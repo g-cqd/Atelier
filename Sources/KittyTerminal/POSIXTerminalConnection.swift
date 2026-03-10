@@ -11,8 +11,7 @@ import KittySync
 // kernel level.
 /// A `TerminalConnection` backed by real POSIX file descriptors.
 ///
-/// On Apple platforms this type uses Darwin syscalls and `OSAllocatedUnfairLock`
-/// for termios state protection. On Linux it falls back to Glibc and `NSLock`.
+/// This type uses Darwin syscalls and `KittySync.StateLock` for termios state protection.
 /// Typically the read descriptor is `STDIN_FILENO` and the write descriptor is
 /// `STDOUT_FILENO`, but PTY descriptors are also supported by supplying a single
 /// file descriptor for both directions.

@@ -1,86 +1,192 @@
-# KittyCode Performance Optimization Plan
+# KittyCode Performance and Reuse Plan
 
-## Overview
+Updated: 2026-03-10
 
-All previously-claimed optimizations (Phases A-D from prior sessions) are **missing from the codebase**. This plan restores and implements them, plus additional improvements discovered through research.
+## Baseline
 
-## Phase A: Zero-Allocation Rendering (Critical Path)
+- Platform floor: macOS 26
+- Toolchain: Swift 6.2
+- Scope: Apple-only terminal editor and supporting libraries
+- Goal: move reusable logic out of `KittyCode` into lower modules, then spend optimization effort only where it changes measured hot paths
 
-The rendering pipeline (DirtyTracker -> DiffRenderer -> SGREncoder -> RenderPipeline -> write) runs every frame. Eliminating allocations here has the highest impact.
+## Already In Place
 
-### A1. ContiguousArray for hot-path storage
-- `DirtyTracker.bits`: `[UInt64]` -> `ContiguousArray<UInt64>` (no bridging overhead)
-- `ScreenBuffer.cells`: `[Cell]` -> `ContiguousArray<Cell>` (O(1) guaranteed COW)
-- `DiffRenderer.render` / `renderFull`: `[UInt8]` output -> `inout ContiguousArray<UInt8>`
-- `SGREncoder.encode` / `encodeDiff`: return via `inout ContiguousArray<UInt8>` overloads
+- `ContiguousArray` is already used on core hot paths in `KittyRenderer`, `KittyCodecs`, and `KittyText`.
+- Render output is already reused across frames through a persistent `ContiguousArray<UInt8>` in `RenderPipeline`.
+- Terminal writes already support a zero-copy contiguous path through `TerminalConnection.writeContiguous(_:)`.
+- Dirty tracking already uses a bitset plus word-level scanning.
+- Parser terminal and non-terminal lookup tables are already cached as dictionaries.
+- Lexer and syntax-node extraction already try contiguous UTF-8 storage before copying.
+- Directory scanning already uses structured concurrency for parallel subdirectory traversal.
 
-### A2. Persistent output buffer in RenderPipeline
-- Add `private var outputBuffer = ContiguousArray<UInt8>()` to `RenderPipeline`
-- Reuse across frames: `outputBuffer.removeAll(keepingCapacity: true)` instead of allocating new `[UInt8]`
+## Landed In This Pass
 
-### A3. Lookup table for decimal encoding
-- `SGREncoder.appendDecimal` and `KittySequences.appendDecimal`: replace division chains with a 256-entry `decimalTable: ContiguousArray<(UInt8, UInt8, UInt8, UInt8)>` for O(1) digit lookup
+- Raised the package baseline to Swift tools 6.2 and macOS 26.
+- Simplified `KittySync.StateLock` to a single `Synchronization.Mutex` implementation.
+- Replaced the remaining `NSLock`-backed syntax artifacts cache with shared `StateLock`.
+- Moved text display metrics out of `KittyCode` into reusable `KittyText` APIs.
+- Added `KittyWidgets.TextEditorLayout` so cursor-placement math lives with the widget instead of the app target.
+- Refactored `KittyCode` to consume the shared text metrics and text-editor layout helpers.
+- Refactored `KittyCode` title and footer rendering to use the reusable `StatusBar` widget.
 
-### A4. UTF-8 append optimization in DiffRenderer
-- `appendUTF8`: avoid `String(char)` allocation; use `char.utf8` directly on Character (Swift 5.x+ supports direct UTF8View iteration on Character)
+## Opportunity Map
 
-## Phase B: Ancillary Optimizations
+### SIMD
 
-### B1. Binary search in UnicodeWidth
-- Replace 13 sequential `.contains()` range checks with a sorted array + binary search for `isCJKOrWide`
-- Add ASCII fast path: `scalar.value < 0x1100` -> return false immediately (covers ~99% of typical source code)
+Status:
+- Limited upside today because the hottest paths are branchy text/layout code, not large numeric kernels.
 
-### B2. Word-level CTZ scanning in DirtyTracker.dirtyRanges
-- Current: per-cell `isDirty()` calls (bit extract per cell)
-- Optimized: iterate words, use `trailingZeroBitCount` to find dirty spans in O(words) not O(cells)
+Best candidates:
+- `DirtyTracker.isEmpty` and `DirtyTracker.clear()` for large buffers.
+- `ScreenBuffer.fill` if profiling shows row fills dominating render time.
 
-### B3. Dictionary lookup in GLRParser
-- `parseTable.terminals.firstIndex(of:)` is O(n) linear scan per token
-- Build `terminalIndex: [String: Int]` dictionary at init time for O(1) lookup
+Action:
+- Only pursue after Instruments shows buffer scans or fills as a top CPU consumer.
 
-### B4. Binary search in Lexer transitions
-- `lexTable.states[state].transitions` iterated linearly per character
-- Sort transitions by range start; use binary search for the matching range
+### Arena Allocation
 
-### B5. Regex cache in Predicates
-- `NSRegularExpression(pattern:)` compiled on every predicate evaluation
-- Cache compiled regexes in a static dictionary keyed by pattern string
+Status:
+- Not yet used explicitly.
 
-## Phase C: Data Structures
+Best candidates:
+- `Highlighter.buildSpans` scratch arrays (`rawSpans`, `byteStyles`, output spans).
+- `LanguageHighlighter.splitDocumentSpans`.
+- Parser temporary node/capture collections during repeated edits.
 
-### C1. GapBuffer for TextBuffer
-- Replace `[String]` lines array with a gap buffer for O(1) amortized insert/delete at cursor
-- Maintain line index for O(log n) line lookup
+Action:
+- Introduce a reusable scratch-buffer or arena-style allocator in a lower module only after measuring highlight churn on large files.
 
-### C2. Batch cache invalidation in Highlighter
-- Track edit ranges; only rebuild `byteStyles` for affected byte ranges instead of full source
+### Zero Copy
 
-## Phase D: SIMD & Parallelism
+Status:
+- Good coverage already exists in input routing, renderer output, terminal writes, lexer tokenization, and syntax-node text extraction.
 
-### D1. SIMD dirty tracking
-- `DirtyTracker.clear()`: use `memset` or SIMD zero-fill for large buffers
-- `DirtyTracker.isEmpty`: use SIMD OR-reduction across words
+Largest remaining gap:
+- `EditorState.refreshHighlights()` rebuilds `textBuffer.text` and re-highlights the entire document on every edit.
 
-### D2. TaskGroup in DirectoryScanner
-- Parallelize subdirectory scanning with `withTaskGroup` for multi-core utilization
-- Maintain entry count limit with atomic counter
+Action:
+- Build an incremental highlighting pipeline around edit ranges and reusable scratch storage.
+- Keep full-document highlighting as fallback for correctness.
 
-### D3. writev(2) scatter-gather I/O
-- Add `TerminalConnection.write(contiguous:)` method taking `ContiguousArray<UInt8>`
-- `POSIXTerminalConnection`: use `withUnsafeBufferPointer` for zero-copy write
-- Future: `writev(2)` for multi-segment writes without concatenation
+### Atomics and Mutexes
 
-## Implementation Priority
+Status:
+- `Synchronization.Mutex` is now the shared locking primitive through `StateLock`.
 
-1. Phase A (A1-A4) - Highest impact, touches every frame
-2. Phase B1, B2 - Common operations, easy wins
-3. Phase C1 - Fundamental data structure improvement
-4. Phase B3-B5 - Parser/query path, lower frequency
-5. Phase D1-D3 - Advanced optimizations
+Best next candidates:
+- Replace lock-based counters with atomics only where the state is truly scalar, such as bounded traversal counters.
 
-## Constraints
+Action:
+- Consider `swift-atomics` only if contention shows up in profiling.
+- Do not replace general-purpose protected state with atomics where a mutex is clearer and safer.
 
-- Swift 6 strict concurrency
-- macOS 14+ / Swift 5.9+ (no InlineArray yet, requires Swift 6.2)
-- All changes must preserve existing test behavior
-- No new dependencies
+### Swift Async Algorithms
+
+Status:
+- Not used yet.
+
+Best candidates:
+- Merge terminal input, resize, and shutdown streams in `ApplicationRuntime`.
+- Debounce bursts of `SIGWINCH` resize events.
+
+Action:
+- Add only if the event pipeline grows more complex or resize storms become observable.
+
+### Swift Algorithms
+
+Status:
+- Not used yet.
+
+Best candidates:
+- Tree flattening and presentation helpers.
+- Query and highlight post-processing where chunking or stable partitioning improves clarity.
+
+Action:
+- Treat as a readability library first, not a performance library.
+
+### Synchronization Framework
+
+Status:
+- Now part of the core synchronization story through `StateLock`.
+
+Action:
+- Keep all shared mutable caches and test doubles on the same primitive unless a stronger reason exists.
+
+### InlineArray, ContiguousArray, Span
+
+Status:
+- `ContiguousArray` is already widely and correctly used.
+- `InlineArray` and `Span` are available under the current toolchain but not yet adopted.
+
+Best candidates:
+- `Span`: borrowed contiguous views in parser and renderer helper loops where APIs currently bounce through buffer-pointer closures.
+- `InlineArray`: only for tiny fixed-size hot data where profiler evidence justifies it.
+
+Action:
+- Prefer `Span` over bespoke unsafe-pointer helpers when a borrowed contiguous view improves both clarity and performance.
+- Avoid forced `InlineArray` adoption without measurements.
+
+### Metal and Shaders
+
+Status:
+- No meaningful fit today.
+
+Reason:
+- This renderer emits terminal escape bytes, not pixels. The dominant work is text layout, diffing, encoding, and I/O, which does not map naturally to Metal.
+
+Action:
+- Do not add Metal to the current terminal rendering pipeline.
+- Revisit only if the project grows a pixel-based preview, minimap, image-processing feature, or offscreen raster stage.
+
+### Aggressive Parallelism
+
+Status:
+- Present in directory scanning, but not elsewhere.
+
+Best candidates:
+- Background syntax-artifact loading.
+- Background highlighting for large-file open.
+- Parallel preprocessing of syntax/highlight data, but only after incremental highlighting reduces work size.
+
+Action:
+- Use structured concurrency and `@concurrent` only for CPU-bound, side-effect-free work.
+- Avoid parallelizing per-keystroke paths until data movement and full-document work are reduced first.
+
+## Ordered Execution Plan
+
+### Phase 1
+
+- Done: platform and synchronization simplification.
+- Done: extract shared text metrics and text-editor layout helpers.
+- Done: make KittyCode use shared widgets for bars instead of manual line assembly.
+
+### Phase 2
+
+- Implement incremental highlight invalidation keyed by edit ranges.
+- Add reusable scratch storage for highlighting and query-match expansion.
+- Offload expensive highlight rebuilds with structured concurrency where it preserves UI responsiveness.
+
+### Phase 3
+
+- Measure render-time row fills and screen clearing.
+- Optimize `ScreenBuffer.fill` and related row operations if they show up in Instruments.
+- Re-evaluate SIMD or span-based implementations only against measured bottlenecks.
+
+### Phase 4
+
+- Modernize the application event pipeline if needed with `swift-async-algorithms`.
+- Debounce resize storms and simplify stream fan-in.
+
+### Phase 5
+
+- Reassess external package additions:
+  - `swift-atomics` for scalar counters under contention
+  - `swift-algorithms` for clarity-heavy transforms
+  - `swift-async-algorithms` for stream composition
+
+## What Not To Do
+
+- Do not add Metal to the terminal renderer.
+- Do not force `InlineArray` into non-hot code.
+- Do not replace every mutex with atomics.
+- Do not add aggressive parallelism to per-keystroke paths before incremental work reduction is in place.

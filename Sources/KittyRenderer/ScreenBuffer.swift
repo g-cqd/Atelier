@@ -70,6 +70,9 @@ public struct ScreenBuffer: Sendable {
             } else {
                 guard c < columns else { break }
                 self[row, c] = Cell(character: char, style: style, width: 1)
+                if c + 1 < columns, self[row, c + 1].width == 0 {
+                    self[row, c + 1] = .empty
+                }
                 c += 1
             }
         }
