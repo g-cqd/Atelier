@@ -1,5 +1,6 @@
 import Foundation
 import KittyFileTree
+import KittySyntax
 import KittyText
 
 extension EditorState {
@@ -12,6 +13,7 @@ extension EditorState {
 
     func refreshFlatTree() {
         cachedFlatTree = FileTreeNavigator.flatten(treeNodes)
+        prewarmVisibleSyntaxArtifacts()
     }
 
     func toggleExpand(at index: Int) {
@@ -120,5 +122,34 @@ extension EditorState {
         } catch {
             statusMessage = "Error saving: \(error.localizedDescription)"
         }
+    }
+
+    private func prewarmVisibleSyntaxArtifacts(limit: Int = 8) {
+        let languages = visibleLanguagesForSyntaxPrewarm(limit: limit)
+        guard !languages.isEmpty else { return }
+
+        Task(priority: .utility) {
+            await LanguageHighlighter.prewarmArtifacts(for: languages)
+        }
+    }
+
+    private func visibleLanguagesForSyntaxPrewarm(limit: Int) -> [String] {
+        var languages: [String] = []
+        var seenLanguages = Set<String>()
+
+        for (_, node) in cachedFlatTree where !node.isDirectory {
+            guard let language = Self.detectLanguage(for: node.name),
+                  seenLanguages.insert(language).inserted
+            else {
+                continue
+            }
+
+            languages.append(language)
+            if languages.count == limit {
+                break
+            }
+        }
+
+        return languages
     }
 }

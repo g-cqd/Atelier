@@ -28,6 +28,10 @@ Updated: 2026-03-10
 - Added `KittyWidgets.TextEditorLayout` so cursor-placement math lives with the widget instead of the app target.
 - Refactored `KittyCode` to consume the shared text metrics and text-editor layout helpers.
 - Refactored `KittyCode` title and footer rendering to use the reusable `StatusBar` widget.
+- Added reusable `KittyText.TextMutation` edit deltas and routed editor edits through them.
+- Reused syntax highlighting sessions and scratch buffers instead of rebuilding them for each refresh.
+- Added incremental fallback highlighting updates so single-line edits and line merges/splits patch only the affected range.
+- Added background syntax-artifact prewarming for visible file types using structured concurrency.
 
 ## Opportunity Map
 
@@ -162,9 +166,9 @@ Action:
 
 ### Phase 2
 
-- Implement incremental highlight invalidation keyed by edit ranges.
-- Add reusable scratch storage for highlighting and query-match expansion.
-- Offload expensive highlight rebuilds with structured concurrency where it preserves UI responsiveness.
+- Done for fallback languages: incremental highlight invalidation keyed by edit ranges.
+- Done for highlighting internals: reusable scratch storage for highlight/span splitting.
+- In progress: move grammar-backed highlighting and artifact work further off the foreground path where it preserves UI responsiveness.
 
 ### Phase 3
 
