@@ -1,6 +1,8 @@
 import Foundation
 import KittyCodecs
+import KittyFileTree
 import KittyRenderer
+import KittyText
 
 @MainActor
 func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeline) {
@@ -14,7 +16,7 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
             if mouse.button == .scrollUp {
                 state.treeScrollOffset = max(0, state.treeScrollOffset - 3)
             } else if mouse.button == .scrollDown {
-                state.treeScrollOffset = min(max(0, state.flatTree.count - 1), state.treeScrollOffset + 3)
+                state.treeScrollOffset = min(max(0, state.cachedFlatTree.count - 1), state.treeScrollOffset + 3)
             }
         } else {
             if mouse.button == .scrollUp {
@@ -51,10 +53,10 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
 @MainActor
 private func handleTreeClick(contentRow: Int, isDoubleClick: Bool, state: EditorState) {
     let clickIndex = state.treeScrollOffset + contentRow
-    guard clickIndex >= 0 && clickIndex < state.flatTree.count else { return }
+    guard clickIndex >= 0 && clickIndex < state.cachedFlatTree.count else { return }
 
     if isDoubleClick && clickIndex == state.lastClickIndex {
-        let entry = state.flatTree[clickIndex].entry
+        let entry = state.cachedFlatTree[clickIndex].node
         if entry.isDirectory {
             state.toggleExpand(at: clickIndex)
         } else {
@@ -80,8 +82,10 @@ private func handleEditorClick(row: Int, mouseCol: Int, editorStart: Int, lineNu
     let line = state.fileContent[lineIndex]
     let relativeCol = mouseCol - editorStart - lineNumWidth
     if state.config.wrapLines {
-        state.cursorCol = min(max(0, relativeCol), line.count)
+        let displayCol = max(0, relativeCol)
+        state.cursorCol = charIndex(forDisplayColumn: displayCol, in: line)
     } else {
-        state.cursorCol = min(max(0, relativeCol + state.hScrollOffset), line.count)
+        let displayCol = max(0, relativeCol + state.hScrollOffset)
+        state.cursorCol = charIndex(forDisplayColumn: displayCol, in: line)
     }
 }

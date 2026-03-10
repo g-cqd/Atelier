@@ -5,10 +5,18 @@ import KittyCodecs
 public protocol ViewModifier: Sendable {
     associatedtype Body: View
     @ViewBuilder func body(content: Content) -> Body
+
+    /// Return the render context modifications this modifier applies.
+    func modifyContext(_ context: RenderContext) -> RenderContext
 }
 
 extension ViewModifier {
     public typealias Content = AnyViewContent
+
+    /// Default implementation: no context modification.
+    public func modifyContext(_ context: RenderContext) -> RenderContext {
+        context
+    }
 }
 
 /// Placeholder for content passed to modifiers.
@@ -69,18 +77,44 @@ extension View {
 
 public struct ForegroundModifier: ViewModifier, Sendable {
     let color: Color
+
     public func body(content: Content) -> some View { content }
+
+    public func modifyContext(_ context: RenderContext) -> RenderContext {
+        var ctx = context
+        ctx.foreground = color
+        return ctx
+    }
 }
 
 public struct BackgroundModifier: ViewModifier, Sendable {
     let color: Color
+
     public func body(content: Content) -> some View { content }
+
+    public func modifyContext(_ context: RenderContext) -> RenderContext {
+        var ctx = context
+        ctx.background = color
+        return ctx
+    }
 }
 
 public struct BoldModifier: ViewModifier, Sendable {
     public func body(content: Content) -> some View { content }
+
+    public func modifyContext(_ context: RenderContext) -> RenderContext {
+        var ctx = context
+        ctx.bold = true
+        return ctx
+    }
 }
 
 public struct ItalicModifier: ViewModifier, Sendable {
     public func body(content: Content) -> some View { content }
+
+    public func modifyContext(_ context: RenderContext) -> RenderContext {
+        var ctx = context
+        ctx.italic = true
+        return ctx
+    }
 }

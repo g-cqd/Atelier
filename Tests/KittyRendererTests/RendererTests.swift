@@ -151,6 +151,7 @@ struct DiffRendererTests {
 @Suite("RenderPipeline")
 struct RenderPipelineTests {
     @Test("Flush writes to connection")
+    @MainActor
     func flushWrites() throws {
         let mock = MockTerminalConnection()
         let pipeline = RenderPipeline(connection: mock, columns: 10, rows: 3)

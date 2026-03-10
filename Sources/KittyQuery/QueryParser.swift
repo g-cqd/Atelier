@@ -9,6 +9,8 @@
 /// ```
 public enum QueryParser: Sendable {
 
+    private static let maxRecursionDepth = 128
+
     public static func parse(_ source: String) throws(QueryError) -> Query {
         var scanner = Scanner(source: source)
         var patterns: [QueryPattern] = []
@@ -25,6 +27,12 @@ public enum QueryParser: Sendable {
     // MARK: - Private
 
     private static func parsePattern(_ scanner: inout Scanner) throws(QueryError) -> QueryPattern {
+        scanner.depth += 1
+        defer { scanner.depth -= 1 }
+        guard scanner.depth <= maxRecursionDepth else {
+            throw .syntaxError("Query exceeds maximum nesting depth (\(maxRecursionDepth))")
+        }
+
         scanner.skipWhitespaceAndComments()
 
         guard let ch = scanner.peek() else {
@@ -278,6 +286,7 @@ public enum QueryParser: Sendable {
 private struct Scanner: Sendable {
     var source: String
     var index: String.Index
+    var depth: Int = 0
 
     init(source: String) {
         self.source = source

@@ -1,6 +1,8 @@
 import Testing
+import Foundation
 @testable import KittySyntax
 @testable import KittyCodecs
+@testable import KittyGrammar
 @testable import KittyQuery
 @testable import KittyParser
 
@@ -113,20 +115,203 @@ struct HighlighterTests {
 @Suite("GrammarRegistry")
 struct GrammarRegistryTests {
     @Test("Register and lookup by extension")
-    func registerLookup() {
+    func registerLookup() async {
         let registry = GrammarRegistry()
-        registry.register(GrammarRegistry.LanguageEntry(
+        await registry.register(GrammarRegistry.LanguageEntry(
             name: "swift", extensions: [".swift"], path: "swift"
         ))
-        let entry = registry.entry(forExtension: ".swift")
+        let entry = await registry.entry(forExtension: ".swift")
         #expect(entry?.name == "swift")
     }
 
     @Test("Language names are sorted")
-    func sortedNames() {
+    func sortedNames() async {
         let registry = GrammarRegistry()
-        registry.register(GrammarRegistry.LanguageEntry(name: "swift", extensions: [".swift"], path: "swift"))
-        registry.register(GrammarRegistry.LanguageEntry(name: "python", extensions: [".py"], path: "python"))
-        #expect(registry.languageNames == ["python", "swift"])
+        await registry.register(GrammarRegistry.LanguageEntry(name: "swift", extensions: [".swift"], path: "swift"))
+        await registry.register(GrammarRegistry.LanguageEntry(name: "python", extensions: [".py"], path: "python"))
+        let names = await registry.languageNames
+        #expect(names == ["python", "swift"])
+    }
+
+    // MARK: - New tests
+
+    @Test("entry(forExtension:) returns nil for unregistered extension")
+    func entryForUnregisteredExtension() async {
+        let registry = GrammarRegistry()
+        let entry = await registry.entry(forExtension: ".xyz")
+        #expect(entry == nil)
+    }
+
+    @Test("entry(forExtension:) normalises extension without leading dot")
+    func entryNormalisesDotPrefix() async {
+        let registry = GrammarRegistry()
+        await registry.register(GrammarRegistry.LanguageEntry(name: "json", extensions: [".json"], path: "json"))
+        let entry = await registry.entry(forExtension: "json")
+        #expect(entry?.name == "json")
+    }
+
+    @Test("loadManifest registers all 19 languages from bundled languages.json")
+    func loadManifestRegistersAllLanguages() async throws {
+        let grammarsPath = try #require(KittySyntaxResources.bundle.resourcePath)
+        let manifestPath = "\(grammarsPath)/Grammars/languages.json"
+        let registry = GrammarRegistry()
+        try await registry.loadManifest(from: manifestPath)
+        let names = await registry.languageNames
+        #expect(names.count == 19)
+    }
+}
+
+// MARK: - GrammarLoader (bundled grammar) tests
+
+@Suite("GrammarLoader bundled grammar")
+struct GrammarLoaderBundledTests {
+
+    private func jsonGrammarPath() throws -> String {
+        let resourcePath = try #require(KittySyntaxResources.bundle.resourcePath)
+        return "\(resourcePath)/Grammars/json/grammar.json"
+    }
+
+    @Test("Load bundled json/grammar.json — name is json")
+    func loadBundledGrammarName() throws {
+        let path = try jsonGrammarPath()
+        let grammar = try GrammarLoader.load(from: path)
+        #expect(grammar.name == "json")
+    }
+
+    @Test("Load bundled json/grammar.json — has expected rule names")
+    func loadBundledGrammarRuleNames() throws {
+        let path = try jsonGrammarPath()
+        let grammar = try GrammarLoader.load(from: path)
+        let ruleNames = grammar.rules.map(\.name)
+        let expectedNames = ["document", "_value", "object", "pair", "array", "string", "number", "true", "false", "null"]
+        for name in expectedNames {
+            #expect(ruleNames.contains(name), "Expected rule '\(name)' in grammar")
+        }
+    }
+
+    @Test("Load bundled json/grammar.json — has 1 extra (whitespace pattern)")
+    func loadBundledGrammarExtras() throws {
+        let path = try jsonGrammarPath()
+        let grammar = try GrammarLoader.load(from: path)
+        #expect(grammar.extras.count == 1)
+    }
+
+    @Test("Load bundled json/grammar.json — supertypes contains _value")
+    func loadBundledGrammarSupertypes() throws {
+        let path = try jsonGrammarPath()
+        let grammar = try GrammarLoader.load(from: path)
+        #expect(grammar.supertypes.contains("_value"))
+    }
+
+    @Test("parse invalid JSON data throws GrammarError")
+    func parseInvalidJSONThrows() {
+        #expect(throws: GrammarError.self) {
+            try GrammarLoader.parse(Data("not valid json {{{".utf8))
+        }
+    }
+}
+
+// MARK: - Theme (Monokai) tests
+
+@Suite("Theme Monokai")
+struct ThemeMonokaiTests {
+
+    @Test("Monokai returns non-default style for keyword")
+    func monokaiKeywordIsNonDefault() {
+        let style = Theme.monokai.style(for: "keyword")
+        #expect(style != Style.default)
+    }
+
+    @Test("Monokai returns non-default style for string")
+    func monokaiStringIsNonDefault() {
+        let style = Theme.monokai.style(for: "string")
+        #expect(style != Style.default)
+    }
+
+    @Test("Hierarchical fallback: keyword.function resolves to keyword style")
+    func hierarchicalFallbackKeywordFunction() {
+        let keywordStyle = Theme.monokai.style(for: "keyword")
+        let keywordFunctionStyle = Theme.monokai.style(for: "keyword.function")
+        // Monokai has no "keyword.function" entry so it falls back to "keyword"
+        #expect(keywordFunctionStyle == keywordStyle)
+    }
+
+    @Test("style(for:) returns default style for nonexistent capture")
+    func nonexistentCaptureReturnsDefault() {
+        let style = Theme.monokai.style(for: "nonexistent_capture")
+        #expect(style == Theme.monokai.defaultStyle)
+    }
+}
+
+// MARK: - Highlighter additional tests
+
+@Suite("Highlighter additional")
+struct HighlighterAdditionalTests {
+
+    @Test("Highlighting empty source returns single default-styled span")
+    func emptySourceReturnsSingleDefaultSpan() {
+        let highlighter = Highlighter(theme: .monokai)
+        let root = SyntaxNode(type: "source", byteRange: 0..<0)
+        let tree = SyntaxTree(root: root, source: "")
+        let query = Query(patterns: [])
+        let spans = highlighter.highlight(source: "", tree: tree, query: query)
+        #expect(spans == [StyledSpan(text: "", style: Theme.monokai.defaultStyle)])
+    }
+
+    @Test("Highlighting with no query matches returns single default-styled span")
+    func noMatchesReturnsSingleDefaultSpan() {
+        let highlighter = Highlighter(theme: .monokai)
+        let source = "hello"
+        let root = SyntaxNode(type: "source", byteRange: 0..<5)
+        let tree = SyntaxTree(root: root, source: source)
+        // Pattern that matches "unknown_type" — will never match
+        let query = Query(patterns: [
+            .nodeMatch(type: "unknown_type", children: [], capture: "keyword")
+        ])
+        let spans = highlighter.highlight(source: source, tree: tree, query: query)
+        #expect(spans == [StyledSpan(text: source, style: Theme.monokai.defaultStyle)])
+    }
+
+    @Test("Highlighting a string node produces a string-styled span")
+    func stringNodeProducesStringStyledSpan() {
+        var theme = Theme(defaultStyle: .default)
+        let stringStyle = Style(fg: .rgb(r: 230, g: 219, b: 116))
+        theme.setStyle(stringStyle, for: "string")
+
+        let source = "\"hello\""  // 7 UTF-8 bytes
+        let stringNode = SyntaxNode(type: "string", byteRange: 0..<7, isNamed: true)
+        let root = SyntaxNode(type: "source", children: [stringNode], byteRange: 0..<7)
+        let tree = SyntaxTree(root: root, source: source)
+        let query = Query(patterns: [
+            .nodeMatch(type: "string", children: [], capture: "string")
+        ])
+
+        let spans = Highlighter(theme: theme).highlight(source: source, tree: tree, query: query)
+        #expect(spans == [StyledSpan(text: source, style: stringStyle)])
+    }
+
+    @Test("Highlighting two adjacent nodes produces two styled spans")
+    func twoAdjacentNodesProduceTwoSpans() {
+        var theme = Theme(defaultStyle: .default)
+        let keywordStyle = Style(fg: .rgb(r: 249, g: 38, b: 114), bold: true)
+        let numberStyle = Style(fg: .rgb(r: 174, g: 129, b: 255))
+        theme.setStyle(keywordStyle, for: "keyword")
+        theme.setStyle(numberStyle, for: "number")
+
+        // source: "if42" — 4 bytes
+        let kwNode = SyntaxNode(type: "keyword", byteRange: 0..<2, isNamed: true)
+        let numNode = SyntaxNode(type: "number", byteRange: 2..<4, isNamed: true)
+        let root = SyntaxNode(type: "source", children: [kwNode, numNode], byteRange: 0..<4)
+        let tree = SyntaxTree(root: root, source: "if42")
+        let query = Query(patterns: [
+            .nodeMatch(type: "keyword", children: [], capture: "keyword"),
+            .nodeMatch(type: "number", children: [], capture: "number"),
+        ])
+
+        let spans = Highlighter(theme: theme).highlight(source: "if42", tree: tree, query: query)
+        #expect(spans == [
+            StyledSpan(text: "if", style: keywordStyle),
+            StyledSpan(text: "42", style: numberStyle),
+        ])
     }
 }

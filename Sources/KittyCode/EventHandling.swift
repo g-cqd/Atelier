@@ -11,11 +11,11 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
         state.isScrolling = false
 
         if key.modifiers == .ctrl {
-            if key.keyCode == UInt32(Character("o").asciiValue!) {
+            if key.keyCode == AsciiKey.o {
                 state.saveFile()
                 return true
             }
-            if key.keyCode == UInt32(Character("x").asciiValue!) {
+            if key.keyCode == AsciiKey.x {
                 if state.mode == .editor {
                     state.mode = .tree
                     state.statusMessage = "Ready | ^O: Save, ^X: Quit"
@@ -25,7 +25,7 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
             }
         }
 
-        if key.keyCode == 27 {
+        if key.keyCode == AsciiKey.escape {
             if state.mode == .editor {
                 if state.config.keybindingMode == .vim {
                     state.vimMode = .normal

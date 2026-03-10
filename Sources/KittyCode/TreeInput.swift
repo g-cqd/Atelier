@@ -1,17 +1,18 @@
 import KittyCodecs
+import KittyFileTree
 
 @MainActor
 func handleTreeKey(_ key: KeyEvent, state: EditorState, contentRows: Int) -> Bool {
     switch key.keyCode {
     case Key.down.rawValue:
-        state.selectedTreeIndex = min(state.selectedTreeIndex + 1, max(0, state.flatTree.count - 1))
+        state.selectedTreeIndex = min(state.selectedTreeIndex + 1, max(0, state.cachedFlatTree.count - 1))
         ensureTreeVisible(state, contentRows: contentRows)
     case Key.up.rawValue:
         state.selectedTreeIndex = max(state.selectedTreeIndex - 1, 0)
         ensureTreeVisible(state, contentRows: contentRows)
     case Key.enter.rawValue, Key.enterAlt.rawValue:
-        guard state.selectedTreeIndex >= 0 && state.selectedTreeIndex < state.flatTree.count else { return true }
-        let entry = state.flatTree[state.selectedTreeIndex].entry
+        guard state.selectedTreeIndex >= 0 && state.selectedTreeIndex < state.cachedFlatTree.count else { return true }
+        let entry = state.cachedFlatTree[state.selectedTreeIndex].node
         if entry.isDirectory {
             state.toggleExpand(at: state.selectedTreeIndex)
         } else {
@@ -19,8 +20,8 @@ func handleTreeKey(_ key: KeyEvent, state: EditorState, contentRows: Int) -> Boo
             state.cursorCol = 0
         }
     case Key.right.rawValue:
-        guard state.selectedTreeIndex >= 0 && state.selectedTreeIndex < state.flatTree.count else { return true }
-        let entry = state.flatTree[state.selectedTreeIndex].entry
+        guard state.selectedTreeIndex >= 0 && state.selectedTreeIndex < state.cachedFlatTree.count else { return true }
+        let entry = state.cachedFlatTree[state.selectedTreeIndex].node
         if entry.isDirectory && !entry.isExpanded {
             state.toggleExpand(at: state.selectedTreeIndex)
         } else if !entry.isDirectory {
@@ -28,8 +29,8 @@ func handleTreeKey(_ key: KeyEvent, state: EditorState, contentRows: Int) -> Boo
             state.cursorCol = 0
         }
     case Key.left.rawValue:
-        guard state.selectedTreeIndex >= 0 && state.selectedTreeIndex < state.flatTree.count else { return true }
-        let entry = state.flatTree[state.selectedTreeIndex].entry
+        guard state.selectedTreeIndex >= 0 && state.selectedTreeIndex < state.cachedFlatTree.count else { return true }
+        let entry = state.cachedFlatTree[state.selectedTreeIndex].node
         if entry.isDirectory && entry.isExpanded {
             state.toggleExpand(at: state.selectedTreeIndex)
         }

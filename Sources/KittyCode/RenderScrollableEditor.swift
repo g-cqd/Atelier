@@ -1,5 +1,6 @@
 import KittyCodecs
 import KittyRenderer
+import KittyText
 
 @MainActor
 func renderScrollableEditor(
@@ -23,7 +24,7 @@ func renderScrollableEditor(
             let numPad = String(repeating: " ", count: max(0, lineNumWidth - num.count - 1))
             pipeline.buffer.write(numPad + num + " ", row: row + 1, col: editorStart, style: colorScheme.lineNumber)
 
-            let spans = highlightSwift(state.fileContent[lineIndex], colorScheme: colorScheme)
+            let spans = state.cachedHighlightLine(lineIndex)
             renderStyledSpans(
                 pipeline: pipeline,
                 spans: spans,
@@ -36,7 +37,9 @@ func renderScrollableEditor(
             )
 
             if isCurrentLine && state.mode == .editor {
-                let relativeCol = state.cursorCol - state.hScrollOffset
+                let line = state.fileContent[lineIndex]
+                let cursorDisplayCol = displayColumn(for: state.cursorCol, in: line)
+                let relativeCol = cursorDisplayCol - state.hScrollOffset
                 if relativeCol >= 0 && relativeCol < availWidth {
                     terminalCursorPos = (row: row + 1, col: editorStart + lineNumWidth + relativeCol)
                 }
