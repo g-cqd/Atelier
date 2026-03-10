@@ -60,6 +60,25 @@ struct TreeViewTests {
         let rows = tree.visibleRows()
         #expect(rows.count == 1)
     }
+
+    @Test("Scroll indicator drag maps track rows into tree scroll offsets")
+    func scrollIndicatorDragMapping() {
+        let tree = TreeView(
+            root: (0..<20).map { TreeNode(value: "node-\($0)") },
+            scrollOffset: 0,
+            showsVerticalScrollIndicator: true,
+            label: { $0 }
+        )
+        let rect = Rect(x: 1, y: 1, width: 10, height: 5)
+
+        #expect(TreeViewLayout.contentWidth(for: tree, in: rect) == 9)
+        #expect(TreeViewLayout.verticalScrollIndicatorRect(for: tree, in: rect) == Rect(x: 10, y: 1, width: 1, height: 5))
+
+        let gripOffset = TreeViewLayout.scrollGripOffset(for: tree, in: rect, pointerRow: 2)
+
+        #expect(gripOffset == 1)
+        #expect(TreeViewLayout.scrollOffset(for: tree, in: rect, pointerRow: 5, gripOffset: gripOffset ?? 0) == 19)
+    }
 }
 
 @Suite("StatusBar")
@@ -189,6 +208,40 @@ struct TextEditorTests {
         )
 
         #expect(position == .init(row: 0, col: 4))
+    }
+
+    @Test("Scroll indicator geometry reserves content width and ignores indicator hit testing")
+    func textEditorScrollIndicatorGeometry() {
+        let editor = TextEditor(
+            lines: ["abcdef"],
+            lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
+            showLineNumbers: true,
+            wrapLines: false,
+            showsVerticalScrollIndicator: true
+        )
+        let rect = Rect(x: 5, y: 3, width: 8, height: 1)
+
+        #expect(TextEditorLayout.contentWidth(for: editor, in: rect) == 4)
+        #expect(TextEditorLayout.verticalScrollIndicatorRect(for: editor, in: rect) == Rect(x: 12, y: 3, width: 1, height: 1))
+        #expect(TextEditorLayout.textPosition(for: editor, in: rect, row: 3, col: 12) == nil)
+    }
+
+    @Test("Wrapped scroll indicator drag maps visual rows back to line offsets")
+    func wrappedScrollIndicatorDragMapping() {
+        let lines = Array(repeating: "abcdef", count: 4)
+        let editor = TextEditor(
+            lines: lines,
+            lineSpans: lines.map { [StyledSpan(text: $0, style: .default)] },
+            showLineNumbers: false,
+            wrapLines: true,
+            showsVerticalScrollIndicator: true
+        )
+        let rect = Rect(x: 1, y: 1, width: 4, height: 3)
+
+        let gripOffset = TextEditorLayout.scrollGripOffset(for: editor, in: rect, pointerRow: 1)
+
+        #expect(gripOffset == 0)
+        #expect(TextEditorLayout.scrollOffset(for: editor, in: rect, pointerRow: 3, gripOffset: gripOffset ?? 0) == 3)
     }
 }
 
@@ -451,6 +504,28 @@ struct TextRenderingTests {
         #expect(buffer[2, 0].style.bg == lineNumberStyle.bg)
         #expect(buffer[2, 3].character == " ")
         #expect(buffer[2, 3].style.bg == editorStyle.bg)
+    }
+
+    @Test func `render tree view draws a vertical scroll indicator when enabled`() {
+        var buffer = makeSUT(columns: 8, rows: 4)
+        let rect = Rect(x: 0, y: 0, width: 8, height: 4)
+        let scrollStyle = VerticalScrollIndicatorStyle(
+            trackStyle: Style(fg: .rgb(r: 1, g: 2, b: 3)),
+            thumbStyle: Style(fg: .rgb(r: 4, g: 5, b: 6)),
+            trackCharacter: "|",
+            thumbCharacter: "#"
+        )
+
+        TreeView(
+            root: (0..<10).map { TreeNode(value: "row-\($0)") },
+            showsVerticalScrollIndicator: true,
+            style: TreeView<String>.TreeViewStyle(scrollIndicatorStyle: scrollStyle),
+            label: { $0 }
+        ).render(to: &buffer, in: rect)
+
+        #expect(buffer[0, 7].character == "#")
+        #expect(buffer[1, 7].character == "#")
+        #expect(buffer[3, 7].character == "|")
     }
 }
 

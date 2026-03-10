@@ -16,13 +16,18 @@ func renderTreePanel(
         root: root,
         selectedIndex: state.selectedTreeIndex,
         scrollOffset: state.treeScrollOffset,
+        showsVerticalScrollIndicator: true,
         style: TreeView<FileNode>.TreeViewStyle(
             normalStyle: colorScheme.treeBg,
             selectedStyle: colorScheme.treeSelected,
             expandedIcon: "[-]",
             collapsedIcon: "[+]",
             leafIcon: "   ",
-            indent: 2
+            indent: 2,
+            scrollIndicatorStyle: VerticalScrollIndicatorStyle(
+                trackStyle: colorScheme.separator,
+                thumbStyle: colorScheme.treeSelected
+            )
         ),
         label: { $0.name },
         rowStyle: { $0.isDirectory ? colorScheme.treeDir : colorScheme.treeBg }

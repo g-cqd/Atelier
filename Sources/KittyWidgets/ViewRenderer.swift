@@ -22,6 +22,8 @@ public enum ViewRenderer {
             renderStyledText(styled, into: &buffer, in: rect, context: context)
         case let status as StatusBar:
             renderStatusBar(status, into: &buffer, in: rect, context: context)
+        case let indicator as VerticalScrollIndicator:
+            renderVerticalScrollIndicator(indicator, into: &buffer, in: rect, context: context)
         case let editor as TextEditor:
             renderTextEditor(editor, into: &buffer, in: rect, context: context)
         case is EmptyView:
@@ -81,6 +83,35 @@ public enum ViewRenderer {
         buffer.write(rendered, row: rect.y, col: rect.x, style: style)
     }
 
+    private static func renderVerticalScrollIndicator(
+        _ indicator: VerticalScrollIndicator,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        guard !rect.isEmpty else { return }
+
+        let trackStyle = context.applyTo(indicator.style.trackStyle)
+        let thumbStyle = context.applyTo(indicator.style.thumbStyle)
+        buffer.fill(
+            row: rect.y,
+            col: rect.x,
+            width: rect.width,
+            height: rect.height,
+            cell: Cell(character: indicator.style.trackCharacter, style: trackStyle)
+        )
+
+        if let thumbRect = VerticalScrollIndicatorLayout.thumbRect(for: indicator.metrics, in: rect) {
+            buffer.fill(
+                row: thumbRect.y,
+                col: thumbRect.x,
+                width: thumbRect.width,
+                height: thumbRect.height,
+                cell: Cell(character: indicator.style.thumbCharacter, style: thumbStyle)
+            )
+        }
+    }
+
     private static func renderTree(
         _ tree: any _TreeViewProtocol,
         into buffer: inout ScreenBuffer,
@@ -89,8 +120,19 @@ public enum ViewRenderer {
     ) {
         let rows = tree.rowsForRendering
         let normalStyle = context.applyTo(tree.normalStyle)
+        let contentWidth = max(0, rect.width - (tree.showsVerticalScrollIndicator && rect.width > 0 ? 1 : 0))
         guard !rows.isEmpty else {
             fillRect(into: &buffer, in: rect, style: normalStyle)
+            if tree.showsVerticalScrollIndicator, rect.width > 0 {
+                VerticalScrollIndicator(
+                    metrics: ScrollMetrics(contentLength: 0, viewportLength: rect.height, offset: 0),
+                    style: tree.scrollIndicatorStyle
+                ).render(
+                    to: &buffer,
+                    in: Rect(x: rect.maxX - 1, y: rect.y, width: 1, height: rect.height),
+                    context: context
+                )
+            }
             return
         }
 
@@ -103,7 +145,7 @@ public enum ViewRenderer {
             let baseStyle = row.index == tree.selectedIndex ? tree.selectedStyle : row.style
             let style = context.applyTo(baseStyle)
             let indent = String(repeating: " ", count: row.depth * indentWidth)
-            let line = String((indent + row.icon + row.label).prefix(rect.width))
+            let line = String((indent + row.icon + row.label).prefix(contentWidth))
             fillRow(into: &buffer, row: rect.y + offset, col: rect.x, width: rect.width, style: style)
             buffer.write(line, row: rect.y + offset, col: rect.x, style: style)
         }
@@ -112,6 +154,22 @@ public enum ViewRenderer {
             for offset in visibleCount..<rect.height {
                 fillRow(into: &buffer, row: rect.y + offset, col: rect.x, width: rect.width, style: normalStyle)
             }
+        }
+
+        if tree.showsVerticalScrollIndicator, rect.width > 0 {
+            VerticalScrollIndicator(
+                metrics: ScrollMetrics(
+                    contentLength: tree.rowCount,
+                    viewportLength: rect.height,
+                    offset: tree.scrollOffset,
+                    maxOffset: max(0, tree.rowCount - 1)
+                ),
+                style: tree.scrollIndicatorStyle
+            ).render(
+                to: &buffer,
+                in: Rect(x: rect.maxX - 1, y: rect.y, width: 1, height: rect.height),
+                context: context
+            )
         }
     }
 
@@ -126,6 +184,7 @@ public enum ViewRenderer {
         let currentLineStyle = context.applyTo(editor.currentLineStyle)
         let lineNumberWidth = TextEditorLayout.gutterWidth(for: editor)
         let contentWidth = TextEditorLayout.contentWidth(for: editor, in: rect)
+        let contentMaxX = rect.x + lineNumberWidth + contentWidth
 
         guard rect.height > 0 else { return }
 
@@ -160,9 +219,9 @@ public enum ViewRenderer {
                         for char in span.text {
                             let width = UnicodeWidth.displayWidth(of: char)
                             if widthPos + width > segEnd { break }
-                            if widthPos >= segStart && col < rect.x + rect.width {
+                            if widthPos >= segStart && col < contentMaxX {
                                 let style = lineIndex == editor.cursorRow ? overlay(backgroundFrom: currentLineStyle, onto: span.style) : span.style
-                                if width == 2 && col + 1 < rect.x + rect.width {
+                                if width == 2 && col + 1 < contentMaxX {
                                     buffer[row, col] = Cell(character: char, style: style, width: 2)
                                     buffer[row, col + 1] = Cell(character: "\0", style: style, width: 0)
                                     col += 2
@@ -176,7 +235,7 @@ public enum ViewRenderer {
                     }
 
                     let fillStyle = lineIndex == editor.cursorRow ? currentLineStyle : editorStyle
-                    while col < rect.x + rect.width {
+                    while col < contentMaxX {
                         buffer[row, col] = Cell(character: " ", style: fillStyle)
                         col += 1
                     }
@@ -197,6 +256,13 @@ public enum ViewRenderer {
                     buffer.fill(row: row, col: rect.x + lineNumberWidth, width: contentWidth, height: 1, cell: Cell(character: " ", style: editorStyle))
                 }
                 screenRow += 1
+            }
+
+            if let indicatorRect = TextEditorLayout.verticalScrollIndicatorRect(for: editor, in: rect) {
+                VerticalScrollIndicator(
+                    metrics: TextEditorLayout.verticalScrollMetrics(for: editor, in: rect),
+                    style: editor.verticalScrollIndicatorStyle
+                ).render(to: &buffer, in: indicatorRect, context: context)
             }
             return
         }
@@ -237,6 +303,13 @@ public enum ViewRenderer {
                 editorStyle: editorStyle,
                 currentLineStyle: currentLineStyle
             )
+        }
+
+        if let indicatorRect = TextEditorLayout.verticalScrollIndicatorRect(for: editor, in: rect) {
+            VerticalScrollIndicator(
+                metrics: TextEditorLayout.verticalScrollMetrics(for: editor, in: rect),
+                style: editor.verticalScrollIndicatorStyle
+            ).render(to: &buffer, in: indicatorRect, context: context)
         }
     }
 
@@ -475,11 +548,14 @@ private struct _TreeRow: Sendable {
 
 private protocol _TreeViewProtocol {
     var rowsForRendering: [_TreeRow] { get }
+    var rowCount: Int { get }
     var normalStyle: Style { get }
     var selectedStyle: Style { get }
     var selectedIndex: Int { get }
     var indentWidth: Int { get }
     var scrollOffset: Int { get }
+    var showsVerticalScrollIndicator: Bool { get }
+    var scrollIndicatorStyle: VerticalScrollIndicatorStyle { get }
 }
 
 private func _childViews<Content: View>(from content: Content) -> [any View] {
@@ -559,7 +635,12 @@ extension TreeView: _TreeViewProtocol {
         }
     }
 
+    fileprivate var rowCount: Int {
+        rowsForRendering.count
+    }
+
     fileprivate var normalStyle: Style { style.normalStyle }
     fileprivate var selectedStyle: Style { style.selectedStyle }
     fileprivate var indentWidth: Int { style.indent }
+    fileprivate var scrollIndicatorStyle: VerticalScrollIndicatorStyle { style.scrollIndicatorStyle }
 }

@@ -246,6 +246,33 @@ struct KittyCodeNavigationTests {
         #expect(sut.state.cursorRow == 0)
         #expect(sut.state.cursorCol == 4)
     }
+
+    @Test("dragging the editor scroll indicator updates the shared scroll offset")
+    func handleMouseDragOnEditorScrollIndicator() {
+        let sut = makeSUT(fileContent: (0..<20).map(String.init), columns: 18, rows: 8)
+        sut.state.treePanelWidth = 3
+        sut.state.mode = .editor
+
+        handleMouse(
+            MouseEvent(button: .left, row: 2, col: 18, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        handleMouse(
+            MouseEvent(button: .left, row: 6, col: 18, kind: .drag),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        handleMouse(
+            MouseEvent(button: .release, row: 6, col: 18, kind: .release),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.scrollOffset == 19)
+        #expect(sut.state.scrollDragState == nil)
+        #expect(sut.state.mode == .editor)
+    }
 }
 
 @Suite("KittyCode Syntax Wiring")
