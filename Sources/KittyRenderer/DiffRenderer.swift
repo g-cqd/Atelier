@@ -35,9 +35,7 @@ public enum DiffRenderer: Sendable {
                 lastStyle = cell.style
 
                 // Emit character
-                var charBuf = [UInt8](repeating: 0, count: 4)
-                let count = encodeUTF8(cell.character, into: &charBuf)
-                bytes.append(contentsOf: charBuf.prefix(count))
+                appendUTF8(cell.character, to: &bytes)
             }
 
             lastRow = row
@@ -66,9 +64,7 @@ public enum DiffRenderer: Sendable {
                 bytes.append(contentsOf: diffBytes)
                 lastStyle = cell.style
 
-                var charBuf = [UInt8](repeating: 0, count: 4)
-                let count = encodeUTF8(cell.character, into: &charBuf)
-                bytes.append(contentsOf: charBuf.prefix(count))
+                appendUTF8(cell.character, to: &bytes)
             }
         }
 
@@ -79,12 +75,9 @@ public enum DiffRenderer: Sendable {
         return bytes
     }
 
-    private static func encodeUTF8(_ char: Character, into buffer: inout [UInt8]) -> Int {
-        var count = 0
+    private static func appendUTF8(_ char: Character, to bytes: inout [UInt8]) {
         for byte in String(char).utf8 {
-            buffer[count] = byte
-            count += 1
+            bytes.append(byte)
         }
-        return count
     }
 }

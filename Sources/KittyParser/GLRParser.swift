@@ -1,4 +1,5 @@
 import KittyGrammar
+import os
 
 /// GLR parser: handles ambiguous grammars by forking on conflict and merging on reduce.
 public final class GLRParser: Sendable {
@@ -198,9 +199,9 @@ public final class GLRParser: Sendable {
 
 // MARK: - Parse Stack
 
-struct ParseStack: Sendable {
-    nonisolated(unsafe) private static var nextID = 0
+private let parseStackCounter = OSAllocatedUnfairLock(initialState: 0)
 
+struct ParseStack: Sendable {
     let id: Int
     var state: Int
     var stateStack: [Int]
@@ -212,8 +213,11 @@ struct ParseStack: Sendable {
     }
 
     init(state: Int) {
-        self.id = ParseStack.nextID
-        ParseStack.nextID += 1
+        self.id = parseStackCounter.withLock { val in
+            let current = val
+            val += 1
+            return current
+        }
         self.state = state
         self.stateStack = [state]
         self.nodes = []
