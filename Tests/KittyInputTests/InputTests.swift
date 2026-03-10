@@ -69,6 +69,22 @@ struct SequenceRouterTests {
         }
     }
 
+    @Test("Routes byte chunks without first copying into an array")
+    func rawBufferInput() {
+        var router = makeSUT()
+        let bytes: [UInt8] = [0x1b, 0x5b, 0x49]
+        let events = bytes.withUnsafeBytes { rawBytes in
+            var routed: [InputEvent] = []
+            router.feedAll(rawBytes, into: &routed)
+            return routed
+        }
+
+        #expect(events.count == 1)
+        if case .some(.focusIn) = events.first {} else {
+            Issue.record("Expected focusIn")
+        }
+    }
+
     @Test("Routes standard CSI keys to functional key codes")
     func csiKeySequences() {
         func feed(_ bytes: [UInt8]) -> [InputEvent] {

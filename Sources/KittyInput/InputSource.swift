@@ -21,6 +21,7 @@ public final class InputSource: Sendable {
     public func start() -> Task<Void, Never> {
         Task { [connection, continuation] in
             var router = SequenceRouter()
+            var routedEvents: [InputEvent] = []
             let bufferSize = 4096
             let buffer = UnsafeMutableRawBufferPointer.allocate(byteCount: bufferSize, alignment: 1)
             defer { buffer.deallocate() }
@@ -28,9 +29,9 @@ public final class InputSource: Sendable {
             while !Task.isCancelled {
                 do {
                     let count = try connection.read(into: buffer)
-                    let bytes = Array(UnsafeRawBufferPointer(start: buffer.baseAddress, count: count))
-                    let events = router.feedAll(bytes)
-                    for event in events {
+                    let bytes = UnsafeRawBufferPointer(start: buffer.baseAddress, count: count)
+                    router.feedAll(bytes, into: &routedEvents)
+                    for event in routedEvents {
                         continuation.yield(event)
                     }
                 } catch {

@@ -22,7 +22,23 @@ public final class Highlighter: Sendable {
     }
 
     private func buildSpans(source: String, matches: [QueryMatch]) -> [StyledSpan] {
+        if let spans = source.utf8.withContiguousStorageIfAvailable({ utf8 in
+            buildSpans(source: source, utf8: utf8, matches: matches)
+        }) {
+            return spans
+        }
+
         let utf8 = Array(source.utf8)
+        return utf8.withUnsafeBufferPointer { utf8 in
+            buildSpans(source: source, utf8: utf8, matches: matches)
+        }
+    }
+
+    private func buildSpans(
+        source: String,
+        utf8: UnsafeBufferPointer<UInt8>,
+        matches: [QueryMatch]
+    ) -> [StyledSpan] {
         guard !utf8.isEmpty else {
             return [StyledSpan(text: source, style: theme.defaultStyle)]
         }
@@ -69,7 +85,8 @@ public final class Highlighter: Sendable {
             while end < utf8.count && (byteStyles[end] ?? theme.defaultStyle) == style {
                 end += 1
             }
-            if let text = String(bytes: utf8[pos..<end], encoding: .utf8), !text.isEmpty {
+            let text = String(decoding: UnsafeBufferPointer(rebasing: utf8[pos..<end]), as: UTF8.self)
+            if !text.isEmpty {
                 spans.append(StyledSpan(text: text, style: style))
             }
             pos = end

@@ -1,10 +1,10 @@
 #if canImport(Darwin)
 import Darwin
-import os
 #elseif canImport(Glibc)
 import Glibc
 #endif
 import Foundation
+import KittySync
 
 // SAFETY: `fd` and `writeFd` are immutable (let). `originalTermios` is guarded
 // by `termiosLock`. POSIX read/write on file descriptors are thread-safe at the
@@ -19,12 +19,7 @@ import Foundation
 public final class POSIXTerminalConnection: TerminalConnection, @unchecked Sendable {
     private let fd: Int32
     private let writeFd: Int32
-    #if canImport(os)
-    private let termiosLock = OSAllocatedUnfairLock<termios?>(initialState: nil)
-    #else
-    private let _termiosNSLock = NSLock()
-    private var _termiosValue: termios?
-    #endif
+    private let termiosState = StateLock<termios?>(initialState: nil)
 
     /// Creates a connection using the given POSIX file descriptors.
     ///
@@ -194,12 +189,6 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
     // MARK: - Cross-platform lock helpers
 
     private func withTermiosLock<T: Sendable>(_ body: @Sendable (inout termios?) -> T) -> T {
-        #if canImport(os)
-        return termiosLock.withLock { body(&$0) }
-        #else
-        _termiosNSLock.lock()
-        defer { _termiosNSLock.unlock() }
-        return body(&_termiosValue)
-        #endif
+        termiosState.withLock(body)
     }
 }

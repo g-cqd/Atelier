@@ -28,8 +28,10 @@ let package = Package(
         .executable(name: "KittyCode", targets: ["KittyCode"]),
     ],
     targets: [
+        .target(name: "KittySync", swiftSettings: defaultSwiftSettings),
+
         // Layer 0 — Raw mode, FD I/O, terminal queries
-        .target(name: "KittyTerminal", swiftSettings: defaultSwiftSettings),
+        .target(name: "KittyTerminal", dependencies: ["KittySync"], swiftSettings: defaultSwiftSettings),
 
         // Layer 1 — Escape sequence encoders/decoders
         .target(name: "KittyCodecs", dependencies: ["KittyTerminal"], swiftSettings: defaultSwiftSettings),
@@ -44,16 +46,16 @@ let package = Package(
         .target(name: "KittyText", swiftSettings: defaultSwiftSettings),
 
         // Layer 2d — File system browsing
-        .target(name: "KittyFileTree", swiftSettings: defaultSwiftSettings),
+        .target(name: "KittyFileTree", dependencies: ["KittySync"], swiftSettings: defaultSwiftSettings),
 
         // Layer 3a — grammar.json loader + LR table compiler
         .target(name: "KittyGrammar", swiftSettings: defaultSwiftSettings),
 
         // Layer 3b — GLR incremental parser engine
-        .target(name: "KittyParser", dependencies: ["KittyGrammar"], swiftSettings: defaultSwiftSettings),
+        .target(name: "KittyParser", dependencies: ["KittyGrammar", "KittySync"], swiftSettings: defaultSwiftSettings),
 
         // Layer 3c — .scm query parser + pattern matcher
-        .target(name: "KittyQuery", dependencies: ["KittyParser"], swiftSettings: defaultSwiftSettings),
+        .target(name: "KittyQuery", dependencies: ["KittyParser", "KittySync"], swiftSettings: defaultSwiftSettings),
 
         // Layer 3d — Themes + styled text producer
         .target(

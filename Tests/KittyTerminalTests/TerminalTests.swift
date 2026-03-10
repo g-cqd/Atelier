@@ -42,6 +42,13 @@ struct MockTerminalConnectionTests {
         #expect(mock.writtenOutput == [0x1b, 0x5b, 0x48])
     }
 
+    @Test("writeContiguous accumulates output")
+    func writeContiguousOutput() throws {
+        let mock = MockTerminalConnection()
+        try mock.writeContiguous(ContiguousArray([0x1b, 0x5b, 0x48]))
+        #expect(mock.writtenOutput == [0x1b, 0x5b, 0x48])
+    }
+
     @Test("Raw mode tracking")
     func rawModeTracking() throws {
         let mock = MockTerminalConnection()
