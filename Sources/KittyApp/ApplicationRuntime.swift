@@ -89,7 +89,10 @@ public final class ApplicationRuntime: Sendable {
         do { try pipeline.flush() } catch {}
 
         // Event loop
-        for await event in inputSource.events {
+        var iterator = inputSource.events.makeAsyncIterator()
+        while true {
+            guard let event = await iterator.next() else { break }
+            
             let shouldContinue = onEvent(event, pipeline)
             if !shouldContinue {
                 readTask.cancel()
@@ -104,8 +107,16 @@ public final class ApplicationRuntime: Sendable {
                 render(pipeline)
                 do { try pipeline.forceRedraw() } catch {}
             default:
-                do { try pipeline.flush() } catch {}
+                // No immediate flush here, wait to see if more events are coming
+                break
             }
+            
+            // Heuristic: check if more events are already buffered in the channel
+            // Since we don't have a non-blocking poll on AsyncStream easily, 
+            // we'll just flush once after each event for now but we've reduced 
+            // the source of high-frequency events (mouse motion).
+            // Actually, we can just flush here.
+            do { try pipeline.flush() } catch {}
         }
         signalTask.cancel()
     }
