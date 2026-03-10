@@ -5,6 +5,11 @@ import KittyText
 extension EditorState {
     private static let maxFileSize = 50_000_000  // 50MB
 
+    func loadInitialTree() async {
+        treeNodes = await DirectoryScanner.scanAsync(rootPath, maxDepth: 1)
+        refreshFlatTree()
+    }
+
     func refreshFlatTree() {
         cachedFlatTree = FileTreeNavigator.flatten(treeNodes)
     }
@@ -51,7 +56,7 @@ extension EditorState {
         invalidateTextSnapshotCache()
         textCursor = TextCursor()
         currentLanguage = Self.detectLanguage(for: node.name)
-        clearHighlightCache()
+        refreshHighlights()
         mode = .editor
         statusMessage = "Opened \(node.name) | ^O: Save, ^X: Tree/Quit"
         if config.keybindingMode == .vim {
