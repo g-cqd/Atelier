@@ -1,5 +1,4 @@
 import KittyGrammar
-import os
 
 /// GLR parser: handles ambiguous grammars by forking on conflict and merging on reduce.
 public final class GLRParser: Sendable {
@@ -12,6 +11,8 @@ public final class GLRParser: Sendable {
         self.lexTable = lexTable
         self.productions = productions
     }
+
+    private static let maxStacks = 256
 
     /// Parse source text and produce a syntax tree.
     public func parse(_ source: String) throws(ParseError) -> SyntaxTree {
@@ -99,6 +100,11 @@ public final class GLRParser: Sendable {
             stacks = newStacks
             guard !stacks.isEmpty else {
                 throw .parsingFailed("No valid parse at token \(tokenIdx): \(token.type)")
+            }
+            // Prune stacks if count exceeds limit — keep stacks with fewest errors
+            if stacks.count > Self.maxStacks {
+                stacks.sort { $0.errorCount < $1.errorCount }
+                stacks = Array(stacks.prefix(Self.maxStacks))
             }
         }
 
@@ -211,47 +217,3 @@ public final class GLRParser: Sendable {
     }
 }
 
-// MARK: - Parse Stack
-
-private let parseStackCounter = OSAllocatedUnfairLock(initialState: 0)
-
-struct ParseStack: Sendable {
-    let id: Int
-    var state: Int
-    var stateStack: [Int]
-    var nodes: [SyntaxNode]
-    var errorCount: Int
-
-    var stateBeforeTop: Int {
-        stateStack.last ?? 0
-    }
-
-    init(state: Int) {
-        self.id = parseStackCounter.withLock { val in
-            let current = val
-            val += 1
-            return current
-        }
-        self.state = state
-        self.stateStack = [state]
-        self.nodes = []
-        self.errorCount = 0
-    }
-
-    mutating func pushNode(_ node: SyntaxNode) {
-        stateStack.append(state)
-        nodes.append(node)
-        if node.isError { errorCount += 1 }
-    }
-
-    mutating func popNodes(_ count: Int) -> [SyntaxNode] {
-        guard count > 0 else { return [] }
-        let popped = Array(nodes.suffix(count))
-        nodes.removeLast(min(count, nodes.count))
-        for _ in 0..<min(count, stateStack.count - 1) {
-            stateStack.removeLast()
-        }
-        state = stateStack.last ?? 0
-        return popped
-    }
-}

@@ -32,7 +32,7 @@ private struct FlattenContext: Sendable {
 public enum ParseTableCompiler: Sendable {
 
     /// Compiled result containing parse table, lex table, and production rules.
-    public struct CompilationResult: Sendable {
+    public struct CompilationResult: Sendable, Codable {
         public var parseTable: ParseTable
         public var lexTable: LexTable
         public var productions: [ProductionRule]
@@ -259,9 +259,11 @@ public enum ParseTableCompiler: Sendable {
                 for sym in prod.symbols {
                     if let firsts = firstSets[sym] {
                         let nonEmpty = firsts.filter { $0 != "" }
-                        let before = firstSets[prod.name]!.count
-                        firstSets[prod.name]!.formUnion(nonEmpty)
-                        if firstSets[prod.name]!.count > before { changed = true }
+                        var prodSet = firstSets[prod.name, default: []]
+                        let before = prodSet.count
+                        prodSet.formUnion(nonEmpty)
+                        if prodSet.count > before { changed = true }
+                        firstSets[prod.name] = prodSet
                         if !firsts.contains("") {
                             canDerive = false
                             break
@@ -272,9 +274,11 @@ public enum ParseTableCompiler: Sendable {
                     }
                 }
                 if canDerive || prod.symbols.isEmpty {
-                    if firstSets[prod.name]!.insert("").inserted {
+                    var prodSet = firstSets[prod.name, default: []]
+                    if prodSet.insert("").inserted {
                         changed = true
                     }
+                    firstSets[prod.name] = prodSet
                 }
             }
         }

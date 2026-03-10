@@ -3,9 +3,10 @@ import KittyGrammar
 
 /// Maps file extensions to grammar definitions.
 /// Loads `languages.json` and auto-discovers grammar bundles.
-public final class GrammarRegistry: @unchecked Sendable {
+public actor GrammarRegistry {
     private var entries: [String: LanguageEntry] = [:]  // extension → entry
     private var loadedGrammars: [String: GrammarDefinition] = [:]  // language name → grammar
+    private var compiledTables: [String: ParseTableCompiler.CompilationResult] = [:]  // language name → compiled result
 
     public struct LanguageEntry: Sendable, Equatable {
         public var name: String
@@ -73,9 +74,53 @@ public final class GrammarRegistry: @unchecked Sendable {
         return grammar
     }
 
+    /// Return a compiled parse table result for the given language.
+    ///
+    /// Lookup order:
+    /// 1. In-memory cache (`compiledTables`).
+    /// 2. Disk cache at `<tmp>/kittycode-cache/<languageName>.ptable` (JSON-encoded `CompilationResult`).
+    /// 3. Fresh compilation from the grammar file, persisted to disk cache.
+    public func compiledResult(
+        for languageName: String,
+        grammarsPath: String
+    ) throws(GrammarError) -> ParseTableCompiler.CompilationResult {
+        if let cached = compiledTables[languageName] { return cached }
+
+        let cacheURL = Self.cacheDirectory.appendingPathComponent("\(languageName).ptable")
+        if let result = try? loadFromDisk(at: cacheURL) {
+            compiledTables[languageName] = result
+            return result
+        }
+
+        let grammarDefinition = try grammar(for: languageName, grammarsPath: grammarsPath)
+        let result = try ParseTableCompiler.compile(grammarDefinition)
+        compiledTables[languageName] = result
+        try? saveToDisk(result, at: cacheURL)
+        return result
+    }
+
     /// All registered language names.
     public var languageNames: [String] {
         Array(Set(entries.values.map(\.name))).sorted()
+    }
+
+    // MARK: - Private disk-cache helpers
+
+    private static let cacheDirectory: URL =
+        FileManager.default.temporaryDirectory.appendingPathComponent("kittycode-cache")
+
+    private func loadFromDisk(at url: URL) throws -> ParseTableCompiler.CompilationResult {
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode(ParseTableCompiler.CompilationResult.self, from: data)
+    }
+
+    private func saveToDisk(_ result: ParseTableCompiler.CompilationResult, at url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: Self.cacheDirectory,
+            withIntermediateDirectories: true
+        )
+        let data = try JSONEncoder().encode(result)
+        try data.write(to: url, options: .atomic)
     }
 }
 

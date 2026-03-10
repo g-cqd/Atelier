@@ -34,8 +34,17 @@ public final class ApplicationRuntime: Sendable {
                 + KittySequences.disableBracketedPaste
                 + KittySequences.showCursor
                 + KittySequences.leaveAlternateScreen
-            try? connection.write(cleanup)
-            try? connection.restoreMode()
+            // Best-effort cleanup — log but don't propagate errors during teardown
+            do {
+                try connection.write(cleanup)
+            } catch {
+                KittyLogger.warning("Cleanup write failed: \(error)")
+            }
+            do {
+                try connection.restoreMode()
+            } catch {
+                KittyLogger.warning("Restore mode failed: \(error)")
+            }
         }
 
         // Setup terminal
@@ -76,6 +85,8 @@ public final class ApplicationRuntime: Sendable {
                 // Query new size and inject resize event
                 if let newSize = try? conn.getSize() {
                     inputSource.inject(.resize(newSize))
+                } else {
+                    KittyLogger.debug("Failed to query terminal size on SIGWINCH")
                 }
             },
             onShutdown: { [inputSource] in
@@ -86,13 +97,17 @@ public final class ApplicationRuntime: Sendable {
 
         // Initial render
         render(pipeline)
-        do { try pipeline.flush() } catch {}
+        do {
+            try pipeline.flush()
+        } catch {
+            KittyLogger.error("Initial flush failed: \(error)")
+        }
 
         // Event loop
         var iterator = inputSource.events.makeAsyncIterator()
         while true {
             guard let event = await iterator.next() else { break }
-            
+
             let shouldContinue = onEvent(event, pipeline)
             if !shouldContinue {
                 readTask.cancel()
@@ -105,31 +120,45 @@ public final class ApplicationRuntime: Sendable {
                 pipeline.resize(columns: newSize.columns, rows: newSize.rows)
                 pipeline.buffer.clear()
                 render(pipeline)
-                do { try pipeline.forceRedraw() } catch {}
+                do {
+                    try pipeline.forceRedraw()
+                } catch {
+                    KittyLogger.error("Redraw after resize failed: \(error)")
+                }
             default:
-                // No immediate flush here, wait to see if more events are coming
                 break
             }
-            
-            // Heuristic: check if more events are already buffered in the channel
-            // Since we don't have a non-blocking poll on AsyncStream easily, 
-            // we'll just flush once after each event for now but we've reduced 
-            // the source of high-frequency events (mouse motion).
-            // Actually, we can just flush here.
-            do { try pipeline.flush() } catch {}
+
+            do {
+                try pipeline.flush()
+            } catch {
+                KittyLogger.error("Flush failed: \(error)")
+            }
         }
         signalTask.cancel()
     }
 
-    /// Convenience: run an App type (evaluates body but uses callbacks for rendering).
+    /// Run an App type, rendering its body into the terminal and dispatching events through the view hierarchy.
     public func run<A: App>(_ appType: A.Type) async throws(AppError) {
-        let _ = A()
-        try await run(render: { _ in }, onEvent: { event, _ in
-            if case .key(let k) = event {
-                if k.keyCode == 3 || k.keyCode == 17 { return false }
-                if k.keyCode == UInt32(Character("q").asciiValue ?? 0) && k.modifiers.isEmpty { return false }
+        let app = A()
+        let rootView = app.body
+        try await run(
+            render: { pipeline in
+                let rect = Rect(x: 0, y: 0, width: pipeline.columns, height: pipeline.rows)
+                rootView.render(to: &pipeline.buffer, in: rect)
+            },
+            onEvent: { event, pipeline in
+                if case .key(let k) = event {
+                    if k.keyCode == 3 || k.keyCode == 17 { return false }
+                }
+                let result = rootView.handleEvent(event)
+                if result == .handled {
+                    // Re-render after handled event
+                    let rect = Rect(x: 0, y: 0, width: pipeline.columns, height: pipeline.rows)
+                    rootView.render(to: &pipeline.buffer, in: rect)
+                }
+                return true
             }
-            return true
-        })
+        )
     }
 }

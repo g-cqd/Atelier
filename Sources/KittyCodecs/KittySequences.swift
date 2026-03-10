@@ -1,4 +1,8 @@
-/// Static builders for Kitty-specific escape sequences.
+/// Static builders for Kitty terminal-specific escape sequences.
+///
+/// Covers synchronized output (mode 2026), the Kitty keyboard protocol (CSI u),
+/// SGR and pixel mouse modes, cursor control, alternate screen, clipboard (OSC 52),
+/// desktop notifications (OSC 99), focus events, and bracketed paste.
 public enum KittySequences: Sendable {
 
     // MARK: - Synchronized Output (mode 2026)
@@ -13,8 +17,11 @@ public enum KittySequences: Sendable {
 
     // MARK: - Keyboard Protocol (CSI u)
 
-    /// Push keyboard mode with given flags onto the stack.
-    /// flags is a bitmask: 1=disambiguate, 2=report-events, 4=report-alternates, 8=report-all, 16=report-associated
+    /// Push a keyboard mode with the given flags onto the terminal's mode stack.
+    ///
+    /// - Parameter flags: A bitmask of reporting flags — 1: disambiguate, 2: report-events,
+    ///   4: report-alternates, 8: report-all, 16: report-associated.
+    /// - Returns: Raw bytes for the `CSI > flags u` sequence.
     public static func pushKeyboardMode(flags: UInt8) -> [UInt8] {
         // CSI > flags u
         var bytes: [UInt8] = [0x1b, 0x5b, 0x3e] // ESC [ >
@@ -59,7 +66,14 @@ public enum KittySequences: Sendable {
 
     // MARK: - Cursor
 
-    /// Move cursor to row, col (1-based). Values are clamped to 1...65535.
+    /// Move the cursor to the specified 1-based row and column position.
+    ///
+    /// Both coordinates are clamped to the range `1...65535` before encoding.
+    ///
+    /// - Parameters:
+    ///   - row: The target row (1-based).
+    ///   - col: The target column (1-based).
+    /// - Returns: Raw bytes for the `CSI row ; col H` sequence.
     public static func moveCursor(row: Int, col: Int) -> [UInt8] {
         // CSI row ; col H
         var bytes: [UInt8] = [0x1b, 0x5b]
@@ -94,7 +108,10 @@ public enum KittySequences: Sendable {
 
     // MARK: - Clipboard (OSC 52)
 
-    /// Set clipboard content (base64-encoded).
+    /// Set the system clipboard to the provided base64-encoded content via OSC 52.
+    ///
+    /// - Parameter base64Content: A base64-encoded string representing the desired clipboard payload.
+    /// - Returns: Raw bytes for the `OSC 52 ; c ; <base64> ST` sequence.
     public static func setClipboard(_ base64Content: String) -> [UInt8] {
         // OSC 52 ; c ; <base64> ST
         var bytes: [UInt8] = [0x1b, 0x5d] // ESC ]
@@ -113,7 +130,14 @@ public enum KittySequences: Sendable {
 
     // MARK: - Notifications (OSC 99)
 
-    /// Send a desktop notification.
+    /// Send a desktop notification via the Kitty OSC 99 protocol.
+    ///
+    /// When `body` is non-empty, a second OSC 99 segment is appended carrying the body text.
+    ///
+    /// - Parameters:
+    ///   - title: The notification title.
+    ///   - body: An optional notification body. Defaults to an empty string (omitted).
+    /// - Returns: Raw bytes encoding one or two OSC 99 sequences.
     public static func notify(title: String, body: String = "") -> [UInt8] {
         // OSC 99 ; i=1:d=0:p=title ; <title> ST
         var bytes: [UInt8] = [0x1b, 0x5d] // ESC ]
