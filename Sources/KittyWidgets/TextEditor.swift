@@ -12,9 +12,11 @@ public struct TextEditor: View, Sendable {
     public var cursorCol: Int
     public var showLineNumbers: Bool
     public var wrapLines: Bool
+    public var showsVerticalScrollIndicator: Bool
     public var editorStyle: Style
     public var lineNumberStyle: Style
     public var currentLineStyle: Style
+    public var verticalScrollIndicatorStyle: VerticalScrollIndicatorStyle
     public var modeShowsCursor: Bool
 
     public init(
@@ -26,9 +28,11 @@ public struct TextEditor: View, Sendable {
         cursorCol: Int = 0,
         showLineNumbers: Bool = true,
         wrapLines: Bool = false,
+        showsVerticalScrollIndicator: Bool = false,
         editorStyle: Style = .default,
         lineNumberStyle: Style = .default,
         currentLineStyle: Style = .default,
+        verticalScrollIndicatorStyle: VerticalScrollIndicatorStyle = VerticalScrollIndicatorStyle(),
         modeShowsCursor: Bool = true
     ) {
         self.lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
@@ -39,9 +43,11 @@ public struct TextEditor: View, Sendable {
         self.cursorCol = cursorCol
         self.showLineNumbers = showLineNumbers
         self.wrapLines = wrapLines
+        self.showsVerticalScrollIndicator = showsVerticalScrollIndicator
         self.editorStyle = editorStyle
         self.lineNumberStyle = lineNumberStyle
         self.currentLineStyle = currentLineStyle
+        self.verticalScrollIndicatorStyle = verticalScrollIndicatorStyle
         self.modeShowsCursor = modeShowsCursor
     }
 
@@ -54,9 +60,11 @@ public struct TextEditor: View, Sendable {
         cursorCol: Int = 0,
         showLineNumbers: Bool = true,
         wrapLines: Bool = false,
+        showsVerticalScrollIndicator: Bool = false,
         editorStyle: Style = .default,
         lineNumberStyle: Style = .default,
         currentLineStyle: Style = .default,
+        verticalScrollIndicatorStyle: VerticalScrollIndicatorStyle = VerticalScrollIndicatorStyle(),
         modeShowsCursor: Bool = true
     ) {
         self.lines = lines.isEmpty ? [""] : lines
@@ -76,9 +84,11 @@ public struct TextEditor: View, Sendable {
         self.cursorCol = cursorCol
         self.showLineNumbers = showLineNumbers
         self.wrapLines = wrapLines
+        self.showsVerticalScrollIndicator = showsVerticalScrollIndicator
         self.editorStyle = editorStyle
         self.lineNumberStyle = lineNumberStyle
         self.currentLineStyle = currentLineStyle
+        self.verticalScrollIndicatorStyle = verticalScrollIndicatorStyle
         self.modeShowsCursor = modeShowsCursor
     }
 
