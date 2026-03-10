@@ -80,14 +80,16 @@ public enum LanguageHighlighter: Sendable {
             }
         }
 
-        public func highlightLines(_ lines: [String]) -> [[StyledSpan]] {
-            let normalizedLines = lines.isEmpty ? [""] : lines
-
+        public func highlightLines<C: Collection>(_ lines: C) -> [[StyledSpan]] where C.Element == String {
             switch strategy {
             case .fallback:
-                return normalizedLines.map { fallbackHighlightLine($0, language: language, theme: theme) }
+                if lines.isEmpty {
+                    return [fallbackHighlightLine("", language: language, theme: theme)]
+                }
+                return lines.map { fallbackHighlightLine($0, language: language, theme: theme) }
             case .grammar:
-                return highlightDocument(source: normalizedLines.joined(separator: "\n"))
+                let source = lines.isEmpty ? "" : lines.joined(separator: "\n")
+                return highlightDocument(source: source)
             }
         }
     }
@@ -114,6 +116,11 @@ public enum LanguageHighlighter: Sendable {
     ) -> Session {
         Session(language: language, theme: theme)
     }
+
+    @discardableResult
+    public static func prewarmArtifacts<S: Sequence>(for languages: S) async -> Set<String> where S.Element == String {
+        await SyntaxArtifactsCache.prewarm(languages: languages)
+    }
 }
 
 private struct SyntaxArtifacts: Sendable {
@@ -136,8 +143,45 @@ private enum SyntaxArtifactsCache {
         }
 
         let loaded = loadArtifacts(for: language)
-        storage.withLock { $0[language] = loaded }
-        return loaded
+        return storage.withLock { cache in
+            if let cached = cache[language] {
+                return cached
+            }
+
+            cache[language] = loaded
+            return loaded
+        }
+    }
+
+    static func prewarm<S: Sequence>(languages: S) async -> Set<String> where S.Element == String {
+        let uniqueLanguages = Set(languages)
+        let uncachedLanguages = uniqueLanguages.filter { language in
+            storage.withLock { !$0.keys.contains(language) }
+        }
+
+        await withTaskGroup(of: (String, SyntaxArtifacts?).self) { group in
+            for language in uncachedLanguages {
+                group.addTask {
+                    (language, loadArtifacts(for: language))
+                }
+            }
+
+            for await (language, loadedArtifacts) in group {
+                storage.withLock { cache in
+                    guard !cache.keys.contains(language) else { return }
+                    cache[language] = loadedArtifacts
+                }
+            }
+        }
+
+        return Set(uniqueLanguages.filter { language in
+            storage.withLock {
+                if case .some(.some(_)) = $0[language] {
+                    return true
+                }
+                return false
+            }
+        })
     }
 
     private static func loadArtifacts(for language: String) -> SyntaxArtifacts? {
