@@ -28,6 +28,7 @@ struct KittyCodeEntry {
 
         let config = KittyConfig.load()
         let state = EditorState(rootPath: rootPath, config: config)
+        await state.loadInitialTree()
         let connection = POSIXTerminalConnection()
         let runtime = ApplicationRuntime(connection: connection)
 

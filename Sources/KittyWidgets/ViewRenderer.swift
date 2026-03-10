@@ -1,5 +1,6 @@
 import KittyCodecs
 import KittyRenderer
+import KittySyntax
 import KittyText
 
 /// Renders a View hierarchy into a ScreenBuffer.
@@ -87,15 +88,24 @@ public enum ViewRenderer {
         let rows = tree.rowsForRendering
         guard !rows.isEmpty else { return }
 
-        let visibleCount = min(rect.height, rows.count)
+        let start = max(0, min(tree.scrollOffset, rows.count))
+        let visibleCount = min(rect.height, rows.count - start)
         let indentWidth = max(0, tree.indentWidth)
 
         for offset in 0..<visibleCount {
-            let row = rows[offset]
-            let style = context.applyTo(row.index == tree.selectedIndex ? tree.selectedStyle : tree.normalStyle)
+            let row = rows[start + offset]
+            let baseStyle = row.index == tree.selectedIndex ? tree.selectedStyle : row.style
+            let style = context.applyTo(baseStyle)
             let indent = String(repeating: " ", count: row.depth * indentWidth)
             let line = String((indent + row.icon + row.label).prefix(rect.width))
             buffer.write(line, row: rect.y + offset, col: rect.x, style: style)
+        }
+
+        if visibleCount < rect.height {
+            for offset in visibleCount..<rect.height {
+                let blank = String(repeating: " ", count: rect.width)
+                buffer.write(blank, row: rect.y + offset, col: rect.x, style: context.applyTo(tree.normalStyle))
+            }
         }
     }
 
@@ -105,22 +115,122 @@ public enum ViewRenderer {
         in rect: Rect,
         context: RenderContext
     ) {
-        let style = context.applyTo(.default)
+        let editorStyle = context.applyTo(editor.editorStyle)
+        let lineNumberStyle = context.applyTo(editor.lineNumberStyle)
+        let currentLineStyle = context.applyTo(editor.currentLineStyle)
+        let lineNumberWidth = editor.showLineNumbers ? max(3, editor.lineNumberWidth + 1) : 0
+        let contentWidth = max(0, rect.width - lineNumberWidth)
+
+        guard rect.height > 0 else { return }
+
+        if editor.wrapLines {
+            var screenRow = 0
+            var lineIndex = max(0, min(editor.scrollOffset, editor.lines.count))
+            while screenRow < rect.height && lineIndex < editor.lines.count {
+                let spans = editor.lineSpans[lineIndex]
+                let totalWidth = max(1, spans.reduce(into: 0) { partial, span in
+                    for char in span.text {
+                        partial += UnicodeWidth.displayWidth(of: char)
+                    }
+                })
+                let wrappedRows = max(1, contentWidth > 0 ? (totalWidth + contentWidth - 1) / contentWidth : 1)
+
+                for wrapRow in 0..<wrappedRows where screenRow < rect.height {
+                    let row = rect.y + screenRow
+                    if lineNumberWidth > 0 {
+                        if wrapRow == 0 {
+                            buffer.write(formattedLineNumber(lineIndex + 1, width: lineNumberWidth - 1) + " ", row: row, col: rect.x, style: lineNumberStyle)
+                        } else {
+                            buffer.fill(row: row, col: rect.x, width: lineNumberWidth, height: 1, cell: Cell(character: " ", style: lineNumberStyle))
+                        }
+                    }
+
+                    let segStart = wrapRow * max(1, contentWidth)
+                    let segEnd = min(segStart + max(1, contentWidth), totalWidth)
+                    var col = rect.x + lineNumberWidth
+                    var widthPos = 0
+                    for span in spans {
+                        if widthPos >= segEnd { break }
+                        for char in span.text {
+                            let width = UnicodeWidth.displayWidth(of: char)
+                            if widthPos + width > segEnd { break }
+                            if widthPos >= segStart && col < rect.x + rect.width {
+                                let style = lineIndex == editor.cursorRow ? overlay(backgroundFrom: currentLineStyle, onto: span.style) : span.style
+                                if width == 2 && col + 1 < rect.x + rect.width {
+                                    buffer[row, col] = Cell(character: char, style: style, width: 2)
+                                    buffer[row, col + 1] = Cell(character: "\0", style: style, width: 0)
+                                    col += 2
+                                } else if width == 1 {
+                                    buffer[row, col] = Cell(character: char, style: style)
+                                    col += 1
+                                }
+                            }
+                            widthPos += width
+                        }
+                    }
+
+                    let fillStyle = lineIndex == editor.cursorRow ? currentLineStyle : editorStyle
+                    while col < rect.x + rect.width {
+                        buffer[row, col] = Cell(character: " ", style: fillStyle)
+                        col += 1
+                    }
+                    screenRow += 1
+                }
+                lineIndex += 1
+            }
+
+            while screenRow < rect.height {
+                let row = rect.y + screenRow
+                if lineNumberWidth > 0 {
+                    buffer.write("~", row: row, col: rect.x, style: lineNumberStyle)
+                    if lineNumberWidth > 1 {
+                        buffer.fill(row: row, col: rect.x + 1, width: lineNumberWidth - 1, height: 1, cell: Cell(character: " ", style: lineNumberStyle))
+                    }
+                }
+                if contentWidth > 0 {
+                    buffer.fill(row: row, col: rect.x + lineNumberWidth, width: contentWidth, height: 1, cell: Cell(character: " ", style: editorStyle))
+                }
+                screenRow += 1
+            }
+            return
+        }
+
         let startLine = max(0, min(editor.scrollOffset, editor.lines.count))
         let endLine = min(editor.lines.count, startLine + rect.height)
 
-        guard startLine < endLine else { return }
+        for rowOffset in 0..<rect.height {
+            let row = rect.y + rowOffset
+            let lineIndex = startLine + rowOffset
 
-        for (rowOffset, lineIndex) in (startLine..<endLine).enumerated() {
-            let prefix: String
-            if editor.showLineNumbers {
-                prefix = formattedLineNumber(lineIndex + 1, width: editor.lineNumberWidth)
-            } else {
-                prefix = ""
+            guard lineIndex < endLine else {
+                if lineNumberWidth > 0 {
+                    buffer.write("~", row: row, col: rect.x, style: lineNumberStyle)
+                    if lineNumberWidth > 1 {
+                        buffer.fill(row: row, col: rect.x + 1, width: lineNumberWidth - 1, height: 1, cell: Cell(character: " ", style: lineNumberStyle))
+                    }
+                }
+                if contentWidth > 0 {
+                    buffer.fill(row: row, col: rect.x + lineNumberWidth, width: contentWidth, height: 1, cell: Cell(character: " ", style: editorStyle))
+                }
+                continue
             }
 
-            let line = String((prefix + editor.lines[lineIndex]).prefix(rect.width))
-            buffer.write(line, row: rect.y + rowOffset, col: rect.x, style: style)
+            if lineNumberWidth > 0 {
+                buffer.write(formattedLineNumber(lineIndex + 1, width: lineNumberWidth - 1) + " ", row: row, col: rect.x, style: lineNumberStyle)
+            }
+
+            let spans = editor.lineSpans[lineIndex]
+            renderStyledLine(
+                spans: spans,
+                into: &buffer,
+                row: row,
+                col: rect.x + lineNumberWidth,
+                availWidth: contentWidth,
+                hScrollOffset: editor.horizontalScrollOffset,
+                isCurrentLine: lineIndex == editor.cursorRow,
+                editorStyle: editorStyle,
+                currentLineStyle: currentLineStyle
+            )
         }
     }
 
@@ -128,6 +238,52 @@ public enum ViewRenderer {
         let digits = String(lineNumber)
         let padding = String(repeating: " ", count: max(0, width - digits.count))
         return padding + digits + " "
+    }
+
+    private static func renderStyledLine(
+        spans: [StyledSpan],
+        into buffer: inout ScreenBuffer,
+        row: Int,
+        col: Int,
+        availWidth: Int,
+        hScrollOffset: Int,
+        isCurrentLine: Bool,
+        editorStyle: Style,
+        currentLineStyle: Style
+    ) {
+        guard availWidth > 0 else { return }
+        var currentCol = col
+        var currentX = 0
+
+        for span in spans {
+            for char in span.text {
+                let width = UnicodeWidth.displayWidth(of: char)
+                if currentX >= hScrollOffset && currentX + width <= hScrollOffset + availWidth {
+                    let style = isCurrentLine ? overlay(backgroundFrom: currentLineStyle, onto: span.style) : span.style
+                    if width == 2 && currentCol + 1 < col + availWidth {
+                        buffer[row, currentCol] = Cell(character: char, style: style, width: 2)
+                        buffer[row, currentCol + 1] = Cell(character: "\0", style: style, width: 0)
+                        currentCol += 2
+                    } else if width == 1 {
+                        buffer[row, currentCol] = Cell(character: char, style: style)
+                        currentCol += 1
+                    }
+                }
+                currentX += width
+            }
+        }
+
+        let fillStyle = isCurrentLine ? currentLineStyle : editorStyle
+        while currentCol < col + availWidth {
+            buffer[row, currentCol] = Cell(character: " ", style: fillStyle)
+            currentCol += 1
+        }
+    }
+
+    private static func overlay(backgroundFrom overlay: Style, onto base: Style) -> Style {
+        var style = base
+        style.bg = overlay.bg
+        return style
     }
 
     // MARK: - Generic/Container Rendering
@@ -288,6 +444,7 @@ private struct _TreeRow: Sendable {
     let icon: String
     let label: String
     let index: Int
+    let style: Style
 }
 
 private protocol _TreeViewProtocol {
@@ -296,6 +453,7 @@ private protocol _TreeViewProtocol {
     var selectedStyle: Style { get }
     var selectedIndex: Int { get }
     var indentWidth: Int { get }
+    var scrollOffset: Int { get }
 }
 
 private func _childViews<Content: View>(from content: Content) -> [any View] {
@@ -369,7 +527,8 @@ extension TreeView: _TreeViewProtocol {
                 depth: row.depth,
                 icon: icon,
                 label: label(row.node.value),
-                index: row.index
+                index: row.index,
+                style: rowStyle(row.node.value)
             )
         }
     }

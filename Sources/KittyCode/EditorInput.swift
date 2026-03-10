@@ -94,23 +94,14 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         state.cursorCol = min(state.cursorCol, rowLength)
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case Key.enter.rawValue, Key.enterAlt.rawValue:
-        let lineBeforeEdit = state.textCursor.row
         TextOperations.insertNewline(into: &state.textBuffer, at: &state.textCursor)
         state.invalidateTextSnapshotCache()
-        // Newline splits a line — invalidate from the split point onward
-        for key in state.highlightCache.keys where key >= lineBeforeEdit {
-            state.highlightCache.removeValue(forKey: key)
-        }
+        state.refreshHighlights()
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
-        let lineBeforeEdit = state.textCursor.row
         TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor)
         state.invalidateTextSnapshotCache()
-        // Backspace may merge lines — invalidate from current line onward
-        let invalidateFrom = min(lineBeforeEdit, state.textCursor.row)
-        for key in state.highlightCache.keys where key >= invalidateFrom {
-            state.highlightCache.removeValue(forKey: key)
-        }
+        state.refreshHighlights()
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case AsciiKey.g:
         if key.modifiers == .shift {
