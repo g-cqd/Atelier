@@ -22,59 +22,58 @@ public final class Highlighter: Sendable {
     }
 
     private func buildSpans(source: String, matches: [QueryMatch]) -> [StyledSpan] {
-        // Collect all captures with their byte ranges
-        var rawSpans: [(byteRange: Range<Int>, style: Style)] = []
+        let utf8 = Array(source.utf8)
+        guard !utf8.isEmpty else {
+            return [StyledSpan(text: source, style: theme.defaultStyle)]
+        }
 
+        // Collect all captures with byte ranges and pattern index
+        var rawSpans: [(byteRange: Range<Int>, style: Style, patternIndex: Int)] = []
         for match in matches {
             for capture in match.captures {
                 let style = theme.style(for: capture.name)
-                rawSpans.append((byteRange: capture.node.byteRange, style: style))
+                rawSpans.append((byteRange: capture.node.byteRange, style: style, patternIndex: match.patternIndex))
             }
         }
-
-        // Sort by start position (later captures override earlier)
-        rawSpans.sort { $0.byteRange.lowerBound < $1.byteRange.lowerBound }
-
         guard !rawSpans.isEmpty else {
             return [StyledSpan(text: source, style: theme.defaultStyle)]
         }
 
-        // Build non-overlapping spans
+        // Sort: larger ranges first, then earlier patterns first.
+        // This way, more specific (smaller/later) captures override broader ones.
+        rawSpans.sort { a, b in
+            let aSize = a.byteRange.count
+            let bSize = b.byteRange.count
+            if aSize != bSize { return aSize > bSize }
+            if a.patternIndex != b.patternIndex { return a.patternIndex < b.patternIndex }
+            if a.byteRange.lowerBound != b.byteRange.lowerBound { return a.byteRange.lowerBound < b.byteRange.lowerBound }
+            return a.byteRange.upperBound < b.byteRange.upperBound
+        }
+
+        // Build per-byte style map
+        var byteStyles = [Style?](repeating: nil, count: utf8.count)
+        for span in rawSpans {
+            let start = min(max(span.byteRange.lowerBound, 0), utf8.count)
+            let end = min(max(span.byteRange.upperBound, start), utf8.count)
+            for i in start..<end {
+                byteStyles[i] = span.style
+            }
+        }
+
+        // Coalesce into spans
         var spans: [StyledSpan] = []
-        let utf8 = Array(source.utf8)
         var pos = 0
-
-        for raw in rawSpans {
-            guard raw.byteRange.lowerBound < utf8.count else { continue }
-
-            // Emit unstyled gap
-            if raw.byteRange.lowerBound > pos {
-                let text = String(bytes: utf8[pos..<raw.byteRange.lowerBound], encoding: .utf8) ?? ""
-                if !text.isEmpty {
-                    spans.append(StyledSpan(text: text, style: theme.defaultStyle))
-                }
+        while pos < utf8.count {
+            let style = byteStyles[pos] ?? theme.defaultStyle
+            var end = pos + 1
+            while end < utf8.count && (byteStyles[end] ?? theme.defaultStyle) == style {
+                end += 1
             }
-
-            let end = min(raw.byteRange.upperBound, utf8.count)
-            if end > max(pos, raw.byteRange.lowerBound) {
-                let start = max(pos, raw.byteRange.lowerBound)
-                let text = String(bytes: utf8[start..<end], encoding: .utf8) ?? ""
-                if !text.isEmpty {
-                    spans.append(StyledSpan(text: text, style: raw.style))
-                }
+            if let text = String(bytes: utf8[pos..<end], encoding: .utf8), !text.isEmpty {
+                spans.append(StyledSpan(text: text, style: style))
             }
-
-            pos = max(pos, raw.byteRange.upperBound)
+            pos = end
         }
-
-        // Trailing unstyled text
-        if pos < utf8.count {
-            let text = String(bytes: utf8[pos...], encoding: .utf8) ?? ""
-            if !text.isEmpty {
-                spans.append(StyledSpan(text: text, style: theme.defaultStyle))
-            }
-        }
-
         return spans
     }
 }

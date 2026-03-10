@@ -72,7 +72,9 @@ public struct KeyboardDecoder: Sendable {
 
         case .keyCode:
             if isDigit(byte) {
-                keyCodeValue = keyCodeValue * 10 + UInt32(byte - 0x30)
+                guard Self.appendDigit(byte - 0x30, to: &keyCodeValue, maximum: UInt32.max) else {
+                    return invalidResult()
+                }
                 return .pending
             }
             if byte == 0x3a { // : — alternate key codes follow
@@ -96,7 +98,9 @@ public struct KeyboardDecoder: Sendable {
 
         case .alternateKeys:
             if isDigit(byte) {
-                currentAlternate = currentAlternate * 10 + UInt32(byte - 0x30)
+                guard Self.appendDigit(byte - 0x30, to: &currentAlternate, maximum: UInt32.max) else {
+                    return invalidResult()
+                }
                 return .pending
             }
             if byte == 0x3a { // : — next alternate
@@ -125,7 +129,9 @@ public struct KeyboardDecoder: Sendable {
 
         case .modifiers:
             if isDigit(byte) {
-                modifierValue = modifierValue * 10 + UInt8(byte - 0x30)
+                guard Self.appendDigit(byte - 0x30, to: &modifierValue, maximum: UInt8.max) else {
+                    return invalidResult()
+                }
                 return .pending
             }
             if byte == 0x3a { // : — event type follows
@@ -149,7 +155,9 @@ public struct KeyboardDecoder: Sendable {
 
         case .eventType:
             if isDigit(byte) {
-                eventTypeValue = eventTypeValue * 10 + UInt8(byte - 0x30)
+                guard Self.appendDigit(byte - 0x30, to: &eventTypeValue, maximum: UInt8.max) else {
+                    return invalidResult()
+                }
                 return .pending
             }
             if byte == 0x3b { // ; — text codepoints follow
@@ -168,7 +176,9 @@ public struct KeyboardDecoder: Sendable {
 
         case .textCodepoints:
             if isDigit(byte) {
-                currentTextCP = currentTextCP * 10 + UInt32(byte - 0x30)
+                guard Self.appendDigit(byte - 0x30, to: &currentTextCP, maximum: UInt32.max) else {
+                    return invalidResult()
+                }
                 return .pending
             }
             if byte == 0x3a { // : — next codepoint
@@ -238,5 +248,30 @@ public struct KeyboardDecoder: Sendable {
 
     private func isDigit(_ byte: UInt8) -> Bool {
         byte >= 0x30 && byte <= 0x39
+    }
+
+    private mutating func invalidResult() -> DecoderResult<KeyEvent> {
+        let invalid = buffer
+        reset()
+        return .invalid(invalid)
+    }
+
+    private static func appendDigit<T: FixedWidthInteger>(
+        _ digit: UInt8,
+        to value: inout T,
+        maximum: T
+    ) -> Bool {
+        let (multiplied, multiplyOverflow) = value.multipliedReportingOverflow(by: 10)
+        guard !multiplyOverflow else {
+            return false
+        }
+
+        let (updated, addOverflow) = multiplied.addingReportingOverflow(T(digit))
+        guard !addOverflow, updated <= maximum else {
+            return false
+        }
+
+        value = updated
+        return true
     }
 }

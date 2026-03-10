@@ -63,13 +63,13 @@ public enum KittySequences: Sendable {
 
     // MARK: - Cursor
 
-    /// Move cursor to row, col (1-based).
+    /// Move cursor to row, col (1-based). Values are clamped to 1...65535.
     public static func moveCursor(row: Int, col: Int) -> [UInt8] {
         // CSI row ; col H
         var bytes: [UInt8] = [0x1b, 0x5b]
-        appendDecimal(&bytes, UInt16(row))
+        appendDecimal(&bytes, clampedCursorCoordinate(row))
         bytes.append(0x3b)
-        appendDecimal(&bytes, UInt16(col))
+        appendDecimal(&bytes, clampedCursorCoordinate(col))
         bytes.append(0x48) // H
         return bytes
     }
@@ -159,24 +159,26 @@ public enum KittySequences: Sendable {
     // MARK: - Private
 
     private static func appendDecimal(_ bytes: inout [UInt8], _ value: UInt16) {
-        if value >= 100 {
-            if value >= 1000 {
-                bytes.append(0x30 + UInt8(value / 1000))
-                bytes.append(0x30 + UInt8((value / 100) % 10))
-            } else {
-                bytes.append(0x30 + UInt8(value / 100))
-            }
-            bytes.append(0x30 + UInt8((value / 10) % 10))
-            bytes.append(0x30 + UInt8(value % 10))
-        } else if value >= 10 {
-            bytes.append(0x30 + UInt8(value / 10))
-            bytes.append(0x30 + UInt8(value % 10))
-        } else {
-            bytes.append(0x30 + UInt8(value))
+        if value >= 10_000 {
+            bytes.append(0x30 + UInt8(value / 10_000))
         }
+        if value >= 1_000 {
+            bytes.append(0x30 + UInt8((value / 1_000) % 10))
+        }
+        if value >= 100 {
+            bytes.append(0x30 + UInt8((value / 100) % 10))
+        }
+        if value >= 10 {
+            bytes.append(0x30 + UInt8((value / 10) % 10))
+        }
+        bytes.append(0x30 + UInt8(value % 10))
     }
 
     private static func appendDecimal(_ bytes: inout [UInt8], _ value: UInt8) {
         appendDecimal(&bytes, UInt16(value))
+    }
+
+    private static func clampedCursorCoordinate(_ value: Int) -> UInt16 {
+        UInt16(Swift.max(1, Swift.min(65_535, value)))
     }
 }

@@ -86,6 +86,14 @@ struct SGREncoderTests {
         let expected: [UInt8] = [0x1b, 0x5b] + "38;5;200".utf8 + [0x6d]
         #expect(bytes == expected)
     }
+
+    @Test("Diff encoding resets underline color")
+    func diffUnderlineColorReset() {
+        let old = Style(underlineColor: .rgb(r: 255, g: 0, b: 0), bold: true)
+        let new = Style(bold: true)
+        let expected: [UInt8] = [0x1b, 0x5b] + "59".utf8 + [0x6d]
+        #expect(SGREncoder.encodeDiff(from: old, to: new) == expected)
+    }
 }
 
 @Suite("KeyboardDecoder")
@@ -157,6 +165,19 @@ struct KeyboardDecoderTests {
             Issue.record("Expected Alt+a")
         }
     }
+
+    @Test("Numeric overflow returns invalid", arguments: [
+        ("\u{1B}[42949672960u", "\u{1B}[4294967296"),
+        ("\u{1B}[1:42949672960u", "\u{1B}[1:4294967296"),
+        ("\u{1B}[1;256u", "\u{1B}[1;256"),
+        ("\u{1B}[1;1:256u", "\u{1B}[1;1:256"),
+        ("\u{1B}[1;1;42949672960u", "\u{1B}[1;1;4294967296"),
+    ])
+    func invalidOnNumericOverflow(sequence: String, invalidPrefix: String) {
+        var decoder = KeyboardDecoder()
+        #expect(feedKeyboard(sequence, into: &decoder) == .invalid(Array(invalidPrefix.utf8)))
+        #expect(decoder.feed(0x61) == .complete(KeyEvent(keyCode: 97)))
+    }
 }
 
 @Suite("MouseDecoder")
@@ -220,6 +241,32 @@ struct MouseDecoderTests {
             Issue.record("Expected shifted mouse event")
         }
     }
+
+    @Test("Numeric overflow returns invalid", arguments: [
+        ("\u{1B}[<65536;1;1M", "\u{1B}[<65536"),
+        ("\u{1B}[<0;65536;1M", "\u{1B}[<0;65536"),
+        ("\u{1B}[<0;1;65536M", "\u{1B}[<0;1;65536"),
+    ])
+    func invalidOnNumericOverflow(sequence: String, invalidPrefix: String) {
+        var decoder = MouseDecoder()
+        #expect(feedMouse(sequence, into: &decoder) == .invalid(Array(invalidPrefix.utf8)))
+        #expect(decoder.feed(0x1b) == .pending)
+    }
+
+    @Test("Extra buttons decode from high values", arguments: [
+        ("\u{1B}[<128;1;1M", MouseButton.button4),
+        ("\u{1B}[<129;1;1M", MouseButton.button5),
+    ])
+    func extraButtons(sequence: String, expectedButton: MouseButton) {
+        var decoder = MouseDecoder()
+        let result = feedMouse(sequence, into: &decoder)
+        if case .complete(let event) = result {
+            #expect(event.button == expectedButton)
+            #expect(event.kind == .press)
+        } else {
+            Issue.record("Expected extra button event")
+        }
+    }
 }
 
 @Suite("KittySequences")
@@ -244,4 +291,41 @@ struct KittySequencesTests {
         // CSI 5 ; 10 H
         #expect(bytes == [0x1b, 0x5b, 0x35, 0x3b, 0x31, 0x30, 0x48])
     }
+
+    @Test("Move cursor clamps edge values", arguments: [
+        (-5, 0, "\u{1B}[1;1H"),
+        (65_535, 65_535, "\u{1B}[65535;65535H"),
+        (70_000, 80_000, "\u{1B}[65535;65535H"),
+    ])
+    func moveCursorClamps(row: Int, col: Int, expectedSequence: String) {
+        #expect(KittySequences.moveCursor(row: row, col: col) == Array(expectedSequence.utf8))
+    }
+}
+
+private func feedKeyboard(_ sequence: String, into decoder: inout KeyboardDecoder) -> DecoderResult<KeyEvent> {
+    var result: DecoderResult<KeyEvent> = .pending
+    for byte in sequence.utf8 {
+        result = decoder.feed(byte)
+        switch result {
+        case .pending:
+            continue
+        case .complete, .invalid:
+            return result
+        }
+    }
+    return result
+}
+
+private func feedMouse(_ sequence: String, into decoder: inout MouseDecoder) -> DecoderResult<MouseEvent> {
+    var result: DecoderResult<MouseEvent> = .pending
+    for byte in sequence.utf8 {
+        result = decoder.feed(byte)
+        switch result {
+        case .pending:
+            continue
+        case .complete, .invalid:
+            return result
+        }
+    }
+    return result
 }

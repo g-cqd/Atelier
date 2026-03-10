@@ -72,10 +72,17 @@ public struct ProductionRule: Sendable, Equatable {
     public var name: String
     public var symbolCount: Int
     public var symbols: [String]
+    public var fields: [Int: String]
 
-    public init(name: String, symbolCount: Int, symbols: [String] = []) {
+    public init(
+        name: String,
+        symbolCount: Int,
+        symbols: [String] = [],
+        fields: [Int: String] = [:]
+    ) {
         self.name = name
         self.symbolCount = symbolCount
         self.symbols = symbols
+        self.fields = fields
     }
 }

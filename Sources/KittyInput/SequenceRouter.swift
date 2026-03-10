@@ -2,23 +2,43 @@ import KittyCodecs
 
 /// Routes incoming byte sequences to appropriate decoders based on prefix.
 public struct SequenceRouter: Sendable {
-    private var keyboardDecoder = KeyboardDecoder()
-    private var mouseDecoder = MouseDecoder()
-    private var buffer: [UInt8] = []
-    private var routeState: RouteState = .ground
-
     private enum RouteState: Sendable {
         case ground
         case escape
         case csi
-        case csiLt       // CSI < — mouse
-        case csiGt       // CSI > — keyboard mode response
-        case keyboard     // CSI ... u
-        case mouse        // CSI < ... M/m
-        case osc          // ESC ]
-        case paste        // bracketed paste content
-        case focusEvent   // CSI I / CSI O
+        case csiLt
+        case csiGt
+        case csiParam
+        case keyboard
+        case mouse
+        case osc
+        case paste
+        case ss3
     }
+
+    private enum FunctionalKeyCode {
+        static let insert: UInt32 = 57348
+        static let delete: UInt32 = 57349
+        static let up: UInt32 = 57352
+        static let down: UInt32 = 57353
+        static let right: UInt32 = 57354
+        static let left: UInt32 = 57355
+        static let home: UInt32 = 57356
+        static let end: UInt32 = 57357
+        static let pageUp: UInt32 = 57358
+        static let pageDown: UInt32 = 57359
+        static let f1: UInt32 = 57364
+        static let f2: UInt32 = 57365
+        static let f3: UInt32 = 57366
+        static let f4: UInt32 = 57367
+    }
+
+    private static let pasteEndMarker: [UInt8] = [0x1b, 0x5b, 0x32, 0x30, 0x31, 0x7e]
+
+    private var keyboardDecoder = KeyboardDecoder()
+    private var mouseDecoder = MouseDecoder()
+    private var buffer: [UInt8] = []
+    private var routeState: RouteState = .ground
 
     public init() {}
 
@@ -30,72 +50,111 @@ public struct SequenceRouter: Sendable {
             if byte == 0x1b {
                 routeState = .escape
                 buffer = [byte]
-            } else {
-                // Plain character — route through keyboard decoder
-                if case .complete(let key) = keyboardDecoder.feed(byte) {
-                    events.append(.key(key))
-                }
+            } else if case .complete(let key) = keyboardDecoder.feed(byte) {
+                events.append(.key(key))
             }
 
         case .escape:
             buffer.append(byte)
-            if byte == 0x5b { // [
+
+            switch byte {
+            case 0x5b:
                 routeState = .csi
-            } else if byte == 0x5d { // ]
+            case 0x5d:
                 routeState = .osc
-            } else if byte == 0x4f { // O — SS3 (function keys)
-                routeState = .keyboard
-                // Re-feed the buffered bytes to keyboard decoder
-                for b in buffer {
-                    _ = keyboardDecoder.feed(b)
-                }
-            } else {
-                // ESC + char — feed to keyboard decoder
-                for b in buffer {
-                    if case .complete(let key) = keyboardDecoder.feed(b) {
-                        events.append(.key(key))
-                    }
-                }
-                routeState = .ground
-                buffer.removeAll()
+            case 0x4f:
+                routeState = .ss3
+            default:
+                events.append(contentsOf: decodeKeyboardSequence(buffer))
+                resetRouting()
             }
 
         case .csi:
             buffer.append(byte)
-            if byte == 0x3c { // <
+
+            switch byte {
+            case 0x3c:
                 routeState = .csiLt
-            } else if byte == 0x3e { // >
+            case 0x3e:
                 routeState = .csiGt
-            } else if byte == 0x49 { // I — focus in
+            case 0x49:
                 events.append(.focusIn)
-                routeState = .ground
-                buffer.removeAll()
-            } else if byte == 0x4f { // O — focus out
+                resetRouting()
+            case 0x4f:
                 events.append(.focusOut)
-                routeState = .ground
-                buffer.removeAll()
-            } else {
-                // Route to keyboard decoder
-                routeState = .keyboard
-                for b in buffer {
-                    _ = keyboardDecoder.feed(b)
+                resetRouting()
+            case 0x75:
+                events.append(contentsOf: decodeKeyboardSequence(buffer))
+                resetRouting()
+            case 0x30 ... 0x39:
+                routeState = .csiParam
+            default:
+                if let keyCode = Self.csiKeyCode(for: byte) {
+                    events.append(.key(KeyEvent(keyCode: keyCode)))
+                } else {
+                    events.append(.unknown(buffer))
                 }
+                resetRouting()
             }
 
         case .csiLt:
             buffer.append(byte)
-            // This is a mouse sequence — route remaining bytes to mouse decoder
             routeState = .mouse
-            for b in buffer {
-                _ = mouseDecoder.feed(b)
+            for bufferedByte in buffer {
+                _ = mouseDecoder.feed(bufferedByte)
             }
 
         case .csiGt:
             buffer.append(byte)
-            // Keyboard mode response or push — route to keyboard decoder
             routeState = .keyboard
-            for b in buffer {
-                _ = keyboardDecoder.feed(b)
+            for bufferedByte in buffer {
+                _ = keyboardDecoder.feed(bufferedByte)
+            }
+
+        case .csiParam:
+            buffer.append(byte)
+
+            if Self.isDigit(byte) || byte == 0x3a || byte == 0x3b {
+                break
+            }
+
+            if byte == 0x75 {
+                events.append(contentsOf: decodeKeyboardSequence(buffer))
+                resetRouting()
+                break
+            }
+
+            if hasCSIFieldSeparators() {
+                events.append(.unknown(buffer))
+                resetRouting()
+                break
+            }
+
+            guard let parameter = currentCSIParameter() else {
+                events.append(.unknown(buffer))
+                resetRouting()
+                break
+            }
+
+            switch byte {
+            case 0x7e:
+                if parameter == 200 {
+                    routeState = .paste
+                    buffer.removeAll(keepingCapacity: true)
+                } else if let keyCode = Self.csiTildeKeyCode(for: parameter) {
+                    events.append(.key(KeyEvent(keyCode: keyCode)))
+                    resetRouting()
+                } else {
+                    events.append(.unknown(buffer))
+                    resetRouting()
+                }
+            default:
+                if let keyCode = Self.csiKeyCode(for: byte) {
+                    events.append(.key(KeyEvent(keyCode: keyCode)))
+                } else {
+                    events.append(.unknown(buffer))
+                }
+                resetRouting()
             }
 
         case .keyboard:
@@ -103,12 +162,10 @@ public struct SequenceRouter: Sendable {
             switch result {
             case .complete(let key):
                 events.append(.key(key))
-                routeState = .ground
-                buffer.removeAll()
+                resetRouting()
             case .invalid(let bytes):
                 events.append(.unknown(bytes))
-                routeState = .ground
-                buffer.removeAll()
+                resetRouting()
             case .pending:
                 break
             }
@@ -118,45 +175,43 @@ public struct SequenceRouter: Sendable {
             switch result {
             case .complete(let mouse):
                 events.append(.mouse(mouse))
-                routeState = .ground
-                buffer.removeAll()
+                resetRouting()
             case .invalid(let bytes):
                 events.append(.unknown(bytes))
-                routeState = .ground
-                buffer.removeAll()
+                resetRouting()
             case .pending:
                 break
             }
 
         case .osc:
             buffer.append(byte)
-            // OSC sequences end with ST (ESC \) or BEL (0x07)
             if byte == 0x07 {
                 events.append(.unknown(buffer))
-                routeState = .ground
-                buffer.removeAll()
-            } else if buffer.count >= 2 && buffer[buffer.count - 2] == 0x1b && byte == 0x5c {
+                resetRouting()
+            } else if buffer.count >= 2, buffer[buffer.count - 2] == 0x1b, byte == 0x5c {
                 events.append(.unknown(buffer))
-                routeState = .ground
-                buffer.removeAll()
+                resetRouting()
             }
 
         case .paste:
             buffer.append(byte)
-            // Check for paste end: ESC [ 2 0 1 ~
-            if buffer.count >= 6 {
-                let tail = buffer.suffix(6)
-                if tail.elementsEqual([0x1b, 0x5b, 0x32, 0x30, 0x31, 0x7e]) {
-                    let pasteBytes = Array(buffer.dropLast(6))
-                    let text = String(bytes: pasteBytes, encoding: .utf8) ?? ""
-                    events.append(.paste(text))
-                    routeState = .ground
-                    buffer.removeAll()
-                }
+            if buffer.count >= Self.pasteEndMarker.count,
+               buffer.suffix(Self.pasteEndMarker.count).elementsEqual(Self.pasteEndMarker) {
+                let pasteBytes = Array(buffer.dropLast(Self.pasteEndMarker.count))
+                let text = String(bytes: pasteBytes, encoding: .utf8) ?? ""
+                events.append(.paste(text))
+                resetRouting()
             }
 
-        case .focusEvent:
-            break
+        case .ss3:
+            if let keyCode = Self.ss3KeyCode(for: byte) {
+                events.append(.key(KeyEvent(keyCode: keyCode)))
+                resetRouting()
+            } else {
+                events.append(contentsOf: decodeKeyboardSequence([0x1b, 0x4f]))
+                resetRouting()
+                events.append(contentsOf: feed(byte))
+            }
         }
 
         return events
@@ -169,5 +224,132 @@ public struct SequenceRouter: Sendable {
             events.append(contentsOf: feed(byte))
         }
         return events
+    }
+
+    private mutating func decodeKeyboardSequence(_ bytes: [UInt8]) -> [InputEvent] {
+        var events: [InputEvent] = []
+
+        for byte in bytes {
+            let result = keyboardDecoder.feed(byte)
+            switch result {
+            case .pending:
+                continue
+            case .complete(let key):
+                events.append(.key(key))
+                return events
+            case .invalid(let invalidBytes):
+                events.append(.unknown(invalidBytes))
+                return events
+            }
+        }
+
+        return events
+    }
+
+    private mutating func resetRouting() {
+        routeState = .ground
+        buffer.removeAll(keepingCapacity: true)
+    }
+
+    private func hasCSIFieldSeparators() -> Bool {
+        buffer.dropFirst(2).contains { $0 == 0x3a || $0 == 0x3b }
+    }
+
+    private func currentCSIParameter() -> Int? {
+        var parameter = 0
+        var hasDigits = false
+
+        for byte in buffer.dropFirst(2) {
+            guard Self.isDigit(byte) else {
+                break
+            }
+
+            hasDigits = true
+            guard Self.appendDigit(byte - 0x30, to: &parameter, maximum: Int.max) else {
+                return nil
+            }
+        }
+
+        return hasDigits ? parameter : nil
+    }
+
+    private static func csiKeyCode(for terminator: UInt8) -> UInt32? {
+        switch terminator {
+        case 0x41:
+            return FunctionalKeyCode.up
+        case 0x42:
+            return FunctionalKeyCode.down
+        case 0x43:
+            return FunctionalKeyCode.right
+        case 0x44:
+            return FunctionalKeyCode.left
+        case 0x46:
+            return FunctionalKeyCode.end
+        case 0x48:
+            return FunctionalKeyCode.home
+        case 0x50:
+            return FunctionalKeyCode.f1
+        case 0x51:
+            return FunctionalKeyCode.f2
+        case 0x52:
+            return FunctionalKeyCode.f3
+        case 0x53:
+            return FunctionalKeyCode.f4
+        default:
+            return nil
+        }
+    }
+
+    private static func csiTildeKeyCode(for parameter: Int) -> UInt32? {
+        switch parameter {
+        case 2:
+            return FunctionalKeyCode.insert
+        case 3:
+            return FunctionalKeyCode.delete
+        case 5:
+            return FunctionalKeyCode.pageUp
+        case 6:
+            return FunctionalKeyCode.pageDown
+        default:
+            return nil
+        }
+    }
+
+    private static func ss3KeyCode(for terminator: UInt8) -> UInt32? {
+        switch terminator {
+        case 0x50:
+            return FunctionalKeyCode.f1
+        case 0x51:
+            return FunctionalKeyCode.f2
+        case 0x52:
+            return FunctionalKeyCode.f3
+        case 0x53:
+            return FunctionalKeyCode.f4
+        default:
+            return nil
+        }
+    }
+
+    private static func isDigit(_ byte: UInt8) -> Bool {
+        byte >= 0x30 && byte <= 0x39
+    }
+
+    private static func appendDigit<T: FixedWidthInteger>(
+        _ digit: UInt8,
+        to value: inout T,
+        maximum: T
+    ) -> Bool {
+        let (multiplied, multiplyOverflow) = value.multipliedReportingOverflow(by: 10)
+        guard !multiplyOverflow else {
+            return false
+        }
+
+        let (updated, addOverflow) = multiplied.addingReportingOverflow(T(digit))
+        guard !addOverflow, updated <= maximum else {
+            return false
+        }
+
+        value = updated
+        return true
     }
 }

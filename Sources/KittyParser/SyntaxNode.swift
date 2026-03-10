@@ -51,9 +51,15 @@ public struct SyntaxNode: Sendable, Equatable {
 
     /// The text content at this node (requires source).
     public func text(from source: String) -> String {
-        let startIdx = source.utf8.index(source.utf8.startIndex, offsetBy: byteRange.lowerBound)
-        let endIdx = source.utf8.index(source.utf8.startIndex, offsetBy: min(byteRange.upperBound, source.utf8.count))
-        return String(source.utf8[startIdx..<endIdx]) ?? ""
+        let utf8 = source.utf8
+        let lower = min(max(byteRange.lowerBound, 0), utf8.count)
+        let upper = min(max(byteRange.upperBound, 0), utf8.count)
+
+        guard lower < upper else { return "" }
+
+        let startIdx = utf8.index(utf8.startIndex, offsetBy: lower)
+        let endIdx = utf8.index(utf8.startIndex, offsetBy: upper)
+        return String(utf8[startIdx..<endIdx]) ?? ""
     }
 
     /// Named children only.

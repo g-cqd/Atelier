@@ -36,7 +36,18 @@ public struct GrammarDefinition: Sendable, Equatable {
     }
 
     public static func == (lhs: GrammarDefinition, rhs: GrammarDefinition) -> Bool {
-        lhs.name == rhs.name
+        guard lhs.name == rhs.name else { return false }
+        guard lhs.rules.count == rhs.rules.count else { return false }
+        for (l, r) in zip(lhs.rules, rhs.rules) {
+            guard l.name == r.name && l.rule == r.rule else { return false }
+        }
+        return lhs.extras == rhs.extras
+            && lhs.conflicts == rhs.conflicts
+            && lhs.externals == rhs.externals
+            && lhs.inline == rhs.inline
+            && lhs.word == rhs.word
+            && lhs.supertypes == rhs.supertypes
+            && lhs.precedences == rhs.precedences
     }
 }
 

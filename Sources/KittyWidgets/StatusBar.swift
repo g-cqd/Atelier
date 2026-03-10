@@ -23,6 +23,7 @@ public struct StatusBar: View, Sendable {
 
     /// Render the status bar into a fixed-width string.
     public func render(width: Int) -> String {
+        guard width > 0 else { return "" }
         let leftPart = left.prefix(width / 3)
         let rightPart = right.suffix(width / 3)
         let centerSpace = width - leftPart.count - rightPart.count
