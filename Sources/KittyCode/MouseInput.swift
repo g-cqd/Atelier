@@ -84,10 +84,10 @@ private func handleEditorClick(row: Int, mouseCol: Int, editorStart: Int, lineNu
     let relativeCol = mouseCol - editorStart - lineNumWidth
     if state.config.wrapLines {
         let displayCol = max(0, relativeCol)
-        state.cursorCol = charIndex(forDisplayColumn: displayCol, in: line)
+        state.cursorCol = TextDisplayMetrics.characterOffset(forDisplayColumn: displayCol, in: line)
     } else {
         let displayCol = max(0, relativeCol + state.hScrollOffset)
-        state.cursorCol = charIndex(forDisplayColumn: displayCol, in: line)
+        state.cursorCol = TextDisplayMetrics.characterOffset(forDisplayColumn: displayCol, in: line)
     }
 }
 

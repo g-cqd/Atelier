@@ -1,5 +1,6 @@
 import KittyCodecs
 import KittySyntax
+import KittyText
 
 /// Scrollable syntax-highlighted text display widget.
 public struct TextEditor: View, Sendable {
@@ -85,11 +86,6 @@ public struct TextEditor: View, Sendable {
 
     /// Number of digits needed for line numbers.
     public var lineNumberWidth: Int {
-        let count = lines.count
-        if count < 10 { return 1 }
-        if count < 100 { return 2 }
-        if count < 1000 { return 3 }
-        if count < 10000 { return 4 }
-        return 5
+        TextDisplayMetrics.lineNumberDigits(forLineCount: lines.count)
     }
 }
