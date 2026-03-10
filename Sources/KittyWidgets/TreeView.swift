@@ -22,7 +22,9 @@ public struct TreeView<Value: Sendable>: View, Sendable {
     public let root: [TreeNode<Value>]
     public let label: @Sendable (Value) -> String
     public var selectedIndex: Int
+    public var scrollOffset: Int
     public var style: TreeViewStyle
+    public let rowStyle: @Sendable (Value) -> Style
 
     public struct TreeViewStyle: Sendable {
         public var normalStyle: Style
@@ -52,13 +54,17 @@ public struct TreeView<Value: Sendable>: View, Sendable {
     public init(
         root: [TreeNode<Value>],
         selectedIndex: Int = 0,
+        scrollOffset: Int = 0,
         style: TreeViewStyle = TreeViewStyle(),
-        label: @escaping @Sendable (Value) -> String
+        label: @escaping @Sendable (Value) -> String,
+        rowStyle: @escaping @Sendable (Value) -> Style = { _ in .default }
     ) {
         self.root = root
         self.selectedIndex = selectedIndex
+        self.scrollOffset = scrollOffset
         self.style = style
         self.label = label
+        self.rowStyle = rowStyle
     }
 
     public var body: Never { fatalError() }
