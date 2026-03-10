@@ -76,6 +76,7 @@ final class EditorState {
             textBuffer = TextBuffer(lines: normalizedLines)
             cachedFileLines = normalizedLines
             cachedDocumentText = normalizedLines.joined(separator: "\n")
+            highlightSession = nil
         }
     }
 
@@ -111,10 +112,16 @@ final class EditorState {
         refreshHighlights()
     }
 
+    func textDidChange(_ mutation: TextMutation) {
+        invalidateTextSnapshotCache()
+        refreshHighlights(after: mutation)
+    }
+
     func replaceDocumentText(with content: String) {
         textBuffer = TextBuffer(content)
         cachedFileLines = nil
         cachedDocumentText = content
+        highlightSession = nil
     }
 
     /// Backward-compatible cursor row.
@@ -176,20 +183,46 @@ final class EditorState {
     }
 
     func refreshHighlights() {
-        let session = highlightSession ?? {
-            let newSession = LanguageHighlighter.makeSession(
-                language: currentLanguage,
-                theme: syntaxTheme
-            )
-            highlightSession = newSession
-            return newSession
-        }()
-
+        let session = currentHighlightSession()
         if session.prefersLineInput {
             highlightedLines = session.highlightLines(fileContent)
         } else {
             highlightedLines = session.highlightDocument(source: documentText)
         }
+    }
+
+    private func currentHighlightSession() -> LanguageHighlighter.Session {
+        if let highlightSession {
+            return highlightSession
+        }
+
+        let newSession = LanguageHighlighter.makeSession(
+            language: currentLanguage,
+            theme: syntaxTheme
+        )
+        highlightSession = newSession
+        return newSession
+    }
+
+    private func refreshHighlights(after mutation: TextMutation) {
+        let session = currentHighlightSession()
+        guard session.prefersLineInput else {
+            refreshHighlights()
+            return
+        }
+
+        let lines = fileContent
+        guard mutation.originalLineRange.lowerBound >= 0,
+              mutation.originalLineRange.upperBound <= highlightedLines.count,
+              mutation.updatedLineRange.lowerBound >= 0,
+              mutation.updatedLineRange.upperBound <= lines.count
+        else {
+            refreshHighlights()
+            return
+        }
+
+        let updatedHighlights = session.highlightLines(lines[mutation.updatedLineRange])
+        highlightedLines.replaceSubrange(mutation.originalLineRange, with: updatedHighlights)
     }
 
     var fileName = ""

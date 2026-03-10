@@ -129,6 +129,15 @@ struct HighlighterTests {
         #expect(lines[0].map(\.text).joined() == "// comment")
         #expect(lines[1].map(\.text).joined() == "value")
     }
+
+    @Test("LanguageHighlighter prewarms only bundled grammar artifacts")
+    func prewarmArtifacts() async {
+        let warmed = await LanguageHighlighter.prewarmArtifacts(for: ["swift", "json", "swift", "unknown_lang"])
+
+        #expect(warmed.contains("json"))
+        #expect(!warmed.contains("swift"))
+        #expect(!warmed.contains("unknown_lang"))
+    }
 }
 
 @Suite("GrammarRegistry")
