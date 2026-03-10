@@ -4,7 +4,7 @@ import KittyText
 /// A flat grid of cells representing the terminal screen.
 public struct ScreenBuffer: Sendable {
     /// The flat array of cells stored in row-major order (row * columns + col).
-    public private(set) var cells: [Cell]
+    public private(set) var cells: ContiguousArray<Cell>
 
     /// The number of columns (horizontal cells) in the buffer.
     public let columns: Int
@@ -23,7 +23,7 @@ public struct ScreenBuffer: Sendable {
     public init(columns: Int, rows: Int) {
         self.columns = columns
         self.rows = rows
-        self.cells = [Cell](repeating: .empty, count: columns * rows)
+        self.cells = ContiguousArray<Cell>(repeating: .empty, count: columns * rows)
         self.dirty = DirtyTracker(capacity: columns * rows)
     }
 
@@ -34,11 +34,11 @@ public struct ScreenBuffer: Sendable {
     public subscript(row: Int, col: Int) -> Cell {
         get {
             guard row >= 0, row < rows, col >= 0, col < columns else { return .empty }
-            return cells[row * columns + col]
+            return cells[row &* columns &+ col]
         }
         set {
             guard row >= 0, row < rows, col >= 0, col < columns else { return }
-            let idx = row * columns + col
+            let idx = row &* columns &+ col
             if cells[idx] != newValue {
                 cells[idx] = newValue
                 dirty.mark(idx)
@@ -113,7 +113,7 @@ public struct ScreenBuffer: Sendable {
     ///   - newCols: The new number of columns.
     ///   - newRows: The new number of rows.
     public mutating func resize(columns newCols: Int, rows newRows: Int) {
-        var newCells = [Cell](repeating: .empty, count: newCols * newRows)
+        var newCells = ContiguousArray<Cell>(repeating: .empty, count: newCols * newRows)
         let copyRows = min(rows, newRows)
         let copyCols = min(columns, newCols)
         for r in 0..<copyRows {
@@ -121,11 +121,10 @@ public struct ScreenBuffer: Sendable {
                 newCells[r * newCols + c] = cells[r * columns + c]
             }
         }
-        // Can't reassign self directly for columns/rows since they are let
         self = ScreenBuffer._fromParts(cells: newCells, columns: newCols, rows: newRows)
     }
 
-    private static func _fromParts(cells: [Cell], columns: Int, rows: Int) -> ScreenBuffer {
+    private static func _fromParts(cells: ContiguousArray<Cell>, columns: Int, rows: Int) -> ScreenBuffer {
         var buf = ScreenBuffer(columns: columns, rows: rows)
         buf.cells = cells
         // Mark everything dirty after resize (batch operation, O(words) not O(cells))

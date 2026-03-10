@@ -6,7 +6,7 @@ import KittyText
 func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipeline: RenderPipeline) -> Bool {
     let treeWidth = min(state.treePanelWidth, pipeline.columns / 2)
     let editorWidth = pipeline.columns - treeWidth - 1
-    let lineNumWidth = max(3, String(state.fileContent.count).count + 1)
+    let lineNumWidth = max(3, String(state.fileLineCount).count + 1)
     let availWidth = editorWidth - lineNumWidth
 
     if state.config.keybindingMode == .vim && state.vimMode == .normal {
@@ -17,11 +17,11 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         case AsciiKey.h:
             state.cursorCol = max(0, state.cursorCol - 1)
         case AsciiKey.j:
-            state.cursorRow = min(state.cursorRow + 1, max(0, state.fileContent.count - 1))
+            state.cursorRow = min(state.cursorRow + 1, max(0, state.fileLineCount - 1))
         case AsciiKey.k:
             state.cursorRow = max(0, state.cursorRow - 1)
         case AsciiKey.l:
-            let rowLength = state.fileContent.isEmpty ? 0 : state.fileContent[state.cursorRow].count
+            let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
             state.cursorCol = min(state.cursorCol + 1, rowLength)
         case AsciiKey.colon:
             state.statusMessage = ":"
@@ -39,11 +39,11 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
     switch key.keyCode {
     case Key.down.rawValue:
         if key.modifiers.contains(.alt) {
-            state.cursorRow = min(state.cursorRow + contentRows, max(0, state.fileContent.count - 1))
+            state.cursorRow = min(state.cursorRow + contentRows, max(0, state.fileLineCount - 1))
         } else {
-            state.cursorRow = min(state.cursorRow + 1, max(0, state.fileContent.count - 1))
+            state.cursorRow = min(state.cursorRow + 1, max(0, state.fileLineCount - 1))
         }
-        let rowLength = state.fileContent.isEmpty ? 0 : state.fileContent[state.cursorRow].count
+        let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
         state.cursorCol = min(state.cursorCol, rowLength)
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case Key.up.rawValue:
@@ -52,7 +52,7 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         } else {
             state.cursorRow = max(state.cursorRow - 1, 0)
         }
-        let rowLength = state.fileContent.isEmpty ? 0 : state.fileContent[state.cursorRow].count
+        let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
         state.cursorCol = min(state.cursorCol, rowLength)
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case Key.left.rawValue:
@@ -66,7 +66,7 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         if key.modifiers.contains(.alt) || key.modifiers.contains(.ctrl) {
             jumpWordForward(state: state)
         } else {
-            let rowLength = state.fileContent.isEmpty ? 0 : state.fileContent[state.cursorRow].count
+            let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
             state.cursorCol = min(state.cursorCol + 1, rowLength)
         }
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
@@ -81,21 +81,22 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
     case Key.home.rawValue:
         state.cursorCol = 0
     case Key.end.rawValue:
-        let rowLength = state.fileContent.isEmpty ? 0 : state.fileContent[state.cursorRow].count
+        let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
         state.cursorCol = rowLength
     case Key.pageUp.rawValue:
         state.cursorRow = max(state.cursorRow - contentRows, 0)
-        let rowLength = state.fileContent.isEmpty ? 0 : state.fileContent[state.cursorRow].count
+        let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
         state.cursorCol = min(state.cursorCol, rowLength)
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case Key.pageDown.rawValue:
-        state.cursorRow = min(state.cursorRow + contentRows, max(0, state.fileContent.count - 1))
-        let rowLength = state.fileContent.isEmpty ? 0 : state.fileContent[state.cursorRow].count
+        state.cursorRow = min(state.cursorRow + contentRows, max(0, state.fileLineCount - 1))
+        let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
         state.cursorCol = min(state.cursorCol, rowLength)
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case Key.enter.rawValue, Key.enterAlt.rawValue:
         let lineBeforeEdit = state.textCursor.row
         TextOperations.insertNewline(into: &state.textBuffer, at: &state.textCursor)
+        state.invalidateTextSnapshotCache()
         // Newline splits a line — invalidate from the split point onward
         for key in state.highlightCache.keys where key >= lineBeforeEdit {
             state.highlightCache.removeValue(forKey: key)
@@ -104,6 +105,7 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
     case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
         let lineBeforeEdit = state.textCursor.row
         TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor)
+        state.invalidateTextSnapshotCache()
         // Backspace may merge lines — invalidate from current line onward
         let invalidateFrom = min(lineBeforeEdit, state.textCursor.row)
         for key in state.highlightCache.keys where key >= invalidateFrom {
@@ -112,7 +114,7 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case AsciiKey.g:
         if key.modifiers == .shift {
-            state.cursorRow = max(0, state.fileContent.count - 1)
+            state.cursorRow = max(0, state.fileLineCount - 1)
             ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
         } else {
             state.cursorRow = 0
