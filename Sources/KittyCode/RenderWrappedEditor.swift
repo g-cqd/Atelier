@@ -17,7 +17,7 @@ func renderWrappedEditor(
     var lineIndex = state.scrollOffset
     var terminalCursorPos: (row: Int, col: Int)?
 
-    while screenRow < contentRows && lineIndex < state.fileContent.count {
+    while screenRow < contentRows && lineIndex < state.fileLineCount {
         let isCurrentLine = lineIndex == state.cursorRow
         let spans = state.cachedHighlightLine(lineIndex)
 
@@ -78,7 +78,7 @@ func renderWrappedEditor(
             }
 
             if isCurrentLine && state.mode == .editor {
-                let line = state.fileContent[lineIndex]
+                let line = state.fileLine(at: lineIndex)
                 let cursorDisplayCol = displayColumn(for: state.cursorCol, in: line)
                 let cursorWrapRow = cursorDisplayCol / availWidth
                 let cursorWrapCol = cursorDisplayCol % availWidth

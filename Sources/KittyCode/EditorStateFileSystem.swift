@@ -48,6 +48,7 @@ extension EditorState {
         fileName = node.name
         filePath = node.path
         textBuffer = TextBuffer(content)
+        invalidateTextSnapshotCache()
         textCursor = TextCursor()
         currentLanguage = Self.detectLanguage(for: node.name)
         clearHighlightCache()

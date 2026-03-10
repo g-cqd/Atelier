@@ -10,10 +10,10 @@ func renderEditorPanel(
     contentRows: Int,
     colorScheme: EditorState.ColorScheme
 ) -> (row: Int, col: Int)? {
-    let lineNumWidth = max(3, String(state.fileContent.count).count + 1)
+    let lineNumWidth = max(3, String(state.fileLineCount).count + 1)
     var terminalCursorPos: (row: Int, col: Int)?
 
-    if state.fileContent.isEmpty {
+    if state.isFileEmpty {
         renderEmptyEditor(
             pipeline: pipeline,
             editorStart: editorStart,

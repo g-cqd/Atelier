@@ -1,6 +1,8 @@
 import Foundation
 import KittyCodecs
 import KittyFileTree
+import KittyRenderer
+import KittyTerminal
 import Testing
 @testable import KittyCode
 
@@ -42,6 +44,20 @@ struct KittyCodeConfigTests {
 @Suite("KittyCode Navigation")
 @MainActor
 struct KittyCodeNavigationTests {
+    private func makeSUT(fileContent: [String], columns: Int = 80, rows: Int = 24) -> (state: EditorState, pipeline: RenderPipeline) {
+        let state = EditorState(rootPath: ".", config: KittyConfig())
+        state.mode = .editor
+        state.fileContent = fileContent
+
+        let pipeline = RenderPipeline(
+            connection: MockTerminalConnection(size: TerminalSize(columns: columns, rows: rows)),
+            columns: columns,
+            rows: rows
+        )
+
+        return (state, pipeline)
+    }
+
     @Test("Word jump forward moves to next token")
     func jumpForward() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
@@ -91,6 +107,125 @@ struct KittyCodeNavigationTests {
 
         ensureTreeVisible(state, contentRows: 10)
         #expect(state.treeScrollOffset == 16)
+    }
+
+    @Test("scrollLinesPerTick scales with viewport height")
+    func scrollLinesPerTickScalesWithViewportHeight() {
+        #expect(scrollLinesPerTick(visibleRows: 10) == 3)
+        #expect(scrollLinesPerTick(visibleRows: 24) == 3)
+        #expect(scrollLinesPerTick(visibleRows: 48) == 6)
+        #expect(scrollLinesPerTick(visibleRows: 200) == 12)
+    }
+
+    @Test("handleEvent moves cursor for repeated arrow keys")
+    func handleEventMovesCursorForRepeatedArrowKeys() {
+        let sut = makeSUT(fileContent: ["one", "two", "three"])
+
+        let handled = handleEvent(
+            event: .key(KeyEvent(keyCode: Key.down.rawValue, eventType: .repeat)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(handled)
+        #expect(sut.state.cursorRow == 1)
+    }
+
+    @Test("handleEvent keeps option arrow repeat semantics")
+    func handleEventKeepsOptionArrowRepeatSemantics() {
+        let sut = makeSUT(fileContent: ["alpha beta gamma"])
+
+        let handled = handleEvent(
+            event: .key(KeyEvent(keyCode: Key.right.rawValue, modifiers: .alt, eventType: .repeat)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(handled)
+        #expect(sut.state.cursorCol == 6)
+    }
+
+    @Test("handleEvent keeps page navigation working for repeated fn style keys")
+    func handleEventKeepsPageNavigationWorkingForRepeatedFnStyleKeys() {
+        let sut = makeSUT(fileContent: (0..<100).map(String.init), rows: 12)
+
+        let handled = handleEvent(
+            event: .key(KeyEvent(keyCode: Key.pageDown.rawValue, eventType: .repeat)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(handled)
+        #expect(sut.state.cursorRow == 10)
+    }
+
+    @Test("handleEvent ignores repeated escape after leaving the editor")
+    func handleEventIgnoresRepeatedEscapeAfterLeavingTheEditor() {
+        let sut = makeSUT(fileContent: ["one"])
+
+        let firstHandled = handleEvent(
+            event: .key(KeyEvent(keyCode: AsciiKey.escape)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        let repeatedHandled = handleEvent(
+            event: .key(KeyEvent(keyCode: AsciiKey.escape, eventType: .repeat)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(firstHandled)
+        #expect(repeatedHandled)
+        #expect(sut.state.mode == .tree)
+    }
+
+    @Test("insertText invalidates cached file snapshot")
+    func insertTextInvalidatesCachedFileSnapshot() {
+        let sut = makeSUT(fileContent: ["hello"])
+        _ = sut.state.fileContent
+        sut.state.cursorCol = 5
+
+        insertText("!", into: sut.state)
+
+        #expect(sut.state.fileContent == ["hello!"])
+        #expect(sut.state.fileLineCount == 1)
+    }
+
+    @Test("handleEvent enter invalidates cached file snapshot")
+    func handleEventEnterInvalidatesCachedFileSnapshot() {
+        let sut = makeSUT(fileContent: ["hello"])
+        _ = sut.state.fileContent
+        sut.state.cursorCol = 2
+
+        let handled = handleEvent(
+            event: .key(KeyEvent(keyCode: Key.enter.rawValue)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(handled)
+        #expect(sut.state.fileContent == ["he", "llo"])
+        #expect(sut.state.cursorRow == 1)
+        #expect(sut.state.cursorCol == 0)
+    }
+
+    @Test("handleEvent backspace invalidates cached file snapshot")
+    func handleEventBackspaceInvalidatesCachedFileSnapshot() {
+        let sut = makeSUT(fileContent: ["he", "llo"])
+        _ = sut.state.fileContent
+        sut.state.cursorRow = 1
+        sut.state.cursorCol = 0
+
+        let handled = handleEvent(
+            event: .key(KeyEvent(keyCode: Key.backspace.rawValue)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(handled)
+        #expect(sut.state.fileContent == ["hello"])
+        #expect(sut.state.cursorRow == 0)
+        #expect(sut.state.cursorCol == 2)
     }
 }
 
