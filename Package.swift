@@ -73,5 +73,6 @@ let package = Package(
         .testTarget(name: "KittySyntaxTests", dependencies: ["KittySyntax"]),
         .testTarget(name: "KittyWidgetsTests", dependencies: ["KittyWidgets"]),
         .testTarget(name: "KittyAppTests", dependencies: ["KittyApp"]),
+        .testTarget(name: "KittyCodeTests", dependencies: ["KittyCode"]),
     ]
 )

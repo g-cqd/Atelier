@@ -18,14 +18,13 @@ func highlightSwift(_ line: String, colorScheme: EditorState.ColorScheme) -> [St
         "Sendable", "Identifiable", "CustomStringConvertible", "View", "Task", "AsyncStream", "MainActor"
     ]
 
-    let baseBackground = colorScheme.editorText.bg
     let defaultStyle = colorScheme.editorText
-    let keywordStyle = Style(fg: .rgb(r: 0xc5, g: 0x86, b: 0xc0), bg: baseBackground)
-    let typeStyle = Style(fg: .rgb(r: 0x4e, g: 0xc9, b: 0xb0), bg: baseBackground)
-    let commentStyle = Style(fg: .rgb(r: 0x6a, g: 0x99, b: 0x55), bg: baseBackground, italic: true)
-    let stringStyle = Style(fg: .rgb(r: 0xce, g: 0x91, b: 0x78), bg: baseBackground)
-    let numberStyle = Style(fg: .rgb(r: 0xb5, g: 0xce, b: 0xa8), bg: baseBackground)
-    let attrStyle = Style(fg: .rgb(r: 0xdc, g: 0xdc, b: 0xaa), bg: baseBackground)
+    let keywordStyle = colorScheme.syntaxKeyword
+    let typeStyle = colorScheme.syntaxType
+    let commentStyle = colorScheme.syntaxComment
+    let stringStyle = colorScheme.syntaxString
+    let numberStyle = colorScheme.syntaxNumber
+    let attrStyle = colorScheme.syntaxAttribute
 
     var spans: [StyledSpan] = []
     var current = ""

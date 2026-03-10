@@ -21,7 +21,7 @@ func renderEmptyEditor(
                 String(line.prefix(editorWidth)),
                 row: row + 1,
                 col: editorStart,
-                style: Style(fg: .rgb(r: 100, g: 100, b: 100), bg: colorScheme.bg.bg)
+                style: Style(fg: .rgb(r: 100, g: 100, b: 100))
             )
         } else {
             pipeline.buffer.fill(row: row + 1, col: editorStart, width: editorWidth, height: 1, cell: Cell(character: " ", style: colorScheme.editorText))
