@@ -34,6 +34,8 @@ public struct SequenceRouter: Sendable {
     }
 
     private static let pasteEndMarker: [UInt8] = [0x1b, 0x5b, 0x32, 0x30, 0x31, 0x7e]
+    private static let oscOverflowBytes = Array("osc overflow".utf8)
+    private static let pasteOverflowBytes = Array("paste overflow".utf8)
 
     private static let maxPasteSize = 1_048_576  // 1MB
 
@@ -131,9 +133,9 @@ public struct SequenceRouter: Sendable {
             // The modifier byte is 1-based: 1 = no modifier, 2 = shift, 3 = alt, etc.
             // The event type after ':' is: 1 = press, 2 = repeat, 3 = release.
             let parsed = parsedCSIParams()
-            let firstParam = parsed.params.first ?? 0
-            let modifierByte = parsed.params.count >= 2 ? parsed.params[1] : 1
-            let mods = KeyModifiers(rawValue: UInt8(max(0, modifierByte - 1)))
+            let firstParam = parsed.firstParam
+            let modifierByte = parsed.modifier
+            let mods = KeyModifiers(rawValue: UInt8(clamping: max(0, modifierByte - 1)))
             let eventType = parsed.eventType
 
             switch byte {
@@ -187,7 +189,7 @@ public struct SequenceRouter: Sendable {
             buffer.append(byte)
             if buffer.count > Self.maxPasteSize {
                 // OSC sequence too large — discard
-                events.append(.unknown(Array("osc overflow".utf8)))
+                events.append(.unknown(Self.oscOverflowBytes))
                 resetRouting()
             } else if byte == 0x07 {
                 events.append(.unknown(buffer))
@@ -201,12 +203,11 @@ public struct SequenceRouter: Sendable {
             buffer.append(byte)
             if buffer.count > Self.maxPasteSize {
                 // Paste too large — discard and reset
-                events.append(.unknown(Array("paste overflow".utf8)))
+                events.append(.unknown(Self.pasteOverflowBytes))
                 resetRouting()
             } else if buffer.count >= Self.pasteEndMarker.count,
                buffer.suffix(Self.pasteEndMarker.count).elementsEqual(Self.pasteEndMarker) {
-                let pasteBytes = Array(buffer.dropLast(Self.pasteEndMarker.count))
-                let text = String(bytes: pasteBytes, encoding: .utf8) ?? ""
+                let text = String(decoding: buffer.dropLast(Self.pasteEndMarker.count), as: UTF8.self)
                 events.append(.paste(text))
                 resetRouting()
             }
@@ -228,13 +229,29 @@ public struct SequenceRouter: Sendable {
     /// Feed a chunk of bytes and collect all emitted events.
     public mutating func feedAll(_ bytes: [UInt8]) -> [InputEvent] {
         var events: [InputEvent] = []
-        for byte in bytes {
-            events.append(contentsOf: feed(byte))
-        }
+        feedAll(bytes, into: &events)
         return events
     }
 
-    private mutating func decodeKeyboardSequence(_ bytes: [UInt8]) -> [InputEvent] {
+    mutating func feedAll(_ bytes: UnsafeRawBufferPointer, into events: inout [InputEvent]) {
+        events.removeAll(keepingCapacity: true)
+        guard let baseAddress = bytes.baseAddress else { return }
+        let typedBytes = UnsafeBufferPointer(
+            start: baseAddress.assumingMemoryBound(to: UInt8.self),
+            count: bytes.count
+        )
+        feedAll(typedBytes, into: &events)
+    }
+
+    private mutating func feedAll<S: Sequence>(_ bytes: S, into events: inout [InputEvent]) where S.Element == UInt8 {
+        events.removeAll(keepingCapacity: true)
+        events.reserveCapacity(max(events.count, bytes.underestimatedCount))
+        for byte in bytes {
+            events.append(contentsOf: feed(byte))
+        }
+    }
+
+    private mutating func decodeKeyboardSequence<S: Sequence>(_ bytes: S) -> [InputEvent] where S.Element == UInt8 {
         var events: [InputEvent] = []
 
         for byte in bytes {
@@ -316,53 +333,52 @@ public struct SequenceRouter: Sendable {
         }
     }
 
-    /// Parse all semicolon-separated numeric parameters from the current CSI buffer.
-    /// Skips the leading ESC [ prefix.
-    /// Returns (semicolonParams, eventType). The modifier field may contain
-    /// a colon-separated event type (e.g. `1;3:3A` → modifier=3, eventType=release).
-    /// Colons within the second field are parsed as sub-fields, not top-level separators.
-    private func parsedCSIParams() -> (params: [Int], eventType: KeyEventType) {
-        // Split by ';' first, keeping raw bytes per field
-        var fields: [[UInt8]] = [[]]
-        for byte in buffer.dropFirst(2) {
-            if byte == 0x3b { // ;
-                fields.append([])
-            } else if Self.isDigit(byte) || byte == 0x3a { // digit or :
-                fields[fields.count - 1].append(byte)
-            } else {
-                break // terminator
+    /// Parse the leading CSI numeric parameters directly from the routing buffer.
+    private func parsedCSIParams() -> (firstParam: Int, modifier: Int, eventType: KeyEventType) {
+        enum ParseField {
+            case firstParam
+            case modifier
+            case eventType
+        }
+
+        var field = ParseField.firstParam
+        var firstParam = 0
+        var modifier = 1
+        var eventTypeValue = 0
+
+        parseLoop: for byte in buffer.dropFirst(2) {
+            switch byte {
+            case 0x30 ... 0x39:
+                switch field {
+                case .firstParam:
+                    guard Self.appendDigit(byte - 0x30, to: &firstParam, maximum: Int.max) else {
+                        firstParam = Int.max
+                        continue
+                    }
+                case .modifier:
+                    guard Self.appendDigit(byte - 0x30, to: &modifier, maximum: Int.max) else {
+                        modifier = Int.max
+                        continue
+                    }
+                case .eventType:
+                    guard Self.appendDigit(byte - 0x30, to: &eventTypeValue, maximum: Int.max) else {
+                        eventTypeValue = Int.max
+                        continue
+                    }
+                }
+            case 0x3b:
+                guard case .firstParam = field else { break parseLoop }
+                field = .modifier
+            case 0x3a:
+                guard case .modifier = field else { break parseLoop }
+                field = .eventType
+            default:
+                break parseLoop
             }
         }
 
-        // Parse first field as a plain number
-        let firstParam = fields.isEmpty ? 0 : Self.parseNumberFromBytes(fields[0])
-
-        // Parse second field: may be "modifier" or "modifier:eventType"
-        var modValue = 1
-        var eventType: KeyEventType = .press
-        if fields.count >= 2 {
-            let modField = fields[1]
-            if let colonIdx = modField.firstIndex(of: 0x3a) {
-                modValue = Self.parseNumberFromBytes(Array(modField[..<colonIdx]))
-                let evtValue = Self.parseNumberFromBytes(Array(modField[(colonIdx + 1)...]))
-                eventType = KeyEventType(rawValue: UInt8(evtValue)) ?? .press
-            } else {
-                modValue = Self.parseNumberFromBytes(modField)
-            }
-        }
-
-        return (params: [firstParam, modValue], eventType: eventType)
-    }
-
-    private static func parseNumberFromBytes(_ bytes: [UInt8]) -> Int {
-        var value = 0
-        for byte in bytes where isDigit(byte) {
-            let (multiplied, overflow1) = value.multipliedReportingOverflow(by: 10)
-            let (added, overflow2) = multiplied.addingReportingOverflow(Int(byte - 0x30))
-            if overflow1 || overflow2 { return Int.max }
-            value = added
-        }
-        return value
+        let eventType = KeyEventType(rawValue: UInt8(clamping: eventTypeValue)) ?? .press
+        return (firstParam, modifier, eventType)
     }
 
     private static func isDigit(_ byte: UInt8) -> Bool {

@@ -1,26 +1,29 @@
 import Foundation
+import KittySync
 
-// SAFETY: All mutable state is guarded by `lock` (NSLock). Every public accessor
-// acquires the lock before reading or writing, ensuring thread-safe access.
+// SAFETY: All mutable state is guarded by `state`, a single mutex-protected store.
 /// An in-memory `TerminalConnection` for use in tests.
 ///
 /// `MockTerminalConnection` replaces real PTY or stdin/stdout I/O with in-memory
 /// buffers, allowing tests to feed input programmatically and inspect what was written
 /// without touching any file descriptor.
 public final class MockTerminalConnection: TerminalConnection, @unchecked Sendable {
-    private let lock = NSLock()
-    private var inputBuffer: [UInt8] = []
-    private var outputBuffer: [UInt8] = []
-    private var _isRawMode = false
-    private var _size: TerminalSize
-    private var _enterRawModeCallCount = 0
-    private var _restoreModeCallCount = 0
+    private struct State {
+        var inputBuffer: [UInt8] = []
+        var outputBuffer = ContiguousArray<UInt8>()
+        var isRawMode = false
+        var size: TerminalSize
+        var enterRawModeCallCount = 0
+        var restoreModeCallCount = 0
+    }
+
+    private let state: StateLock<State>
 
     /// Creates a mock connection with the given initial terminal size.
     ///
     /// - Parameter size: The terminal size returned by `getSize()`. Defaults to 80 × 24.
     public init(size: TerminalSize = TerminalSize(columns: 80, rows: 24)) {
-        _size = size
+        state = StateLock(initialState: State(size: size))
     }
 
     // MARK: - Test Helpers
@@ -29,39 +32,39 @@ public final class MockTerminalConnection: TerminalConnection, @unchecked Sendab
     ///
     /// - Parameter bytes: The bytes to enqueue as terminal input.
     public func feedInput(_ bytes: [UInt8]) {
-        lock.withLock { inputBuffer.append(contentsOf: bytes) }
+        withStateLock { $0.inputBuffer.append(contentsOf: bytes) }
     }
 
     /// A snapshot of all bytes written to the connection since the last `clearOutput()` call.
     public var writtenOutput: [UInt8] {
-        lock.withLock { outputBuffer }
+        withStateLock { Array($0.outputBuffer) }
     }
 
     /// `true` when the connection is currently in raw mode.
     public var isRawMode: Bool {
-        lock.withLock { _isRawMode }
+        withStateLock { $0.isRawMode }
     }
 
     /// The total number of times `enterRawMode()` has been called.
     public var enterRawModeCallCount: Int {
-        lock.withLock { _enterRawModeCallCount }
+        withStateLock { $0.enterRawModeCallCount }
     }
 
     /// The total number of times `restoreMode()` has been called.
     public var restoreModeCallCount: Int {
-        lock.withLock { _restoreModeCallCount }
+        withStateLock { $0.restoreModeCallCount }
     }
 
     /// Replaces the size reported by `getSize()`.
     ///
     /// - Parameter size: The new terminal size to return.
     public func setSize(_ size: TerminalSize) {
-        lock.withLock { _size = size }
+        withStateLock { $0.size = size }
     }
 
     /// Discards all bytes accumulated in the output buffer.
     public func clearOutput() {
-        lock.withLock { outputBuffer.removeAll() }
+        withStateLock { $0.outputBuffer.removeAll(keepingCapacity: true) }
     }
 
     // MARK: - TerminalConnection
@@ -72,40 +75,46 @@ public final class MockTerminalConnection: TerminalConnection, @unchecked Sendab
     /// - Returns: The number of bytes copied.
     /// - Throws: `TerminalError.connectionClosed` when the input buffer is empty.
     public func read(into buffer: UnsafeMutableRawBufferPointer) throws(TerminalError) -> Int {
-        lock.lock()
-        guard !inputBuffer.isEmpty else {
-            lock.unlock()
-            throw .connectionClosed
+        let requestedCount = buffer.count
+        let result = withStateLock { state -> Result<[UInt8], TerminalError> in
+            guard !state.inputBuffer.isEmpty else {
+                return .failure(.connectionClosed)
+            }
+
+            let count = min(requestedCount, state.inputBuffer.count)
+            let bytes = Array(state.inputBuffer.prefix(count))
+            state.inputBuffer.removeFirst(count)
+            return .success(bytes)
         }
-        let count = min(buffer.count, inputBuffer.count)
-        for i in 0..<count {
-            buffer[i] = inputBuffer[i]
-        }
-        inputBuffer.removeFirst(count)
-        lock.unlock()
-        return count
+        let bytes = try result.get()
+        buffer.copyBytes(from: bytes)
+        return bytes.count
     }
 
     /// Appends `bytes` to the in-memory output buffer.
     ///
     /// - Parameter bytes: The bytes to record as terminal output.
     public func write(_ bytes: [UInt8]) throws(TerminalError) {
-        lock.withLock { outputBuffer.append(contentsOf: bytes) }
+        withStateLock { $0.outputBuffer.append(contentsOf: bytes) }
+    }
+
+    public func writeContiguous(_ bytes: ContiguousArray<UInt8>) throws(TerminalError) {
+        withStateLock { $0.outputBuffer.append(contentsOf: bytes) }
     }
 
     /// Marks the connection as being in raw mode and increments `enterRawModeCallCount`.
     public func enterRawMode() throws(TerminalError) {
-        lock.withLock {
-            _isRawMode = true
-            _enterRawModeCallCount += 1
+        withStateLock {
+            $0.isRawMode = true
+            $0.enterRawModeCallCount += 1
         }
     }
 
     /// Marks the connection as no longer in raw mode and increments `restoreModeCallCount`.
     public func restoreMode() throws(TerminalError) {
-        lock.withLock {
-            _isRawMode = false
-            _restoreModeCallCount += 1
+        withStateLock {
+            $0.isRawMode = false
+            $0.restoreModeCallCount += 1
         }
     }
 
@@ -113,6 +122,10 @@ public final class MockTerminalConnection: TerminalConnection, @unchecked Sendab
     ///
     /// - Returns: The current mock terminal size.
     public func getSize() throws(TerminalError) -> TerminalSize {
-        lock.withLock { _size }
+        withStateLock { $0.size }
+    }
+
+    private func withStateLock<T: Sendable>(_ body: @Sendable (inout State) -> T) -> T {
+        state.withLock(body)
     }
 }

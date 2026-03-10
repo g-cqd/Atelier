@@ -51,15 +51,16 @@ public struct SyntaxNode: Sendable, Equatable {
 
     /// The text content at this node (requires source).
     public func text(from source: String) -> String {
-        let utf8 = source.utf8
-        let lower = min(max(byteRange.lowerBound, 0), utf8.count)
-        let upper = min(max(byteRange.upperBound, 0), utf8.count)
+        if let text = source.utf8.withContiguousStorageIfAvailable({ utf8 in
+            text(from: utf8)
+        }) {
+            return text
+        }
 
-        guard lower < upper else { return "" }
-
-        let startIdx = utf8.index(utf8.startIndex, offsetBy: lower)
-        let endIdx = utf8.index(utf8.startIndex, offsetBy: upper)
-        return String(utf8[startIdx..<endIdx]) ?? ""
+        let utf8 = Array(source.utf8)
+        return utf8.withUnsafeBufferPointer { utf8 in
+            text(from: utf8)
+        }
     }
 
     /// Named children only.
@@ -70,6 +71,13 @@ public struct SyntaxNode: Sendable, Equatable {
     /// First child with the given field name.
     public func child(forField name: String) -> SyntaxNode? {
         fields[name]?.first
+    }
+
+    private func text(from utf8: UnsafeBufferPointer<UInt8>) -> String {
+        let lower = min(max(byteRange.lowerBound, 0), utf8.count)
+        let upper = min(max(byteRange.upperBound, 0), utf8.count)
+        guard lower < upper else { return "" }
+        return String(decoding: UnsafeBufferPointer(rebasing: utf8[lower..<upper]), as: UTF8.self)
     }
 }
 

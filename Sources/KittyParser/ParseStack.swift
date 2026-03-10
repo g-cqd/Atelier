@@ -1,11 +1,18 @@
-#if canImport(os)
-import os
-private let parseStackCounter = OSAllocatedUnfairLock(initialState: 0)
-#else
-import Foundation
-private let _parseStackLock = NSLock()
-private var _parseStackCounterValue = 0
-#endif
+import KittySync
+
+private let parseStackIDs = ParseStackIDGenerator()
+
+private final class ParseStackIDGenerator: Sendable {
+    private let counter = StateLock(initialState: 0)
+
+    func next() -> Int {
+        return counter.withLock { counter in
+            let current = counter
+            counter += 1
+            return current
+        }
+    }
+}
 
 struct ParseStack: Sendable {
     let id: Int
@@ -19,18 +26,7 @@ struct ParseStack: Sendable {
     }
 
     init(state: Int) {
-        #if canImport(os)
-        self.id = parseStackCounter.withLock { val in
-            let current = val
-            val += 1
-            return current
-        }
-        #else
-        _parseStackLock.lock()
-        self.id = _parseStackCounterValue
-        _parseStackCounterValue += 1
-        _parseStackLock.unlock()
-        #endif
+        self.id = parseStackIDs.next()
         self.state = state
         self.stateStack = [state]
         self.nodes = []

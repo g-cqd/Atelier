@@ -29,7 +29,19 @@ public struct Lexer: Sendable {
 
     /// Tokenize the source text starting from a byte offset.
     public func tokenize(_ source: String, from offset: Int = 0) -> [Token] {
+        if let tokens = source.utf8.withContiguousStorageIfAvailable({ utf8 in
+            tokenize(utf8: utf8, from: offset)
+        }) {
+            return tokens
+        }
+
         let utf8 = Array(source.utf8)
+        return utf8.withUnsafeBufferPointer { utf8 in
+            tokenize(utf8: utf8, from: offset)
+        }
+    }
+
+    private func tokenize(utf8: UnsafeBufferPointer<UInt8>, from offset: Int) -> [Token] {
         var tokens: [Token] = []
         var pos = offset
         var point = pointAt(utf8: utf8, byte: offset)
@@ -59,7 +71,7 @@ public struct Lexer: Sendable {
                     type: "_whitespace",
                     byteRange: start..<pos,
                     pointRange: startPoint..<point,
-                    text: String(bytes: utf8[start..<pos], encoding: .utf8) ?? "",
+                    text: String(decoding: UnsafeBufferPointer(rebasing: utf8[start..<pos]), as: UTF8.self),
                     isExtra: true
                 ))
                 continue
@@ -86,7 +98,7 @@ public struct Lexer: Sendable {
         return tokens
     }
 
-    private func matchKeyword(utf8: [UInt8], pos: Int, point: Point) -> Token? {
+    private func matchKeyword(utf8: UnsafeBufferPointer<UInt8>, pos: Int, point: Point) -> Token? {
         guard !lexTable.states.isEmpty else { return nil }
 
         var state = 0
@@ -118,7 +130,7 @@ public struct Lexer: Sendable {
         }
 
         guard let (_, end) = lastAccepting, end > pos else { return nil }
-        let text = String(bytes: utf8[pos..<end], encoding: .utf8) ?? ""
+        let text = String(decoding: UnsafeBufferPointer(rebasing: utf8[pos..<end]), as: UTF8.self)
 
         // Find the keyword string that matched
         let tokenType: String
@@ -137,7 +149,7 @@ public struct Lexer: Sendable {
         )
     }
 
-    private func pointAt(utf8: [UInt8], byte: Int) -> Point {
+    private func pointAt(utf8: UnsafeBufferPointer<UInt8>, byte: Int) -> Point {
         var row = 0
         var col = 0
         for i in 0..<min(byte, utf8.count) {
@@ -151,7 +163,7 @@ public struct Lexer: Sendable {
         return Point(row: row, column: col)
     }
 
-    private func advancePoint(_ point: Point, over utf8: [UInt8], from: Int, to: Int) -> Point {
+    private func advancePoint(_ point: Point, over utf8: UnsafeBufferPointer<UInt8>, from: Int, to: Int) -> Point {
         var p = point
         for i in from..<min(to, utf8.count) {
             if utf8[i] == 0x0a {
