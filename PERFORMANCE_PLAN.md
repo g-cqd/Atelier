@@ -32,6 +32,7 @@ Updated: 2026-03-10
 - Reused syntax highlighting sessions and scratch buffers instead of rebuilding them for each refresh.
 - Added incremental fallback highlighting updates so single-line edits and line merges/splits patch only the affected range.
 - Added background syntax-artifact prewarming for visible file types using structured concurrency.
+- Added reusable text-editor hit testing in `KittyWidgets.TextEditorLayout` and switched KittyCode mouse handling to it.
 
 ## Opportunity Map
 
@@ -163,12 +164,14 @@ Action:
 - Done: platform and synchronization simplification.
 - Done: extract shared text metrics and text-editor layout helpers.
 - Done: make KittyCode use shared widgets for bars instead of manual line assembly.
+- Done: move text-editor hit testing out of KittyCode so widget coordinate mapping is shared with rendering.
 
 ### Phase 2
 
 - Done for fallback languages: incremental highlight invalidation keyed by edit ranges.
 - Done for highlighting internals: reusable scratch storage for highlight/span splitting.
 - In progress: move grammar-backed highlighting and artifact work further off the foreground path where it preserves UI responsiveness.
+- Next extraction target: tree-view hit testing and scroll-visibility math so tree interaction uses shared widget logic too.
 
 ### Phase 3
 

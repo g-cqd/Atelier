@@ -59,6 +59,57 @@ public enum TextEditorLayout {
         )
     }
 
+    public static func textPosition(
+        for editor: TextEditor,
+        in rect: Rect,
+        row: Int,
+        col: Int
+    ) -> TextPosition? {
+        guard rect.height > 0 else { return nil }
+        guard row >= rect.y && row < rect.maxY else { return nil }
+
+        let gutterWidth = gutterWidth(for: editor)
+        let contentWidth = max(1, contentWidth(for: editor, in: rect))
+        let relativeRow = row - rect.y
+        let relativeColumn = max(0, col - rect.x - gutterWidth)
+        let displayColumn = min(relativeColumn, contentWidth - 1)
+        let startLine = max(0, min(editor.scrollOffset, editor.lines.count))
+
+        if editor.wrapLines {
+            var screenRow = 0
+            for lineIndex in startLine..<editor.lines.count {
+                let wrappedRows = wrappedRowCount(for: editor.lines[lineIndex], contentWidth: contentWidth)
+                let nextScreenRow = screenRow + wrappedRows
+                if relativeRow < nextScreenRow {
+                    let wrapRow = relativeRow - screenRow
+                    let line = editor.lines[lineIndex]
+                    let wrappedDisplayColumn = wrapRow * contentWidth + displayColumn
+                    return TextPosition(
+                        row: lineIndex,
+                        col: TextDisplayMetrics.characterOffset(
+                            forDisplayColumn: wrappedDisplayColumn,
+                            in: line
+                        )
+                    )
+                }
+                screenRow = nextScreenRow
+                if screenRow >= rect.height { break }
+            }
+            return nil
+        }
+
+        let lineIndex = startLine + relativeRow
+        guard lineIndex >= 0 && lineIndex < editor.lines.count else { return nil }
+        let line = editor.lines[lineIndex]
+        return TextPosition(
+            row: lineIndex,
+            col: TextDisplayMetrics.characterOffset(
+                forDisplayColumn: displayColumn + editor.horizontalScrollOffset,
+                in: line
+            )
+        )
+    }
+
     private static func wrappedRowCount(for line: String, contentWidth: Int) -> Int {
         guard contentWidth > 0 else { return 1 }
         let lineWidth = max(1, UnicodeWidth.displayWidth(of: line))

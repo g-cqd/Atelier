@@ -151,6 +151,45 @@ struct TextEditorTests {
 
         #expect(position == .init(row: 4, col: 9))
     }
+
+    @Test("Hit testing maps clicks into scrolled unwrapped content")
+    func textPositionWithoutWrap() {
+        let editor = TextEditor(
+            lines: ["abcdef"],
+            lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
+            horizontalScrollOffset: 2,
+            showLineNumbers: true,
+            wrapLines: false
+        )
+
+        let position = TextEditorLayout.textPosition(
+            for: editor,
+            in: Rect(x: 5, y: 3, width: 8, height: 1),
+            row: 3,
+            col: 10
+        )
+
+        #expect(position == .init(row: 0, col: 4))
+    }
+
+    @Test("Hit testing maps clicks into wrapped rows")
+    func textPositionWithWrap() {
+        let editor = TextEditor(
+            lines: ["abcdef"],
+            lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
+            showLineNumbers: true,
+            wrapLines: true
+        )
+
+        let position = TextEditorLayout.textPosition(
+            for: editor,
+            in: Rect(x: 5, y: 3, width: 6, height: 2),
+            row: 4,
+            col: 9
+        )
+
+        #expect(position == .init(row: 0, col: 4))
+    }
 }
 
 // MARK: - Text Rendering Tests

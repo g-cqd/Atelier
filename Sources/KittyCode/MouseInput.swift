@@ -3,12 +3,12 @@ import KittyCodecs
 import KittyFileTree
 import KittyRenderer
 import KittyText
+import KittyWidgets
 
 @MainActor
 func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeline) {
     let treeWidth = min(state.treePanelWidth, pipeline.columns / 2)
     let editorStart = 1 + treeWidth + 1
-    let lineNumWidth = max(3, String(state.fileLineCount).count + 1)
     let scrollStep = scrollLinesPerTick(visibleRows: max(1, pipeline.rows - 2))
 
     if mouse.button.isScroll {
@@ -40,10 +40,14 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
         handleTreeClick(contentRow: contentRow, isDoubleClick: isDoubleClick, state: state)
     } else if contentRow >= 0 {
         handleEditorClick(
-            row: contentRow,
+            mouseRow: mouse.row,
             mouseCol: mouse.col,
-            editorStart: editorStart,
-            lineNumWidth: lineNumWidth,
+            editorRect: Rect(
+                x: editorStart,
+                y: 1,
+                width: pipeline.columns - editorStart,
+                height: max(0, pipeline.rows - 2)
+            ),
             state: state
         )
     }
@@ -73,22 +77,29 @@ private func handleTreeClick(contentRow: Int, isDoubleClick: Bool, state: Editor
 }
 
 @MainActor
-private func handleEditorClick(row: Int, mouseCol: Int, editorStart: Int, lineNumWidth: Int, state: EditorState) {
-    let lineIndex = state.scrollOffset + row
-    guard lineIndex >= 0 && lineIndex < state.fileLineCount else { return }
-
-    state.cursorRow = lineIndex
-    state.mode = .editor
-
-    let line = state.fileLine(at: lineIndex)
-    let relativeCol = mouseCol - editorStart - lineNumWidth
-    if state.config.wrapLines {
-        let displayCol = max(0, relativeCol)
-        state.cursorCol = TextDisplayMetrics.characterOffset(forDisplayColumn: displayCol, in: line)
-    } else {
-        let displayCol = max(0, relativeCol + state.hScrollOffset)
-        state.cursorCol = TextDisplayMetrics.characterOffset(forDisplayColumn: displayCol, in: line)
+private func handleEditorClick(mouseRow: Int, mouseCol: Int, editorRect: Rect, state: EditorState) {
+    let editor = TextEditor(
+        lines: state.fileContent,
+        lineSpans: state.highlightedLines,
+        scrollOffset: state.scrollOffset,
+        horizontalScrollOffset: state.hScrollOffset,
+        cursorRow: state.cursorRow,
+        cursorCol: state.cursorCol,
+        showLineNumbers: true,
+        wrapLines: state.config.wrapLines
+    )
+    guard let position = TextEditorLayout.textPosition(
+        for: editor,
+        in: editorRect,
+        row: mouseRow - 1,
+        col: mouseCol
+    ) else {
+        return
     }
+
+    state.cursorRow = position.row
+    state.cursorCol = position.col
+    state.mode = .editor
 }
 
 @MainActor
