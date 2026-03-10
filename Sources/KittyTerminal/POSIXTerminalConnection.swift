@@ -6,10 +6,14 @@ import Glibc
 
 public final class POSIXTerminalConnection: TerminalConnection, @unchecked Sendable {
     private let fd: Int32
+    private let writeFd: Int32
     private var originalTermios: termios?
 
-    public init(fileDescriptor: Int32 = STDIN_FILENO) {
+    public init(fileDescriptor: Int32 = STDIN_FILENO, writeFileDescriptor: Int32? = nil) {
         self.fd = fileDescriptor
+        // For ptys, the same fd is used for read/write.
+        // For the default stdin case, write to stdout.
+        self.writeFd = writeFileDescriptor ?? (fileDescriptor == STDIN_FILENO ? STDOUT_FILENO : fileDescriptor)
     }
 
     public func read(into buffer: UnsafeMutableRawBufferPointer) throws(TerminalError) -> Int {
@@ -34,11 +38,11 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
             let n: Int
             #if canImport(Darwin)
             n = bytes.withUnsafeBufferPointer { buf in
-                Darwin.write(STDOUT_FILENO, buf.baseAddress! + offset, bytes.count - offset)
+                Darwin.write(self.writeFd, buf.baseAddress! + offset, buf.count - offset)
             }
             #else
             n = bytes.withUnsafeBufferPointer { buf in
-                Glibc.write(STDOUT_FILENO, buf.baseAddress! + offset, bytes.count - offset)
+                Glibc.write(self.writeFd, buf.baseAddress! + offset, buf.count - offset)
             }
             #endif
             guard n >= 0 else {
