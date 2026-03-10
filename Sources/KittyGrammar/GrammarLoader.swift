@@ -26,12 +26,13 @@ public enum GrammarLoader: Sendable {
         guard let dict = json as? [String: Any] else {
             throw .invalidJSON("Root must be an object")
         }
-        return try parseGrammar(dict)
+        let ruleOrder = try extractRuleOrder(from: data)
+        return try parseGrammar(dict, ruleOrder: ruleOrder)
     }
 
     // MARK: - Private
 
-    private static func parseGrammar(_ dict: [String: Any]) throws(GrammarError) -> GrammarDefinition {
+    private static func parseGrammar(_ dict: [String: Any], ruleOrder: [String]) throws(GrammarError) -> GrammarDefinition {
         guard let name = dict["name"] as? String else {
             throw .missingField("name")
         }
@@ -39,12 +40,8 @@ public enum GrammarLoader: Sendable {
             throw .missingField("rules")
         }
 
-        // Preserve rule order — use the order from the JSON
-        // rules is an object in grammar.json but order matters (first rule = start rule)
         var rules: [(name: String, rule: Rule)] = []
-        // JSONSerialization doesn't preserve order, so we parse manually
-        // For now, sort alphabetically but put the first rule first
-        let ruleNames = rulesDict.keys.sorted()
+        let ruleNames = orderedRuleNames(in: rulesDict, using: ruleOrder)
         for ruleName in ruleNames {
             guard let ruleJSON = rulesDict[ruleName] else { continue }
             let rule = try parseRule(ruleJSON)
@@ -170,6 +167,29 @@ public enum GrammarLoader: Sendable {
         }
     }
 
+    private static func extractRuleOrder(from data: Data) throws(GrammarError) -> [String] {
+        guard let jsonString = String(data: data, encoding: .utf8) else {
+            throw .invalidJSON("Grammar JSON must be UTF-8 encoded")
+        }
+        var scanner = JSONOrderScanner(source: jsonString)
+        return try scanner.extractKeyOrder(for: "rules") ?? []
+    }
+
+    private static func orderedRuleNames(
+        in rulesDict: [String: Any],
+        using ruleOrder: [String]
+    ) -> [String] {
+        var orderedNames: [String] = []
+        var seen = Set<String>()
+        for ruleName in ruleOrder where rulesDict[ruleName] != nil {
+            if seen.insert(ruleName).inserted {
+                orderedNames.append(ruleName)
+            }
+        }
+        let remainingNames = rulesDict.keys.filter { !seen.contains($0) }.sorted()
+        return orderedNames + remainingNames
+    }
+
     private static func parsePrecedences(_ json: Any?) throws(GrammarError) -> [[PrecedenceEntry]] {
         guard let array = json as? [[Any]] else { return [] }
         var result: [[PrecedenceEntry]] = []
@@ -193,5 +213,301 @@ public enum GrammarLoader: Sendable {
             result.append(entries)
         }
         return result
+    }
+}
+
+private struct JSONOrderScanner: Sendable {
+    private let source: String
+    private var index: String.Index
+
+    init(source: String) {
+        self.source = source
+        self.index = source.startIndex
+    }
+
+    mutating func extractKeyOrder(for targetKey: String) throws(GrammarError) -> [String]? {
+        skipWhitespace()
+        guard consume("{") else {
+            throw .invalidJSON("Root must be an object")
+        }
+
+        skipWhitespace()
+        if consume("}") {
+            return nil
+        }
+
+        while true {
+            let key = try parseString()
+            skipWhitespace()
+            try consumeRequired(":", message: "Expected ':' after object key")
+            skipWhitespace()
+
+            if key == targetKey {
+                return try parseObjectKeyOrder()
+            }
+
+            try skipValue()
+            skipWhitespace()
+
+            if consume("}") {
+                return nil
+            }
+
+            try consumeRequired(",", message: "Expected ',' between object members")
+            skipWhitespace()
+        }
+    }
+
+    private mutating func parseObjectKeyOrder() throws(GrammarError) -> [String] {
+        try consumeRequired("{", message: "Expected object for 'rules'")
+
+        skipWhitespace()
+        if consume("}") {
+            return []
+        }
+
+        var keys: [String] = []
+
+        while true {
+            keys.append(try parseString())
+            skipWhitespace()
+            try consumeRequired(":", message: "Expected ':' after rule key")
+            skipWhitespace()
+            try skipValue()
+            skipWhitespace()
+
+            if consume("}") {
+                return keys
+            }
+
+            try consumeRequired(",", message: "Expected ',' between rule definitions")
+            skipWhitespace()
+        }
+    }
+
+    private mutating func skipValue() throws(GrammarError) {
+        skipWhitespace()
+
+        guard let character = currentCharacter else {
+            throw .invalidJSON("Unexpected end of JSON")
+        }
+
+        switch character {
+        case "\"":
+            _ = try parseString()
+        case "{":
+            try skipObject()
+        case "[":
+            try skipArray()
+        default:
+            skipScalarValue()
+        }
+    }
+
+    private mutating func skipObject() throws(GrammarError) {
+        try consumeRequired("{", message: "Expected object")
+        skipWhitespace()
+
+        if consume("}") {
+            return
+        }
+
+        while true {
+            _ = try parseString()
+            skipWhitespace()
+            try consumeRequired(":", message: "Expected ':' after object key")
+            skipWhitespace()
+            try skipValue()
+            skipWhitespace()
+
+            if consume("}") {
+                return
+            }
+
+            try consumeRequired(",", message: "Expected ',' between object members")
+            skipWhitespace()
+        }
+    }
+
+    private mutating func skipArray() throws(GrammarError) {
+        try consumeRequired("[", message: "Expected array")
+        skipWhitespace()
+
+        if consume("]") {
+            return
+        }
+
+        while true {
+            try skipValue()
+            skipWhitespace()
+
+            if consume("]") {
+                return
+            }
+
+            try consumeRequired(",", message: "Expected ',' between array elements")
+            skipWhitespace()
+        }
+    }
+
+    private mutating func skipScalarValue() {
+        while let character = currentCharacter, !character.isWhitespace, !isValueTerminator(character) {
+            advance()
+        }
+    }
+
+    private mutating func parseString() throws(GrammarError) -> String {
+        try consumeRequired("\"", message: "Expected string")
+
+        var result = String()
+
+        while let character = currentCharacter {
+            advance()
+
+            if character == "\"" {
+                return result
+            }
+
+            if character == "\\" {
+                guard let escapedCharacter = currentCharacter else {
+                    throw .invalidJSON("Unterminated escape sequence")
+                }
+                advance()
+                try appendEscapedCharacter(escapedCharacter, to: &result)
+                continue
+            }
+
+            result.append(character)
+        }
+
+        throw .invalidJSON("Unterminated string")
+    }
+
+    private mutating func appendEscapedCharacter(
+        _ escapedCharacter: Character,
+        to result: inout String
+    ) throws(GrammarError) {
+        switch escapedCharacter {
+        case "\"":
+            result.append("\"")
+        case "\\":
+            result.append("\\")
+        case "/":
+            result.append("/")
+        case "b":
+            result.append("\u{08}")
+        case "f":
+            result.append("\u{0C}")
+        case "n":
+            result.append("\n")
+        case "r":
+            result.append("\r")
+        case "t":
+            result.append("\t")
+        case "u":
+            try appendUnicodeEscape(to: &result)
+        default:
+            throw .invalidJSON("Unsupported escape sequence \\(escapedCharacter)")
+        }
+    }
+
+    private mutating func appendUnicodeEscape(to result: inout String) throws(GrammarError) {
+        let firstCodeUnit = try parseUnicodeEscapeCodeUnit()
+
+        if Self.isHighSurrogate(firstCodeUnit) {
+            try consumeRequired("\\", message: "Expected low surrogate following high surrogate")
+            try consumeRequired("u", message: "Expected unicode escape following high surrogate")
+
+            let secondCodeUnit = try parseUnicodeEscapeCodeUnit()
+            guard Self.isLowSurrogate(secondCodeUnit) else {
+                throw .invalidJSON("Invalid unicode escape surrogate pair")
+            }
+
+            let scalarValue = Self.supplementaryScalarValue(
+                highSurrogate: firstCodeUnit,
+                lowSurrogate: secondCodeUnit
+            )
+            guard let scalar = UnicodeScalar(scalarValue) else {
+                throw .invalidJSON("Invalid unicode escape surrogate pair")
+            }
+
+            result.unicodeScalars.append(scalar)
+            return
+        }
+
+        guard !Self.isLowSurrogate(firstCodeUnit), let scalar = UnicodeScalar(firstCodeUnit) else {
+            throw .invalidJSON("Invalid unicode escape surrogate pair")
+        }
+
+        result.unicodeScalars.append(scalar)
+    }
+
+    private mutating func parseUnicodeEscapeCodeUnit() throws(GrammarError) -> UInt32 {
+        let start = index
+        let end = source.index(start, offsetBy: 4, limitedBy: source.endIndex)
+        guard let end else {
+            throw .invalidJSON("Incomplete unicode escape")
+        }
+
+        let hex = String(source[start..<end])
+        guard hex.count == 4, let codeUnit = UInt32(hex, radix: 16) else {
+            throw .invalidJSON("Invalid unicode escape \\u\(hex)")
+        }
+
+        index = end
+        return codeUnit
+    }
+
+    private mutating func consumeRequired(
+        _ expected: Character,
+        message: String
+    ) throws(GrammarError) {
+        guard consume(expected) else {
+            throw .invalidJSON(message)
+        }
+    }
+
+    private mutating func consume(_ expected: Character) -> Bool {
+        guard currentCharacter == expected else {
+            return false
+        }
+
+        advance()
+        return true
+    }
+
+    private mutating func skipWhitespace() {
+        while let character = currentCharacter, character.isWhitespace {
+            advance()
+        }
+    }
+
+    private var currentCharacter: Character? {
+        guard index < source.endIndex else {
+            return nil
+        }
+        return source[index]
+    }
+
+    private mutating func advance() {
+        index = source.index(after: index)
+    }
+
+    private func isValueTerminator(_ character: Character) -> Bool {
+        character == "," || character == "]" || character == "}"
+    }
+
+    private static func isHighSurrogate(_ value: UInt32) -> Bool {
+        value >= 0xD800 && value <= 0xDBFF
+    }
+
+    private static func isLowSurrogate(_ value: UInt32) -> Bool {
+        value >= 0xDC00 && value <= 0xDFFF
+    }
+
+    private static func supplementaryScalarValue(highSurrogate: UInt32, lowSurrogate: UInt32) -> UInt32 {
+        let highOffset = highSurrogate - 0xD800
+        let lowOffset = lowSurrogate - 0xDC00
+        return 0x10000 + (highOffset << 10) + lowOffset
     }
 }

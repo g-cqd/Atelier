@@ -15,8 +15,12 @@ public struct ScreenBuffer: Sendable {
     }
 
     public subscript(row: Int, col: Int) -> Cell {
-        get { cells[row * columns + col] }
+        get {
+            guard row >= 0, row < rows, col >= 0, col < columns else { return .empty }
+            return cells[row * columns + col]
+        }
         set {
+            guard row >= 0, row < rows, col >= 0, col < columns else { return }
             let idx = row * columns + col
             if cells[idx] != newValue {
                 cells[idx] = newValue
@@ -27,9 +31,10 @@ public struct ScreenBuffer: Sendable {
 
     /// Write a string with style starting at (row, col).
     public mutating func write(_ string: String, row: Int, col: Int, style: Style) {
+        guard row >= 0, row < rows else { return }
         var c = col
         for char in string {
-            guard c < columns else { break }
+            guard c >= 0, c < columns else { break }
             self[row, c] = Cell(character: char, style: style, width: 1)
             c += 1
         }
@@ -47,6 +52,7 @@ public struct ScreenBuffer: Sendable {
 
     /// Fill a rectangular region.
     public mutating func fill(row: Int, col: Int, width: Int, height: Int, cell: Cell) {
+        guard row >= 0, row < rows, col >= 0, col < columns, width > 0, height > 0 else { return }
         for r in row..<min(row + height, rows) {
             for c in col..<min(col + width, columns) {
                 self[r, c] = cell

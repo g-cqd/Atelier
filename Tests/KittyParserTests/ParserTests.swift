@@ -12,6 +12,13 @@ struct SyntaxNodeTests {
         #expect(node.text(from: source) == "hello")
     }
 
+    @Test("Node text extraction returns empty string for out-of-bounds lower bound")
+    func nodeTextOutOfBoundsLowerBound() {
+        let source = "hello"
+        let node = SyntaxNode(type: "word", byteRange: 20..<25)
+        #expect(node.text(from: source).isEmpty)
+    }
+
     @Test("Named children filter")
     func namedChildren() {
         let child1 = SyntaxNode(type: "name", isNamed: true)
@@ -65,6 +72,43 @@ struct TextEditTests {
 
         // child2 should have shifted by 2
         #expect(edited.root.children[1].byteRange.lowerBound == 5)
+    }
+
+    @Test("Apply edit shifts point ranges and field nodes")
+    func applyEditShiftsPointRangesAndFields() {
+        let left = SyntaxNode(
+            type: "left",
+            byteRange: 0..<3,
+            pointRange: Point(row: 0, column: 0)..<Point(row: 0, column: 3)
+        )
+        let right = SyntaxNode(
+            type: "right",
+            byteRange: 3..<6,
+            pointRange: Point(row: 0, column: 3)..<Point(row: 0, column: 6)
+        )
+        let root = SyntaxNode(
+            type: "root",
+            children: [left, right],
+            byteRange: 0..<6,
+            pointRange: Point(row: 0, column: 0)..<Point(row: 0, column: 6),
+            fields: ["rhs": [right]]
+        )
+        let tree = SyntaxTree(root: root, source: "abcdef")
+
+        let edit = TextEdit(
+            startByte: 3,
+            oldEndByte: 3,
+            newEndByte: 4,
+            startPoint: Point(row: 0, column: 3),
+            oldEndPoint: Point(row: 0, column: 3),
+            newEndPoint: Point(row: 1, column: 0)
+        )
+        let edited = tree.applying(edit: edit)
+
+        #expect(edited.root.children[1].byteRange == 4..<7)
+        #expect(edited.root.children[1].pointRange == Point(row: 1, column: 0)..<Point(row: 1, column: 3))
+        #expect(edited.root.fields["rhs"]?.first?.byteRange == 4..<7)
+        #expect(edited.root.fields["rhs"]?.first?.pointRange == Point(row: 1, column: 0)..<Point(row: 1, column: 3))
     }
 }
 
@@ -123,6 +167,26 @@ struct GLRParserTests {
         let tree = try parser.parse("hello")
         #expect(tree.root.type != "")
     }
+
+    @Test("Parse continues reducing later stacks after an earlier conflict")
+    func parseProcessesAllStacksAfterConflict() throws {
+        let parser = GLRParser(
+            parseTable: makeConflictParseTable(),
+            lexTable: LexTable(),
+            productions: [
+                ProductionRule(name: "_start", symbolCount: 1, symbols: ["Good"]),
+                ProductionRule(name: "Bad", symbolCount: 2, symbols: ["a", "ERROR"]),
+                ProductionRule(name: "BadSingle", symbolCount: 1, symbols: ["ERROR"]),
+                ProductionRule(name: "Good", symbolCount: 2, symbols: ["a", "b"], fields: [1: "rhs"]),
+            ]
+        )
+
+        let tree = try parser.parse("ab")
+
+        #expect(tree.root.type == "Good")
+        #expect(tree.root.children.map(\.type) == ["a", "b"])
+        #expect(tree.root.child(forField: "rhs")?.type == "b")
+    }
 }
 
 @Suite("IncrementalParser")
@@ -150,4 +214,56 @@ struct IncrementalParserTests {
         let tree2 = try parser.parse("x", oldTree: tree1)
         #expect(tree2.root.type != "")
     }
+}
+
+private func makeConflictParseTable() -> ParseTable {
+    let terminals = ["a", "b", "$end"]
+    let nonTerminals = ["Bad", "BadSingle", "Good"]
+    let errorRow: [Action] = [.error, .error, .error]
+
+    return ParseTable(
+        stateCount: 6,
+        symbols: terminals + nonTerminals,
+        terminals: terminals,
+        nonTerminals: nonTerminals,
+        actions: [
+            [
+                .conflict([.shift(1), .shift(2)]),
+                .error,
+                .error,
+            ],
+            [
+                .error,
+                .error,
+                .conflict([
+                    .reduce(ruleIndex: 1, count: 2, nonTerminal: "Bad"),
+                    .reduce(ruleIndex: 2, count: 1, nonTerminal: "BadSingle"),
+                ]),
+            ],
+            [
+                .error,
+                .shift(3),
+                .error,
+            ],
+            [
+                .error,
+                .error,
+                .reduce(ruleIndex: 3, count: 2, nonTerminal: "Good"),
+            ],
+            errorRow,
+            [
+                .error,
+                .error,
+                .accept,
+            ],
+        ],
+        gotos: [
+            [4, 4, 5],
+            [nil, nil, nil],
+            [nil, nil, nil],
+            [nil, nil, nil],
+            [nil, nil, nil],
+            [nil, nil, nil],
+        ]
+    )
 }

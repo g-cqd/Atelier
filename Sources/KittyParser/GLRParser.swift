@@ -120,15 +120,15 @@ public final class GLRParser: Sendable {
         var result: [ParseStack] = []
 
         for var stack in stacks {
-            var reduced = true
-            while reduced {
-                reduced = false
+            var shouldAppendStack = true
+
+            reduceLoop: while true {
                 let action = parseTable.actions[stack.state][terminalIndex]
 
                 switch action {
                 case .reduce(let ruleIndex, let count, let nonTerminal):
                     stack = performReduce(stack: stack, ruleIndex: ruleIndex, count: count, nonTerminal: nonTerminal)
-                    reduced = true
+                    continue reduceLoop
 
                 case .conflict(let actions):
                     // Fork: one stack per reduce action
@@ -138,17 +138,20 @@ public final class GLRParser: Sendable {
                             result.append(forked)
                         }
                     }
-                    // Continue with the original stack for any shift
                     if actions.contains(where: { if case .shift = $0 { return true }; return false }) {
                         result.append(stack)
                     }
-                    return result + stacks.filter { $0.id != stack.id }
+                    shouldAppendStack = false
+                    break reduceLoop
 
                 default:
-                    break
+                    break reduceLoop
                 }
             }
-            result.append(stack)
+
+            if shouldAppendStack {
+                result.append(stack)
+            }
         }
 
         return result
@@ -162,12 +165,18 @@ public final class GLRParser: Sendable {
         let byteEnd = children.last?.byteRange.upperBound ?? 0
         let pointStart = children.first?.pointRange.lowerBound ?? .zero
         let pointEnd = children.last?.pointRange.upperBound ?? .zero
+        var nodeFields: [String: [SyntaxNode]] = [:]
+
+        for (idx, fieldName) in productionFields(for: ruleIndex) where idx < children.count {
+            nodeFields[fieldName, default: []].append(children[idx])
+        }
 
         let node = SyntaxNode(
             type: nonTerminal,
             children: children,
             byteRange: byteStart..<byteEnd,
             pointRange: pointStart..<pointEnd,
+            fields: nodeFields,
             isNamed: true
         )
 
@@ -180,6 +189,11 @@ public final class GLRParser: Sendable {
         }
 
         return s
+    }
+
+    private func productionFields(for ruleIndex: Int) -> [Int: String] {
+        guard productions.indices.contains(ruleIndex) else { return [:] }
+        return productions[ruleIndex].fields
     }
 
     private func buildRootNode(from stack: ParseStack, source: String) -> SyntaxNode {

@@ -1,3 +1,26 @@
+struct FlatProduction: Sendable, Equatable {
+    var name: String
+    var symbols: [String]
+    var fields: [Int: String]
+}
+
+private struct FlatSequence: Sendable, Equatable {
+    var symbols: [String]
+    var fields: [Int: String]
+
+    static let empty = FlatSequence(symbols: [], fields: [:])
+}
+
+private struct FlattenContext: Sendable {
+    var auxiliaryProductions: [FlatProduction] = []
+    var counter = 0
+
+    mutating func freshName(_ prefix: String) -> String {
+        counter += 1
+        return "\(prefix)_\(counter)"
+    }
+}
+
 /// Compiles a GrammarDefinition into an LR parse table.
 ///
 /// This is a simplified LR(1) table compiler that:
@@ -18,21 +41,22 @@ public enum ParseTableCompiler: Sendable {
     /// Compile a grammar definition into parse tables.
     public static func compile(_ grammar: GrammarDefinition) throws(GrammarError) -> CompilationResult {
         let flattened = flattenRules(grammar)
-        let terminals = collectTerminals(flattened, grammar: grammar)
         let nonTerminals = collectNonTerminals(flattened)
+        let terminals = collectTerminals(flattened, nonTerminals: Set(nonTerminals))
+        let grammarProductions = flattened.map { (name: $0.name, symbols: $0.symbols) }
         let allSymbols = terminals + nonTerminals
 
         let firstSets = computeFirstSets(
-            productions: flattened,
+            productions: grammarProductions,
             terminals: Set(terminals),
             nonTerminals: Set(nonTerminals)
         )
 
-        let rulesByNT = buildRuleIndex(flattened, nonTerminals: Set(nonTerminals))
+        let rulesByNT = buildRuleIndex(grammarProductions, nonTerminals: Set(nonTerminals))
 
         // Build item sets
         let (itemSets, transitions) = buildItemSets(
-            productions: flattened,
+            productions: grammarProductions,
             firstSets: firstSets,
             rulesByNonTerminal: rulesByNT,
             allSymbols: allSymbols
@@ -42,13 +66,18 @@ public enum ParseTableCompiler: Sendable {
         let table = buildParseTable(
             itemSets: itemSets,
             transitions: transitions,
-            productions: flattened,
+            productions: grammarProductions,
             terminals: terminals,
             nonTerminals: nonTerminals
         )
 
         let productions = flattened.map { prod in
-            ProductionRule(name: prod.name, symbolCount: prod.symbols.count, symbols: prod.symbols)
+            ProductionRule(
+                name: prod.name,
+                symbolCount: prod.symbols.count,
+                symbols: prod.symbols,
+                fields: prod.fields
+            )
         }
 
         let lexTable = LexTableCompiler.compile(grammar)
@@ -62,80 +91,141 @@ public enum ParseTableCompiler: Sendable {
 
     // MARK: - Private
 
-    private static func flattenRules(_ grammar: GrammarDefinition) -> [(name: String, symbols: [String])] {
-        var productions: [(name: String, symbols: [String])] = []
+    private static func flattenRules(_ grammar: GrammarDefinition) -> [FlatProduction] {
+        var productions: [FlatProduction] = []
+        var context = FlattenContext()
 
         // Add augmented start rule: S' → startSymbol
         if let first = grammar.rules.first {
-            productions.append((name: "_start", symbols: [first.name]))
+            productions.append(FlatProduction(name: "_start", symbols: [first.name], fields: [:]))
         }
 
         for (name, rule) in grammar.rules {
-            let expanded = expandRule(rule)
-            for symbols in expanded {
-                productions.append((name: name, symbols: symbols))
+            let expanded = expandRule(rule, context: &context)
+            for production in expanded {
+                productions.append(FlatProduction(
+                    name: name,
+                    symbols: production.symbols,
+                    fields: production.fields
+                ))
             }
         }
 
+        productions.append(contentsOf: context.auxiliaryProductions)
         return productions
     }
 
-    private static func expandRule(_ rule: Rule) -> [[String]] {
+    private static func expandRule(_ rule: Rule, context: inout FlattenContext) -> [FlatSequence] {
         switch rule {
         case .symbol(let name):
-            return [[name]]
+            return [FlatSequence(symbols: [name], fields: [:])]
         case .string(let value):
-            return [["\"" + value + "\""]]
+            return [FlatSequence(symbols: ["\"" + value + "\""], fields: [:])]
         case .pattern:
             // Patterns become terminal tokens — use a placeholder
-            return [["_pattern"]]
+            return [FlatSequence(symbols: ["_pattern"], fields: [:])]
         case .seq(let members):
-            var result: [[String]] = [[]]
+            var result = [FlatSequence.empty]
             for member in members {
-                let memberExpanded = expandRule(member)
-                var newResult: [[String]] = []
+                let memberExpanded = expandRule(member, context: &context)
+                var newResult: [FlatSequence] = []
                 for existing in result {
                     for expanded in memberExpanded {
-                        newResult.append(existing + expanded)
+                        newResult.append(combine(existing, expanded))
                     }
                 }
                 result = newResult
             }
             return result
         case .choice(let members):
-            return members.flatMap { expandRule($0) }
+            var productions: [FlatSequence] = []
+            for member in members {
+                productions.append(contentsOf: expandRule(member, context: &context))
+            }
+            return productions
         case .repeat(let content):
-            // A* → ε | A* A
-            let inner = expandRule(content)
-            // Simplified: just produce empty and single occurrence
-            return [[]] + inner
+            let helperName = context.freshName("_repeat")
+            let inner = expandRule(content, context: &context)
+            let recursiveAlternatives = inner.filter { !$0.symbols.isEmpty }
+
+            context.auxiliaryProductions.append(FlatProduction(name: helperName, symbols: [], fields: [:]))
+            for alternative in recursiveAlternatives {
+                context.auxiliaryProductions.append(FlatProduction(
+                    name: helperName,
+                    symbols: [helperName] + alternative.symbols,
+                    fields: shiftFields(alternative.fields, by: 1)
+                ))
+            }
+
+            return [FlatSequence(symbols: [helperName], fields: [:])]
         case .repeat1(let content):
-            return expandRule(content)
+            let helperName = context.freshName("_repeat1")
+            let inner = expandRule(content, context: &context)
+            let recursiveAlternatives = inner.filter { !$0.symbols.isEmpty }
+
+            for alternative in inner {
+                context.auxiliaryProductions.append(FlatProduction(
+                    name: helperName,
+                    symbols: alternative.symbols,
+                    fields: alternative.fields
+                ))
+            }
+            for alternative in recursiveAlternatives {
+                context.auxiliaryProductions.append(FlatProduction(
+                    name: helperName,
+                    symbols: [helperName] + alternative.symbols,
+                    fields: shiftFields(alternative.fields, by: 1)
+                ))
+            }
+
+            return [FlatSequence(symbols: [helperName], fields: [:])]
         case .optional(let content):
-            return [[]] + expandRule(content)
+            return [FlatSequence.empty] + expandRule(content, context: &context)
         case .prec(_, let content), .precLeft(_, let content), .precRight(_, let content),
              .precDynamic(_, let content):
-            return expandRule(content)
+            return expandRule(content, context: &context)
         case .token(let content), .immediateToken(let content):
-            return expandRule(content)
-        case .field(_, let content):
-            return expandRule(content)
+            return expandRule(content, context: &context)
+        case .field(let name, let content):
+            return expandRule(content, context: &context).map { production in
+                guard !production.symbols.isEmpty else {
+                    return production
+                }
+
+                var fields = production.fields
+                fields[0] = name
+                return FlatSequence(symbols: production.symbols, fields: fields)
+            }
         case .alias(let content, _, _):
-            return expandRule(content)
+            return expandRule(content, context: &context)
         case .blank:
-            return [[]]
+            return [FlatSequence.empty]
         }
     }
 
+    private static func combine(_ lhs: FlatSequence, _ rhs: FlatSequence) -> FlatSequence {
+        var fields = lhs.fields
+        for (index, name) in rhs.fields {
+            fields[lhs.symbols.count + index] = name
+        }
+
+        return FlatSequence(symbols: lhs.symbols + rhs.symbols, fields: fields)
+    }
+
+    private static func shiftFields(_ fields: [Int: String], by offset: Int) -> [Int: String] {
+        Dictionary(uniqueKeysWithValues: fields.map { (index, name) in
+            (index + offset, name)
+        })
+    }
+
     private static func collectTerminals(
-        _ productions: [(name: String, symbols: [String])],
-        grammar: GrammarDefinition
+        _ productions: [FlatProduction],
+        nonTerminals: Set<String>
     ) -> [String] {
-        let ntNames = Set(grammar.rules.map(\.name) + ["_start"])
         var terminals = Set<String>()
         for prod in productions {
             for sym in prod.symbols {
-                if !ntNames.contains(sym) {
+                if !nonTerminals.contains(sym) {
                     terminals.insert(sym)
                 }
             }
@@ -144,7 +234,7 @@ public enum ParseTableCompiler: Sendable {
         return terminals.sorted()
     }
 
-    private static func collectNonTerminals(_ productions: [(name: String, symbols: [String])]) -> [String] {
+    private static func collectNonTerminals(_ productions: [FlatProduction]) -> [String] {
         var nts = Set<String>()
         for prod in productions {
             nts.insert(prod.name)

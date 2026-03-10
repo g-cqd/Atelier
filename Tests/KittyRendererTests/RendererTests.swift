@@ -25,6 +25,18 @@ struct DirtyTrackerTests {
         #expect(!tracker.isDirty(4))
     }
 
+    @Test("Out of bounds indices are ignored")
+    func outOfBoundsIndicesAreIgnored() {
+        var tracker = DirtyTracker(capacity: 10)
+
+        tracker.mark(-1)
+        tracker.mark(10)
+
+        #expect(!tracker.isDirty(-1))
+        #expect(!tracker.isDirty(10))
+        #expect(tracker.isEmpty)
+    }
+
     @Test("Clear resets all bits")
     func clear() {
         var tracker = DirtyTracker(capacity: 100)
@@ -75,6 +87,42 @@ struct ScreenBufferTests {
         buffer.dirty.clear()
         buffer[1, 5] = Cell(character: "A", style: .default)
         #expect(buffer.dirty.isDirty(15)) // row 1 * 10 + col 5
+    }
+
+    @Test("Out of bounds reads return empty")
+    func outOfBoundsReadReturnsEmpty() {
+        let buffer = ScreenBuffer(columns: 10, rows: 3)
+
+        #expect(buffer[-1, 0] == .empty)
+        #expect(buffer[0, -1] == .empty)
+        #expect(buffer[3, 0] == .empty)
+        #expect(buffer[0, 10] == .empty)
+    }
+
+    @Test("Out of bounds writes are ignored")
+    func outOfBoundsWritesAreIgnored() {
+        var buffer = ScreenBuffer(columns: 5, rows: 2)
+
+        buffer[-1, 0] = Cell(character: "X", style: .default)
+        buffer[0, -1] = Cell(character: "Y", style: .default)
+        buffer.write("Hello", row: -1, col: 0, style: .default)
+        buffer.write("Hello", row: 2, col: 0, style: .default)
+        buffer.write("Hello", row: 0, col: -1, style: .default)
+
+        #expect(buffer.cells.allSatisfy { $0 == .empty })
+        #expect(buffer.dirty.isEmpty)
+    }
+
+    @Test("Out of bounds fills are ignored")
+    func outOfBoundsFillsAreIgnored() {
+        var buffer = ScreenBuffer(columns: 5, rows: 2)
+
+        buffer.fill(row: -1, col: 0, width: 2, height: 1, cell: Cell(character: "A", style: .default))
+        buffer.fill(row: 0, col: -1, width: 2, height: 1, cell: Cell(character: "B", style: .default))
+        buffer.fill(row: 2, col: 0, width: 2, height: 1, cell: Cell(character: "C", style: .default))
+
+        #expect(buffer.cells.allSatisfy { $0 == .empty })
+        #expect(buffer.dirty.isEmpty)
     }
 }
 

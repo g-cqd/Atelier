@@ -54,35 +54,47 @@ public enum QueryMatcher: Sendable {
         switch pattern {
         case .nodeMatch(let type, let children, let capture):
             guard node.type == type else { return false }
-            // Match children patterns
+            var localCaptures = captures
+            var childCursor = 0
             for childPattern in children {
                 switch childPattern {
                 case .fieldMatch(let name, let fieldPattern):
                     guard let fieldNode = node.child(forField: name) else { return false }
-                    if !matchPattern(fieldPattern, against: fieldNode, source: source, captures: &captures) {
+                    var fieldCaptures = localCaptures
+                    if !matchPattern(fieldPattern, against: fieldNode, source: source, captures: &fieldCaptures) {
                         return false
                     }
+                    localCaptures = fieldCaptures
                 case .negatedField(let name):
                     if node.fields[name] != nil { return false }
                 case .predicate(let pred):
-                    if !evaluatePredicate(pred, captures: captures, source: source) {
+                    if !evaluatePredicate(pred, captures: localCaptures, source: source) {
                         return false
                     }
                 default:
-                    // Match against child nodes positionally
                     var matched = false
-                    for child in node.children {
-                        if matchPattern(childPattern, against: child, source: source, captures: &captures) {
+                    while childCursor < node.children.count {
+                        var candidateCaptures = localCaptures
+                        if matchPattern(
+                            childPattern,
+                            against: node.children[childCursor],
+                            source: source,
+                            captures: &candidateCaptures
+                        ) {
+                            childCursor += 1
+                            localCaptures = candidateCaptures
                             matched = true
                             break
                         }
+                        childCursor += 1
                     }
                     if !matched { return false }
                 }
             }
             if let captureName = capture {
-                captures.append((node: node, name: captureName))
+                localCaptures.append((node: node, name: captureName))
             }
+            captures = localCaptures
             return true
 
         case .literal(let value, let capture):
@@ -120,11 +132,13 @@ public enum QueryMatcher: Sendable {
             return evaluatePredicate(pred, captures: captures, source: source)
 
         case .sequence(let patterns):
+            var localCaptures = captures
             for p in patterns {
-                if !matchPattern(p, against: node, source: source, captures: &captures) {
+                if !matchPattern(p, against: node, source: source, captures: &localCaptures) {
                     return false
                 }
             }
+            captures = localCaptures
             return true
 
         case .anchor:

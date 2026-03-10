@@ -68,6 +68,29 @@ struct StatusBarTests {
         let rendered = bar.render(width: 30)
         #expect(rendered.count == 30)
     }
+
+    @Test("Non positive width returns empty string")
+    func nonPositiveWidthReturnsEmptyString() {
+        let bar = StatusBar(left: "L", center: "C", right: "R")
+
+        #expect(bar.render(width: 0).isEmpty)
+        #expect(bar.render(width: -1).isEmpty)
+    }
+}
+
+@Suite("ViewModifier")
+struct ViewModifierTests {
+    @Test("ModifiedView preserves wrapped content")
+    func modifiedViewPreservesWrappedContent() {
+        let inner = ModifiedView(content: Text("Hello"), modifier: BoldModifier())
+        let outer = ModifiedView(content: inner, modifier: ItalicModifier())
+
+        let resolvedInner = outer.modifierContent.resolve(as: ModifiedView<Text, BoldModifier>.self)
+        let resolvedText = resolvedInner?.modifierContent.resolve(as: Text.self)
+
+        #expect(resolvedInner != nil)
+        #expect(resolvedText?.content == "Hello")
+    }
 }
 
 @Suite("TextEditor")

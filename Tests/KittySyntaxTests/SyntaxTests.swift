@@ -64,6 +64,50 @@ struct HighlighterTests {
         // First span should be styled as keyword
         #expect(spans[0].style.bold)
     }
+
+    @Test("Nested captures override broader captures")
+    func nestedCapturesOverrideBroaderCaptures() {
+        var theme = Theme(defaultStyle: .default)
+        let functionStyle = Style(fg: .rgb(r: 1, g: 2, b: 3))
+        let functionNameStyle = Style(fg: .rgb(r: 4, g: 5, b: 6), italic: true)
+        let keywordStyle = Style(fg: .rgb(r: 7, g: 8, b: 9), bold: true)
+        theme.setStyle(functionStyle, for: "function")
+        theme.setStyle(functionNameStyle, for: "function.name")
+        theme.setStyle(keywordStyle, for: "keyword")
+
+        let identifier = SyntaxNode(type: "identifier", byteRange: 5..<10, isNamed: true)
+        let function = SyntaxNode(
+            type: "function_definition",
+            children: [identifier],
+            byteRange: 0..<20,
+            isNamed: true
+        )
+        let keyword = SyntaxNode(type: "keyword", byteRange: 20..<23, isNamed: true)
+        let root = SyntaxNode(
+            type: "source",
+            children: [function, keyword],
+            byteRange: 0..<23
+        )
+        let tree = SyntaxTree(root: root, source: "abcdefghijklmnopqrstuvw")
+        let query = Query(patterns: [
+            .nodeMatch(type: "function_definition", children: [], capture: "function"),
+            .nodeMatch(type: "identifier", children: [], capture: "function.name"),
+            .nodeMatch(type: "keyword", children: [], capture: "keyword"),
+        ])
+
+        let spans = Highlighter(theme: theme).highlight(
+            source: tree.source,
+            tree: tree,
+            query: query
+        )
+
+        #expect(spans == [
+            StyledSpan(text: "abcde", style: functionStyle),
+            StyledSpan(text: "fghij", style: functionNameStyle),
+            StyledSpan(text: "klmnopqrst", style: functionStyle),
+            StyledSpan(text: "uvw", style: keywordStyle),
+        ])
+    }
 }
 
 @Suite("GrammarRegistry")
