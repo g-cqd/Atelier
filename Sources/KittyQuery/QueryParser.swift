@@ -54,6 +54,9 @@ public enum QueryParser: Sendable {
             pattern = attachCapture(capture, to: pattern)
         }
 
+        let predicates = try parsePredicates(&scanner)
+        pattern = wrap(pattern, with: predicates)
+
         return pattern
     }
 
@@ -66,6 +69,11 @@ public enum QueryParser: Sendable {
             return .literal(value, capture: existing ?? capture)
         case .wildcard(let existing):
             return .wildcard(capture: existing ?? capture)
+        case .sequence(let patterns):
+            guard !patterns.isEmpty else { return pattern }
+            var updatedPatterns = patterns
+            updatedPatterns[0] = attachCapture(capture, to: updatedPatterns[0])
+            return .sequence(updatedPatterns)
         default:
             return pattern
         }
@@ -75,23 +83,27 @@ public enum QueryParser: Sendable {
         scanner.advance() // consume (
         scanner.skipWhitespaceAndComments()
 
+        if scanner.peek() == "#" {
+            let predicate = try parsePredicatePattern(&scanner)
+            scanner.skipWhitespaceAndComments()
+            guard scanner.peek() == ")" else {
+                throw .syntaxError("Expected )")
+            }
+            scanner.advance()
+            return predicate
+        }
+
         // Check for wildcard (_)
         if scanner.peek() == "_" {
             scanner.advance()
             scanner.skipWhitespaceAndComments()
             let capture = try parseCapture(&scanner)
-            scanner.skipWhitespaceAndComments()
-            // Consume any predicates
-            var predicates: [QueryPattern] = []
-            while scanner.peek() == "#" {
-                predicates.append(try parsePredicatePattern(&scanner))
-                scanner.skipWhitespaceAndComments()
-            }
+            let predicates = try parsePredicates(&scanner)
             guard scanner.peek() == ")" else {
                 throw .syntaxError("Expected )")
             }
             scanner.advance()
-            return .wildcard(capture: capture)
+            return wrap(.wildcard(capture: capture), with: predicates)
         }
 
         // Node type
@@ -127,11 +139,7 @@ public enum QueryParser: Sendable {
         }
 
         // Predicates inside parens
-        scanner.skipWhitespaceAndComments()
-        while scanner.peek() == "#" {
-            children.append(try parsePredicatePattern(&scanner))
-            scanner.skipWhitespaceAndComments()
-        }
+        children.append(contentsOf: try parsePredicates(&scanner))
 
         guard scanner.peek() == ")" else {
             throw .syntaxError("Expected )")
@@ -198,6 +206,26 @@ public enum QueryParser: Sendable {
         return .predicate(predicate)
     }
 
+    private static func parsePredicates(_ scanner: inout Scanner) throws(QueryError) -> [QueryPattern] {
+        var predicates: [QueryPattern] = []
+
+        while true {
+            scanner.skipWhitespaceAndComments()
+
+            if scanner.peek() == "#" {
+                predicates.append(try parsePredicatePattern(&scanner))
+                continue
+            }
+
+            if scanner.isParenthesizedPredicateStart() {
+                predicates.append(try parseNodePattern(&scanner))
+                continue
+            }
+
+            return predicates
+        }
+    }
+
     private static func parseCapture(_ scanner: inout Scanner) throws(QueryError) -> String? {
         guard scanner.peek() == "@" else { return nil }
         scanner.advance()
@@ -237,6 +265,11 @@ public enum QueryParser: Sendable {
         default:
             throw .unknownPredicate(name)
         }
+    }
+
+    private static func wrap(_ pattern: QueryPattern, with predicates: [QueryPattern]) -> QueryPattern {
+        guard !predicates.isEmpty else { return pattern }
+        return .sequence([pattern] + predicates)
     }
 }
 
@@ -339,6 +372,31 @@ private struct Scanner: Sendable {
                 return false
             }
         }
+        return false
+    }
+
+    func isParenthesizedPredicateStart() -> Bool {
+        guard peek() == "(" else { return false }
+
+        var tempIdx = source.index(after: index)
+        while tempIdx < source.endIndex {
+            let ch = source[tempIdx]
+
+            if ch.isWhitespace {
+                tempIdx = source.index(after: tempIdx)
+                continue
+            }
+
+            if ch == ";" {
+                while tempIdx < source.endIndex, source[tempIdx] != "\n" {
+                    tempIdx = source.index(after: tempIdx)
+                }
+                continue
+            }
+
+            return ch == "#"
+        }
+
         return false
     }
 }

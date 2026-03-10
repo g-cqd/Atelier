@@ -13,6 +13,34 @@ struct GrammarDefinitionTests {
         #expect(str == .string("if"))
         #expect(blank == .blank)
     }
+
+    @Test("Equality compares all stored properties")
+    func equalityComparesAllFields() {
+        let lhs = GrammarDefinition(
+            name: "shared",
+            rules: [("source", .symbol("statement"))],
+            extras: [.pattern("\\s+")],
+            conflicts: [["source", "statement"]],
+            externals: [.symbol("external_token")],
+            inline: ["statement"],
+            word: "identifier",
+            supertypes: ["expression"],
+            precedences: [[.symbol("statement")]]
+        )
+        let rhs = GrammarDefinition(
+            name: "shared",
+            rules: [("source", .string("statement"))],
+            extras: [.pattern("\\s+")],
+            conflicts: [["source", "statement"]],
+            externals: [.symbol("external_token")],
+            inline: ["statement"],
+            word: "identifier",
+            supertypes: ["expression"],
+            precedences: [[.symbol("statement")]]
+        )
+
+        #expect(lhs != rhs)
+    }
 }
 
 @Suite("GrammarLoader")
@@ -45,6 +73,37 @@ struct GrammarLoaderTests {
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         #expect(grammar.name == "test")
         #expect(grammar.rules.count == 2)
+    }
+
+    @Test("Preserves JSON rule order for start symbol")
+    func preservesRuleOrder() throws {
+        let json = """
+        {
+            "name": "ordering",
+            "rules": {
+                "z_entry": {
+                    "type": "SYMBOL",
+                    "name": "statement"
+                },
+                "a_helper": {
+                    "type": "STRING",
+                    "value": "helper"
+                },
+                "statement": {
+                    "type": "STRING",
+                    "value": "stmt"
+                }
+            }
+        }
+        """
+
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+        #expect(grammar.rules.map(\.name) == ["z_entry", "a_helper", "statement"])
+
+        let result = try ParseTableCompiler.compile(grammar)
+        let startRule = try #require(result.productions.first)
+        #expect(startRule.name == "_start")
+        #expect(startRule.symbols == ["z_entry"])
     }
 
     @Test("Parse grammar with all rule types")
@@ -88,6 +147,29 @@ struct GrammarLoaderTests {
     func invalidJSON() {
         #expect(throws: GrammarError.self) {
             try GrammarLoader.parse(Data("not json".utf8))
+        }
+    }
+
+    @Test("Parses surrogate-pair unicode escapes in JSON strings")
+    func parsesSurrogatePairUnicodeEscapes() throws {
+        let json = #"""
+        {
+            "name": "emoji",
+            "rules": {
+                "source": {
+                    "type": "STRING",
+                    "value": "\uD83D\uDE00"
+                }
+            }
+        }
+        """#
+
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+        #expect(grammar.rules.count == 1)
+        if case let .string(value) = try #require(grammar.rules.first?.rule) {
+            #expect(value == "😀")
+        } else {
+            Issue.record("Expected string rule")
         }
     }
 }
@@ -138,6 +220,126 @@ struct ParseTableCompilerTests {
         let result = try ParseTableCompiler.compile(grammar)
         #expect(result.parseTable.stateCount > 0)
         #expect(result.productions.count > 0)
+    }
+
+    @Test("repeat compiles to recursive zero or more productions")
+    func repeatCompilesRecursively() throws {
+        let json = """
+        {
+            "name": "repeat_test",
+            "rules": {
+                "source": {
+                    "type": "REPEAT",
+                    "content": {
+                        "type": "SYMBOL",
+                        "name": "item"
+                    }
+                },
+                "item": {
+                    "type": "STRING",
+                    "value": "a"
+                }
+            }
+        }
+        """
+
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+        let result = try ParseTableCompiler.compile(grammar)
+
+        let sourceRule = try #require(result.productions.first { $0.name == "source" })
+        let helperName = try #require(sourceRule.symbols.first)
+        #expect(helperName.starts(with: "_repeat_"))
+
+        let helperRules = result.productions.filter { $0.name == helperName }
+        #expect(helperRules.contains { $0.symbols.isEmpty })
+        #expect(helperRules.contains { $0.symbols == [helperName, "item"] })
+    }
+
+    @Test("repeat1 compiles to recursive one or more productions")
+    func repeat1CompilesRecursively() throws {
+        let json = """
+        {
+            "name": "repeat1_test",
+            "rules": {
+                "source": {
+                    "type": "REPEAT1",
+                    "content": {
+                        "type": "SYMBOL",
+                        "name": "item"
+                    }
+                },
+                "item": {
+                    "type": "STRING",
+                    "value": "a"
+                }
+            }
+        }
+        """
+
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+        let result = try ParseTableCompiler.compile(grammar)
+
+        let sourceRule = try #require(result.productions.first { $0.name == "source" })
+        let helperName = try #require(sourceRule.symbols.first)
+        #expect(helperName.starts(with: "_repeat1_"))
+
+        let helperRules = result.productions.filter { $0.name == helperName }
+        #expect(!helperRules.contains { $0.symbols.isEmpty })
+        #expect(helperRules.contains { $0.symbols == ["item"] })
+        #expect(helperRules.contains { $0.symbols == [helperName, "item"] })
+    }
+
+    @Test("Fields are preserved on flattened productions")
+    func preservesFieldMetadata() throws {
+        let json = """
+        {
+            "name": "fields_test",
+            "rules": {
+                "source": {
+                    "type": "SEQ",
+                    "members": [
+                        {
+                            "type": "FIELD",
+                            "name": "left",
+                            "content": {
+                                "type": "SYMBOL",
+                                "name": "lhs"
+                            }
+                        },
+                        {
+                            "type": "STRING",
+                            "value": "="
+                        },
+                        {
+                            "type": "FIELD",
+                            "name": "right",
+                            "content": {
+                                "type": "SYMBOL",
+                                "name": "rhs"
+                            }
+                        }
+                    ]
+                },
+                "lhs": {
+                    "type": "STRING",
+                    "value": "a"
+                },
+                "rhs": {
+                    "type": "STRING",
+                    "value": "b"
+                }
+            }
+        }
+        """
+
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+        let result = try ParseTableCompiler.compile(grammar)
+
+        let sourceRule = try #require(result.productions.first {
+            $0.name == "source" && $0.symbols == ["lhs", "\"=\"", "rhs"]
+        })
+
+        #expect(sourceRule.fields == [0: "left", 2: "right"])
     }
 }
 

@@ -38,7 +38,9 @@ public enum SGREncoder: Sendable {
         if style.bg != .default {
             appendColor(&params, style.bg, foreground: false, first: &first)
         }
-        appendUnderlineColor(&params, style.underlineColor, first: &first)
+        if style.underlineColor != .default {
+            appendUnderlineColor(&params, style.underlineColor, first: &first)
+        }
 
         params.append(0x6d) // m
         return params
@@ -164,20 +166,19 @@ public enum SGREncoder: Sendable {
     }
 
     private static func appendUnderlineColor(_ bytes: inout [UInt8], _ color: Color, first: inout Bool) {
-        guard color != .default else { return }
         if !first { bytes.append(0x3b) }
         first = false
-        // CSI 58;2;R;G;Bm for underline color
-        bytes.append(contentsOf: [0x35, 0x38]) // 58
         switch color {
         case .default:
-            break
+            bytes.append(contentsOf: [0x35, 0x39]) // 59
         case .indexed(let idx):
+            bytes.append(contentsOf: [0x35, 0x38]) // 58
             bytes.append(0x3b)
             bytes.append(0x35) // 5
             bytes.append(0x3b)
             appendDecimal(&bytes, UInt16(idx))
         case .rgb(let r, let g, let b):
+            bytes.append(contentsOf: [0x35, 0x38]) // 58
             bytes.append(0x3b)
             bytes.append(0x32) // 2
             bytes.append(0x3b)

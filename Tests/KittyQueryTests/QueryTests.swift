@@ -58,6 +58,58 @@ struct QueryParserTests {
         let query = try QueryParser.parse(source)
         #expect(query.patterns.count == 1)
     }
+
+    @Test("Parse parenthesized eq? predicate")
+    func parenthesizedEqPredicate() throws {
+        let query = try QueryParser.parse("(#eq? @var \"self\")")
+        #expect(query.patterns.count == 1)
+
+        if case .predicate(.eq(capture: let capture, value: let value)) = query.patterns[0] {
+            #expect(capture == "@var")
+            #expect(value == "self")
+        } else {
+            Issue.record("Expected eq? predicate")
+        }
+    }
+
+    @Test("Parse parenthesized match? predicate")
+    func parenthesizedMatchPredicate() throws {
+        let query = try QueryParser.parse("(#match? @comment \"TODO\")")
+        #expect(query.patterns.count == 1)
+
+        if case .predicate(.match(capture: let capture, pattern: let pattern)) = query.patterns[0] {
+            #expect(capture == "@comment")
+            #expect(pattern == "TODO")
+        } else {
+            Issue.record("Expected match? predicate")
+        }
+    }
+
+    @Test("Parse pattern with trailing parenthesized predicate")
+    func trailingParenthesizedPredicate() throws {
+        let query = try QueryParser.parse("(identifier) @var (#eq? @var \"self\")")
+        #expect(query.patterns.count == 1)
+
+        guard case .sequence(let patterns) = query.patterns[0] else {
+            Issue.record("Expected sequence")
+            return
+        }
+
+        #expect(patterns.count == 2)
+        if case .nodeMatch(let type, _, let capture) = patterns[0] {
+            #expect(type == "identifier")
+            #expect(capture == "var")
+        } else {
+            Issue.record("Expected node match")
+        }
+
+        if case .predicate(.eq(capture: let predicateCapture, value: let value)) = patterns[1] {
+            #expect(predicateCapture == "@var")
+            #expect(value == "self")
+        } else {
+            Issue.record("Expected eq? predicate")
+        }
+    }
 }
 
 @Suite("QueryMatcher")
@@ -95,6 +147,83 @@ struct QueryMatcherTests {
         let query = Query(patterns: [.nodeMatch(type: "identifier", children: [], capture: "var")])
         let matches = QueryMatcher.execute(query: query, tree: tree, byteRange: 0..<5)
         #expect(matches.count == 1)
+    }
+
+    @Test("Parenthesized predicate filters a captured node match")
+    func parenthesizedPredicateMatch() throws {
+        let node = SyntaxNode(type: "identifier", byteRange: 0..<4)
+        let root = SyntaxNode(type: "source", children: [node], byteRange: 0..<4)
+        let tree = SyntaxTree(root: root, source: "self")
+
+        let query = try QueryParser.parse("(identifier) @var (#eq? @var \"self\")")
+        let matches = QueryMatcher.execute(query: query, tree: tree)
+
+        #expect(matches.count == 1)
+        #expect(matches[0].captures.first?.name == "var")
+    }
+
+    @Test("Wildcard predicate filters wildcard matches")
+    func wildcardPredicateMatch() throws {
+        let comment = SyntaxNode(type: "comment", byteRange: 0..<4)
+        let root = SyntaxNode(type: "source", children: [comment], byteRange: 0..<7)
+        let tree = SyntaxTree(root: root, source: "TODO();")
+
+        let query = try QueryParser.parse("(_) @comment (#match? @comment \"^TODO$\")")
+        let matches = QueryMatcher.execute(query: query, tree: tree)
+
+        #expect(matches.count == 1)
+        #expect(matches[0].captures.first?.node == comment)
+        #expect(matches[0].captures.first?.name == "comment")
+    }
+
+    @Test("Positional child matching respects order")
+    func positionalChildMatchingOrder() {
+        let identifier = SyntaxNode(type: "identifier", byteRange: 0..<1)
+        let number = SyntaxNode(type: "number", byteRange: 1..<2)
+        let matchingCall = SyntaxNode(type: "call", children: [identifier, number], byteRange: 0..<2)
+        let reversedCall = SyntaxNode(type: "call", children: [number, identifier], byteRange: 0..<2)
+
+        let query = Query(patterns: [
+            .nodeMatch(
+                type: "call",
+                children: [
+                    .nodeMatch(type: "identifier", children: [], capture: "first"),
+                    .nodeMatch(type: "number", children: [], capture: "second"),
+                ],
+                capture: nil
+            ),
+        ])
+
+        let matchingTree = SyntaxTree(root: matchingCall, source: "ab")
+        let reversedTree = SyntaxTree(root: reversedCall, source: "ab")
+
+        let matchingResults = QueryMatcher.execute(query: query, tree: matchingTree)
+        let reversedResults = QueryMatcher.execute(query: query, tree: reversedTree)
+
+        #expect(matchingResults.count == 1)
+        #expect(matchingResults[0].captures.map(\.name) == ["first", "second"])
+        #expect(reversedResults.isEmpty)
+    }
+
+    @Test("Positional child matching does not reuse the same child")
+    func positionalChildMatchingNoReuse() {
+        let identifier = SyntaxNode(type: "identifier", byteRange: 0..<1)
+        let call = SyntaxNode(type: "call", children: [identifier], byteRange: 0..<1)
+        let tree = SyntaxTree(root: call, source: "a")
+
+        let query = Query(patterns: [
+            .nodeMatch(
+                type: "call",
+                children: [
+                    .nodeMatch(type: "identifier", children: [], capture: "first"),
+                    .nodeMatch(type: "identifier", children: [], capture: "second"),
+                ],
+                capture: nil
+            ),
+        ])
+
+        let matches = QueryMatcher.execute(query: query, tree: tree)
+        #expect(matches.isEmpty)
     }
 }
 

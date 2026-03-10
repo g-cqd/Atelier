@@ -13,6 +13,20 @@ extension ViewModifier {
 
 /// Placeholder for content passed to modifiers.
 public struct AnyViewContent: View, Sendable {
+    private let storage: any Sendable
+
+    public init() {
+        self.storage = EmptyView()
+    }
+
+    public init<Content: View>(_ content: Content) {
+        self.storage = content
+    }
+
+    public func resolve<Content: View>(as type: Content.Type = Content.self) -> Content? {
+        storage as? Content
+    }
+
     public var body: Never { fatalError() }
 }
 
@@ -22,8 +36,12 @@ public struct ModifiedView<Content: View, Modifier: ViewModifier>: View, Sendabl
     public let content: Content
     public let modifier: Modifier
 
+    public var modifierContent: AnyViewContent {
+        AnyViewContent(content)
+    }
+
     public var body: some View {
-        modifier.body(content: AnyViewContent())
+        modifier.body(content: modifierContent)
     }
 }
 
