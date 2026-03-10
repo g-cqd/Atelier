@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 
 import PackageDescription
 
@@ -9,7 +9,7 @@ let defaultSwiftSettings: [SwiftSetting] = [
 let package = Package(
     name: "KittyTUI",
     platforms: [
-        .macOS(.v14),
+        .macOS(.v26),
     ],
     products: [
         .library(name: "KittyTerminal", targets: ["KittyTerminal"]),

@@ -1,5 +1,6 @@
 import KittyCodecs
 import KittyRenderer
+import KittyWidgets
 
 @MainActor
 func render(pipeline: RenderPipeline, state: EditorState) {
@@ -13,9 +14,10 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     let editorWidth = cols - editorStart
     let contentRows = rows - 2
 
-    let title = " KittyCode — \(state.rootPath) "
-    let titlePadding = String(repeating: " ", count: max(0, cols - title.count))
-    pipeline.buffer.write(String((title + titlePadding).prefix(cols)), row: 0, col: 0, style: colorScheme.titleBar)
+    StatusBar(
+        left: " KittyCode — \(state.rootPath) ",
+        style: colorScheme.titleBar
+    ).render(to: &pipeline.buffer, in: Rect(x: 0, y: 0, width: cols, height: 1))
 
     renderTreePanel(
         pipeline: pipeline,
@@ -38,8 +40,11 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     let position = state.isFileEmpty ? "" : "Ln \(state.cursorRow + 1)/\(state.fileLineCount)"
     let statusLeft = " [\(mode)] \(state.statusMessage)"
     let statusRight = "\(position)  \(cols)x\(rows) "
-    let statusLine = statusLeft + String(repeating: " ", count: max(0, cols - statusLeft.count - statusRight.count)) + statusRight
-    pipeline.buffer.write(String(statusLine.prefix(cols)), row: rows - 1, col: 0, style: colorScheme.statusBar)
+    StatusBar(
+        left: statusLeft,
+        right: statusRight,
+        style: colorScheme.statusBar
+    ).render(to: &pipeline.buffer, in: Rect(x: 0, y: rows - 1, width: cols, height: 1))
 
     if let pos = terminalCursorPos {
         pipeline.cursorRow = pos.row

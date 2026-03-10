@@ -24,18 +24,41 @@ public struct StatusBar: View, Sendable {
     /// Render the status bar into a fixed-width string.
     public func render(width: Int) -> String {
         guard width > 0 else { return "" }
-        let leftPart = left.prefix(width / 3)
-        let rightPart = right.suffix(width / 3)
-        let centerSpace = width - leftPart.count - rightPart.count
-        let centerPart = center.prefix(centerSpace)
-        let padding = centerSpace - centerPart.count
-        let leftPadding = padding / 2
-        let rightPadding = padding - leftPadding
+        if center.isEmpty {
+            return renderEdgeAligned(width: width)
+        }
+        return renderCentered(width: width)
+    }
 
-        return String(leftPart)
-            + String(repeating: " ", count: leftPadding)
-            + String(centerPart)
-            + String(repeating: " ", count: rightPadding)
-            + String(rightPart)
+    private func renderEdgeAligned(width: Int) -> String {
+        let rightPart = String(right.suffix(width))
+        let leftPart = String(left.prefix(max(0, width - rightPart.count)))
+        return leftPart
+            + String(repeating: " ", count: width - leftPart.count - rightPart.count)
+            + rightPart
+    }
+
+    private func renderCentered(width: Int) -> String {
+        let leftPart = String(left.prefix(width))
+        let rightPart = String(right.suffix(width))
+        let centerStart = min(width, leftPart.count)
+        let centerEnd = max(centerStart, width - rightPart.count)
+        let availableCenterWidth = max(0, centerEnd - centerStart)
+        let centerPart = String(center.prefix(availableCenterWidth))
+
+        var result = Array(repeating: Character(" "), count: width)
+        write(leftPart, into: &result, at: 0)
+        write(rightPart, into: &result, at: max(0, width - rightPart.count))
+        write(centerPart, into: &result, at: centerStart + max(0, (availableCenterWidth - centerPart.count) / 2))
+        return String(result)
+    }
+
+    private func write(_ text: String, into result: inout [Character], at start: Int) {
+        guard start < result.count else { return }
+        for (offset, char) in text.enumerated() {
+            let index = start + offset
+            guard index < result.count else { break }
+            result[index] = char
+        }
     }
 }

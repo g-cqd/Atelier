@@ -81,6 +81,21 @@ struct ScreenBufferTests {
         #expect(buffer[0, 0].character == " ")
     }
 
+    @Test("Writing narrow text clears stale wide-character continuation cells")
+    func writeClearsWideCharacterContinuationCells() {
+        var buffer = ScreenBuffer(columns: 10, rows: 1)
+
+        buffer.write("界", row: 0, col: 0, style: .default)
+        buffer.dirty.clear()
+        buffer.write("a", row: 0, col: 0, style: .default)
+
+        #expect(buffer[0, 0].character == "a")
+        #expect(buffer[0, 0].width == 1)
+        #expect(buffer[0, 1] == .empty)
+        #expect(buffer.dirty.isDirty(0))
+        #expect(buffer.dirty.isDirty(1))
+    }
+
     @Test("Subscript marks dirty")
     func subscriptDirty() {
         var buffer = ScreenBuffer(columns: 10, rows: 3)
