@@ -52,8 +52,7 @@ extension EditorState {
 
         fileName = node.name
         filePath = node.path
-        textBuffer = TextBuffer(content)
-        invalidateTextSnapshotCache()
+        replaceDocumentText(with: content)
         textCursor = TextCursor()
         currentLanguage = Self.detectLanguage(for: node.name)
         refreshHighlights()
@@ -114,7 +113,7 @@ extension EditorState {
             return
         }
 
-        let content = textBuffer.text
+        let content = documentText
         do {
             try content.write(toFile: filePath, atomically: true, encoding: .utf8)
             statusMessage = "Saved: \(fileName)"

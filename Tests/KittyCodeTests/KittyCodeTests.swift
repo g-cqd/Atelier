@@ -268,6 +268,20 @@ struct KittyCodeSyntaxWiringTests {
         #expect(!state.highlightedLine(at: 0).isEmpty)
         #expect(!state.highlightedLine(at: 1).isEmpty)
     }
+
+    @Test("EditorState fallback highlighting reuses line-based input for unsupported languages")
+    @MainActor
+    func editorStateRefreshHighlightsForFallbackLanguage() {
+        let state = EditorState(rootPath: ".", config: KittyConfig())
+        state.fileContent = ["// comment", "value"]
+        state.currentLanguage = "unknown_lang"
+
+        state.refreshHighlights()
+
+        #expect(state.highlightedLines.count == 2)
+        #expect(state.highlightedLines[0].map(\.text).joined() == "// comment")
+        #expect(state.highlightedLines[1].map(\.text).joined() == "value")
+    }
 }
 
 // MARK: - detectLanguage tests
