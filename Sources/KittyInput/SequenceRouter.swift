@@ -35,6 +35,8 @@ public struct SequenceRouter: Sendable {
 
     private static let pasteEndMarker: [UInt8] = [0x1b, 0x5b, 0x32, 0x30, 0x31, 0x7e]
 
+    private static let maxPasteSize = 1_048_576  // 1MB
+
     private var keyboardDecoder = KeyboardDecoder()
     private var mouseDecoder = MouseDecoder()
     private var buffer: [UInt8] = []
@@ -183,7 +185,11 @@ public struct SequenceRouter: Sendable {
 
         case .osc:
             buffer.append(byte)
-            if byte == 0x07 {
+            if buffer.count > Self.maxPasteSize {
+                // OSC sequence too large — discard
+                events.append(.unknown(Array("osc overflow".utf8)))
+                resetRouting()
+            } else if byte == 0x07 {
                 events.append(.unknown(buffer))
                 resetRouting()
             } else if buffer.count >= 2, buffer[buffer.count - 2] == 0x1b, byte == 0x5c {
@@ -193,7 +199,11 @@ public struct SequenceRouter: Sendable {
 
         case .paste:
             buffer.append(byte)
-            if buffer.count >= Self.pasteEndMarker.count,
+            if buffer.count > Self.maxPasteSize {
+                // Paste too large — discard and reset
+                events.append(.unknown(Array("paste overflow".utf8)))
+                resetRouting()
+            } else if buffer.count >= Self.pasteEndMarker.count,
                buffer.suffix(Self.pasteEndMarker.count).elementsEqual(Self.pasteEndMarker) {
                 let pasteBytes = Array(buffer.dropLast(Self.pasteEndMarker.count))
                 let text = String(bytes: pasteBytes, encoding: .utf8) ?? ""

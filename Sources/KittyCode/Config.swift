@@ -92,10 +92,16 @@ struct KittyConfig: Codable, Sendable {
         let fileManager = FileManager.default
         let home = fileManager.homeDirectoryForCurrentUser
         let configURL = home.appendingPathComponent(".kittycode.json")
-        if let data = try? Data(contentsOf: configURL),
-           let config = try? JSONDecoder().decode(KittyConfig.self, from: data) {
-            return config
+        guard let data = try? Data(contentsOf: configURL) else {
+            return KittyConfig()
         }
-        return KittyConfig()
+        do {
+            return try JSONDecoder().decode(KittyConfig.self, from: data)
+        } catch {
+            FileHandle.standardError.write(
+                Data("Warning: failed to parse ~/.kittycode.json: \(error). Using defaults.\n".utf8)
+            )
+            return KittyConfig()
+        }
     }
 }

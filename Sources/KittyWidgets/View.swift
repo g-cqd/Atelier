@@ -1,4 +1,5 @@
 import KittyCodecs
+import KittyInput
 import KittyRenderer
 
 // MARK: - Size
@@ -46,6 +47,16 @@ extension View {
     /// Compute the size this view needs.
     public func size(proposed: ProposedSize) -> Size {
         Size(width: proposed.width ?? 0, height: proposed.height ?? 0)
+    }
+
+    /// Render this view into a buffer. Default dispatches to ViewRenderer.
+    public func render(to buffer: inout ScreenBuffer, in rect: Rect, context: RenderContext = RenderContext()) {
+        ViewRenderer.render(self, into: &buffer, in: rect, context: context)
+    }
+
+    /// Handle an input event. Default returns .ignored.
+    public func handleEvent(_ event: InputEvent) -> EventResult {
+        .ignored
     }
 }
 

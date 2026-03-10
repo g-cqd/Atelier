@@ -4,14 +4,12 @@ import KittyParser
 public struct QueryCursor: Sendable {
     private let query: Query
     private let tree: SyntaxTree
-    private var byteRange: Range<Int>?
     private var matches: [QueryMatch]
     private var currentIndex: Int
 
     public init(query: Query, tree: SyntaxTree, byteRange: Range<Int>? = nil) {
         self.query = query
         self.tree = tree
-        self.byteRange = byteRange
         self.currentIndex = 0
 
         if let range = byteRange {
@@ -19,6 +17,14 @@ public struct QueryCursor: Sendable {
         } else {
             self.matches = QueryMatcher.execute(query: query, tree: tree)
         }
+    }
+
+    /// Initialize with a point range filter (row/column).
+    public init(query: Query, tree: SyntaxTree, pointRange: Range<Point>) {
+        self.query = query
+        self.tree = tree
+        self.currentIndex = 0
+        self.matches = QueryMatcher.execute(query: query, tree: tree, pointRange: pointRange)
     }
 
     /// Returns the next match, or nil if exhausted.

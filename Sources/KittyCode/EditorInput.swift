@@ -1,5 +1,6 @@
 import KittyCodecs
 import KittyRenderer
+import KittyText
 
 @MainActor
 func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipeline: RenderPipeline) -> Bool {
@@ -10,21 +11,21 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
 
     if state.config.keybindingMode == .vim && state.vimMode == .normal {
         switch key.keyCode {
-        case UInt32(Character("i").asciiValue!):
+        case AsciiKey.i:
             state.vimMode = .insert
             state.statusMessage = "-- INSERT -- [\(state.fileName)]"
-        case UInt32(Character("h").asciiValue!):
+        case AsciiKey.h:
             state.cursorCol = max(0, state.cursorCol - 1)
-        case UInt32(Character("j").asciiValue!):
+        case AsciiKey.j:
             state.cursorRow = min(state.cursorRow + 1, max(0, state.fileContent.count - 1))
-        case UInt32(Character("k").asciiValue!):
+        case AsciiKey.k:
             state.cursorRow = max(0, state.cursorRow - 1)
-        case UInt32(Character("l").asciiValue!):
+        case AsciiKey.l:
             let rowLength = state.fileContent.isEmpty ? 0 : state.fileContent[state.cursorRow].count
             state.cursorCol = min(state.cursorCol + 1, rowLength)
-        case UInt32(Character(":").asciiValue!):
+        case AsciiKey.colon:
             state.statusMessage = ":"
-        case UInt32(Character("w").asciiValue!):
+        case AsciiKey.w:
             if state.statusMessage == ":" {
                 state.saveFile()
             }
@@ -69,59 +70,47 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
             state.cursorCol = min(state.cursorCol + 1, rowLength)
         }
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
-    case UInt32(Character("b").asciiValue!):
+    case AsciiKey.b:
         if key.modifiers == .alt {
             jumpWordBackward(state: state)
         }
-    case UInt32(Character("f").asciiValue!):
+    case AsciiKey.f:
         if key.modifiers == .alt {
             jumpWordForward(state: state)
         }
-    case 57356:
+    case Key.home.rawValue:
         state.cursorCol = 0
-    case 57357:
+    case Key.end.rawValue:
         let rowLength = state.fileContent.isEmpty ? 0 : state.fileContent[state.cursorRow].count
         state.cursorCol = rowLength
-    case 57358:
+    case Key.pageUp.rawValue:
         state.cursorRow = max(state.cursorRow - contentRows, 0)
         let rowLength = state.fileContent.isEmpty ? 0 : state.fileContent[state.cursorRow].count
         state.cursorCol = min(state.cursorCol, rowLength)
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
-    case 57359:
+    case Key.pageDown.rawValue:
         state.cursorRow = min(state.cursorRow + contentRows, max(0, state.fileContent.count - 1))
         let rowLength = state.fileContent.isEmpty ? 0 : state.fileContent[state.cursorRow].count
         state.cursorCol = min(state.cursorCol, rowLength)
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case Key.enter.rawValue, Key.enterAlt.rawValue:
-        guard !state.fileContent.isEmpty else {
-            state.fileContent = [""]
-            state.cursorRow = 0
-            state.cursorCol = 0
-            return true
+        let lineBeforeEdit = state.textCursor.row
+        TextOperations.insertNewline(into: &state.textBuffer, at: &state.textCursor)
+        // Newline splits a line — invalidate from the split point onward
+        for key in state.highlightCache.keys where key >= lineBeforeEdit {
+            state.highlightCache.removeValue(forKey: key)
         }
-        let currentLine = state.fileContent[state.cursorRow]
-        let prefix = String(currentLine.prefix(state.cursorCol))
-        let suffix = String(currentLine.dropFirst(state.cursorCol))
-        state.fileContent[state.cursorRow] = prefix
-        state.fileContent.insert(suffix, at: state.cursorRow + 1)
-        state.cursorRow += 1
-        state.cursorCol = 0
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
-        if state.cursorCol > 0 {
-            var line = state.fileContent[state.cursorRow]
-            let index = line.index(line.startIndex, offsetBy: state.cursorCol - 1)
-            line.remove(at: index)
-            state.fileContent[state.cursorRow] = line
-            state.cursorCol -= 1
-        } else if state.cursorRow > 0 {
-            let line = state.fileContent.remove(at: state.cursorRow)
-            state.cursorRow -= 1
-            state.cursorCol = state.fileContent[state.cursorRow].count
-            state.fileContent[state.cursorRow] += line
-            ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+        let lineBeforeEdit = state.textCursor.row
+        TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor)
+        // Backspace may merge lines — invalidate from current line onward
+        let invalidateFrom = min(lineBeforeEdit, state.textCursor.row)
+        for key in state.highlightCache.keys where key >= invalidateFrom {
+            state.highlightCache.removeValue(forKey: key)
         }
-    case UInt32(Character("g").asciiValue!):
+        ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+    case AsciiKey.g:
         if key.modifiers == .shift {
             state.cursorRow = max(0, state.fileContent.count - 1)
             ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)

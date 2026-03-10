@@ -11,9 +11,16 @@ public enum QueryMatcher: Sendable {
     }
 
     /// Execute a query within a byte range.
-    public static func execute(query: Query, tree: SyntaxTree, byteRange: Range<Int>) -> [QueryMatch] {
+    public static func execute(query: Query, tree: SyntaxTree, byteRange range: Range<Int>) -> [QueryMatch] {
         var matches: [QueryMatch] = []
-        matchInNode(tree.root, query: query, source: tree.source, byteRange: byteRange, matches: &matches)
+        matchInNode(tree.root, query: query, source: tree.source, byteRange: range, pointRange: nil, matches: &matches)
+        return matches
+    }
+
+    /// Execute a query within a point range (row/column).
+    public static func execute(query: Query, tree: SyntaxTree, pointRange range: Range<Point>) -> [QueryMatch] {
+        var matches: [QueryMatch] = []
+        matchInNode(tree.root, query: query, source: tree.source, byteRange: nil, pointRange: range, matches: &matches)
         return matches
     }
 
@@ -24,11 +31,15 @@ public enum QueryMatcher: Sendable {
         query: Query,
         source: String,
         byteRange: Range<Int>? = nil,
+        pointRange: Range<Point>? = nil,
         matches: inout [QueryMatch]
     ) {
         // Check if node is in range
         if let range = byteRange {
             guard node.byteRange.overlaps(range) else { return }
+        }
+        if let range = pointRange {
+            guard node.pointRange.overlaps(range) else { return }
         }
 
         // Try each pattern against this node
@@ -41,7 +52,7 @@ public enum QueryMatcher: Sendable {
 
         // Recurse into children
         for child in node.children {
-            matchInNode(child, query: query, source: source, byteRange: byteRange, matches: &matches)
+            matchInNode(child, query: query, source: source, byteRange: byteRange, pointRange: pointRange, matches: &matches)
         }
     }
 

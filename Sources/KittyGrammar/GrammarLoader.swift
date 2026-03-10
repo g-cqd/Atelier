@@ -3,9 +3,17 @@ import Foundation
 /// Loads and validates tree-sitter grammar.json files.
 public enum GrammarLoader: Sendable {
 
+    private static let maxGrammarFileSize = 10_000_000  // 10MB
+
     /// Load a grammar definition from a file path.
     public static func load(from path: String) throws(GrammarError) -> GrammarDefinition {
         let url = URL(fileURLWithPath: path)
+        // Check file size before loading
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+           let fileSize = attrs[.size] as? Int,
+           fileSize > maxGrammarFileSize {
+            throw .invalidJSON("Grammar file too large (\(fileSize) bytes, limit \(maxGrammarFileSize))")
+        }
         let data: Data
         do {
             data = try Data(contentsOf: url)

@@ -1,5 +1,6 @@
 import KittyCodecs
 import KittyRenderer
+import KittyText
 
 @MainActor
 func renderWrappedEditor(
@@ -18,10 +19,17 @@ func renderWrappedEditor(
 
     while screenRow < contentRows && lineIndex < state.fileContent.count {
         let isCurrentLine = lineIndex == state.cursorRow
-        let spans = highlightSwift(state.fileContent[lineIndex], colorScheme: colorScheme)
-        let flat = flattenSpans(spans)
-        let totalChars = max(flat.count, 1)
-        let wrappedRowCount = max(1, (totalChars + availWidth - 1) / availWidth)
+        let spans = state.cachedHighlightLine(lineIndex)
+
+        // Count total display width by walking spans directly (no intermediate array)
+        var totalWidth = 0
+        for span in spans {
+            for char in span.text {
+                totalWidth += UnicodeWidth.displayWidth(of: char)
+            }
+        }
+        totalWidth = max(totalWidth, 1)
+        let wrappedRowCount = max(1, (totalWidth + availWidth - 1) / availWidth)
 
         for wrapRow in 0..<wrappedRowCount {
             guard screenRow < contentRows else { break }
@@ -35,16 +43,32 @@ func renderWrappedEditor(
                 pipeline.buffer.fill(row: row, col: editorStart, width: lineNumWidth, height: 1, cell: Cell(character: " ", style: colorScheme.lineNumber))
             }
 
-            let segStart = wrapRow * availWidth
-            let segEnd = min(segStart + availWidth, flat.count)
+            // Walk spans directly for this wrap row's segment (width-aware)
+            let segStartWidth = wrapRow * availWidth
+            let segEndWidth = min(segStartWidth + availWidth, totalWidth)
             var col = editorStart + lineNumWidth
-            for index in segStart..<segEnd {
-                var style = flat[index].1
-                if isCurrentLine {
-                    style.bg = colorScheme.editorCursorLine.bg
+            var widthPos = 0
+            for span in spans {
+                if widthPos >= segEndWidth { break }
+                for char in span.text {
+                    let w = UnicodeWidth.displayWidth(of: char)
+                    if widthPos + w > segEndWidth { break }
+                    if widthPos >= segStartWidth {
+                        var style = span.style
+                        if isCurrentLine {
+                            style.bg = colorScheme.editorCursorLine.bg
+                        }
+                        if w == 2 && col + 1 < editorStart + editorWidth {
+                            pipeline.buffer[row, col] = Cell(character: char, style: style, width: 2)
+                            pipeline.buffer[row, col + 1] = Cell(character: "\0", style: style, width: 0)
+                            col += 2
+                        } else if w == 1 {
+                            pipeline.buffer[row, col] = Cell(character: char, style: style)
+                            col += 1
+                        }
+                    }
+                    widthPos += w
                 }
-                pipeline.buffer[row, col] = Cell(character: flat[index].0, style: style)
-                col += 1
             }
 
             let padStyle = isCurrentLine ? colorScheme.editorCursorLine : colorScheme.editorText
@@ -54,8 +78,10 @@ func renderWrappedEditor(
             }
 
             if isCurrentLine && state.mode == .editor {
-                let cursorWrapRow = state.cursorCol / availWidth
-                let cursorWrapCol = state.cursorCol % availWidth
+                let line = state.fileContent[lineIndex]
+                let cursorDisplayCol = displayColumn(for: state.cursorCol, in: line)
+                let cursorWrapRow = cursorDisplayCol / availWidth
+                let cursorWrapCol = cursorDisplayCol % availWidth
                 if wrapRow == cursorWrapRow {
                     terminalCursorPos = (row: row, col: editorStart + lineNumWidth + cursorWrapCol)
                 }

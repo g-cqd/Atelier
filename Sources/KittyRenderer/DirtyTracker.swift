@@ -16,6 +16,13 @@ public struct DirtyTracker: Sendable, Equatable {
         bits[word] |= (1 << bit)
     }
 
+    /// Marks all cells dirty in a single pass (O(words) instead of O(cells)).
+    public mutating func markAll() {
+        for i in bits.indices {
+            bits[i] = UInt64.max
+        }
+    }
+
     public func isDirty(_ index: Int) -> Bool {
         guard index >= 0, index < capacity else { return false }
         let word = index / 64
