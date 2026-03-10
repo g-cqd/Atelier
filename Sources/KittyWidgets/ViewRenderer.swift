@@ -1,0 +1,380 @@
+import KittyCodecs
+import KittyRenderer
+import KittyText
+
+/// Renders a View hierarchy into a ScreenBuffer.
+public enum ViewRenderer {
+
+    /// Render a view into a buffer region.
+    public static func render<V: View>(
+        _ view: V,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext = RenderContext()
+    ) {
+        guard !rect.isEmpty else { return }
+
+        switch view {
+        case let text as Text:
+            renderText(text, into: &buffer, in: rect, context: context)
+        case let styled as StyledTextView:
+            renderStyledText(styled, into: &buffer, in: rect, context: context)
+        case let status as StatusBar:
+            renderStatusBar(status, into: &buffer, in: rect, context: context)
+        case let editor as TextEditor:
+            renderTextEditor(editor, into: &buffer, in: rect, context: context)
+        case is EmptyView:
+            break
+        default:
+            renderGeneric(view, into: &buffer, in: rect, context: context)
+        }
+    }
+
+    // MARK: - Leaf Renderers
+
+    private static func renderText(
+        _ text: Text,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        let style = context.applyTo(text.style)
+        buffer.write(String(text.content.prefix(rect.width)), row: rect.y, col: rect.x, style: style)
+    }
+
+    private static func renderStyledText(
+        _ view: StyledTextView,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        var col = rect.x
+        let maxCol = rect.x + rect.width
+        for span in view.spans {
+            let style = context.applyTo(span.style)
+            for char in span.text {
+                let w = UnicodeWidth.displayWidth(of: char)
+                guard col + w <= maxCol else { return }
+                if w == 2 {
+                    buffer[rect.y, col] = Cell(character: char, style: style, width: 2)
+                    buffer[rect.y, col + 1] = Cell(character: "\0", style: style, width: 0)
+                    col += 2
+                } else if w == 1 {
+                    buffer[rect.y, col] = Cell(character: char, style: style)
+                    col += 1
+                }
+            }
+        }
+    }
+
+    private static func renderStatusBar(
+        _ bar: StatusBar,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        let style = context.applyTo(bar.style)
+        let rendered = bar.render(width: rect.width)
+        buffer.write(rendered, row: rect.y, col: rect.x, style: style)
+    }
+
+    private static func renderTree(
+        _ tree: any _TreeViewProtocol,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        let rows = tree.rowsForRendering
+        guard !rows.isEmpty else { return }
+
+        let visibleCount = min(rect.height, rows.count)
+        let indentWidth = max(0, tree.indentWidth)
+
+        for offset in 0..<visibleCount {
+            let row = rows[offset]
+            let style = context.applyTo(row.index == tree.selectedIndex ? tree.selectedStyle : tree.normalStyle)
+            let indent = String(repeating: " ", count: row.depth * indentWidth)
+            let line = String((indent + row.icon + row.label).prefix(rect.width))
+            buffer.write(line, row: rect.y + offset, col: rect.x, style: style)
+        }
+    }
+
+    private static func renderTextEditor(
+        _ editor: TextEditor,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        let style = context.applyTo(.default)
+        let startLine = max(0, min(editor.scrollOffset, editor.lines.count))
+        let endLine = min(editor.lines.count, startLine + rect.height)
+
+        guard startLine < endLine else { return }
+
+        for (rowOffset, lineIndex) in (startLine..<endLine).enumerated() {
+            let prefix: String
+            if editor.showLineNumbers {
+                prefix = formattedLineNumber(lineIndex + 1, width: editor.lineNumberWidth)
+            } else {
+                prefix = ""
+            }
+
+            let line = String((prefix + editor.lines[lineIndex]).prefix(rect.width))
+            buffer.write(line, row: rect.y + rowOffset, col: rect.x, style: style)
+        }
+    }
+
+    private static func formattedLineNumber(_ lineNumber: Int, width: Int) -> String {
+        let digits = String(lineNumber)
+        let padding = String(repeating: " ", count: max(0, width - digits.count))
+        return padding + digits + " "
+    }
+
+    // MARK: - Generic/Container Rendering
+
+    private static func renderGeneric<V: View>(
+        _ view: V,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        if let tree = view as? any _TreeViewProtocol {
+            renderTree(tree, into: &buffer, in: rect, context: context)
+            return
+        }
+
+        if let conditional = view as? any _ConditionalViewProtocol {
+            conditional.activeView.render(to: &buffer, in: rect, context: context)
+            return
+        }
+
+        if let modified = view as? any _ModifiedViewProtocol {
+            let mergedContext = modified.modifiedContext(from: context)
+            modified.contentView.render(to: &buffer, in: rect, context: mergedContext)
+            return
+        }
+
+        if let stack = view as? any _StackViewProtocol {
+            renderStack(stack, into: &buffer, in: rect, context: context)
+            return
+        }
+
+        if let zstack = view as? any _ZStackProtocol {
+            renderZStack(zstack, into: &buffer, in: rect, context: context)
+            return
+        }
+
+        if let tuple = view as? any _TupleViewProtocol {
+            renderTupleView(tuple, into: &buffer, in: rect, context: context)
+            return
+        }
+
+        if V.Body.self != Never.self {
+            let body = view.body
+            render(body, into: &buffer, in: rect, context: context)
+        }
+    }
+
+    private static func renderTupleView(
+        _ tuple: any _TupleViewProtocol,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        for child in tuple.childViews {
+            child.render(to: &buffer, in: rect, context: context)
+        }
+    }
+
+    private static func renderZStack(
+        _ zstack: any _ZStackProtocol,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        for child in zstack.childViews {
+            child.render(to: &buffer, in: rect, context: context)
+        }
+    }
+
+    private static func renderStack(
+        _ stack: any _StackViewProtocol,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        let children = stack.childViews
+        guard !children.isEmpty else { return }
+
+        if children.count == 1 {
+            children[0].render(to: &buffer, in: rect, context: context)
+            return
+        }
+
+        let segments = segments(
+            totalLength: stack.axis == .vertical ? rect.height : rect.width,
+            count: children.count,
+            spacing: stack.spacing
+        )
+
+        for (child, segment) in zip(children, segments) {
+            let childRect: Rect
+            switch stack.axis {
+            case .vertical:
+                childRect = Rect(x: rect.x, y: rect.y + segment.offset, width: rect.width, height: segment.length)
+            case .horizontal:
+                childRect = Rect(x: rect.x + segment.offset, y: rect.y, width: segment.length, height: rect.height)
+            }
+
+            guard !childRect.isEmpty else { continue }
+            child.render(to: &buffer, in: childRect, context: context)
+        }
+    }
+
+    private static func segments(totalLength: Int, count: Int, spacing: Int) -> [(offset: Int, length: Int)] {
+        guard count > 0 else { return [] }
+
+        let resolvedSpacing = max(0, spacing)
+        let totalSpacing = resolvedSpacing * max(0, count - 1)
+        let availableLength = max(0, totalLength - totalSpacing)
+        let baseLength = availableLength / count
+        let remainder = availableLength % count
+
+        var result: [(offset: Int, length: Int)] = []
+        result.reserveCapacity(count)
+
+        var offset = 0
+        for index in 0..<count {
+            let extra = index < remainder ? 1 : 0
+            let length = baseLength + extra
+            result.append((offset: offset, length: length))
+            offset += length + resolvedSpacing
+        }
+
+        return result
+    }
+}
+
+private enum _StackAxis {
+    case vertical
+    case horizontal
+}
+
+private protocol _TupleViewProtocol {
+    var childViews: [any View] { get }
+}
+
+private protocol _ConditionalViewProtocol {
+    var activeView: any View { get }
+}
+
+private protocol _ModifiedViewProtocol {
+    var contentView: any View { get }
+    func modifiedContext(from context: RenderContext) -> RenderContext
+}
+
+private protocol _StackViewProtocol {
+    var axis: _StackAxis { get }
+    var childViews: [any View] { get }
+    var spacing: Int { get }
+}
+
+private protocol _ZStackProtocol {
+    var childViews: [any View] { get }
+}
+
+private struct _TreeRow: Sendable {
+    let depth: Int
+    let icon: String
+    let label: String
+    let index: Int
+}
+
+private protocol _TreeViewProtocol {
+    var rowsForRendering: [_TreeRow] { get }
+    var normalStyle: Style { get }
+    var selectedStyle: Style { get }
+    var selectedIndex: Int { get }
+    var indentWidth: Int { get }
+}
+
+private func _childViews<Content: View>(from content: Content) -> [any View] {
+    if let tuple = content as? any _TupleViewProtocol {
+        return tuple.childViews
+    }
+    return [content]
+}
+
+extension TupleView: _TupleViewProtocol {
+    fileprivate var childViews: [any View] {
+        let mirror = Mirror(reflecting: value)
+        if mirror.displayStyle == .tuple {
+            return mirror.children.compactMap { $0.value as? any View }
+        }
+
+        if let view = value as? any View {
+            return [view]
+        }
+
+        return []
+    }
+}
+
+extension ConditionalView: _ConditionalViewProtocol {
+    fileprivate var activeView: any View {
+        switch self {
+        case let .first(view):
+            view
+        case let .second(view):
+            view
+        }
+    }
+}
+
+extension ModifiedView: _ModifiedViewProtocol {
+    fileprivate var contentView: any View { content }
+
+    fileprivate func modifiedContext(from context: RenderContext) -> RenderContext {
+        modifier.modifyContext(context)
+    }
+}
+
+extension VStack: _StackViewProtocol {
+    fileprivate var axis: _StackAxis { .vertical }
+    fileprivate var childViews: [any View] { _childViews(from: content) }
+}
+
+extension HStack: _StackViewProtocol {
+    fileprivate var axis: _StackAxis { .horizontal }
+    fileprivate var childViews: [any View] { _childViews(from: content) }
+}
+
+extension ZStack: _ZStackProtocol {
+    fileprivate var childViews: [any View] { _childViews(from: content) }
+}
+
+extension TreeView: _TreeViewProtocol {
+    fileprivate var rowsForRendering: [_TreeRow] {
+        visibleRows().map { row in
+            let icon: String
+            if row.node.isLeaf {
+                icon = style.leafIcon
+            } else if row.node.isExpanded {
+                icon = style.expandedIcon
+            } else {
+                icon = style.collapsedIcon
+            }
+
+            return _TreeRow(
+                depth: row.depth,
+                icon: icon,
+                label: label(row.node.value),
+                index: row.index
+            )
+        }
+    }
+
+    fileprivate var normalStyle: Style { style.normalStyle }
+    fileprivate var selectedStyle: Style { style.selectedStyle }
+    fileprivate var indentWidth: Int { style.indent }
+}

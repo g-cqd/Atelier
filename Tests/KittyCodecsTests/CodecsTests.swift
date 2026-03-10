@@ -302,6 +302,162 @@ struct KittySequencesTests {
     }
 }
 
+// MARK: - GraphicsEncoder Tests
+
+@Suite("GraphicsEncoder")
+struct GraphicsEncoderTests {
+    @Test("Small payload fits in single chunk")
+    func singleChunk() {
+        let cmd = GraphicsCommand(
+            action: .transmitAndDisplay,
+            format: .png,
+            transmission: .direct,
+            payload: [0x89, 0x50, 0x4E, 0x47] // PNG magic bytes
+        )
+        let bytes = GraphicsEncoder.encode(cmd)
+        // Should contain APC start (ESC _), 'G', control params, ';', base64 payload, ST (ESC \)
+        #expect(bytes.first == 0x1b)
+        #expect(bytes[1] == 0x5f) // _ (APC)
+        #expect(bytes[2] == 0x47) // G
+        // Should end with ESC \ (ST)
+        #expect(bytes[bytes.count - 2] == 0x1b)
+        #expect(bytes[bytes.count - 1] == 0x5c)
+        // Should NOT contain m=1 (no continuation)
+        let asString = String(bytes: bytes, encoding: .ascii) ?? ""
+        #expect(!asString.contains("m=1"))
+    }
+
+    @Test("Control part includes action, format, transmission")
+    func controlPart() {
+        let cmd = GraphicsCommand(
+            action: .query,
+            format: .rgb,
+            transmission: .file,
+            payload: [1, 2, 3]
+        )
+        let bytes = GraphicsEncoder.encode(cmd)
+        let asString = String(bytes: bytes, encoding: .ascii) ?? ""
+        #expect(asString.contains("a=q"))
+        #expect(asString.contains("f=24"))
+        #expect(asString.contains("t=f"))
+    }
+
+    @Test("Control includes id, width, height when nonzero")
+    func controlWithDimensions() {
+        let cmd = GraphicsCommand(
+            action: .transmitAndDisplay,
+            format: .rgba,
+            transmission: .direct,
+            id: 42,
+            width: 100,
+            height: 50,
+            payload: [0xFF]
+        )
+        let bytes = GraphicsEncoder.encode(cmd)
+        let asString = String(bytes: bytes, encoding: .ascii) ?? ""
+        #expect(asString.contains("i=42"))
+        #expect(asString.contains("s=100"))
+        #expect(asString.contains("v=50"))
+    }
+
+    @Test("Control omits id, width, height when zero")
+    func controlOmitsZeros() {
+        let cmd = GraphicsCommand(payload: [0xFF])
+        let bytes = GraphicsEncoder.encode(cmd)
+        let asString = String(bytes: bytes, encoding: .ascii) ?? ""
+        #expect(!asString.contains("i="))
+        #expect(!asString.contains("s="))
+        #expect(!asString.contains("v="))
+    }
+
+    @Test("Large payload produces multiple chunks with m=1 continuation")
+    func multiChunk() {
+        // Create a payload that will exceed 4096 bytes when base64-encoded
+        // Base64 expands 3 bytes to 4 chars, so 3073 bytes → 4100 chars (> 4096)
+        let cmd = GraphicsCommand(payload: Array(repeating: 0xAB, count: 3073))
+        let bytes = GraphicsEncoder.encode(cmd)
+        let asString = String(bytes: bytes, encoding: .ascii) ?? ""
+        // Should contain m=1 for continuation
+        #expect(asString.contains("m=1"))
+        // Should contain multiple APC sequences (multiple ESC _ G ... ESC \)
+        let apcCount = asString.components(separatedBy: "\u{1B}_G").count - 1
+        #expect(apcCount >= 2)
+    }
+
+    @Test("Empty payload produces valid single chunk")
+    func emptyPayload() {
+        let cmd = GraphicsCommand(payload: [])
+        let bytes = GraphicsEncoder.encode(cmd)
+        #expect(bytes.first == 0x1b)
+        #expect(bytes.last == 0x5c)
+    }
+}
+
+// MARK: - Clipboard Tests
+
+@Suite("Clipboard")
+struct ClipboardTests {
+    @Test("setClipboard produces OSC 52 sequence")
+    func setClipboard() {
+        let bytes = KittySequences.setClipboard("SGVsbG8=") // "Hello" in base64
+        // OSC 52 ; c ; <base64> ST
+        #expect(bytes[0] == 0x1b)
+        #expect(bytes[1] == 0x5d) // ] (OSC)
+        let body = String(bytes: Array(bytes[2 ..< bytes.count - 2]), encoding: .utf8) ?? ""
+        #expect(body == "52;c;SGVsbG8=")
+        #expect(bytes[bytes.count - 2] == 0x1b)
+        #expect(bytes[bytes.count - 1] == 0x5c)
+    }
+
+    @Test("requestClipboard produces OSC 52 query")
+    func requestClipboard() {
+        let bytes = KittySequences.requestClipboard
+        let expected: [UInt8] = [0x1b, 0x5d] + "52;c;?".utf8 + [0x1b, 0x5c]
+        #expect(bytes == expected)
+    }
+
+    @Test("setClipboard with empty string produces valid sequence")
+    func emptyClipboard() {
+        let bytes = KittySequences.setClipboard("")
+        let expected: [UInt8] = [0x1b, 0x5d] + "52;c;".utf8 + [0x1b, 0x5c]
+        #expect(bytes == expected)
+    }
+}
+
+// MARK: - Notification Tests
+
+@Suite("Notifications")
+struct NotificationTests {
+    @Test("notify with title only produces single OSC 99 sequence")
+    func titleOnly() {
+        let bytes = KittySequences.notify(title: "Build done")
+        let asString = String(bytes: bytes, encoding: .utf8) ?? ""
+        #expect(asString.contains("99;i=1:d=0:p=title;Build done"))
+        // Should not have body part
+        #expect(!asString.contains("p=body"))
+        // Single ST at end
+        #expect(bytes[bytes.count - 2] == 0x1b)
+        #expect(bytes[bytes.count - 1] == 0x5c)
+    }
+
+    @Test("notify with title and body produces two OSC 99 sequences")
+    func titleAndBody() {
+        let bytes = KittySequences.notify(title: "Alert", body: "Check logs")
+        let asString = String(bytes: bytes, encoding: .utf8) ?? ""
+        #expect(asString.contains("p=title;Alert"))
+        #expect(asString.contains("p=body;Check logs"))
+    }
+
+    @Test("notify with empty body produces title-only sequence")
+    func emptyBody() {
+        let bytes = KittySequences.notify(title: "Test", body: "")
+        let asString = String(bytes: bytes, encoding: .utf8) ?? ""
+        #expect(!asString.contains("p=body"))
+    }
+}
+
+// MARK: - Helpers
+
 private func feedKeyboard(_ sequence: String, into decoder: inout KeyboardDecoder) -> DecoderResult<KeyEvent> {
     var result: DecoderResult<KeyEvent> = .pending
     for byte in sequence.utf8 {

@@ -8,7 +8,15 @@ public enum GraphicsEncoder: Sendable {
 
     private static let chunkSize = 4096
 
-    /// Encodes a graphics command into one or more APC chunks.
+    /// Encodes a graphics command into one or more Kitty APC chunks.
+    ///
+    /// The command payload is base64-encoded and split into chunks of at most 4096 bytes.
+    /// When multiple chunks are required the first carries the full control header and
+    /// subsequent chunks carry only the continuation marker (`m=1`/`m=0`).
+    ///
+    /// - Parameter command: The graphics command to encode, including action, format, transmission,
+    ///   dimensions, and raw payload bytes.
+    /// - Returns: Raw bytes for the complete sequence of `ESC _ G ... ESC \` APC frames.
     public static func encode(_ command: GraphicsCommand) -> [UInt8] {
         let controlPart = buildControl(command)
         let base64Payload = Data(command.payload).base64EncodedString()

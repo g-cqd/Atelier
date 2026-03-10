@@ -10,7 +10,9 @@ struct KittyCodeEntry {
             try await runEditor()
         } catch {
             let msg = "CRASH: \(error)\n"
-            try? msg.write(toFile: "/tmp/kittycode-crash.log", atomically: true, encoding: .utf8)
+            let crashPath = FileManager.default.temporaryDirectory
+                .appendingPathComponent("kittycode-crash-\(ProcessInfo.processInfo.processIdentifier).log")
+            try? msg.write(to: crashPath, atomically: true, encoding: .utf8)
             FileHandle.standardError.write(Data(msg.utf8))
         }
     }
@@ -37,7 +39,6 @@ struct KittyCodeEntry {
             onEvent: { event, pipeline in
                 let shouldContinue = handleEvent(event: event, state: state, pipeline: pipeline)
                 if shouldContinue {
-                    pipeline.buffer.clear()
                     render(pipeline: pipeline, state: state)
                 }
                 return shouldContinue

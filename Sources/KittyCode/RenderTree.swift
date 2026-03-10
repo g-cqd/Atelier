@@ -1,4 +1,5 @@
 import KittyCodecs
+import KittyFileTree
 import KittyRenderer
 
 @MainActor
@@ -11,15 +12,15 @@ func renderTreePanel(
 ) {
     for row in 0..<contentRows {
         let treeIndex = state.treeScrollOffset + row
-        if treeIndex >= 0 && treeIndex < state.flatTree.count {
-            let (depth, entry) = state.flatTree[treeIndex]
+        if treeIndex >= 0 && treeIndex < state.cachedFlatTree.count {
+            let (depth, node) = state.cachedFlatTree[treeIndex]
             let indent = String(repeating: " ", count: depth * 2)
-            let label = indent + entry.icon + " " + entry.name
+            let label = indent + node.icon + " " + node.name
             let padded = label + String(repeating: " ", count: max(0, treeWidth - label.count))
             let style: Style
             if treeIndex == state.selectedTreeIndex {
                 style = colorScheme.treeSelected
-            } else if entry.isDirectory {
+            } else if node.isDirectory {
                 style = colorScheme.treeDir
             } else {
                 style = colorScheme.treeBg

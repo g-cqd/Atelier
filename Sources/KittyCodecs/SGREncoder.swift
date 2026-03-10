@@ -1,11 +1,18 @@
 // MARK: - SGR Encoder
 
+/// Converts `Style` values into ANSI/VT Select Graphic Rendition (SGR) escape sequences.
+///
+/// All methods produce raw UTF-8 byte arrays ready to be written directly to a terminal output stream.
 public enum SGREncoder: Sendable {
 
     // MARK: - Full Encode
 
-    /// Encodes a Style into SGR escape sequence bytes.
-    /// Returns empty array if style is default.
+    /// Encodes a style into a complete SGR escape sequence.
+    ///
+    /// Returns an empty array when `style` equals `.default`, avoiding unnecessary output.
+    ///
+    /// - Parameter style: The style to encode.
+    /// - Returns: Raw bytes for the SGR sequence, or an empty array if the style is the default.
     public static func encode(_ style: Style) -> [UInt8] {
         if style == .default { return [] }
         var params: [UInt8] = []
@@ -48,7 +55,15 @@ public enum SGREncoder: Sendable {
 
     // MARK: - Diff Encode
 
-    /// Encodes the minimal SGR transition from `old` to `new`.
+    /// Encodes the minimal SGR sequence needed to transition from one style to another.
+    ///
+    /// Only the attributes that differ between `old` and `new` are included, reducing byte output.
+    /// Returns an empty array when the styles are identical.
+    ///
+    /// - Parameters:
+    ///   - old: The currently active style.
+    ///   - new: The desired target style.
+    /// - Returns: Raw bytes for the minimal SGR transition, or an empty array if the styles are equal.
     public static func encodeDiff(from old: Style, to new: Style) -> [UInt8] {
         if old == new { return [] }
         if new == .default { return [0x1b, 0x5b, 0x6d] } // ESC[m (reset)
@@ -114,6 +129,7 @@ public enum SGREncoder: Sendable {
 
     // MARK: - Reset
 
+    /// The SGR reset sequence (`ESC[m`) that restores all attributes to their defaults.
     public static let reset: [UInt8] = [0x1b, 0x5b, 0x6d]
 
     // MARK: - Private
