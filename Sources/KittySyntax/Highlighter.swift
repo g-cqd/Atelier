@@ -3,6 +3,18 @@ import KittyGrammar
 import KittyParser
 import KittyQuery
 
+final class HighlightScratch {
+    struct RawCaptureSpan {
+        var byteRange: Range<Int>
+        var style: Style
+        var patternIndex: Int
+    }
+
+    var rawSpans: [RawCaptureSpan] = []
+    var byteStyles: [Style?] = []
+    var spans: [StyledSpan] = []
+}
+
 /// Combines parsing, querying, and theming to produce styled text.
 public final class Highlighter: Sendable {
     private let theme: Theme
@@ -17,47 +29,65 @@ public final class Highlighter: Sendable {
         tree: SyntaxTree,
         query: Query
     ) -> [StyledSpan] {
-        let matches = QueryMatcher.execute(query: query, tree: tree)
-        return buildSpans(source: source, matches: matches)
+        let scratch = HighlightScratch()
+        return highlight(source: source, tree: tree, query: query, scratch: scratch)
     }
 
-    private func buildSpans(source: String, matches: [QueryMatch]) -> [StyledSpan] {
+    func highlight(
+        source: String,
+        tree: SyntaxTree,
+        query: Query,
+        scratch: HighlightScratch
+    ) -> [StyledSpan] {
+        let matches = QueryMatcher.execute(query: query, tree: tree)
+        return buildSpans(source: source, matches: matches, scratch: scratch)
+    }
+
+    private func buildSpans(source: String, matches: [QueryMatch], scratch: HighlightScratch) -> [StyledSpan] {
         if let spans = source.utf8.withContiguousStorageIfAvailable({ utf8 in
-            buildSpans(source: source, utf8: utf8, matches: matches)
+            buildSpans(source: source, utf8: utf8, matches: matches, scratch: scratch)
         }) {
             return spans
         }
 
         let utf8 = Array(source.utf8)
         return utf8.withUnsafeBufferPointer { utf8 in
-            buildSpans(source: source, utf8: utf8, matches: matches)
+            buildSpans(source: source, utf8: utf8, matches: matches, scratch: scratch)
         }
     }
 
     private func buildSpans(
         source: String,
         utf8: UnsafeBufferPointer<UInt8>,
-        matches: [QueryMatch]
+        matches: [QueryMatch],
+        scratch: HighlightScratch
     ) -> [StyledSpan] {
         guard !utf8.isEmpty else {
             return [StyledSpan(text: source, style: theme.defaultStyle)]
         }
 
-        // Collect all captures with byte ranges and pattern index
-        var rawSpans: [(byteRange: Range<Int>, style: Style, patternIndex: Int)] = []
+        scratch.rawSpans.removeAll(keepingCapacity: true)
+        scratch.rawSpans.reserveCapacity(matches.reduce(into: 0) { $0 += $1.captures.count })
+
         for match in matches {
             for capture in match.captures {
                 let style = theme.style(for: capture.name)
-                rawSpans.append((byteRange: capture.node.byteRange, style: style, patternIndex: match.patternIndex))
+                scratch.rawSpans.append(
+                    .init(
+                        byteRange: capture.node.byteRange,
+                        style: style,
+                        patternIndex: match.patternIndex
+                    )
+                )
             }
         }
-        guard !rawSpans.isEmpty else {
+        guard !scratch.rawSpans.isEmpty else {
             return [StyledSpan(text: source, style: theme.defaultStyle)]
         }
 
         // Sort: larger ranges first, then earlier patterns first.
         // This way, more specific (smaller/later) captures override broader ones.
-        rawSpans.sort { a, b in
+        scratch.rawSpans.sort { a, b in
             let aSize = a.byteRange.count
             let bSize = b.byteRange.count
             if aSize != bSize { return aSize > bSize }
@@ -67,31 +97,35 @@ public final class Highlighter: Sendable {
         }
 
         // Build per-byte style map
-        var byteStyles = [Style?](repeating: nil, count: utf8.count)
-        for span in rawSpans {
+        scratch.byteStyles.removeAll(keepingCapacity: true)
+        scratch.byteStyles.reserveCapacity(utf8.count)
+        scratch.byteStyles.append(contentsOf: repeatElement(nil, count: utf8.count))
+
+        for span in scratch.rawSpans {
             let start = min(max(span.byteRange.lowerBound, 0), utf8.count)
             let end = min(max(span.byteRange.upperBound, start), utf8.count)
             for i in start..<end {
-                byteStyles[i] = span.style
+                scratch.byteStyles[i] = span.style
             }
         }
 
         // Coalesce into spans
-        var spans: [StyledSpan] = []
+        scratch.spans.removeAll(keepingCapacity: true)
+        scratch.spans.reserveCapacity(min(scratch.rawSpans.count + 1, utf8.count))
         var pos = 0
         while pos < utf8.count {
-            let style = byteStyles[pos] ?? theme.defaultStyle
+            let style = scratch.byteStyles[pos] ?? theme.defaultStyle
             var end = pos + 1
-            while end < utf8.count && (byteStyles[end] ?? theme.defaultStyle) == style {
+            while end < utf8.count && (scratch.byteStyles[end] ?? theme.defaultStyle) == style {
                 end += 1
             }
             let text = String(decoding: UnsafeBufferPointer(rebasing: utf8[pos..<end]), as: UTF8.self)
             if !text.isEmpty {
-                spans.append(StyledSpan(text: text, style: style))
+                scratch.spans.append(StyledSpan(text: text, style: style))
             }
             pos = end
         }
-        return spans
+        return scratch.spans
     }
 }
 
