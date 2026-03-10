@@ -229,6 +229,23 @@ struct KittyCodeNavigationTests {
         #expect(sut.state.cursorRow == 0)
         #expect(sut.state.cursorCol == 2)
     }
+
+    @Test("mouse click on wrapped editor row uses shared widget hit testing")
+    func handleMouseClickForWrappedLine() {
+        let sut = makeSUT(fileContent: ["abcdef"], columns: 11, rows: 6)
+        sut.state.config.wrapLines = true
+        sut.state.treePanelWidth = 3
+        sut.state.mode = .editor
+
+        handleMouse(
+            MouseEvent(button: .left, row: 3, col: 9, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.cursorRow == 0)
+        #expect(sut.state.cursorCol == 4)
+    }
 }
 
 @Suite("KittyCode Syntax Wiring")
