@@ -23,6 +23,7 @@ public struct TreeView<Value: Sendable>: View, Sendable {
     public let label: @Sendable (Value) -> String
     public var selectedIndex: Int
     public var scrollOffset: Int
+    public var showsVerticalScrollIndicator: Bool
     public var style: TreeViewStyle
     public let rowStyle: @Sendable (Value) -> Style
 
@@ -33,6 +34,7 @@ public struct TreeView<Value: Sendable>: View, Sendable {
         public var collapsedIcon: String
         public var leafIcon: String
         public var indent: Int
+        public var scrollIndicatorStyle: VerticalScrollIndicatorStyle
 
         public init(
             normalStyle: Style = .default,
@@ -40,7 +42,8 @@ public struct TreeView<Value: Sendable>: View, Sendable {
             expandedIcon: String = "▼",
             collapsedIcon: String = "▶",
             leafIcon: String = " ",
-            indent: Int = 2
+            indent: Int = 2,
+            scrollIndicatorStyle: VerticalScrollIndicatorStyle = VerticalScrollIndicatorStyle()
         ) {
             self.normalStyle = normalStyle
             self.selectedStyle = selectedStyle
@@ -48,6 +51,7 @@ public struct TreeView<Value: Sendable>: View, Sendable {
             self.collapsedIcon = collapsedIcon
             self.leafIcon = leafIcon
             self.indent = indent
+            self.scrollIndicatorStyle = scrollIndicatorStyle
         }
     }
 
@@ -55,6 +59,7 @@ public struct TreeView<Value: Sendable>: View, Sendable {
         root: [TreeNode<Value>],
         selectedIndex: Int = 0,
         scrollOffset: Int = 0,
+        showsVerticalScrollIndicator: Bool = false,
         style: TreeViewStyle = TreeViewStyle(),
         label: @escaping @Sendable (Value) -> String,
         rowStyle: @escaping @Sendable (Value) -> Style = { _ in .default }
@@ -62,6 +67,7 @@ public struct TreeView<Value: Sendable>: View, Sendable {
         self.root = root
         self.selectedIndex = selectedIndex
         self.scrollOffset = scrollOffset
+        self.showsVerticalScrollIndicator = showsVerticalScrollIndicator
         self.style = style
         self.label = label
         self.rowStyle = rowStyle

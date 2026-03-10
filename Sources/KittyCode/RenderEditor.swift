@@ -32,9 +32,14 @@ func renderEditorPanel(
         cursorCol: state.cursorCol,
         showLineNumbers: true,
         wrapLines: state.config.wrapLines,
+        showsVerticalScrollIndicator: true,
         editorStyle: colorScheme.editorText,
         lineNumberStyle: colorScheme.lineNumber,
         currentLineStyle: colorScheme.editorCursorLine,
+        verticalScrollIndicatorStyle: VerticalScrollIndicatorStyle(
+            trackStyle: colorScheme.lineNumber,
+            thumbStyle: colorScheme.editorCursorLine
+        ),
         modeShowsCursor: state.mode == .editor
     )
 
