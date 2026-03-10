@@ -8,6 +8,9 @@ public final class RenderPipeline: Sendable {
     private var front: ScreenBuffer
     private var back: ScreenBuffer
 
+    /// Persistent output buffer reused across frames to avoid allocation.
+    private var outputBuffer = ContiguousArray<UInt8>()
+
     /// The current number of columns in the render viewport.
     public var columns: Int { back.columns }
 
@@ -54,27 +57,28 @@ public final class RenderPipeline: Sendable {
     ///
     /// - Throws: `TerminalError` if the underlying connection write fails.
     public func flush() throws(TerminalError) {
-        let diffBytes = DiffRenderer.render(front: front, back: back)
-        
-        var output: [UInt8] = []
-        output.append(contentsOf: KittySequences.beginSyncUpdate)
-        
-        if !diffBytes.isEmpty {
-            output.append(contentsOf: KittySequences.hideCursor)
-            output.append(contentsOf: diffBytes)
+        outputBuffer.removeAll(keepingCapacity: true)
+
+        KittySequences.appendBeginSyncUpdate(to: &outputBuffer)
+
+        // Render diff directly into our persistent buffer
+        let hasDirty = !back.dirty.isEmpty
+        if hasDirty {
+            KittySequences.appendHideCursor(to: &outputBuffer)
+            DiffRenderer.render(front: front, back: back, into: &outputBuffer)
         }
 
         if let r = cursorRow, let c = cursorCol {
-            output.append(contentsOf: KittySequences.moveCursor(row: r + 1, col: c + 1))
-            output.append(contentsOf: KittySequences.showCursor)
+            KittySequences.appendMoveCursor(row: r + 1, col: c + 1, to: &outputBuffer)
+            KittySequences.appendShowCursor(to: &outputBuffer)
         } else {
-            output.append(contentsOf: KittySequences.hideCursor)
+            KittySequences.appendHideCursor(to: &outputBuffer)
         }
 
-        output.append(contentsOf: KittySequences.endSyncUpdate)
+        KittySequences.appendEndSyncUpdate(to: &outputBuffer)
 
-        if !output.isEmpty {
-            try connection.write(output)
+        if !outputBuffer.isEmpty {
+            try connection.writeContiguous(outputBuffer)
         }
 
         // Swap: copy back → front, clear dirty bits
@@ -89,19 +93,19 @@ public final class RenderPipeline: Sendable {
     ///
     /// - Throws: `TerminalError` if the underlying connection write fails.
     public func forceRedraw() throws(TerminalError) {
-        let fullBytes = DiffRenderer.renderFull(back)
-        var output: [UInt8] = []
-        output.append(contentsOf: KittySequences.beginSyncUpdate)
-        output.append(contentsOf: KittySequences.hideCursor)
-        output.append(contentsOf: fullBytes)
+        outputBuffer.removeAll(keepingCapacity: true)
+
+        KittySequences.appendBeginSyncUpdate(to: &outputBuffer)
+        KittySequences.appendHideCursor(to: &outputBuffer)
+        DiffRenderer.renderFull(back, into: &outputBuffer)
 
         if let r = cursorRow, let c = cursorCol {
-            output.append(contentsOf: KittySequences.moveCursor(row: r + 1, col: c + 1))
-            output.append(contentsOf: KittySequences.showCursor)
+            KittySequences.appendMoveCursor(row: r + 1, col: c + 1, to: &outputBuffer)
+            KittySequences.appendShowCursor(to: &outputBuffer)
         }
 
-        output.append(contentsOf: KittySequences.endSyncUpdate)
-        try connection.write(output)
+        KittySequences.appendEndSyncUpdate(to: &outputBuffer)
+        try connection.writeContiguous(outputBuffer)
         front = back
         back.dirty.clear()
     }

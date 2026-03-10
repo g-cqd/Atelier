@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(os)
+import os
+#endif
 
 /// Recursively scans a directory tree into an array of ``FileNode`` values.
 ///
@@ -29,6 +32,29 @@ public enum DirectoryScanner {
         var count = 0
         return scanDirectory(path, maxDepth: maxDepth, maxEntries: maxEntries, entryCount: &count)
     }
+
+    /// Async variant that parallelizes subdirectory scanning using a TaskGroup.
+    ///
+    /// Top-level directory entries are enumerated sequentially (for entry count
+    /// tracking), but subdirectory recursion is dispatched concurrently across
+    /// cores. Falls back to sequential scanning for shallow depths.
+    ///
+    /// - Parameters:
+    ///   - path: Absolute path of the directory to scan.
+    ///   - maxDepth: Maximum recursion depth. `0` returns only direct children.
+    ///   - maxEntries: Hard cap on the total number of entries visited.
+    /// - Returns: Sorted entries — directories first, then files, each group
+    ///   sorted case-insensitively by name.
+    public static func scanAsync(
+        _ path: String,
+        maxDepth: Int = defaultMaxDepth,
+        maxEntries: Int = defaultMaxEntries
+    ) async -> [FileNode] {
+        let counter = EntryCounter(limit: maxEntries)
+        return await scanDirectoryAsync(path, maxDepth: maxDepth, counter: counter)
+    }
+
+    // MARK: - Synchronous (original)
 
     private static func scanDirectory(
         _ path: String,
@@ -62,7 +88,105 @@ public enum DirectoryScanner {
             entries.append(FileNode(name: item, path: fullPath, isDirectory: isDir.boolValue, children: children))
         }
 
-        return entries.sorted { lhs, rhs in
+        return sortEntries(entries)
+    }
+
+    // MARK: - Async parallel
+
+    /// Thread-safe atomic counter for bounding total entries across tasks.
+    private final class EntryCounter: Sendable {
+        private let lock: NSLock
+        private let _limit: Int
+        // nonisolated(unsafe) is required for mutable state behind a lock in Swift 6
+        nonisolated(unsafe) private var _count: Int
+
+        var limit: Int { _limit }
+
+        init(limit: Int) {
+            self.lock = NSLock()
+            self._limit = limit
+            self._count = 0
+        }
+
+        /// Attempts to increment the counter. Returns `true` if under the limit.
+        func tryIncrement() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            if _count >= _limit { return false }
+            _count += 1
+            return true
+        }
+
+        /// Returns the current count.
+        var count: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return _count
+        }
+    }
+
+    private static func scanDirectoryAsync(
+        _ path: String,
+        maxDepth: Int,
+        counter: EntryCounter
+    ) async -> [FileNode] {
+        let fm = FileManager.default
+        guard let items = try? fm.contentsOfDirectory(atPath: path) else { return [] }
+
+        // Classify entries into files and directories
+        var fileEntries: [FileNode] = []
+        var dirItems: [(name: String, path: String)] = []
+
+        for item in items.sorted() where !item.hasPrefix(".") {
+            guard counter.tryIncrement() else { break }
+            let fullPath = (path as NSString).appendingPathComponent(item)
+            guard isWithinRoot(fullPath, root: path) else { continue }
+
+            var isDir: ObjCBool = false
+            fm.fileExists(atPath: fullPath, isDirectory: &isDir)
+
+            if isDir.boolValue {
+                dirItems.append((name: item, path: fullPath))
+            } else {
+                fileEntries.append(FileNode(name: item, path: fullPath, isDirectory: false))
+            }
+        }
+
+        // Scan subdirectories in parallel if depth allows
+        var dirEntries: [FileNode] = []
+        if maxDepth > 0 && !dirItems.isEmpty {
+            dirEntries = await withTaskGroup(of: (Int, FileNode).self) { group in
+                for (idx, dir) in dirItems.enumerated() {
+                    group.addTask {
+                        let children = await scanDirectoryAsync(
+                            dir.path,
+                            maxDepth: maxDepth - 1,
+                            counter: counter
+                        )
+                        return (idx, FileNode(name: dir.name, path: dir.path, isDirectory: true, children: children))
+                    }
+                }
+
+                var results: [(Int, FileNode)] = []
+                for await result in group {
+                    results.append(result)
+                }
+                // Sort by original index to maintain deterministic order
+                return results.sorted { $0.0 < $1.0 }.map(\.1)
+            }
+        } else {
+            // No recursion — just create empty-children directory nodes
+            dirEntries = dirItems.map { FileNode(name: $0.name, path: $0.path, isDirectory: true) }
+        }
+
+        return sortEntries(dirEntries + fileEntries)
+    }
+
+    // MARK: - Shared helpers
+
+    /// Sorts entries: directories first, then files, case-insensitive within each group.
+    private static func sortEntries(_ entries: [FileNode]) -> [FileNode] {
+        entries.sorted { lhs, rhs in
             if lhs.isDirectory != rhs.isDirectory { return lhs.isDirectory }
             return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
         }

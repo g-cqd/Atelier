@@ -3,6 +3,47 @@ import KittyRenderer
 import KittySyntax
 import KittyText
 
+private enum HighlightLexicon {
+    static let pythonKeywords: Set<String> = [
+        "def", "class", "if", "elif", "else", "for", "while", "return",
+        "import", "from", "as", "is", "in", "not", "and", "or",
+        "with", "try", "except", "finally", "raise", "pass", "break",
+        "continue", "yield", "lambda", "global", "nonlocal", "assert",
+        "del", "True", "False", "None", "async", "await", "self",
+    ]
+    static let pythonTypes: Set<String> = [
+        "int", "float", "str", "bool", "list", "dict", "tuple",
+        "set", "bytes", "type", "object", "range",
+    ]
+    static let javaScriptKeywords: Set<String> = [
+        "function", "const", "let", "var", "if", "else", "for", "while",
+        "return", "class", "new", "this", "import", "export", "from",
+        "default", "switch", "case", "break", "continue", "try", "catch",
+        "finally", "throw", "typeof", "instanceof", "in", "of", "async",
+        "await", "yield", "void", "delete", "extends", "implements",
+        "interface", "type", "enum", "abstract", "static", "public",
+        "private", "protected", "readonly", "override",
+    ]
+    static let javaScriptTypes: Set<String> = [
+        "string", "number", "boolean", "any", "void", "never",
+        "unknown", "undefined", "null", "Array", "Promise", "Map", "Set",
+    ]
+    static let swiftKeywords: Set<String> = [
+        "import", "struct", "class", "enum", "func", "var", "let", "guard", "if", "else", "switch", "case", "return", "default",
+        "final", "extension", "public", "private", "static", "mutating", "override", "init", "deinit", "typealias", "where", "while", "for",
+        "in", "do", "catch", "try", "throw", "throws", "as", "is", "self", "nil", "true", "false", "protocol", "associatedtype",
+        "internal", "fileprivate", "open", "weak", "unowned", "lazy", "async", "await", "some", "any", "defer", "break", "continue",
+        "fallthrough", "repeat", "super", "inout", "convenience", "required", "dynamic", "optional", "indirect", "nonisolated",
+        "consuming", "borrowing", "@MainActor", "@Sendable", "@escaping", "@autoclosure", "@discardableResult",
+    ]
+    static let swiftTypes: Set<String> = [
+        "String", "Int", "Bool", "Double", "Float", "Any", "Array", "Dictionary", "Optional", "UInt32", "UInt8", "UInt16", "UInt64",
+        "UInt", "Int8", "Int16", "Int32", "Int64", "Date", "Data", "URL", "Error", "Result", "Void", "Never", "Character",
+        "Substring", "Set", "ClosedRange", "Range", "Comparable", "Equatable", "Hashable", "Codable", "Decodable", "Encodable",
+        "Sendable", "Identifiable", "CustomStringConvertible", "View", "Task", "AsyncStream", "MainActor",
+    ]
+}
+
 /// Main highlight entry point — dispatches to grammar-based or regex highlighting.
 func highlightLine(_ line: String, language: String?, colorScheme: EditorState.ColorScheme) -> [StyledSpan] {
     switch language {
@@ -86,18 +127,6 @@ func highlightJSON(_ line: String, colorScheme: EditorState.ColorScheme) -> [Sty
 }
 
 func highlightPython(_ line: String, colorScheme: EditorState.ColorScheme) -> [StyledSpan] {
-    let keywords: Set<String> = [
-        "def", "class", "if", "elif", "else", "for", "while", "return",
-        "import", "from", "as", "is", "in", "not", "and", "or",
-        "with", "try", "except", "finally", "raise", "pass", "break",
-        "continue", "yield", "lambda", "global", "nonlocal", "assert",
-        "del", "True", "False", "None", "async", "await", "self",
-    ]
-    let types: Set<String> = [
-        "int", "float", "str", "bool", "list", "dict", "tuple",
-        "set", "bytes", "type", "object", "range",
-    ]
-
     let defaultStyle = colorScheme.editorText
     let keywordStyle = colorScheme.syntaxKeyword
     let typeStyle = colorScheme.syntaxType
@@ -113,9 +142,9 @@ func highlightPython(_ line: String, colorScheme: EditorState.ColorScheme) -> [S
     func flushCurrent() {
         guard !current.isEmpty else { return }
         let style: Style
-        if keywords.contains(current) {
+        if HighlightLexicon.pythonKeywords.contains(current) {
             style = keywordStyle
-        } else if types.contains(current) {
+        } else if HighlightLexicon.pythonTypes.contains(current) {
             style = typeStyle
         } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
                   let first = current.first, first.isNumber {
@@ -186,20 +215,6 @@ func highlightPython(_ line: String, colorScheme: EditorState.ColorScheme) -> [S
 }
 
 func highlightJavaScript(_ line: String, colorScheme: EditorState.ColorScheme) -> [StyledSpan] {
-    let keywords: Set<String> = [
-        "function", "const", "let", "var", "if", "else", "for", "while",
-        "return", "class", "new", "this", "import", "export", "from",
-        "default", "switch", "case", "break", "continue", "try", "catch",
-        "finally", "throw", "typeof", "instanceof", "in", "of", "async",
-        "await", "yield", "void", "delete", "extends", "implements",
-        "interface", "type", "enum", "abstract", "static", "public",
-        "private", "protected", "readonly", "override",
-    ]
-    let types: Set<String> = [
-        "string", "number", "boolean", "any", "void", "never",
-        "unknown", "undefined", "null", "Array", "Promise", "Map", "Set",
-    ]
-
     let defaultStyle = colorScheme.editorText
     let keywordStyle = colorScheme.syntaxKeyword
     let typeStyle = colorScheme.syntaxType
@@ -215,9 +230,9 @@ func highlightJavaScript(_ line: String, colorScheme: EditorState.ColorScheme) -
     func flushCurrent() {
         guard !current.isEmpty else { return }
         let style: Style
-        if keywords.contains(current) {
+        if HighlightLexicon.javaScriptKeywords.contains(current) {
             style = keywordStyle
-        } else if types.contains(current) {
+        } else if HighlightLexicon.javaScriptTypes.contains(current) {
             style = typeStyle
         } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
                   let first = current.first, first.isNumber {
@@ -358,21 +373,6 @@ func highlightGeneric(_ line: String, colorScheme: EditorState.ColorScheme) -> [
 // MARK: - Swift highlighter
 
 func highlightSwift(_ line: String, colorScheme: EditorState.ColorScheme) -> [StyledSpan] {
-    let keywords: Set<String> = [
-        "import", "struct", "class", "enum", "func", "var", "let", "guard", "if", "else", "switch", "case", "return", "default",
-        "final", "extension", "public", "private", "static", "mutating", "override", "init", "deinit", "typealias", "where", "while", "for",
-        "in", "do", "catch", "try", "throw", "throws", "as", "is", "self", "nil", "true", "false", "protocol", "associatedtype",
-        "internal", "fileprivate", "open", "weak", "unowned", "lazy", "async", "await", "some", "any", "defer", "break", "continue",
-        "fallthrough", "repeat", "super", "inout", "convenience", "required", "dynamic", "optional", "indirect", "nonisolated",
-        "consuming", "borrowing", "@MainActor", "@Sendable", "@escaping", "@autoclosure", "@discardableResult"
-    ]
-    let types: Set<String> = [
-        "String", "Int", "Bool", "Double", "Float", "Any", "Array", "Dictionary", "Optional", "UInt32", "UInt8", "UInt16", "UInt64",
-        "UInt", "Int8", "Int16", "Int32", "Int64", "Date", "Data", "URL", "Error", "Result", "Void", "Never", "Character",
-        "Substring", "Set", "ClosedRange", "Range", "Comparable", "Equatable", "Hashable", "Codable", "Decodable", "Encodable",
-        "Sendable", "Identifiable", "CustomStringConvertible", "View", "Task", "AsyncStream", "MainActor"
-    ]
-
     let defaultStyle = colorScheme.editorText
     let keywordStyle = colorScheme.syntaxKeyword
     let typeStyle = colorScheme.syntaxType
@@ -389,11 +389,11 @@ func highlightSwift(_ line: String, colorScheme: EditorState.ColorScheme) -> [St
     func flushCurrent() {
         guard !current.isEmpty else { return }
         let style: Style
-        if current.hasPrefix("@") && keywords.contains(current) {
+        if current.hasPrefix("@") && HighlightLexicon.swiftKeywords.contains(current) {
             style = attrStyle
-        } else if keywords.contains(current) {
+        } else if HighlightLexicon.swiftKeywords.contains(current) {
             style = keywordStyle
-        } else if types.contains(current) {
+        } else if HighlightLexicon.swiftTypes.contains(current) {
             style = typeStyle
         } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
                   let first = current.first,

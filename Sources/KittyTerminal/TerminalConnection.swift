@@ -17,6 +17,15 @@ public protocol TerminalConnection: Sendable {
     /// - Throws: `TerminalError.writeFailed` if the write syscall fails.
     func write(_ bytes: [UInt8]) throws(TerminalError)
 
+    /// Writes all bytes from a ContiguousArray to the terminal (zero-copy path).
+    ///
+    /// Default implementation bridges to `write(_:)`. Conforming types may override
+    /// for zero-copy writes using `withUnsafeBufferPointer`.
+    ///
+    /// - Parameter bytes: The contiguous byte buffer to transmit.
+    /// - Throws: `TerminalError.writeFailed` if the write syscall fails.
+    func writeContiguous(_ bytes: ContiguousArray<UInt8>) throws(TerminalError)
+
     /// Switches the terminal into raw (non-canonical) mode.
     ///
     /// In raw mode, input is forwarded byte-by-byte with no line buffering,
@@ -36,4 +45,11 @@ public protocol TerminalConnection: Sendable {
     /// - Returns: A `TerminalSize` value describing the terminal's column and row counts.
     /// - Throws: `TerminalError.failedToGetSize` if the size cannot be determined.
     func getSize() throws(TerminalError) -> TerminalSize
+}
+
+// Default implementation bridges ContiguousArray to Array
+extension TerminalConnection {
+    public func writeContiguous(_ bytes: ContiguousArray<UInt8>) throws(TerminalError) {
+        try write(Array(bytes))
+    }
 }

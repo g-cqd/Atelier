@@ -5,6 +5,28 @@
 /// desktop notifications (OSC 99), focus events, and bracketed paste.
 public enum KittySequences: Sendable {
 
+    // MARK: - Lookup table for decimal encoding
+
+    /// Pre-computed decimal digits for values 0-65535.
+    private static let decimalTable: [(UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)] = {
+        var table = [(UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)](repeating: (0, 0, 0, 0, 0, 0), count: 65536)
+        for i in 0..<65536 {
+            let d5 = UInt8(i / 10_000)
+            let d4 = UInt8((i / 1_000) % 10)
+            let d3 = UInt8((i / 100) % 10)
+            let d2 = UInt8((i / 10) % 10)
+            let d1 = UInt8(i % 10)
+            let count: UInt8
+            if i >= 10_000 { count = 5 }
+            else if i >= 1_000 { count = 4 }
+            else if i >= 100 { count = 3 }
+            else if i >= 10 { count = 2 }
+            else { count = 1 }
+            table[i] = (0x30 + d5, 0x30 + d4, 0x30 + d3, 0x30 + d2, 0x30 + d1, count)
+        }
+        return table
+    }()
+
     // MARK: - Synchronized Output (mode 2026)
 
     /// Begin synchronized update — terminal buffers output until end.
@@ -25,7 +47,7 @@ public enum KittySequences: Sendable {
     public static func pushKeyboardMode(flags: UInt8) -> [UInt8] {
         // CSI > flags u
         var bytes: [UInt8] = [0x1b, 0x5b, 0x3e] // ESC [ >
-        appendDecimal(&bytes, flags)
+        appendDecimalLegacy(&bytes, flags)
         bytes.append(0x75) // u
         return bytes
     }
@@ -77,11 +99,46 @@ public enum KittySequences: Sendable {
     public static func moveCursor(row: Int, col: Int) -> [UInt8] {
         // CSI row ; col H
         var bytes: [UInt8] = [0x1b, 0x5b]
-        appendDecimal(&bytes, clampedCursorCoordinate(row))
+        appendDecimalLegacy(&bytes, clampedCursorCoordinate(row))
         bytes.append(0x3b)
-        appendDecimal(&bytes, clampedCursorCoordinate(col))
+        appendDecimalLegacy(&bytes, clampedCursorCoordinate(col))
         bytes.append(0x48) // H
         return bytes
+    }
+
+    /// Appends a cursor movement sequence directly into a ContiguousArray buffer (zero-allocation).
+    @inline(__always)
+    public static func appendMoveCursor(row: Int, col: Int, to bytes: inout ContiguousArray<UInt8>) {
+        bytes.append(0x1b) // ESC
+        bytes.append(0x5b) // [
+        appendDecimal(&bytes, clampedCursorCoordinate(row))
+        bytes.append(0x3b) // ;
+        appendDecimal(&bytes, clampedCursorCoordinate(col))
+        bytes.append(0x48) // H
+    }
+
+    /// Appends begin sync update sequence to a buffer.
+    @inline(__always)
+    public static func appendBeginSyncUpdate(to bytes: inout ContiguousArray<UInt8>) {
+        bytes.append(contentsOf: beginSyncUpdate)
+    }
+
+    /// Appends end sync update sequence to a buffer.
+    @inline(__always)
+    public static func appendEndSyncUpdate(to bytes: inout ContiguousArray<UInt8>) {
+        bytes.append(contentsOf: endSyncUpdate)
+    }
+
+    /// Appends hide cursor sequence to a buffer.
+    @inline(__always)
+    public static func appendHideCursor(to bytes: inout ContiguousArray<UInt8>) {
+        bytes.append(contentsOf: hideCursor)
+    }
+
+    /// Appends show cursor sequence to a buffer.
+    @inline(__always)
+    public static func appendShowCursor(to bytes: inout ContiguousArray<UInt8>) {
+        bytes.append(contentsOf: showCursor)
     }
 
     /// Hide cursor.
@@ -178,7 +235,41 @@ public enum KittySequences: Sendable {
 
     // MARK: - Private
 
-    private static func appendDecimal(_ bytes: inout [UInt8], _ value: UInt16) {
+    /// Decimal encoding for the optimized ContiguousArray path using lookup table.
+    @inline(__always)
+    private static func appendDecimal(_ bytes: inout ContiguousArray<UInt8>, _ value: UInt16) {
+        let entry = decimalTable[Int(value)]
+        switch entry.5 {
+        case 5:
+            bytes.append(entry.0)
+            bytes.append(entry.1)
+            bytes.append(entry.2)
+            bytes.append(entry.3)
+            bytes.append(entry.4)
+        case 4:
+            bytes.append(entry.1)
+            bytes.append(entry.2)
+            bytes.append(entry.3)
+            bytes.append(entry.4)
+        case 3:
+            bytes.append(entry.2)
+            bytes.append(entry.3)
+            bytes.append(entry.4)
+        case 2:
+            bytes.append(entry.3)
+            bytes.append(entry.4)
+        default:
+            bytes.append(entry.4)
+        }
+    }
+
+    @inline(__always)
+    private static func appendDecimal(_ bytes: inout ContiguousArray<UInt8>, _ value: UInt8) {
+        appendDecimal(&bytes, UInt16(value))
+    }
+
+    /// Legacy [UInt8] path for backward compatibility (static let properties, pushKeyboardMode, etc.)
+    private static func appendDecimalLegacy(_ bytes: inout [UInt8], _ value: UInt16) {
         if value >= 10_000 {
             bytes.append(0x30 + UInt8(value / 10_000))
         }
@@ -194,8 +285,8 @@ public enum KittySequences: Sendable {
         bytes.append(0x30 + UInt8(value % 10))
     }
 
-    private static func appendDecimal(_ bytes: inout [UInt8], _ value: UInt8) {
-        appendDecimal(&bytes, UInt16(value))
+    private static func appendDecimalLegacy(_ bytes: inout [UInt8], _ value: UInt8) {
+        appendDecimalLegacy(&bytes, UInt16(value))
     }
 
     private static func clampedCursorCoordinate(_ value: Int) -> UInt16 {

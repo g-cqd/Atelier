@@ -4,6 +4,9 @@ import KittyParser
 /// Evaluates query predicates against captured nodes.
 public enum Predicates: Sendable {
 
+    /// Thread-safe regex cache to avoid recompiling patterns.
+    private static let regexCache = RegexCache()
+
     public static func evaluate(
         _ predicate: Predicate,
         captures: [(node: SyntaxNode, name: String)],
@@ -55,7 +58,7 @@ public enum Predicates: Sendable {
     }
 
     private static func matchRegex(text: String, pattern: String) -> Bool {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
+        guard let regex = regexCache.regex(for: pattern) else { return false }
         let range = NSRange(text.startIndex..., in: text)
         return regex.firstMatch(in: text, range: range) != nil
     }
@@ -79,5 +82,38 @@ public enum Predicates: Sendable {
         default:
             return !expected
         }
+    }
+}
+
+// MARK: - Thread-safe regex cache
+
+#if canImport(os)
+import os
+#endif
+
+private final class RegexCache: Sendable {
+    #if canImport(os)
+    private let storage = OSAllocatedUnfairLock(initialState: [String: NSRegularExpression]())
+    #else
+    private let _lock = NSLock()
+    private let _storage = NSMutableDictionary()
+    #endif
+
+    func regex(for pattern: String) -> NSRegularExpression? {
+        #if canImport(os)
+        return storage.withLock { cache in
+            if let existing = cache[pattern] { return existing }
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+            cache[pattern] = regex
+            return regex
+        }
+        #else
+        _lock.lock()
+        defer { _lock.unlock() }
+        if let existing = _storage[pattern] as? NSRegularExpression { return existing }
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        _storage[pattern] = regex
+        return regex
+        #endif
     }
 }
