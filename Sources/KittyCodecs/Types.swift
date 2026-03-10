@@ -119,6 +119,13 @@ public enum MouseButton: UInt8, Sendable, Equatable {
     case scrollRight = 67
     case button4 = 128
     case button5 = 129
+
+    public var isScroll: Bool {
+        switch self {
+        case .scrollUp, .scrollDown, .scrollLeft, .scrollRight: true
+        default: false
+        }
+    }
 }
 
 // MARK: - Mouse Event Kind

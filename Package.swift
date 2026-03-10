@@ -19,6 +19,7 @@ let package = Package(
         .library(name: "KittyWidgets", targets: ["KittyWidgets"]),
         .library(name: "KittyApp", targets: ["KittyApp"]),
         .executable(name: "Demo", targets: ["Demo"]),
+        .executable(name: "KittyCode", targets: ["KittyCode"]),
     ],
     targets: [
         // Layer 0 — Raw mode, FD I/O, terminal queries
@@ -57,6 +58,9 @@ let package = Package(
 
         // Demo executable
         .executableTarget(name: "Demo", dependencies: ["KittyApp"], path: "Demo"),
+
+        // KittyCode — Terminal code editor
+        .executableTarget(name: "KittyCode", dependencies: ["KittyApp"]),
 
         // Tests
         .testTarget(name: "KittyTerminalTests", dependencies: ["KittyTerminal"]),
