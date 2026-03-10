@@ -110,6 +110,25 @@ struct HighlighterTests {
             StyledSpan(text: "uvw", style: keywordStyle),
         ])
     }
+
+    @Test("LanguageHighlighter session matches one-shot grammar-backed highlighting")
+    func sessionMatchesOneShotHighlighting() {
+        let source = "import Foundation"
+        let session = LanguageHighlighter.makeSession(language: "swift")
+
+        #expect(session.highlightDocument(source: source) == LanguageHighlighter.highlightDocument(source: source, language: "swift"))
+    }
+
+    @Test("LanguageHighlighter session supports line-based fallback highlighting")
+    func sessionSupportsLineBasedFallback() {
+        let session = LanguageHighlighter.makeSession(language: nil)
+        let lines = session.highlightLines(["// comment", "value"])
+
+        #expect(session.prefersLineInput)
+        #expect(lines.count == 2)
+        #expect(lines[0].map(\.text).joined() == "// comment")
+        #expect(lines[1].map(\.text).joined() == "value")
+    }
 }
 
 @Suite("GrammarRegistry")

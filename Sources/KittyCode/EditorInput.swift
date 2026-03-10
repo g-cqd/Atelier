@@ -95,13 +95,11 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case Key.enter.rawValue, Key.enterAlt.rawValue:
         TextOperations.insertNewline(into: &state.textBuffer, at: &state.textCursor)
-        state.invalidateTextSnapshotCache()
-        state.refreshHighlights()
+        state.textDidChange()
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
         TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor)
-        state.invalidateTextSnapshotCache()
-        state.refreshHighlights()
+        state.textDidChange()
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case AsciiKey.g:
         if key.modifiers == .shift {

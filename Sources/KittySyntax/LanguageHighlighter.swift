@@ -6,31 +6,98 @@ import KittyQuery
 import KittySync
 
 public enum LanguageHighlighter: Sendable {
+    public final class Session {
+        private enum Strategy {
+            case grammar(GrammarSession)
+            case fallback
+        }
+
+        private final class GrammarSession {
+            let parser: IncrementalParser
+            let query: Query
+            let highlighter: Highlighter
+            let scratch = HighlightScratch()
+            var previousTree: SyntaxTree?
+
+            init(artifacts: SyntaxArtifacts, theme: Theme) {
+                parser = IncrementalParser(
+                    parseTable: artifacts.parseTable,
+                    lexTable: artifacts.lexTable,
+                    productions: artifacts.productions
+                )
+                query = artifacts.query
+                highlighter = Highlighter(theme: theme)
+            }
+        }
+
+        private let language: String?
+        private let theme: Theme
+        private let strategy: Strategy
+        private var splitScratch = SplitLinesScratch()
+
+        public var prefersLineInput: Bool {
+            if case .fallback = strategy {
+                return true
+            }
+            return false
+        }
+
+        public init(language: String?, theme: Theme = .monokai) {
+            self.language = language
+            self.theme = theme
+
+            if let language, let artifacts = SyntaxArtifactsCache.artifacts(for: language) {
+                strategy = .grammar(GrammarSession(artifacts: artifacts, theme: theme))
+            } else {
+                strategy = .fallback
+            }
+        }
+
+        public func highlightDocument(source: String) -> [[StyledSpan]] {
+            switch strategy {
+            case .grammar(let grammarSession):
+                do {
+                    let tree = try grammarSession.parser.parse(source, oldTree: grammarSession.previousTree)
+                    grammarSession.previousTree = tree
+                    let spans = grammarSession.highlighter.highlight(
+                        source: source,
+                        tree: tree,
+                        query: grammarSession.query,
+                        scratch: grammarSession.scratch
+                    )
+                    return splitDocumentSpans(
+                        spans,
+                        source: source,
+                        defaultStyle: theme.defaultStyle,
+                        scratch: &splitScratch
+                    )
+                } catch {
+                    return fallbackHighlightDocument(source: source, language: language, theme: theme)
+                }
+
+            case .fallback:
+                return fallbackHighlightDocument(source: source, language: language, theme: theme)
+            }
+        }
+
+        public func highlightLines(_ lines: [String]) -> [[StyledSpan]] {
+            let normalizedLines = lines.isEmpty ? [""] : lines
+
+            switch strategy {
+            case .fallback:
+                return normalizedLines.map { fallbackHighlightLine($0, language: language, theme: theme) }
+            case .grammar:
+                return highlightDocument(source: normalizedLines.joined(separator: "\n"))
+            }
+        }
+    }
+
     public static func highlightDocument(
         source: String,
         language: String?,
         theme: Theme = .monokai
     ) -> [[StyledSpan]] {
-        guard let language else {
-            return fallbackHighlightDocument(source: source, language: nil, theme: theme)
-        }
-
-        if let artifacts = SyntaxArtifactsCache.artifacts(for: language) {
-            do {
-                let parser = IncrementalParser(
-                    parseTable: artifacts.parseTable,
-                    lexTable: artifacts.lexTable,
-                    productions: artifacts.productions
-                )
-                let tree = try parser.parse(source)
-                let spans = Highlighter(theme: theme).highlight(source: source, tree: tree, query: artifacts.query)
-                return splitDocumentSpans(spans, source: source, defaultStyle: theme.defaultStyle)
-            } catch {
-                return fallbackHighlightDocument(source: source, language: language, theme: theme)
-            }
-        }
-
-        return fallbackHighlightDocument(source: source, language: language, theme: theme)
+        Session(language: language, theme: theme).highlightDocument(source: source)
     }
 
     public static func highlightLine(
@@ -41,40 +108,11 @@ public enum LanguageHighlighter: Sendable {
         fallbackHighlightLine(line, language: language, theme: theme)
     }
 
-    private static func splitDocumentSpans(
-        _ spans: [StyledSpan],
-        source: String,
-        defaultStyle: Style
-    ) -> [[StyledSpan]] {
-        if source.isEmpty {
-            return [[StyledSpan(text: "", style: defaultStyle)]]
-        }
-
-        var lines: [[StyledSpan]] = [[]]
-
-        for span in spans {
-            var current = ""
-            for char in span.text {
-                if char == "\n" {
-                    if !current.isEmpty {
-                        lines[lines.count - 1].append(StyledSpan(text: current, style: span.style))
-                        current.removeAll(keepingCapacity: true)
-                    }
-                    lines.append([])
-                } else {
-                    current.append(char)
-                }
-            }
-            if !current.isEmpty {
-                lines[lines.count - 1].append(StyledSpan(text: current, style: span.style))
-            }
-        }
-
-        if source.last == "\n" {
-            lines.append([])
-        }
-
-        return lines.isEmpty ? [[StyledSpan(text: "", style: defaultStyle)]] : lines
+    public static func makeSession(
+        language: String?,
+        theme: Theme = .monokai
+    ) -> Session {
+        Session(language: language, theme: theme)
     }
 }
 
@@ -83,6 +121,10 @@ private struct SyntaxArtifacts: Sendable {
     let lexTable: LexTable
     let productions: [ProductionRule]
     let query: Query
+}
+
+private struct SplitLinesScratch {
+    var lines: [[StyledSpan]] = []
 }
 
 private enum SyntaxArtifactsCache {
@@ -127,6 +169,44 @@ private enum SyntaxArtifactsCache {
             query: query
         )
     }
+}
+
+private func splitDocumentSpans(
+    _ spans: [StyledSpan],
+    source: String,
+    defaultStyle: Style,
+    scratch: inout SplitLinesScratch
+) -> [[StyledSpan]] {
+    if source.isEmpty {
+        return [[StyledSpan(text: "", style: defaultStyle)]]
+    }
+
+    scratch.lines.removeAll(keepingCapacity: true)
+    scratch.lines.append([])
+
+    for span in spans {
+        var current = ""
+        for char in span.text {
+            if char == "\n" {
+                if !current.isEmpty {
+                    scratch.lines[scratch.lines.count - 1].append(StyledSpan(text: current, style: span.style))
+                    current.removeAll(keepingCapacity: true)
+                }
+                scratch.lines.append([])
+            } else {
+                current.append(char)
+            }
+        }
+        if !current.isEmpty {
+            scratch.lines[scratch.lines.count - 1].append(StyledSpan(text: current, style: span.style))
+        }
+    }
+
+    if source.last == "\n" {
+        scratch.lines.append([])
+    }
+
+    return scratch.lines.isEmpty ? [[StyledSpan(text: "", style: defaultStyle)]] : scratch.lines
 }
 
 private enum HighlightLexicon {
