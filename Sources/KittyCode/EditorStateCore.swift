@@ -36,6 +36,16 @@ final class EditorState {
         case insert
     }
 
+    enum ScrollDragTarget: Equatable {
+        case tree
+        case editor
+    }
+
+    struct ScrollDragState: Equatable {
+        var target: ScrollDragTarget
+        var gripOffset: Int
+    }
+
     var config: KittyConfig
     var colorScheme: ColorScheme {
         didSet {
@@ -234,6 +244,7 @@ final class EditorState {
     var lastClickTime: Date = .distantPast
     var lastClickIndex = -1
     var isScrolling = false
+    var scrollDragState: ScrollDragState?
 
     init(rootPath: String, config: KittyConfig) {
         self.rootPath = rootPath
