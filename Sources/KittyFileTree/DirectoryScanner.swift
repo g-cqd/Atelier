@@ -1,7 +1,5 @@
 import Foundation
-#if canImport(os)
-import os
-#endif
+import KittySync
 
 /// Recursively scans a directory tree into an array of ``FileNode`` values.
 ///
@@ -95,33 +93,27 @@ public enum DirectoryScanner {
 
     /// Thread-safe atomic counter for bounding total entries across tasks.
     private final class EntryCounter: Sendable {
-        private let lock: NSLock
+        private let counterValue = StateLock(initialState: 0)
         private let _limit: Int
-        // nonisolated(unsafe) is required for mutable state behind a lock in Swift 6
-        nonisolated(unsafe) private var _count: Int
 
         var limit: Int { _limit }
 
         init(limit: Int) {
-            self.lock = NSLock()
             self._limit = limit
-            self._count = 0
         }
 
         /// Attempts to increment the counter. Returns `true` if under the limit.
         func tryIncrement() -> Bool {
-            lock.lock()
-            defer { lock.unlock() }
-            if _count >= _limit { return false }
-            _count += 1
-            return true
+            return counterValue.withLock { count in
+                guard count < _limit else { return false }
+                count += 1
+                return true
+            }
         }
 
         /// Returns the current count.
         var count: Int {
-            lock.lock()
-            defer { lock.unlock() }
-            return _count
+            return counterValue.withLock { $0 }
         }
     }
 
