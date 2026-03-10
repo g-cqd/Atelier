@@ -40,6 +40,7 @@ public enum ViewRenderer {
         context: RenderContext
     ) {
         let style = context.applyTo(text.style)
+        fillRow(into: &buffer, row: rect.y, col: rect.x, width: rect.width, style: style)
         buffer.write(String(text.content.prefix(rect.width)), row: rect.y, col: rect.x, style: style)
     }
 
@@ -49,6 +50,7 @@ public enum ViewRenderer {
         in rect: Rect,
         context: RenderContext
     ) {
+        fillRow(into: &buffer, row: rect.y, col: rect.x, width: rect.width, style: context.applyTo(.default))
         var col = rect.x
         let maxCol = rect.x + rect.width
         for span in view.spans {
@@ -86,7 +88,11 @@ public enum ViewRenderer {
         context: RenderContext
     ) {
         let rows = tree.rowsForRendering
-        guard !rows.isEmpty else { return }
+        let normalStyle = context.applyTo(tree.normalStyle)
+        guard !rows.isEmpty else {
+            fillRect(into: &buffer, in: rect, style: normalStyle)
+            return
+        }
 
         let start = max(0, min(tree.scrollOffset, rows.count))
         let visibleCount = min(rect.height, rows.count - start)
@@ -98,13 +104,13 @@ public enum ViewRenderer {
             let style = context.applyTo(baseStyle)
             let indent = String(repeating: " ", count: row.depth * indentWidth)
             let line = String((indent + row.icon + row.label).prefix(rect.width))
+            fillRow(into: &buffer, row: rect.y + offset, col: rect.x, width: rect.width, style: style)
             buffer.write(line, row: rect.y + offset, col: rect.x, style: style)
         }
 
         if visibleCount < rect.height {
             for offset in visibleCount..<rect.height {
-                let blank = String(repeating: " ", count: rect.width)
-                buffer.write(blank, row: rect.y + offset, col: rect.x, style: context.applyTo(tree.normalStyle))
+                fillRow(into: &buffer, row: rect.y + offset, col: rect.x, width: rect.width, style: normalStyle)
             }
         }
     }
@@ -118,8 +124,8 @@ public enum ViewRenderer {
         let editorStyle = context.applyTo(editor.editorStyle)
         let lineNumberStyle = context.applyTo(editor.lineNumberStyle)
         let currentLineStyle = context.applyTo(editor.currentLineStyle)
-        let lineNumberWidth = editor.showLineNumbers ? max(3, editor.lineNumberWidth + 1) : 0
-        let contentWidth = max(0, rect.width - lineNumberWidth)
+        let lineNumberWidth = TextEditorLayout.gutterWidth(for: editor)
+        let contentWidth = TextEditorLayout.contentWidth(for: editor, in: rect)
 
         guard rect.height > 0 else { return }
 
@@ -238,6 +244,26 @@ public enum ViewRenderer {
         let digits = String(lineNumber)
         let padding = String(repeating: " ", count: max(0, width - digits.count))
         return padding + digits + " "
+    }
+
+    private static func fillRect(
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        style: Style
+    ) {
+        guard rect.width > 0, rect.height > 0 else { return }
+        buffer.fill(row: rect.y, col: rect.x, width: rect.width, height: rect.height, cell: Cell(character: " ", style: style))
+    }
+
+    private static func fillRow(
+        into buffer: inout ScreenBuffer,
+        row: Int,
+        col: Int,
+        width: Int,
+        style: Style
+    ) {
+        guard width > 0 else { return }
+        buffer.fill(row: row, col: col, width: width, height: 1, cell: Cell(character: " ", style: style))
     }
 
     private static func renderStyledLine(

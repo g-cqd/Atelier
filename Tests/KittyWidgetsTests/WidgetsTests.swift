@@ -2,6 +2,7 @@ import Testing
 @testable import KittyWidgets
 @testable import KittyCodecs
 @testable import KittyRenderer
+@testable import KittySyntax
 
 @Suite("View Protocol")
 struct ViewTests {
@@ -77,6 +78,15 @@ struct StatusBarTests {
         #expect(bar.render(width: 0).isEmpty)
         #expect(bar.render(width: -1).isEmpty)
     }
+
+    @Test("Edge-aligned rendering preserves the trailing segment")
+    func edgeAlignedPreservesTrailingSegment() {
+        let bar = StatusBar(left: "left side", right: "RIGHT")
+        let rendered = bar.render(width: 14)
+
+        #expect(rendered.count == 14)
+        #expect(rendered.hasSuffix("RIGHT"))
+    }
 }
 
 @Suite("ViewModifier")
@@ -101,6 +111,45 @@ struct TextEditorTests {
         let editor = TextEditor(content: "a\nb\nc")
         #expect(editor.lines.count == 3)
         #expect(editor.lineNumberWidth == 1)
+    }
+
+    @Test("Cursor layout accounts for line-number gutter and horizontal scroll")
+    func cursorPositionWithoutWrap() {
+        let editor = TextEditor(
+            lines: ["abcdef"],
+            lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
+            horizontalScrollOffset: 2,
+            cursorRow: 0,
+            cursorCol: 4,
+            showLineNumbers: true,
+            wrapLines: false
+        )
+
+        let position = TextEditorLayout.cursorPosition(
+            for: editor,
+            in: Rect(x: 5, y: 3, width: 8, height: 1)
+        )
+
+        #expect(position == .init(row: 3, col: 10))
+    }
+
+    @Test("Cursor layout accounts for wrapped rows")
+    func cursorPositionWithWrap() {
+        let editor = TextEditor(
+            lines: ["abcdef"],
+            lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
+            cursorRow: 0,
+            cursorCol: 4,
+            showLineNumbers: true,
+            wrapLines: true
+        )
+
+        let position = TextEditorLayout.cursorPosition(
+            for: editor,
+            in: Rect(x: 5, y: 3, width: 6, height: 2)
+        )
+
+        #expect(position == .init(row: 4, col: 9))
     }
 }
 
@@ -187,6 +236,182 @@ struct TextRenderingTests {
         view.render(to: &buffer, in: rect, context: context)
 
         #expect(buffer[0, 0].style.fg == .rgb(r: 255, g: 0, b: 0))
+    }
+
+    @Test func `render clears trailing cells when plain text shrinks`() {
+        var buffer = makeSUT(columns: 10, rows: 1)
+        let rect = Rect(x: 0, y: 0, width: 10, height: 1)
+        let style = Style(bg: .rgb(r: 12, g: 34, b: 56))
+
+        Text("Longer", style: style).render(to: &buffer, in: rect)
+        Text("Hi", style: style).render(to: &buffer, in: rect)
+
+        #expect(buffer[0, 0].character == "H")
+        #expect(buffer[0, 1].character == "i")
+        #expect(buffer[0, 2].character == " ")
+        #expect(buffer[0, 2].style.bg == style.bg)
+        #expect(buffer[0, 5].character == " ")
+    }
+
+    @Test func `render clears trailing cells when styled text shrinks`() {
+        var buffer = makeSUT(columns: 10, rows: 1)
+        let rect = Rect(x: 0, y: 0, width: 10, height: 1)
+        var context = RenderContext()
+        context.background = .rgb(r: 90, g: 80, b: 70)
+
+        StyledTextView([
+            StyledTextView.StyledTextSpan(text: "Longer", style: Style(fg: .rgb(r: 255, g: 0, b: 0))),
+        ]).render(to: &buffer, in: rect, context: context)
+
+        StyledTextView([
+            StyledTextView.StyledTextSpan(text: "Hi", style: Style(fg: .rgb(r: 0, g: 255, b: 0))),
+        ]).render(to: &buffer, in: rect, context: context)
+
+        #expect(buffer[0, 0].character == "H")
+        #expect(buffer[0, 1].character == "i")
+        #expect(buffer[0, 2].character == " ")
+        #expect(buffer[0, 2].style.bg == .rgb(r: 90, g: 80, b: 70))
+        #expect(buffer[0, 2].style.fg == .default)
+    }
+
+    @Test func `render clears trailing cells when selected tree row shrinks`() {
+        var buffer = makeSUT(columns: 12, rows: 2)
+        let rect = Rect(x: 0, y: 0, width: 12, height: 2)
+        let selectedStyle = Style(bg: .rgb(r: 1, g: 2, b: 3))
+        let child = TreeNode(value: "child")
+
+        TreeView(
+            root: [TreeNode(value: "LongerName", children: [child], isExpanded: false)],
+            selectedIndex: 0,
+            style: TreeView<String>.TreeViewStyle(
+                normalStyle: .default,
+                selectedStyle: selectedStyle,
+                expandedIcon: "[-]",
+                collapsedIcon: "[+]",
+                leafIcon: "   ",
+                indent: 2
+            ),
+            label: { $0 }
+        ).render(to: &buffer, in: rect)
+
+        TreeView(
+            root: [TreeNode(value: "Tests", children: [child], isExpanded: false)],
+            selectedIndex: 0,
+            style: TreeView<String>.TreeViewStyle(
+                normalStyle: .default,
+                selectedStyle: selectedStyle,
+                expandedIcon: "[-]",
+                collapsedIcon: "[+]",
+                leafIcon: "   ",
+                indent: 2
+            ),
+            label: { $0 }
+        ).render(to: &buffer, in: rect)
+
+        #expect(buffer[0, 0].character == "[")
+        #expect(buffer[0, 1].character == "+")
+        #expect(buffer[0, 2].character == "]")
+        #expect(buffer[0, 3].character == "T")
+        #expect(buffer[0, 8].character == " ")
+        #expect(buffer[0, 8].style.bg == selectedStyle.bg)
+        #expect(buffer[0, 10].character == " ")
+    }
+
+    @Test func `render clears stale rows when tree becomes empty`() {
+        var buffer = makeSUT(columns: 12, rows: 2)
+        let rect = Rect(x: 0, y: 0, width: 12, height: 2)
+        let normalStyle = Style(bg: .rgb(r: 11, g: 22, b: 33))
+
+        TreeView(
+            root: [TreeNode(value: "Root", isExpanded: false)],
+            style: TreeView<String>.TreeViewStyle(
+                normalStyle: normalStyle,
+                selectedStyle: .default,
+                expandedIcon: "[-]",
+                collapsedIcon: "[+]",
+                leafIcon: "   ",
+                indent: 2
+            ),
+            label: { $0 }
+        ).render(to: &buffer, in: rect)
+
+        TreeView(
+            root: [],
+            style: TreeView<String>.TreeViewStyle(
+                normalStyle: normalStyle,
+                selectedStyle: .default,
+                expandedIcon: "[-]",
+                collapsedIcon: "[+]",
+                leafIcon: "   ",
+                indent: 2
+            ),
+            label: { $0 }
+        ).render(to: &buffer, in: rect)
+
+        #expect(buffer[0, 0].character == " ")
+        #expect(buffer[0, 0].style.bg == normalStyle.bg)
+        #expect(buffer[1, 11].character == " ")
+        #expect(buffer[1, 11].style.bg == normalStyle.bg)
+    }
+
+    @Test func `render text editor applies current-line background to content and trailing cells`() {
+        var buffer = makeSUT(columns: 6, rows: 1)
+        let rect = Rect(x: 0, y: 0, width: 6, height: 1)
+        let editorStyle = Style(bg: .rgb(r: 10, g: 20, b: 30))
+        let currentLineStyle = Style(bg: .rgb(r: 40, g: 50, b: 60))
+        let textStyle = Style(fg: .rgb(r: 70, g: 80, b: 90))
+        let editor = TextEditor(
+            lines: ["Hi"],
+            lineSpans: [[StyledSpan(text: "Hi", style: textStyle)]],
+            cursorRow: 0,
+            showLineNumbers: false,
+            wrapLines: false,
+            editorStyle: editorStyle,
+            currentLineStyle: currentLineStyle
+        )
+
+        editor.render(to: &buffer, in: rect)
+
+        #expect(buffer[0, 0].character == "H")
+        #expect(buffer[0, 0].style.fg == textStyle.fg)
+        #expect(buffer[0, 0].style.bg == currentLineStyle.bg)
+        #expect(buffer[0, 2].character == " ")
+        #expect(buffer[0, 2].style.bg == currentLineStyle.bg)
+    }
+
+    @Test func `render wrapped text editor uses line-number gutter only on first visual row`() {
+        var buffer = makeSUT(columns: 6, rows: 3)
+        let rect = Rect(x: 0, y: 0, width: 6, height: 3)
+        let lineNumberStyle = Style(bg: .rgb(r: 1, g: 2, b: 3))
+        let editorStyle = Style(bg: .rgb(r: 4, g: 5, b: 6))
+        let editor = TextEditor(
+            lines: ["abcdef"],
+            lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
+            showLineNumbers: true,
+            wrapLines: true,
+            editorStyle: editorStyle,
+            lineNumberStyle: lineNumberStyle
+        )
+
+        editor.render(to: &buffer, in: rect)
+
+        #expect(buffer[0, 0].character == " ")
+        #expect(buffer[0, 1].character == "1")
+        #expect(buffer[0, 2].character == " ")
+        #expect(buffer[0, 3].character == "a")
+        #expect(buffer[0, 5].character == "c")
+
+        #expect(buffer[1, 0].character == " ")
+        #expect(buffer[1, 1].character == " ")
+        #expect(buffer[1, 2].character == " ")
+        #expect(buffer[1, 0].style.bg == lineNumberStyle.bg)
+        #expect(buffer[1, 3].character == "d")
+        #expect(buffer[1, 5].character == "f")
+
+        #expect(buffer[2, 0].character == "~")
+        #expect(buffer[2, 0].style.bg == lineNumberStyle.bg)
+        #expect(buffer[2, 3].character == " ")
+        #expect(buffer[2, 3].style.bg == editorStyle.bg)
     }
 }
 

@@ -3,6 +3,7 @@ import KittyCodecs
 import KittyGrammar
 import KittyParser
 import KittyQuery
+import KittySync
 
 public enum LanguageHighlighter: Sendable {
     public static func highlightDocument(
@@ -85,32 +86,15 @@ private struct SyntaxArtifacts: Sendable {
 }
 
 private enum SyntaxArtifactsCache {
-    private final class Storage: @unchecked Sendable {
-        private let lock = NSLock()
-        private var cache: [String: SyntaxArtifacts?] = [:]
-
-        func get(_ language: String) -> SyntaxArtifacts?? {
-            lock.lock()
-            defer { lock.unlock() }
-            return cache[language]
-        }
-
-        func set(_ artifacts: SyntaxArtifacts?, for language: String) {
-            lock.lock()
-            defer { lock.unlock() }
-            cache[language] = artifacts
-        }
-    }
-
-    private static let storage = Storage()
+    private static let storage = StateLock(initialState: [String: SyntaxArtifacts?]())
 
     static func artifacts(for language: String) -> SyntaxArtifacts? {
-        if let cached = storage.get(language) {
+        if let cached = storage.withLock({ $0[language] }) {
             return cached
         }
 
         let loaded = loadArtifacts(for: language)
-        storage.set(loaded, for: language)
+        storage.withLock { $0[language] = loaded }
         return loaded
     }
 
