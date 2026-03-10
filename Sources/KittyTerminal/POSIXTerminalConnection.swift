@@ -86,6 +86,31 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
         }
     }
 
+    /// Zero-copy write from ContiguousArray using direct pointer access.
+    ///
+    /// - Parameter bytes: The contiguous byte buffer to transmit.
+    /// - Throws: `TerminalError.writeFailed` if `write(2)` returns a negative value.
+    public func writeContiguous(_ bytes: ContiguousArray<UInt8>) throws(TerminalError) {
+        var offset = 0
+        let count = bytes.count
+        while offset < count {
+            let n: Int
+            #if canImport(Darwin)
+            n = bytes.withUnsafeBufferPointer { buf in
+                Darwin.write(self.writeFd, buf.baseAddress! + offset, count - offset)
+            }
+            #else
+            n = bytes.withUnsafeBufferPointer { buf in
+                Glibc.write(self.writeFd, buf.baseAddress! + offset, count - offset)
+            }
+            #endif
+            guard n >= 0 else {
+                throw .writeFailed(errno)
+            }
+            offset += n
+        }
+    }
+
     /// Puts the terminal into raw mode, saving the current `termios` for later restoration.
     ///
     /// - Throws: `TerminalError.notATerminal` if the descriptor is not a tty,

@@ -7,10 +7,10 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
 
     switch event {
     case .key(let key):
-        guard key.eventType == .press else { return true }
+        guard key.eventType != .release else { return true }
         state.isScrolling = false
 
-        if key.modifiers == .ctrl {
+        if key.eventType == .press, key.modifiers == .ctrl {
             if key.keyCode == AsciiKey.o {
                 state.saveFile()
                 return true
@@ -25,7 +25,7 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
             }
         }
 
-        if key.keyCode == AsciiKey.escape {
+        if key.eventType == .press, key.keyCode == AsciiKey.escape {
             if state.mode == .editor {
                 if state.config.keybindingMode == .vim {
                     state.vimMode = .normal
@@ -39,7 +39,7 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
             return false
         }
 
-        if key.keyCode == 3 {
+        if key.eventType == .press, key.keyCode == 3 {
             return false
         }
 

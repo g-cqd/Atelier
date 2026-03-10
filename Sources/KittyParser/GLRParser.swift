@@ -5,11 +5,25 @@ public final class GLRParser: Sendable {
     private let parseTable: ParseTable
     private let lexTable: LexTable
     private let productions: [ProductionRule]
+    /// O(1) terminal name -> index lookup (replaces linear firstIndex(of:) scans).
+    private let terminalIndex: [String: Int]
+    /// O(1) non-terminal name -> index lookup.
+    private let nonTerminalIndex: [String: Int]
 
     public init(parseTable: ParseTable, lexTable: LexTable, productions: [ProductionRule]) {
         self.parseTable = parseTable
         self.lexTable = lexTable
         self.productions = productions
+        var tIdx = [String: Int](minimumCapacity: parseTable.terminals.count)
+        for (i, t) in parseTable.terminals.enumerated() {
+            tIdx[t] = i
+        }
+        self.terminalIndex = tIdx
+        var ntIdx = [String: Int](minimumCapacity: parseTable.nonTerminals.count)
+        for (i, nt) in parseTable.nonTerminals.enumerated() {
+            ntIdx[nt] = i
+        }
+        self.nonTerminalIndex = ntIdx
     }
 
     private static let maxStacks = 256
@@ -32,7 +46,7 @@ public final class GLRParser: Sendable {
         var stacks: [ParseStack] = [ParseStack(state: 0)]
 
         for (tokenIdx, token) in nonExtraTokens.enumerated() {
-            guard let termIdx = parseTable.terminals.firstIndex(of: token.type) else {
+            guard let termIdx = terminalIndex[token.type] else {
                 // Unknown token — wrap in error node and continue
                 stacks = stacks.map { stack in
                     var s = stack
@@ -109,7 +123,7 @@ public final class GLRParser: Sendable {
         }
 
         // Check for accept on $end
-        if let endIdx = parseTable.terminals.firstIndex(of: "$end") {
+        if let endIdx = terminalIndex["$end"] {
             stacks = applyReduces(stacks: stacks, terminalIndex: endIdx)
         }
 
@@ -122,14 +136,14 @@ public final class GLRParser: Sendable {
 
     // MARK: - Private
 
-    private func applyReduces(stacks: [ParseStack], terminalIndex: Int) -> [ParseStack] {
+    private func applyReduces(stacks: [ParseStack], terminalIndex termIdx: Int) -> [ParseStack] {
         var result: [ParseStack] = []
 
         for var stack in stacks {
             var shouldAppendStack = true
 
             reduceLoop: while true {
-                let action = parseTable.actions[stack.state][terminalIndex]
+                let action = parseTable.actions[stack.state][termIdx]
 
                 switch action {
                 case .reduce(let ruleIndex, let count, let nonTerminal):
@@ -188,8 +202,8 @@ public final class GLRParser: Sendable {
 
         s.pushNode(node)
 
-        // Apply GOTO
-        if let ntIdx = parseTable.nonTerminals.firstIndex(of: nonTerminal),
+        // Apply GOTO using dictionary lookup
+        if let ntIdx = nonTerminalIndex[nonTerminal],
            let gotoState = parseTable.gotos[s.stateBeforeTop][ntIdx] {
             s.state = gotoState
         }
@@ -216,4 +230,3 @@ public final class GLRParser: Sendable {
         )
     }
 }
-

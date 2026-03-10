@@ -44,11 +44,40 @@ final class EditorState {
 
     var textBuffer = TextBuffer()
     var textCursor = TextCursor()
+    private var cachedFileLines: [String]?
 
     /// Backward-compatible computed access to file content lines.
     var fileContent: [String] {
-        get { textBuffer.lines }
-        set { textBuffer = TextBuffer(lines: newValue) }
+        get {
+            if let cachedFileLines {
+                return cachedFileLines
+            }
+
+            let lines = textBuffer.lines
+            cachedFileLines = lines
+            return lines
+        }
+        set {
+            let normalizedLines = newValue.isEmpty ? [""] : newValue
+            textBuffer = TextBuffer(lines: normalizedLines)
+            cachedFileLines = normalizedLines
+        }
+    }
+
+    var fileLineCount: Int {
+        textBuffer.lineCount
+    }
+
+    var isFileEmpty: Bool {
+        textBuffer.isEmpty
+    }
+
+    func fileLine(at index: Int) -> String {
+        textBuffer.line(at: index)
+    }
+
+    func invalidateTextSnapshotCache() {
+        cachedFileLines = nil
     }
 
     /// Backward-compatible cursor row.
@@ -89,7 +118,7 @@ final class EditorState {
 
     /// Returns cached highlight spans for a line, re-highlighting only when content changed.
     func cachedHighlightLine(_ lineIndex: Int) -> [StyledSpan] {
-        let content = fileContent[lineIndex]
+        let content = fileLine(at: lineIndex)
         if let cached = highlightCache[lineIndex], cached.content == content {
             return cached.spans
         }
@@ -101,6 +130,13 @@ final class EditorState {
     /// Invalidates the highlight cache for a specific line.
     func invalidateHighlightCache(line: Int) {
         highlightCache.removeValue(forKey: line)
+    }
+
+    /// Invalidates the highlight cache for a contiguous range of lines.
+    func invalidateHighlightCache(lines range: Range<Int>) {
+        for line in range {
+            highlightCache.removeValue(forKey: line)
+        }
     }
 
     /// Clears the entire highlight cache (e.g. on file open or language change).

@@ -8,21 +8,22 @@ import KittyText
 func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeline) {
     let treeWidth = min(state.treePanelWidth, pipeline.columns / 2)
     let editorStart = 1 + treeWidth + 1
-    let lineNumWidth = max(3, String(state.fileContent.count).count + 1)
+    let lineNumWidth = max(3, String(state.fileLineCount).count + 1)
+    let scrollStep = scrollLinesPerTick(visibleRows: max(1, pipeline.rows - 2))
 
     if mouse.button.isScroll {
         state.isScrolling = true
         if mouse.col <= treeWidth {
             if mouse.button == .scrollUp {
-                state.treeScrollOffset = max(0, state.treeScrollOffset - 3)
+                state.treeScrollOffset = max(0, state.treeScrollOffset - scrollStep)
             } else if mouse.button == .scrollDown {
-                state.treeScrollOffset = min(max(0, state.cachedFlatTree.count - 1), state.treeScrollOffset + 3)
+                state.treeScrollOffset = min(max(0, state.cachedFlatTree.count - 1), state.treeScrollOffset + scrollStep)
             }
         } else {
             if mouse.button == .scrollUp {
-                state.scrollOffset = max(0, state.scrollOffset - 3)
+                state.scrollOffset = max(0, state.scrollOffset - scrollStep)
             } else if mouse.button == .scrollDown {
-                state.scrollOffset = min(max(0, state.fileContent.count - 1), state.scrollOffset + 3)
+                state.scrollOffset = min(max(0, state.fileLineCount - 1), state.scrollOffset + scrollStep)
             }
         }
         return
@@ -74,12 +75,12 @@ private func handleTreeClick(contentRow: Int, isDoubleClick: Bool, state: Editor
 @MainActor
 private func handleEditorClick(row: Int, mouseCol: Int, editorStart: Int, lineNumWidth: Int, state: EditorState) {
     let lineIndex = state.scrollOffset + row
-    guard lineIndex >= 0 && lineIndex < state.fileContent.count else { return }
+    guard lineIndex >= 0 && lineIndex < state.fileLineCount else { return }
 
     state.cursorRow = lineIndex
     state.mode = .editor
 
-    let line = state.fileContent[lineIndex]
+    let line = state.fileLine(at: lineIndex)
     let relativeCol = mouseCol - editorStart - lineNumWidth
     if state.config.wrapLines {
         let displayCol = max(0, relativeCol)
@@ -88,4 +89,9 @@ private func handleEditorClick(row: Int, mouseCol: Int, editorStart: Int, lineNu
         let displayCol = max(0, relativeCol + state.hScrollOffset)
         state.cursorCol = charIndex(forDisplayColumn: displayCol, in: line)
     }
+}
+
+@MainActor
+func scrollLinesPerTick(visibleRows: Int) -> Int {
+    min(12, max(3, visibleRows / 8))
 }

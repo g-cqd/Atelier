@@ -19,7 +19,7 @@ func renderScrollableEditor(
         let lineIndex = state.scrollOffset + row
         let isCurrentLine = lineIndex == state.cursorRow
 
-        if lineIndex >= 0 && lineIndex < state.fileContent.count {
+        if lineIndex >= 0 && lineIndex < state.fileLineCount {
             let num = String(lineIndex + 1)
             let numPad = String(repeating: " ", count: max(0, lineNumWidth - num.count - 1))
             pipeline.buffer.write(numPad + num + " ", row: row + 1, col: editorStart, style: colorScheme.lineNumber)
@@ -37,7 +37,7 @@ func renderScrollableEditor(
             )
 
             if isCurrentLine && state.mode == .editor {
-                let line = state.fileContent[lineIndex]
+                let line = state.fileLine(at: lineIndex)
                 let cursorDisplayCol = displayColumn(for: state.cursorCol, in: line)
                 let relativeCol = cursorDisplayCol - state.hScrollOffset
                 if relativeCol >= 0 && relativeCol < availWidth {

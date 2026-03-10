@@ -5,6 +5,27 @@
 /// All methods produce raw UTF-8 byte arrays ready to be written directly to a terminal output stream.
 public enum SGREncoder: Sendable {
 
+    // MARK: - Lookup table for decimal encoding (0-255 -> ASCII digits)
+
+    /// Pre-computed decimal digits for values 0-999.
+    /// Each entry is (hundreds, tens, ones, digitCount).
+    private static let decimalTable: [(UInt8, UInt8, UInt8, UInt8)] = {
+        var table = [(UInt8, UInt8, UInt8, UInt8)](repeating: (0, 0, 0, 0), count: 1000)
+        for i in 0..<1000 {
+            let h = UInt8(i / 100)
+            let t = UInt8((i / 10) % 10)
+            let o = UInt8(i % 10)
+            if i >= 100 {
+                table[i] = (0x30 + h, 0x30 + t, 0x30 + o, 3)
+            } else if i >= 10 {
+                table[i] = (0, 0x30 + t, 0x30 + o, 2)
+            } else {
+                table[i] = (0, 0, 0x30 + o, 1)
+            }
+        }
+        return table
+    }()
+
     // MARK: - Full Encode
 
     /// Encodes a style into a complete SGR escape sequence.
@@ -15,29 +36,34 @@ public enum SGREncoder: Sendable {
     /// - Returns: Raw bytes for the SGR sequence, or an empty array if the style is the default.
     public static func encode(_ style: Style) -> [UInt8] {
         if style == .default { return [] }
-        var params: [UInt8] = []
-        params.append(contentsOf: [0x1b, 0x5b]) // ESC[
+        var params = ContiguousArray<UInt8>()
+        params.reserveCapacity(32)
+        encode(style, into: &params)
+        return Array(params)
+    }
+
+    /// Encodes a style into a caller-provided buffer (zero-allocation path).
+    public static func encode(_ style: Style, into params: inout ContiguousArray<UInt8>) {
+        if style == .default { return }
+        params.append(0x1b) // ESC
+        params.append(0x5b) // [
 
         var first = true
-        func sep() {
-            if !first { params.append(0x3b) } // ;
-            first = false
-        }
 
-        if style.bold { sep(); params.append(0x31) } // 1
-        if style.dim { sep(); params.append(0x32) } // 2
-        if style.italic { sep(); params.append(0x33) } // 3
+        if style.bold { appendSep(&params, &first); params.append(0x31) } // 1
+        if style.dim { appendSep(&params, &first); params.append(0x32) } // 2
+        if style.italic { appendSep(&params, &first); params.append(0x33) } // 3
 
         if style.underline != .none {
-            sep()
+            appendSep(&params, &first)
             // Kitty styled underlines: 4:N
             params.append(0x34) // 4
             params.append(0x3a) // :
             params.append(0x30 + style.underline.rawValue) // 0-5
         }
 
-        if style.inverse { sep(); params.append(0x37) } // 7
-        if style.strikethrough { sep(); params.append(0x39) } // 9
+        if style.inverse { appendSep(&params, &first); params.append(0x37) } // 7
+        if style.strikethrough { appendSep(&params, &first); params.append(0x39) } // 9
 
         if style.fg != .default {
             appendColor(&params, style.fg, foreground: true, first: &first)
@@ -50,7 +76,6 @@ public enum SGREncoder: Sendable {
         }
 
         params.append(0x6d) // m
-        return params
     }
 
     // MARK: - Diff Encode
@@ -65,53 +90,57 @@ public enum SGREncoder: Sendable {
     ///   - new: The desired target style.
     /// - Returns: Raw bytes for the minimal SGR transition, or an empty array if the styles are equal.
     public static func encodeDiff(from old: Style, to new: Style) -> [UInt8] {
-        if old == new { return [] }
-        if new == .default { return [0x1b, 0x5b, 0x6d] } // ESC[m (reset)
-        if old == .default { return encode(new) }
+        var params = ContiguousArray<UInt8>()
+        params.reserveCapacity(32)
+        encodeDiff(from: old, to: new, into: &params)
+        return Array(params)
+    }
 
-        var params: [UInt8] = []
-        params.append(contentsOf: [0x1b, 0x5b])
+    /// Encodes the minimal SGR diff into a caller-provided buffer (zero-allocation path).
+    public static func encodeDiff(from old: Style, to new: Style, into params: inout ContiguousArray<UInt8>) {
+        if old == new { return }
+        if new == .default { params.append(contentsOf: [0x1b, 0x5b, 0x6d] as ContiguousArray<UInt8>); return } // ESC[m (reset)
+        if old == .default { encode(new, into: &params); return }
+
+        params.append(0x1b) // ESC
+        params.append(0x5b) // [
 
         var first = true
-        func sep() {
-            if !first { params.append(0x3b) }
-            first = false
-        }
 
         // Check each attribute individually
         if old.bold != new.bold {
-            sep()
+            appendSep(&params, &first)
             if new.bold { params.append(0x31) } // 1
-            else { params.append(contentsOf: [0x32, 0x32]) } // 22
+            else { params.append(0x32); params.append(0x32) } // 22
         }
         if old.dim != new.dim {
-            sep()
+            appendSep(&params, &first)
             if new.dim { params.append(0x32) } // 2
-            else { params.append(contentsOf: [0x32, 0x32]) } // 22
+            else { params.append(0x32); params.append(0x32) } // 22
         }
         if old.italic != new.italic {
-            sep()
+            appendSep(&params, &first)
             if new.italic { params.append(0x33) } // 3
-            else { params.append(contentsOf: [0x32, 0x33]) } // 23
+            else { params.append(0x32); params.append(0x33) } // 23
         }
         if old.underline != new.underline {
-            sep()
+            appendSep(&params, &first)
             if new.underline == .none {
-                params.append(contentsOf: [0x32, 0x34]) // 24
+                params.append(0x32); params.append(0x34) // 24
             } else {
                 params.append(0x34); params.append(0x3a)
                 params.append(0x30 + new.underline.rawValue)
             }
         }
         if old.inverse != new.inverse {
-            sep()
+            appendSep(&params, &first)
             if new.inverse { params.append(0x37) } // 7
-            else { params.append(contentsOf: [0x32, 0x37]) } // 27
+            else { params.append(0x32); params.append(0x37) } // 27
         }
         if old.strikethrough != new.strikethrough {
-            sep()
+            appendSep(&params, &first)
             if new.strikethrough { params.append(0x39) } // 9
-            else { params.append(contentsOf: [0x32, 0x39]) } // 29
+            else { params.append(0x32); params.append(0x39) } // 29
         }
         if old.fg != new.fg {
             appendColor(&params, new.fg, foreground: true, first: &first)
@@ -124,7 +153,6 @@ public enum SGREncoder: Sendable {
         }
 
         params.append(0x6d)
-        return params
     }
 
     // MARK: - Reset
@@ -132,22 +160,34 @@ public enum SGREncoder: Sendable {
     /// The SGR reset sequence (`ESC[m`) that restores all attributes to their defaults.
     public static let reset: [UInt8] = [0x1b, 0x5b, 0x6d]
 
+    /// Appends the SGR reset sequence to a buffer.
+    @inline(__always)
+    public static func appendReset(to bytes: inout ContiguousArray<UInt8>) {
+        bytes.append(0x1b)
+        bytes.append(0x5b)
+        bytes.append(0x6d)
+    }
+
     // MARK: - Private
 
-    private static func appendColor(_ bytes: inout [UInt8], _ color: Color, foreground: Bool, first: inout Bool) {
+    @inline(__always)
+    private static func appendSep(_ bytes: inout ContiguousArray<UInt8>, _ first: inout Bool) {
+        if !first { bytes.append(0x3b) } // ;
+        first = false
+    }
+
+    private static func appendColor(_ bytes: inout ContiguousArray<UInt8>, _ color: Color, foreground: Bool, first: inout Bool) {
         switch color {
         case .default:
-            if !first { bytes.append(0x3b) }
-            first = false
+            appendSep(&bytes, &first)
             // 39 = default fg, 49 = default bg
             if foreground {
-                bytes.append(contentsOf: [0x33, 0x39])
+                bytes.append(0x33); bytes.append(0x39)
             } else {
-                bytes.append(contentsOf: [0x34, 0x39])
+                bytes.append(0x34); bytes.append(0x39)
             }
         case .indexed(let idx):
-            if !first { bytes.append(0x3b) }
-            first = false
+            appendSep(&bytes, &first)
             if idx < 8 {
                 // 30-37 fg, 40-47 bg
                 let base: UInt8 = foreground ? 30 : 40
@@ -166,8 +206,7 @@ public enum SGREncoder: Sendable {
                 appendDecimal(&bytes, UInt16(idx))
             }
         case .rgb(let r, let g, let b):
-            if !first { bytes.append(0x3b) }
-            first = false
+            appendSep(&bytes, &first)
             let prefix: UInt8 = foreground ? 38 : 48
             appendDecimal(&bytes, prefix)
             bytes.append(0x3b)
@@ -181,20 +220,19 @@ public enum SGREncoder: Sendable {
         }
     }
 
-    private static func appendUnderlineColor(_ bytes: inout [UInt8], _ color: Color, first: inout Bool) {
-        if !first { bytes.append(0x3b) }
-        first = false
+    private static func appendUnderlineColor(_ bytes: inout ContiguousArray<UInt8>, _ color: Color, first: inout Bool) {
+        appendSep(&bytes, &first)
         switch color {
         case .default:
-            bytes.append(contentsOf: [0x35, 0x39]) // 59
+            bytes.append(0x35); bytes.append(0x39) // 59
         case .indexed(let idx):
-            bytes.append(contentsOf: [0x35, 0x38]) // 58
+            bytes.append(0x35); bytes.append(0x38) // 58
             bytes.append(0x3b)
             bytes.append(0x35) // 5
             bytes.append(0x3b)
             appendDecimal(&bytes, UInt16(idx))
         case .rgb(let r, let g, let b):
-            bytes.append(contentsOf: [0x35, 0x38]) // 58
+            bytes.append(0x35); bytes.append(0x38) // 58
             bytes.append(0x3b)
             bytes.append(0x32) // 2
             bytes.append(0x3b)
@@ -206,20 +244,24 @@ public enum SGREncoder: Sendable {
         }
     }
 
-    private static func appendDecimal(_ bytes: inout [UInt8], _ value: UInt8) {
+    @inline(__always)
+    private static func appendDecimal(_ bytes: inout ContiguousArray<UInt8>, _ value: UInt8) {
         appendDecimal(&bytes, UInt16(value))
     }
 
-    private static func appendDecimal(_ bytes: inout [UInt8], _ value: UInt16) {
-        if value >= 100 {
-            bytes.append(0x30 + UInt8(value / 100))
-            bytes.append(0x30 + UInt8((value / 10) % 10))
-            bytes.append(0x30 + UInt8(value % 10))
-        } else if value >= 10 {
-            bytes.append(0x30 + UInt8(value / 10))
-            bytes.append(0x30 + UInt8(value % 10))
-        } else {
-            bytes.append(0x30 + UInt8(value))
+    @inline(__always)
+    private static func appendDecimal(_ bytes: inout ContiguousArray<UInt8>, _ value: UInt16) {
+        let entry = decimalTable[Int(value)]
+        switch entry.3 {
+        case 3:
+            bytes.append(entry.0)
+            bytes.append(entry.1)
+            bytes.append(entry.2)
+        case 2:
+            bytes.append(entry.1)
+            bytes.append(entry.2)
+        default:
+            bytes.append(entry.2)
         }
     }
 }

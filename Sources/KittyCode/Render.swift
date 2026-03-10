@@ -35,7 +35,7 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     )
 
     let mode = state.mode == .tree ? "TREE" : "EDIT"
-    let position = state.fileContent.isEmpty ? "" : "Ln \(state.cursorRow + 1)/\(state.fileContent.count)"
+    let position = state.isFileEmpty ? "" : "Ln \(state.cursorRow + 1)/\(state.fileLineCount)"
     let statusLeft = " [\(mode)] \(state.statusMessage)"
     let statusRight = "\(position)  \(cols)x\(rows) "
     let statusLine = statusLeft + String(repeating: " ", count: max(0, cols - statusLeft.count - statusRight.count)) + statusRight

@@ -14,12 +14,18 @@ public enum DiffRenderer: Sendable {
     ///   - back: The buffer containing the desired new state, with a populated dirty tracker.
     /// - Returns: A byte array of ANSI/VT escape sequences that transition the terminal from
     ///   `front` to `back`. Returns an empty array when no cells are dirty.
-    public static func render(front: ScreenBuffer, back: ScreenBuffer) -> [UInt8] {
+    public static func render(front: ScreenBuffer, back: ScreenBuffer) -> ContiguousArray<UInt8> {
+        var bytes = ContiguousArray<UInt8>()
+        render(front: front, back: back, into: &bytes)
+        return bytes
+    }
+
+    /// Renders diff into a caller-provided buffer (avoids allocation when reused).
+    public static func render(front: ScreenBuffer, back: ScreenBuffer, into bytes: inout ContiguousArray<UInt8>) {
         let columns = back.columns
         let ranges = back.dirty.dirtyRanges(columns: columns)
-        guard !ranges.isEmpty else { return [] }
+        guard !ranges.isEmpty else { return }
 
-        var bytes: [UInt8] = []
         var lastRow = -1
         var lastCol = -1
         var lastStyle = Style.default
@@ -29,10 +35,11 @@ public enum DiffRenderer: Sendable {
 
             // Move cursor if needed
             if row != lastRow || range.colStart != lastCol {
-                bytes.append(contentsOf: KittySequences.moveCursor(
+                KittySequences.appendMoveCursor(
                     row: row + 1,
-                    col: range.colStart + 1
-                ))
+                    col: range.colStart + 1,
+                    to: &bytes
+                )
             }
 
             for col in range.colStart..<range.colEnd {
@@ -42,8 +49,7 @@ public enum DiffRenderer: Sendable {
                 if cell.isContinuation { continue }
 
                 // Emit style change
-                let diffBytes = SGREncoder.encodeDiff(from: lastStyle, to: cell.style)
-                bytes.append(contentsOf: diffBytes)
+                SGREncoder.encodeDiff(from: lastStyle, to: cell.style, into: &bytes)
                 lastStyle = cell.style
 
                 // Emit character
@@ -56,10 +62,8 @@ public enum DiffRenderer: Sendable {
 
         // Reset style at end
         if lastStyle != .default {
-            bytes.append(contentsOf: SGREncoder.reset)
+            SGREncoder.appendReset(to: &bytes)
         }
-
-        return bytes
     }
 
     /// Renders the entire buffer unconditionally, ignoring the dirty tracker.
@@ -69,20 +73,25 @@ public enum DiffRenderer: Sendable {
     ///
     /// - Parameter buffer: The buffer whose full contents should be rendered.
     /// - Returns: A byte array of ANSI/VT escape sequences representing every cell in `buffer`.
-    public static func renderFull(_ buffer: ScreenBuffer) -> [UInt8] {
-        var bytes: [UInt8] = []
+    public static func renderFull(_ buffer: ScreenBuffer) -> ContiguousArray<UInt8> {
+        var bytes = ContiguousArray<UInt8>()
+        renderFull(buffer, into: &bytes)
+        return bytes
+    }
+
+    /// Renders the entire buffer into a caller-provided buffer.
+    public static func renderFull(_ buffer: ScreenBuffer, into bytes: inout ContiguousArray<UInt8>) {
         var lastStyle = Style.default
 
         for row in 0..<buffer.rows {
-            bytes.append(contentsOf: KittySequences.moveCursor(row: row + 1, col: 1))
+            KittySequences.appendMoveCursor(row: row + 1, col: 1, to: &bytes)
             for col in 0..<buffer.columns {
                 let cell = buffer[row, col]
 
                 // Skip continuation cells
                 if cell.isContinuation { continue }
 
-                let diffBytes = SGREncoder.encodeDiff(from: lastStyle, to: cell.style)
-                bytes.append(contentsOf: diffBytes)
+                SGREncoder.encodeDiff(from: lastStyle, to: cell.style, into: &bytes)
                 lastStyle = cell.style
 
                 appendUTF8(cell.character, to: &bytes)
@@ -90,14 +99,13 @@ public enum DiffRenderer: Sendable {
         }
 
         if lastStyle != .default {
-            bytes.append(contentsOf: SGREncoder.reset)
+            SGREncoder.appendReset(to: &bytes)
         }
-
-        return bytes
     }
 
-    private static func appendUTF8(_ char: Character, to bytes: inout [UInt8]) {
-        for byte in String(char).utf8 {
+    @inline(__always)
+    private static func appendUTF8(_ char: Character, to bytes: inout ContiguousArray<UInt8>) {
+        for byte in char.utf8 {
             bytes.append(byte)
         }
     }
