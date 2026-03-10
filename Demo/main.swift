@@ -134,7 +134,7 @@ struct DemoEntry {
                 case .mouse(let m):
                     mouseRow = m.row
                     mouseCol = m.col
-                    if m.kind == .press { clickCount += 1 }
+                    if m.kind == .press && !m.button.isScroll { clickCount += 1 }
 
                     pipeline.buffer.clear()
                     renderDemo(pipeline: pipeline, mouseRow: mouseRow, mouseCol: mouseCol, clickCount: clickCount, lastKey: lastKey)
