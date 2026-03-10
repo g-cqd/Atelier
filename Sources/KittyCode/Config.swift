@@ -64,17 +64,23 @@ struct KittyConfig: Codable, Sendable {
     }
 
     struct Theme: Codable, Sendable {
-        var backgroundColor = ColorRGB(r: 0x1e, g: 0x1e, b: 0x1e)
-        var treePanelBackground = ColorRGB(r: 0x18, g: 0x18, b: 0x18)
-        var treePanelForeground = ColorRGB(r: 0xcc, g: 0xcc, b: 0xcc)
-        var treeSelectedBackground = ColorRGB(r: 0x26, g: 0x4f, b: 0x78)
-        var treeSelectedForeground = ColorRGB(r: 0xff, g: 0xff, b: 0xff)
-        var editorForeground = ColorRGB(r: 0xd4, g: 0xd4, b: 0xd4)
-        var editorCursorLineBackground = ColorRGB(r: 0x28, g: 0x28, b: 0x28)
-        var statusBarBackground = ColorRGB(r: 0x00, g: 0x7a, b: 0xcc)
-        var statusBarForeground = ColorRGB(r: 0xff, g: 0xff, b: 0xff)
-        var titleBarBackground = ColorRGB(r: 0x32, g: 0x32, b: 0x32)
-        var titleBarForeground = ColorRGB(r: 0xcc, g: 0xcc, b: 0xcc)
+        // GitHub Dark (foreground-focused) defaults.
+        // Backgrounds are intentionally omitted so terminal default background is preserved.
+        var treePanelForeground = ColorRGB(r: 0xc9, g: 0xd1, b: 0xd9)
+        var treeSelectedForeground = ColorRGB(r: 0x58, g: 0xa6, b: 0xff)
+        var treeDirectoryForeground = ColorRGB(r: 0x7e, g: 0xe7, b: 0x87)
+        var editorForeground = ColorRGB(r: 0xc9, g: 0xd1, b: 0xd9)
+        var lineNumberForeground = ColorRGB(r: 0x8b, g: 0x94, b: 0x9e)
+        var statusBarForeground = ColorRGB(r: 0x79, g: 0xc0, b: 0xff)
+        var titleBarForeground = ColorRGB(r: 0xf0, g: 0xf6, b: 0xfc)
+        var separatorForeground = ColorRGB(r: 0x30, g: 0x36, b: 0x3d)
+
+        var keywordForeground = ColorRGB(r: 0xff, g: 0x7b, b: 0x72)
+        var typeForeground = ColorRGB(r: 0x79, g: 0xc0, b: 0xff)
+        var commentForeground = ColorRGB(r: 0x8b, g: 0x94, b: 0x9e)
+        var stringForeground = ColorRGB(r: 0xa5, g: 0xd6, b: 0xff)
+        var numberForeground = ColorRGB(r: 0x79, g: 0xc0, b: 0xff)
+        var attributeForeground = ColorRGB(r: 0xd2, g: 0xa8, b: 0xff)
     }
 
     var keybindingMode: KeybindingMode = .nano
