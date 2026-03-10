@@ -4,6 +4,7 @@ import KittyFileTree
 import KittyRenderer
 import KittySyntax
 import KittyTerminal
+import KittyText
 import Testing
 @testable import KittyCode
 
@@ -281,6 +282,32 @@ struct KittyCodeSyntaxWiringTests {
         #expect(state.highlightedLines.count == 2)
         #expect(state.highlightedLines[0].map(\.text).joined() == "// comment")
         #expect(state.highlightedLines[1].map(\.text).joined() == "value")
+    }
+
+    @Test("EditorState patches only the affected fallback highlight range")
+    @MainActor
+    func editorStateIncrementalFallbackHighlighting() {
+        let state = EditorState(rootPath: ".", config: KittyConfig())
+        state.currentLanguage = "unknown_lang"
+        state.fileContent = ["hello", "world", "tail"]
+        state.highlightedLines = [
+            [StyledSpan(text: "stale-first", style: .default)],
+            [StyledSpan(text: "stale-second", style: .default)],
+            [StyledSpan(text: "tail-sentinel", style: .default)],
+        ]
+        state.cursorRow = 1
+        state.cursorCol = 0
+
+        let mutation = TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor)
+        #expect(mutation != nil)
+        if let mutation {
+            state.textDidChange(mutation)
+        }
+
+        #expect(state.fileContent == ["helloworld", "tail"])
+        #expect(state.highlightedLines.count == 2)
+        #expect(state.highlightedLines[0].map(\.text).joined() == "helloworld")
+        #expect(state.highlightedLines[1][0].text == "tail-sentinel")
     }
 }
 
