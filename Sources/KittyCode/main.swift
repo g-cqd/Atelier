@@ -15,13 +15,33 @@ struct KittyConfig: Codable, Sendable {
         case vim
     }
     
-    struct ColorRGB: Codable, Sendable {
+    struct ColorRGB: Sendable, Equatable {
         var r: UInt8
         var g: UInt8
         var b: UInt8
         
         var color: Color { .rgb(r: r, g: g, b: b) }
+
+        init(r: UInt8, g: UInt8, b: UInt8) {
+            self.r = r
+            self.g = g
+            self.b = b
+        }
+
+        /// Parse from hex string like "#1e1e1e" or "1e1e1e".
+        init?(hex: String) {
+            var h = hex
+            if h.hasPrefix("#") { h = String(h.dropFirst()) }
+            guard h.count == 6,
+                  let val = UInt32(h, radix: 16) else { return nil }
+            self.r = UInt8((val >> 16) & 0xFF)
+            self.g = UInt8((val >> 8) & 0xFF)
+            self.b = UInt8(val & 0xFF)
+        }
     }
+
+    // Custom Codable for ColorRGB: accepts either {"r":N,"g":N,"b":N} or "#rrggbb"
+    // This is implemented via the extension below.
     
     struct Theme: Codable, Sendable {
         var backgroundColor: ColorRGB = ColorRGB(r: 0x1e, g: 0x1e, b: 0x1e)
@@ -51,6 +71,32 @@ struct KittyConfig: Codable, Sendable {
             return config
         }
         return KittyConfig()
+    }
+}
+
+extension KittyConfig.ColorRGB: Codable {
+    init(from decoder: Decoder) throws {
+        // Try decoding as a hex string first
+        if let container = try? decoder.singleValueContainer(),
+           let hexString = try? container.decode(String.self),
+           let parsed = KittyConfig.ColorRGB(hex: hexString) {
+            self = parsed
+            return
+        }
+        // Fall back to object with r/g/b keys
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.r = try container.decode(UInt8.self, forKey: .r)
+        self.g = try container.decode(UInt8.self, forKey: .g)
+        self.b = try container.decode(UInt8.self, forKey: .b)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(String(format: "#%02x%02x%02x", r, g, b))
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case r, g, b
     }
 }
 
@@ -244,66 +290,87 @@ final class EditorState {
 // MARK: - Render
 
 func highlightSwift(_ line: String, colorScheme: EditorState.ColorScheme) -> [StyledSpan] {
-    let keywords = ["import", "struct", "class", "enum", "func", "var", "let", "guard", "if", "else", "switch", "case", "return", "default", "final", "extension", "public", "private", "static", "mutating", "override", "init", "deinit", "typealias", "where", "while", "for", "in", "do", "catch", "try", "throw", "throws", "as", "is", "self", "nil", "true", "false"]
-    let types = ["String", "Int", "Bool", "Double", "Float", "Any", "Array", "Dictionary", "Optional", "UInt32", "UInt8", "Date", "Data"]
+    let keywords: Set<String> = ["import", "struct", "class", "enum", "func", "var", "let", "guard", "if", "else", "switch", "case", "return", "default", "final", "extension", "public", "private", "static", "mutating", "override", "init", "deinit", "typealias", "where", "while", "for", "in", "do", "catch", "try", "throw", "throws", "as", "is", "self", "nil", "true", "false", "protocol", "associatedtype", "internal", "fileprivate", "open", "weak", "unowned", "lazy", "async", "await", "some", "any", "defer", "break", "continue", "fallthrough", "repeat", "super", "inout", "convenience", "required", "dynamic", "optional", "indirect", "nonisolated", "consuming", "borrowing", "@MainActor", "@Sendable", "@escaping", "@autoclosure", "@discardableResult"]
+    let types: Set<String> = ["String", "Int", "Bool", "Double", "Float", "Any", "Array", "Dictionary", "Optional", "UInt32", "UInt8", "UInt16", "UInt64", "UInt", "Int8", "Int16", "Int32", "Int64", "Date", "Data", "URL", "Error", "Result", "Void", "Never", "Character", "Substring", "Set", "ClosedRange", "Range", "Comparable", "Equatable", "Hashable", "Codable", "Decodable", "Encodable", "Sendable", "Identifiable", "CustomStringConvertible", "View", "Task", "AsyncStream", "MainActor"]
+
+    let baseBg = colorScheme.editorText.bg
+    let defaultStyle = colorScheme.editorText
+    let keywordStyle = Style(fg: .rgb(r: 0xc5, g: 0x86, b: 0xc0), bg: baseBg)
+    let typeStyle = Style(fg: .rgb(r: 0x4e, g: 0xc9, b: 0xb0), bg: baseBg)
+    let commentStyle = Style(fg: .rgb(r: 0x6a, g: 0x99, b: 0x55), bg: baseBg, italic: true)
+    let stringStyle = Style(fg: .rgb(r: 0xce, g: 0x91, b: 0x78), bg: baseBg)
+    let numberStyle = Style(fg: .rgb(r: 0xb5, g: 0xce, b: 0xa8), bg: baseBg)
+    let attrStyle = Style(fg: .rgb(r: 0xdc, g: 0xdc, b: 0xaa), bg: baseBg)
 
     var spans: [StyledSpan] = []
     var current = ""
     let chars = Array(line)
     var i = 0
     
+    func flushCurrent() {
+        guard !current.isEmpty else { return }
+        let style: Style
+        if current.hasPrefix("@") && keywords.contains(current) {
+            style = attrStyle
+        } else if keywords.contains(current) {
+            style = keywordStyle
+        } else if types.contains(current) {
+            style = typeStyle
+        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
+                  let first = current.first, first.isNumber {
+            style = numberStyle
+        } else {
+            style = defaultStyle
+        }
+        spans.append(StyledSpan(text: current, style: style))
+        current = ""
+    }
+
     while i < chars.count {
         let char = chars[i]
-        if char.isWhitespace || "(){}[],.+-*/=<>!&|".contains(char) {
-            if !current.isEmpty {
-                var style = colorScheme.editorText
-                if keywords.contains(current) {
-                    style = Style(fg: .rgb(r: 197, g: 134, b: 192))
-                } else if types.contains(current) {
-                    style = Style(fg: .rgb(r: 78, g: 201, b: 176))
-                }
-                spans.append(StyledSpan(text: current, style: style))
-                current = ""
+
+        if char == "@" {
+            flushCurrent()
+            current = "@"
+            i += 1
+            while i < chars.count && (chars[i].isLetter || chars[i].isNumber || chars[i] == "_") {
+                current.append(chars[i])
+                i += 1
             }
-            spans.append(StyledSpan(text: String(char), style: colorScheme.editorText))
+            flushCurrent()
+        } else if char.isWhitespace || "(){}[],.+-*/=<>!&|;:?".contains(char) {
+            flushCurrent()
+            spans.append(StyledSpan(text: String(char), style: defaultStyle))
             i += 1
         } else if char == "/" && i + 1 < chars.count && chars[i+1] == "/" {
-            if !current.isEmpty {
-                spans.append(StyledSpan(text: current, style: colorScheme.editorText))
-                current = ""
-            }
-            spans.append(StyledSpan(text: String(chars[i...]), style: Style(fg: .rgb(r: 106, g: 153, b: 85))))
-            break
+            flushCurrent()
+            spans.append(StyledSpan(text: String(chars[i...]), style: commentStyle))
+            return spans
         } else if char == "\"" {
-            if !current.isEmpty {
-                spans.append(StyledSpan(text: current, style: colorScheme.editorText))
-                current = ""
-            }
+            flushCurrent()
             var str = "\""
             i += 1
             while i < chars.count && chars[i] != "\"" {
-                str.append(chars[i])
-                i += 1
+                if chars[i] == "\\" && i + 1 < chars.count {
+                    str.append(chars[i])
+                    str.append(chars[i + 1])
+                    i += 2
+                } else {
+                    str.append(chars[i])
+                    i += 1
+                }
             }
             if i < chars.count {
                 str.append("\"")
                 i += 1
             }
-            spans.append(StyledSpan(text: str, style: Style(fg: .rgb(r: 206, g: 145, b: 120))))
+            spans.append(StyledSpan(text: str, style: stringStyle))
         } else {
             current.append(char)
             i += 1
         }
     }
-    if !current.isEmpty {
-        var style = colorScheme.editorText
-        if keywords.contains(current) {
-            style = Style(fg: .rgb(r: 197, g: 134, b: 192))
-        } else if types.contains(current) {
-            style = Style(fg: .rgb(r: 78, g: 201, b: 176))
-        }
-        spans.append(StyledSpan(text: current, style: style))
-    }
+    flushCurrent()
     return spans
 }
 
@@ -333,6 +400,17 @@ func renderStyledSpans(pipeline: RenderPipeline, spans: [StyledSpan], row: Int, 
         pipeline.buffer[row, currentColInRow] = Cell(character: " ", style: style)
         currentColInRow += 1
     }
+}
+
+/// Build a flat list of characters with styles from spans, for wrapping.
+func flattenSpans(_ spans: [StyledSpan]) -> [(Character, Style)] {
+    var result: [(Character, Style)] = []
+    for span in spans {
+        for char in span.text {
+            result.append((char, span.style))
+        }
+    }
+    return result
 }
 
 @MainActor
@@ -396,7 +474,73 @@ func render(pipeline: RenderPipeline, state: EditorState) {
                 pipeline.buffer.fill(row: r + 1, col: editorStart, width: editorWidth, height: 1, cell: Cell(character: " ", style: colorScheme.editorText))
             }
         }
+    } else if state.config.wrapLines {
+        // Wrapped mode: each source line may occupy multiple screen rows
+        let availWidth = editorWidth - lineNumWidth
+        var screenRow = 0
+        var lineIdx = state.scrollOffset
+
+        while screenRow < contentRows && lineIdx < state.fileContent.count {
+            let isCurrentLine = lineIdx == state.cursorRow
+            let line = state.fileContent[lineIdx]
+            let spans = highlightSwift(line, colorScheme: colorScheme)
+            let flat = flattenSpans(spans)
+            let totalChars = max(flat.count, 1)
+            let wrappedRowCount = max(1, (totalChars + availWidth - 1) / availWidth)
+
+            for wrapRow in 0..<wrappedRowCount {
+                guard screenRow < contentRows else { break }
+                let r = screenRow + 1 // +1 for title bar
+
+                // Line number: show on first wrap row only
+                if wrapRow == 0 {
+                    let numStr = String(lineIdx + 1)
+                    let numPad = String(repeating: " ", count: max(0, lineNumWidth - numStr.count - 1))
+                    pipeline.buffer.write(numPad + numStr + " ", row: r, col: editorStart, style: colorScheme.lineNumber)
+                } else {
+                    pipeline.buffer.fill(row: r, col: editorStart, width: lineNumWidth, height: 1, cell: Cell(character: " ", style: colorScheme.lineNumber))
+                }
+
+                // Render this wrap segment
+                let segStart = wrapRow * availWidth
+                let segEnd = min(segStart + availWidth, flat.count)
+                var colPos = editorStart + lineNumWidth
+                for ci in segStart..<segEnd {
+                    var style = flat[ci].1
+                    if isCurrentLine { style.bg = colorScheme.editorCursorLine.bg }
+                    pipeline.buffer[r, colPos] = Cell(character: flat[ci].0, style: style)
+                    colPos += 1
+                }
+                // Fill remaining
+                let padStyle = isCurrentLine ? colorScheme.editorCursorLine : colorScheme.editorText
+                while colPos < editorStart + editorWidth {
+                    pipeline.buffer[r, colPos] = Cell(character: " ", style: padStyle)
+                    colPos += 1
+                }
+
+                // Cursor positioning
+                if isCurrentLine && state.mode == .editor {
+                    let cursorWrapRow = state.cursorCol / availWidth
+                    let cursorWrapCol = state.cursorCol % availWidth
+                    if wrapRow == cursorWrapRow {
+                        terminalCursorPos = (row: r, col: editorStart + lineNumWidth + cursorWrapCol)
+                    }
+                }
+
+                screenRow += 1
+            }
+            lineIdx += 1
+        }
+        // Fill remaining screen rows
+        while screenRow < contentRows {
+            let r = screenRow + 1
+            pipeline.buffer.write("~", row: r, col: editorStart, style: colorScheme.lineNumber)
+            pipeline.buffer.fill(row: r, col: editorStart + 1, width: editorWidth - 1, height: 1, cell: Cell(character: " ", style: colorScheme.editorText))
+            screenRow += 1
+        }
     } else {
+        // Non-wrapped (horizontal scroll) mode
+        let availWidth = editorWidth - lineNumWidth
         for r in 0..<contentRows {
             let lineIdx = state.scrollOffset + r
             let isCurrentLine = lineIdx == state.cursorRow
@@ -409,26 +553,13 @@ func render(pipeline: RenderPipeline, state: EditorState) {
 
                 // Line content
                 let line = state.fileContent[lineIdx]
-                let availWidth = editorWidth - lineNumWidth
-
-                // Basic highlighting
                 let spans = highlightSwift(line, colorScheme: colorScheme)
-                
-                if state.config.wrapLines {
-                    // Truncate for now as a simple wrap
-                    renderStyledSpans(pipeline: pipeline, spans: spans, row: r + 1, col: editorStart + lineNumWidth, availWidth: availWidth, hScrollOffset: 0, isCurrentLine: isCurrentLine, colorScheme: colorScheme)
-                    
-                    if isCurrentLine && state.mode == .editor {
-                        terminalCursorPos = (row: r + 1, col: editorStart + lineNumWidth + state.cursorCol)
-                    }
-                } else {
-                    renderStyledSpans(pipeline: pipeline, spans: spans, row: r + 1, col: editorStart + lineNumWidth, availWidth: availWidth, hScrollOffset: state.hScrollOffset, isCurrentLine: isCurrentLine, colorScheme: colorScheme)
+                renderStyledSpans(pipeline: pipeline, spans: spans, row: r + 1, col: editorStart + lineNumWidth, availWidth: availWidth, hScrollOffset: state.hScrollOffset, isCurrentLine: isCurrentLine, colorScheme: colorScheme)
 
-                    if isCurrentLine && state.mode == .editor {
-                        let relativeCol = state.cursorCol - state.hScrollOffset
-                        if relativeCol >= 0 && relativeCol < availWidth {
-                            terminalCursorPos = (row: r + 1, col: editorStart + lineNumWidth + relativeCol)
-                        }
+                if isCurrentLine && state.mode == .editor {
+                    let relativeCol = state.cursorCol - state.hScrollOffset
+                    if relativeCol >= 0 && relativeCol < availWidth {
+                        terminalCursorPos = (row: r + 1, col: editorStart + lineNumWidth + relativeCol)
                     }
                 }
             } else {
@@ -639,6 +770,7 @@ func handleEditorKey(_ k: KeyEvent, state: EditorState, contentRows: Int, pipeli
         } else {
             state.cursorCol = max(state.cursorCol - 1, 0)
         }
+        ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case Key.right.rawValue:
         if k.modifiers.contains(.alt) || k.modifiers.contains(.ctrl) {
             jumpWordForward(state: state)
@@ -646,6 +778,7 @@ func handleEditorKey(_ k: KeyEvent, state: EditorState, contentRows: Int, pipeli
             let rowLen = state.fileContent.isEmpty ? 0 : state.fileContent[state.cursorRow].count
             state.cursorCol = min(state.cursorCol + 1, rowLen)
         }
+        ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     // ESC+b / ESC+f: macOS Terminal.app sends these for Option+Arrow (emacs-style word jump)
     case UInt32(Character("b").asciiValue!):
         if k.modifiers == .alt { jumpWordBackward(state: state) }
