@@ -37,9 +37,19 @@ final class EditorState {
     }
 
     var config: KittyConfig
-    var colorScheme: ColorScheme
+    var colorScheme: ColorScheme {
+        didSet {
+            highlightSession = nil
+        }
+    }
     var rootPath: String
-    var currentLanguage: String?
+    var currentLanguage: String? {
+        didSet {
+            if currentLanguage != oldValue {
+                highlightSession = nil
+            }
+        }
+    }
     var highlightedLines: [[StyledSpan]] = [[StyledSpan(text: "", style: .default)]]
 
     // MARK: - Text buffer (backed by KittyText)
@@ -47,6 +57,8 @@ final class EditorState {
     var textBuffer = TextBuffer()
     var textCursor = TextCursor()
     private var cachedFileLines: [String]?
+    private var cachedDocumentText: String?
+    private var highlightSession: LanguageHighlighter.Session?
 
     /// Backward-compatible computed access to file content lines.
     var fileContent: [String] {
@@ -63,7 +75,18 @@ final class EditorState {
             let normalizedLines = newValue.isEmpty ? [""] : newValue
             textBuffer = TextBuffer(lines: normalizedLines)
             cachedFileLines = normalizedLines
+            cachedDocumentText = normalizedLines.joined(separator: "\n")
         }
+    }
+
+    var documentText: String {
+        if let cachedDocumentText {
+            return cachedDocumentText
+        }
+
+        let text = textBuffer.text
+        cachedDocumentText = text
+        return text
     }
 
     var fileLineCount: Int {
@@ -80,6 +103,18 @@ final class EditorState {
 
     func invalidateTextSnapshotCache() {
         cachedFileLines = nil
+        cachedDocumentText = nil
+    }
+
+    func textDidChange() {
+        invalidateTextSnapshotCache()
+        refreshHighlights()
+    }
+
+    func replaceDocumentText(with content: String) {
+        textBuffer = TextBuffer(content)
+        cachedFileLines = nil
+        cachedDocumentText = content
     }
 
     /// Backward-compatible cursor row.
@@ -141,11 +176,20 @@ final class EditorState {
     }
 
     func refreshHighlights() {
-        highlightedLines = LanguageHighlighter.highlightDocument(
-            source: textBuffer.text,
-            language: currentLanguage,
-            theme: syntaxTheme
-        )
+        let session = highlightSession ?? {
+            let newSession = LanguageHighlighter.makeSession(
+                language: currentLanguage,
+                theme: syntaxTheme
+            )
+            highlightSession = newSession
+            return newSession
+        }()
+
+        if session.prefersLineInput {
+            highlightedLines = session.highlightLines(fileContent)
+        } else {
+            highlightedLines = session.highlightDocument(source: documentText)
+        }
     }
 
     var fileName = ""
