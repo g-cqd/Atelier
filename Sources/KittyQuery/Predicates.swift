@@ -1,4 +1,5 @@
 import Foundation
+import KittySync
 import KittyParser
 
 /// Evaluates query predicates against captured nodes.
@@ -87,33 +88,19 @@ public enum Predicates: Sendable {
 
 // MARK: - Thread-safe regex cache
 
-#if canImport(os)
-import os
-#endif
-
 private final class RegexCache: Sendable {
-    #if canImport(os)
-    private let storage = OSAllocatedUnfairLock(initialState: [String: NSRegularExpression]())
-    #else
-    private let _lock = NSLock()
-    private let _storage = NSMutableDictionary()
-    #endif
+    private struct CacheState: @unchecked Sendable {
+        var regexes: [String: NSRegularExpression] = [:]
+    }
+
+    private let storage = StateLock(initialState: CacheState())
 
     func regex(for pattern: String) -> NSRegularExpression? {
-        #if canImport(os)
         return storage.withLock { cache in
-            if let existing = cache[pattern] { return existing }
+            if let existing = cache.regexes[pattern] { return existing }
             guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-            cache[pattern] = regex
+            cache.regexes[pattern] = regex
             return regex
         }
-        #else
-        _lock.lock()
-        defer { _lock.unlock() }
-        if let existing = _storage[pattern] as? NSRegularExpression { return existing }
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-        _storage[pattern] = regex
-        return regex
-        #endif
     }
 }
