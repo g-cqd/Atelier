@@ -1,6 +1,7 @@
 import KittyCodecs
 import KittyFileTree
 import KittyRenderer
+import KittyWidgets
 
 @MainActor
 func renderTreePanel(
@@ -10,26 +11,29 @@ func renderTreePanel(
     contentRows: Int,
     colorScheme: EditorState.ColorScheme
 ) {
-    for row in 0..<contentRows {
-        let treeIndex = state.treeScrollOffset + row
-        if treeIndex >= 0 && treeIndex < state.cachedFlatTree.count {
-            let (depth, node) = state.cachedFlatTree[treeIndex]
-            let indent = String(repeating: " ", count: depth * 2)
-            let label = indent + node.icon + " " + node.name
-            let padded = label + String(repeating: " ", count: max(0, treeWidth - label.count))
-            let style: Style
-            if treeIndex == state.selectedTreeIndex {
-                style = colorScheme.treeSelected
-            } else if node.isDirectory {
-                style = colorScheme.treeDir
-            } else {
-                style = colorScheme.treeBg
-            }
-            pipeline.buffer.write(String(padded.prefix(treeWidth)), row: row + 1, col: 0, style: style)
-        } else {
-            pipeline.buffer.fill(row: row + 1, col: 0, width: treeWidth, height: 1, cell: Cell(character: " ", style: colorScheme.treeBg))
-        }
+    let root = state.treeNodes.map(makeTreeNode)
+    let view = TreeView(
+        root: root,
+        selectedIndex: state.selectedTreeIndex,
+        scrollOffset: state.treeScrollOffset,
+        style: TreeView<FileNode>.TreeViewStyle(
+            normalStyle: colorScheme.treeBg,
+            selectedStyle: colorScheme.treeSelected,
+            expandedIcon: "[-]",
+            collapsedIcon: "[+]",
+            leafIcon: "   ",
+            indent: 2
+        ),
+        label: { $0.name },
+        rowStyle: { $0.isDirectory ? colorScheme.treeDir : colorScheme.treeBg }
+    )
+    view.render(to: &pipeline.buffer, in: Rect(x: 0, y: 1, width: treeWidth, height: contentRows))
 
+    for row in 0..<contentRows {
         pipeline.buffer.write("│", row: row + 1, col: treeWidth, style: colorScheme.separator)
     }
+}
+
+private func makeTreeNode(_ node: FileNode) -> TreeNode<FileNode> {
+    TreeNode(value: node, children: node.children.map(makeTreeNode), isExpanded: node.isExpanded)
 }

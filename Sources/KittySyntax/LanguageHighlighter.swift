@@ -1,7 +1,149 @@
+import Foundation
 import KittyCodecs
-import KittyRenderer
-import KittySyntax
-import KittyText
+import KittyGrammar
+import KittyParser
+import KittyQuery
+
+public enum LanguageHighlighter: Sendable {
+    public static func highlightDocument(
+        source: String,
+        language: String?,
+        theme: Theme = .monokai
+    ) -> [[StyledSpan]] {
+        guard let language else {
+            return fallbackHighlightDocument(source: source, language: nil, theme: theme)
+        }
+
+        if let artifacts = SyntaxArtifactsCache.artifacts(for: language) {
+            do {
+                let parser = IncrementalParser(
+                    parseTable: artifacts.parseTable,
+                    lexTable: artifacts.lexTable,
+                    productions: artifacts.productions
+                )
+                let tree = try parser.parse(source)
+                let spans = Highlighter(theme: theme).highlight(source: source, tree: tree, query: artifacts.query)
+                return splitDocumentSpans(spans, source: source, defaultStyle: theme.defaultStyle)
+            } catch {
+                return fallbackHighlightDocument(source: source, language: language, theme: theme)
+            }
+        }
+
+        return fallbackHighlightDocument(source: source, language: language, theme: theme)
+    }
+
+    public static func highlightLine(
+        _ line: String,
+        language: String?,
+        theme: Theme = .monokai
+    ) -> [StyledSpan] {
+        fallbackHighlightLine(line, language: language, theme: theme)
+    }
+
+    private static func splitDocumentSpans(
+        _ spans: [StyledSpan],
+        source: String,
+        defaultStyle: Style
+    ) -> [[StyledSpan]] {
+        if source.isEmpty {
+            return [[StyledSpan(text: "", style: defaultStyle)]]
+        }
+
+        var lines: [[StyledSpan]] = [[]]
+
+        for span in spans {
+            var current = ""
+            for char in span.text {
+                if char == "\n" {
+                    if !current.isEmpty {
+                        lines[lines.count - 1].append(StyledSpan(text: current, style: span.style))
+                        current.removeAll(keepingCapacity: true)
+                    }
+                    lines.append([])
+                } else {
+                    current.append(char)
+                }
+            }
+            if !current.isEmpty {
+                lines[lines.count - 1].append(StyledSpan(text: current, style: span.style))
+            }
+        }
+
+        if source.last == "\n" {
+            lines.append([])
+        }
+
+        return lines.isEmpty ? [[StyledSpan(text: "", style: defaultStyle)]] : lines
+    }
+}
+
+private struct SyntaxArtifacts: Sendable {
+    let parseTable: ParseTable
+    let lexTable: LexTable
+    let productions: [ProductionRule]
+    let query: Query
+}
+
+private enum SyntaxArtifactsCache {
+    private final class Storage: @unchecked Sendable {
+        private let lock = NSLock()
+        private var cache: [String: SyntaxArtifacts?] = [:]
+
+        func get(_ language: String) -> SyntaxArtifacts?? {
+            lock.lock()
+            defer { lock.unlock() }
+            return cache[language]
+        }
+
+        func set(_ artifacts: SyntaxArtifacts?, for language: String) {
+            lock.lock()
+            defer { lock.unlock() }
+            cache[language] = artifacts
+        }
+    }
+
+    private static let storage = Storage()
+
+    static func artifacts(for language: String) -> SyntaxArtifacts? {
+        if let cached = storage.get(language) {
+            return cached
+        }
+
+        let loaded = loadArtifacts(for: language)
+        storage.set(loaded, for: language)
+        return loaded
+    }
+
+    private static func loadArtifacts(for language: String) -> SyntaxArtifacts? {
+        let bundle = KittySyntaxResources.bundle
+        guard let grammarURL = bundle.url(
+            forResource: "grammar",
+            withExtension: "json",
+            subdirectory: "Grammars/\(language)"
+        ), let queryURL = bundle.url(
+            forResource: "highlights",
+            withExtension: "scm",
+            subdirectory: "Grammars/\(language)"
+        ) else {
+            return nil
+        }
+
+        guard let querySource = try? String(contentsOf: queryURL, encoding: .utf8),
+              let grammar = try? GrammarLoader.load(from: grammarURL.path),
+              let compiled = try? ParseTableCompiler.compile(grammar),
+              let query = try? QueryParser.parse(querySource)
+        else {
+            return nil
+        }
+
+        return SyntaxArtifacts(
+            parseTable: compiled.parseTable,
+            lexTable: compiled.lexTable,
+            productions: compiled.productions,
+            query: query
+        )
+    }
+}
 
 private enum HighlightLexicon {
     static let pythonKeywords: Set<String> = [
@@ -44,29 +186,31 @@ private enum HighlightLexicon {
     ]
 }
 
-/// Main highlight entry point — dispatches to grammar-based or regex highlighting.
-func highlightLine(_ line: String, language: String?, colorScheme: EditorState.ColorScheme) -> [StyledSpan] {
+private func fallbackHighlightDocument(source: String, language: String?, theme: Theme) -> [[StyledSpan]] {
+    let lines = source.isEmpty ? [""] : source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    return lines.map { fallbackHighlightLine($0, language: language, theme: theme) }
+}
+
+private func fallbackHighlightLine(_ line: String, language: String?, theme: Theme) -> [StyledSpan] {
     switch language {
     case "json":
-        return highlightJSON(line, colorScheme: colorScheme)
+        return fallbackHighlightJSON(line, theme: theme)
     case "python":
-        return highlightPython(line, colorScheme: colorScheme)
+        return fallbackHighlightPython(line, theme: theme)
     case "javascript", "typescript":
-        return highlightJavaScript(line, colorScheme: colorScheme)
+        return fallbackHighlightJavaScript(line, theme: theme)
     case "swift":
-        return highlightSwift(line, colorScheme: colorScheme)
+        return fallbackHighlightSwift(line, theme: theme)
     default:
-        return highlightGeneric(line, colorScheme: colorScheme)
+        return fallbackHighlightGeneric(line, theme: theme)
     }
 }
 
-// MARK: - Per-language regex-based highlighters
-
-func highlightJSON(_ line: String, colorScheme: EditorState.ColorScheme) -> [StyledSpan] {
-    let defaultStyle = colorScheme.editorText
-    let keywordStyle = colorScheme.syntaxKeyword
-    let stringStyle = colorScheme.syntaxString
-    let numberStyle = colorScheme.syntaxNumber
+private func fallbackHighlightJSON(_ line: String, theme: Theme) -> [StyledSpan] {
+    let defaultStyle = theme.defaultStyle
+    let keywordStyle = theme.style(for: "keyword")
+    let stringStyle = theme.style(for: "string")
+    let numberStyle = theme.style(for: "number")
 
     var spans: [StyledSpan] = []
     let chars = Array(line)
@@ -76,7 +220,6 @@ func highlightJSON(_ line: String, colorScheme: EditorState.ColorScheme) -> [Sty
         let char = chars[index]
 
         if char == "\"" {
-            // Consume the full quoted string
             var token = "\""
             index += 1
             while index < chars.count && chars[index] != "\"" {
@@ -93,30 +236,28 @@ func highlightJSON(_ line: String, colorScheme: EditorState.ColorScheme) -> [Sty
                 token.append("\"")
                 index += 1
             }
-            // Peek past whitespace to see if a colon follows → key
             var peek = index
             while peek < chars.count && chars[peek] == " " { peek += 1 }
             let isKey = peek < chars.count && chars[peek] == ":"
             spans.append(StyledSpan(text: token, style: isKey ? keywordStyle : stringStyle))
-
         } else if char.isNumber || (char == "-" && index + 1 < chars.count && chars[index + 1].isNumber) {
             var token = String(char)
             index += 1
             while index < chars.count && (chars[index].isNumber || chars[index] == "." || chars[index] == "e"
-                    || chars[index] == "E" || chars[index] == "+" || chars[index] == "-") {
+                || chars[index] == "E" || chars[index] == "+" || chars[index] == "-")
+            {
                 token.append(chars[index])
                 index += 1
             }
             spans.append(StyledSpan(text: token, style: numberStyle))
-
         } else if chars[index...].starts(with: "true".unicodeScalars.map(Character.init))
-               || chars[index...].starts(with: "false".unicodeScalars.map(Character.init))
-               || chars[index...].starts(with: "null".unicodeScalars.map(Character.init)) {
+            || chars[index...].starts(with: "false".unicodeScalars.map(Character.init))
+            || chars[index...].starts(with: "null".unicodeScalars.map(Character.init))
+        {
             let keyword = chars[index...].prefix(while: { $0.isLetter })
             let token = String(keyword)
             spans.append(StyledSpan(text: token, style: keywordStyle))
             index += token.count
-
         } else {
             spans.append(StyledSpan(text: String(char), style: defaultStyle))
             index += 1
@@ -126,13 +267,13 @@ func highlightJSON(_ line: String, colorScheme: EditorState.ColorScheme) -> [Sty
     return spans
 }
 
-func highlightPython(_ line: String, colorScheme: EditorState.ColorScheme) -> [StyledSpan] {
-    let defaultStyle = colorScheme.editorText
-    let keywordStyle = colorScheme.syntaxKeyword
-    let typeStyle = colorScheme.syntaxType
-    let commentStyle = colorScheme.syntaxComment
-    let stringStyle = colorScheme.syntaxString
-    let numberStyle = colorScheme.syntaxNumber
+private func fallbackHighlightPython(_ line: String, theme: Theme) -> [StyledSpan] {
+    let defaultStyle = theme.defaultStyle
+    let keywordStyle = theme.style(for: "keyword")
+    let typeStyle = theme.style(for: "type")
+    let commentStyle = theme.style(for: "comment")
+    let stringStyle = theme.style(for: "string")
+    let numberStyle = theme.style(for: "number")
 
     var spans: [StyledSpan] = []
     let chars = Array(line)
@@ -146,8 +287,7 @@ func highlightPython(_ line: String, colorScheme: EditorState.ColorScheme) -> [S
             style = keywordStyle
         } else if HighlightLexicon.pythonTypes.contains(current) {
             style = typeStyle
-        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
-                  let first = current.first, first.isNumber {
+        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }), let first = current.first, first.isNumber {
             style = numberStyle
         } else {
             style = defaultStyle
@@ -163,7 +303,6 @@ func highlightPython(_ line: String, colorScheme: EditorState.ColorScheme) -> [S
             flushCurrent()
             spans.append(StyledSpan(text: String(chars[index...]), style: commentStyle))
             return spans
-
         } else if char == "\"" || char == "'" {
             flushCurrent()
             let quote = char
@@ -184,11 +323,9 @@ func highlightPython(_ line: String, colorScheme: EditorState.ColorScheme) -> [S
                 index += 1
             }
             spans.append(StyledSpan(text: token, style: stringStyle))
-
         } else if char.isLetter || char == "_" {
             current.append(char)
             index += 1
-
         } else if char.isNumber && current.isEmpty {
             var token = String(char)
             index += 1
@@ -197,12 +334,10 @@ func highlightPython(_ line: String, colorScheme: EditorState.ColorScheme) -> [S
                 index += 1
             }
             spans.append(StyledSpan(text: token, style: numberStyle))
-
         } else if char.isWhitespace || "(){}[],.+-*/=<>!&|;:?".contains(char) {
             flushCurrent()
             spans.append(StyledSpan(text: String(char), style: defaultStyle))
             index += 1
-
         } else {
             flushCurrent()
             spans.append(StyledSpan(text: String(char), style: defaultStyle))
@@ -214,13 +349,13 @@ func highlightPython(_ line: String, colorScheme: EditorState.ColorScheme) -> [S
     return spans
 }
 
-func highlightJavaScript(_ line: String, colorScheme: EditorState.ColorScheme) -> [StyledSpan] {
-    let defaultStyle = colorScheme.editorText
-    let keywordStyle = colorScheme.syntaxKeyword
-    let typeStyle = colorScheme.syntaxType
-    let commentStyle = colorScheme.syntaxComment
-    let stringStyle = colorScheme.syntaxString
-    let numberStyle = colorScheme.syntaxNumber
+private func fallbackHighlightJavaScript(_ line: String, theme: Theme) -> [StyledSpan] {
+    let defaultStyle = theme.defaultStyle
+    let keywordStyle = theme.style(for: "keyword")
+    let typeStyle = theme.style(for: "type")
+    let commentStyle = theme.style(for: "comment")
+    let stringStyle = theme.style(for: "string")
+    let numberStyle = theme.style(for: "number")
 
     var spans: [StyledSpan] = []
     let chars = Array(line)
@@ -234,8 +369,7 @@ func highlightJavaScript(_ line: String, colorScheme: EditorState.ColorScheme) -
             style = keywordStyle
         } else if HighlightLexicon.javaScriptTypes.contains(current) {
             style = typeStyle
-        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
-                  let first = current.first, first.isNumber {
+        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }), let first = current.first, first.isNumber {
             style = numberStyle
         } else {
             style = defaultStyle
@@ -247,18 +381,14 @@ func highlightJavaScript(_ line: String, colorScheme: EditorState.ColorScheme) -
     while index < chars.count {
         let char = chars[index]
 
-        // Line comment
         if char == "/" && index + 1 < chars.count && chars[index + 1] == "/" {
             flushCurrent()
             spans.append(StyledSpan(text: String(chars[index...]), style: commentStyle))
             return spans
-
-        // Block comment start (treat rest of line as comment)
         } else if char == "/" && index + 1 < chars.count && chars[index + 1] == "*" {
             flushCurrent()
             spans.append(StyledSpan(text: String(chars[index...]), style: commentStyle))
             return spans
-
         } else if char == "\"" || char == "'" || char == "`" {
             flushCurrent()
             let quote = char
@@ -279,11 +409,9 @@ func highlightJavaScript(_ line: String, colorScheme: EditorState.ColorScheme) -
                 index += 1
             }
             spans.append(StyledSpan(text: token, style: stringStyle))
-
         } else if char.isLetter || char == "_" || char == "$" {
             current.append(char)
             index += 1
-
         } else if char.isNumber && current.isEmpty {
             var token = String(char)
             index += 1
@@ -292,12 +420,10 @@ func highlightJavaScript(_ line: String, colorScheme: EditorState.ColorScheme) -
                 index += 1
             }
             spans.append(StyledSpan(text: token, style: numberStyle))
-
         } else if char.isWhitespace || "(){}[],.+-*/=<>!&|;:?".contains(char) {
             flushCurrent()
             spans.append(StyledSpan(text: String(char), style: defaultStyle))
             index += 1
-
         } else {
             flushCurrent()
             spans.append(StyledSpan(text: String(char), style: defaultStyle))
@@ -309,11 +435,11 @@ func highlightJavaScript(_ line: String, colorScheme: EditorState.ColorScheme) -
     return spans
 }
 
-func highlightGeneric(_ line: String, colorScheme: EditorState.ColorScheme) -> [StyledSpan] {
-    let defaultStyle = colorScheme.editorText
-    let commentStyle = colorScheme.syntaxComment
-    let stringStyle = colorScheme.syntaxString
-    let numberStyle = colorScheme.syntaxNumber
+private func fallbackHighlightGeneric(_ line: String, theme: Theme) -> [StyledSpan] {
+    let defaultStyle = theme.defaultStyle
+    let commentStyle = theme.style(for: "comment")
+    let stringStyle = theme.style(for: "string")
+    let numberStyle = theme.style(for: "number")
 
     var spans: [StyledSpan] = []
     let chars = Array(line)
@@ -322,16 +448,12 @@ func highlightGeneric(_ line: String, colorScheme: EditorState.ColorScheme) -> [
     while index < chars.count {
         let char = chars[index]
 
-        // C-style line comment
         if char == "/" && index + 1 < chars.count && chars[index + 1] == "/" {
             spans.append(StyledSpan(text: String(chars[index...]), style: commentStyle))
             return spans
-
-        // Shell/Python-style line comment
         } else if char == "#" {
             spans.append(StyledSpan(text: String(chars[index...]), style: commentStyle))
             return spans
-
         } else if char == "\"" || char == "'" {
             let quote = char
             var token = String(char)
@@ -351,7 +473,6 @@ func highlightGeneric(_ line: String, colorScheme: EditorState.ColorScheme) -> [
                 index += 1
             }
             spans.append(StyledSpan(text: token, style: stringStyle))
-
         } else if char.isNumber {
             var token = String(char)
             index += 1
@@ -360,7 +481,6 @@ func highlightGeneric(_ line: String, colorScheme: EditorState.ColorScheme) -> [
                 index += 1
             }
             spans.append(StyledSpan(text: token, style: numberStyle))
-
         } else {
             spans.append(StyledSpan(text: String(char), style: defaultStyle))
             index += 1
@@ -370,16 +490,14 @@ func highlightGeneric(_ line: String, colorScheme: EditorState.ColorScheme) -> [
     return spans
 }
 
-// MARK: - Swift highlighter
-
-func highlightSwift(_ line: String, colorScheme: EditorState.ColorScheme) -> [StyledSpan] {
-    let defaultStyle = colorScheme.editorText
-    let keywordStyle = colorScheme.syntaxKeyword
-    let typeStyle = colorScheme.syntaxType
-    let commentStyle = colorScheme.syntaxComment
-    let stringStyle = colorScheme.syntaxString
-    let numberStyle = colorScheme.syntaxNumber
-    let attrStyle = colorScheme.syntaxAttribute
+private func fallbackHighlightSwift(_ line: String, theme: Theme) -> [StyledSpan] {
+    let defaultStyle = theme.defaultStyle
+    let keywordStyle = theme.style(for: "keyword")
+    let typeStyle = theme.style(for: "type")
+    let commentStyle = theme.style(for: "comment")
+    let stringStyle = theme.style(for: "string")
+    let numberStyle = theme.style(for: "number")
+    let attrStyle = theme.style(for: "attribute")
 
     var spans: [StyledSpan] = []
     var current = ""
@@ -395,9 +513,7 @@ func highlightSwift(_ line: String, colorScheme: EditorState.ColorScheme) -> [St
             style = keywordStyle
         } else if HighlightLexicon.swiftTypes.contains(current) {
             style = typeStyle
-        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
-                  let first = current.first,
-                  first.isNumber {
+        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }), let first = current.first, first.isNumber {
             style = numberStyle
         } else {
             style = defaultStyle
@@ -428,23 +544,23 @@ func highlightSwift(_ line: String, colorScheme: EditorState.ColorScheme) -> [St
             return spans
         } else if char == "\"" {
             flushCurrent()
-            var stringToken = "\""
+            var token = "\""
             index += 1
             while index < chars.count && chars[index] != "\"" {
                 if chars[index] == "\\" && index + 1 < chars.count {
-                    stringToken.append(chars[index])
-                    stringToken.append(chars[index + 1])
+                    token.append(chars[index])
+                    token.append(chars[index + 1])
                     index += 2
                 } else {
-                    stringToken.append(chars[index])
+                    token.append(chars[index])
                     index += 1
                 }
             }
             if index < chars.count {
-                stringToken.append("\"")
+                token.append("\"")
                 index += 1
             }
-            spans.append(StyledSpan(text: stringToken, style: stringStyle))
+            spans.append(StyledSpan(text: token, style: stringStyle))
         } else {
             current.append(char)
             index += 1
@@ -453,74 +569,4 @@ func highlightSwift(_ line: String, colorScheme: EditorState.ColorScheme) -> [St
 
     flushCurrent()
     return spans
-}
-
-@MainActor
-func renderStyledSpans(
-    pipeline: RenderPipeline,
-    spans: [StyledSpan],
-    row: Int,
-    col: Int,
-    availWidth: Int,
-    hScrollOffset: Int,
-    isCurrentLine: Bool,
-    colorScheme: EditorState.ColorScheme
-) {
-    var currentCol = col
-    var currentX = 0
-
-    for span in spans {
-        for char in span.text {
-            let w = UnicodeWidth.displayWidth(of: char)
-            if currentX >= hScrollOffset && currentX + w <= hScrollOffset + availWidth {
-                var style = span.style
-                if isCurrentLine {
-                    style.bg = colorScheme.editorCursorLine.bg
-                }
-                if w == 2 && currentCol + 1 < col + availWidth {
-                    pipeline.buffer[row, currentCol] = Cell(character: char, style: style, width: 2)
-                    pipeline.buffer[row, currentCol + 1] = Cell(character: "\0", style: style, width: 0)
-                    currentCol += 2
-                } else if w == 1 {
-                    pipeline.buffer[row, currentCol] = Cell(character: char, style: style)
-                    currentCol += 1
-                }
-            }
-            currentX += w
-        }
-    }
-
-    while currentCol < col + availWidth {
-        let style = isCurrentLine ? colorScheme.editorCursorLine : colorScheme.editorText
-        pipeline.buffer[row, currentCol] = Cell(character: " ", style: style)
-        currentCol += 1
-    }
-}
-
-/// Converts a character index within a line to the display column offset,
-/// accounting for wide characters.
-func displayColumn(for charIndex: Int, in line: String) -> Int {
-    var col = 0
-    for (i, char) in line.enumerated() {
-        if i >= charIndex { break }
-        col += UnicodeWidth.displayWidth(of: char)
-    }
-    return col
-}
-
-/// Converts a display column offset to the character index, accounting for wide characters.
-func charIndex(forDisplayColumn targetCol: Int, in line: String) -> Int {
-    var col = 0
-    for (i, char) in line.enumerated() {
-        if col >= targetCol { return i }
-        col += UnicodeWidth.displayWidth(of: char)
-    }
-    return line.count
-}
-
-extension Character {
-    var isPrintable: Bool {
-        guard let scalar = unicodeScalars.first else { return false }
-        return !scalar.isASCII || (scalar.value >= 32 && scalar.value < 127)
-    }
 }

@@ -3,6 +3,7 @@ import KittyCodecs
 import KittyFileTree
 import KittySyntax
 import KittyText
+import KittyWidgets
 
 @MainActor
 final class EditorState {
@@ -39,6 +40,7 @@ final class EditorState {
     var colorScheme: ColorScheme
     var rootPath: String
     var currentLanguage: String?
+    var highlightedLines: [[StyledSpan]] = [[StyledSpan(text: "", style: .default)]]
 
     // MARK: - Text buffer (backed by KittyText)
 
@@ -111,37 +113,39 @@ final class EditorState {
     var selectedTreeIndex = 0
     var treeScrollOffset = 0
 
-    // MARK: - Highlight cache
+    // MARK: - Highlighted document
 
-    /// Per-line highlight cache: maps line index to (content at time of highlight, styled spans).
-    var highlightCache: [Int: (content: String, spans: [StyledSpan])] = [:]
-
-    /// Returns cached highlight spans for a line, re-highlighting only when content changed.
-    func cachedHighlightLine(_ lineIndex: Int) -> [StyledSpan] {
-        let content = fileLine(at: lineIndex)
-        if let cached = highlightCache[lineIndex], cached.content == content {
-            return cached.spans
+    func highlightedLine(at index: Int) -> [StyledSpan] {
+        guard index >= 0 && index < highlightedLines.count else {
+            return [StyledSpan(text: "", style: syntaxTheme.defaultStyle)]
         }
-        let spans = highlightLine(content, language: currentLanguage, colorScheme: colorScheme)
-        highlightCache[lineIndex] = (content: content, spans: spans)
-        return spans
+        return highlightedLines[index]
     }
 
-    /// Invalidates the highlight cache for a specific line.
-    func invalidateHighlightCache(line: Int) {
-        highlightCache.removeValue(forKey: line)
+    var syntaxTheme: Theme {
+        var theme = Theme(defaultStyle: colorScheme.editorText)
+        theme.setStyle(colorScheme.syntaxKeyword, for: "keyword")
+        theme.setStyle(colorScheme.syntaxType, for: "type")
+        theme.setStyle(colorScheme.syntaxComment, for: "comment")
+        theme.setStyle(colorScheme.syntaxString, for: "string")
+        theme.setStyle(colorScheme.syntaxNumber, for: "number")
+        theme.setStyle(colorScheme.syntaxAttribute, for: "attribute")
+        theme.setStyle(colorScheme.syntaxAttribute, for: "string.special")
+        theme.setStyle(colorScheme.syntaxKeyword, for: "constant")
+        theme.setStyle(colorScheme.syntaxKeyword, for: "constant.builtin")
+        theme.setStyle(colorScheme.editorText, for: "variable")
+        theme.setStyle(colorScheme.editorText, for: "variable.parameter")
+        theme.setStyle(colorScheme.syntaxAttribute, for: "property")
+        theme.setStyle(colorScheme.syntaxAttribute, for: "function")
+        return theme
     }
 
-    /// Invalidates the highlight cache for a contiguous range of lines.
-    func invalidateHighlightCache(lines range: Range<Int>) {
-        for line in range {
-            highlightCache.removeValue(forKey: line)
-        }
-    }
-
-    /// Clears the entire highlight cache (e.g. on file open or language change).
-    func clearHighlightCache() {
-        highlightCache.removeAll()
+    func refreshHighlights() {
+        highlightedLines = LanguageHighlighter.highlightDocument(
+            source: textBuffer.text,
+            language: currentLanguage,
+            theme: syntaxTheme
+        )
     }
 
     var fileName = ""
@@ -162,5 +166,6 @@ final class EditorState {
         self.treeNodes = DirectoryScanner.scan(rootPath, maxDepth: 1)
         self.cachedFlatTree = FileTreeNavigator.flatten(treeNodes)
         self.statusMessage = "Opened: \(rootPath) | ^O: Save, ^X: Quit"
+        refreshHighlights()
     }
 }
