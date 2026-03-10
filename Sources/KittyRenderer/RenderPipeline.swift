@@ -10,6 +10,9 @@ public final class RenderPipeline: @unchecked Sendable {
     public var columns: Int { back.columns }
     public var rows: Int { back.rows }
 
+    public var cursorRow: Int?
+    public var cursorCol: Int?
+
     public init(connection: any TerminalConnection, columns: Int, rows: Int) {
         self.connection = connection
         self.front = ScreenBuffer(columns: columns, rows: rows)
@@ -26,16 +29,27 @@ public final class RenderPipeline: @unchecked Sendable {
     /// wrapped in synchronized output markers.
     public func flush() throws(TerminalError) {
         let diffBytes = DiffRenderer.render(front: front, back: back)
-        guard !diffBytes.isEmpty else { return }
-
+        
         var output: [UInt8] = []
         output.append(contentsOf: KittySequences.beginSyncUpdate)
-        output.append(contentsOf: KittySequences.hideCursor)
-        output.append(contentsOf: diffBytes)
-        output.append(contentsOf: KittySequences.showCursor)
+        
+        if !diffBytes.isEmpty {
+            output.append(contentsOf: KittySequences.hideCursor)
+            output.append(contentsOf: diffBytes)
+        }
+
+        if let r = cursorRow, let c = cursorCol {
+            output.append(contentsOf: KittySequences.moveCursor(row: r + 1, col: c + 1))
+            output.append(contentsOf: KittySequences.showCursor)
+        } else {
+            output.append(contentsOf: KittySequences.hideCursor)
+        }
+
         output.append(contentsOf: KittySequences.endSyncUpdate)
 
-        try connection.write(output)
+        if !output.isEmpty {
+            try connection.write(output)
+        }
 
         // Swap: copy back → front, clear dirty bits
         front = back
@@ -49,7 +63,12 @@ public final class RenderPipeline: @unchecked Sendable {
         output.append(contentsOf: KittySequences.beginSyncUpdate)
         output.append(contentsOf: KittySequences.hideCursor)
         output.append(contentsOf: fullBytes)
-        output.append(contentsOf: KittySequences.showCursor)
+
+        if let r = cursorRow, let c = cursorCol {
+            output.append(contentsOf: KittySequences.moveCursor(row: r + 1, col: c + 1))
+            output.append(contentsOf: KittySequences.showCursor)
+        }
+
         output.append(contentsOf: KittySequences.endSyncUpdate)
         try connection.write(output)
         front = back
