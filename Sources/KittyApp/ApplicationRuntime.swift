@@ -144,20 +144,20 @@ public final class ApplicationRuntime: Sendable {
     public func run<A: App>(_ appType: A.Type) async throws(AppError) {
         let app = A()
         let rootView = app.body
+        let renderRootFrame: @MainActor (RenderPipeline) -> Void = { pipeline in
+            pipeline.beginFrame()
+            let rect = Rect(x: 0, y: 0, width: pipeline.columns, height: pipeline.rows)
+            rootView.render(to: &pipeline.buffer, in: rect)
+        }
         try await run(
-            render: { pipeline in
-                let rect = Rect(x: 0, y: 0, width: pipeline.columns, height: pipeline.rows)
-                rootView.render(to: &pipeline.buffer, in: rect)
-            },
+            render: renderRootFrame,
             onEvent: { event, pipeline in
                 if case .key(let k) = event {
                     if k.keyCode == 3 || k.keyCode == 17 { return false }
                 }
                 let result = rootView.handleEvent(event)
                 if result == .handled {
-                    // Re-render after handled event
-                    let rect = Rect(x: 0, y: 0, width: pipeline.columns, height: pipeline.rows)
-                    rootView.render(to: &pipeline.buffer, in: rect)
+                    renderRootFrame(pipeline)
                 }
                 return true
             },

@@ -678,6 +678,40 @@ struct TextRenderingTests {
         #expect(buffer[2, 3].style.bg == editorStyle.bg)
     }
 
+    @Test func `render wrapped text editor moves tabs to the next visual row when they do not fit`() {
+        var buffer = makeSUT(columns: 5, rows: 2)
+        let rect = Rect(x: 0, y: 0, width: 5, height: 2)
+        let editor = TextEditor(
+            lines: ["1234\tX"],
+            lineSpans: [[StyledSpan(text: "1234\tX", style: .default)]],
+            showLineNumbers: false,
+            wrapLines: true,
+            tabSize: 4
+        )
+
+        editor.render(to: &buffer, in: rect)
+
+        #expect(String((0..<5).map { buffer[0, $0].character }) == "1234 ")
+        #expect(String((0..<5).map { buffer[1, $0].character }) == "    X")
+    }
+
+    @Test func `cursor layout wraps at tab boundaries instead of splitting the tab`() {
+        let editor = TextEditor(
+            lines: ["1234\tX"],
+            lineSpans: [[StyledSpan(text: "1234\tX", style: .default)]],
+            cursorRow: 0,
+            cursorCol: 4,
+            showLineNumbers: false,
+            wrapLines: true,
+            tabSize: 4
+        )
+        let rect = Rect(x: 0, y: 0, width: 5, height: 2)
+
+        let cursor = TextEditorLayout.cursorPosition(for: editor, in: rect)
+
+        #expect(cursor == .init(row: 1, col: 0))
+    }
+
     @Test func `render tree view draws a vertical scroll indicator when enabled`() {
         var buffer = makeSUT(columns: 8, rows: 4)
         let rect = Rect(x: 0, y: 0, width: 8, height: 4)
@@ -1388,9 +1422,9 @@ struct TabRibbonScrollTests {
         let ribbon = TabRibbon(tabs: tabs, activeIndex: 3, scrollOffset: 2)
         // scrollOffset > 0 adds 1 col for the "<" overflow indicator
         // Tab 2 starts at ribbonX + 1, tab 0 and 1 are scrolled out
-        #expect(ribbon.tabIndex(atColumn: 1, ribbonX: 0) == 2)
+        #expect(ribbon.tabIndex(atColumn: 1, ribbonX: 0, ribbonWidth: 20) == 2)
         // Column 0 is the overflow indicator, not a tab
-        #expect(ribbon.tabIndex(atColumn: 0, ribbonX: 0) == nil)
+        #expect(ribbon.tabIndex(atColumn: 0, ribbonX: 0, ribbonWidth: 20) == nil)
     }
 
     @Test func `clampedScrollOffset scrolls active tab into view`() {
@@ -1419,6 +1453,17 @@ struct TabRibbonScrollTests {
         #expect(!ribbon.tabsExtendBeyond(ribbonWidth: 30))
     }
 
+    @Test func `tabsExtendBeyond accounts for the left overflow indicator width`() {
+        let tabs = [
+            TabRibbon.Tab(name: "one", isDirty: false),
+            TabRibbon.Tab(name: "two", isDirty: false),
+            TabRibbon.Tab(name: "tri", isDirty: false),
+        ]
+        let ribbon = TabRibbon(tabs: tabs, activeIndex: 1, scrollOffset: 1)
+
+        #expect(ribbon.tabsExtendBeyond(ribbonWidth: 10))
+    }
+
     @Test func `overflow indicators rendered when tabs overflow`() {
         var buffer = ScreenBuffer(columns: 20, rows: 1)
         let tabs = (0..<10).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
@@ -1426,6 +1471,13 @@ struct TabRibbonScrollTests {
         ribbon.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 1))
         #expect(buffer[0, 0].character == "<")
         #expect(buffer[0, 19].character == ">")
+    }
+
+    @Test func `tabIndex ignores the right overflow indicator`() {
+        let tabs = (0..<10).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
+        let ribbon = TabRibbon(tabs: tabs, activeIndex: 3, scrollOffset: 2)
+
+        #expect(ribbon.tabIndex(atColumn: 19, ribbonX: 0, ribbonWidth: 20) == nil)
     }
 
     @Test func `preview tab renders in italic style`() {

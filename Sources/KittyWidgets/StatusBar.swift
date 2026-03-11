@@ -1,4 +1,5 @@
 import KittyCodecs
+import KittyText
 
 /// Status bar with left/center/right aligned segments.
 public struct StatusBar: View, Sendable {
@@ -31,10 +32,13 @@ public struct StatusBar: View, Sendable {
     }
 
     private func renderEdgeAligned(width: Int) -> String {
-        let rightPart = String(right.suffix(width))
-        let leftPart = String(left.prefix(max(0, width - rightPart.count)))
+        let rightPart = suffixFitting(right, width: width)
+        let leftPart = prefixFitting(left, width: max(0, width - UnicodeWidth.displayWidth(of: rightPart)))
         return leftPart
-            + String(repeating: " ", count: width - leftPart.count - rightPart.count)
+            + String(
+                repeating: " ",
+                count: max(0, width - UnicodeWidth.displayWidth(of: leftPart) - UnicodeWidth.displayWidth(of: rightPart))
+            )
             + rightPart
     }
 
@@ -60,5 +64,35 @@ public struct StatusBar: View, Sendable {
             guard index < result.count else { break }
             result[index] = char
         }
+    }
+
+    private func prefixFitting(_ text: String, width: Int) -> String {
+        guard width > 0 else { return "" }
+
+        var result = ""
+        var usedWidth = 0
+        for char in text {
+            let charWidth = UnicodeWidth.displayWidth(of: char)
+            guard charWidth > 0 else { continue }
+            guard usedWidth + charWidth <= width else { break }
+            result.append(char)
+            usedWidth += charWidth
+        }
+        return result
+    }
+
+    private func suffixFitting(_ text: String, width: Int) -> String {
+        guard width > 0 else { return "" }
+
+        var reversed: [Character] = []
+        var usedWidth = 0
+        for char in text.reversed() {
+            let charWidth = UnicodeWidth.displayWidth(of: char)
+            guard charWidth > 0 else { continue }
+            guard usedWidth + charWidth <= width else { break }
+            reversed.append(char)
+            usedWidth += charWidth
+        }
+        return String(reversed.reversed())
     }
 }

@@ -742,6 +742,7 @@ struct StatusBarAndPromptTests {
         let segments = state.statusBarSegments(columns: 80, rows: 24)
 
         #expect(segments.left.contains("note.swift"))
+        #expect(segments.right.contains("│"))
         #expect(segments.right.contains("swift"))
         #expect(segments.right.contains("CRLF"))
         #expect(segments.right.contains("M3 A1 D2 !1"))
@@ -1332,12 +1333,11 @@ struct RuntimeRegressionsTests {
 
         // Render with sidebar
         sut.state.sidebarCollapsed = false
-        render(pipeline: sut.pipeline, state: sut.state)
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
 
-        // Clear and render without sidebar
-        sut.pipeline.buffer.clear()
+        // Re-render without sidebar using the same top-level entry point as the app.
         sut.state.sidebarCollapsed = true
-        render(pipeline: sut.pipeline, state: sut.state)
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
 
         // The separator column from the previous render should not persist
         // Editor should now start at column 0 (no sidebar)
@@ -1345,6 +1345,29 @@ struct RuntimeRegressionsTests {
         let row1Text = String(row1Chars).trimmingCharacters(in: .whitespaces)
         #expect(row1Text.contains("content") || row1Text.contains("1"),
                 "Editor should render from column 0 when sidebar is collapsed")
+    }
+
+    @Test
+    func `dismissing prompt clears overlay chrome on next frame`() throws {
+        let sut = makeSUT(columns: 40, rows: 10)
+        sut.state.beginNewFile()
+        sut.state.mode = .editor
+        sut.state.beginSavePrompt()
+
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+
+        let promptCorner = try #require(
+            (0..<10).lazy.compactMap { row in
+                (0..<40).lazy.compactMap { col in
+                    sut.pipeline.buffer[row, col].character == "┌" ? (row, col) : nil
+                }.first
+            }.first
+        )
+
+        sut.state.prompt = nil
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+
+        #expect(sut.pipeline.buffer[promptCorner.0, promptCorner.1].character != "┌")
     }
 }
 

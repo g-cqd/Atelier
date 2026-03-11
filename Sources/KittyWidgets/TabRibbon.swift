@@ -113,18 +113,23 @@ public struct TabRibbon: Sendable {
     }
 
     /// Returns the tab index at a given column, or nil if outside all tabs.
-    public func tabIndex(atColumn clickCol: Int, ribbonX: Int) -> Int? {
+    public func tabIndex(atColumn clickCol: Int, ribbonX: Int, ribbonWidth: Int) -> Int? {
         guard !tabs.isEmpty else { return nil }
+        guard ribbonWidth > 0 else { return nil }
+
+        let rightBound = ribbonX + ribbonWidth - (tabsExtendBeyond(ribbonWidth: ribbonWidth) ? 1 : 0)
+        guard clickCol < rightBound else { return nil }
 
         var col = ribbonX
         if scrollOffset > 0 { col += 1 } // skip left overflow indicator
         for i in scrollOffset..<tabs.count {
             let tabWidth = tabLabelWidth(at: i)
 
-            if clickCol >= col && clickCol < col + tabWidth {
+            if clickCol >= col && clickCol < min(col + tabWidth, rightBound) {
                 return i
             }
             col += tabWidth
+            if col >= rightBound { break }
         }
         return nil
     }
@@ -156,14 +161,18 @@ public struct TabRibbon: Sendable {
             offset = target
         }
 
-        // If active tab is past the visible area, scroll right
-        var visibleWidth = 0
-        for i in offset...target {
-            visibleWidth += tabLabelWidth(at: i)
-            if visibleWidth > ribbonWidth {
-                offset = i
-                visibleWidth = tabLabelWidth(at: i)
+        // If active tab is past the visible area, scroll right.
+        while offset < target {
+            let reserveLeft = offset > 0 ? 1 : 0
+            let reserveRight = target < tabs.count - 1 ? 1 : 0
+            let availableWidth = max(0, ribbonWidth - reserveLeft - reserveRight)
+            let requiredWidth = (offset...target).reduce(into: 0) { total, index in
+                total += tabLabelWidth(at: index)
             }
+            if requiredWidth <= availableWidth {
+                break
+            }
+            offset += 1
         }
 
         return max(0, min(offset, tabs.count - 1))
@@ -171,10 +180,11 @@ public struct TabRibbon: Sendable {
 
     /// Whether tabs starting from scrollOffset extend beyond the given width.
     public func tabsExtendBeyond(ribbonWidth: Int) -> Bool {
+        let availableWidth = max(0, ribbonWidth - (scrollOffset > 0 ? 1 : 0))
         var width = 0
         for i in scrollOffset..<tabs.count {
             width += tabLabelWidth(at: i)
-            if width > ribbonWidth { return true }
+            if width > availableWidth { return true }
         }
         return false
     }
