@@ -42,9 +42,36 @@ struct ApplicationRuntimeTests {
         #expect(found)
     }
 
+    @Test("Run restores raw mode and writes cleanup sequences")
+    @MainActor
+    func runRestoresRawModeAndWritesCleanupSequences() async throws {
+        let mock = MockTerminalConnection()
+        mock.feedInput([0x03])
+
+        let runtime = ApplicationRuntime(connection: mock)
+
+        try await runtime.run(TestApp.self)
+
+        #expect(mock.enterRawModeCallCount == 1)
+        #expect(mock.restoreModeCallCount == 1)
+        #expect(!mock.isRawMode)
+        #expect(containsSubsequence(KittySequences.popKeyboardMode, in: mock.writtenOutput))
+        #expect(containsSubsequence(KittySequences.disableMouseSGR, in: mock.writtenOutput))
+        #expect(containsSubsequence(KittySequences.disableFocusEvents, in: mock.writtenOutput))
+        #expect(containsSubsequence(KittySequences.disableBracketedPaste, in: mock.writtenOutput))
+        #expect(containsSubsequence(KittySequences.showCursor, in: mock.writtenOutput))
+        #expect(containsSubsequence(KittySequences.leaveAlternateScreen, in: mock.writtenOutput))
+    }
+
     struct TestApp: App {
         var body: some View {
             Text("Test")
+        }
+    }
+
+    private func containsSubsequence(_ subsequence: [UInt8], in bytes: [UInt8]) -> Bool {
+        bytes.indices.contains { index in
+            bytes[index...].starts(with: subsequence)
         }
     }
 }

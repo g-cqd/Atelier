@@ -1,3 +1,4 @@
+import Darwin
 import Testing
 @testable import KittyCodecs
 @testable import KittyInput
@@ -239,5 +240,27 @@ struct InputSourceTests {
 
         task.cancel()
         #expect(received.count == 1)
+    }
+
+    @Test("Start continues after interrupted reads and preserves subsequent input")
+    func startContinuesAfterInterruptedRead() async throws {
+        let mock = MockTerminalConnection()
+        mock.enqueueReadError(.readFailed(EINTR))
+        mock.feedInput([0x61])
+
+        let source = InputSource(connection: mock)
+        let task = source.start()
+        defer { task.cancel() }
+
+        var iterator = source.events.makeAsyncIterator()
+        let event = await iterator.next()
+
+        if case let .some(.key(key)) = event {
+            #expect(key.keyCode == 97)
+            #expect(key.modifiers == [])
+            #expect(key.eventType == .press)
+        } else {
+            Issue.record("Expected key event after interrupted read")
+        }
     }
 }
