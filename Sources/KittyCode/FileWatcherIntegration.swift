@@ -23,7 +23,7 @@ final class FileWatcherIntegration {
 
         watchTask = Task { [weak self] in
             guard let self else { return }
-            for await event in await self.watcher.events {
+            for await event in self.watcher.events {
                 await self.handleEvent(event)
             }
         }

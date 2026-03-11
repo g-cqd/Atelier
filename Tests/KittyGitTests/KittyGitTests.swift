@@ -103,4 +103,38 @@ struct KittyGitTests {
         #expect(GitStatusProvider.isGitRepository(nestedDirectory.path))
         #expect(GitStatusProvider.repositoryRoot(for: nestedDirectory.path) == tempRoot.path)
     }
+
+    @Test
+    func `Line decorations distinguish modified and added lines`() {
+        let provider = GitStatusProvider(rootPath: "/project")
+        let decorations = provider.makeLineDecorations(
+            baseLines: ["alpha", "beta", "gamma"],
+            currentLines: ["alpha", "delta", "epsilon", "gamma"],
+            addedColor: .added
+        )
+
+        #expect(decorations.markers == [1: .modified, 2: .added])
+    }
+
+    @Test
+    func `Line decorations anchor deletions to the next surviving line`() {
+        let provider = GitStatusProvider(rootPath: "/project")
+        let decorations = provider.makeLineDecorations(
+            baseLines: ["alpha", "beta", "gamma"],
+            currentLines: ["alpha", "gamma"],
+            addedColor: .added
+        )
+
+        #expect(decorations.markers == [1: .deleted])
+    }
+
+    @Test
+    func `Added line decorations mark every visible line`() {
+        let decorations = GitStatusProvider.addedLineDecorations(
+            for: ["alpha", "beta", ""],
+            color: .untracked
+        )
+
+        #expect(decorations.markers == [0: .untracked, 1: .untracked, 2: .untracked])
+    }
 }

@@ -42,7 +42,7 @@ final class GitDecorationManager {
             guard !Task.isCancelled else { return }
 
             let decorations = await provider.lineDecorations(for: path, lines: lines)
-            await self?.apply(decorations, for: path, version: version)
+            self?.apply(decorations, for: path, version: version)
         }
     }
 
