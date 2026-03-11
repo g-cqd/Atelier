@@ -1,13 +1,18 @@
 import KittyCodecs
 import KittyRenderer
 import KittyText
+import KittyWidgets
 
 @MainActor
 func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipeline: RenderPipeline) -> Bool {
-    let treeWidth = min(state.treePanelWidth, pipeline.columns / 2)
-    let editorWidth = pipeline.columns - treeWidth - 1
-    let lineNumWidth = max(3, String(state.fileLineCount).count + 1)
-    let availWidth = editorWidth - lineNumWidth
+    let layout = LayoutMetrics(state: state, columns: pipeline.columns, rows: pipeline.rows)
+    let editorRect = Rect(
+        x: layout.editorStart,
+        y: layout.contentStartRow,
+        width: layout.editorWidth,
+        height: layout.contentRows
+    )
+    let availWidth = max(1, TextEditorLayout.contentWidth(for: makeEditorView(state: state), in: editorRect))
     var shouldEnsureVisible = false
 
     if state.config.keybindingMode == .vim && state.vimMode == .normal {
@@ -66,15 +71,14 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         if key.modifiers.contains(.alt) || key.modifiers.contains(.ctrl) {
             jumpWordBackward(state: state)
         } else {
-            state.cursorCol = max(state.cursorCol - 1, 0)
+            moveCursorLeft(state: state)
         }
         shouldEnsureVisible = true
     case Key.right.rawValue:
         if key.modifiers.contains(.alt) || key.modifiers.contains(.ctrl) {
             jumpWordForward(state: state)
         } else {
-            let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
-            state.cursorCol = min(state.cursorCol + 1, rowLength)
+            moveCursorRight(state: state)
         }
         shouldEnsureVisible = true
     case AsciiKey.b:

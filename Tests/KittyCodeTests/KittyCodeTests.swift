@@ -648,6 +648,31 @@ struct KittyConfigExtensionTests {
     }
 
     @Test
+    func `status bar and editor config decode custom values`() throws {
+        let json = """
+        {
+          "editor": {
+            "arrowKeysWrapAcrossLines": false
+          },
+          "statusBar": {
+            "show": false,
+            "leftItems": ["file"],
+            "rightItems": ["language", "lineEnding", "git"],
+            "showContextHints": false
+          }
+        }
+        """
+
+        let config = try JSONDecoder().decode(KittyConfig.self, from: Data(json.utf8))
+
+        #expect(config.editor.arrowKeysWrapAcrossLines == false)
+        #expect(config.statusBar.show == false)
+        #expect(config.statusBar.leftItems == [.file])
+        #expect(config.statusBar.rightItems == [.language, .lineEnding, .git])
+        #expect(config.statusBar.showContextHints == false)
+    }
+
+    @Test
     func `new JSON fields roundtrip correctly`() throws {
         var config = KittyConfig()
         config.autoSave = true
@@ -676,6 +701,71 @@ struct KittyConfigExtensionTests {
         #expect(theme.tabActiveForeground == nil)
         #expect(theme.activityBarBackground == nil)
         #expect(theme.openFilesForeground == nil)
+    }
+}
+
+@Suite
+@MainActor
+struct StatusBarAndPromptTests {
+    @Test
+    func `beginSavePrompt defaults to last selected directory`() {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
+
+        state.noteSelectedPath(rootURL.appendingPathComponent("Sources/App/main.swift").path, isDirectory: false)
+        state.beginNewFile()
+        state.beginSavePrompt()
+
+        #expect(state.prompt?.input == "Sources/App/")
+    }
+
+    @Test
+    func `statusBarSegments render configured file metadata`() {
+        var config = KittyConfig()
+        config.statusBar.leftItems = [.file]
+        config.statusBar.rightItems = [.language, .lineEnding, .git, .position]
+
+        let state = EditorState(rootPath: ".", config: config)
+        state.beginNewFile()
+        state.mode = .editor
+        state.fileName = "note.swift"
+        state.bufferManager.activeBuffer?.fileName = "note.swift"
+        state.currentLanguage = "swift"
+        state.currentLineEnding = .crlf
+        state.fileContent = ["abc"]
+        state.cursorRow = 0
+        state.cursorCol = 2
+        state.fileStatusProvider = TestGitProvider(
+            summary: .init(modified: 3, added: 1, deleted: 2, conflicted: 1)
+        )
+
+        let segments = state.statusBarSegments(columns: 80, rows: 24)
+
+        #expect(segments.left.contains("note.swift"))
+        #expect(segments.right.contains("swift"))
+        #expect(segments.right.contains("CRLF"))
+        #expect(segments.right.contains("M3 A1 D2 !1"))
+        #expect(segments.right.contains("Ln 1, Col 3"))
+    }
+
+    @Test
+    func `writeBufferToDisk preserves configured line endings`() throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
+        state.beginNewFile()
+        state.fileContent = ["alpha", "beta", ""]
+        state.currentLineEnding = .crlf
+
+        let savedURL = rootURL.appendingPathComponent("notes/output.txt")
+        let saveSucceeded = state.writeBufferToDisk(at: savedURL.path)
+
+        #expect(saveSucceeded)
+        #expect(try String(contentsOf: savedURL, encoding: .utf8) == "alpha\r\nbeta\r\n")
+        #expect(state.currentLineEnding == .crlf)
+        #expect(state.bufferManager.activeBuffer?.lineEnding == .crlf)
     }
 }
 
@@ -1044,6 +1134,60 @@ struct RuntimeRegressionsTests {
         #expect(sut.state.selectedTreeIndex == 0, "First content row click should select tree index 0")
     }
 
+    @Test
+    func `right click on tree opens context menu without opening file`() {
+        let sut = makeSUT(columns: 40, rows: 10)
+        sut.state.treePanelWidth = 10
+        sut.state.mode = .tree
+        sut.state.treeNodes = [
+            FileNode(name: "note.txt", path: "/note.txt", isDirectory: false)
+        ]
+        sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
+
+        handleMouse(
+            MouseEvent(button: .right, row: 2, col: 3, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.contextMenu?.target == .treeNode(index: 0))
+        #expect(sut.state.contextMenu?.items.map(\.title) == ["Open", "Open and Pin", "Save Here…"])
+        #expect(sut.state.bufferManager.count == 0)
+    }
+
+    @Test
+    func `editor context menu click activates selected action`() throws {
+        let sut = makeSUT(columns: 40, rows: 10)
+        sut.state.beginNewFile()
+        sut.state.mode = .editor
+        sut.state.sidebarCollapsed = true
+
+        handleMouse(
+            MouseEvent(button: .right, row: 2, col: 10, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        let click = try #require(
+            (1...10).lazy.compactMap { row in
+                (1...40).lazy.compactMap { col in
+                    let mouse = MouseEvent(button: .left, row: row, col: col, kind: .press)
+                    return contextMenuItemIndex(at: mouse, state: sut.state, columns: 40, rows: 10) == 0 ? mouse : nil
+                }.first
+            }.first
+        )
+
+        handleMouse(
+            click,
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.contextMenu == nil)
+        #expect(sut.state.prompt?.kind == .savePath)
+        #expect(sut.state.contextHintText == "Enter Save  Esc Cancel")
+    }
+
     // --- Scroll position preservation ---
 
     @Test
@@ -1118,8 +1262,8 @@ struct RuntimeRegressionsTests {
 
         let lastRowChars = (0..<40).map { sut.pipeline.buffer[rows - 1, $0].character }
         let lastRowText = String(lastRowChars)
-        // Status bar should contain mode indicator
-        #expect(lastRowText.contains("Edit") || lastRowText.contains("Tree"))
+        // Status bar should contain file name or language
+        #expect(lastRowText.contains("Untitled") || lastRowText.contains("plain text"))
     }
 
     @Test
@@ -1175,7 +1319,7 @@ struct RuntimeRegressionsTests {
         // Status bar at last row
         let statusChars = (0..<60).map { sut.pipeline.buffer[11, $0].character }
         let statusText = String(statusChars)
-        #expect(statusText.contains("Edit") || statusText.contains("Tree"))
+        #expect(statusText.contains("a.txt") || statusText.contains("plain text"))
     }
 
     // --- Sidebar toggle ---

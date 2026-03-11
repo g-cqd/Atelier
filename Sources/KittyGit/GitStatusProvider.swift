@@ -17,6 +17,7 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
 
     private let rootPath: String
     private let lock: StateLock<State>
+    private let inFlightLock = StateLock(initialState: [String: Task<BaseContent, Never>]())
 
     public init(rootPath: String) {
         self.rootPath = Self.normalizePath(rootPath)
@@ -122,8 +123,20 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
             return cached
         }
 
-        let content = await loadBaseContent(relativePath: relativePath)
+        let task: Task<BaseContent, Never> = inFlightLock.withLock { inFlight in
+            if let existing = inFlight[normalizedPath] {
+                return existing
+            }
+            let newTask = Task<BaseContent, Never> {
+                await loadBaseContent(relativePath: relativePath)
+            }
+            inFlight[normalizedPath] = newTask
+            return newTask
+        }
+
+        let content = await task.value
         lock.withLock { $0.baseContents[normalizedPath] = content }
+        inFlightLock.withLock { $0[normalizedPath] = nil }
         return content
     }
 

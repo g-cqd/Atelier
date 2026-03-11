@@ -31,15 +31,15 @@ public enum TextEditorLayout {
     public static func verticalScrollMetrics(for editor: TextEditor, in rect: Rect) -> ScrollMetrics {
         if editor.wrapLines {
             let contentWidth = max(1, contentWidth(for: editor, in: rect))
-            let visualRowCount = totalWrappedRowCount(for: editor.lines, contentWidth: contentWidth)
+            let visualRowCount = totalWrappedRowCount(for: editor, contentWidth: contentWidth)
             let visualOffset = visualRowOffset(
                 forLineOffset: editor.scrollOffset,
-                lines: editor.lines,
+                editor: editor,
                 contentWidth: contentWidth
             )
             let maxOffset = visualRowOffset(
-                forLineOffset: max(0, editor.lines.count - 1),
-                lines: editor.lines,
+                forLineOffset: max(0, editor.lineCount - 1),
+                editor: editor,
                 contentWidth: contentWidth
             )
             return ScrollMetrics(
@@ -51,10 +51,10 @@ public enum TextEditorLayout {
         }
 
         return ScrollMetrics(
-            contentLength: editor.lines.count,
+            contentLength: editor.lineCount,
             viewportLength: rect.height,
             offset: editor.scrollOffset,
-            maxOffset: max(0, editor.lines.count - 1)
+            maxOffset: max(0, editor.lineCount - 1)
         )
     }
 
@@ -101,7 +101,7 @@ public enum TextEditorLayout {
         let wrappedContentWidth = max(1, contentWidth(for: editor, in: rect))
         return lineOffset(
             forVisualRowOffset: nextOffset,
-            lines: editor.lines,
+            editor: editor,
             contentWidth: wrappedContentWidth
         )
     }
@@ -109,20 +109,20 @@ public enum TextEditorLayout {
     public static func cursorPosition(for editor: TextEditor, in rect: Rect) -> CursorPosition? {
         guard editor.modeShowsCursor else { return nil }
         guard rect.height > 0 else { return nil }
-        guard editor.cursorRow >= 0 && editor.cursorRow < editor.lines.count else { return nil }
+        guard editor.cursorRow >= 0 && editor.cursorRow < editor.lineCount else { return nil }
 
         let gutterWidth = gutterWidth(for: editor)
         let contentWidth = max(1, contentWidth(for: editor, in: rect))
-        let startLine = max(0, min(editor.scrollOffset, editor.lines.count))
+        let startLine = max(0, min(editor.scrollOffset, editor.lineCount))
         guard editor.cursorRow >= startLine else { return nil }
 
-        let line = editor.lines[editor.cursorRow]
-        let displayColumn = TextDisplayMetrics.displayColumn(forCharacterOffset: editor.cursorCol, in: line)
+        let line = editor.line(at: editor.cursorRow)
+        let displayColumn = TextDisplayMetrics.displayColumn(forCharacterOffset: editor.cursorCol, in: line, tabSize: editor.tabSize)
 
         if editor.wrapLines {
             var screenRow = 0
             for lineIndex in startLine..<editor.cursorRow {
-                screenRow += wrappedRowCount(for: editor.lines[lineIndex], contentWidth: contentWidth)
+                screenRow += wrappedRowCount(for: editor.line(at: lineIndex), contentWidth: contentWidth, tabSize: editor.tabSize)
                 if screenRow >= rect.height { return nil }
             }
 
@@ -163,22 +163,23 @@ public enum TextEditorLayout {
         let relativeRow = row - rect.y
         let relativeColumn = max(0, col - rect.x - gutterWidth)
         let displayColumn = min(relativeColumn, contentWidth - 1)
-        let startLine = max(0, min(editor.scrollOffset, editor.lines.count))
+        let startLine = max(0, min(editor.scrollOffset, editor.lineCount))
 
         if editor.wrapLines {
             var screenRow = 0
-            for lineIndex in startLine..<editor.lines.count {
-                let wrappedRows = wrappedRowCount(for: editor.lines[lineIndex], contentWidth: contentWidth)
+            for lineIndex in startLine..<editor.lineCount {
+                let wrappedRows = wrappedRowCount(for: editor.line(at: lineIndex), contentWidth: contentWidth, tabSize: editor.tabSize)
                 let nextScreenRow = screenRow + wrappedRows
                 if relativeRow < nextScreenRow {
                     let wrapRow = relativeRow - screenRow
-                    let line = editor.lines[lineIndex]
+                    let line = editor.line(at: lineIndex)
                     let wrappedDisplayColumn = wrapRow * contentWidth + displayColumn
                     return TextPosition(
                         row: lineIndex,
                         col: TextDisplayMetrics.characterOffset(
                             forDisplayColumn: wrappedDisplayColumn,
-                            in: line
+                            in: line,
+                            tabSize: editor.tabSize
                         )
                     )
                 }
@@ -189,13 +190,14 @@ public enum TextEditorLayout {
         }
 
         let lineIndex = startLine + relativeRow
-        guard lineIndex >= 0 && lineIndex < editor.lines.count else { return nil }
-        let line = editor.lines[lineIndex]
+        guard lineIndex >= 0 && lineIndex < editor.lineCount else { return nil }
+        let line = editor.line(at: lineIndex)
         return TextPosition(
             row: lineIndex,
             col: TextDisplayMetrics.characterOffset(
                 forDisplayColumn: displayColumn + editor.horizontalScrollOffset,
-                in: line
+                in: line,
+                tabSize: editor.tabSize
             )
         )
     }
@@ -203,7 +205,7 @@ public enum TextEditorLayout {
     // MARK: - Horizontal Scroll
 
     public static func horizontalScrollMetrics(for editor: TextEditor, maxLineWidth: Int) -> ScrollMetrics {
-        let contentWidth = maxLineWidth
+        let contentWidth = max(1, maxLineWidth + 1)
         return ScrollMetrics(
             contentLength: contentWidth,
             viewportLength: 1, // computed per-rect below
@@ -217,7 +219,7 @@ public enum TextEditorLayout {
         let gutterW = gutterWidth(for: editor)
         let vsiW = verticalScrollIndicatorWidth(for: editor, in: rect)
         let availWidth = max(0, rect.width - gutterW - vsiW)
-        return maxLineWidth > availWidth
+        return maxLineWidth + 1 > availWidth
     }
 
     public static func horizontalScrollIndicatorRect(
@@ -241,11 +243,12 @@ public enum TextEditorLayout {
         let gutterW = gutterWidth(for: editor)
         let vsiW = verticalScrollIndicatorWidth(for: editor, in: rect)
         let availWidth = max(0, rect.width - gutterW - vsiW)
+        let contentLength = max(1, maxLineWidth + 1)
         return ScrollMetrics(
-            contentLength: maxLineWidth,
+            contentLength: contentLength,
             viewportLength: availWidth,
             offset: editor.horizontalScrollOffset,
-            maxOffset: max(0, maxLineWidth - availWidth)
+            maxOffset: max(0, contentLength - availWidth)
         )
     }
 
@@ -258,36 +261,36 @@ public enum TextEditorLayout {
         if editor.wrapLines {
             let gutter = gutterWidth(for: editor)
             let pessimisticContentWidth = max(1, rect.width - gutter - 1)
-            let visualRows = totalWrappedRowCount(for: editor.lines, contentWidth: pessimisticContentWidth)
+            let visualRows = totalWrappedRowCount(for: editor, contentWidth: pessimisticContentWidth)
             return visualRows > rect.height
         }
-        return editor.lines.count > rect.height
+        return editor.lineCount > rect.height
     }
 
-    private static func wrappedRowCount(for line: String, contentWidth: Int) -> Int {
+    private static func wrappedRowCount(for line: String, contentWidth: Int, tabSize: Int = 4) -> Int {
         guard contentWidth > 0 else { return 1 }
-        let lineWidth = max(1, UnicodeWidth.displayWidth(of: line))
+        let lineWidth = max(1, TextDisplayMetrics.displayWidth(of: line, tabSize: tabSize))
         return max(1, (lineWidth + contentWidth - 1) / contentWidth)
     }
 
-    private static func totalWrappedRowCount(for lines: [String], contentWidth: Int) -> Int {
-        lines.reduce(into: 0) { total, line in
-            total += wrappedRowCount(for: line, contentWidth: contentWidth)
+    private static func totalWrappedRowCount(for editor: TextEditor, contentWidth: Int) -> Int {
+        (0..<editor.lineCount).reduce(into: 0) { total, lineIndex in
+            total += wrappedRowCount(for: editor.line(at: lineIndex), contentWidth: contentWidth, tabSize: editor.tabSize)
         }
     }
 
     private static func visualRowOffset(
         forLineOffset lineOffset: Int,
-        lines: [String],
+        editor: TextEditor,
         contentWidth: Int
     ) -> Int {
-        guard !lines.isEmpty else { return 0 }
+        guard editor.lineCount > 0 else { return 0 }
 
-        let clampedLineOffset = min(max(0, lineOffset), max(0, lines.count - 1))
+        let clampedLineOffset = min(max(0, lineOffset), max(0, editor.lineCount - 1))
         var visualOffset = 0
 
         for lineIndex in 0..<clampedLineOffset {
-            visualOffset += wrappedRowCount(for: lines[lineIndex], contentWidth: contentWidth)
+            visualOffset += wrappedRowCount(for: editor.line(at: lineIndex), contentWidth: contentWidth, tabSize: editor.tabSize)
         }
 
         return visualOffset
@@ -295,22 +298,23 @@ public enum TextEditorLayout {
 
     private static func lineOffset(
         forVisualRowOffset visualRowOffset: Int,
-        lines: [String],
+        editor: TextEditor,
         contentWidth: Int
     ) -> Int {
-        guard !lines.isEmpty else { return 0 }
+        guard editor.lineCount > 0 else { return 0 }
 
         let resolvedVisualRowOffset = max(0, visualRowOffset)
         var currentVisualRow = 0
 
-        for (lineIndex, line) in lines.enumerated() {
-            let nextVisualRow = currentVisualRow + wrappedRowCount(for: line, contentWidth: contentWidth)
+        for lineIndex in 0..<editor.lineCount {
+            let line = editor.line(at: lineIndex)
+            let nextVisualRow = currentVisualRow + wrappedRowCount(for: line, contentWidth: contentWidth, tabSize: editor.tabSize)
             if resolvedVisualRowOffset < nextVisualRow {
                 return lineIndex
             }
             currentVisualRow = nextVisualRow
         }
 
-        return max(0, lines.count - 1)
+        return max(0, editor.lineCount - 1)
     }
 }

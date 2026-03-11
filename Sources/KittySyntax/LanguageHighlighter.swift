@@ -6,6 +6,11 @@ import KittyQuery
 import KittySync
 
 public enum LanguageHighlighter: Sendable {
+    /// Maximum source size in bytes for grammar-backed highlighting.
+    /// Beyond this, the session falls back to the lightweight lexical highlighter
+    /// to prevent runaway memory from per-byte style arrays and token lists.
+    public static let maxGrammarSourceBytes = 512_000 // 512 KB
+
     public final class Session {
         private enum Strategy {
             case grammar(GrammarSession)
@@ -49,11 +54,17 @@ public enum LanguageHighlighter: Sendable {
             return false
         }
 
-        public init(language: String?, theme: Theme = .monokai) {
+        public init(
+            language: String?,
+            theme: Theme = .monokai,
+            preferGrammar: Bool = true
+        ) {
             self.language = language
             self.theme = theme
 
-            if let language, let artifacts = SyntaxArtifactsCache.artifacts(for: language) {
+            if preferGrammar,
+               let language,
+               let artifacts = SyntaxArtifactsCache.artifacts(for: language) {
                 strategy = .grammar(GrammarSession(artifacts: artifacts, theme: theme))
             } else {
                 strategy = .fallback
@@ -63,6 +74,9 @@ public enum LanguageHighlighter: Sendable {
         public func highlightDocument(source: String) -> [[StyledSpan]] {
             switch strategy {
             case .grammar(let grammarSession):
+                guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
+                    return fallbackHighlightDocument(source: source, language: language, theme: theme)
+                }
                 do {
                     let tree = try grammarSession.parser.parse(source, oldTree: grammarSession.previousTree)
                     guard tree.root.type != "_start" else {
@@ -111,7 +125,8 @@ public enum LanguageHighlighter: Sendable {
         language: String?,
         theme: Theme = .monokai
     ) -> [[StyledSpan]] {
-        Session(language: language, theme: theme).highlightDocument(source: source)
+        let useGrammar = source.utf8.count <= maxGrammarSourceBytes
+        return Session(language: language, theme: theme, preferGrammar: useGrammar).highlightDocument(source: source)
     }
 
     public static func highlightLine(
@@ -124,9 +139,10 @@ public enum LanguageHighlighter: Sendable {
 
     public static func makeSession(
         language: String?,
-        theme: Theme = .monokai
+        theme: Theme = .monokai,
+        preferGrammar: Bool = true
     ) -> Session {
-        Session(language: language, theme: theme)
+        Session(language: language, theme: theme, preferGrammar: preferGrammar)
     }
 
     public static func detectLanguage(for filename: String) -> String? {
@@ -273,20 +289,23 @@ private func splitDocumentSpans(
     scratch.lines.append([])
 
     for span in spans {
-        var current = ""
-        for char in span.text {
-            if char == "\n" {
-                if !current.isEmpty {
-                    scratch.lines[scratch.lines.count - 1].append(StyledSpan(text: current, style: span.style))
-                    current.removeAll(keepingCapacity: true)
+        let text = span.text
+        var searchStart = text.startIndex
+        while searchStart < text.endIndex {
+            if let nlIndex = text[searchStart...].firstIndex(of: "\n") {
+                if nlIndex > searchStart {
+                    scratch.lines[scratch.lines.count - 1].append(
+                        StyledSpan(text: String(text[searchStart..<nlIndex]), style: span.style)
+                    )
                 }
                 scratch.lines.append([])
+                searchStart = text.index(after: nlIndex)
             } else {
-                current.append(char)
+                scratch.lines[scratch.lines.count - 1].append(
+                    StyledSpan(text: String(text[searchStart...]), style: span.style)
+                )
+                break
             }
-        }
-        if !current.isEmpty {
-            scratch.lines[scratch.lines.count - 1].append(StyledSpan(text: current, style: span.style))
         }
     }
 

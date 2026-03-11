@@ -39,6 +39,7 @@ public struct TextEditor: View, Sendable {
     public var horizontalScrollIndicatorStyle: HorizontalScrollIndicatorStyle
     public var modeShowsCursor: Bool
     public var maxLineWidth: Int
+    public var tabSize: Int
     public var whitespaceConfig: WhitespaceRenderer.Config
 
     public init(
@@ -62,6 +63,7 @@ public struct TextEditor: View, Sendable {
         horizontalScrollIndicatorStyle: HorizontalScrollIndicatorStyle = HorizontalScrollIndicatorStyle(),
         modeShowsCursor: Bool = true,
         maxLineWidth: Int = 0,
+        tabSize: Int = 4,
         whitespaceConfig: WhitespaceRenderer.Config = .disabled
     ) {
         let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
@@ -85,6 +87,7 @@ public struct TextEditor: View, Sendable {
         self.horizontalScrollIndicatorStyle = horizontalScrollIndicatorStyle
         self.modeShowsCursor = modeShowsCursor
         self.maxLineWidth = maxLineWidth
+        self.tabSize = tabSize
         self.whitespaceConfig = whitespaceConfig
     }
 
@@ -109,6 +112,7 @@ public struct TextEditor: View, Sendable {
         horizontalScrollIndicatorStyle: HorizontalScrollIndicatorStyle = HorizontalScrollIndicatorStyle(),
         modeShowsCursor: Bool = true,
         maxLineWidth: Int = 0,
+        tabSize: Int = 4,
         whitespaceConfig: WhitespaceRenderer.Config = .disabled
     ) {
         self.lineStorage = .lines(lines.isEmpty ? [""] : lines)
@@ -131,6 +135,7 @@ public struct TextEditor: View, Sendable {
         self.horizontalScrollIndicatorStyle = horizontalScrollIndicatorStyle
         self.modeShowsCursor = modeShowsCursor
         self.maxLineWidth = maxLineWidth
+        self.tabSize = tabSize
         self.whitespaceConfig = whitespaceConfig
     }
 
@@ -155,6 +160,7 @@ public struct TextEditor: View, Sendable {
         horizontalScrollIndicatorStyle: HorizontalScrollIndicatorStyle = HorizontalScrollIndicatorStyle(),
         modeShowsCursor: Bool = true,
         maxLineWidth: Int = 0,
+        tabSize: Int = 4,
         whitespaceConfig: WhitespaceRenderer.Config = .disabled
     ) {
         self.lineStorage = .buffer(buffer.lineCount == 0 ? TextBuffer(lines: [""]) : buffer)
@@ -177,6 +183,7 @@ public struct TextEditor: View, Sendable {
         self.horizontalScrollIndicatorStyle = horizontalScrollIndicatorStyle
         self.modeShowsCursor = modeShowsCursor
         self.maxLineWidth = maxLineWidth
+        self.tabSize = tabSize
         self.whitespaceConfig = whitespaceConfig
     }
 
