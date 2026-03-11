@@ -110,6 +110,52 @@ struct QueryParserTests {
             Issue.record("Expected eq? predicate")
         }
     }
+
+    @Test("Parse tree-sitter directive as a no-op predicate")
+    func directivePredicate() throws {
+        let query = try QueryParser.parse("(identifier) @name (#set! test.scope \"demo\")")
+        #expect(query.patterns.count == 1)
+
+        guard case .sequence(let patterns) = query.patterns[0] else {
+            Issue.record("Expected sequence")
+            return
+        }
+
+        #expect(patterns.count == 2)
+        if case .predicate(.directive(name: let name, arguments: let arguments)) = patterns[1] {
+            #expect(name == "#set!")
+            #expect(arguments == ["test.scope", "demo"])
+        } else {
+            Issue.record("Expected directive predicate")
+        }
+    }
+
+    @Test("Capture after alternation is applied to each alternative")
+    func alternationCapture() throws {
+        let query = try QueryParser.parse("[(true) (false) (null)] @constant.builtin")
+        #expect(query.patterns.count == 1)
+
+        guard case .alternation(let alternatives) = query.patterns[0] else {
+            Issue.record("Expected alternation")
+            return
+        }
+
+        #expect(alternatives.count == 3)
+
+        for alternative in alternatives {
+            guard case .nodeMatch(_, _, let capture) = alternative else {
+                Issue.record("Expected node match alternative")
+                return
+            }
+            #expect(capture == "constant.builtin")
+        }
+    }
+
+    @Test("Parse anchor and quantifier syntax used by bundled highlight queries")
+    func anchorAndQuantifierSyntax() throws {
+        let query = try QueryParser.parse("((identifier) @type . (identifier) @member)+")
+        #expect(query.patterns.count == 1)
+    }
 }
 
 @Suite("QueryMatcher")
@@ -259,6 +305,18 @@ struct PredicatesTests {
         let captures: [(node: SyntaxNode, name: String)] = [(node: node, name: "kw")]
         let result = Predicates.evaluate(
             .anyOf(capture: "@kw", values: ["if", "for", "while"]),
+            captures: captures,
+            source: "if"
+        )
+        #expect(result)
+    }
+
+    @Test("directive predicate is a no-op")
+    func directivePredicate() {
+        let node = SyntaxNode(type: "identifier", byteRange: 0..<2)
+        let captures: [(node: SyntaxNode, name: String)] = [(node: node, name: "kw")]
+        let result = Predicates.evaluate(
+            .directive(name: "#set!", arguments: ["scope", "demo"]),
             captures: captures,
             source: "if"
         )

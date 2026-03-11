@@ -1,6 +1,16 @@
-(pair key: (string) @string.special)
+(pair
+  key: (_) @string.special.key)
+
 (string) @string
+
 (number) @number
-(true) @constant.builtin
-(false) @constant.builtin
-(null) @constant.builtin
+
+[
+  (null)
+  (true)
+  (false)
+] @constant.builtin
+
+(escape_sequence) @escape
+
+(comment) @comment

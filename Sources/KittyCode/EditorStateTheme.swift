@@ -19,7 +19,12 @@ extension EditorState {
             syntaxComment: Style(fg: theme.commentForeground.color, italic: true),
             syntaxString: Style(fg: theme.stringForeground.color),
             syntaxNumber: Style(fg: theme.numberForeground.color),
-            syntaxAttribute: Style(fg: theme.attributeForeground.color)
+            syntaxAttribute: Style(fg: theme.attributeForeground.color),
+            gitModified: Style(fg: theme.gitModifiedForeground.color),
+            gitAdded: Style(fg: theme.gitAddedForeground.color),
+            gitUntracked: Style(fg: theme.gitUntrackedForeground.color, dim: true),
+            gitDeleted: Style(fg: theme.gitDeletedForeground.color),
+            gitConflicted: Style(fg: theme.gitConflictedForeground.color, bold: true)
         )
     }
 }

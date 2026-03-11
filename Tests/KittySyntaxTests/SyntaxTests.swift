@@ -112,11 +112,14 @@ struct HighlighterTests {
     }
 
     @Test("LanguageHighlighter session matches one-shot grammar-backed highlighting")
-    func sessionMatchesOneShotHighlighting() {
-        let source = "import Foundation"
-        let session = LanguageHighlighter.makeSession(language: "swift")
+    func sessionMatchesOneShotHighlighting() async {
+        let source = "true"
+        let available = await LanguageHighlighter.ensureArtifacts(for: "json")
+        let session = LanguageHighlighter.makeSession(language: "json")
 
-        #expect(session.highlightDocument(source: source) == LanguageHighlighter.highlightDocument(source: source, language: "swift"))
+        #expect(available)
+        #expect(session.isGrammarBacked)
+        #expect(session.highlightDocument(source: source) == LanguageHighlighter.highlightDocument(source: source, language: "json"))
     }
 
     @Test("LanguageHighlighter session supports line-based fallback highlighting")
@@ -130,13 +133,19 @@ struct HighlighterTests {
         #expect(lines[1].map(\.text).joined() == "value")
     }
 
-    @Test("LanguageHighlighter prewarms only bundled grammar artifacts")
+    @Test("LanguageHighlighter prewarms bundled grammar artifacts used by kittycode")
     func prewarmArtifacts() async {
-        let warmed = await LanguageHighlighter.prewarmArtifacts(for: ["swift", "json", "swift", "unknown_lang"])
+        let warmed = await LanguageHighlighter.prewarmArtifacts(for: ["json", "unknown_lang"])
 
         #expect(warmed.contains("json"))
-        #expect(!warmed.contains("swift"))
         #expect(!warmed.contains("unknown_lang"))
+    }
+
+    @Test("Bundled language manifest drives runtime language detection")
+    func bundledManifestDetection() {
+        #expect(LanguageHighlighter.detectLanguage(for: "main.SWIFT") == "swift")
+        #expect(LanguageHighlighter.detectLanguage(for: "settings.yaml") == "yaml")
+        #expect(LanguageHighlighter.detectLanguage(for: "Makefile") == nil)
     }
 }
 
@@ -187,6 +196,19 @@ struct GrammarRegistryTests {
         let names = await registry.languageNames
         #expect(names.count == 19)
     }
+
+    @Test("Bundled manifest entries ship grammar and highlight resources")
+    func bundledManifestEntriesShipResources() throws {
+        let resourcePath = try #require(KittySyntaxResources.bundle.resourcePath)
+
+        for entry in BundledLanguageManifest.entries {
+            let grammarPath = "\(resourcePath)/Grammars/\(entry.path)/grammar.json"
+            let highlightsPath = "\(resourcePath)/Grammars/\(entry.path)/highlights.scm"
+
+            #expect(FileManager.default.fileExists(atPath: grammarPath), "Missing grammar for \(entry.name)")
+            #expect(FileManager.default.fileExists(atPath: highlightsPath), "Missing highlights for \(entry.name)")
+        }
+    }
 }
 
 // MARK: - GrammarLoader (bundled grammar) tests
@@ -217,11 +239,11 @@ struct GrammarLoaderBundledTests {
         }
     }
 
-    @Test("Load bundled json/grammar.json — has 1 extra (whitespace pattern)")
+    @Test("Load bundled json/grammar.json — has 2 extras (whitespace pattern + comment)")
     func loadBundledGrammarExtras() throws {
         let path = try jsonGrammarPath()
         let grammar = try GrammarLoader.load(from: path)
-        #expect(grammar.extras.count == 1)
+        #expect(grammar.extras.count == 2)
     }
 
     @Test("Load bundled json/grammar.json — supertypes contains _value")
@@ -236,6 +258,15 @@ struct GrammarLoaderBundledTests {
         #expect(throws: GrammarError.self) {
             try GrammarLoader.parse(Data("not valid json {{{".utf8))
         }
+    }
+
+    @Test("Load bundled swift grammar — external scanner is not required")
+    func loadBundledSwiftGrammarIsScannerless() throws {
+        let resourcePath = try #require(KittySyntaxResources.bundle.resourcePath)
+        let path = "\(resourcePath)/Grammars/swift/grammar.json"
+        let grammar = try GrammarLoader.load(from: path)
+        #expect(grammar.name == "swift")
+        #expect(grammar.externals.isEmpty)
     }
 }
 
