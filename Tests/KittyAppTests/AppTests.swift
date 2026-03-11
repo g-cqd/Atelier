@@ -4,26 +4,26 @@ import Testing
 @testable import KittyTerminal
 @testable import KittyCodecs
 
-@Suite("App Protocol")
-struct AppTests {
+@Suite
+struct AppProtocolTests {
     struct TestApp: App {
         var body: some View {
             Text("Test")
         }
     }
 
-    @Test("App instance can be created")
-    func createApp() {
+    @Test
+    func `App instance can be created`() {
         let app = TestApp()
         _ = app.body
     }
 }
 
-@Suite("ApplicationRuntime")
+@Suite
 struct ApplicationRuntimeTests {
-    @Test("Setup writes expected escape sequences")
+    @Test
     @MainActor
-    func setupSequences() async throws {
+    func `Setup writes expected escape sequences`() async throws {
         let mock = MockTerminalConnection()
         mock.feedInput([0x03]) // Ctrl+C (keyCode 3) to quit immediately
 
@@ -42,9 +42,9 @@ struct ApplicationRuntimeTests {
         #expect(found)
     }
 
-    @Test("Run restores raw mode and writes cleanup sequences")
+    @Test
     @MainActor
-    func runRestoresRawModeAndWritesCleanupSequences() async throws {
+    func `Run restores raw mode and writes cleanup sequences`() async throws {
         let mock = MockTerminalConnection()
         mock.feedInput([0x03])
 

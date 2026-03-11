@@ -3,10 +3,10 @@ import Testing
 @testable import KittyFileTree
 import Foundation
 
-@Suite("KittyGit")
+@Suite
 struct KittyGitTests {
-    @Test("Parse porcelain output produces correct statuses")
-    func parsePorcelain() {
+    @Test
+    func `Parse porcelain output produces correct statuses`() {
         let provider = GitStatusProvider(rootPath: "/project")
         let output = """
          M src/main.swift
@@ -32,8 +32,8 @@ struct KittyGitTests {
         #expect(summary.conflicted == 1)
     }
 
-    @Test("Directory status propagates from children")
-    func directoryPropagation() {
+    @Test
+    func `Directory status propagates from children`() {
         let provider = GitStatusProvider(rootPath: "/project")
         let output = " M src/lib/file.swift\n"
         let (statuses, _) = provider.parseGitStatus(output, rootPath: "/project")
@@ -43,8 +43,8 @@ struct KittyGitTests {
         #expect(statuses["/project/src"] == .modified)
     }
 
-    @Test("FileStatus indicator strings")
-    func statusIndicators() {
+    @Test
+    func `FileStatus indicator strings`() {
         #expect(FileStatus.modified.indicator == "M")
         #expect(FileStatus.added.indicator == "A")
         #expect(FileStatus.untracked.indicator == "?")
@@ -55,22 +55,22 @@ struct KittyGitTests {
         #expect(FileStatus.clean.indicator == "")
     }
 
-    @Test("FileStatusSummary isEmpty")
-    func summaryIsEmpty() {
+    @Test
+    func `FileStatusSummary isEmpty`() {
         #expect(FileStatusSummary().isEmpty)
         #expect(!FileStatusSummary(modified: 1).isEmpty)
     }
 
-    @Test("Empty porcelain output produces empty statuses")
-    func emptyPorcelain() {
+    @Test
+    func `Empty porcelain output produces empty statuses`() {
         let provider = GitStatusProvider(rootPath: "/project")
         let (statuses, summary) = provider.parseGitStatus("", rootPath: "/project")
         #expect(statuses.isEmpty)
         #expect(summary.isEmpty)
     }
 
-    @Test("FileStatus statusColor mapping")
-    func statusColors() {
+    @Test
+    func `FileStatus statusColor mapping`() {
         #expect(FileStatus.modified.statusColor == .modified)
         #expect(FileStatus.renamed.statusColor == .modified)
         #expect(FileStatus.added.statusColor == .added)
@@ -81,8 +81,8 @@ struct KittyGitTests {
         #expect(FileStatus.ignored.statusColor == .clean)
     }
 
-    @Test("Repository detection works from nested directories")
-    func repositoryRootFromNestedDirectory() throws {
+    @Test
+    func `Repository detection works from nested directories`() throws {
         let fileManager = FileManager.default
         let tempRoot = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let nestedDirectory = tempRoot.appendingPathComponent("Sources/Nested", isDirectory: true)

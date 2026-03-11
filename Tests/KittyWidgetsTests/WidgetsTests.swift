@@ -4,25 +4,25 @@ import Testing
 @testable import KittyRenderer
 @testable import KittySyntax
 
-@Suite("View Protocol")
-struct ViewTests {
-    @Test("Text view creation")
-    func textView() {
+@Suite
+struct ViewProtocolTests {
+    @Test
+    func `Text view creation`() {
         let text = Text("Hello", style: Style(bold: true))
         #expect(text.content == "Hello")
         #expect(text.style.bold)
     }
 
-    @Test("EmptyView creation")
-    func emptyView() {
+    @Test
+    func `EmptyView creation`() {
         _ = EmptyView()
     }
 }
 
-@Suite("Layout")
+@Suite
 struct LayoutTests {
-    @Test("VStack creation")
-    func vstackCreation() {
+    @Test
+    func `VStack creation`() {
         let stack = VStack {
             Text("A")
             Text("B")
@@ -30,8 +30,8 @@ struct LayoutTests {
         _ = stack
     }
 
-    @Test("HStack creation")
-    func hstackCreation() {
+    @Test
+    func `HStack creation`() {
         let stack = HStack(spacing: 2) {
             Text("X")
         }
@@ -39,10 +39,10 @@ struct LayoutTests {
     }
 }
 
-@Suite("TreeView")
+@Suite
 struct TreeViewTests {
-    @Test("Visible rows flattening")
-    func visibleRows() {
+    @Test
+    func `Visible rows flattening`() {
         let child = TreeNode(value: "child")
         let root = TreeNode(value: "root", children: [child], isExpanded: true)
         let tree = TreeView(root: [root], label: { $0 })
@@ -52,8 +52,8 @@ struct TreeViewTests {
         #expect(rows[1].depth == 1)
     }
 
-    @Test("Collapsed node hides children")
-    func collapsed() {
+    @Test
+    func `Collapsed node hides children`() {
         let child = TreeNode(value: "child")
         let root = TreeNode(value: "root", children: [child], isExpanded: false)
         let tree = TreeView(root: [root], label: { $0 })
@@ -61,8 +61,8 @@ struct TreeViewTests {
         #expect(rows.count == 1)
     }
 
-    @Test("Scroll indicator drag maps track rows into tree scroll offsets")
-    func scrollIndicatorDragMapping() {
+    @Test
+    func `Scroll indicator drag maps track rows into tree scroll offsets`() {
         let tree = TreeView(
             root: (0..<20).map { TreeNode(value: "node-\($0)") },
             scrollOffset: 0,
@@ -80,8 +80,8 @@ struct TreeViewTests {
         #expect(TreeViewLayout.scrollOffset(for: tree, in: rect, pointerRow: 5, gripOffset: gripOffset ?? 0) == 19)
     }
 
-    @Test("Tree scroll indicator hidden when all items fit in viewport")
-    func treeScrollIndicatorHiddenWhenFits() {
+    @Test
+    func `Tree scroll indicator hidden when all items fit in viewport`() {
         let tree = TreeView(
             root: (0..<3).map { TreeNode(value: "node-\($0)") },
             scrollOffset: 0,
@@ -95,8 +95,8 @@ struct TreeViewTests {
         #expect(TreeViewLayout.contentWidth(for: tree, in: rect) == 10)
     }
 
-    @Test("Tree scroll indicator hidden when rendered with fewer items than viewport")
-    func treeScrollIndicatorHiddenInRenderedOutput() {
+    @Test
+    func `Tree scroll indicator hidden when rendered with fewer items than viewport`() {
         var buffer = ScreenBuffer(columns: 10, rows: 5)
         let tree = TreeView(
             root: (0..<3).map { TreeNode(value: "n\($0)") },
@@ -122,25 +122,25 @@ struct TreeViewTests {
     }
 }
 
-@Suite("StatusBar")
+@Suite
 struct StatusBarTests {
-    @Test("Render fixed width")
-    func renderWidth() {
+    @Test
+    func `Render fixed width`() {
         let bar = StatusBar(left: "L", center: "C", right: "R")
         let rendered = bar.render(width: 30)
         #expect(rendered.count == 30)
     }
 
-    @Test("Non positive width returns empty string")
-    func nonPositiveWidthReturnsEmptyString() {
+    @Test
+    func `Non positive width returns empty string`() {
         let bar = StatusBar(left: "L", center: "C", right: "R")
 
         #expect(bar.render(width: 0).isEmpty)
         #expect(bar.render(width: -1).isEmpty)
     }
 
-    @Test("Edge-aligned rendering preserves the trailing segment")
-    func edgeAlignedPreservesTrailingSegment() {
+    @Test
+    func `Edge-aligned rendering preserves the trailing segment`() {
         let bar = StatusBar(left: "left side", right: "RIGHT")
         let rendered = bar.render(width: 14)
 
@@ -149,10 +149,10 @@ struct StatusBarTests {
     }
 }
 
-@Suite("ViewModifier")
+@Suite
 struct ViewModifierTests {
-    @Test("ModifiedView preserves wrapped content")
-    func modifiedViewPreservesWrappedContent() {
+    @Test
+    func `ModifiedView preserves wrapped content`() {
         let inner = ModifiedView(content: Text("Hello"), modifier: BoldModifier())
         let outer = ModifiedView(content: inner, modifier: ItalicModifier())
 
@@ -164,17 +164,17 @@ struct ViewModifierTests {
     }
 }
 
-@Suite("TextEditor")
+@Suite
 struct TextEditorTests {
-    @Test("Line number width")
-    func lineNumberWidth() {
+    @Test
+    func `Line number width`() {
         let editor = TextEditor(content: "a\nb\nc")
         #expect(editor.lines.count == 3)
         #expect(editor.lineNumberWidth == 1)
     }
 
-    @Test("Cursor layout accounts for line-number gutter and horizontal scroll")
-    func cursorPositionWithoutWrap() {
+    @Test
+    func `Cursor layout accounts for line-number gutter and horizontal scroll`() {
         let editor = TextEditor(
             lines: ["abcdef"],
             lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
@@ -193,8 +193,8 @@ struct TextEditorTests {
         #expect(position == .init(row: 3, col: 10))
     }
 
-    @Test("Cursor layout accounts for wrapped rows")
-    func cursorPositionWithWrap() {
+    @Test
+    func `Cursor layout accounts for wrapped rows`() {
         let editor = TextEditor(
             lines: ["abcdef"],
             lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
@@ -212,8 +212,8 @@ struct TextEditorTests {
         #expect(position == .init(row: 4, col: 9))
     }
 
-    @Test("Hit testing maps clicks into scrolled unwrapped content")
-    func textPositionWithoutWrap() {
+    @Test
+    func `Hit testing maps clicks into scrolled unwrapped content`() {
         let editor = TextEditor(
             lines: ["abcdef"],
             lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
@@ -232,8 +232,8 @@ struct TextEditorTests {
         #expect(position == .init(row: 0, col: 4))
     }
 
-    @Test("Hit testing maps clicks into wrapped rows")
-    func textPositionWithWrap() {
+    @Test
+    func `Hit testing maps clicks into wrapped rows`() {
         let editor = TextEditor(
             lines: ["abcdef"],
             lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
@@ -251,8 +251,8 @@ struct TextEditorTests {
         #expect(position == .init(row: 0, col: 4))
     }
 
-    @Test("Scroll indicator geometry reserves content width and ignores indicator hit testing")
-    func textEditorScrollIndicatorGeometry() {
+    @Test
+    func `Scroll indicator geometry reserves content width and ignores indicator hit testing`() {
         // Need more lines than viewport height to trigger scrollbar
         let lines = ["abcdef", "ghijkl", "mnopqr"]
         let editor = TextEditor(
@@ -269,8 +269,8 @@ struct TextEditorTests {
         #expect(TextEditorLayout.textPosition(for: editor, in: rect, row: 3, col: 12) == nil)
     }
 
-    @Test("Scroll indicator hidden when content fits in viewport")
-    func textEditorScrollIndicatorHiddenWhenContentFits() {
+    @Test
+    func `Scroll indicator hidden when content fits in viewport`() {
         let editor = TextEditor(
             lines: ["abcdef"],
             lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
@@ -285,8 +285,8 @@ struct TextEditorTests {
         #expect(TextEditorLayout.verticalScrollIndicatorRect(for: editor, in: rect) == nil)
     }
 
-    @Test("Wrapped scroll indicator drag maps visual rows back to line offsets")
-    func wrappedScrollIndicatorDragMapping() {
+    @Test
+    func `Wrapped scroll indicator drag maps visual rows back to line offsets`() {
         let lines = Array(repeating: "abcdef", count: 4)
         let editor = TextEditor(
             lines: lines,
@@ -306,7 +306,7 @@ struct TextEditorTests {
 
 // MARK: - Text Rendering Tests
 
-@Suite("Text Rendering")
+@Suite
 struct TextRenderingTests {
     private func makeSUT(columns: Int = 20, rows: Int = 5) -> ScreenBuffer {
         ScreenBuffer(columns: columns, rows: rows)
@@ -590,14 +590,14 @@ struct TextRenderingTests {
 
 // MARK: - ScrollView Tests
 
-@Suite("ScrollView")
+@Suite
 struct ScrollViewTests {
     private func makeSUT(columns: Int = 20, rows: Int = 5) -> ScreenBuffer {
         ScreenBuffer(columns: columns, rows: rows)
     }
 
-    @Test("ScrollView hides scrollbar when content fits in viewport")
-    func hidesScrollbarWhenContentFits() {
+    @Test
+    func `ScrollView hides scrollbar when content fits in viewport`() {
         let scrollView = ScrollView(contentHeight: 3, scrollOffset: 0) {
             Text("Hello")
         }
@@ -608,8 +608,8 @@ struct ScrollViewTests {
         #expect(ScrollViewLayout.verticalScrollIndicatorRect(for: scrollView, in: rect) == nil)
     }
 
-    @Test("ScrollView shows scrollbar when content overflows viewport")
-    func showsScrollbarWhenContentOverflows() {
+    @Test
+    func `ScrollView shows scrollbar when content overflows viewport`() {
         let scrollView = ScrollView(contentHeight: 20, scrollOffset: 0) {
             Text("Hello")
         }
@@ -620,8 +620,8 @@ struct ScrollViewTests {
         #expect(ScrollViewLayout.verticalScrollIndicatorRect(for: scrollView, in: rect) == Rect(x: 9, y: 0, width: 1, height: 5))
     }
 
-    @Test("ScrollView content rect excludes scrollbar when scrollable")
-    func contentRectExcludesScrollbar() {
+    @Test
+    func `ScrollView content rect excludes scrollbar when scrollable`() {
         let scrollView = ScrollView(contentHeight: 20, scrollOffset: 0) {
             Text("Hello")
         }
@@ -631,8 +631,8 @@ struct ScrollViewTests {
         #expect(contentRect == Rect(x: 2, y: 3, width: 9, height: 5))
     }
 
-    @Test("ScrollView content rect uses full width when content fits")
-    func contentRectUsesFullWidth() {
+    @Test
+    func `ScrollView content rect uses full width when content fits`() {
         let scrollView = ScrollView(contentHeight: 3, scrollOffset: 0) {
             Text("Hello")
         }
@@ -642,8 +642,8 @@ struct ScrollViewTests {
         #expect(contentRect == Rect(x: 0, y: 0, width: 10, height: 5))
     }
 
-    @Test("ScrollView drag maps pointer rows to scroll offsets")
-    func scrollDragMapping() {
+    @Test
+    func `ScrollView drag maps pointer rows to scroll offsets`() {
         let scrollView = ScrollView(contentHeight: 20, scrollOffset: 0) {
             Text("Hello")
         }
@@ -658,8 +658,8 @@ struct ScrollViewTests {
         #expect(offset == 15)
     }
 
-    @Test("ScrollView clampedOffset respects bounds")
-    func clampedOffsetBounds() {
+    @Test
+    func `ScrollView clampedOffset respects bounds`() {
         let scrollView = ScrollView(contentHeight: 20, scrollOffset: 0) {
             Text("Hello")
         }
@@ -670,8 +670,8 @@ struct ScrollViewTests {
         #expect(ScrollViewLayout.clampedOffset(for: scrollView, in: rect, offset: 10) == 10)
     }
 
-    @Test("ScrollView renders content into full width when content fits")
-    func rendersContentFullWidth() {
+    @Test
+    func `ScrollView renders content into full width when content fits`() {
         var buffer = makeSUT(columns: 10, rows: 3)
         let rect = Rect(x: 0, y: 0, width: 10, height: 3)
 
@@ -684,8 +684,8 @@ struct ScrollViewTests {
         #expect(buffer[0, 9].character == " ")
     }
 
-    @Test("ScrollView renders scrollbar thumb when content overflows")
-    func rendersScrollbarThumb() {
+    @Test
+    func `ScrollView renders scrollbar thumb when content overflows`() {
         let thumbStyle = Style(fg: .rgb(r: 200, g: 200, b: 200))
         let style = ScrollViewStyle(
             thumbStyle: thumbStyle,
@@ -702,8 +702,8 @@ struct ScrollViewTests {
         #expect(buffer[0, 9].style.fg == thumbStyle.fg)
     }
 
-    @Test("ScrollView does not render scrollbar column when content fits")
-    func noScrollbarColumnWhenContentFits() {
+    @Test
+    func `ScrollView does not render scrollbar column when content fits`() {
         let style = ScrollViewStyle(trackCharacter: "|", thumbCharacter: "#")
         var buffer = makeSUT(columns: 10, rows: 5)
         let rect = Rect(x: 0, y: 0, width: 10, height: 5)
@@ -719,8 +719,8 @@ struct ScrollViewTests {
         }
     }
 
-    @Test("ScrollView default style uses translucent gray")
-    func defaultStyleIsTranslucentGray() {
+    @Test
+    func `ScrollView default style uses translucent gray`() {
         let style = ScrollViewStyle()
         #expect(style.thumbStyle.dim == true)
         #expect(style.thumbStyle.fg == .rgb(r: 140, g: 140, b: 140))
@@ -728,8 +728,8 @@ struct ScrollViewTests {
         #expect(style.trackCharacter == " ")
     }
 
-    @Test("ScrollView scroll metrics reports not scrollable when content fits")
-    func metricsNotScrollableWhenFits() {
+    @Test
+    func `ScrollView scroll metrics reports not scrollable when content fits`() {
         let scrollView = ScrollView(contentHeight: 3, scrollOffset: 0) {
             Text("Hello")
         }
@@ -739,8 +739,8 @@ struct ScrollViewTests {
         #expect(!metrics.isScrollable)
     }
 
-    @Test("ScrollView scroll metrics reports scrollable when content overflows")
-    func metricsScrollableWhenOverflows() {
+    @Test
+    func `ScrollView scroll metrics reports scrollable when content overflows`() {
         let scrollView = ScrollView(contentHeight: 20, scrollOffset: 5) {
             Text("Hello")
         }
@@ -753,8 +753,8 @@ struct ScrollViewTests {
         #expect(metrics.viewportLength == 5)
     }
 
-    @Test("ScrollView gripOffset returns nil when content fits")
-    func gripOffsetNilWhenFits() {
+    @Test
+    func `ScrollView gripOffset returns nil when content fits`() {
         let scrollView = ScrollView(contentHeight: 3, scrollOffset: 0) {
             Text("Hello")
         }
@@ -763,8 +763,8 @@ struct ScrollViewTests {
         #expect(ScrollViewLayout.scrollGripOffset(for: scrollView, in: rect, pointerRow: 2) == nil)
     }
 
-    @Test("ScrollViewStyle converts to VerticalScrollIndicatorStyle")
-    func styleConvertsToIndicatorStyle() {
+    @Test
+    func `ScrollViewStyle converts to VerticalScrollIndicatorStyle`() {
         let style = ScrollViewStyle(
             trackStyle: Style(fg: .rgb(r: 10, g: 20, b: 30)),
             thumbStyle: Style(fg: .rgb(r: 40, g: 50, b: 60)),
@@ -782,7 +782,7 @@ struct ScrollViewTests {
 
 // MARK: - ViewModifier Context Tests
 
-@Suite("ViewModifier Context")
+@Suite
 struct ViewModifierContextTests {
     @Test func `foreground modifier sets foreground on RenderContext`() {
         let modifier = ForegroundModifier(color: .rgb(r: 255, g: 0, b: 0))
@@ -845,7 +845,7 @@ struct ViewModifierContextTests {
 
 // MARK: - RenderContext Tests
 
-@Suite("RenderContext")
+@Suite
 struct RenderContextTests {
     @Test func `default RenderContext has nil for all properties`() {
         let context = RenderContext()
@@ -936,7 +936,7 @@ struct RenderContextTests {
 
 // MARK: - Rect Tests
 
-@Suite("Rect")
+@Suite
 struct RectTests {
     @Test func `zero has all zero components`() {
         let rect = Rect.zero
@@ -998,7 +998,7 @@ struct RectTests {
 
 // MARK: - FocusEngine Tests
 
-@Suite("FocusEngine")
+@Suite
 struct FocusEngineTests {
     private func makeSUT(focusedIndex: Int = 0, focusableCount: Int = 3) -> FocusEngine {
         FocusEngine(focusedIndex: focusedIndex, focusableCount: focusableCount)
@@ -1085,7 +1085,7 @@ struct FocusEngineTests {
 
 // MARK: - State Property Wrapper Tests
 
-@Suite("State Property Wrapper")
+@Suite
 struct StatePropertyWrapperTests {
     @Test func `wrappedValue stores the initial value`() {
         let state = State(wrappedValue: 42)
