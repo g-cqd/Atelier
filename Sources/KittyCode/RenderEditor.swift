@@ -28,6 +28,7 @@ func renderEditorPanel(
 
     let gutterDecorations = activeGutterDecorations(state: state, colorScheme: colorScheme)
     let lineStyleOverlays = activeLineStyleOverlays(state: state, colorScheme: colorScheme)
+    let selectionRanges = activeSelectionRanges(state: state)
 
     let wsConfig = WhitespaceRenderer.Config(
         showIndentation: state.config.whitespace.showIndentation,
@@ -55,6 +56,8 @@ func renderEditorPanel(
         showsVerticalScrollIndicator: true,
         showsHorizontalScrollIndicator: !state.config.editor.wrapLines,
         lineStyleOverlays: lineStyleOverlays,
+        selectionRanges: selectionRanges,
+        selectionStyle: colorScheme.selection,
         editorStyle: colorScheme.editorText,
         lineNumberStyle: colorScheme.lineNumber,
         currentLineStyle: colorScheme.editorCursorLine,
@@ -102,4 +105,29 @@ private func gutterSymbol(for color: FileStatusColor) -> Character {
     case .deleted: return "-"
     case .conflicted, .clean: return "!"
     }
+}
+
+@MainActor
+private func activeSelectionRanges(state: EditorState) -> [Int: ClosedRange<Int>] {
+    guard let selection = state.selection, !selection.isCollapsed else { return [:] }
+    let (start, end) = selection.ordered
+    var ranges: [Int: ClosedRange<Int>] = [:]
+
+    if start.row == end.row {
+        ranges[start.row] = start.col...end.col - 1
+    } else {
+        let firstLineLength = state.fileLine(at: start.row).count
+        ranges[start.row] = start.col...firstLineLength
+
+        for row in (start.row + 1)..<end.row {
+            let lineLength = state.fileLine(at: row).count
+            ranges[row] = 0...lineLength
+        }
+
+        if end.row > start.row {
+            ranges[end.row] = 0...end.col - 1
+        }
+    }
+
+    return ranges
 }
