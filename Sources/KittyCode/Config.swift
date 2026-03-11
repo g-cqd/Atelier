@@ -259,6 +259,10 @@ struct KittyConfig: Codable, Sendable {
         var cursorLineBackground: ColorRGB?
         var cursorLineForeground: ColorRGB?
 
+        // Selection highlighting
+        var selectionBackground: ColorRGB?
+        var selectionForeground: ColorRGB?
+
         // Whitespace rendering
         var whitespaceIndentationForeground: ColorRGB?
         var whitespaceSpaceForeground: ColorRGB?
@@ -313,6 +317,8 @@ struct KittyConfig: Codable, Sendable {
             openFilesSelectedForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .openFilesSelectedForeground)
             cursorLineBackground = try c.decodeIfPresent(ColorRGB.self, forKey: .cursorLineBackground)
             cursorLineForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .cursorLineForeground)
+            selectionBackground = try c.decodeIfPresent(ColorRGB.self, forKey: .selectionBackground)
+            selectionForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .selectionForeground)
             whitespaceIndentationForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .whitespaceIndentationForeground)
             whitespaceSpaceForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .whitespaceSpaceForeground)
             whitespaceLineBreakForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .whitespaceLineBreakForeground)

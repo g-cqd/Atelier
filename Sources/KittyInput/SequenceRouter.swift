@@ -14,6 +14,7 @@ public struct SequenceRouter: Sendable {
         case osc
         case paste
         case ss3
+        case utf8Sequence
     }
 
     private enum FunctionalKeyCode {
@@ -43,6 +44,8 @@ public struct SequenceRouter: Sendable {
     private var mouseDecoder = MouseDecoder()
     private var buffer: [UInt8] = []
     private var routeState: RouteState = .ground
+    private var utf8Buffer: [UInt8] = []
+    private var utf8ExpectedBytes: Int = 0
 
     public init() {}
 
@@ -58,8 +61,22 @@ public struct SequenceRouter: Sendable {
             if byte == 0x1b {
                 routeState = .escape
                 buffer = [byte]
-            } else if case .complete(let key) = keyboardDecoder.feed(byte) {
-                events.append(.key(key))
+            } else if (byte & 0b1000_0000) == 0 {
+                if case .complete(let key) = keyboardDecoder.feed(byte) {
+                    events.append(.key(key))
+                }
+            } else if (byte & 0b1110_0000) == 0b1100_0000 {
+                utf8Buffer = [byte]
+                utf8ExpectedBytes = 2
+                routeState = .utf8Sequence
+            } else if (byte & 0b1110_0000) == 0b1110_0000 {
+                utf8Buffer = [byte]
+                utf8ExpectedBytes = 3
+                routeState = .utf8Sequence
+            } else if (byte & 0b1111_0000) == 0b1111_0000 {
+                utf8Buffer = [byte]
+                utf8ExpectedBytes = 4
+                routeState = .utf8Sequence
             }
 
         case .escape:
@@ -225,6 +242,20 @@ public struct SequenceRouter: Sendable {
                 resetRouting()
                 feed(byte, into: &events)
             }
+
+        case .utf8Sequence:
+            utf8Buffer.append(byte)
+            if utf8Buffer.count >= utf8ExpectedBytes {
+                let text = String(decoding: utf8Buffer, as: UTF8.self)
+                if let scalar = text.unicodeScalars.first {
+                    let event = KeyEvent(
+                        keyCode: UInt32(scalar.value),
+                        associatedText: text
+                    )
+                    events.append(.key(event))
+                }
+                resetRouting()
+            }
         }
     }
 
@@ -276,6 +307,8 @@ public struct SequenceRouter: Sendable {
     private mutating func resetRouting() {
         routeState = .ground
         buffer.removeAll(keepingCapacity: true)
+        utf8Buffer.removeAll(keepingCapacity: true)
+        utf8ExpectedBytes = 0
     }
 
     private static func csiKeyCode(for terminator: UInt8) -> UInt32? {

@@ -16,6 +16,31 @@ final class EditorState {
         case editor
     }
 
+    struct WrapCache: Sendable {
+        var contentWidth: Int = -1
+        var tabSize: Int = -1
+        var documentVersion: Int = 0
+        var totalRowCount: Int = 0
+        var lineWrapCounts: [Int] = []
+        var visualOffsets: [Int] = []
+
+        mutating func invalidate() {
+            contentWidth = -1
+            tabSize = -1
+            documentVersion = 0
+            totalRowCount = 0
+            lineWrapCounts.removeAll(keepingCapacity: true)
+            visualOffsets.removeAll(keepingCapacity: true)
+        }
+
+        func isValid(contentWidth: Int, tabSize: Int, documentVersion: Int, lineCount: Int) -> Bool {
+            self.contentWidth == contentWidth &&
+            self.tabSize == tabSize &&
+            self.documentVersion == documentVersion &&
+            lineWrapCounts.count == lineCount
+        }
+    }
+
     struct ColorScheme {
         var bg: Style
         var treeBg: Style
@@ -50,6 +75,7 @@ final class EditorState {
         var verticalScrollIndicator: VerticalScrollIndicatorStyle
         var horizontalScrollIndicator: HorizontalScrollIndicatorStyle
         var emptyEditorMessage: Style
+        var selection: Style
 
         func gitStatusStyle(for color: FileStatusColor) -> Style {
             switch color {
@@ -455,6 +481,7 @@ final class EditorState {
         widenCachedMaxLineWidth(for: mutation.updatedLineRange)
         refreshHighlights(after: mutation)
         gitDecorationManager?.scheduleRefreshForActiveBuffer()
+        wrapCache.invalidate()
     }
 
     func replaceDocumentText(with content: String) {
@@ -510,6 +537,55 @@ final class EditorState {
         tabScrollOffset = ribbon.clampedScrollOffset(activeIndex: bufferManager.activeIndex, ribbonWidth: ribbonWidth)
     }
 
+    func buildWrapCache(contentWidth: Int) {
+        guard contentWidth > 0 else { return }
+
+        let docVersion = bufferManager.activeBuffer?.documentVersion ?? 0
+        let lineCount = fileLineCount
+        let tabSize = config.editor.tabSize
+
+        guard !wrapCache.isValid(contentWidth: contentWidth, tabSize: tabSize, documentVersion: docVersion, lineCount: lineCount) else {
+            return
+        }
+
+        wrapCache.contentWidth = contentWidth
+        wrapCache.tabSize = tabSize
+        wrapCache.documentVersion = docVersion
+        wrapCache.lineWrapCounts = (0..<lineCount).map { lineIndex in
+            let line = fileLine(at: lineIndex)
+            var rowCount = 1
+            var currentRowWidth = 0
+            for char in line {
+                let width = char == "\t" ? tabSize - (currentRowWidth % tabSize) : UnicodeWidth.displayWidth(of: char)
+                guard width > 0 else { continue }
+                if currentRowWidth > 0, currentRowWidth + width > contentWidth {
+                    rowCount += 1
+                    currentRowWidth = 0
+                }
+                currentRowWidth += width
+            }
+            return rowCount
+        }
+        wrapCache.totalRowCount = wrapCache.lineWrapCounts.reduce(0, +)
+
+        var offset = 0
+        wrapCache.visualOffsets = [0]
+        for i in 1..<lineCount {
+            offset += wrapCache.lineWrapCounts[i - 1]
+            wrapCache.visualOffsets.append(offset)
+        }
+    }
+
+    func visualRowOffset(forLine lineIndex: Int) -> Int {
+        guard lineIndex >= 0 && lineIndex < fileLineCount else { return 0 }
+        guard lineIndex < wrapCache.visualOffsets.count else { return 0 }
+        return wrapCache.visualOffsets[lineIndex]
+    }
+
+    func totalWrappedRowCount() -> Int {
+        wrapCache.totalRowCount
+    }
+
     func tabRibbonTabs() -> [TabRibbon.Tab] {
         bufferManager.buffers.map { buf in
             let status = config.git.enabled && config.git.decorations.showTabRibbonStatus
@@ -552,9 +628,20 @@ final class EditorState {
     var pendingAcceleratedScrollTarget: AcceleratedScrollTarget?
     var scrollAccelerationTask: Task<Void, Never>?
     var isLoadingGrammar = false
+    var wrapCache = WrapCache()
+    var selection: TextSelection?
+    var terminalWriter: (([UInt8]) -> Void)?
 
     var maxLineWidth: Int {
         cachedMaxLineWidth ?? 0
+    }
+
+    var hasActiveSelection: Bool {
+        selection.map { !$0.isCollapsed } ?? false
+    }
+
+    func clearSelection() {
+        selection = nil
     }
 
     init(rootPath: String, config: KittyConfig) {
