@@ -24,6 +24,13 @@ import Testing
         #expect(buffer.lineCount == 3)
     }
 
+    @Test func `init from multiline string preserves trailing empty line`() {
+        let buffer = TextBuffer("foo\nbar\n")
+        #expect(buffer.lines == ["foo", "bar", ""])
+        #expect(buffer.lineCount == 3)
+        #expect(buffer.text == "foo\nbar\n")
+    }
+
     @Test func `init from empty lines array produces single empty line`() {
         let buffer = TextBuffer(lines: [])
         #expect(buffer.lines == [""])

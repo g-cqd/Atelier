@@ -634,6 +634,35 @@ struct MultiBufferIntegrationTests {
         state.textDidChange()
         #expect(state.bufferManager.activeBuffer?.isDirty == true)
     }
+
+    @Test("opening and restoring a file preserves exact document snapshots")
+    func openAndRestorePreservesExactSnapshots() throws {
+        let fileManager = FileManager.default
+        let rootURL = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: rootURL) }
+
+        let firstFileURL = rootURL.appendingPathComponent("first.txt")
+        let secondFileURL = rootURL.appendingPathComponent("second.txt")
+        try "alpha\nbeta\n".write(to: firstFileURL, atomically: true, encoding: .utf8)
+        try "gamma".write(to: secondFileURL, atomically: true, encoding: .utf8)
+
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbonPosition = .hidden
+        let state = EditorState(rootPath: rootURL.path, config: config)
+
+        state.openFilePath(firstFileURL.path, name: "first.txt")
+        #expect(state.fileContent == ["alpha", "beta", ""])
+        #expect(state.documentText == "alpha\nbeta\n")
+
+        state.openFilePath(secondFileURL.path, name: "second.txt")
+        state.switchToTab(0)
+
+        #expect(state.fileName == "first.txt")
+        #expect(state.fileContent == ["alpha", "beta", ""])
+        #expect(state.documentText == "alpha\nbeta\n")
+    }
 }
 
 // MARK: - Syntax config tests
