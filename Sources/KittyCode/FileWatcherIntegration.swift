@@ -80,9 +80,17 @@ final class FileWatcherIntegration {
                   let content = String(data: data, encoding: .utf8) else { return }
 
             buffer.textBuffer = TextBuffer(content)
-            buffer.textCursor = TextCursor()
             buffer.lastModifiedDate = diskDate
             buffer.highlightSession = nil
+            buffer.cachedFileLines = nil
+            buffer.cachedDocumentText = nil
+
+            // Clamp cursor to valid bounds instead of resetting
+            let lineCount = buffer.textBuffer.lineCount
+            buffer.textCursor.row = min(buffer.textCursor.row, max(0, lineCount - 1))
+            let lineLength = buffer.textBuffer.line(at: buffer.textCursor.row).count
+            buffer.textCursor.col = min(buffer.textCursor.col, lineLength)
+            buffer.textCursor.scrollRow = min(buffer.textCursor.scrollRow, max(0, lineCount - 1))
 
             if index == state.bufferManager.activeIndex {
                 state.restoreStateFromActiveBuffer()

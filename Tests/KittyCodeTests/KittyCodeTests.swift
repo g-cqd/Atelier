@@ -5,6 +5,7 @@ import KittyRenderer
 import KittySyntax
 import KittyTerminal
 import KittyText
+import KittyWidgets
 import Testing
 @testable import KittyCode
 
@@ -385,7 +386,7 @@ struct KittyCodeSyntaxWiringTests {
 
     @Test("EditorState patches only the affected fallback highlight range")
     @MainActor
-    func editorStateIncrementalFallbackHighlighting() {
+    func editorStateIncrementalFallbackHighlighting() throws {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         state.currentLanguage = "unknown_lang"
         state.fileContent = ["hello", "world", "tail"]
@@ -397,11 +398,8 @@ struct KittyCodeSyntaxWiringTests {
         state.cursorRow = 1
         state.cursorCol = 0
 
-        let mutation = TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor)
-        #expect(mutation != nil)
-        if let mutation {
-            state.textDidChange(mutation)
-        }
+        let mutation = try #require(TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor))
+        state.textDidChange(mutation)
 
         #expect(state.fileContent == ["helloworld", "tail"])
         #expect(state.highlightedLines.count == 2)
@@ -660,6 +658,309 @@ struct MultiBufferIntegrationTests {
         #expect(state.fileName == "first.txt")
         #expect(state.fileContent == ["alpha", "beta", ""])
         #expect(state.documentText == "alpha\nbeta\n")
+    }
+}
+
+// MARK: - Runtime regression tests
+
+@Suite("Runtime Regressions")
+@MainActor
+struct RuntimeRegressionTests {
+    private func makeSUT(
+        fileContent: [String] = [""],
+        columns: Int = 80,
+        rows: Int = 24,
+        activityBar: Bool = false,
+        tabRibbon: KittyConfig.TabRibbonPosition = .hidden
+    ) -> (state: EditorState, pipeline: RenderPipeline) {
+        var config = KittyConfig()
+        config.activityBar.show = activityBar
+        config.tabRibbonPosition = tabRibbon
+        let state = EditorState(rootPath: ".", config: config)
+        state.fileContent = fileContent
+        let pipeline = RenderPipeline(
+            connection: MockTerminalConnection(size: TerminalSize(columns: columns, rows: rows)),
+            columns: columns,
+            rows: rows
+        )
+        return (state, pipeline)
+    }
+
+    // --- Editor content placement ---
+
+    @Test("editor content renders at contentStartRow, not row 1")
+    func editorContentStartRow() {
+        let sut = makeSUT(fileContent: ["hello"], columns: 40, rows: 10)
+        sut.state.mode = .editor
+        sut.state.sidebarCollapsed = true
+        sut.state.refreshHighlights()
+        // Without tab ribbon, contentStartRow = 1
+        render(pipeline: sut.pipeline, state: sut.state)
+
+        // Row 0 is title bar, row 1 should have editor content (line numbers + text)
+        let row1Chars = (0..<40).map { sut.pipeline.buffer[1, $0].character }
+        let row1Text = String(row1Chars)
+        #expect(row1Text.contains("hello"), "Editor content should appear at row 1 (contentStartRow)")
+    }
+
+    @Test("editor content starts at row 2 when tab ribbon is shown")
+    func editorContentBelowTabRibbon() {
+        let cols = 40
+        let sut = makeSUT(columns: cols, rows: 10, tabRibbon: .top)
+        sut.state.mode = .editor
+        sut.state.sidebarCollapsed = true
+        sut.state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "world", language: nil)
+        sut.state.restoreStateFromActiveBuffer()
+        sut.state.refreshHighlights()
+
+        render(pipeline: sut.pipeline, state: sut.state)
+
+        // Row 0: title bar, Row 1: tab ribbon, Row 2: editor content
+        let row2Chars = (0..<cols).map { sut.pipeline.buffer[2, $0].character }
+        let row2Text = String(row2Chars)
+        #expect(row2Text.contains("world"), "Editor content should appear at row 2 below tab ribbon")
+
+        // Row 1 should NOT contain editor content (it's the tab ribbon)
+        let row1Chars = (0..<cols).map { sut.pipeline.buffer[1, $0].character }
+        let row1Text = String(row1Chars)
+        #expect(!row1Text.contains("world"), "Tab ribbon row should not contain editor text")
+    }
+
+    @Test("tab ribbon fills full terminal width")
+    func tabRibbonFullWidth() {
+        let cols = 40
+        let sut = makeSUT(fileContent: ["x"], columns: cols, rows: 10, tabRibbon: .top)
+        sut.state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "x", language: nil)
+        sut.state.restoreStateFromActiveBuffer()
+
+        render(pipeline: sut.pipeline, state: sut.state)
+
+        // Row 1 is the tab ribbon — every column should be non-null (filled with background)
+        for col in 0..<cols {
+            let cell = sut.pipeline.buffer[1, col]
+            #expect(cell.character != "\0", "Tab ribbon row should be filled at col \(col)")
+        }
+    }
+
+    // --- Activity bar ---
+
+    @Test("activity bar renders in the first 3 columns")
+    func activityBarRendersWidth3() {
+        let sut = makeSUT(fileContent: ["test"], columns: 40, rows: 10, activityBar: true)
+        sut.state.mode = .editor
+        render(pipeline: sut.pipeline, state: sut.state)
+
+        // Activity bar renders at columns 0-2, contentStartRow=1
+        // Column 1 (centered) should have an icon character for the first activity bar item
+        let iconCell = sut.pipeline.buffer[1, 1]
+        #expect(iconCell.character != " " || iconCell.style != .default,
+                "Activity bar center column should have styled content")
+    }
+
+    @Test("ActivityBar.width is 3")
+    func activityBarWidthIs3() {
+        #expect(ActivityBar.width == 3)
+    }
+
+    // --- Mouse coordinate handling (1-based SGR to 0-based screen) ---
+
+    @Test("editor click converts 1-based mouse coordinates correctly")
+    func editorClickCoordinateConversion() {
+        let sut = makeSUT(fileContent: ["line one", "line two", "line three"], columns: 40, rows: 10)
+        sut.state.mode = .editor
+        sut.state.treePanelWidth = 0
+        sut.state.sidebarCollapsed = true
+
+        // Mouse row 2 (1-based) = screen row 1 = first content row (contentStartRow=1)
+        // Mouse col 5 (1-based) = screen col 4
+        handleMouse(
+            MouseEvent(button: .left, row: 2, col: 5, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.cursorRow == 0, "First content row should map to line 0")
+        #expect(sut.state.mode == .editor)
+    }
+
+    @Test("tree click converts 1-based mouse coordinates correctly")
+    func treeClickCoordinateConversion() {
+        let sut = makeSUT(columns: 40, rows: 10)
+        sut.state.treePanelWidth = 10
+        sut.state.mode = .tree
+        sut.state.treeNodes = (0..<5).map { i in
+            FileNode(name: "file\(i).txt", path: "/file\(i).txt", isDirectory: false)
+        }
+        sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
+
+        // Mouse row 2 (1-based) = screen row 1 = contentStartRow
+        // contentRow = 1 - 1 - 1 = -1... wait, no: mouse.row - 1 - contentStartRow = 2 - 1 - 1 = 0
+        handleMouse(
+            MouseEvent(button: .left, row: 2, col: 3, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.selectedTreeIndex == 0, "First content row click should select tree index 0")
+    }
+
+    // --- Scroll position preservation ---
+
+    @Test("tree refresh preserves scroll offset")
+    func treeRefreshPreservesScroll() async {
+        let sut = makeSUT(columns: 40, rows: 10)
+        sut.state.treeScrollOffset = 5
+        sut.state.selectedTreeIndex = 7
+        sut.state.treeNodes = (0..<20).map { i in
+            FileNode(name: "file\(i).txt", path: "/file\(i).txt", isDirectory: false)
+        }
+        sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
+
+        // Simulate a tree refresh — loadInitialTree rescans, but we can't do async I/O in tests
+        // so test refreshFlatTree directly (which loadInitialTree calls)
+        sut.state.refreshFlatTree()
+
+        // Scroll offset should not be reset
+        #expect(sut.state.treeScrollOffset == 5)
+        #expect(sut.state.selectedTreeIndex == 7)
+    }
+
+    @Test("tree refresh clamps scroll offset when tree shrinks")
+    func treeRefreshClampsScroll() {
+        let sut = makeSUT(columns: 40, rows: 10)
+        sut.state.treeScrollOffset = 15
+        sut.state.selectedTreeIndex = 18
+        // Start with 20 items
+        sut.state.treeNodes = (0..<20).map { i in
+            FileNode(name: "file\(i).txt", path: "/file\(i).txt", isDirectory: false)
+        }
+        sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
+
+        // Shrink to 10 items
+        sut.state.treeNodes = (0..<10).map { i in
+            FileNode(name: "file\(i).txt", path: "/file\(i).txt", isDirectory: false)
+        }
+        sut.state.refreshFlatTree()
+
+        // Scroll and selection should be clamped, not reset to 0
+        let maxIndex = sut.state.cachedFlatTree.count - 1
+        #expect(sut.state.treeScrollOffset <= maxIndex)
+        #expect(sut.state.selectedTreeIndex <= maxIndex)
+    }
+
+    // --- Empty editor ---
+
+    @Test("empty editor message renders at contentStartRow, not row 1")
+    func emptyEditorAtContentStartRow() {
+        let sut = makeSUT(columns: 60, rows: 10, tabRibbon: .top)
+        sut.state.mode = .editor
+        sut.state.sidebarCollapsed = true
+        // With tab ribbon but no buffers, showTabRibbon=false (count=0)
+        // So contentStartRow=1. Let's just verify render doesn't crash
+        render(pipeline: sut.pipeline, state: sut.state)
+
+        // Row 0 = title bar, no tab ribbon (no buffers), content starts at row 1
+        // The empty editor message should be somewhere in the middle rows
+        let midRow = 1 + (10 - 2) / 2  // contentStartRow + contentRows/2
+        let rowChars = (0..<60).map { sut.pipeline.buffer[midRow, $0].character }
+        let rowText = String(rowChars).trimmingCharacters(in: .whitespaces)
+        #expect(rowText.contains("Open a file"))
+    }
+
+    // --- Status bar at bottom ---
+
+    @Test("status bar renders on the last row")
+    func statusBarOnLastRow() {
+        let rows = 10
+        let sut = makeSUT(fileContent: ["test"], columns: 40, rows: rows)
+        sut.state.mode = .editor
+        render(pipeline: sut.pipeline, state: sut.state)
+
+        let lastRowChars = (0..<40).map { sut.pipeline.buffer[rows - 1, $0].character }
+        let lastRowText = String(lastRowChars)
+        // Status bar should contain mode indicator
+        #expect(lastRowText.contains("Edit") || lastRowText.contains("Tree"))
+    }
+
+    @Test("no empty/blank row between content and status bar")
+    func noBlankRowAboveStatusBar() {
+        let rows = 10
+        let sut = makeSUT(fileContent: (0..<20).map { "line \($0)" }, columns: 40, rows: rows)
+        sut.state.mode = .editor
+        render(pipeline: sut.pipeline, state: sut.state)
+
+        // Row rows-2 (second to last) should have editor content, not be blank
+        let penultimateChars = (0..<40).map { sut.pipeline.buffer[rows - 2, $0].character }
+        let penultimateText = String(penultimateChars).trimmingCharacters(in: .whitespaces)
+        #expect(!penultimateText.isEmpty, "Second-to-last row should have content, not be blank")
+    }
+
+    // --- Layout with activity bar + tab ribbon ---
+
+    @Test("full layout with activity bar and tab ribbon renders without overlap")
+    func fullLayoutNoOverlap() {
+        let sut = makeSUT(
+            fileContent: ["hello world"],
+            columns: 60,
+            rows: 12,
+            activityBar: true,
+            tabRibbon: .top
+        )
+        sut.state.mode = .editor
+        sut.state.treePanelWidth = 15
+        sut.state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
+        sut.state.restoreStateFromActiveBuffer()
+
+        render(pipeline: sut.pipeline, state: sut.state)
+
+        // Row 0: title bar
+        // Row 1: tab ribbon (full width)
+        // Rows 2-9: activity bar (cols 0-2) + sidebar (cols 3-17) + separator (col 18) + editor (cols 19+)
+        // Row 11: status bar
+
+        // Title bar at row 0 should span full width
+        let titleChar = sut.pipeline.buffer[0, 1].character
+        #expect(titleChar != "\0")
+
+        // Tab ribbon at row 1
+        let tabChar = sut.pipeline.buffer[1, 0].character
+        #expect(tabChar != "\0", "Tab ribbon should fill from column 0")
+
+        // Editor content at row 2 (contentStartRow=2)
+        let editorArea = (19..<60).map { sut.pipeline.buffer[2, $0].character }
+        let editorText = String(editorArea).trimmingCharacters(in: .whitespaces)
+        #expect(editorText.contains("hello") || editorText.contains("1"),
+                "Editor area should have content at row 2")
+
+        // Status bar at last row
+        let statusChars = (0..<60).map { sut.pipeline.buffer[11, $0].character }
+        let statusText = String(statusChars)
+        #expect(statusText.contains("Edit") || statusText.contains("Tree"))
+    }
+
+    // --- Sidebar toggle ---
+
+    @Test("toggling sidebar resets layout cleanly on re-render")
+    func sidebarToggleCleanLayout() {
+        let sut = makeSUT(fileContent: ["content line"], columns: 40, rows: 10)
+        sut.state.mode = .editor
+        sut.state.treePanelWidth = 10
+
+        // Render with sidebar
+        sut.state.sidebarCollapsed = false
+        render(pipeline: sut.pipeline, state: sut.state)
+
+        // Clear and render without sidebar
+        sut.pipeline.buffer.clear()
+        sut.state.sidebarCollapsed = true
+        render(pipeline: sut.pipeline, state: sut.state)
+
+        // The separator column from the previous render should not persist
+        // Editor should now start at column 0 (no sidebar)
+        let row1Chars = (0..<40).map { sut.pipeline.buffer[1, $0].character }
+        let row1Text = String(row1Chars).trimmingCharacters(in: .whitespaces)
+        #expect(row1Text.contains("content") || row1Text.contains("1"),
+                "Editor should render from column 0 when sidebar is collapsed")
     }
 }
 
