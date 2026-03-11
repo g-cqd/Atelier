@@ -12,6 +12,11 @@ struct KittyConfig: Codable, Sendable {
         case hidden
     }
 
+    enum TabPersistence: String, Codable, Sendable {
+        case pinned
+        case preview
+    }
+
     struct ActivityBarConfig: Codable, Sendable {
         var show: Bool = true
         var position: Position = .left
@@ -44,6 +49,26 @@ struct KittyConfig: Codable, Sendable {
             tabPrev = try c.decodeIfPresent(String.self, forKey: .tabPrev) ?? d.tabPrev
             tabClose = try c.decodeIfPresent(String.self, forKey: .tabClose) ?? d.tabClose
             toggleSidebar = try c.decodeIfPresent(String.self, forKey: .toggleSidebar) ?? d.toggleSidebar
+        }
+    }
+
+    struct GitDecorationsConfig: Codable, Sendable {
+        var showLineChanges: Bool = true
+        var showTabRibbonStatus: Bool = true
+        var showOpenFilesStatus: Bool = true
+        var lineChangeDebounceMilliseconds: UInt64 = 150
+        var maxLineDiffBytes: Int = 1_000_000
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let d = GitDecorationsConfig()
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            showLineChanges = try c.decodeIfPresent(Bool.self, forKey: .showLineChanges) ?? d.showLineChanges
+            showTabRibbonStatus = try c.decodeIfPresent(Bool.self, forKey: .showTabRibbonStatus) ?? d.showTabRibbonStatus
+            showOpenFilesStatus = try c.decodeIfPresent(Bool.self, forKey: .showOpenFilesStatus) ?? d.showOpenFilesStatus
+            lineChangeDebounceMilliseconds = try c.decodeIfPresent(UInt64.self, forKey: .lineChangeDebounceMilliseconds) ?? d.lineChangeDebounceMilliseconds
+            maxLineDiffBytes = try c.decodeIfPresent(Int.self, forKey: .maxLineDiffBytes) ?? d.maxLineDiffBytes
         }
     }
 
@@ -141,6 +166,7 @@ struct KittyConfig: Codable, Sendable {
     // Git
     var showGitStatus: Bool = true
     var gitRefreshInterval: TimeInterval = 10
+    var gitDecorations: GitDecorationsConfig = .init()
 
     // Syntax
     var syntaxHighlighting: Bool = true
@@ -148,6 +174,7 @@ struct KittyConfig: Codable, Sendable {
 
     // Tab ribbon
     var tabRibbonPosition: TabRibbonPosition = .top
+    var tabPersistence: TabPersistence = .pinned
 
     // Activity bar
     var activityBar: ActivityBarConfig = .init()
@@ -170,9 +197,11 @@ struct KittyConfig: Codable, Sendable {
         autoSaveInterval = try c.decodeIfPresent(TimeInterval.self, forKey: .autoSaveInterval) ?? d.autoSaveInterval
         showGitStatus = try c.decodeIfPresent(Bool.self, forKey: .showGitStatus) ?? d.showGitStatus
         gitRefreshInterval = try c.decodeIfPresent(TimeInterval.self, forKey: .gitRefreshInterval) ?? d.gitRefreshInterval
+        gitDecorations = try c.decodeIfPresent(GitDecorationsConfig.self, forKey: .gitDecorations) ?? d.gitDecorations
         syntaxHighlighting = try c.decodeIfPresent(Bool.self, forKey: .syntaxHighlighting) ?? d.syntaxHighlighting
         disabledLanguages = try c.decodeIfPresent([String].self, forKey: .disabledLanguages) ?? d.disabledLanguages
         tabRibbonPosition = try c.decodeIfPresent(TabRibbonPosition.self, forKey: .tabRibbonPosition) ?? d.tabRibbonPosition
+        tabPersistence = try c.decodeIfPresent(TabPersistence.self, forKey: .tabPersistence) ?? d.tabPersistence
         activityBar = try c.decodeIfPresent(ActivityBarConfig.self, forKey: .activityBar) ?? d.activityBar
         keybindings = try c.decodeIfPresent(KeybindingsConfig.self, forKey: .keybindings) ?? d.keybindings
     }

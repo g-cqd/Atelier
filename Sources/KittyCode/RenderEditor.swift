@@ -1,4 +1,5 @@
 import KittyCodecs
+import KittyFileTree
 import KittyRenderer
 import KittyText
 import KittyWidgets
@@ -25,6 +26,8 @@ func renderEditorPanel(
         return nil
     }
 
+    let gutterDecorations = activeGutterDecorations(state: state, colorScheme: colorScheme)
+
     let editor = TextEditor(
         lines: state.fileContent,
         lineSpans: state.highlightedLines,
@@ -33,8 +36,11 @@ func renderEditorPanel(
         cursorRow: state.cursorRow,
         cursorCol: state.cursorCol,
         showLineNumbers: true,
+        showsGutterDecorations: state.config.showGitStatus && state.config.gitDecorations.showLineChanges && state.gitLineDecorationProvider != nil,
+        gutterDecorations: gutterDecorations,
         wrapLines: state.config.wrapLines,
         showsVerticalScrollIndicator: true,
+        showsHorizontalScrollIndicator: !state.config.wrapLines,
         editorStyle: colorScheme.editorText,
         lineNumberStyle: colorScheme.lineNumber,
         currentLineStyle: colorScheme.editorCursorLine,
@@ -53,4 +59,34 @@ func renderEditorPanel(
         return nil
     }
     return (row: cursor.row, col: cursor.col)
+}
+
+@MainActor
+private func activeGutterDecorations(
+    state: EditorState,
+    colorScheme: EditorState.ColorScheme
+) -> [Int: TextEditor.GutterDecoration] {
+    guard let decorations = state.bufferManager.activeBuffer?.gitLineDecorations.markers,
+          !decorations.isEmpty
+    else {
+        return [:]
+    }
+
+    return decorations.reduce(into: [Int: TextEditor.GutterDecoration]()) { result, entry in
+        let (lineIndex, color) = entry
+        result[lineIndex] = TextEditor.GutterDecoration(
+            symbol: gutterSymbol(for: color),
+            style: colorScheme.gitStatusStyle(for: color)
+        )
+    }
+}
+
+private func gutterSymbol(for color: FileStatusColor) -> Character {
+    switch color {
+    case .added: return "+"
+    case .modified: return "~"
+    case .untracked: return "?"
+    case .deleted: return "-"
+    case .conflicted, .clean: return "!"
+    }
 }

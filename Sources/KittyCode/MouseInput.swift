@@ -43,11 +43,30 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     if mouse.button.isScroll {
         state.scrollDragState = nil
         state.isScrolling = true
+
+        // Scroll wheel on tab ribbon row
+        if layout.showTabRibbon && mouse.row == 2 && mouse.col - 1 >= layout.editorStart {
+            if mouse.button == .scrollUp {
+                state.tabScrollOffset = max(0, state.tabScrollOffset - 1)
+            } else if mouse.button == .scrollDown {
+                state.tabScrollOffset = min(max(0, state.bufferManager.count - 1), state.tabScrollOffset + 1)
+            }
+            return
+        }
+
         if mouse.col - 1 < layout.editorStart {
             if mouse.button == .scrollUp {
                 state.treeScrollOffset = max(0, state.treeScrollOffset - scrollStep)
             } else if mouse.button == .scrollDown {
                 state.treeScrollOffset = min(max(0, state.cachedFlatTree.count - 1), state.treeScrollOffset + scrollStep)
+            }
+        } else if mouse.modifiers.contains(.shift) && !state.config.wrapLines {
+            // Shift+scroll for horizontal scrolling in editor
+            let hStep = 4
+            if mouse.button == .scrollUp {
+                state.hScrollOffset = max(0, state.hScrollOffset - hStep)
+            } else if mouse.button == .scrollDown {
+                state.hScrollOffset = min(max(0, state.maxLineWidth - 1), state.hScrollOffset + hStep)
             }
         } else {
             if mouse.button == .scrollUp {
@@ -138,6 +157,20 @@ struct LayoutMetrics {
     let showTabRibbon: Bool
 
     @MainActor
+    static func editorStart(state: EditorState, columns: Int) -> Int {
+        let showAB = state.config.activityBar.show && !state.sidebarCollapsed
+        let abWidth = showAB ? ActivityBar.width : 0
+        let sidebarWidth: Int
+        if state.sidebarCollapsed {
+            sidebarWidth = 0
+        } else {
+            sidebarWidth = min(state.treePanelWidth, columns / 2)
+        }
+        let separatorWidth = sidebarWidth > 0 ? 1 : 0
+        return abWidth + sidebarWidth + separatorWidth
+    }
+
+    @MainActor
     init(state: EditorState, columns: Int, rows: Int) {
         let showAB = state.config.activityBar.show && !state.sidebarCollapsed
         self.activityBarWidth = showAB ? ActivityBar.width : 0
@@ -169,6 +202,10 @@ private func handleTreeClick(contentRow: Int, isDoubleClick: Bool, state: Editor
         } else {
             state.openFile(at: clickIndex)
             state.cursorCol = 0
+            // Double-click pins the buffer
+            if let buf = state.bufferManager.activeBuffer, buf.isPreview {
+                buf.isPreview = false
+            }
         }
     } else {
         state.selectedTreeIndex = clickIndex
@@ -240,6 +277,28 @@ private func beginScrollDragIfNeeded(
         return true
     }
 
+    // Check horizontal scroll indicator drag
+    if let hRect = TextEditorLayout.horizontalScrollIndicatorRect(
+        for: editor, in: editorRect, maxLineWidth: state.maxLineWidth
+    ),
+       pointerRow >= hRect.y, pointerRow < hRect.maxY,
+       pointerCol >= hRect.x, pointerCol < hRect.maxX {
+        let hMetrics = TextEditorLayout.horizontalScrollMetrics(
+            for: editor, in: editorRect, maxLineWidth: state.maxLineWidth
+        )
+        if let gripOffset = HorizontalScrollIndicatorLayout.gripOffset(
+            for: hMetrics, in: hRect, pointerCol: pointerCol
+        ) {
+            state.scrollDragState = EditorState.ScrollDragState(target: .editorHorizontal, gripOffset: gripOffset)
+            state.hScrollOffset = HorizontalScrollIndicatorLayout.offset(
+                for: hMetrics, in: hRect, pointerCol: pointerCol, gripOffset: gripOffset
+            )
+            state.mode = .editor
+            state.isScrolling = true
+            return true
+        }
+    }
+
     return false
 }
 
@@ -271,6 +330,20 @@ private func updateScrollDrag(
             pointerRow: pointerRow,
             gripOffset: dragState.gripOffset
         )
+        state.mode = .editor
+    case .editorHorizontal:
+        let editor = makeEditorView(state: state)
+        let pointerCol = mouse.col - 1
+        if let hRect = TextEditorLayout.horizontalScrollIndicatorRect(
+            for: editor, in: editorRect, maxLineWidth: state.maxLineWidth
+        ) {
+            let hMetrics = TextEditorLayout.horizontalScrollMetrics(
+                for: editor, in: editorRect, maxLineWidth: state.maxLineWidth
+            )
+            state.hScrollOffset = HorizontalScrollIndicatorLayout.offset(
+                for: hMetrics, in: hRect, pointerCol: pointerCol, gripOffset: dragState.gripOffset
+            )
+        }
         state.mode = .editor
     }
 

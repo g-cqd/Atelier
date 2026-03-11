@@ -13,11 +13,19 @@ public enum TextEditorLayout {
     }
 
     public static func gutterWidth(for editor: TextEditor) -> Int {
-        editor.showLineNumbers ? max(3, editor.lineNumberWidth + 1) : 0
+        gutterDecorationWidth(for: editor) + lineNumberColumnWidth(for: editor)
     }
 
     public static func contentWidth(for editor: TextEditor, in rect: Rect) -> Int {
         max(0, rect.width - gutterWidth(for: editor) - verticalScrollIndicatorWidth(for: editor, in: rect))
+    }
+
+    public static func gutterDecorationWidth(for editor: TextEditor) -> Int {
+        editor.showsGutterDecorations ? 2 : 0
+    }
+
+    public static func lineNumberColumnWidth(for editor: TextEditor) -> Int {
+        editor.showLineNumbers ? max(3, editor.lineNumberWidth + 1) : 0
     }
 
     public static func verticalScrollMetrics(for editor: TextEditor, in rect: Rect) -> ScrollMetrics {
@@ -192,6 +200,55 @@ public enum TextEditorLayout {
         )
     }
 
+    // MARK: - Horizontal Scroll
+
+    public static func horizontalScrollMetrics(for editor: TextEditor, maxLineWidth: Int) -> ScrollMetrics {
+        let contentWidth = maxLineWidth
+        return ScrollMetrics(
+            contentLength: contentWidth,
+            viewportLength: 1, // computed per-rect below
+            offset: editor.horizontalScrollOffset
+        )
+    }
+
+    public static func needsHorizontalScrollIndicator(for editor: TextEditor, in rect: Rect, maxLineWidth: Int) -> Bool {
+        guard editor.showsHorizontalScrollIndicator, !editor.wrapLines else { return false }
+        guard rect.width > 0, rect.height > 1 else { return false }
+        let gutterW = gutterWidth(for: editor)
+        let vsiW = verticalScrollIndicatorWidth(for: editor, in: rect)
+        let availWidth = max(0, rect.width - gutterW - vsiW)
+        return maxLineWidth > availWidth
+    }
+
+    public static func horizontalScrollIndicatorRect(
+        for editor: TextEditor,
+        in rect: Rect,
+        maxLineWidth: Int
+    ) -> Rect? {
+        guard needsHorizontalScrollIndicator(for: editor, in: rect, maxLineWidth: maxLineWidth) else { return nil }
+        let gutterW = gutterWidth(for: editor)
+        let vsiW = verticalScrollIndicatorWidth(for: editor, in: rect)
+        let trackWidth = max(0, rect.width - gutterW - vsiW)
+        guard trackWidth > 0 else { return nil }
+        return Rect(x: rect.x + gutterW, y: rect.maxY - 1, width: trackWidth, height: 1)
+    }
+
+    public static func horizontalScrollMetrics(
+        for editor: TextEditor,
+        in rect: Rect,
+        maxLineWidth: Int
+    ) -> ScrollMetrics {
+        let gutterW = gutterWidth(for: editor)
+        let vsiW = verticalScrollIndicatorWidth(for: editor, in: rect)
+        let availWidth = max(0, rect.width - gutterW - vsiW)
+        return ScrollMetrics(
+            contentLength: maxLineWidth,
+            viewportLength: availWidth,
+            offset: editor.horizontalScrollOffset,
+            maxOffset: max(0, maxLineWidth - availWidth)
+        )
+    }
+
     private static func verticalScrollIndicatorWidth(for editor: TextEditor, in rect: Rect) -> Int {
         needsScrollIndicator(for: editor, in: rect) ? 1 : 0
     }
@@ -199,7 +256,7 @@ public enum TextEditorLayout {
     private static func needsScrollIndicator(for editor: TextEditor, in rect: Rect) -> Bool {
         guard editor.showsVerticalScrollIndicator, rect.width > 0, rect.height > 0 else { return false }
         if editor.wrapLines {
-            let gutter = editor.showLineNumbers ? max(3, editor.lineNumberWidth + 1) : 0
+            let gutter = gutterWidth(for: editor)
             let pessimisticContentWidth = max(1, rect.width - gutter - 1)
             let visualRows = totalWrappedRowCount(for: editor.lines, contentWidth: pessimisticContentWidth)
             return visualRows > rect.height

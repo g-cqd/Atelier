@@ -30,11 +30,14 @@ struct KittyCodeEntry {
         let config = KittyConfig.load()
         let state = EditorState(rootPath: rootPath, config: config)
         await state.loadInitialTree()
+        let refreshSource = RenderRefreshSource()
+        state.renderRefreshSource = refreshSource
 
         if config.showGitStatus, let repositoryRoot = GitStatusProvider.repositoryRoot(for: rootPath) {
             let gitProvider = GitStatusProvider(rootPath: repositoryRoot)
-            await gitProvider.refresh()
             state.fileStatusProvider = gitProvider
+            state.gitLineDecorationProvider = gitProvider
+            state.gitDecorationManager = GitDecorationManager(state: state, refreshSource: refreshSource)
         }
 
         // File watcher (Phase 3)
@@ -57,7 +60,8 @@ struct KittyCodeEntry {
         // Git refresh (Phase 6)
         var gitRefreshManager: GitRefreshManager?
         if config.showGitStatus, state.fileStatusProvider != nil {
-            let manager = GitRefreshManager(state: state)
+            let manager = GitRefreshManager(state: state, refreshSource: refreshSource)
+            manager.refreshNow()
             manager.start()
             gitRefreshManager = manager
         }
@@ -76,12 +80,16 @@ struct KittyCodeEntry {
                     render(pipeline: pipeline, state: state)
                 }
                 return shouldContinue
+            },
+            configureInputSource: { inputSource in
+                refreshSource.bind(inputSource: inputSource)
             }
         )
 
         // Cleanup
         autoSaveManager?.stop()
         gitRefreshManager?.stop()
+        state.gitDecorationManager?.stop()
         fileWatcherIntegration?.stop()
 
         // Suppress unused variable warnings

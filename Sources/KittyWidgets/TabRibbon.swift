@@ -5,10 +5,22 @@ public struct TabRibbon: Sendable {
     public struct Tab: Sendable {
         public var name: String
         public var isDirty: Bool
+        public var isPreview: Bool
+        public var statusIndicator: String?
+        public var statusStyle: Style?
 
-        public init(name: String, isDirty: Bool) {
+        public init(
+            name: String,
+            isDirty: Bool,
+            isPreview: Bool = false,
+            statusIndicator: String? = nil,
+            statusStyle: Style? = nil
+        ) {
             self.name = name
             self.isDirty = isDirty
+            self.isPreview = isPreview
+            self.statusIndicator = statusIndicator
+            self.statusStyle = statusStyle
         }
     }
 
@@ -58,37 +70,44 @@ public struct TabRibbon: Sendable {
         let bgCell = Cell(character: " ", style: style.inactiveStyle)
         buffer.fill(row: rect.y, col: rect.x, width: rect.width, height: 1, cell: bgCell)
 
-        var col = rect.x
         let maxCol = rect.x + rect.width
+        let hasLeftOverflow = scrollOffset > 0
+        let hasRightOverflow = tabsExtendBeyond(ribbonWidth: rect.width)
+
+        var col = rect.x
+
+        // Left overflow indicator
+        if hasLeftOverflow {
+            buffer[rect.y, col] = Cell(character: "<", style: style.inactiveStyle)
+            col += 1
+        }
+
+        let rightBound = hasRightOverflow ? maxCol - 1 : maxCol
 
         for i in scrollOffset..<tabs.count {
-            guard col < maxCol else { break }
+            guard col < rightBound else { break }
             let tab = tabs[i]
             let isActive = (i == activeIndex)
-            let tabStyle = isActive ? style.activeStyle : style.inactiveStyle
-
-            // Build tab label: " name ● │"
-            var label = " \(tab.name)"
-            if tab.isDirty {
-                label += style.dirtyIndicator
+            var tabStyle = isActive ? style.activeStyle : style.inactiveStyle
+            if tab.isPreview {
+                tabStyle = Style(fg: tabStyle.fg, bg: tabStyle.bg, bold: tabStyle.bold, italic: true)
             }
-            label += " "
 
-            // Write label
-            for ch in label {
-                guard col < maxCol else { break }
-                buffer[rect.y, col] = Cell(character: ch, style: tabStyle)
-                col += 1
-            }
+            col = renderLabelPrefix(for: tab, into: &buffer, row: rect.y, col: col, maxCol: rightBound, tabStyle: tabStyle)
 
             // Write separator
-            if col < maxCol {
+            if col < rightBound {
                 buffer[rect.y, col] = Cell(
                     character: Character(style.separator),
                     style: style.inactiveStyle
                 )
                 col += 1
             }
+        }
+
+        // Right overflow indicator
+        if hasRightOverflow {
+            buffer[rect.y, maxCol - 1] = Cell(character: ">", style: style.inactiveStyle)
         }
     }
 
@@ -97,14 +116,9 @@ public struct TabRibbon: Sendable {
         guard !tabs.isEmpty else { return nil }
 
         var col = ribbonX
+        if scrollOffset > 0 { col += 1 } // skip left overflow indicator
         for i in scrollOffset..<tabs.count {
-            let tab = tabs[i]
-            var label = " \(tab.name)"
-            if tab.isDirty {
-                label += style.dirtyIndicator
-            }
-            label += " "
-            let tabWidth = label.count + 1 // +1 for separator
+            let tabWidth = tabLabelWidth(at: i)
 
             if clickCol >= col && clickCol < col + tabWidth {
                 return i
@@ -112,5 +126,110 @@ public struct TabRibbon: Sendable {
             col += tabWidth
         }
         return nil
+    }
+
+    /// Compute tab label width for a given tab index.
+    public func tabLabelWidth(at index: Int) -> Int {
+        guard index >= 0, index < tabs.count else { return 0 }
+        let tab = tabs[index]
+        var label = " \(tab.name)"
+        if let statusIndicator = tab.statusIndicator {
+            label += " \(statusIndicator)"
+        }
+        if tab.isDirty {
+            label += style.dirtyIndicator
+        }
+        label += " "
+        return label.count + 1 // +1 for separator
+    }
+
+    /// Returns a clamped scrollOffset that ensures the given tab index is visible.
+    public func clampedScrollOffset(activeIndex: Int, ribbonWidth: Int) -> Int {
+        guard !tabs.isEmpty, ribbonWidth > 0 else { return 0 }
+        let target = max(0, min(activeIndex, tabs.count - 1))
+
+        var offset = scrollOffset
+
+        // If active tab is before the scroll window, scroll left
+        if target < offset {
+            offset = target
+        }
+
+        // If active tab is past the visible area, scroll right
+        var visibleWidth = 0
+        for i in offset...target {
+            visibleWidth += tabLabelWidth(at: i)
+            if visibleWidth > ribbonWidth {
+                offset = i
+                visibleWidth = tabLabelWidth(at: i)
+            }
+        }
+
+        return max(0, min(offset, tabs.count - 1))
+    }
+
+    /// Whether tabs starting from scrollOffset extend beyond the given width.
+    public func tabsExtendBeyond(ribbonWidth: Int) -> Bool {
+        var width = 0
+        for i in scrollOffset..<tabs.count {
+            width += tabLabelWidth(at: i)
+            if width > ribbonWidth { return true }
+        }
+        return false
+    }
+
+    private func renderLabelPrefix(
+        for tab: Tab,
+        into buffer: inout ScreenBuffer,
+        row: Int,
+        col: Int,
+        maxCol: Int,
+        tabStyle: Style
+    ) -> Int {
+        var currentCol = col
+
+        currentCol = render(" \(tab.name)", style: tabStyle, into: &buffer, row: row, col: currentCol, maxCol: maxCol)
+
+        if let statusIndicator = tab.statusIndicator {
+            currentCol = render(" ", style: tabStyle, into: &buffer, row: row, col: currentCol, maxCol: maxCol)
+            currentCol = render(
+                statusIndicator,
+                style: tab.statusStyle ?? tabStyle,
+                into: &buffer,
+                row: row,
+                col: currentCol,
+                maxCol: maxCol
+            )
+        }
+
+        if tab.isDirty {
+            currentCol = render(
+                style.dirtyIndicator,
+                style: style.dirtyStyle ?? tabStyle,
+                into: &buffer,
+                row: row,
+                col: currentCol,
+                maxCol: maxCol
+            )
+        }
+
+        return render(" ", style: tabStyle, into: &buffer, row: row, col: currentCol, maxCol: maxCol)
+    }
+
+    private func render(
+        _ text: String,
+        style: Style,
+        into buffer: inout ScreenBuffer,
+        row: Int,
+        col: Int,
+        maxCol: Int
+    ) -> Int {
+        var currentCol = col
+        for ch in text {
+            guard currentCol < maxCol else { break }
+            buffer[row, currentCol] = Cell(character: ch, style: style)
+            currentCol += 1
+        }
+        return currentCol
     }
 }

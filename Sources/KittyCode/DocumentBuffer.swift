@@ -1,4 +1,5 @@
 import Foundation
+import KittyGit
 import KittySyntax
 import KittyText
 
@@ -16,9 +17,12 @@ final class DocumentBuffer {
     var language: String?
 
     var isDirty: Bool = false
+    var isPreview: Bool = false
     var lastModifiedDate: Date?
     var externallyModified: Bool = false
     var highlightGeneration: Int = 0
+    var documentVersion: Int = 0
+    var gitLineDecorations: GitLineDecorations = .empty
 
     init(
         filePath: String,

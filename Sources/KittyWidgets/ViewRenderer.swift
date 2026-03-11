@@ -24,6 +24,8 @@ public enum ViewRenderer {
             renderStatusBar(status, into: &buffer, in: rect, context: context)
         case let indicator as VerticalScrollIndicator:
             renderVerticalScrollIndicator(indicator, into: &buffer, in: rect, context: context)
+        case let hIndicator as HorizontalScrollIndicator:
+            renderHorizontalScrollIndicator(hIndicator, into: &buffer, in: rect, context: context)
         case let editor as TextEditor:
             renderTextEditor(editor, into: &buffer, in: rect, context: context)
         case is EmptyView:
@@ -109,6 +111,32 @@ public enum ViewRenderer {
                 height: thumbRect.height,
                 cell: Cell(character: indicator.style.thumbCharacter, style: thumbStyle)
             )
+        }
+    }
+
+    private static func renderHorizontalScrollIndicator(
+        _ indicator: HorizontalScrollIndicator,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        guard !rect.isEmpty else { return }
+
+        let trackStyle = context.applyTo(indicator.style.trackStyle)
+        let thumbStyle = context.applyTo(indicator.style.thumbStyle)
+        buffer.fill(
+            row: rect.y,
+            col: rect.x,
+            width: rect.width,
+            height: rect.height,
+            cell: Cell(character: indicator.style.trackCharacter, style: trackStyle)
+        )
+
+        if let thumbRect = HorizontalScrollIndicatorLayout.thumbRect(for: indicator.metrics, in: rect) {
+            for col in thumbRect.x..<thumbRect.maxX {
+                guard col >= rect.x, col < rect.maxX else { continue }
+                buffer[thumbRect.y, col] = Cell(character: indicator.style.thumbCharacter, style: thumbStyle)
+            }
         }
     }
 
@@ -224,9 +252,11 @@ public enum ViewRenderer {
         let editorStyle = context.applyTo(editor.editorStyle)
         let lineNumberStyle = context.applyTo(editor.lineNumberStyle)
         let currentLineStyle = context.applyTo(editor.currentLineStyle)
-        let lineNumberWidth = TextEditorLayout.gutterWidth(for: editor)
+        let gutterWidth = TextEditorLayout.gutterWidth(for: editor)
+        let gutterDecorationWidth = TextEditorLayout.gutterDecorationWidth(for: editor)
+        let lineNumberColumnWidth = TextEditorLayout.lineNumberColumnWidth(for: editor)
         let contentWidth = TextEditorLayout.contentWidth(for: editor, in: rect)
-        let contentMaxX = rect.x + lineNumberWidth + contentWidth
+        let contentMaxX = rect.x + gutterWidth + contentWidth
 
         guard rect.height > 0 else { return }
 
@@ -244,17 +274,32 @@ public enum ViewRenderer {
 
                 for wrapRow in 0..<wrappedRows where screenRow < rect.height {
                     let row = rect.y + screenRow
-                    if lineNumberWidth > 0 {
+                    if gutterWidth > 0 {
                         if wrapRow == 0 {
-                            buffer.write(formattedLineNumber(lineIndex + 1, width: lineNumberWidth - 1) + " ", row: row, col: rect.x, style: lineNumberStyle)
+                            renderGutterDecoration(
+                                editor.gutterDecorations[lineIndex],
+                                into: &buffer,
+                                row: row,
+                                col: rect.x,
+                                width: gutterDecorationWidth,
+                                fallbackStyle: lineNumberStyle
+                            )
+                            if lineNumberColumnWidth > 0 {
+                                buffer.write(
+                                    formattedLineNumber(lineIndex + 1, width: lineNumberColumnWidth - 1) + " ",
+                                    row: row,
+                                    col: rect.x + gutterDecorationWidth,
+                                    style: lineNumberStyle
+                                )
+                            }
                         } else {
-                            buffer.fill(row: row, col: rect.x, width: lineNumberWidth, height: 1, cell: Cell(character: " ", style: lineNumberStyle))
+                            buffer.fill(row: row, col: rect.x, width: gutterWidth, height: 1, cell: Cell(character: " ", style: lineNumberStyle))
                         }
                     }
 
                     let segStart = wrapRow * max(1, contentWidth)
                     let segEnd = min(segStart + max(1, contentWidth), totalWidth)
-                    var col = rect.x + lineNumberWidth
+                    var col = rect.x + gutterWidth
                     var widthPos = 0
                     for span in spans {
                         if widthPos >= segEnd { break }
@@ -288,14 +333,30 @@ public enum ViewRenderer {
 
             while screenRow < rect.height {
                 let row = rect.y + screenRow
-                if lineNumberWidth > 0 {
-                    buffer.write("~", row: row, col: rect.x, style: lineNumberStyle)
-                    if lineNumberWidth > 1 {
-                        buffer.fill(row: row, col: rect.x + 1, width: lineNumberWidth - 1, height: 1, cell: Cell(character: " ", style: lineNumberStyle))
+                if gutterWidth > 0 {
+                    renderGutterDecoration(
+                        nil,
+                        into: &buffer,
+                        row: row,
+                        col: rect.x,
+                        width: gutterDecorationWidth,
+                        fallbackStyle: lineNumberStyle
+                    )
+                    if lineNumberColumnWidth > 0 {
+                        buffer.write("~", row: row, col: rect.x + gutterDecorationWidth, style: lineNumberStyle)
+                        if lineNumberColumnWidth > 1 {
+                            buffer.fill(
+                                row: row,
+                                col: rect.x + gutterDecorationWidth + 1,
+                                width: lineNumberColumnWidth - 1,
+                                height: 1,
+                                cell: Cell(character: " ", style: lineNumberStyle)
+                            )
+                        }
                     }
                 }
                 if contentWidth > 0 {
-                    buffer.fill(row: row, col: rect.x + lineNumberWidth, width: contentWidth, height: 1, cell: Cell(character: " ", style: editorStyle))
+                    buffer.fill(row: row, col: rect.x + gutterWidth, width: contentWidth, height: 1, cell: Cell(character: " ", style: editorStyle))
                 }
                 screenRow += 1
             }
@@ -317,20 +378,51 @@ public enum ViewRenderer {
             let lineIndex = startLine + rowOffset
 
             guard lineIndex < endLine else {
-                if lineNumberWidth > 0 {
-                    buffer.write("~", row: row, col: rect.x, style: lineNumberStyle)
-                    if lineNumberWidth > 1 {
-                        buffer.fill(row: row, col: rect.x + 1, width: lineNumberWidth - 1, height: 1, cell: Cell(character: " ", style: lineNumberStyle))
+                if gutterWidth > 0 {
+                    renderGutterDecoration(
+                        nil,
+                        into: &buffer,
+                        row: row,
+                        col: rect.x,
+                        width: gutterDecorationWidth,
+                        fallbackStyle: lineNumberStyle
+                    )
+                    if lineNumberColumnWidth > 0 {
+                        buffer.write("~", row: row, col: rect.x + gutterDecorationWidth, style: lineNumberStyle)
+                        if lineNumberColumnWidth > 1 {
+                            buffer.fill(
+                                row: row,
+                                col: rect.x + gutterDecorationWidth + 1,
+                                width: lineNumberColumnWidth - 1,
+                                height: 1,
+                                cell: Cell(character: " ", style: lineNumberStyle)
+                            )
+                        }
                     }
                 }
                 if contentWidth > 0 {
-                    buffer.fill(row: row, col: rect.x + lineNumberWidth, width: contentWidth, height: 1, cell: Cell(character: " ", style: editorStyle))
+                    buffer.fill(row: row, col: rect.x + gutterWidth, width: contentWidth, height: 1, cell: Cell(character: " ", style: editorStyle))
                 }
                 continue
             }
 
-            if lineNumberWidth > 0 {
-                buffer.write(formattedLineNumber(lineIndex + 1, width: lineNumberWidth - 1) + " ", row: row, col: rect.x, style: lineNumberStyle)
+            if gutterWidth > 0 {
+                renderGutterDecoration(
+                    editor.gutterDecorations[lineIndex],
+                    into: &buffer,
+                    row: row,
+                    col: rect.x,
+                    width: gutterDecorationWidth,
+                    fallbackStyle: lineNumberStyle
+                )
+                if lineNumberColumnWidth > 0 {
+                    buffer.write(
+                        formattedLineNumber(lineIndex + 1, width: lineNumberColumnWidth - 1) + " ",
+                        row: row,
+                        col: rect.x + gutterDecorationWidth,
+                        style: lineNumberStyle
+                    )
+                }
             }
 
             let spans = editor.lineSpans[lineIndex]
@@ -338,7 +430,7 @@ public enum ViewRenderer {
                 spans: spans,
                 into: &buffer,
                 row: row,
-                col: rect.x + lineNumberWidth,
+                col: rect.x + gutterWidth,
                 availWidth: contentWidth,
                 hScrollOffset: editor.horizontalScrollOffset,
                 isCurrentLine: lineIndex == editor.cursorRow,
@@ -353,12 +445,55 @@ public enum ViewRenderer {
                 style: editor.verticalScrollIndicatorStyle
             ).render(to: &buffer, in: indicatorRect, context: context)
         }
+
+        // Horizontal scroll indicator (only for non-wrapped mode)
+        if editor.showsHorizontalScrollIndicator, !editor.wrapLines {
+            let maxWidth = editor.lines.reduce(0) { max($0, UnicodeWidth.displayWidth(of: $1)) }
+            if let hRect = TextEditorLayout.horizontalScrollIndicatorRect(
+                for: editor, in: rect, maxLineWidth: maxWidth
+            ) {
+                let hMetrics = TextEditorLayout.horizontalScrollMetrics(
+                    for: editor, in: rect, maxLineWidth: maxWidth
+                )
+                HorizontalScrollIndicator(
+                    metrics: hMetrics,
+                    style: HorizontalScrollIndicatorStyle(
+                        trackStyle: Style(fg: .rgb(r: 60, g: 60, b: 60), dim: true),
+                        thumbStyle: Style(fg: .rgb(r: 140, g: 140, b: 140), dim: true),
+                        trackCharacter: " ",
+                        thumbCharacter: "\u{2501}"
+                    )
+                ).render(to: &buffer, in: hRect, context: context)
+            }
+        }
     }
 
     private static func formattedLineNumber(_ lineNumber: Int, width: Int) -> String {
         let digits = String(lineNumber)
         let padding = String(repeating: " ", count: max(0, width - digits.count))
         return padding + digits + " "
+    }
+
+    private static func renderGutterDecoration(
+        _ decoration: TextEditor.GutterDecoration?,
+        into buffer: inout ScreenBuffer,
+        row: Int,
+        col: Int,
+        width: Int,
+        fallbackStyle: Style
+    ) {
+        guard width > 0 else { return }
+
+        buffer.fill(
+            row: row,
+            col: col,
+            width: width,
+            height: 1,
+            cell: Cell(character: " ", style: fallbackStyle)
+        )
+
+        guard let decoration else { return }
+        buffer[row, col] = Cell(character: decoration.symbol, style: decoration.style)
     }
 
     private static func fillRect(
