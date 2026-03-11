@@ -147,6 +147,23 @@ struct KittyCodeNavigationTests {
         #expect(sut.state.cursorCol == 6)
     }
 
+    @Test("modifier-only key presses do not scroll the editor to an offscreen cursor")
+    func handleEventIgnoresModifierOnlyEditorKeys() {
+        let sut = makeSUT(fileContent: (0..<80).map(String.init), rows: 12)
+        sut.state.cursorRow = 40
+        sut.state.scrollOffset = 0
+
+        let handled = handleEvent(
+            event: .key(KeyEvent(keyCode: 0, modifiers: .super, eventType: .press)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(handled)
+        #expect(sut.state.cursorRow == 40)
+        #expect(sut.state.scrollOffset == 0)
+    }
+
     @Test("handleEvent keeps page navigation working for repeated fn style keys")
     func handleEventKeepsPageNavigationWorkingForRepeatedFnStyleKeys() {
         let sut = makeSUT(fileContent: (0..<100).map(String.init), rows: 12)
