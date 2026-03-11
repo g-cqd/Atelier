@@ -19,7 +19,7 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     let editorRect = Rect(
         x: layout.editorStart,
         y: layout.contentStartRow,
-        width: max(0, pipeline.columns - layout.editorStart),
+        width: layout.editorWidth,
         height: layout.contentRows
     )
 
@@ -45,10 +45,10 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
         state.isScrolling = true
 
         // Scroll wheel on tab ribbon row
-        if layout.showTabRibbon && mouse.row == 2 && mouse.col - 1 >= layout.editorStart {
-            if mouse.button == .scrollUp {
+        if layout.showTabRibbon && mouse.row == layout.contentStartRow && mouse.col - 1 >= layout.editorStart {
+            if mouse.button == .scrollUp || mouse.button == .scrollLeft {
                 state.tabScrollOffset = max(0, state.tabScrollOffset - 1)
-            } else if mouse.button == .scrollDown {
+            } else if mouse.button == .scrollDown || mouse.button == .scrollRight {
                 state.tabScrollOffset = min(max(0, state.bufferManager.count - 1), state.tabScrollOffset + 1)
             }
             return
@@ -60,13 +60,14 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
             } else if mouse.button == .scrollDown {
                 state.treeScrollOffset = min(max(0, state.cachedFlatTree.count - 1), state.treeScrollOffset + scrollStep)
             }
-        } else if mouse.modifiers.contains(.shift) && !state.config.wrapLines {
-            // Shift+scroll for horizontal scrolling in editor
+        } else if !state.config.wrapLines,
+                  mouse.button == .scrollLeft || mouse.button == .scrollRight ||
+                  (mouse.modifiers.contains(.shift) && (mouse.button == .scrollUp || mouse.button == .scrollDown)) {
             let hStep = 4
-            if mouse.button == .scrollUp {
-                state.hScrollOffset = max(0, state.hScrollOffset - hStep)
-            } else if mouse.button == .scrollDown {
-                state.hScrollOffset = min(max(0, state.maxLineWidth - 1), state.hScrollOffset + hStep)
+            if mouse.button == .scrollUp || mouse.button == .scrollLeft {
+                scrollEditorHorizontally(state: state, editorRect: editorRect, delta: -hStep)
+            } else if mouse.button == .scrollDown || mouse.button == .scrollRight {
+                scrollEditorHorizontally(state: state, editorRect: editorRect, delta: hStep)
             }
         } else {
             if mouse.button == .scrollUp {
@@ -80,8 +81,11 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
 
     guard mouse.kind == .press, mouse.button == .left else { return }
 
-    // Tab ribbon click (mouse coords are 1-based, tab ribbon is at screen row 1)
-    if layout.showTabRibbon && mouse.row == 2 && mouse.col - 1 >= layout.editorStart {
+    let now = Date()
+    let isDoubleClick = now.timeIntervalSince(state.lastClickTime) < 0.3
+
+    // Tab ribbon click (mouse coords are 1-based, tab ribbon row uses layout.contentStartRow)
+    if layout.showTabRibbon && mouse.row == layout.contentStartRow && mouse.col - 1 >= layout.editorStart {
         let tabs = state.bufferManager.buffers.map { buf in
             TabRibbon.Tab(name: buf.fileName, isDirty: buf.isDirty)
         }
@@ -91,9 +95,15 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
             scrollOffset: state.tabScrollOffset
         )
         if let tabIdx = ribbon.tabIndex(atColumn: mouse.col - 1, ribbonX: layout.editorStart) {
-            state.switchToTab(tabIdx)
+            if isDoubleClick && tabIdx == state.bufferManager.activeIndex,
+               let buf = state.bufferManager.activeBuffer, buf.isPreview {
+                buf.isPreview = false
+            } else {
+                state.switchToTab(tabIdx)
+            }
             state.mode = .editor
         }
+        state.lastClickTime = now
         return
     }
 
@@ -134,8 +144,6 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     }
 
     state.isScrolling = false
-    let now = Date()
-    let isDoubleClick = now.timeIntervalSince(state.lastClickTime) < 0.3
     let contentRow = mouse.row - 1 - layout.contentStartRow
 
     if mouse.col - 1 >= layout.activityBarWidth && mouse.col - 1 < layout.editorStart - 1 && contentRow >= 0 {
@@ -145,49 +153,6 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     }
 
     state.lastClickTime = now
-}
-
-struct LayoutMetrics {
-    let activityBarWidth: Int
-    let sidebarWidth: Int
-    let totalSidebarWidth: Int
-    let editorStart: Int
-    let contentStartRow: Int
-    let contentRows: Int
-    let showTabRibbon: Bool
-
-    @MainActor
-    static func editorStart(state: EditorState, columns: Int) -> Int {
-        let showAB = state.config.activityBar.show && !state.sidebarCollapsed
-        let abWidth = showAB ? ActivityBar.width : 0
-        let sidebarWidth: Int
-        if state.sidebarCollapsed {
-            sidebarWidth = 0
-        } else {
-            sidebarWidth = min(state.treePanelWidth, columns / 2)
-        }
-        let separatorWidth = sidebarWidth > 0 ? 1 : 0
-        return abWidth + sidebarWidth + separatorWidth
-    }
-
-    @MainActor
-    init(state: EditorState, columns: Int, rows: Int) {
-        let showAB = state.config.activityBar.show && !state.sidebarCollapsed
-        self.activityBarWidth = showAB ? ActivityBar.width : 0
-        self.showTabRibbon = state.config.tabRibbonPosition == .top && state.bufferManager.count > 0
-        let tabRows = showTabRibbon ? 1 : 0
-        self.contentStartRow = 1 + tabRows
-        self.contentRows = max(0, rows - 2 - tabRows)
-
-        if state.sidebarCollapsed {
-            self.sidebarWidth = 0
-        } else {
-            self.sidebarWidth = min(state.treePanelWidth, columns / 2)
-        }
-        self.totalSidebarWidth = activityBarWidth + sidebarWidth
-        let separatorWidth = sidebarWidth > 0 ? 1 : 0
-        self.editorStart = totalSidebarWidth + separatorWidth
-    }
 }
 
 @MainActor
@@ -365,7 +330,7 @@ private func makeTreeView(state: EditorState) -> TreeView<FileNode> {
 @MainActor
 private func makeEditorView(state: EditorState) -> TextEditor {
     TextEditor(
-        lines: state.fileContent,
+        buffer: state.textBuffer,
         lineSpans: state.highlightedLines,
         scrollOffset: state.scrollOffset,
         horizontalScrollOffset: state.hScrollOffset,
@@ -373,7 +338,8 @@ private func makeEditorView(state: EditorState) -> TextEditor {
         cursorCol: state.cursorCol,
         showLineNumbers: true,
         wrapLines: state.config.wrapLines,
-        showsVerticalScrollIndicator: true
+        showsVerticalScrollIndicator: true,
+        maxLineWidth: state.maxLineWidth
     )
 }
 
@@ -382,6 +348,20 @@ private func makeTreeNodeForMouseInput(_ node: FileNode) -> TreeNode<FileNode> {
         value: node,
         children: node.children.map(makeTreeNodeForMouseInput),
         isExpanded: node.isExpanded
+    )
+}
+
+@MainActor
+private func scrollEditorHorizontally(state: EditorState, editorRect: Rect, delta: Int) {
+    let editor = makeEditorView(state: state)
+    let metrics = TextEditorLayout.horizontalScrollMetrics(
+        for: editor,
+        in: editorRect,
+        maxLineWidth: state.maxLineWidth
+    )
+    state.hScrollOffset = min(
+        metrics.maxOffset,
+        max(0, state.hScrollOffset + delta)
     )
 }
 

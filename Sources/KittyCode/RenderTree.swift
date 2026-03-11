@@ -25,12 +25,7 @@ func renderTreePanel(
             collapsedIcon: state.symbolTheme[.folderClosed].text + " ",
             leafIcon: state.symbolTheme[.file].text + " ",
             indent: 2,
-            scrollIndicatorStyle: VerticalScrollIndicatorStyle(
-                trackStyle: Style(fg: .rgb(r: 60, g: 60, b: 60), dim: true),
-                thumbStyle: Style(fg: .rgb(r: 140, g: 140, b: 140), dim: true),
-                trackCharacter: " ",
-                thumbCharacter: "\u{2593}"
-            )
+            scrollIndicatorStyle: colorScheme.verticalScrollIndicator
         ),
         label: { $0.name },
         rowStyle: { $0.isDirectory ? colorScheme.treeDir : colorScheme.treeBg },

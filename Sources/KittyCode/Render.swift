@@ -11,25 +11,16 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     guard cols > 0 && rows > 2 else { return }
 
     // Layout calculations
-    let showActivityBar = state.config.activityBar.show && !state.sidebarCollapsed
-    let activityBarWidth = showActivityBar ? ActivityBar.width : 0
-    let showTabRibbon = state.config.tabRibbonPosition == .top && state.bufferManager.count > 0
-    let tabRibbonRows = showTabRibbon ? 1 : 0
-    let contentStartRow = 1 + tabRibbonRows
-    let contentRows = rows - 2 - tabRibbonRows
+    let layout = LayoutMetrics(state: state, columns: cols, rows: rows)
+    let showTabRibbon = layout.showTabRibbon
+    let contentStartRow = layout.contentStartRow
+    let contentRows = layout.contentRows
+    let activityBarWidth = layout.activityBarWidth
+    let sidebarWidth = layout.sidebarWidth
+    let editorStart = layout.editorStart
+    let editorWidth = layout.editorWidth
 
     guard contentRows > 0 else { return }
-
-    let sidebarWidth: Int
-    if state.sidebarCollapsed {
-        sidebarWidth = 0
-    } else {
-        sidebarWidth = min(state.treePanelWidth, cols / 2)
-    }
-    let totalSidebarWidth = activityBarWidth + sidebarWidth
-    let separatorWidth = sidebarWidth > 0 ? 1 : 0
-    let editorStart = totalSidebarWidth + separatorWidth
-    let editorWidth = max(0, cols - editorStart)
 
     // Title bar
     StatusBar(
@@ -51,15 +42,16 @@ func render(pipeline: RenderPipeline, state: EditorState) {
                 statusStyle: status.map { colorScheme.gitStatusStyle(for: $0.statusColor) }
             )
         }
+        let theme = state.config.theme
         var tabStyle = TabRibbon.TabRibbonStyle()
-        if let fg = state.config.theme.tabActiveForeground {
-            tabStyle.activeStyle = Style(fg: fg.color, bold: true)
+        if let s = theme.resolvedStyle(theme.tabActiveForeground, bold: true) {
+            tabStyle.activeStyle = s
         }
-        if let fg = state.config.theme.tabInactiveForeground {
-            tabStyle.inactiveStyle = Style(fg: fg.color)
+        if let s = theme.resolvedStyle(theme.tabInactiveForeground) {
+            tabStyle.inactiveStyle = s
         }
-        if let fg = state.config.theme.tabDirtyIndicator {
-            tabStyle.dirtyStyle = Style(fg: fg.color)
+        if let s = theme.resolvedStyle(theme.tabDirtyIndicator) {
+            tabStyle.dirtyStyle = s
         }
         let ribbon = TabRibbon(
             tabs: tabs,
@@ -77,7 +69,7 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     }
 
     // Activity bar
-    if showActivityBar {
+    if activityBarWidth > 0 {
         renderActivityBar(
             pipeline: pipeline,
             state: state,
@@ -130,7 +122,9 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     let mode = state.mode == .tree ? "Tree" : "Edit"
     let position = state.isFileEmpty ? "" : "Ln \(state.cursorRow + 1)/\(state.fileLineCount)"
     let grammarIndicator = state.isLoadingGrammar ? " [loading grammar...]" : ""
-    let statusLeft = " " + TerminalSymbolRenderer.label(modeGlyph, mode) + "  \(state.statusMessage)" + grammarIndicator
+    let statusPrefix = " " + TerminalSymbolRenderer.label(modeGlyph, mode) + "  "
+    let statusBody = state.displayedStatusMessage + (state.prompt == nil ? grammarIndicator : "")
+    let statusLeft = statusPrefix + statusBody
     let branchSegment: String? = state.fileStatusProvider?.branchName.map { name in
         TerminalSymbolRenderer.label(state.symbolTheme[.gitBranch], name)
     }
@@ -148,7 +142,11 @@ func render(pipeline: RenderPipeline, state: EditorState) {
         style: colorScheme.statusBar
     ).render(to: &pipeline.buffer, in: Rect(x: 0, y: rows - 1, width: cols, height: 1))
 
-    if let pos = terminalCursorPos {
+    if let promptCursorOffset = state.promptCursorOffset {
+        let promptCursorCol = min(cols - 1, max(0, statusPrefix.count + promptCursorOffset))
+        pipeline.cursorRow = rows - 1
+        pipeline.cursorCol = promptCursorCol
+    } else if let pos = terminalCursorPos {
         pipeline.cursorRow = pos.row
         pipeline.cursorCol = pos.col
     } else {

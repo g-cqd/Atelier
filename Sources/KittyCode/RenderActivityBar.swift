@@ -33,12 +33,13 @@ func renderActivityBar(
         activeIdx = state.config.activityBar.items.firstIndex(of: "openDocuments") ?? 0
     }
 
+    let theme = state.config.theme
     var barStyle = ActivityBar.ActivityBarStyle()
-    if let fg = state.config.theme.activityBarForeground {
-        barStyle.normalStyle = Style(fg: fg.color)
+    if let s = theme.resolvedStyle(theme.activityBarForeground) {
+        barStyle.normalStyle = s
     }
-    if let fg = state.config.theme.activityBarActiveForeground {
-        barStyle.activeStyle = Style(fg: fg.color, bold: true)
+    if let s = theme.resolvedStyle(theme.activityBarActiveForeground) {
+        barStyle.activeStyle = s
     }
 
     let bar = ActivityBar(items: items, activeIndex: activeIdx, style: barStyle)

@@ -3,14 +3,17 @@ import KittyRenderer
 
 @MainActor
 func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline) -> Bool {
-    let showTabRibbon = state.config.tabRibbonPosition == .top && state.bufferManager.count > 0
-    let tabRibbonRows = showTabRibbon ? 1 : 0
-    let contentRows = pipeline.rows - 2 - tabRibbonRows
+    let layout = LayoutMetrics(state: state, columns: pipeline.columns, rows: pipeline.rows)
+    let contentRows = layout.contentRows
 
     switch event {
     case .key(let key):
         guard key.eventType != .release else { return true }
         state.isScrolling = false
+
+        if state.prompt != nil {
+            return state.handlePromptKey(key)
+        }
 
         // Tab navigation (checked before mode dispatch)
         if key.eventType == .press, key.modifiers == .ctrl {
@@ -34,6 +37,10 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
         if key.eventType == .press, key.modifiers == .ctrl {
             if key.keyCode == AsciiKey.o {
                 state.saveFile()
+                return true
+            }
+            if key.keyCode == AsciiKey.n {
+                state.beginNewFile()
                 return true
             }
             if key.keyCode == AsciiKey.x {
@@ -82,6 +89,9 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
         }
 
     case .mouse(let mouse):
+        if state.prompt != nil {
+            return true
+        }
         handleMouse(mouse, state: state, pipeline: pipeline)
         return true
 
