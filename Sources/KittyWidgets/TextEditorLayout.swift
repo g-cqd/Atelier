@@ -126,12 +126,17 @@ public enum TextEditorLayout {
                 if screenRow >= rect.height { return nil }
             }
 
-            let wrapRow = displayColumn / contentWidth
+            let (wrapRow, wrapColumn) = wrappedRowPosition(
+                forDisplayColumn: displayColumn,
+                in: line,
+                contentWidth: contentWidth,
+                tabSize: editor.tabSize
+            )
             let row = screenRow + wrapRow
             guard row < rect.height else { return nil }
             return CursorPosition(
                 row: rect.y + row,
-                col: rect.x + gutterWidth + (displayColumn % contentWidth)
+                col: rect.x + gutterWidth + min(wrapColumn, contentWidth - 1)
             )
         }
 
@@ -173,7 +178,9 @@ public enum TextEditorLayout {
                 if relativeRow < nextScreenRow {
                     let wrapRow = relativeRow - screenRow
                     let line = editor.line(at: lineIndex)
-                    let wrappedDisplayColumn = wrapRow * contentWidth + displayColumn
+                    let rowStarts = wrappedRowStartColumns(for: line, contentWidth: contentWidth, tabSize: editor.tabSize)
+                    let rowStart = rowStarts[min(max(0, wrapRow), max(0, rowStarts.count - 1))]
+                    let wrappedDisplayColumn = rowStart + displayColumn
                     return TextPosition(
                         row: lineIndex,
                         col: TextDisplayMetrics.characterOffset(
@@ -269,8 +276,7 @@ public enum TextEditorLayout {
 
     private static func wrappedRowCount(for line: String, contentWidth: Int, tabSize: Int = 4) -> Int {
         guard contentWidth > 0 else { return 1 }
-        let lineWidth = max(1, TextDisplayMetrics.displayWidth(of: line, tabSize: tabSize))
-        return max(1, (lineWidth + contentWidth - 1) / contentWidth)
+        return wrappedRowStartColumns(for: line, contentWidth: contentWidth, tabSize: tabSize).count
     }
 
     private static func totalWrappedRowCount(for editor: TextEditor, contentWidth: Int) -> Int {
@@ -316,5 +322,55 @@ public enum TextEditorLayout {
         }
 
         return max(0, editor.lineCount - 1)
+    }
+
+    static func wrappedRowStartColumns(for line: String, contentWidth: Int, tabSize: Int = 4) -> [Int] {
+        guard contentWidth > 0 else { return [0] }
+
+        var starts = [0]
+        var currentRowWidth = 0
+
+        for char in line {
+            let width = displayWidth(of: char, atColumn: currentRowWidth, tabSize: tabSize)
+            guard width > 0 else { continue }
+
+            if currentRowWidth > 0, currentRowWidth + width > contentWidth {
+                starts.append(starts[starts.count - 1] + currentRowWidth)
+                currentRowWidth = 0
+            }
+
+            currentRowWidth += width
+        }
+
+        return starts
+    }
+
+    private static func wrappedRowPosition(
+        forDisplayColumn displayColumn: Int,
+        in line: String,
+        contentWidth: Int,
+        tabSize: Int = 4
+    ) -> (row: Int, column: Int) {
+        let rowStarts = wrappedRowStartColumns(for: line, contentWidth: contentWidth, tabSize: tabSize)
+        let totalWidth = max(0, TextDisplayMetrics.displayWidth(of: line, tabSize: tabSize))
+        let clampedDisplayColumn = max(0, displayColumn)
+
+        for rowIndex in rowStarts.indices {
+            let start = rowStarts[rowIndex]
+            let end = rowIndex + 1 < rowStarts.count ? rowStarts[rowIndex + 1] : totalWidth
+            if clampedDisplayColumn < end || rowIndex == rowStarts.count - 1 {
+                return (rowIndex, clampedDisplayColumn - start)
+            }
+        }
+
+        return (0, 0)
+    }
+
+    private static func displayWidth(of char: Character, atColumn column: Int, tabSize: Int) -> Int {
+        if char == "\t" {
+            let ts = max(1, tabSize)
+            return ts - (column % ts)
+        }
+        return UnicodeWidth.displayWidth(of: char)
     }
 }
