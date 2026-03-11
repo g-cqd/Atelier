@@ -571,6 +571,7 @@ public enum ViewRenderer {
             }
 
             let spans = editor.spans(at: lineIndex)
+            let selectionRange = editor.selectionRanges[lineIndex]
             renderStyledLine(
                 spans: spans,
                 into: &buffer,
@@ -583,7 +584,9 @@ public enum ViewRenderer {
                 editorStyle: editorStyle,
                 currentLineStyle: currentLineStyle,
                 whitespaceConfig: editor.whitespaceConfig,
-                tabSize: editor.tabSize
+                tabSize: editor.tabSize,
+                selectionRange: selectionRange,
+                selectionStyle: selectionStyle
             )
         }
 
@@ -778,12 +781,15 @@ public enum ViewRenderer {
         editorStyle: Style,
         currentLineStyle: Style,
         whitespaceConfig: WhitespaceRenderer.Config = .disabled,
-        tabSize: Int = 4
+        tabSize: Int = 4,
+        selectionRange: ClosedRange<Int>? = nil,
+        selectionStyle: Style = .default
     ) {
         guard availWidth > 0 else { return }
         var currentCol = col
         var currentX = 0
         var isLeading = true
+        var charIndex = 0
         let ts = max(1, tabSize)
 
         for span in spans {
@@ -831,12 +837,15 @@ public enum ViewRenderer {
                 }
 
                 if currentX >= hScrollOffset && currentX + width <= hScrollOffset + availWidth {
-                    let style = resolvedLineStyle(
+                    var style = resolvedLineStyle(
                         from: charStyle,
                         lineOverlay: lineOverlay,
                         isCurrentLine: isCurrentLine,
                         currentLineStyle: currentLineStyle
                     )
+                    if let range = selectionRange, range.contains(charIndex) {
+                        style = applySelectionStyle(selectionStyle, to: style)
+                    }
                     if isControl && width > 1 {
                         // Tab: render as multiple spaces
                         for _ in 0..<width where currentCol < col + availWidth {
@@ -853,6 +862,7 @@ public enum ViewRenderer {
                     }
                 }
                 currentX += width
+                charIndex += 1
             }
         }
 
