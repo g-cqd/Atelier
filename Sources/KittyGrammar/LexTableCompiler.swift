@@ -105,7 +105,7 @@ public enum LexTableCompiler: Sendable {
     /// Extracts the leading literal characters from a tree-sitter regex pattern.
     private static func extractLiteralPrefix(from regex: String) -> String {
         var result = ""
-        var chars = Array(regex.unicodeScalars)
+        let chars = Array(regex.unicodeScalars)
         var i = 0
 
         while i < chars.count && result.count < 4 {
