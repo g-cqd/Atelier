@@ -1,7 +1,7 @@
 import Foundation
 
-actor FileWatcher {
-    enum FileWatchEvent: Sendable {
+public actor FileWatcher {
+    public enum FileWatchEvent: Sendable {
         case fileChanged(String)
         case directoryChanged(String)
     }
@@ -15,9 +15,9 @@ actor FileWatcher {
     private static let debounceInterval: TimeInterval = 0.1
     private static let suppressWindow: TimeInterval = 1.0
 
-    let events: AsyncStream<FileWatchEvent>
+    public nonisolated let events: AsyncStream<FileWatchEvent>
 
-    init() {
+    public init() {
         var captured: AsyncStream<FileWatchEvent>.Continuation?
         self.events = AsyncStream { continuation in
             captured = continuation
@@ -25,7 +25,7 @@ actor FileWatcher {
         self.continuation = captured
     }
 
-    func watchDirectory(_ path: String) {
+    public func watchDirectory(_ path: String) {
         guard directoryStream == nil else { return }
 
         let queue = DispatchQueue(label: "com.kittycode.fswatcher", qos: .utility)
@@ -59,7 +59,7 @@ actor FileWatcher {
         }
     }
 
-    func watchFile(_ path: String) {
+    public func watchFile(_ path: String) {
         guard fileSources[path] == nil else { return }
 
         let fd = open(path, O_EVTONLY)
@@ -92,16 +92,16 @@ actor FileWatcher {
         fileSources[path] = source
     }
 
-    func unwatchFile(_ path: String) {
+    public func unwatchFile(_ path: String) {
         guard let source = fileSources.removeValue(forKey: path) else { return }
         source.cancel()
     }
 
-    func suppressNotifications(for path: String) {
+    public func suppressNotifications(for path: String) {
         suppressTimestamps[path] = Date()
     }
 
-    func stop() {
+    public func stop() {
         for (_, source) in fileSources {
             source.cancel()
         }
