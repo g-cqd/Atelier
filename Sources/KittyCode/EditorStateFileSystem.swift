@@ -261,6 +261,10 @@ extension EditorState {
             if !closedPath.isEmpty {
                 fileWatcherIntegration?.unwatchClosedFile(closedPath)
             }
+            // Clamp open files scroll offset after removing a buffer
+            if openFilesScrollOffset > 0 {
+                openFilesScrollOffset = min(openFilesScrollOffset, max(0, bufferManager.count - 1))
+            }
             if bufferManager.isEmpty {
                 // Reset to empty editor state
                 fileName = ""

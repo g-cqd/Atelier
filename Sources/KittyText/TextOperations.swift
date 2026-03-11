@@ -109,7 +109,7 @@ public enum TextOperations {
 
             buffer.setLine(at: start.row, to: firstPrefix + lastSuffix)
 
-            for _ in (start.row + 1)..<end.row {
+            for _ in (start.row + 1)...end.row {
                 buffer.removeLine(at: start.row + 1)
             }
 

@@ -478,7 +478,10 @@ private func enqueueAcceleratedScroll(
 
     guard state.scrollAccelerationTask == nil else { return }
 
-    state.scrollAccelerationTask = Task { [weak state] in
+    // Use Task.detached so the loop runs on a background executor.
+    // Only the MainActor.run blocks hop to the main actor, avoiding
+    // starvation when other @MainActor work is scheduled concurrently.
+    state.scrollAccelerationTask = Task.detached { [weak state] in
         guard let state else { return }
 
         while !Task.isCancelled {
@@ -534,6 +537,31 @@ func cancelPendingAcceleratedScroll(state: EditorState, resetBurst: Bool) {
     if resetBurst {
         resetScrollAccelerationBurst(state: state)
     }
+}
+
+/// Synchronously drains all pending accelerated scroll lines, applying each
+/// one-by-one. Cancels the background acceleration task first so there is no
+/// race.  Intended for deterministic testing.
+@MainActor
+func drainPendingAcceleratedScroll(state: EditorState) {
+    state.scrollAccelerationTask?.cancel()
+    state.scrollAccelerationTask = nil
+
+    guard let target = state.pendingAcceleratedScrollTarget else {
+        state.pendingAcceleratedScrollLines = 0
+        return
+    }
+
+    while state.pendingAcceleratedScrollLines != 0 {
+        let step = state.pendingAcceleratedScrollLines > 0 ? 1 : -1
+        guard applyVerticalScrollDelta(step, target: target, state: state) else {
+            break
+        }
+        state.pendingAcceleratedScrollLines -= step
+    }
+
+    state.pendingAcceleratedScrollLines = 0
+    state.pendingAcceleratedScrollTarget = nil
 }
 
 @MainActor
@@ -631,14 +659,24 @@ private func handleSelectionDrag(mouse: MouseEvent, editorRect: Rect, layout: La
     let contentBottom = layout.contentStartRow + layout.contentRows
 
     if mouse.row <= contentTop {
-        state.scrollOffset = max(0, state.scrollOffset - 1)
+        if state.config.editor.wrapLines {
+            _ = applyWrapModeScrollDelta(-1, state: state)
+        } else {
+            state.scrollOffset = max(0, state.scrollOffset - 1)
+        }
     } else if mouse.row >= contentBottom {
-        state.scrollOffset = min(state.fileLineCount - 1, state.scrollOffset + 1)
+        if state.config.editor.wrapLines {
+            _ = applyWrapModeScrollDelta(1, state: state)
+        } else {
+            state.scrollOffset = min(state.fileLineCount - 1, state.scrollOffset + 1)
+        }
     }
 
     let editor = makeEditorView(state: state)
     if let pos = TextEditorLayout.textPosition(for: editor, in: editorRect, row: mouse.row - 1, col: mouse.col - 1) {
         state.selection?.head = pos
+        state.cursorRow = pos.row
+        state.cursorCol = pos.col
     }
 }
 
@@ -818,5 +856,5 @@ func scrollLinesPerTick(visibleRows: Int, configured: Int?) -> Int {
     if let configured, configured > 0 {
         return configured
     }
-    return 1
+    return min(12, max(3, visibleRows / 8))
 }
