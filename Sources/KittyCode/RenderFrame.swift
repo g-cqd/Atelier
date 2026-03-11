@@ -6,6 +6,8 @@ import KittyRenderer
 @MainActor
 func renderFrame(pipeline: RenderPipeline, state: EditorState) {
     pipeline.beginFrame()
+    state.lastRenderColumns = pipeline.columns
+    state.lastRenderRows = pipeline.rows
 
     let layout = LayoutMetrics(state: state, columns: pipeline.columns, rows: pipeline.rows)
 

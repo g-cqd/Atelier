@@ -18,6 +18,7 @@ public struct TextEditor: View, Sendable {
 
     public var lineSpans: [[StyledSpan]]
     public var scrollOffset: Int
+    public var wrapRowOffset: Int
     public var horizontalScrollOffset: Int
     public var cursorRow: Int
     public var cursorCol: Int
@@ -42,6 +43,7 @@ public struct TextEditor: View, Sendable {
         content: String = "",
         spans: [StyledSpan] = [],
         scrollOffset: Int = 0,
+        wrapRowOffset: Int = 0,
         horizontalScrollOffset: Int = 0,
         cursorRow: Int = 0,
         cursorCol: Int = 0,
@@ -66,6 +68,7 @@ public struct TextEditor: View, Sendable {
         self.source = ArrayDocumentSource(lines)
         self.lineSpans = lines.map { _ in spans }
         self.scrollOffset = scrollOffset
+        self.wrapRowOffset = wrapRowOffset
         self.horizontalScrollOffset = horizontalScrollOffset
         self.cursorRow = cursorRow
         self.cursorCol = cursorCol
@@ -91,6 +94,7 @@ public struct TextEditor: View, Sendable {
         lines: [String],
         lineSpans: [[StyledSpan]],
         scrollOffset: Int = 0,
+        wrapRowOffset: Int = 0,
         horizontalScrollOffset: Int = 0,
         cursorRow: Int = 0,
         cursorCol: Int = 0,
@@ -114,6 +118,7 @@ public struct TextEditor: View, Sendable {
         self.source = ArrayDocumentSource(lines)
         self.lineSpans = lineSpans
         self.scrollOffset = scrollOffset
+        self.wrapRowOffset = wrapRowOffset
         self.horizontalScrollOffset = horizontalScrollOffset
         self.cursorRow = cursorRow
         self.cursorCol = cursorCol
@@ -139,6 +144,7 @@ public struct TextEditor: View, Sendable {
         buffer: TextBuffer,
         lineSpans: [[StyledSpan]],
         scrollOffset: Int = 0,
+        wrapRowOffset: Int = 0,
         horizontalScrollOffset: Int = 0,
         cursorRow: Int = 0,
         cursorCol: Int = 0,
@@ -162,6 +168,7 @@ public struct TextEditor: View, Sendable {
         self.source = buffer.lineCount == 0 ? TextBuffer(lines: [""]) : buffer
         self.lineSpans = lineSpans
         self.scrollOffset = scrollOffset
+        self.wrapRowOffset = wrapRowOffset
         self.horizontalScrollOffset = horizontalScrollOffset
         self.cursorRow = cursorRow
         self.cursorCol = cursorCol

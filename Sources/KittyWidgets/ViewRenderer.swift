@@ -293,7 +293,8 @@ public enum ViewRenderer {
                     currentLineStyle: currentLineStyle
                 )
 
-                for wrapRow in 0..<wrappedRows where screenRow < rect.height {
+                let firstWrapRow = lineIndex == max(0, min(editor.scrollOffset, editor.lineCount)) ? editor.wrapRowOffset : 0
+                for wrapRow in firstWrapRow..<wrappedRows where screenRow < rect.height {
                     let row = rect.y + screenRow
                     if isCurrentLine || lineOverlay != nil {
                         fillRow(

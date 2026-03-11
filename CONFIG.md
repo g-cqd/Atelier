@@ -22,10 +22,10 @@ KittyCode reads its configuration from `~/.kittycode.json` on launch. All fields
 | `editor.scrollLines` | `int?` | `null` | Lines per scroll-wheel tick. When `null`, vertical scrolling defaults to 1 line per event. |
 | `editor.scrollHorizontalStep` | `int` | `4` | Columns per horizontal scroll tick (Shift+scroll or trackpad horizontal). |
 | `editor.scrollMomentumBlockMilliseconds` | `int` | `5` | Brief rebound-block window after reversing scroll direction. Set to `0` to disable it. |
-| `editor.scrollAccelerationEnabled` | `bool` | `true` | Enable conservative burst-rate acceleration for vertical 1-line scrolling. |
-| `editor.scrollAccelerationWindowMilliseconds` | `int` | `50` | Time window used to count dense same-direction scroll bursts. |
-| `editor.scrollAccelerationStepIntervalMilliseconds` | `int` | `5` | Delay between queued accelerated 1-line steps. |
-| `editor.scrollAccelerationMaxExtraLines` | `int` | `2` | Maximum extra 1-line steps queued from a single burst event. |
+| `editor.scrollAccelerationEnabled` | `bool` | `true` | Enable burst-rate acceleration for vertical 1-line scrolling. |
+| `editor.scrollAccelerationWindowMilliseconds` | `int` | `120` | Time window used to count same-direction scroll bursts. |
+| `editor.scrollAccelerationStepIntervalMilliseconds` | `int` | `1` | Delay between queued accelerated 1-line steps. |
+| `editor.scrollAccelerationMaxExtraLines` | `int` | `8` | Maximum extra 1-line steps queued from a single burst event. |
 
 ## Tab Ribbon (`tabRibbon`)
 

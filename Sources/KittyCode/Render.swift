@@ -6,6 +6,8 @@ import KittyWidgets
 func render(pipeline: RenderPipeline, state: EditorState) {
     let cols = pipeline.columns
     let rows = pipeline.rows
+    state.lastRenderColumns = cols
+    state.lastRenderRows = rows
     let colorScheme = state.colorScheme
     guard cols > 0 && rows > 1 else { return }
 
