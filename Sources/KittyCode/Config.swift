@@ -55,7 +55,15 @@ struct KittyConfig: Codable, Sendable {
     struct EditorConfig: Codable, Sendable {
         var highlightCurrentLine: Bool = false
         var arrowKeysWrapAcrossLines: Bool = true
+        var wrapLines: Bool = false
         var tabSize: Int = 4
+        var scrollLines: Int? = nil
+        var scrollHorizontalStep: Int = 4
+        var scrollMomentumBlockMilliseconds: Int = 5
+        var scrollAccelerationEnabled: Bool = true
+        var scrollAccelerationWindowMilliseconds: Int = 50
+        var scrollAccelerationStepIntervalMilliseconds: Int = 5
+        var scrollAccelerationMaxExtraLines: Int = 2
 
         init() {}
 
@@ -64,12 +72,21 @@ struct KittyConfig: Codable, Sendable {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             highlightCurrentLine = try c.decodeIfPresent(Bool.self, forKey: .highlightCurrentLine) ?? d.highlightCurrentLine
             arrowKeysWrapAcrossLines = try c.decodeIfPresent(Bool.self, forKey: .arrowKeysWrapAcrossLines) ?? d.arrowKeysWrapAcrossLines
+            wrapLines = try c.decodeIfPresent(Bool.self, forKey: .wrapLines) ?? d.wrapLines
             tabSize = try c.decodeIfPresent(Int.self, forKey: .tabSize) ?? d.tabSize
+            scrollLines = try c.decodeIfPresent(Int.self, forKey: .scrollLines)
+            scrollHorizontalStep = try c.decodeIfPresent(Int.self, forKey: .scrollHorizontalStep) ?? d.scrollHorizontalStep
+            scrollMomentumBlockMilliseconds = try c.decodeIfPresent(Int.self, forKey: .scrollMomentumBlockMilliseconds) ?? d.scrollMomentumBlockMilliseconds
+            scrollAccelerationEnabled = try c.decodeIfPresent(Bool.self, forKey: .scrollAccelerationEnabled) ?? d.scrollAccelerationEnabled
+            scrollAccelerationWindowMilliseconds = try c.decodeIfPresent(Int.self, forKey: .scrollAccelerationWindowMilliseconds) ?? d.scrollAccelerationWindowMilliseconds
+            scrollAccelerationStepIntervalMilliseconds = try c.decodeIfPresent(Int.self, forKey: .scrollAccelerationStepIntervalMilliseconds) ?? d.scrollAccelerationStepIntervalMilliseconds
+            scrollAccelerationMaxExtraLines = try c.decodeIfPresent(Int.self, forKey: .scrollAccelerationMaxExtraLines) ?? d.scrollAccelerationMaxExtraLines
         }
     }
 
     struct StatusBarConfig: Codable, Sendable {
         enum Item: String, Codable, Sendable {
+            case path
             case file
             case status
             case language
@@ -77,11 +94,12 @@ struct KittyConfig: Codable, Sendable {
             case lineEnding
             case git
             case position
+            case visibility
         }
 
         var show: Bool = true
-        var leftItems: [Item] = [.file, .status]
-        var rightItems: [Item] = [.language, .size, .lineEnding, .git, .position]
+        var leftItems: [Item] = [.path, .status]
+        var rightItems: [Item] = [.visibility, .language, .size, .lineEnding, .git, .position]
         var showContextHints: Bool = true
 
         init() {}
@@ -117,6 +135,64 @@ struct KittyConfig: Codable, Sendable {
             showOpenFilesStatus = try c.decodeIfPresent(Bool.self, forKey: .showOpenFilesStatus) ?? d.showOpenFilesStatus
             lineChangeDebounceMilliseconds = try c.decodeIfPresent(UInt64.self, forKey: .lineChangeDebounceMilliseconds) ?? d.lineChangeDebounceMilliseconds
             maxLineDiffBytes = try c.decodeIfPresent(Int.self, forKey: .maxLineDiffBytes) ?? d.maxLineDiffBytes
+        }
+    }
+
+    struct GitConfig: Codable, Sendable {
+        var enabled: Bool = true
+        var refreshInterval: TimeInterval = 10
+        var decorations: GitDecorationsConfig = .init()
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let d = GitConfig()
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? d.enabled
+            refreshInterval = try c.decodeIfPresent(TimeInterval.self, forKey: .refreshInterval) ?? d.refreshInterval
+            decorations = try c.decodeIfPresent(GitDecorationsConfig.self, forKey: .decorations) ?? d.decorations
+        }
+    }
+
+    struct TabRibbonConfig: Codable, Sendable {
+        var position: TabRibbonPosition = .top
+        var persistence: TabPersistence = .pinned
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let d = TabRibbonConfig()
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            position = try c.decodeIfPresent(TabRibbonPosition.self, forKey: .position) ?? d.position
+            persistence = try c.decodeIfPresent(TabPersistence.self, forKey: .persistence) ?? d.persistence
+        }
+    }
+
+    struct SyntaxConfig: Codable, Sendable {
+        var enabled: Bool = true
+        var disabledLanguages: [String] = []
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let d = SyntaxConfig()
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? d.enabled
+            disabledLanguages = try c.decodeIfPresent([String].self, forKey: .disabledLanguages) ?? d.disabledLanguages
+        }
+    }
+
+    struct AutoSaveConfig: Codable, Sendable {
+        var enabled: Bool = false
+        var interval: TimeInterval = 30
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let d = AutoSaveConfig()
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? d.enabled
+            interval = try c.decodeIfPresent(TimeInterval.self, forKey: .interval) ?? d.interval
         }
     }
 
@@ -255,40 +331,18 @@ struct KittyConfig: Codable, Sendable {
     }
 
     var keybindingMode: KeybindingMode = .nano
-    var wrapLines = false
-    var treeWidth = 30
-    var useSFSymbolsInTerminal = true
-    var editor = EditorConfig()
-    var theme = Theme()
-    var statusBar: StatusBarConfig = .init()
-
-    // File watching
+    var treeWidth: Int = 30
+    var useSFSymbolsInTerminal: Bool = true
     var fileWatcherEnabled: Bool = true
-
-    // Auto-save
-    var autoSave: Bool = false
-    var autoSaveInterval: TimeInterval = 30
-
-    // Git
-    var showGitStatus: Bool = true
-    var gitRefreshInterval: TimeInterval = 10
-    var gitDecorations: GitDecorationsConfig = .init()
-
-    // Syntax
-    var syntaxHighlighting: Bool = true
-    var disabledLanguages: [String] = []
-
-    // Tab ribbon
-    var tabRibbonPosition: TabRibbonPosition = .top
-    var tabPersistence: TabPersistence = .pinned
-
-    // Activity bar
+    var editor: EditorConfig = .init()
+    var theme: Theme = .init()
+    var statusBar: StatusBarConfig = .init()
+    var git: GitConfig = .init()
+    var syntax: SyntaxConfig = .init()
+    var tabRibbon: TabRibbonConfig = .init()
+    var autoSave: AutoSaveConfig = .init()
     var activityBar: ActivityBarConfig = .init()
-
-    // Keybindings
     var keybindings: KeybindingsConfig = .init()
-
-    // Whitespace rendering
     var whitespace: WhitespaceConfig = .init()
 
     init() {}
@@ -297,31 +351,25 @@ struct KittyConfig: Codable, Sendable {
         let d = KittyConfig()
         let c = try decoder.container(keyedBy: CodingKeys.self)
         keybindingMode = try c.decodeIfPresent(KeybindingMode.self, forKey: .keybindingMode) ?? d.keybindingMode
-        wrapLines = try c.decodeIfPresent(Bool.self, forKey: .wrapLines) ?? d.wrapLines
         treeWidth = try c.decodeIfPresent(Int.self, forKey: .treeWidth) ?? d.treeWidth
         useSFSymbolsInTerminal = try c.decodeIfPresent(Bool.self, forKey: .useSFSymbolsInTerminal) ?? d.useSFSymbolsInTerminal
+        fileWatcherEnabled = try c.decodeIfPresent(Bool.self, forKey: .fileWatcherEnabled) ?? d.fileWatcherEnabled
         editor = try c.decodeIfPresent(EditorConfig.self, forKey: .editor) ?? d.editor
         theme = try c.decodeIfPresent(Theme.self, forKey: .theme) ?? d.theme
         statusBar = try c.decodeIfPresent(StatusBarConfig.self, forKey: .statusBar) ?? d.statusBar
-        fileWatcherEnabled = try c.decodeIfPresent(Bool.self, forKey: .fileWatcherEnabled) ?? d.fileWatcherEnabled
-        autoSave = try c.decodeIfPresent(Bool.self, forKey: .autoSave) ?? d.autoSave
-        autoSaveInterval = try c.decodeIfPresent(TimeInterval.self, forKey: .autoSaveInterval) ?? d.autoSaveInterval
-        showGitStatus = try c.decodeIfPresent(Bool.self, forKey: .showGitStatus) ?? d.showGitStatus
-        gitRefreshInterval = try c.decodeIfPresent(TimeInterval.self, forKey: .gitRefreshInterval) ?? d.gitRefreshInterval
-        gitDecorations = try c.decodeIfPresent(GitDecorationsConfig.self, forKey: .gitDecorations) ?? d.gitDecorations
-        syntaxHighlighting = try c.decodeIfPresent(Bool.self, forKey: .syntaxHighlighting) ?? d.syntaxHighlighting
-        disabledLanguages = try c.decodeIfPresent([String].self, forKey: .disabledLanguages) ?? d.disabledLanguages
-        tabRibbonPosition = try c.decodeIfPresent(TabRibbonPosition.self, forKey: .tabRibbonPosition) ?? d.tabRibbonPosition
-        tabPersistence = try c.decodeIfPresent(TabPersistence.self, forKey: .tabPersistence) ?? d.tabPersistence
+        git = try c.decodeIfPresent(GitConfig.self, forKey: .git) ?? d.git
+        syntax = try c.decodeIfPresent(SyntaxConfig.self, forKey: .syntax) ?? d.syntax
+        tabRibbon = try c.decodeIfPresent(TabRibbonConfig.self, forKey: .tabRibbon) ?? d.tabRibbon
+        autoSave = try c.decodeIfPresent(AutoSaveConfig.self, forKey: .autoSave) ?? d.autoSave
         activityBar = try c.decodeIfPresent(ActivityBarConfig.self, forKey: .activityBar) ?? d.activityBar
         keybindings = try c.decodeIfPresent(KeybindingsConfig.self, forKey: .keybindings) ?? d.keybindings
         whitespace = try c.decodeIfPresent(WhitespaceConfig.self, forKey: .whitespace) ?? d.whitespace
     }
 
+    static let configURL: URL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".kittycode.json")
+
     static func load() -> KittyConfig {
-        let fileManager = FileManager.default
-        let home = fileManager.homeDirectoryForCurrentUser
-        let configURL = home.appendingPathComponent(".kittycode.json")
         guard let data = try? Data(contentsOf: configURL) else {
             return KittyConfig()
         }

@@ -34,6 +34,115 @@ struct KittyCodeConfigTests {
     func `ColorRGB rejects invalid hex`() {
         #expect(ColorRGB(hex: "#zzz999") == nil)
         #expect(ColorRGB(hex: "#12345") == nil)
+        #expect(ColorRGB(hex: "#1234567") == nil)
+    }
+
+    @Test
+    func `ColorRGB parses 8 digit hex with alpha`() {
+        let parsed = ColorRGB(hex: "#FF000080")
+        #expect(parsed != nil)
+        #expect(parsed?.r == 0xFF)
+        #expect(parsed?.g == 0x00)
+        #expect(parsed?.b == 0x00)
+        #expect(parsed?.alpha == Double(0x80) / 255.0)
+    }
+
+    @Test
+    func `ColorRGB 8 digit hex FF alpha is 1`() {
+        let parsed = ColorRGB(hex: "#ABCDEFFF")
+        #expect(parsed != nil)
+        #expect(parsed?.r == 0xAB)
+        #expect(parsed?.g == 0xCD)
+        #expect(parsed?.b == 0xEF)
+        #expect(parsed?.alpha == 1.0)
+    }
+
+    @Test
+    func `ColorRGB 8 digit hex 00 alpha is 0`() {
+        let parsed = ColorRGB(hex: "#ABCDEF00")
+        #expect(parsed != nil)
+        #expect(parsed?.alpha == 0.0)
+    }
+
+    @Test
+    func `ColorRGB encodes 8 digit hex when alpha below 1`() throws {
+        let color = ColorRGB(r: 0xFF, g: 0x00, b: 0x00, alpha: 0.5)
+        let data = try JSONEncoder().encode(color)
+        let hex = String(data: data, encoding: .utf8)!
+        #expect(hex.contains("ff000080"))
+    }
+
+    @Test
+    func `ColorRGB encodes 6 digit hex when alpha is 1`() throws {
+        let color = ColorRGB(r: 0xAB, g: 0xCD, b: 0xEF)
+        let data = try JSONEncoder().encode(color)
+        let hex = String(data: data, encoding: .utf8)!
+        #expect(hex.contains("abcdef"))
+        #expect(!hex.contains("abcdefff"))
+    }
+
+    @Test
+    func `ColorRGB codable roundtrips alpha`() throws {
+        let original = ColorRGB(r: 0x11, g: 0x22, b: 0x33, alpha: 0.5)
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(ColorRGB.self, from: data)
+        #expect(decoded.r == original.r)
+        #expect(decoded.g == original.g)
+        #expect(decoded.b == original.b)
+        #expect(abs(decoded.alpha - original.alpha) < 0.01)
+    }
+
+    @Test
+    func `ColorRGB HSB init produces correct red`() {
+        let red = ColorRGB(hue: 0, saturation: 1, brightness: 1)
+        #expect(red.r == 255)
+        #expect(red.g == 0)
+        #expect(red.b == 0)
+        #expect(red.alpha == 1)
+    }
+
+    @Test
+    func `ColorRGB HSB init produces correct green`() {
+        let green = ColorRGB(hue: 1.0 / 3.0, saturation: 1, brightness: 1)
+        #expect(green.r == 0)
+        #expect(green.g == 255)
+        #expect(green.b == 0)
+    }
+
+    @Test
+    func `ColorRGB HSB init with alpha`() {
+        let color = ColorRGB(hue: 0, saturation: 1, brightness: 1, alpha: 0.5)
+        #expect(color.r == 255)
+        #expect(color.alpha == 0.5)
+    }
+
+    @Test
+    func `ColorRGB OKLCH init produces plausible values`() {
+        let color = ColorRGB(lightness: 0.7, chroma: 0.15, hue: 150)
+        #expect(color.g > color.r)
+        #expect(color.alpha == 1)
+    }
+
+    @Test
+    func `ColorRGB OKLCH init with alpha`() {
+        let color = ColorRGB(lightness: 0.5, chroma: 0.1, hue: 30, alpha: 0.3)
+        #expect(color.alpha == 0.3)
+    }
+
+    @Test
+    func `ColorRGB OKLCH white`() {
+        let white = ColorRGB(lightness: 1, chroma: 0, hue: 0)
+        #expect(white.r == 255)
+        #expect(white.g == 255)
+        #expect(white.b == 255)
+    }
+
+    @Test
+    func `ColorRGB OKLCH black`() {
+        let black = ColorRGB(lightness: 0, chroma: 0, hue: 0)
+        #expect(black.r == 0)
+        #expect(black.g == 0)
+        #expect(black.b == 0)
     }
 
     @Test
@@ -54,6 +163,16 @@ struct KittyCodeConfigTests {
     }
 
     @Test
+    func `Color overlay config decodes 8 digit hex shorthand`() throws {
+        let overlay = try JSONDecoder().decode(
+            ColorOverlayConfig.self,
+            from: Data("\"#FF000080\"".utf8)
+        )
+        #expect(overlay.color == ColorRGB(r: 0xFF, g: 0x00, b: 0x00))
+        #expect(abs(overlay.alpha - Double(0x80) / 255.0) < 0.01)
+    }
+
+    @Test
     @MainActor
     func `Color scheme uses terminal default backgrounds`() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
@@ -69,7 +188,7 @@ struct KittyCodeNavigationTests {
     private func makeSUT(fileContent: [String], columns: Int = 80, rows: Int = 24) -> (state: EditorState, pipeline: RenderPipeline) {
         var config = KittyConfig()
         config.activityBar.show = false
-        config.tabRibbonPosition = .hidden
+        config.tabRibbon.position = .hidden
         let state = EditorState(rootPath: ".", config: config)
         state.mode = .editor
         state.fileContent = fileContent
@@ -112,7 +231,7 @@ struct KittyCodeNavigationTests {
         state.cursorRow = 0
         state.cursorCol = 25
         state.hScrollOffset = 0
-        state.config.wrapLines = false
+        state.config.editor.wrapLines = false
 
         ensureEditorVisible(state, contentRows: 10, availWidth: 8)
         #expect(state.hScrollOffset > 0)
@@ -135,6 +254,141 @@ struct KittyCodeNavigationTests {
     }
 
     @Test
+    func `reversing scroll direction keeps accepting the new direction`() {
+        let sut = makeSUT(fileContent: (0..<200).map(String.init), rows: 12)
+        sut.state.config.editor.scrollAccelerationEnabled = false
+        sut.state.scrollOffset = 30
+        sut.state.sidebarCollapsed = true
+
+        handleMouse(
+            MouseEvent(button: .scrollDown, row: 2, col: 40, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        handleMouse(
+            MouseEvent(button: .scrollUp, row: 2, col: 40, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        handleMouse(
+            MouseEvent(button: .scrollUp, row: 2, col: 40, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.scrollOffset == 29)
+    }
+
+    @Test
+    func `stale rebound event is ignored once after a reversal`() {
+        let sut = makeSUT(fileContent: (0..<200).map(String.init), rows: 12)
+        sut.state.config.editor.scrollAccelerationEnabled = false
+        sut.state.scrollOffset = 30
+        sut.state.sidebarCollapsed = true
+
+        handleMouse(
+            MouseEvent(button: .scrollDown, row: 2, col: 40, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        handleMouse(
+            MouseEvent(button: .scrollUp, row: 2, col: 40, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        handleMouse(
+            MouseEvent(button: .scrollDown, row: 2, col: 40, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.scrollOffset == 30)
+    }
+
+    @Test
+    func `rapid same-direction scroll bursts enqueue extra line-by-line steps`() async {
+        let sut = makeSUT(fileContent: (0..<200).map(String.init), rows: 12)
+        sut.state.sidebarCollapsed = true
+        sut.state.config.editor.scrollAccelerationEnabled = true
+        sut.state.config.editor.scrollAccelerationWindowMilliseconds = 100
+        sut.state.config.editor.scrollAccelerationStepIntervalMilliseconds = 5
+        sut.state.config.editor.scrollAccelerationMaxExtraLines = 2
+
+        handleMouse(
+            MouseEvent(button: .scrollDown, row: 2, col: 40, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        handleMouse(
+            MouseEvent(button: .scrollDown, row: 2, col: 40, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        handleMouse(
+            MouseEvent(button: .scrollDown, row: 2, col: 40, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.scrollOffset == 3)
+
+        let deadline = Date().addingTimeInterval(1)
+        while (sut.state.pendingAcceleratedScrollLines != 0 || sut.state.scrollAccelerationTask != nil),
+              Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+
+        #expect(sut.state.scrollOffset == 5)
+    }
+
+    @Test
+    func `opposing direction cancels pending accelerated scroll immediately`() async {
+        let sut = makeSUT(fileContent: (0..<200).map(String.init), rows: 12)
+        sut.state.sidebarCollapsed = true
+        sut.state.config.editor.scrollAccelerationEnabled = true
+        sut.state.config.editor.scrollAccelerationWindowMilliseconds = 100
+        sut.state.config.editor.scrollAccelerationStepIntervalMilliseconds = 40
+        sut.state.config.editor.scrollAccelerationMaxExtraLines = 2
+
+        handleMouse(
+            MouseEvent(button: .scrollDown, row: 2, col: 40, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        handleMouse(
+            MouseEvent(button: .scrollDown, row: 2, col: 40, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        handleMouse(
+            MouseEvent(button: .scrollDown, row: 2, col: 40, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        let midDrainDeadline = Date().addingTimeInterval(1)
+        while sut.state.pendingAcceleratedScrollLines != 1, Date() < midDrainDeadline {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(sut.state.scrollOffset == 4)
+
+        handleMouse(
+            MouseEvent(button: .scrollUp, row: 2, col: 40, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        let drainDeadline = Date().addingTimeInterval(1)
+        while (sut.state.pendingAcceleratedScrollLines != 0 || sut.state.scrollAccelerationTask != nil),
+              Date() < drainDeadline {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+
+        #expect(sut.state.scrollOffset == 3)
+        #expect(sut.state.pendingAcceleratedScrollLines == 0)
+    }
+
+    @Test
     func `ensureTreeVisible scrolls selected row into viewport`() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         // Populate the underlying FileNode tree and flatten it
@@ -151,10 +405,17 @@ struct KittyCodeNavigationTests {
 
     @Test
     func `scrollLinesPerTick scales with viewport height`() {
-        #expect(scrollLinesPerTick(visibleRows: 10) == 3)
-        #expect(scrollLinesPerTick(visibleRows: 24) == 3)
-        #expect(scrollLinesPerTick(visibleRows: 48) == 6)
-        #expect(scrollLinesPerTick(visibleRows: 200) == 12)
+        #expect(scrollLinesPerTick(visibleRows: 10, configured: nil) == 1)
+        #expect(scrollLinesPerTick(visibleRows: 24, configured: nil) == 1)
+        #expect(scrollLinesPerTick(visibleRows: 48, configured: nil) == 1)
+        #expect(scrollLinesPerTick(visibleRows: 200, configured: nil) == 1)
+    }
+
+    @Test
+    func `scrollLinesPerTick respects configured value`() {
+        #expect(scrollLinesPerTick(visibleRows: 48, configured: 1) == 1)
+        #expect(scrollLinesPerTick(visibleRows: 48, configured: 20) == 20)
+        #expect(scrollLinesPerTick(visibleRows: 48, configured: 0) == 1)
     }
 
     @Test
@@ -215,7 +476,7 @@ struct KittyCodeNavigationTests {
     func `left arrow wraps to previous line when enabled`() {
         var config = KittyConfig()
         config.activityBar.show = false
-        config.tabRibbonPosition = .hidden
+        config.tabRibbon.position = .hidden
         config.editor.arrowKeysWrapAcrossLines = true
 
         let state = EditorState(rootPath: ".", config: config)
@@ -245,7 +506,7 @@ struct KittyCodeNavigationTests {
     func `right arrow wraps to next line when enabled`() {
         var config = KittyConfig()
         config.activityBar.show = false
-        config.tabRibbonPosition = .hidden
+        config.tabRibbon.position = .hidden
         config.editor.arrowKeysWrapAcrossLines = true
 
         let state = EditorState(rootPath: ".", config: config)
@@ -299,7 +560,7 @@ struct KittyCodeNavigationTests {
         )
 
         #expect(handled)
-        #expect(sut.state.cursorRow == 10)
+        #expect(sut.state.cursorRow == 11)
     }
 
     @Test
@@ -374,12 +635,12 @@ struct KittyCodeNavigationTests {
     @Test
     func `mouse click on wrapped editor row uses shared widget hit testing`() {
         let sut = makeSUT(fileContent: ["abcdef"], columns: 11, rows: 6)
-        sut.state.config.wrapLines = true
+        sut.state.config.editor.wrapLines = true
         sut.state.treePanelWidth = 3
         sut.state.mode = .editor
 
         handleMouse(
-            MouseEvent(button: .left, row: 3, col: 9, kind: .press),
+            MouseEvent(button: .left, row: 2, col: 9, kind: .press),
             state: sut.state,
             pipeline: sut.pipeline
         )
@@ -658,20 +919,24 @@ struct KittyConfigExtensionTests {
         #expect(config.keybindingMode == .vim)
         #expect(config.treeWidth == 25)
         #expect(config.fileWatcherEnabled == true)
-        #expect(config.autoSave == false)
-        #expect(config.autoSaveInterval == 30)
-        #expect(config.showGitStatus == true)
-        #expect(config.gitRefreshInterval == 10)
-        #expect(config.gitDecorations.showLineChanges == true)
-        #expect(config.gitDecorations.showTabRibbonStatus == true)
-        #expect(config.gitDecorations.showOpenFilesStatus == true)
-        #expect(config.syntaxHighlighting == true)
-        #expect(config.disabledLanguages.isEmpty)
-        #expect(config.tabRibbonPosition == .top)
+        #expect(config.autoSave.enabled == false)
+        #expect(config.autoSave.interval == 30)
+        #expect(config.git.enabled == true)
+        #expect(config.git.refreshInterval == 10)
+        #expect(config.git.decorations.showLineChanges == true)
+        #expect(config.git.decorations.showTabRibbonStatus == true)
+        #expect(config.git.decorations.showOpenFilesStatus == true)
+        #expect(config.syntax.enabled == true)
+        #expect(config.syntax.disabledLanguages.isEmpty)
+        #expect(config.tabRibbon.position == .top)
         #expect(config.activityBar.show == true)
         #expect(config.activityBar.position == .left)
         #expect(config.keybindings.tabNext == "ctrl+pagedown")
         #expect(config.keybindings.toggleSidebar == "ctrl+b")
+        #expect(config.editor.scrollAccelerationEnabled == true)
+        #expect(config.editor.scrollAccelerationWindowMilliseconds == 50)
+        #expect(config.editor.scrollAccelerationStepIntervalMilliseconds == 5)
+        #expect(config.editor.scrollAccelerationMaxExtraLines == 2)
     }
 
     @Test
@@ -679,7 +944,12 @@ struct KittyConfigExtensionTests {
         let json = """
         {
           "editor": {
-            "arrowKeysWrapAcrossLines": false
+            "arrowKeysWrapAcrossLines": false,
+            "scrollMomentumBlockMilliseconds": 9,
+            "scrollAccelerationEnabled": false,
+            "scrollAccelerationWindowMilliseconds": 80,
+            "scrollAccelerationStepIntervalMilliseconds": 3,
+            "scrollAccelerationMaxExtraLines": 4
           },
           "statusBar": {
             "show": false,
@@ -693,6 +963,11 @@ struct KittyConfigExtensionTests {
         let config = try JSONDecoder().decode(KittyConfig.self, from: Data(json.utf8))
 
         #expect(config.editor.arrowKeysWrapAcrossLines == false)
+        #expect(config.editor.scrollMomentumBlockMilliseconds == 9)
+        #expect(config.editor.scrollAccelerationEnabled == false)
+        #expect(config.editor.scrollAccelerationWindowMilliseconds == 80)
+        #expect(config.editor.scrollAccelerationStepIntervalMilliseconds == 3)
+        #expect(config.editor.scrollAccelerationMaxExtraLines == 4)
         #expect(config.statusBar.show == false)
         #expect(config.statusBar.leftItems == [.file])
         #expect(config.statusBar.rightItems == [.language, .lineEnding, .git])
@@ -702,23 +977,33 @@ struct KittyConfigExtensionTests {
     @Test
     func `new JSON fields roundtrip correctly`() throws {
         var config = KittyConfig()
-        config.autoSave = true
-        config.autoSaveInterval = 60
-        config.tabRibbonPosition = .hidden
+        config.autoSave.enabled = true
+        config.autoSave.interval = 60
+        config.tabRibbon.position = .hidden
+        config.editor.scrollMomentumBlockMilliseconds = 7
+        config.editor.scrollAccelerationEnabled = false
+        config.editor.scrollAccelerationWindowMilliseconds = 70
+        config.editor.scrollAccelerationStepIntervalMilliseconds = 4
+        config.editor.scrollAccelerationMaxExtraLines = 3
         config.activityBar.show = false
-        config.gitDecorations.showTabRibbonStatus = false
-        config.gitDecorations.maxLineDiffBytes = 2048
-        config.disabledLanguages = ["python", "ruby"]
+        config.git.decorations.showTabRibbonStatus = false
+        config.git.decorations.maxLineDiffBytes = 2048
+        config.syntax.disabledLanguages = ["python", "ruby"]
 
         let data = try JSONEncoder().encode(config)
         let decoded = try JSONDecoder().decode(KittyConfig.self, from: data)
-        #expect(decoded.autoSave == true)
-        #expect(decoded.autoSaveInterval == 60)
-        #expect(decoded.tabRibbonPosition == .hidden)
+        #expect(decoded.autoSave.enabled == true)
+        #expect(decoded.autoSave.interval == 60)
+        #expect(decoded.tabRibbon.position == .hidden)
+        #expect(decoded.editor.scrollMomentumBlockMilliseconds == 7)
+        #expect(decoded.editor.scrollAccelerationEnabled == false)
+        #expect(decoded.editor.scrollAccelerationWindowMilliseconds == 70)
+        #expect(decoded.editor.scrollAccelerationStepIntervalMilliseconds == 4)
+        #expect(decoded.editor.scrollAccelerationMaxExtraLines == 3)
         #expect(decoded.activityBar.show == false)
-        #expect(decoded.gitDecorations.showTabRibbonStatus == false)
-        #expect(decoded.gitDecorations.maxLineDiffBytes == 2048)
-        #expect(decoded.disabledLanguages == ["python", "ruby"])
+        #expect(decoded.git.decorations.showTabRibbonStatus == false)
+        #expect(decoded.git.decorations.maxLineDiffBytes == 2048)
+        #expect(decoded.syntax.disabledLanguages == ["python", "ruby"])
     }
 
     @Test
@@ -806,7 +1091,7 @@ struct MultiBufferIntegrationTests {
     func `switching tabs preserves cursor position`() {
         var config = KittyConfig()
         config.activityBar.show = false
-        config.tabRibbonPosition = .hidden
+        config.tabRibbon.position = .hidden
         let state = EditorState(rootPath: ".", config: config)
 
         // Simulate opening first file via bufferManager
@@ -864,7 +1149,7 @@ struct MultiBufferIntegrationTests {
 
         var config = KittyConfig()
         config.activityBar.show = false
-        config.tabRibbonPosition = .hidden
+        config.tabRibbon.position = .hidden
         let state = EditorState(rootPath: rootURL.path, config: config)
 
         func waitUntil(_ condition: @escaping () -> Bool) async {
@@ -906,7 +1191,7 @@ struct RuntimeRegressionsTests {
     ) -> (state: EditorState, pipeline: RenderPipeline) {
         var config = KittyConfig()
         config.activityBar.show = activityBar
-        config.tabRibbonPosition = tabRibbon
+        config.tabRibbon.position = tabRibbon
         let state = EditorState(rootPath: ".", config: config)
         state.fileContent = fileContent
         let pipeline = RenderPipeline(
@@ -925,13 +1210,13 @@ struct RuntimeRegressionsTests {
         sut.state.mode = .editor
         sut.state.sidebarCollapsed = true
         sut.state.refreshHighlights()
-        // Without tab ribbon, contentStartRow = 1
+        // Without tab ribbon, contentStartRow = 0
         render(pipeline: sut.pipeline, state: sut.state)
 
-        // Row 0 is title bar, row 1 should have editor content (line numbers + text)
-        let row1Chars = (0..<40).map { sut.pipeline.buffer[1, $0].character }
+        // Without title bar, row 0 should have editor content (line numbers + text)
+        let row1Chars = (0..<40).map { sut.pipeline.buffer[0, $0].character }
         let row1Text = String(row1Chars)
-        #expect(row1Text.contains("hello"), "Editor content should appear at row 1 (contentStartRow)")
+        #expect(row1Text.contains("hello"), "Editor content should appear at row 0 (contentStartRow)")
     }
 
     @Test
@@ -946,13 +1231,13 @@ struct RuntimeRegressionsTests {
 
         render(pipeline: sut.pipeline, state: sut.state)
 
-        // Row 0: title bar, Row 1: tab ribbon, Row 2: editor content
-        let row2Chars = (0..<cols).map { sut.pipeline.buffer[2, $0].character }
+        // Row 0: tab ribbon, Row 1: editor content
+        let row2Chars = (0..<cols).map { sut.pipeline.buffer[1, $0].character }
         let row2Text = String(row2Chars)
-        #expect(row2Text.contains("world"), "Editor content should appear at row 2 below tab ribbon")
+        #expect(row2Text.contains("world"), "Editor content should appear at row 1 below tab ribbon")
 
-        // Row 1 should NOT contain editor content (it's the tab ribbon)
-        let row1Chars = (0..<cols).map { sut.pipeline.buffer[1, $0].character }
+        // Row 0 should NOT contain editor content (it's the tab ribbon)
+        let row1Chars = (0..<cols).map { sut.pipeline.buffer[0, $0].character }
         let row1Text = String(row1Chars)
         #expect(!row1Text.contains("world"), "Tab ribbon row should not contain editor text")
     }
@@ -985,8 +1270,8 @@ struct RuntimeRegressionsTests {
 
         render(pipeline: sut.pipeline, state: sut.state)
 
-        #expect(sut.pipeline.buffer[1, 0].character == "+")
-        #expect(sut.pipeline.buffer[1, 3].character == "1")
+        #expect(sut.pipeline.buffer[0, 0].character == "+")
+        #expect(sut.pipeline.buffer[0, 3].character == "1")
     }
 
     @Test
@@ -999,10 +1284,10 @@ struct RuntimeRegressionsTests {
 
         render(pipeline: sut.pipeline, state: sut.state)
 
-        let mCol = (0..<cols).first { sut.pipeline.buffer[1, $0].character == "M" }
+        let mCol = (0..<cols).first { sut.pipeline.buffer[0, $0].character == "M" }
         #expect(mCol != nil, "Expected 'M' indicator in tab ribbon row")
         if let col = mCol {
-            let cell = sut.pipeline.buffer[1, col]
+            let cell = sut.pipeline.buffer[0, col]
             #expect(cell.style == sut.state.colorScheme.gitModified, "M indicator should use gitModified style")
         }
     }
@@ -1019,10 +1304,10 @@ struct RuntimeRegressionsTests {
 
         render(pipeline: sut.pipeline, state: sut.state)
 
-        let mCol = (0..<16).first { sut.pipeline.buffer[1, $0].character == "M" }
+        let mCol = (0..<16).first { sut.pipeline.buffer[0, $0].character == "M" }
         #expect(mCol != nil, "Expected 'M' indicator in open files panel")
         if let col = mCol {
-            let cell = sut.pipeline.buffer[1, col]
+            let cell = sut.pipeline.buffer[0, col]
             #expect(cell.style == sut.state.colorScheme.gitModified, "M indicator should use gitModified style")
         }
     }
@@ -1081,7 +1366,7 @@ struct RuntimeRegressionsTests {
 
         var config = KittyConfig()
         config.activityBar.show = false
-        config.tabRibbonPosition = .hidden
+        config.tabRibbon.position = .hidden
         let state = EditorState(rootPath: rootURL.path, config: config)
         let pipeline = RenderPipeline(
             connection: MockTerminalConnection(size: TerminalSize(columns: 40, rows: 10)),
@@ -1129,10 +1414,10 @@ struct RuntimeRegressionsTests {
         sut.state.treePanelWidth = 0
         sut.state.sidebarCollapsed = true
 
-        // Mouse row 2 (1-based) = screen row 1 = first content row (contentStartRow=1)
+        // Mouse row 1 (1-based) = screen row 0 = first content row (contentStartRow=0)
         // Mouse col 5 (1-based) = screen col 4
         handleMouse(
-            MouseEvent(button: .left, row: 2, col: 5, kind: .press),
+            MouseEvent(button: .left, row: 1, col: 5, kind: .press),
             state: sut.state,
             pipeline: sut.pipeline
         )
@@ -1151,10 +1436,10 @@ struct RuntimeRegressionsTests {
         }
         sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
 
-        // Mouse row 2 (1-based) = screen row 1 = contentStartRow
-        // contentRow = 1 - 1 - 1 = -1... wait, no: mouse.row - 1 - contentStartRow = 2 - 1 - 1 = 0
+        // Mouse row 1 (1-based) = screen row 0 = contentStartRow
+        // contentRow = mouse.row - 1 - contentStartRow = 1 - 1 - 0 = 0
         handleMouse(
-            MouseEvent(button: .left, row: 2, col: 3, kind: .press),
+            MouseEvent(button: .left, row: 1, col: 3, kind: .press),
             state: sut.state,
             pipeline: sut.pipeline
         )
@@ -1173,7 +1458,7 @@ struct RuntimeRegressionsTests {
         sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
 
         handleMouse(
-            MouseEvent(button: .right, row: 2, col: 3, kind: .press),
+            MouseEvent(button: .right, row: 1, col: 3, kind: .press),
             state: sut.state,
             pipeline: sut.pipeline
         )
@@ -1271,9 +1556,9 @@ struct RuntimeRegressionsTests {
         // So contentStartRow=1. Let's just verify render doesn't crash
         render(pipeline: sut.pipeline, state: sut.state)
 
-        // Row 0 = title bar, no tab ribbon (no buffers), content starts at row 1
+        // No tab ribbon (no buffers), content starts at row 0
         // The empty editor message should be somewhere in the middle rows
-        let midRow = 1 + (10 - 2) / 2  // contentStartRow + contentRows/2
+        let midRow = 0 + (10 - 1) / 2  // contentStartRow + contentRows/2
         let rowChars = (0..<60).map { sut.pipeline.buffer[midRow, $0].character }
         let rowText = String(rowChars).trimmingCharacters(in: .whitespaces)
         #expect(rowText.contains("Open a file"))
@@ -1325,24 +1610,19 @@ struct RuntimeRegressionsTests {
 
         render(pipeline: sut.pipeline, state: sut.state)
 
-        // Row 0: title bar
-        // Row 1: tab ribbon (full width)
-        // Rows 2-9: activity bar (cols 0-2) + sidebar (cols 3-17) + separator (col 18) + editor (cols 19+)
+        // Row 0: tab ribbon (full width)
+        // Rows 1-10: activity bar (cols 0-2) + sidebar (cols 3-17) + separator (col 18) + editor (cols 19+)
         // Row 11: status bar
 
-        // Title bar at row 0 should span full width
-        let titleChar = sut.pipeline.buffer[0, 1].character
-        #expect(titleChar != "\0")
-
-        // Tab ribbon at row 1
-        let tabChar = sut.pipeline.buffer[1, 0].character
+        // Tab ribbon at row 0
+        let tabChar = sut.pipeline.buffer[0, 0].character
         #expect(tabChar != "\0", "Tab ribbon should fill from column 0")
 
-        // Editor content at row 2 (contentStartRow=2)
-        let editorArea = (19..<60).map { sut.pipeline.buffer[2, $0].character }
+        // Editor content at row 1 (contentStartRow=1)
+        let editorArea = (19..<60).map { sut.pipeline.buffer[1, $0].character }
         let editorText = String(editorArea).trimmingCharacters(in: .whitespaces)
         #expect(editorText.contains("hello") || editorText.contains("1"),
-                "Editor area should have content at row 2")
+                "Editor area should have content at row 1")
 
         // Status bar at last row
         let statusChars = (0..<60).map { sut.pipeline.buffer[11, $0].character }
@@ -1368,10 +1648,38 @@ struct RuntimeRegressionsTests {
 
         // The separator column from the previous render should not persist
         // Editor should now start at column 0 (no sidebar)
-        let row1Chars = (0..<40).map { sut.pipeline.buffer[1, $0].character }
+        let row1Chars = (0..<40).map { sut.pipeline.buffer[0, $0].character }
         let row1Text = String(row1Chars).trimmingCharacters(in: .whitespaces)
         #expect(row1Text.contains("content") || row1Text.contains("1"),
                 "Editor should render from column 0 when sidebar is collapsed")
+    }
+
+    @Test
+    func `scrolling the tree repaints the top visible row`() throws {
+        let sut = makeSUT(columns: 40, rows: 10)
+        sut.state.sidebarCollapsed = false
+        sut.state.treePanelWidth = 18
+        sut.state.treeNodes = (0..<20).map { i in
+            FileNode(name: String(format: "file%02d.txt", i), path: "/file\(i).txt", isDirectory: false)
+        }
+        sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
+
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+        try sut.pipeline.flush()
+
+        sut.state.treeScrollOffset = 1
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+
+        let layout = LayoutMetrics(state: sut.state, columns: sut.pipeline.columns, rows: sut.pipeline.rows)
+        let topRow = layout.contentStartRow
+        let treeStartCol = layout.activityBarWidth
+        let treeEndCol = treeStartCol + layout.sidebarWidth
+
+        let topRowHasDirtyTreeCell = (treeStartCol..<treeEndCol).contains { col in
+            sut.pipeline.buffer.dirty.isDirty(topRow * sut.pipeline.columns + col)
+        }
+
+        #expect(topRowHasDirtyTreeCell, "Top visible tree row should be repainted after scrolling")
     }
 
     @Test
@@ -1395,6 +1703,211 @@ struct RuntimeRegressionsTests {
         renderFrame(pipeline: sut.pipeline, state: sut.state)
 
         #expect(sut.pipeline.buffer[promptCorner.0, promptCorner.1].character != "┌")
+    }
+}
+
+// MARK: - Scroll rendering regression tests
+
+@Suite
+@MainActor
+struct ScrollRenderingTests {
+    private func makeSUT(
+        lineCount: Int = 100,
+        columns: Int = 40,
+        rows: Int = 12
+    ) -> (state: EditorState, pipeline: RenderPipeline) {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        config.statusBar.show = false
+        let state = EditorState(rootPath: ".", config: config)
+        state.sidebarCollapsed = true
+        state.mode = .editor
+        state.fileContent = (0..<lineCount).map { "line \($0) content here" }
+        state.refreshHighlights()
+        let pipeline = RenderPipeline(
+            connection: MockTerminalConnection(size: TerminalSize(columns: columns, rows: rows)),
+            columns: columns,
+            rows: rows
+        )
+        return (state, pipeline)
+    }
+
+    @Test
+    func `scroll down renders correct content without clearing`() throws {
+        let sut = makeSUT()
+        // Initial render at scrollOffset 0
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+        try sut.pipeline.flush()
+
+        // Scroll down by 3
+        sut.state.scrollOffset = 3
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+
+        // Content area starts at row 0 (no title bar).
+        // The first visible line should now be "line 3 ..."
+        let contentRow = 0
+        let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
+        let rowText = String(rowChars)
+        #expect(rowText.contains("line 3"), "First editor row should show line 3 after scrolling down, got: \(rowText)")
+    }
+
+    @Test
+    func `scroll up renders correct content without clearing`() throws {
+        let sut = makeSUT()
+        // Start at scrollOffset 10
+        sut.state.scrollOffset = 10
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+        try sut.pipeline.flush()
+
+        // Scroll up by 3
+        sut.state.scrollOffset = 7
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+
+        let contentRow = 0
+        let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
+        let rowText = String(rowChars)
+        #expect(rowText.contains("line 7"), "First editor row should show line 7 after scrolling up, got: \(rowText)")
+    }
+
+    @Test
+    func `pre-shift reduces dirty cells on scroll down`() throws {
+        let sut = makeSUT()
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+        try sut.pipeline.flush()
+
+        // Scroll down by 1
+        sut.state.scrollOffset = 1
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+
+        // Count dirty cells in the content area (rows 0..<12, all columns)
+        let cols = 40
+        var dirtyCount = 0
+        for row in 0..<12 {
+            for col in 0..<cols {
+                if sut.pipeline.buffer.dirty.isDirty(row * cols + col) {
+                    dirtyCount += 1
+                }
+            }
+        }
+
+        // Without pre-shift, all ~440 content cells would be dirty.
+        // With pre-shift, only the new bottom row + line number changes should be dirty.
+        // Line numbers change by 1 digit on every row, so expect roughly:
+        //   1 full row (new content) + small gutter changes ≈ < 220 cells
+        let totalContentCells = 11 * cols
+        #expect(dirtyCount < totalContentCells, "Dirty cells (\(dirtyCount)) should be less than total content cells (\(totalContentCells))")
+    }
+
+    @Test
+    func `pre-shift reduces dirty cells on scroll up`() throws {
+        let sut = makeSUT()
+        sut.state.scrollOffset = 10
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+        try sut.pipeline.flush()
+
+        // Scroll up by 1
+        sut.state.scrollOffset = 9
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+
+        let cols = 40
+        var dirtyCount = 0
+        for row in 0..<12 {
+            for col in 0..<cols {
+                if sut.pipeline.buffer.dirty.isDirty(row * cols + col) {
+                    dirtyCount += 1
+                }
+            }
+        }
+
+        let totalContentCells = 11 * cols
+        #expect(dirtyCount < totalContentCells, "Dirty cells (\(dirtyCount)) should be less than total content cells (\(totalContentCells))")
+    }
+
+    @Test
+    func `flush output is smaller for scrolled frame than initial frame`() throws {
+        let mock = MockTerminalConnection(size: TerminalSize(columns: 40, rows: 12))
+        let pipeline = RenderPipeline(connection: mock, columns: 40, rows: 12)
+
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        config.statusBar.show = false
+        let state = EditorState(rootPath: ".", config: config)
+        state.sidebarCollapsed = true
+        state.mode = .editor
+        state.fileContent = (0..<100).map { "line \($0) content here" }
+        state.refreshHighlights()
+
+        // Initial render
+        renderFrame(pipeline: pipeline, state: state)
+        try pipeline.flush()
+        let initialSize = mock.writtenOutput.count
+        mock.clearOutput()
+
+        // Scroll by 1 and re-render
+        state.scrollOffset = 1
+        renderFrame(pipeline: pipeline, state: state)
+        try pipeline.flush()
+        let scrolledSize = mock.writtenOutput.count
+
+        #expect(scrolledSize < initialSize, "Scrolled flush (\(scrolledSize) bytes) should be smaller than initial flush (\(initialSize) bytes)")
+    }
+
+    @Test
+    func `large scroll jump still renders correctly`() throws {
+        let sut = makeSUT()
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+        try sut.pipeline.flush()
+
+        // Jump by more than viewport height — pre-shift is skipped
+        sut.state.scrollOffset = 50
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+
+        let contentRow = 0
+        let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
+        let rowText = String(rowChars)
+        #expect(rowText.contains("line 50"), "First editor row should show line 50 after large jump, got: \(rowText)")
+    }
+
+    @Test
+    func `multiple consecutive scrolls produce correct content`() throws {
+        let sut = makeSUT()
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+        try sut.pipeline.flush()
+
+        // Scroll down 5 times by 1
+        for i in 1...5 {
+            sut.state.scrollOffset = i
+            renderFrame(pipeline: sut.pipeline, state: sut.state)
+            try sut.pipeline.flush()
+        }
+
+        let contentRow = 0
+        let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
+        let rowText = String(rowChars)
+        #expect(rowText.contains("line 5"), "After 5 scroll-down steps, first row should show line 5, got: \(rowText)")
+    }
+
+    @Test
+    func `scroll down then up returns to original content`() throws {
+        let sut = makeSUT()
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+        try sut.pipeline.flush()
+
+        // Scroll down
+        sut.state.scrollOffset = 5
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+        try sut.pipeline.flush()
+
+        // Scroll back up
+        sut.state.scrollOffset = 0
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+
+        let contentRow = 0
+        let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
+        let rowText = String(rowChars)
+        #expect(rowText.contains("line 0"), "After scroll down+up, first row should show line 0, got: \(rowText)")
     }
 }
 
@@ -1454,7 +1967,7 @@ struct PreviewModeTests {
     func `editing auto-pins preview buffer`() {
         var config = KittyConfig()
         config.activityBar.show = false
-        config.tabPersistence = .preview
+        config.tabRibbon.persistence = .preview
         let state = EditorState(rootPath: ".", config: config)
         state.bufferManager.openPreview(filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
         state.restoreStateFromActiveBuffer()
@@ -1505,16 +2018,16 @@ struct TabPersistenceConfigTests {
     @Test
     func `tabPersistence defaults to pinned`() {
         let config = KittyConfig()
-        #expect(config.tabPersistence == .pinned)
+        #expect(config.tabRibbon.persistence == .pinned)
     }
 
     @Test
     func `tabPersistence decodes from JSON`() throws {
         let json = """
-        {"tabPersistence": "preview"}
+        {"tabRibbon": {"persistence": "preview"}}
         """
         let config = try JSONDecoder().decode(KittyConfig.self, from: Data(json.utf8))
-        #expect(config.tabPersistence == .preview)
+        #expect(config.tabRibbon.persistence == .preview)
     }
 
     @Test
@@ -1523,7 +2036,7 @@ struct TabPersistenceConfigTests {
         {"keybindingMode": "nano"}
         """
         let config = try JSONDecoder().decode(KittyConfig.self, from: Data(json.utf8))
-        #expect(config.tabPersistence == .pinned)
+        #expect(config.tabRibbon.persistence == .pinned)
     }
 }
 
@@ -1566,7 +2079,7 @@ struct LayoutMetricsTests {
     func `contentRows accounts for tab ribbon`() {
         var config = KittyConfig()
         config.activityBar.show = false
-        config.tabRibbonPosition = .top
+        config.tabRibbon.position = .top
         let state = EditorState(rootPath: ".", config: config)
         state.sidebarCollapsed = true
         // Need at least one buffer for tab ribbon to show
@@ -1574,8 +2087,8 @@ struct LayoutMetricsTests {
 
         let layout = LayoutMetrics(state: state, columns: 80, rows: 24)
         #expect(layout.showTabRibbon == true)
-        #expect(layout.contentStartRow == 2)
-        #expect(layout.contentRows == 21) // rows - 2 - tabRows = 24 - 2 - 1 = 21
+        #expect(layout.contentStartRow == 1)
+        #expect(layout.contentRows == 22) // rows - 1 - tabRows = 24 - 1 - 1 = 22
     }
 
     @Test
@@ -1642,7 +2155,7 @@ struct SyntaxConfigurationTests {
     @Test
     func `syntaxHighlighting=false produces plain spans`() {
         var config = KittyConfig()
-        config.syntaxHighlighting = false
+        config.syntax.enabled = false
         let state = EditorState(rootPath: ".", config: config)
         state.fileContent = ["func hello() {", "}"]
         state.currentLanguage = "swift"
@@ -1657,7 +2170,7 @@ struct SyntaxConfigurationTests {
     @Test
     func `disabled language produces plain spans`() {
         var config = KittyConfig()
-        config.disabledLanguages = ["swift"]
+        config.syntax.disabledLanguages = ["swift"]
         let state = EditorState(rootPath: ".", config: config)
         state.fileContent = ["let x = 42"]
         state.currentLanguage = "swift"

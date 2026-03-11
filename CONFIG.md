@@ -1,112 +1,130 @@
 # KittyCode Configuration
 
-KittyCode reads its configuration from `~/.kittycode.json` on launch. All fields are optional — omitted fields use their default values.
+KittyCode reads its configuration from `~/.kittycode.json` on launch. All fields are optional — omitted fields use their default values. The file is watched for changes and hot-reloaded automatically.
 
-## Editor Behavior
+## Top-Level Options
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
+| JSON Key | Type | Default | Description |
+|----------|------|---------|-------------|
 | `keybindingMode` | `"nano"` \| `"vim"` | `"nano"` | Keyboard shortcut scheme. Nano uses Ctrl-based shortcuts; Vim uses modal editing. |
-| `wrapLines` | `bool` | `false` | Wrap long lines in the editor instead of horizontal scrolling. |
 | `treeWidth` | `int` | `30` | Width of the file tree sidebar in columns. Clamped to half the terminal width. |
-| `useSFSymbolsInTerminal` | `bool` | `true` | Use SF Symbol glyphs for icons when the terminal supports them. |
-| `editor.highlightCurrentLine` | `bool` | `false` | Highlight the line containing the cursor across the full editor width. |
-| `editor.arrowKeysWrapAcrossLines` | `bool` | `false` | Let left/right arrow keys move to the previous/next line when the cursor crosses a line boundary. |
-
-Keyboard flow: `Ctrl+N` creates an untitled buffer, and `Ctrl+O` saves it. Unsaved buffers prompt for a project-relative or absolute path inside the project root.
-
-## Tab Ribbon
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `tabRibbonPosition` | `"top"` \| `"hidden"` | `"top"` | Position of the tab ribbon. `"hidden"` disables the tab bar entirely. |
-| `tabPersistence` | `"pinned"` \| `"preview"` | `"pinned"` | How new file tabs behave. `"pinned"` keeps all opened files as permanent tabs. `"preview"` opens files as a single preview tab that gets replaced by the next file opened; editing or double-clicking a tree entry pins the tab. |
-
-## Syntax Highlighting
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `syntaxHighlighting` | `bool` | `true` | Enable Tree-sitter-based syntax highlighting. |
-| `disabledLanguages` | `[string]` | `[]` | List of language identifiers to exclude from syntax highlighting (e.g. `["python", "ruby"]`). |
-
-## File Watching
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
+| `useSFSymbolsInTerminal` | `bool` | `true` | Use SF Symbol glyphs for file/folder icons when the terminal supports them. |
 | `fileWatcherEnabled` | `bool` | `true` | Watch open files for external changes and prompt for reload. |
 
-## Auto-Save
+## Editor (`editor`)
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `autoSave` | `bool` | `false` | Automatically save dirty buffers on a timer. |
-| `autoSaveInterval` | `number` | `30` | Seconds between auto-save checks. |
+| JSON Key | Type | Default | Description |
+|----------|------|---------|-------------|
+| `editor.wrapLines` | `bool` | `false` | Wrap long lines instead of horizontal scrolling. |
+| `editor.tabSize` | `int` | `4` | Number of columns per tab stop. |
+| `editor.highlightCurrentLine` | `bool` | `false` | Highlight the line containing the cursor across the full editor width. |
+| `editor.arrowKeysWrapAcrossLines` | `bool` | `true` | Let left/right arrow keys move to the previous/next line at line boundaries. |
+| `editor.scrollLines` | `int?` | `null` | Lines per scroll-wheel tick. When `null`, vertical scrolling defaults to 1 line per event. |
+| `editor.scrollHorizontalStep` | `int` | `4` | Columns per horizontal scroll tick (Shift+scroll or trackpad horizontal). |
+| `editor.scrollMomentumBlockMilliseconds` | `int` | `5` | Brief rebound-block window after reversing scroll direction. Set to `0` to disable it. |
+| `editor.scrollAccelerationEnabled` | `bool` | `true` | Enable conservative burst-rate acceleration for vertical 1-line scrolling. |
+| `editor.scrollAccelerationWindowMilliseconds` | `int` | `50` | Time window used to count dense same-direction scroll bursts. |
+| `editor.scrollAccelerationStepIntervalMilliseconds` | `int` | `5` | Delay between queued accelerated 1-line steps. |
+| `editor.scrollAccelerationMaxExtraLines` | `int` | `2` | Maximum extra 1-line steps queued from a single burst event. |
 
-## Git Integration
+## Tab Ribbon (`tabRibbon`)
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `showGitStatus` | `bool` | `true` | Show git status indicators in the file tree and status bar. |
-| `gitRefreshInterval` | `number` | `10` | Seconds between git status refreshes. |
-| `gitDecorations.showLineBackgrounds` | `bool` | `false` | Tint changed lines using per-status background overlays. |
-| `gitDecorations.showLineForegrounds` | `bool` | `false` | Tint changed lines using per-status foreground overlays. |
+| JSON Key | Type | Default | Description |
+|----------|------|---------|-------------|
+| `tabRibbon.position` | `"top"` \| `"hidden"` | `"top"` | Position of the tab ribbon. `"hidden"` disables the tab bar entirely. |
+| `tabRibbon.persistence` | `"pinned"` \| `"preview"` | `"pinned"` | How new file tabs behave. `"pinned"` keeps all opened files as permanent tabs. `"preview"` opens files as a single preview tab that gets replaced by the next file opened; editing or double-clicking a tree entry pins the tab. |
 
-## Activity Bar
+## Syntax Highlighting (`syntax`)
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
+| JSON Key | Type | Default | Description |
+|----------|------|---------|-------------|
+| `syntax.enabled` | `bool` | `true` | Enable Tree-sitter-based syntax highlighting. |
+| `syntax.disabledLanguages` | `[string]` | `[]` | Language identifiers to exclude from highlighting (e.g. `["python", "ruby"]`). |
+
+## Auto-Save (`autoSave`)
+
+| JSON Key | Type | Default | Description |
+|----------|------|---------|-------------|
+| `autoSave.enabled` | `bool` | `false` | Automatically save dirty buffers on a timer. |
+| `autoSave.interval` | `number` | `30` | Seconds between auto-save checks. |
+
+## Git Integration (`git`)
+
+| JSON Key | Type | Default | Description |
+|----------|------|---------|-------------|
+| `git.enabled` | `bool` | `true` | Enable git integration (status indicators, branch info, line decorations). |
+| `git.refreshInterval` | `number` | `10` | Seconds between background git status refreshes. |
+
+### Git Decorations (`git.decorations`)
+
+| JSON Key | Type | Default | Description |
+|----------|------|---------|-------------|
+| `git.decorations.showLineChanges` | `bool` | `true` | Show `+`/`~`/`-` gutter symbols for changed lines. |
+| `git.decorations.showLineBackgrounds` | `bool` | `false` | Tint changed lines using per-status background overlays. |
+| `git.decorations.showLineForegrounds` | `bool` | `false` | Tint changed lines using per-status foreground overlays. |
+| `git.decorations.showTabRibbonStatus` | `bool` | `true` | Show git status color on tab labels. |
+| `git.decorations.showOpenFilesStatus` | `bool` | `true` | Show git status color in the open files panel. |
+| `git.decorations.lineChangeDebounceMilliseconds` | `int` | `150` | Debounce delay before recomputing line-level git decorations after edits. |
+| `git.decorations.maxLineDiffBytes` | `int` | `1000000` | Skip line-level git diff for files larger than this byte count. |
+
+## Status Bar (`statusBar`)
+
+| JSON Key | Type | Default | Description |
+|----------|------|---------|-------------|
+| `statusBar.show` | `bool` | `true` | Show the status bar at the bottom of the editor. |
+| `statusBar.leftItems` | `[item]` | `["status"]` | Segments shown on the left side of the status bar. |
+| `statusBar.rightItems` | `[item]` | `["visibility", "language", "size", "lineEnding", "git", "position"]` | Segments shown on the right side. |
+| `statusBar.showContextHints` | `bool` | `true` | Show contextual keyboard hints in the status bar. |
+
+Available status bar items: `file`, `status`, `language`, `size`, `lineEnding`, `git`, `position`, `visibility`.
+
+## Activity Bar (`activityBar`)
+
+| JSON Key | Type | Default | Description |
+|----------|------|---------|-------------|
 | `activityBar.show` | `bool` | `true` | Show the activity bar on the left side of the editor. |
 | `activityBar.position` | `"left"` \| `"right"` | `"left"` | Position of the activity bar. |
-| `activityBar.items` | `[string]` | `["explorer", "openDocuments"]` | Activity bar panels, in display order. |
+| `activityBar.items` | `[string]` | `["explorer", "openDocuments"]` | Sidebar panels, in display order. |
 
-## Keybindings
+## Keybindings (`keybindings`)
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
+| JSON Key | Type | Default | Description |
+|----------|------|---------|-------------|
 | `keybindings.tabNext` | `string` | `"ctrl+pagedown"` | Key combo to switch to the next tab. |
 | `keybindings.tabPrev` | `string` | `"ctrl+pageup"` | Key combo to switch to the previous tab. |
 | `keybindings.tabClose` | `string?` | `null` | Optional key combo to close the current tab. |
 | `keybindings.toggleSidebar` | `string` | `"ctrl+b"` | Key combo to toggle the sidebar. |
 
-## Whitespace Rendering
+## Whitespace Rendering (`whitespace`)
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
+| JSON Key | Type | Default | Description |
+|----------|------|---------|-------------|
 | `whitespace.showIndentation` | `bool` | `false` | Show `·` for leading spaces and `→` for leading tabs. |
 | `whitespace.showSpaces` | `bool` | `false` | Show `·` for mid-line and trailing spaces. |
 | `whitespace.showLineBreaks` | `bool` | `false` | Show `¶` at the end of each line. |
 | `whitespace.showUnexpected` | `bool` | `true` | Show `⌀` for non-breaking spaces, zero-width spaces, and other invisible characters. |
 
-### Whitespace Theme Colors (optional)
+## Theme Colors (`theme`)
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| `theme.whitespaceIndentationForeground` | `#484f58` | Color for indentation markers (dim) |
-| `theme.whitespaceSpaceForeground` | `#484f58` | Color for space markers (dim) |
-| `theme.whitespaceLineBreakForeground` | `#484f58` | Color for line break markers (dim) |
-| `theme.whitespaceUnexpectedForeground` | `#ff7b72` | Color for unexpected invisible characters (warning red) |
+All color values are CSS-style hex strings (e.g. `"#c9d1d9"`). All theme fields are optional.
 
-## Theme Colors
+### Core UI
 
-All color values are CSS-style hex strings (e.g. `"#c9d1d9"`). All are optional.
-
-### Core
-
-| Field | Default | Description |
-|-------|---------|-------------|
+| JSON Key | Default | Description |
+|----------|---------|-------------|
+| `theme.editorForeground` | `#c9d1d9` | Editor text color |
+| `theme.lineNumberForeground` | `#8b949e` | Line number gutter color |
 | `theme.treePanelForeground` | `#c9d1d9` | File tree text color |
 | `theme.treeSelectedForeground` | `#58a6ff` | Selected tree item color |
 | `theme.treeDirectoryForeground` | `#7ee787` | Directory name color |
-| `theme.editorForeground` | `#c9d1d9` | Editor text color |
-| `theme.lineNumberForeground` | `#8b949e` | Line number gutter color |
 | `theme.statusBarForeground` | `#79c0ff` | Status bar text color |
 | `theme.titleBarForeground` | `#f0f6fc` | Title bar text color |
 | `theme.separatorForeground` | `#30363d` | Panel separator color |
 
-### Syntax
+### Syntax Highlighting
 
-| Field | Default | Description |
-|-------|---------|-------------|
+| JSON Key | Default | Description |
+|----------|---------|-------------|
 | `theme.keywordForeground` | `#ff7b72` | Keywords (`if`, `let`, `func`, etc.) |
 | `theme.typeForeground` | `#79c0ff` | Type names |
 | `theme.commentForeground` | `#8b949e` | Comments |
@@ -114,29 +132,29 @@ All color values are CSS-style hex strings (e.g. `"#c9d1d9"`). All are optional.
 | `theme.numberForeground` | `#79c0ff` | Numeric literals |
 | `theme.attributeForeground` | `#d2a8ff` | Attributes, properties, function names |
 
-### Git
+### Editor Line Highlighting
 
-| Field | Default | Description |
-|-------|---------|-------------|
+| JSON Key | Default | Description |
+|----------|---------|-------------|
+| `theme.cursorLineBackground` | — | Full-width cursor-line background color |
+| `theme.cursorLineForeground` | — | Full-width cursor-line foreground color |
+
+### Git File Status
+
+| JSON Key | Default | Description |
+|----------|---------|-------------|
 | `theme.gitModifiedForeground` | `#e3b341` | Modified files |
 | `theme.gitAddedForeground` | `#3fb950` | Added files |
 | `theme.gitUntrackedForeground` | `#8b949e` | Untracked files |
 | `theme.gitDeletedForeground` | `#f85149` | Deleted files |
 | `theme.gitConflictedForeground` | `#ff7b72` | Conflicted files |
 
-### Editor Line Highlighting (optional)
+### Git Line Highlighting
 
-| Field | Description |
-|-------|-------------|
-| `theme.cursorLineBackground` | Full-width cursor-line background color |
-| `theme.cursorLineForeground` | Full-width cursor-line foreground color |
+These fields accept either a plain hex color like `"#3fb950"` or an object with alpha: `{ "color": "#3fb950", "alpha": 0.18 }`.
 
-### Git Line Highlighting (optional)
-
-These fields accept either a plain hex color like `"#3fb950"` or an object such as `{ "color": "#3fb950", "alpha": 0.18 }`.
-
-| Field | Description |
-|-------|-------------|
+| JSON Key | Description |
+|----------|-------------|
 | `theme.gitModifiedLineBackground` | Modified-line background overlay |
 | `theme.gitModifiedLineForeground` | Modified-line foreground overlay |
 | `theme.gitAddedLineBackground` | Added-line background overlay |
@@ -148,55 +166,103 @@ These fields accept either a plain hex color like `"#3fb950"` or an object such 
 | `theme.gitConflictedLineBackground` | Conflicted-line background overlay |
 | `theme.gitConflictedLineForeground` | Conflicted-line foreground overlay |
 
-### Tab Ribbon (optional)
+### Tab Ribbon
 
-| Field | Description |
-|-------|-------------|
+| JSON Key | Description |
+|----------|-------------|
 | `theme.tabActiveBackground` | Active tab background |
 | `theme.tabActiveForeground` | Active tab text color |
 | `theme.tabInactiveBackground` | Inactive tab background |
 | `theme.tabInactiveForeground` | Inactive tab text color |
 | `theme.tabDirtyIndicator` | Dirty indicator color |
 
-### Activity Bar (optional)
+### Activity Bar
 
-| Field | Description |
-|-------|-------------|
+| JSON Key | Description |
+|----------|-------------|
 | `theme.activityBarBackground` | Activity bar background |
 | `theme.activityBarForeground` | Activity bar icon color |
 | `theme.activityBarActiveForeground` | Active panel icon color |
 
-### Open Files Panel (optional)
+### Open Files Panel
 
-| Field | Description |
-|-------|-------------|
+| JSON Key | Description |
+|----------|-------------|
 | `theme.openFilesForeground` | Open files list text color |
 | `theme.openFilesSelectedForeground` | Selected file text color |
+
+### Whitespace
+
+| JSON Key | Default | Description |
+|----------|---------|-------------|
+| `theme.whitespaceIndentationForeground` | `#484f58` | Color for indentation markers |
+| `theme.whitespaceSpaceForeground` | `#484f58` | Color for space markers |
+| `theme.whitespaceLineBreakForeground` | `#484f58` | Color for line break markers |
+| `theme.whitespaceUnexpectedForeground` | `#ff7b72` | Color for unexpected invisible characters |
+
+## Built-in Keyboard Shortcuts
+
+These are hardcoded and not configurable via JSON.
+
+| Shortcut | Mode | Action |
+|----------|------|--------|
+| `Ctrl+O` | Any | Save current file |
+| `Ctrl+N` | Any | Create new untitled buffer |
+| `Ctrl+X` | Editor | Switch to tree mode / Quit (from tree mode) |
+| `Ctrl+B` | Any | Toggle sidebar |
+| `Ctrl+W` | Nano | Close current tab |
+| `Ctrl+H` | Any | Cycle file visibility (Default -> Git-filtered -> All) |
+| `Ctrl+PageDown` | Any | Next tab |
+| `Ctrl+PageUp` | Any | Previous tab |
+| `Escape` | Editor (Nano) | Switch to tree mode |
+| `Escape` | Editor (Vim) | Enter normal mode |
 
 ## Complete Example
 
 ```json
 {
   "keybindingMode": "vim",
-  "wrapLines": false,
   "treeWidth": 35,
   "useSFSymbolsInTerminal": true,
-  "editor": {
-    "highlightCurrentLine": true,
-    "arrowKeysWrapAcrossLines": true
-  },
-  "syntaxHighlighting": true,
-  "disabledLanguages": [],
-  "tabRibbonPosition": "top",
-  "tabPersistence": "pinned",
   "fileWatcherEnabled": true,
-  "autoSave": false,
-  "autoSaveInterval": 30,
-  "showGitStatus": true,
-  "gitRefreshInterval": 10,
-  "gitDecorations": {
-    "showLineBackgrounds": true,
-    "showLineForegrounds": false
+  "editor": {
+    "wrapLines": false,
+    "tabSize": 4,
+    "highlightCurrentLine": true,
+    "arrowKeysWrapAcrossLines": true,
+    "scrollLines": null,
+    "scrollHorizontalStep": 4
+  },
+  "syntax": {
+    "enabled": true,
+    "disabledLanguages": []
+  },
+  "tabRibbon": {
+    "position": "top",
+    "persistence": "pinned"
+  },
+  "autoSave": {
+    "enabled": false,
+    "interval": 30
+  },
+  "git": {
+    "enabled": true,
+    "refreshInterval": 10,
+    "decorations": {
+      "showLineChanges": true,
+      "showLineBackgrounds": true,
+      "showLineForegrounds": false,
+      "showTabRibbonStatus": true,
+      "showOpenFilesStatus": true,
+      "lineChangeDebounceMilliseconds": 150,
+      "maxLineDiffBytes": 1000000
+    }
+  },
+  "statusBar": {
+    "show": true,
+    "leftItems": ["status"],
+    "rightItems": ["visibility", "language", "size", "lineEnding", "git", "position"],
+    "showContextHints": true
   },
   "activityBar": {
     "show": true,
@@ -217,15 +283,31 @@ These fields accept either a plain hex color like `"#3fb950"` or an object such 
   },
   "theme": {
     "editorForeground": "#c9d1d9",
-    "cursorLineBackground": "#30363d",
+    "lineNumberForeground": "#8b949e",
+    "treePanelForeground": "#c9d1d9",
+    "treeSelectedForeground": "#58a6ff",
+    "treeDirectoryForeground": "#7ee787",
+    "statusBarForeground": "#79c0ff",
+    "titleBarForeground": "#f0f6fc",
+    "separatorForeground": "#30363d",
     "keywordForeground": "#ff7b72",
     "typeForeground": "#79c0ff",
     "commentForeground": "#8b949e",
     "stringForeground": "#a5d6ff",
+    "numberForeground": "#79c0ff",
+    "attributeForeground": "#d2a8ff",
+    "cursorLineBackground": "#30363d",
+    "gitModifiedForeground": "#e3b341",
+    "gitAddedForeground": "#3fb950",
+    "gitUntrackedForeground": "#8b949e",
+    "gitDeletedForeground": "#f85149",
+    "gitConflictedForeground": "#ff7b72",
     "gitModifiedLineBackground": {
       "color": "#e3b341",
       "alpha": 0.18
-    }
+    },
+    "whitespaceIndentationForeground": "#484f58",
+    "whitespaceUnexpectedForeground": "#ff7b72"
   }
 }
 ```
