@@ -177,7 +177,7 @@ struct GrammarLoaderTests {
 @Suite("ItemSet")
 struct ItemSetTests {
     @Test("Basic closure")
-    func basicClosure() {
+    func basicClosure() throws {
         // S -> . E, E -> . "a"
         let productions: [(name: String, symbols: [String])] = [
             ("S'", ["S"]),
@@ -194,7 +194,12 @@ struct ItemSetTests {
         let rulesByNT: [String: [Int]] = ["S'": [0], "S": [1], "E": [2]]
 
         let initial = ItemSet(items: [LRItem(ruleIndex: 0, dotPosition: 0, lookahead: "$end")])
-        let closed = initial.closure(productions: productions, firstSets: firstSets, rulesByNonTerminal: rulesByNT)
+        let closed = try initial.closure(
+            productions: productions,
+            firstSets: firstSets,
+            rulesByNonTerminal: rulesByNT,
+            limits: .default
+        )
 
         // Should contain items for S and E productions
         #expect(closed.items.count > 1)
@@ -340,6 +345,84 @@ struct ParseTableCompilerTests {
         })
 
         #expect(sourceRule.fields == [0: "left", 2: "right"])
+    }
+
+    @Test("Compile rejects rule expansion that exceeds configured limits")
+    func rejectsExplosiveRuleExpansion() throws {
+        let json = """
+        {
+            "name": "explosive",
+            "rules": {
+                "source": {
+                    "type": "SEQ",
+                    "members": [
+                        {"type": "CHOICE", "members": [{"type": "STRING", "value": "a"}, {"type": "BLANK"}]},
+                        {"type": "CHOICE", "members": [{"type": "STRING", "value": "b"}, {"type": "BLANK"}]},
+                        {"type": "CHOICE", "members": [{"type": "STRING", "value": "c"}, {"type": "BLANK"}]},
+                        {"type": "CHOICE", "members": [{"type": "STRING", "value": "d"}, {"type": "BLANK"}]},
+                        {"type": "CHOICE", "members": [{"type": "STRING", "value": "e"}, {"type": "BLANK"}]},
+                        {"type": "CHOICE", "members": [{"type": "STRING", "value": "f"}, {"type": "BLANK"}]},
+                        {"type": "CHOICE", "members": [{"type": "STRING", "value": "g"}, {"type": "BLANK"}]}
+                    ]
+                }
+            }
+        }
+        """
+
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+
+        #expect(
+            throws: GrammarError.resourceLimitExceeded(
+                "Sequence expansion for source exceeded limit (128 alternatives, limit 64)"
+            )
+        ) {
+            try ParseTableCompiler.compile(
+                grammar,
+                limits: GrammarCompilationLimits(
+                    maxExpandedAlternativesPerRule: 64,
+                    maxFlattenedProductions: 1_000,
+                    maxProductionSymbols: 1_000,
+                    maxItemsPerState: 1_000,
+                    maxStates: 100,
+                    maxTransitions: 1_000
+                )
+            )
+        }
+    }
+
+    @Test("Compile rejects parser state growth that exceeds configured limits")
+    func rejectsStateExplosion() throws {
+        let json = """
+        {
+            "name": "simple",
+            "rules": {
+                "source": {
+                    "type": "STRING",
+                    "value": "hello"
+                }
+            }
+        }
+        """
+
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+
+        #expect(
+            throws: GrammarError.resourceLimitExceeded(
+                "Parser state construction exceeded limit (2 states, limit 1)"
+            )
+        ) {
+            try ParseTableCompiler.compile(
+                grammar,
+                limits: GrammarCompilationLimits(
+                    maxExpandedAlternativesPerRule: 64,
+                    maxFlattenedProductions: 1_000,
+                    maxProductionSymbols: 1_000,
+                    maxItemsPerState: 1_000,
+                    maxStates: 1,
+                    maxTransitions: 1_000
+                )
+            )
+        }
     }
 }
 
