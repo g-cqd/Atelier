@@ -587,6 +587,42 @@ private func handleEditorClick(mouseRow: Int, mouseCol: Int, editorRect: Rect, s
     state.cursorRow = position.row
     state.cursorCol = position.col
     state.mode = .editor
+
+    let now = Date()
+    let isDoubleClick = now.timeIntervalSince(state.lastClickTime) < 0.3
+
+    state.lastClickTime = now
+    state.lastClickIndex = position.row
+
+    if isDoubleClick {
+        handleWordSelection(at: position, state: state)
+    }
+}
+
+@MainActor
+private func handleWordSelection(at pos: TextPosition, state: EditorState) {
+    let line = state.fileLine(at: pos.row)
+    let chars = Array(line)
+    var start = pos.col
+    var end = pos.col
+
+    while start > 0 && isWordChar(chars[start - 1]) {
+        start -= 1
+    }
+
+    while end < chars.count && isWordChar(chars[end]) {
+        end += 1
+    }
+
+    state.selection = TextSelection(
+        anchor: TextPosition(row: pos.row, col: start),
+        head: TextPosition(row: pos.row, col: end)
+    )
+}
+
+@MainActor
+private func isWordChar(_ char: Character) -> Bool {
+    char.isLetter || char.isNumber || char == "_"
 }
 
 @MainActor

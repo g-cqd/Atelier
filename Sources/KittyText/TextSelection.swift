@@ -36,3 +36,37 @@ public struct TextSelection: Sendable, Equatable {
         anchor <= head ? (anchor, head) : (head, anchor)
     }
 }
+
+extension TextSelection {
+    public func extractText(from lines: (Int) -> String, lineCount: Int) -> String {
+        let (start, end) = ordered
+        var result = ""
+
+        if start.row == end.row {
+            let line = lines(start.row)
+            let endIndex = min(end.col, line.count)
+            let startIndex = min(start.col, line.count)
+            let lineIndex = line.index(line.startIndex, offsetBy: startIndex)
+            let endIndexStr = line.index(line.startIndex, offsetBy: endIndex)
+            result = String(line[lineIndex..<endIndexStr])
+        } else {
+            let firstLine = lines(start.row)
+            let startIndex = min(start.col, firstLine.count)
+            let firstLineIndex = firstLine.index(firstLine.startIndex, offsetBy: startIndex)
+            result += String(firstLine[firstLineIndex...])
+
+            for row in (start.row + 1)..<end.row {
+                result += "\n" + lines(row)
+            }
+
+            if end.row > start.row {
+                let lastLine = lines(end.row)
+                let endIndex = min(end.col, lastLine.count)
+                let lastLineIndex = lastLine.index(lastLine.startIndex, offsetBy: endIndex)
+                result += "\n" + String(lastLine[..<lastLineIndex])
+            }
+        }
+
+        return result
+    }
+}

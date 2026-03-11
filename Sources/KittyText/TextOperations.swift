@@ -53,7 +53,7 @@ public enum TextOperations {
 
     /// Deletes the character immediately before the cursor.
     ///
-    /// When the cursor is at column 0 and not on the first line, the current
+    /// When cursor is at column 0 and not on the first line, the current
     /// line is merged into the previous line.
     @discardableResult
     public static func deleteBackward(in buffer: inout TextBuffer, at cursor: inout TextCursor) -> TextMutation? {
@@ -80,5 +80,45 @@ public enum TextOperations {
         }
 
         return nil
+    }
+
+    @discardableResult
+    public static func deleteRange(in buffer: inout TextBuffer, at cursor: inout TextCursor, selection: TextSelection) -> TextMutation {
+        let (start, end) = selection.ordered
+
+        if start.row == end.row {
+            var line = buffer.line(at: start.row)
+            let startIndex = line.index(line.startIndex, offsetBy: min(start.col, line.count))
+            let endIndex = line.index(line.startIndex, offsetBy: min(end.col, line.count))
+            line.removeSubrange(startIndex..<endIndex)
+            buffer.setLine(at: start.row, to: line)
+            cursor.row = start.row
+            cursor.col = start.col
+            return TextMutation(
+                originalLineRange: start.row..<(start.row + 1),
+                updatedLineRange: start.row..<(start.row + 1)
+            )
+        } else {
+            let firstLine = buffer.line(at: start.row)
+            let firstStartIndex = firstLine.index(firstLine.startIndex, offsetBy: min(start.col, firstLine.count))
+            let firstPrefix = String(firstLine[..<firstStartIndex])
+
+            let lastLine = buffer.line(at: end.row)
+            let lastEndIndex = lastLine.index(lastLine.startIndex, offsetBy: min(end.col, lastLine.count))
+            let lastSuffix = String(lastLine[lastEndIndex...])
+
+            buffer.setLine(at: start.row, to: firstPrefix + lastSuffix)
+
+            for _ in (start.row + 1)..<end.row {
+                buffer.removeLine(at: start.row + 1)
+            }
+
+            cursor.row = start.row
+            cursor.col = start.col
+            return TextMutation(
+                originalLineRange: start.row..<(end.row + 1),
+                updatedLineRange: start.row..<(start.row + 1)
+            )
+        }
     }
 }

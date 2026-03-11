@@ -1,5 +1,8 @@
+import Foundation
+import KittyCodecs
 import KittyInput
 import KittyRenderer
+import KittyText
 
 @MainActor
 func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline) -> Bool {
@@ -48,13 +51,25 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
                 state.beginNewFile()
                 return true
             }
+            if key.keyCode == AsciiKey.c, state.hasActiveSelection {
+                handleCopy(state: state)
+                return true
+            }
             if key.keyCode == AsciiKey.x {
+                if state.hasActiveSelection {
+                    handleCut(state: state)
+                    return true
+                }
                 if state.mode == .editor {
                     state.mode = .tree
                     state.statusMessage = "Ready | ^O: Save, ^X: Quit"
                     return true
                 }
                 return false
+            }
+            if key.keyCode == 118 {
+                handlePasteRequest(state: state)
+                return true
             }
             // Ctrl+B toggles sidebar
             if key.keyCode == AsciiKey.b {
@@ -101,6 +116,10 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
             return handleEditorKey(key, state: state, contentRows: contentRows, pipeline: pipeline)
         }
 
+    case .paste(let text):
+        handlePaste(text, state: state)
+        return true
+
     case .mouse(let mouse):
         if state.prompt != nil {
             return true
@@ -110,5 +129,51 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
 
     default:
         return true
+    }
+}
+
+@MainActor
+private func handleCopy(state: EditorState) {
+    guard let selection = state.selection else { return }
+    let text = selection.extractText(from: { state.fileLine(at: $0) }, lineCount: state.fileLineCount)
+    let base64 = Data(text.utf8).base64EncodedString()
+    state.terminalWriter?(KittySequences.setClipboard(base64))
+    state.statusMessage = "Copied \(text.count) chars"
+    state.clearSelection()
+}
+
+@MainActor
+private func handleCut(state: EditorState) {
+    guard let selection = state.selection else { return }
+    let text = selection.extractText(from: { state.fileLine(at: $0) }, lineCount: state.fileLineCount)
+    let base64 = Data(text.utf8).base64EncodedString()
+    state.terminalWriter?(KittySequences.setClipboard(base64))
+    let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: selection)
+    state.textDidChange(mutation)
+    state.statusMessage = "Cut \(text.count) chars"
+}
+
+@MainActor
+private func handlePasteRequest(state: EditorState) {
+    state.terminalWriter?(KittySequences.requestClipboard)
+    state.statusMessage = "Paste request sent"
+}
+
+@MainActor
+private func handlePaste(_ text: String, state: EditorState) {
+    let sanitized = TextSanitizer.sanitize(text)
+
+    if state.hasActiveSelection {
+        let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
+        state.textDidChange(mutation)
+    }
+
+    let mutation = TextOperations.insert(sanitized.text, into: &state.textBuffer, at: &state.textCursor)
+    state.textDidChange(mutation)
+
+    if sanitized.replacedCount > 0 {
+        state.statusMessage = "Pasted \(sanitized.text.count) chars (\(sanitized.replacedCount) non-printable replaced)"
+    } else {
+        state.statusMessage = "Pasted \(sanitized.text.count) chars"
     }
 }
