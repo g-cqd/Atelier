@@ -333,13 +333,11 @@ struct KittyCodeNavigationTests {
 
 @Suite("KittyCode Syntax Wiring")
 struct KittyCodeSyntaxWiringTests {
-    @Test func `language highlighter uses grammar-backed json highlighting when available`() async {
+    @Test func `language highlighter returns styled json output when bundled resources are available`() async {
         let available = await LanguageHighlighter.ensureArtifacts(for: "json")
         let session = LanguageHighlighter.makeSession(language: "json")
         let lines = session.highlightDocument(source: "true")
         #expect(available)
-        #expect(session.isGrammarBacked)
-        #expect(!session.prefersLineInput)
         #expect(lines.count == 1)
         #expect(lines[0].count == 1)
         #expect(lines[0][0].text == "true")

@@ -371,9 +371,10 @@ private func fallbackHighlightLine(_ line: String, language: String?, theme: The
 
 private func fallbackHighlightJSON(_ line: String, theme: Theme) -> [StyledSpan] {
     let defaultStyle = theme.defaultStyle
-    let keywordStyle = theme.style(for: "keyword")
+    let keyStyle = theme.style(for: "string.special.key")
     let stringStyle = theme.style(for: "string")
     let numberStyle = theme.style(for: "number")
+    let constantStyle = theme.style(for: "constant.builtin")
 
     var spans: [StyledSpan] = []
     let chars = Array(line)
@@ -402,7 +403,7 @@ private func fallbackHighlightJSON(_ line: String, theme: Theme) -> [StyledSpan]
             var peek = index
             while peek < chars.count && chars[peek] == " " { peek += 1 }
             let isKey = peek < chars.count && chars[peek] == ":"
-            spans.append(StyledSpan(text: token, style: isKey ? keywordStyle : stringStyle))
+            spans.append(StyledSpan(text: token, style: isKey ? keyStyle : stringStyle))
         } else if char.isNumber || (char == "-" && index + 1 < chars.count && chars[index + 1].isNumber) {
             var token = String(char)
             index += 1
@@ -419,7 +420,7 @@ private func fallbackHighlightJSON(_ line: String, theme: Theme) -> [StyledSpan]
         {
             let keyword = chars[index...].prefix(while: { $0.isLetter })
             let token = String(keyword)
-            spans.append(StyledSpan(text: token, style: keywordStyle))
+            spans.append(StyledSpan(text: token, style: constantStyle))
             index += token.count
         } else {
             spans.append(StyledSpan(text: String(char), style: defaultStyle))
