@@ -29,6 +29,8 @@ public struct TextEditor: View, Sendable {
     public var showsVerticalScrollIndicator: Bool
     public var showsHorizontalScrollIndicator: Bool
     public var lineStyleOverlays: [Int: TextStyleOverlay]
+    public var selectionRanges: [Int: ClosedRange<Int>]
+    public var selectionStyle: Style
     public var editorStyle: Style
     public var lineNumberStyle: Style
     public var currentLineStyle: Style
@@ -54,6 +56,8 @@ public struct TextEditor: View, Sendable {
         showsVerticalScrollIndicator: Bool = false,
         showsHorizontalScrollIndicator: Bool = false,
         lineStyleOverlays: [Int: TextStyleOverlay] = [:],
+        selectionRanges: [Int: ClosedRange<Int>] = [:],
+        selectionStyle: Style = .default,
         editorStyle: Style = .default,
         lineNumberStyle: Style = .default,
         currentLineStyle: Style = .default,
@@ -79,6 +83,8 @@ public struct TextEditor: View, Sendable {
         self.showsVerticalScrollIndicator = showsVerticalScrollIndicator
         self.showsHorizontalScrollIndicator = showsHorizontalScrollIndicator
         self.lineStyleOverlays = lineStyleOverlays
+        self.selectionRanges = selectionRanges
+        self.selectionStyle = selectionStyle
         self.editorStyle = editorStyle
         self.lineNumberStyle = lineNumberStyle
         self.currentLineStyle = currentLineStyle
@@ -105,6 +111,8 @@ public struct TextEditor: View, Sendable {
         showsVerticalScrollIndicator: Bool = false,
         showsHorizontalScrollIndicator: Bool = false,
         lineStyleOverlays: [Int: TextStyleOverlay] = [:],
+        selectionRanges: [Int: ClosedRange<Int>] = [:],
+        selectionStyle: Style = .default,
         editorStyle: Style = .default,
         lineNumberStyle: Style = .default,
         currentLineStyle: Style = .default,
@@ -129,6 +137,8 @@ public struct TextEditor: View, Sendable {
         self.showsVerticalScrollIndicator = showsVerticalScrollIndicator
         self.showsHorizontalScrollIndicator = showsHorizontalScrollIndicator
         self.lineStyleOverlays = lineStyleOverlays
+        self.selectionRanges = selectionRanges
+        self.selectionStyle = selectionStyle
         self.editorStyle = editorStyle
         self.lineNumberStyle = lineNumberStyle
         self.currentLineStyle = currentLineStyle
@@ -155,6 +165,8 @@ public struct TextEditor: View, Sendable {
         showsVerticalScrollIndicator: Bool = false,
         showsHorizontalScrollIndicator: Bool = false,
         lineStyleOverlays: [Int: TextStyleOverlay] = [:],
+        selectionRanges: [Int: ClosedRange<Int>] = [:],
+        selectionStyle: Style = .default,
         editorStyle: Style = .default,
         lineNumberStyle: Style = .default,
         currentLineStyle: Style = .default,
@@ -179,6 +191,8 @@ public struct TextEditor: View, Sendable {
         self.showsVerticalScrollIndicator = showsVerticalScrollIndicator
         self.showsHorizontalScrollIndicator = showsHorizontalScrollIndicator
         self.lineStyleOverlays = lineStyleOverlays
+        self.selectionRanges = selectionRanges
+        self.selectionStyle = selectionStyle
         self.editorStyle = editorStyle
         self.lineNumberStyle = lineNumberStyle
         self.currentLineStyle = currentLineStyle

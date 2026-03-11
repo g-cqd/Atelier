@@ -256,6 +256,7 @@ public enum ViewRenderer {
         let editorStyle = context.applyTo(editor.editorStyle)
         let lineNumberStyle = context.applyTo(editor.lineNumberStyle)
         let currentLineStyle = context.applyTo(editor.currentLineStyle)
+        let selectionStyle = context.applyTo(editor.selectionStyle)
         let gutterWidth = TextEditorLayout.gutterWidth(for: editor)
         let gutterDecorationWidth = TextEditorLayout.gutterDecorationWidth(for: editor)
         let lineNumberColumnWidth = TextEditorLayout.lineNumberColumnWidth(for: editor)
@@ -343,8 +344,11 @@ public enum ViewRenderer {
                     let segEnd = wrapRow + 1 < rowStarts.count ? rowStarts[wrapRow + 1] : totalWidth
                     var col = rect.x + gutterWidth
                     var widthPos = 0
+                    var charIndex = 0
                     var wrapIsLeading = true
                     let wsConfig = editor.whitespaceConfig
+                    let selectionRange = editor.selectionRanges[lineIndex]
+
                     spanLoop: for span in spans {
                         for char in span.text {
                             var displayChar = char
@@ -394,12 +398,15 @@ public enum ViewRenderer {
                             }
 
                             if col < contentMaxX {
-                                let style = resolvedLineStyle(
+                                var style = resolvedLineStyle(
                                     from: charStyle,
                                     lineOverlay: lineOverlay,
                                     isCurrentLine: isCurrentLine,
                                     currentLineStyle: currentLineStyle
                                 )
+                                if let range = selectionRange, range.contains(charIndex) {
+                                    style = applySelectionStyle(selectionStyle, to: style)
+                                }
                                 if isControl && width > 1 {
                                     for _ in 0..<width where col < contentMaxX {
                                         buffer[row, col] = Cell(character: " ", style: style)
@@ -415,6 +422,7 @@ public enum ViewRenderer {
                                 }
                             }
                             widthPos += width
+                            charIndex += 1
                         }
                     }
 
@@ -745,6 +753,17 @@ public enum ViewRenderer {
     ) {
         guard width > 0 else { return }
         buffer.fill(row: row, col: col, width: width, height: 1, cell: Cell(character: " ", style: style))
+    }
+
+    private static func applySelectionStyle(_ selectionStyle: Style, to base: Style) -> Style {
+        var style = base
+        if selectionStyle.bg != .default {
+            style.bg = selectionStyle.bg
+        }
+        if selectionStyle.fg != .default {
+            style.fg = selectionStyle.fg
+        }
+        return style
     }
 
     private static func renderStyledLine(

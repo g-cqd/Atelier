@@ -16,6 +16,12 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
     var shouldEnsureVisible = false
 
     if !isClipboardShortcut(key) {
+        if state.hasActiveSelection {
+            let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
+            state.textDidChange(mutation)
+            state.clearSelection()
+        }
+    } else {
         state.clearSelection()
     }
 

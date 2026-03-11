@@ -109,6 +109,9 @@ struct KittyCodeEntry {
 
         let connection = POSIXTerminalConnection()
         let runtime = ApplicationRuntime(connection: connection)
+        state.terminalWriter = { bytes in
+            try? connection.write(Array(Data(bytes)))
+        }
 
         try await runtime.run(
             render: { pipeline in
