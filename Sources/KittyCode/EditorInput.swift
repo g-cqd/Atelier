@@ -8,6 +8,7 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
     let editorWidth = pipeline.columns - treeWidth - 1
     let lineNumWidth = max(3, String(state.fileLineCount).count + 1)
     let availWidth = editorWidth - lineNumWidth
+    var shouldEnsureVisible = false
 
     if state.config.keybindingMode == .vim && state.vimMode == .normal {
         switch key.keyCode {
@@ -16,13 +17,17 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
             state.statusMessage = "-- INSERT -- [\(state.fileName)]"
         case AsciiKey.h:
             state.cursorCol = max(0, state.cursorCol - 1)
+            shouldEnsureVisible = true
         case AsciiKey.j:
             state.cursorRow = min(state.cursorRow + 1, max(0, state.fileLineCount - 1))
+            shouldEnsureVisible = true
         case AsciiKey.k:
             state.cursorRow = max(0, state.cursorRow - 1)
+            shouldEnsureVisible = true
         case AsciiKey.l:
             let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
             state.cursorCol = min(state.cursorCol + 1, rowLength)
+            shouldEnsureVisible = true
         case AsciiKey.colon:
             state.statusMessage = ":"
         case AsciiKey.w:
@@ -32,7 +37,9 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         default:
             break
         }
-        ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+        if shouldEnsureVisible {
+            ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+        }
         return true
     }
 
@@ -45,7 +52,7 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         }
         let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
         state.cursorCol = min(state.cursorCol, rowLength)
-        ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+        shouldEnsureVisible = true
     case Key.up.rawValue:
         if key.modifiers.contains(.alt) {
             state.cursorRow = max(state.cursorRow - contentRows, 0)
@@ -54,14 +61,14 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         }
         let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
         state.cursorCol = min(state.cursorCol, rowLength)
-        ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+        shouldEnsureVisible = true
     case Key.left.rawValue:
         if key.modifiers.contains(.alt) || key.modifiers.contains(.ctrl) {
             jumpWordBackward(state: state)
         } else {
             state.cursorCol = max(state.cursorCol - 1, 0)
         }
-        ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+        shouldEnsureVisible = true
     case Key.right.rawValue:
         if key.modifiers.contains(.alt) || key.modifiers.contains(.ctrl) {
             jumpWordForward(state: state)
@@ -69,59 +76,67 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
             let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
             state.cursorCol = min(state.cursorCol + 1, rowLength)
         }
-        ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+        shouldEnsureVisible = true
     case AsciiKey.b:
         if key.modifiers == .alt {
             jumpWordBackward(state: state)
+            shouldEnsureVisible = true
         }
     case AsciiKey.f:
         if key.modifiers == .alt {
             jumpWordForward(state: state)
+            shouldEnsureVisible = true
         }
     case Key.home.rawValue:
         state.cursorCol = 0
+        shouldEnsureVisible = true
     case Key.end.rawValue:
         let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
         state.cursorCol = rowLength
+        shouldEnsureVisible = true
     case Key.pageUp.rawValue:
         state.cursorRow = max(state.cursorRow - contentRows, 0)
         let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
         state.cursorCol = min(state.cursorCol, rowLength)
-        ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+        shouldEnsureVisible = true
     case Key.pageDown.rawValue:
         state.cursorRow = min(state.cursorRow + contentRows, max(0, state.fileLineCount - 1))
         let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
         state.cursorCol = min(state.cursorCol, rowLength)
-        ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+        shouldEnsureVisible = true
     case Key.enter.rawValue, Key.enterAlt.rawValue:
         let mutation = TextOperations.insertNewline(into: &state.textBuffer, at: &state.textCursor)
         state.textDidChange(mutation)
-        ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+        shouldEnsureVisible = true
     case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
         if let mutation = TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor) {
             state.textDidChange(mutation)
+            shouldEnsureVisible = true
         }
-        ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     case AsciiKey.g:
         if key.modifiers == .shift {
             state.cursorRow = max(0, state.fileLineCount - 1)
-            ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
         } else {
             state.cursorRow = 0
             state.cursorCol = 0
             state.scrollOffset = 0
         }
+        shouldEnsureVisible = true
     default:
         if !key.associatedText.isEmpty {
             insertText(key.associatedText, into: state)
+            shouldEnsureVisible = true
         } else if key.keyCode < 256, let scalar = UnicodeScalar(key.keyCode) {
             let char = Character(scalar)
             if char.isPrintable {
                 insertText(String(char), into: state)
+                shouldEnsureVisible = true
             }
         }
     }
 
-    ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+    if shouldEnsureVisible {
+        ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+    }
     return true
 }

@@ -107,16 +107,31 @@ public enum SGREncoder: Sendable {
 
         var first = true
 
-        // Check each attribute individually
-        if old.bold != new.bold {
-            appendSep(&params, &first)
-            if new.bold { params.append(0x31) } // 1
-            else { params.append(0x32); params.append(0x32) } // 22
-        }
-        if old.dim != new.dim {
-            appendSep(&params, &first)
-            if new.dim { params.append(0x32) } // 2
-            else { params.append(0x32); params.append(0x32) } // 22
+        let intensityChanged = old.bold != new.bold || old.dim != new.dim
+        let requiresIntensityReset = (old.bold && !new.bold) || (old.dim && !new.dim)
+
+        if intensityChanged {
+            if requiresIntensityReset {
+                appendSep(&params, &first)
+                params.append(0x32); params.append(0x32) // 22
+                if new.bold {
+                    appendSep(&params, &first)
+                    params.append(0x31) // 1
+                }
+                if new.dim {
+                    appendSep(&params, &first)
+                    params.append(0x32) // 2
+                }
+            } else {
+                if new.bold {
+                    appendSep(&params, &first)
+                    params.append(0x31) // 1
+                }
+                if new.dim {
+                    appendSep(&params, &first)
+                    params.append(0x32) // 2
+                }
+            }
         }
         if old.italic != new.italic {
             appendSep(&params, &first)
