@@ -10,6 +10,7 @@ import KittySync
 public final class MockTerminalConnection: TerminalConnection, @unchecked Sendable {
     private struct State {
         var inputBuffer: [UInt8] = []
+        var queuedReadResults: [Result<[UInt8], TerminalError>] = []
         var outputBuffer = ContiguousArray<UInt8>()
         var isRawMode = false
         var size: TerminalSize
@@ -33,6 +34,13 @@ public final class MockTerminalConnection: TerminalConnection, @unchecked Sendab
     /// - Parameter bytes: The bytes to enqueue as terminal input.
     public func feedInput(_ bytes: [UInt8]) {
         withStateLock { $0.inputBuffer.append(contentsOf: bytes) }
+    }
+
+    /// Enqueues a read error to be returned by the next `read(into:)` call.
+    ///
+    /// - Parameter error: The error that should be returned on the next read.
+    public func enqueueReadError(_ error: TerminalError) {
+        withStateLock { $0.queuedReadResults.append(.failure(error)) }
     }
 
     /// A snapshot of all bytes written to the connection since the last `clearOutput()` call.
@@ -77,6 +85,10 @@ public final class MockTerminalConnection: TerminalConnection, @unchecked Sendab
     public func read(into buffer: UnsafeMutableRawBufferPointer) throws(TerminalError) -> Int {
         let requestedCount = buffer.count
         let result = withStateLock { state -> Result<[UInt8], TerminalError> in
+            if !state.queuedReadResults.isEmpty {
+                return state.queuedReadResults.removeFirst()
+            }
+
             guard !state.inputBuffer.isEmpty else {
                 return .failure(.connectionClosed)
             }

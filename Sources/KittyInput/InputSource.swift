@@ -1,3 +1,4 @@
+import Darwin
 import KittyTerminal
 import KittyCodecs
 
@@ -34,6 +35,8 @@ public final class InputSource: Sendable {
                     for event in routedEvents {
                         continuation.yield(event)
                     }
+                } catch TerminalError.readFailed(let code) where code == EINTR {
+                    continue
                 } catch {
                     break
                 }
