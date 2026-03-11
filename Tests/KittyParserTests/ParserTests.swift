@@ -142,6 +142,150 @@ struct LexerTests {
     }
 }
 
+@Suite("Lexer comment tokenization")
+struct LexerCommentTests {
+    private func makeLexTable(comments: [CommentPattern], keywords: [String: Int] = [:]) -> LexTable {
+        var states: [LexState] = []
+        if !keywords.isEmpty {
+            states = buildTrieStates(keywords: keywords)
+        }
+        return LexTable(states: states, keywords: keywords, commentPatterns: comments)
+    }
+
+    private func buildTrieStates(keywords: [String: Int]) -> [LexState] {
+        // Minimal trie for testing
+        LexTableCompiler.compile(
+            GrammarDefinition(
+                name: "test",
+                rules: keywords.map { ($0.key, Rule.string($0.key)) }
+            )
+        ).states
+    }
+
+    @Test("Line comment is tokenized as a single extra token")
+    func lineCommentSingleToken() {
+        let lexTable = makeLexTable(comments: [.line(prefix: "//")])
+        let lexer = Lexer(lexTable: lexTable)
+        let tokens = lexer.tokenize("// this is a comment")
+        let commentTokens = tokens.filter { $0.type == "comment" }
+        #expect(commentTokens.count == 1)
+        #expect(commentTokens[0].text == "// this is a comment")
+        #expect(commentTokens[0].isExtra)
+    }
+
+    @Test("Line comment stops at newline")
+    func lineCommentStopsAtNewline() {
+        let lexTable = makeLexTable(comments: [.line(prefix: "//")])
+        let lexer = Lexer(lexTable: lexTable)
+        let tokens = lexer.tokenize("// comment\ncode")
+        let commentTokens = tokens.filter { $0.type == "comment" }
+        #expect(commentTokens.count == 1)
+        #expect(commentTokens[0].text == "// comment")
+    }
+
+    @Test("Doc comment (///) is captured by // prefix")
+    func docCommentCapturedByLinePrefix() {
+        let lexTable = makeLexTable(comments: [.line(prefix: "//")])
+        let lexer = Lexer(lexTable: lexTable)
+        let tokens = lexer.tokenize("/// doc comment with if keyword")
+        let commentTokens = tokens.filter { $0.type == "comment" }
+        #expect(commentTokens.count == 1)
+        #expect(commentTokens[0].text == "/// doc comment with if keyword")
+    }
+
+    @Test("Keywords inside line comments are NOT tokenized separately")
+    func keywordsInsideLineCommentNotTokenized() {
+        let lexTable = LexTable(
+            states: LexTableCompiler.compile(
+                GrammarDefinition(name: "t", rules: [("s", .string("if"))])
+            ).states,
+            keywords: ["if": 0],
+            commentPatterns: [.line(prefix: "//")]
+        )
+        let lexer = Lexer(lexTable: lexTable)
+        let tokens = lexer.tokenize("// if something")
+        let keywordTokens = tokens.filter { $0.type == "\"if\"" }
+        #expect(keywordTokens.isEmpty, "Keywords inside comments should not be tokenized")
+    }
+
+    @Test("Block comment is tokenized as a single extra token")
+    func blockCommentSingleToken() {
+        let lexTable = makeLexTable(comments: [.block(open: "/*", close: "*/")])
+        let lexer = Lexer(lexTable: lexTable)
+        let tokens = lexer.tokenize("/* block comment */")
+        let commentTokens = tokens.filter { $0.type == "comment" }
+        #expect(commentTokens.count == 1)
+        #expect(commentTokens[0].text == "/* block comment */")
+        #expect(commentTokens[0].isExtra)
+    }
+
+    @Test("Block comment spans multiple lines")
+    func blockCommentMultiline() {
+        let lexTable = makeLexTable(comments: [.block(open: "/*", close: "*/")])
+        let lexer = Lexer(lexTable: lexTable)
+        let tokens = lexer.tokenize("/* line1\nline2 */")
+        let commentTokens = tokens.filter { $0.type == "comment" }
+        #expect(commentTokens.count == 1)
+        #expect(commentTokens[0].text == "/* line1\nline2 */")
+    }
+
+    @Test("Keywords inside block comments are NOT tokenized separately")
+    func keywordsInsideBlockCommentNotTokenized() {
+        let lexTable = LexTable(
+            states: LexTableCompiler.compile(
+                GrammarDefinition(name: "t", rules: [("s", .string("if"))])
+            ).states,
+            keywords: ["if": 0],
+            commentPatterns: [.block(open: "/*", close: "*/")]
+        )
+        let lexer = Lexer(lexTable: lexTable)
+        let tokens = lexer.tokenize("/* if else for */")
+        let keywordTokens = tokens.filter { $0.type == "\"if\"" }
+        #expect(keywordTokens.isEmpty, "Keywords inside block comments should not be tokenized")
+    }
+
+    @Test("Comment is matched before keyword when at same position")
+    func commentMatchedBeforeKeyword() {
+        let lexTable = LexTable(
+            states: LexTableCompiler.compile(
+                GrammarDefinition(name: "t", rules: [("s", .choice([.string("if"), .string("//")]))])
+            ).states,
+            keywords: ["if": 0, "//": 1],
+            commentPatterns: [.line(prefix: "//")]
+        )
+        let lexer = Lexer(lexTable: lexTable)
+        let tokens = lexer.tokenize("// if")
+        #expect(tokens.first?.type == "comment")
+    }
+
+    @Test("Hash comment prefix works for Python-style comments")
+    func hashCommentPrefix() {
+        let lexTable = makeLexTable(comments: [.line(prefix: "#")])
+        let lexer = Lexer(lexTable: lexTable)
+        let tokens = lexer.tokenize("# this is a comment")
+        let commentTokens = tokens.filter { $0.type == "comment" }
+        #expect(commentTokens.count == 1)
+        #expect(commentTokens[0].text == "# this is a comment")
+    }
+
+    @Test("Code after line comment on next line is tokenized normally")
+    func codeAfterCommentTokenizedNormally() {
+        let lexTable = LexTable(
+            states: LexTableCompiler.compile(
+                GrammarDefinition(name: "t", rules: [("s", .string("if"))])
+            ).states,
+            keywords: ["if": 0],
+            commentPatterns: [.line(prefix: "//")]
+        )
+        let lexer = Lexer(lexTable: lexTable)
+        let tokens = lexer.tokenize("// comment\nif")
+        let commentTokens = tokens.filter { $0.type == "comment" }
+        let keywordTokens = tokens.filter { $0.type == "\"if\"" }
+        #expect(commentTokens.count == 1)
+        #expect(keywordTokens.count == 1, "Keyword after comment line should be tokenized")
+    }
+}
+
 @Suite("GLRParser")
 struct GLRParserTests {
     @Test("Parse produces syntax tree")
@@ -186,6 +330,88 @@ struct GLRParserTests {
         #expect(tree.root.type == "Good")
         #expect(tree.root.children.map(\.type) == ["a", "b"])
         #expect(tree.root.child(forField: "rhs")?.type == "b")
+    }
+}
+
+@Suite("GLRParser comment nodes")
+struct GLRParserCommentNodeTests {
+    @Test("Comment tokens appear as extra nodes in the tree")
+    func commentNodesInTree() throws {
+        let json = """
+        {
+            "name": "comment_tree_test",
+            "rules": {
+                "source": {"type": "STRING", "value": "x"},
+                "comment": {
+                    "type": "TOKEN",
+                    "content": {
+                        "type": "PATTERN",
+                        "value": "\\\\/\\\\/[^\\\\n]*"
+                    }
+                }
+            },
+            "extras": [
+                {"type": "PATTERN", "value": "\\\\s+"},
+                {"type": "SYMBOL", "name": "comment"}
+            ]
+        }
+        """
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+        let result = try ParseTableCompiler.compile(grammar)
+
+        let parser = GLRParser(
+            parseTable: result.parseTable,
+            lexTable: result.lexTable,
+            productions: result.productions
+        )
+
+        let tree = try parser.parse("// a comment\nx")
+        let commentNodes = tree.root.children.filter { $0.type == "comment" }
+        #expect(commentNodes.count == 1)
+        #expect(commentNodes[0].isExtra)
+        #expect(commentNodes[0].isNamed)
+        #expect(commentNodes[0].text(from: tree.source) == "// a comment")
+    }
+
+    @Test("Multiple comments produce multiple extra nodes")
+    func multipleCommentNodes() throws {
+        let json = """
+        {
+            "name": "multi_comment_test",
+            "rules": {
+                "source": {
+                    "type": "SEQ",
+                    "members": [
+                        {"type": "STRING", "value": "x"},
+                        {"type": "STRING", "value": "x"}
+                    ]
+                },
+                "comment": {
+                    "type": "TOKEN",
+                    "content": {
+                        "type": "PATTERN",
+                        "value": "\\\\/\\\\/[^\\\\n]*"
+                    }
+                }
+            },
+            "extras": [
+                {"type": "PATTERN", "value": "\\\\s+"},
+                {"type": "SYMBOL", "name": "comment"}
+            ]
+        }
+        """
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+        let result = try ParseTableCompiler.compile(grammar)
+
+        let parser = GLRParser(
+            parseTable: result.parseTable,
+            lexTable: result.lexTable,
+            productions: result.productions
+        )
+
+        let tree = try parser.parse("// first\nx\n// second\nx")
+        let commentNodes = tree.root.children.filter { $0.type == "comment" }
+        #expect(commentNodes.count == 2)
     }
 }
 

@@ -454,6 +454,163 @@ struct LexTableCompilerTests {
     }
 }
 
+@Suite("LexTableCompiler comment patterns")
+struct LexTableCompilerCommentPatternTests {
+    @Test("Extracts line comment pattern from grammar extras")
+    func extractsLineCommentPattern() throws {
+        let json = """
+        {
+            "name": "comment_test",
+            "rules": {
+                "source": {"type": "STRING", "value": "x"},
+                "comment": {
+                    "type": "TOKEN",
+                    "content": {
+                        "type": "PATTERN",
+                        "value": "\\\\/\\\\/[^\\\\n]*"
+                    }
+                }
+            },
+            "extras": [
+                {"type": "PATTERN", "value": "\\\\s+"},
+                {"type": "SYMBOL", "name": "comment"}
+            ]
+        }
+        """
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+        let lexTable = LexTableCompiler.compile(grammar)
+        #expect(lexTable.commentPatterns.contains(.line(prefix: "//")))
+    }
+
+    @Test("Extracts block comment pattern from grammar extras")
+    func extractsBlockCommentPattern() throws {
+        let json = """
+        {
+            "name": "block_comment_test",
+            "rules": {
+                "source": {"type": "STRING", "value": "x"},
+                "comment": {
+                    "type": "TOKEN",
+                    "content": {
+                        "type": "CHOICE",
+                        "members": [
+                            {"type": "PATTERN", "value": "\\\\/\\\\/[^\\\\n]*"},
+                            {"type": "PATTERN", "value": "\\\\/\\\\*[^*]*\\\\*+([^\\\\/*][^*]*\\\\*+)*\\\\/"}
+                        ]
+                    }
+                }
+            },
+            "extras": [
+                {"type": "PATTERN", "value": "\\\\s+"},
+                {"type": "SYMBOL", "name": "comment"}
+            ]
+        }
+        """
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+        let lexTable = LexTableCompiler.compile(grammar)
+        #expect(lexTable.commentPatterns.contains(.line(prefix: "//")))
+        #expect(lexTable.commentPatterns.contains(.block(open: "/*", close: "*/")))
+    }
+
+    @Test("Returns empty comment patterns when no extras define comments")
+    func noCommentPatterns() throws {
+        let json = """
+        {
+            "name": "no_comments",
+            "rules": {
+                "source": {"type": "STRING", "value": "x"}
+            },
+            "extras": [
+                {"type": "PATTERN", "value": "\\\\s+"}
+            ]
+        }
+        """
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+        let lexTable = LexTableCompiler.compile(grammar)
+        #expect(lexTable.commentPatterns.isEmpty)
+    }
+
+    @Test("Swift grammar extras produce both line and block comment patterns")
+    func swiftGrammarCommentPatterns() throws {
+        let json = """
+        {
+            "name": "swift_like",
+            "rules": {
+                "source": {"type": "STRING", "value": "x"},
+                "comment": {
+                    "type": "TOKEN",
+                    "content": {
+                        "type": "CHOICE",
+                        "members": [
+                            {
+                                "type": "SEQ",
+                                "members": [{"type": "PATTERN", "value": "\\\\/{2,3}[^\\\\/].*"}]
+                            },
+                            {
+                                "type": "SEQ",
+                                "members": [{"type": "PATTERN", "value": "\\\\/\\\\*{1,}[^*]*\\\\*+([^\\\\/*][^*]*\\\\*+)*\\\\/"}]
+                            }
+                        ]
+                    }
+                }
+            },
+            "extras": [
+                {"type": "PATTERN", "value": "\\\\s+"},
+                {"type": "SYMBOL", "name": "comment"}
+            ]
+        }
+        """
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+        let lexTable = LexTableCompiler.compile(grammar)
+        #expect(lexTable.commentPatterns.contains(.line(prefix: "//")))
+        #expect(lexTable.commentPatterns.contains(.block(open: "/*", close: "*/")))
+    }
+
+    @Test("Hash line comment pattern is extracted")
+    func hashLineCommentPattern() throws {
+        let json = """
+        {
+            "name": "hash_comment",
+            "rules": {
+                "source": {"type": "STRING", "value": "x"},
+                "comment": {
+                    "type": "TOKEN",
+                    "content": {
+                        "type": "PATTERN",
+                        "value": "#[^\\\\n]*"
+                    }
+                }
+            },
+            "extras": [
+                {"type": "SYMBOL", "name": "comment"}
+            ]
+        }
+        """
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+        let lexTable = LexTableCompiler.compile(grammar)
+        #expect(lexTable.commentPatterns.contains(.line(prefix: "#")))
+    }
+}
+
+@Suite("CommentPattern Codable")
+struct CommentPatternCodableTests {
+    @Test("Line comment pattern round-trips through Codable")
+    func lineCommentRoundTrips() throws {
+        let pattern = CommentPattern.line(prefix: "//")
+        let data = try JSONEncoder().encode(pattern)
+        let decoded = try JSONDecoder().decode(CommentPattern.self, from: data)
+        #expect(decoded == pattern)
+    }
+
+    @Test("Block comment pattern round-trips through Codable")
+    func blockCommentRoundTrips() throws {
+        let pattern = CommentPattern.block(open: "/*", close: "*/")
+        let data = try JSONEncoder().encode(pattern)
+        let decoded = try JSONDecoder().decode(CommentPattern.self, from: data)
+        #expect(decoded == pattern)
+    }
+}
+
 @Suite("KeywordExtractor")
 struct KeywordExtractorTests {
     @Test("Extracts word-like keywords")

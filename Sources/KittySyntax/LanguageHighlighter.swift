@@ -683,7 +683,29 @@ private func fallbackHighlightSwift(_ line: String, theme: Theme) -> [StyledSpan
     while index < chars.count {
         let char = chars[index]
 
-        if char == "@" {
+        if char == "/" && index + 1 < chars.count && chars[index + 1] == "/" {
+            flushCurrent()
+            spans.append(StyledSpan(text: String(chars[index...]), style: commentStyle))
+            return spans
+        } else if char == "/" && index + 1 < chars.count && chars[index + 1] == "*" {
+            flushCurrent()
+            var token = "/*"
+            index += 2
+            while index + 1 < chars.count {
+                if chars[index] == "*" && chars[index + 1] == "/" {
+                    token.append("*/")
+                    index += 2
+                    break
+                }
+                token.append(chars[index])
+                index += 1
+            }
+            if index < chars.count && !token.hasSuffix("*/") {
+                token.append(contentsOf: chars[index...])
+                index = chars.count
+            }
+            spans.append(StyledSpan(text: token, style: commentStyle))
+        } else if char == "@" {
             flushCurrent()
             current = "@"
             index += 1
@@ -696,10 +718,6 @@ private func fallbackHighlightSwift(_ line: String, theme: Theme) -> [StyledSpan
             flushCurrent()
             spans.append(StyledSpan(text: String(char), style: defaultStyle))
             index += 1
-        } else if char == "/" && index + 1 < chars.count && chars[index + 1] == "/" {
-            flushCurrent()
-            spans.append(StyledSpan(text: String(chars[index...]), style: commentStyle))
-            return spans
         } else if char == "\"" {
             flushCurrent()
             var token = "\""
