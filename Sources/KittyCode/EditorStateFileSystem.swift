@@ -13,6 +13,11 @@ extension EditorState {
             restoreExpandedPaths(expandedPaths, in: &treeNodes)
         }
         refreshFlatTree()
+
+        // Clamp scroll/selection to valid range after rescan
+        let maxIndex = max(0, cachedFlatTree.count - 1)
+        treeScrollOffset = min(treeScrollOffset, maxIndex)
+        selectedTreeIndex = min(selectedTreeIndex, maxIndex)
     }
 
     private func collectExpandedPaths(_ nodes: [FileNode]) -> Set<String> {
@@ -41,6 +46,10 @@ extension EditorState {
 
     func refreshFlatTree() {
         cachedFlatTree = FileTreeNavigator.flatten(treeNodes)
+        // Clamp scroll/selection to valid range
+        let maxIndex = max(0, cachedFlatTree.count - 1)
+        treeScrollOffset = min(treeScrollOffset, maxIndex)
+        selectedTreeIndex = min(selectedTreeIndex, maxIndex)
         prewarmVisibleSyntaxArtifacts()
     }
 
