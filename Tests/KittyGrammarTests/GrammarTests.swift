@@ -2,10 +2,10 @@ import Testing
 import Foundation
 @testable import KittyGrammar
 
-@Suite("GrammarDefinition")
+@Suite
 struct GrammarDefinitionTests {
-    @Test("Rule enum variants")
-    func ruleVariants() {
+    @Test
+    func `Rule enum variants`() {
         let sym = Rule.symbol("identifier")
         let str = Rule.string("if")
         let blank = Rule.blank
@@ -14,8 +14,8 @@ struct GrammarDefinitionTests {
         #expect(blank == .blank)
     }
 
-    @Test("Equality compares all stored properties")
-    func equalityComparesAllFields() {
+    @Test
+    func `Equality compares all stored properties`() {
         let lhs = GrammarDefinition(
             name: "shared",
             rules: [("source", .symbol("statement"))],
@@ -43,10 +43,10 @@ struct GrammarDefinitionTests {
     }
 }
 
-@Suite("GrammarLoader")
+@Suite
 struct GrammarLoaderTests {
-    @Test("Parse minimal JSON grammar")
-    func parseMinimal() throws {
+    @Test
+    func `Parse minimal JSON grammar`() throws {
         let json = """
         {
             "name": "test",
@@ -75,8 +75,8 @@ struct GrammarLoaderTests {
         #expect(grammar.rules.count == 2)
     }
 
-    @Test("Preserves JSON rule order for start symbol")
-    func preservesRuleOrder() throws {
+    @Test
+    func `Preserves JSON rule order for start symbol`() throws {
         let json = """
         {
             "name": "ordering",
@@ -106,8 +106,8 @@ struct GrammarLoaderTests {
         #expect(startRule.symbols == ["z_entry"])
     }
 
-    @Test("Parse grammar with all rule types")
-    func parseAllRuleTypes() throws {
+    @Test
+    func `Parse grammar with all rule types`() throws {
         let json = """
         {
             "name": "complex",
@@ -133,8 +133,8 @@ struct GrammarLoaderTests {
         #expect(grammar.name == "complex")
     }
 
-    @Test("Missing name throws error")
-    func missingName() {
+    @Test
+    func `Missing name throws error`() {
         let json = """
         {"rules": {}}
         """
@@ -143,15 +143,15 @@ struct GrammarLoaderTests {
         }
     }
 
-    @Test("Invalid JSON throws error")
-    func invalidJSON() {
+    @Test
+    func `Invalid JSON throws error`() {
         #expect(throws: GrammarError.self) {
             try GrammarLoader.parse(Data("not json".utf8))
         }
     }
 
-    @Test("Parses surrogate-pair unicode escapes in JSON strings")
-    func parsesSurrogatePairUnicodeEscapes() throws {
+    @Test
+    func `Parses surrogate-pair unicode escapes in JSON strings`() throws {
         let json = #"""
         {
             "name": "emoji",
@@ -166,18 +166,25 @@ struct GrammarLoaderTests {
 
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         #expect(grammar.rules.count == 1)
-        if case let .string(value) = try #require(grammar.rules.first?.rule) {
-            #expect(value == "😀")
-        } else {
-            Issue.record("Expected string rule")
-        }
+        #expect(try requireStringRule(grammar.rules.first?.rule) == "😀")
     }
 }
 
-@Suite("ItemSet")
+private enum GrammarRuleExpectationError: Error {
+    case expectedStringRule
+}
+
+private func requireStringRule(_ rule: Rule?) throws -> String {
+    guard case let .some(.string(value)) = rule else {
+        throw GrammarRuleExpectationError.expectedStringRule
+    }
+    return value
+}
+
+@Suite
 struct ItemSetTests {
-    @Test("Basic closure")
-    func basicClosure() throws {
+    @Test
+    func `Basic closure`() throws {
         // S -> . E, E -> . "a"
         let productions: [(name: String, symbols: [String])] = [
             ("S'", ["S"]),
@@ -206,10 +213,10 @@ struct ItemSetTests {
     }
 }
 
-@Suite("ParseTableCompiler")
+@Suite
 struct ParseTableCompilerTests {
-    @Test("Compile simple grammar")
-    func compileSimple() throws {
+    @Test
+    func `Compile simple grammar`() throws {
         let json = """
         {
             "name": "simple",
@@ -227,8 +234,8 @@ struct ParseTableCompilerTests {
         #expect(result.productions.count > 0)
     }
 
-    @Test("repeat compiles to recursive zero or more productions")
-    func repeatCompilesRecursively() throws {
+    @Test
+    func `repeat compiles to recursive zero or more productions`() throws {
         let json = """
         {
             "name": "repeat_test",
@@ -260,8 +267,8 @@ struct ParseTableCompilerTests {
         #expect(helperRules.contains { $0.symbols == [helperName, "item"] })
     }
 
-    @Test("repeat1 compiles to recursive one or more productions")
-    func repeat1CompilesRecursively() throws {
+    @Test
+    func `repeat1 compiles to recursive one or more productions`() throws {
         let json = """
         {
             "name": "repeat1_test",
@@ -294,8 +301,8 @@ struct ParseTableCompilerTests {
         #expect(helperRules.contains { $0.symbols == [helperName, "item"] })
     }
 
-    @Test("Fields are preserved on flattened productions")
-    func preservesFieldMetadata() throws {
+    @Test
+    func `Fields are preserved on flattened productions`() throws {
         let json = """
         {
             "name": "fields_test",
@@ -347,8 +354,8 @@ struct ParseTableCompilerTests {
         #expect(sourceRule.fields == [0: "left", 2: "right"])
     }
 
-    @Test("Compile rejects rule expansion that exceeds configured limits")
-    func rejectsExplosiveRuleExpansion() throws {
+    @Test
+    func `Compile rejects rule expansion that exceeds configured limits`() throws {
         let json = """
         {
             "name": "explosive",
@@ -390,8 +397,8 @@ struct ParseTableCompilerTests {
         }
     }
 
-    @Test("Compile rejects parser state growth that exceeds configured limits")
-    func rejectsStateExplosion() throws {
+    @Test
+    func `Compile rejects parser state growth that exceeds configured limits`() throws {
         let json = """
         {
             "name": "simple",
@@ -426,10 +433,10 @@ struct ParseTableCompilerTests {
     }
 }
 
-@Suite("LexTableCompiler")
+@Suite
 struct LexTableCompilerTests {
-    @Test("Extract keywords from grammar")
-    func extractKeywords() throws {
+    @Test
+    func `Extract keywords from grammar`() throws {
         let json = """
         {
             "name": "kw_test",
@@ -454,10 +461,10 @@ struct LexTableCompilerTests {
     }
 }
 
-@Suite("LexTableCompiler comment patterns")
-struct LexTableCompilerCommentPatternTests {
-    @Test("Extracts line comment pattern from grammar extras")
-    func extractsLineCommentPattern() throws {
+@Suite
+struct LexTableCompilerCommentPatternsTests {
+    @Test
+    func `Extracts line comment pattern from grammar extras`() throws {
         let json = """
         {
             "name": "comment_test",
@@ -482,8 +489,8 @@ struct LexTableCompilerCommentPatternTests {
         #expect(lexTable.commentPatterns.contains(.line(prefix: "//")))
     }
 
-    @Test("Extracts block comment pattern from grammar extras")
-    func extractsBlockCommentPattern() throws {
+    @Test
+    func `Extracts block comment pattern from grammar extras`() throws {
         let json = """
         {
             "name": "block_comment_test",
@@ -512,8 +519,8 @@ struct LexTableCompilerCommentPatternTests {
         #expect(lexTable.commentPatterns.contains(.block(open: "/*", close: "*/")))
     }
 
-    @Test("Returns empty comment patterns when no extras define comments")
-    func noCommentPatterns() throws {
+    @Test
+    func `Returns empty comment patterns when no extras define comments`() throws {
         let json = """
         {
             "name": "no_comments",
@@ -530,8 +537,8 @@ struct LexTableCompilerCommentPatternTests {
         #expect(lexTable.commentPatterns.isEmpty)
     }
 
-    @Test("Swift grammar extras produce both line and block comment patterns")
-    func swiftGrammarCommentPatterns() throws {
+    @Test
+    func `Swift grammar extras produce both line and block comment patterns`() throws {
         let json = """
         {
             "name": "swift_like",
@@ -566,8 +573,8 @@ struct LexTableCompilerCommentPatternTests {
         #expect(lexTable.commentPatterns.contains(.block(open: "/*", close: "*/")))
     }
 
-    @Test("Hash line comment pattern is extracted")
-    func hashLineCommentPattern() throws {
+    @Test
+    func `Hash line comment pattern is extracted`() throws {
         let json = """
         {
             "name": "hash_comment",
@@ -592,18 +599,18 @@ struct LexTableCompilerCommentPatternTests {
     }
 }
 
-@Suite("CommentPattern Codable")
+@Suite
 struct CommentPatternCodableTests {
-    @Test("Line comment pattern round-trips through Codable")
-    func lineCommentRoundTrips() throws {
+    @Test
+    func `Line comment pattern round-trips through Codable`() throws {
         let pattern = CommentPattern.line(prefix: "//")
         let data = try JSONEncoder().encode(pattern)
         let decoded = try JSONDecoder().decode(CommentPattern.self, from: data)
         #expect(decoded == pattern)
     }
 
-    @Test("Block comment pattern round-trips through Codable")
-    func blockCommentRoundTrips() throws {
+    @Test
+    func `Block comment pattern round-trips through Codable`() throws {
         let pattern = CommentPattern.block(open: "/*", close: "*/")
         let data = try JSONEncoder().encode(pattern)
         let decoded = try JSONDecoder().decode(CommentPattern.self, from: data)
@@ -611,10 +618,10 @@ struct CommentPatternCodableTests {
     }
 }
 
-@Suite("KeywordExtractor")
+@Suite
 struct KeywordExtractorTests {
-    @Test("Extracts word-like keywords")
-    func extractWords() throws {
+    @Test
+    func `Extracts word-like keywords`() throws {
         let json = """
         {
             "name": "extract_test",

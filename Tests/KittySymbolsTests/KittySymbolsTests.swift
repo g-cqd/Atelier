@@ -2,10 +2,10 @@ import Foundation
 import Testing
 @testable import KittySymbols
 
-@Suite("KittySymbols")
+@Suite
 struct KittySymbolsTests {
-    @Test("Mapping entry derives glyph from codepoint")
-    func mappingEntryGlyph() {
+    @Test
+    func `Mapping entry derives glyph from codepoint`() {
         let entry = SymbolMappingEntry(
             name: "folder",
             visibility: .publicSymbol,
@@ -16,16 +16,16 @@ struct KittySymbolsTests {
         #expect(entry.glyph == "􀈕")
     }
 
-    @Test("Terminal symbol theme falls back without catalog")
-    func themeFallback() {
+    @Test
+    func `Terminal symbol theme falls back without catalog`() {
         let theme = TerminalSymbolTheme.make(symbolsEnabled: false, catalog: nil)
 
         #expect(theme[.folderClosed].text == ">")
         #expect(theme[.file].text == "-")
     }
 
-    @Test("Terminal symbol theme uses mapped glyphs")
-    func themeUsesCatalogGlyphs() {
+    @Test
+    func `Terminal symbol theme uses mapped glyphs`() {
         let catalog = SymbolCatalog(entries: [
             "folder": SymbolMappingEntry(name: "folder", visibility: .publicSymbol, assetGlyphIndex: 77, codepoint: 0x100215),
             "folder.fill": SymbolMappingEntry(name: "folder.fill", visibility: .publicSymbol, assetGlyphIndex: 78, codepoint: 0x100216),
@@ -40,16 +40,16 @@ struct KittySymbolsTests {
         #expect(theme[.file].text == "􀈿")
     }
 
-    @Test("All roles have non-empty fallback text")
-    func allRolesHaveFallbacks() {
+    @Test
+    func `All roles have non-empty fallback text`() {
         let theme = TerminalSymbolTheme.make(symbolsEnabled: false, catalog: nil)
         for role in TerminalSymbolTheme.Role.allCases {
             #expect(!theme[role].text.isEmpty, "Role \(role) has empty fallback")
         }
     }
 
-    @Test("New git roles have correct fallbacks")
-    func gitRoleFallbacks() {
+    @Test
+    func `New git roles have correct fallbacks`() {
         let theme = TerminalSymbolTheme.make(symbolsEnabled: false, catalog: nil)
         #expect(theme[.gitModified].text == "M")
         #expect(theme[.gitAdded].text == "A")
