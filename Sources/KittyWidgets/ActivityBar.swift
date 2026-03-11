@@ -18,7 +18,7 @@ public struct ActivityBar: Sendable {
 
         public init(
             normalStyle: Style = Style(fg: .rgb(r: 0x8b, g: 0x94, b: 0x9e)),
-            activeStyle: Style = Style(fg: .rgb(r: 0xf0, g: 0xf6, b: 0xfc), bold: true)
+            activeStyle: Style = Style(fg: .rgb(r: 0xf0, g: 0xf6, b: 0xfc))
         ) {
             self.normalStyle = normalStyle
             self.activeStyle = activeStyle

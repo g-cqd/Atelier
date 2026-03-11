@@ -1,0 +1,225 @@
+import Foundation
+
+@MainActor
+public final class TextDocument {
+    public enum LineEnding: String, Sendable, Equatable {
+        case lf
+        case crlf
+        case cr
+
+        public var label: String {
+            switch self {
+            case .lf:
+                "LF"
+            case .crlf:
+                "CRLF"
+            case .cr:
+                "CR"
+            }
+        }
+
+        public var sequence: String {
+            switch self {
+            case .lf:
+                "\n"
+            case .crlf:
+                "\r\n"
+            case .cr:
+                "\r"
+            }
+        }
+    }
+
+    public var textBuffer: TextBuffer
+    public var textCursor: TextCursor
+
+    public var cachedFileLines: [String]?
+    public var cachedDocumentText: String?
+    public var cachedMaxLineWidth: Int?
+    public var cachedSerializedByteCount: Int?
+
+    public var filePath: String
+    public var fileName: String
+    public var language: String?
+    public var lineEnding: LineEnding {
+        didSet {
+            cachedSerializedByteCount = nil
+        }
+    }
+
+    public var isDirty: Bool = false
+    public var isPreview: Bool = false
+    public var lastModifiedDate: Date?
+    public var externallyModified: Bool = false
+    public var documentVersion: Int = 0
+
+    public init(
+        filePath: String,
+        fileName: String,
+        content: String,
+        language: String?,
+        lineEnding: LineEnding = .lf
+    ) {
+        let lines = TextBuffer.splitLines(from: content)
+        self.textBuffer = TextBuffer(lines: lines)
+        self.textCursor = TextCursor()
+        self.filePath = filePath
+        self.fileName = fileName
+        self.language = language
+        self.lineEnding = lineEnding
+        self.cachedFileLines = nil
+        self.cachedDocumentText = nil
+        self.cachedMaxLineWidth = nil
+        self.cachedSerializedByteCount = nil
+    }
+
+    public var fileContent: [String] {
+        get {
+            if let cachedFileLines {
+                return cachedFileLines
+            }
+
+            let lines = textBuffer.lines
+            cachedFileLines = lines
+            return lines
+        }
+        set {
+            let normalizedLines = newValue.isEmpty ? [""] : newValue
+            textBuffer = TextBuffer(lines: normalizedLines)
+            cachedFileLines = normalizedLines
+            cachedDocumentText = normalizedLines.joined(separator: "\n")
+            cachedMaxLineWidth = Self.computeMaxLineWidth(for: normalizedLines)
+            cachedSerializedByteCount = Self.computeSerializedByteCount(for: normalizedLines, lineEnding: lineEnding)
+        }
+    }
+
+    public var documentText: String {
+        if let cachedDocumentText {
+            return cachedDocumentText
+        }
+
+        let text = textBuffer.text
+        cachedDocumentText = text
+        return text
+    }
+
+    public var fileLineCount: Int {
+        textBuffer.lineCount
+    }
+
+    public var isEmpty: Bool {
+        textBuffer.isEmpty
+    }
+
+    public func line(at index: Int) -> String {
+        textBuffer.line(at: index)
+    }
+
+    public func replaceDocumentText(with content: String) {
+        let lines = TextBuffer.splitLines(from: content)
+        textBuffer = TextBuffer(lines: lines)
+        cachedFileLines = lines
+        cachedDocumentText = content
+        cachedMaxLineWidth = Self.computeMaxLineWidth(for: lines)
+        cachedSerializedByteCount = Self.computeSerializedByteCount(for: lines, lineEnding: lineEnding)
+    }
+
+    public func invalidateTextSnapshotCache() {
+        cachedFileLines = nil
+        cachedDocumentText = nil
+        cachedMaxLineWidth = nil
+        cachedSerializedByteCount = nil
+    }
+
+    public var serializedByteCount: Int {
+        if let cachedSerializedByteCount {
+            return cachedSerializedByteCount
+        }
+
+        let count = Self.computeSerializedByteCount(in: textBuffer, lineEnding: lineEnding)
+        cachedSerializedByteCount = count
+        return count
+    }
+
+    public func serializedText() -> String {
+        Self.serializedText(from: documentText, lineEnding: lineEnding)
+    }
+
+    public nonisolated static func computeMaxLineWidth<C: Collection>(for lines: C, tabSize: Int = 4) -> Int where C.Element == String {
+        lines.reduce(0) { max($0, TextDisplayMetrics.displayWidth(of: $1, tabSize: tabSize)) }
+    }
+
+    public nonisolated static func computeMaxLineWidth(in buffer: TextBuffer, tabSize: Int = 4) -> Int {
+        computeMaxLineWidth(for: buffer.lines, tabSize: tabSize)
+    }
+
+    public nonisolated static func computeSerializedByteCount<C: Collection>(
+        for lines: C,
+        lineEnding: LineEnding
+    ) -> Int where C.Element == String {
+        let separatorBytes = lineEnding.sequence.lengthOfBytes(using: .utf8)
+        let lineBytes = lines.reduce(0) { partial, line in
+            partial + line.lengthOfBytes(using: .utf8)
+        }
+        return lineBytes + max(0, lines.count - 1) * separatorBytes
+    }
+
+    public nonisolated static func computeSerializedByteCount(
+        in buffer: TextBuffer,
+        lineEnding: LineEnding
+    ) -> Int {
+        var total = 0
+        let separatorBytes = lineEnding.sequence.lengthOfBytes(using: .utf8)
+
+        for lineIndex in 0..<buffer.lineCount {
+            total += buffer.line(at: lineIndex).lengthOfBytes(using: .utf8)
+        }
+
+        return total + max(0, buffer.lineCount - 1) * separatorBytes
+    }
+
+    public nonisolated static func serializedText(from text: String, lineEnding: LineEnding) -> String {
+        guard lineEnding != .lf else { return text }
+        return text.replacingOccurrences(of: "\n", with: lineEnding.sequence)
+    }
+
+    public nonisolated static func detectLineEnding(in data: Data) -> LineEnding {
+        var lfCount = 0
+        var crlfCount = 0
+        var crCount = 0
+
+        data.withUnsafeBytes { rawBuffer in
+            let bytes = rawBuffer.bindMemory(to: UInt8.self)
+            var index = 0
+
+            while index < bytes.count {
+                switch bytes[index] {
+                case 0x0D:
+                    if index + 1 < bytes.count, bytes[index + 1] == 0x0A {
+                        crlfCount += 1
+                        index += 2
+                    } else {
+                        crCount += 1
+                        index += 1
+                    }
+                case 0x0A:
+                    lfCount += 1
+                    index += 1
+                default:
+                    index += 1
+                }
+            }
+        }
+
+        if crlfCount >= lfCount, crlfCount >= crCount, crlfCount > 0 {
+            return .crlf
+        }
+        if lfCount >= crCount, lfCount > 0 {
+            return .lf
+        }
+        if crCount > 0 {
+            return .cr
+        }
+        return .lf
+    }
+}

@@ -137,4 +137,33 @@ struct KittyGitTests {
 
         #expect(decorations.markers == [0: .untracked, 1: .untracked, 2: .untracked])
     }
+
+    @Test
+    func `Added line decorations for empty input returns empty`() {
+        let decorations = GitStatusProvider.addedLineDecorations(for: [], color: .added)
+        #expect(decorations.isEmpty)
+    }
+
+    @Test
+    func `Line decorations for empty base and current returns empty`() {
+        let provider = GitStatusProvider(rootPath: "/project")
+        let decorations = provider.makeLineDecorations(
+            baseLines: [],
+            currentLines: [],
+            addedColor: .added
+        )
+        #expect(decorations.isEmpty)
+    }
+
+    @Test
+    func `Line decorations handle deletion at end of file`() {
+        let provider = GitStatusProvider(rootPath: "/project")
+        let decorations = provider.makeLineDecorations(
+            baseLines: ["a", "b"],
+            currentLines: ["a"],
+            addedColor: .added
+        )
+        // Deletion anchored to last surviving line
+        #expect(decorations.markers[0] == .deleted)
+    }
 }

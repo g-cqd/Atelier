@@ -76,14 +76,20 @@ final class FileWatcherIntegration {
             }
         } else {
             // Auto-reload clean buffer
-            guard let data = fileManager.contents(atPath: path),
-                  let content = String(data: data, encoding: .utf8) else { return }
+            guard let loadedFile = try? await EditorState.readUTF8File(at: path) else { return }
+            let content = loadedFile.content
 
+            buffer.postOpenProcessingTask?.cancel()
+            buffer.postOpenProcessingTask = nil
             buffer.textBuffer = TextBuffer(content)
+            buffer.lineEnding = loadedFile.lineEnding
             buffer.lastModifiedDate = diskDate
+            buffer.highlightedLines = []
             buffer.highlightSession = nil
             buffer.cachedFileLines = nil
             buffer.cachedDocumentText = nil
+            buffer.cachedMaxLineWidth = nil
+            buffer.cachedSerializedByteCount = nil
             buffer.documentVersion += 1
 
             // Clamp cursor to valid bounds instead of resetting
@@ -95,10 +101,15 @@ final class FileWatcherIntegration {
 
             if index == state.bufferManager.activeIndex {
                 state.restoreStateFromActiveBuffer()
-                state.refreshHighlights()
+                state.highlightedLines = []
+                state.invalidateHighlightSession()
+                state.isLoadingGrammar = false
                 state.gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
+                state.schedulePostLoadProcessing(for: buffer, content: content)
                 state.renderRefreshSource?.invalidate()
                 state.statusMessage = "\(buffer.fileName) reloaded from disk"
+            } else {
+                state.schedulePostLoadProcessing(for: buffer, content: content)
             }
         }
     }

@@ -27,12 +27,17 @@ public final class GLRParser: Sendable {
     }
 
     private static let maxStacks = 256
+    private static let maxTokens = 100_000
 
     /// Parse source text and produce a syntax tree.
     public func parse(_ source: String) throws(ParseError) -> SyntaxTree {
         let lexer = Lexer(lexTable: lexTable)
         let tokens = lexer.tokenize(source)
         let nonExtraTokens = tokens.filter { !$0.isExtra }
+
+        guard nonExtraTokens.count <= Self.maxTokens else {
+            throw .parsingFailed("Token count \(nonExtraTokens.count) exceeds limit \(Self.maxTokens)")
+        }
 
         guard !nonExtraTokens.isEmpty else {
             // Empty input

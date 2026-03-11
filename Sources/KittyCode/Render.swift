@@ -118,34 +118,26 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     )
 
     // Status bar
-    let modeGlyph = state.mode == .tree ? state.symbolTheme[.modeTree] : state.symbolTheme[.modeEdit]
-    let mode = state.mode == .tree ? "Tree" : "Edit"
-    let position = state.isFileEmpty ? "" : "Ln \(state.cursorRow + 1)/\(state.fileLineCount)"
-    let grammarIndicator = state.isLoadingGrammar ? " [loading grammar...]" : ""
-    let statusPrefix = " " + TerminalSymbolRenderer.label(modeGlyph, mode) + "  "
-    let statusBody = state.displayedStatusMessage + (state.prompt == nil ? grammarIndicator : "")
-    let statusLeft = statusPrefix + statusBody
-    let branchSegment: String? = state.fileStatusProvider?.branchName.map { name in
-        TerminalSymbolRenderer.label(state.symbolTheme[.gitBranch], name)
-    }
-    let tabInfo = state.bufferManager.count > 1 ? "[\(state.bufferManager.activeIndex + 1)/\(state.bufferManager.count)]" : nil
-    let statusRightCore = [
-        tabInfo,
-        branchSegment,
-        position.isEmpty ? nil : TerminalSymbolRenderer.label(state.symbolTheme[.position], position),
-        TerminalSymbolRenderer.label(state.symbolTheme[.dimensions], "\(cols)x\(rows)")
-    ].compactMap { $0 }.joined(separator: "  ")
-    let statusRight = statusRightCore + " "
+    let statusSegments = state.config.statusBar.show
+        ? state.statusBarSegments(columns: cols, rows: rows)
+        : ("", state.contextHintText ?? "")
     StatusBar(
-        left: statusLeft,
-        right: statusRight,
+        left: statusSegments.0,
+        right: statusSegments.1,
         style: colorScheme.statusBar
     ).render(to: &pipeline.buffer, in: Rect(x: 0, y: rows - 1, width: cols, height: 1))
 
-    if let promptCursorOffset = state.promptCursorOffset {
-        let promptCursorCol = min(cols - 1, max(0, statusPrefix.count + promptCursorOffset))
-        pipeline.cursorRow = rows - 1
-        pipeline.cursorCol = promptCursorCol
+    let overlayCursorPos = renderOverlay(
+        pipeline: pipeline,
+        state: state,
+        columns: cols,
+        rows: rows,
+        colorScheme: colorScheme
+    )
+
+    if let pos = overlayCursorPos {
+        pipeline.cursorRow = pos.row
+        pipeline.cursorCol = pos.col
     } else if let pos = terminalCursorPos {
         pipeline.cursorRow = pos.row
         pipeline.cursorCol = pos.col

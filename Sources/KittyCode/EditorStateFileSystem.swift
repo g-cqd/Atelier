@@ -5,6 +5,10 @@ import KittyText
 
 extension EditorState {
     private static let maxFileSize = 50_000_000  // 50MB
+    struct LoadedFile {
+        let content: String
+        let lineEnding: TextDocument.LineEnding
+    }
 
     func loadInitialTree() async {
         let expandedPaths = collectExpandedPaths(treeNodes)
@@ -68,6 +72,7 @@ extension EditorState {
         let node = flat[index].node
         guard !node.isDirectory else { return }
 
+        noteSelectedPath(node.path, isDirectory: false)
         openFilePath(node.path, name: node.name)
     }
 
@@ -77,6 +82,9 @@ extension EditorState {
             statusMessage = "Access denied: path outside project root"
             return
         }
+
+        let requestID = nextOpenRequestID()
+        cancelPendingFileOpen()
 
         // If already open, just switch to it
         if let existingIndex = bufferManager.bufferIndex(forPath: path) {
@@ -101,65 +109,38 @@ extension EditorState {
             return
         }
 
-        guard let content = try? String(contentsOfFile: path, encoding: .utf8) else {
-            statusMessage = "Cannot read: \(name)"
-            return
-        }
-
         // Save current buffer state before switching
         saveStateToActiveBuffer()
 
         let language = Self.detectLanguage(for: name)
         let modDate = attributes?[.modificationDate] as? Date
+        statusMessage = "Opening \(name)..."
+        renderRefreshSource?.invalidate()
 
-        let newIndex: Int
-        if config.tabPersistence == .preview {
-            newIndex = bufferManager.openPreview(
-                filePath: path,
-                fileName: name,
-                content: content,
-                language: language
-            )
-        } else {
-            newIndex = bufferManager.open(
-                filePath: path,
-                fileName: name,
-                content: content,
-                language: language
-            )
-        }
-        bufferManager.buffers[newIndex].lastModifiedDate = modDate
+        let task = Task { [weak self] in
+            guard let self else { return }
 
-        // Restore from the new buffer
-        restoreStateFromActiveBuffer()
-        refreshHighlights()
-        gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
-        mode = .editor
-        statusMessage = "Opened \(name) | ^O: Save, ^X: Tree/Quit"
-        if config.keybindingMode == .vim {
-            vimMode = .normal
-            statusMessage = "-- NORMAL -- [\(name)] :w=Save, :q=Quit"
-        }
+            do {
+                let loadedFile = try await Self.readUTF8File(at: path)
+                guard !Task.isCancelled else { return }
+                guard self.isCurrentOpenRequest(requestID) else { return }
 
-        // Load grammar artifacts off the main thread, then re-highlight with full syntax
-        if let language = currentLanguage,
-           config.syntaxHighlighting,
-           !config.disabledLanguages.contains(language) {
-            isLoadingGrammar = true
-            Task {
-                let available = await LanguageHighlighter.ensureArtifacts(for: language)
-                self.isLoadingGrammar = false
-                guard self.currentLanguage == language else { return }
-                if available {
-                    self.invalidateHighlightSession()
-                    self.refreshHighlights()
-                    self.renderRefreshSource?.invalidate()
-                }
+                self.finishOpeningFile(
+                    requestID: requestID,
+                    path: path,
+                    name: name,
+                    content: loadedFile.content,
+                    language: language,
+                    modificationDate: modDate,
+                    lineEnding: loadedFile.lineEnding
+                )
+            } catch {
+                guard self.isCurrentOpenRequest(requestID) else { return }
+                self.statusMessage = "Cannot read: \(name)"
+                self.renderRefreshSource?.invalidate()
             }
         }
-
-        // Watch the new file
-        // (FileWatcherIntegration handles this via AppMain)
+        replaceFileOpenTask(with: task)
     }
 
     /// Detect language name from file extension.
@@ -167,48 +148,138 @@ extension EditorState {
         LanguageHighlighter.detectLanguage(for: filename)
     }
 
-    func saveFile() {
-        guard !filePath.isEmpty else { return }
+    static func readUTF8File(at path: String) async throws -> LoadedFile {
+        try await Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let url = URL(fileURLWithPath: path)
+            let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+            try Task.checkCancellation()
+            let lineEnding = TextDocument.detectLineEnding(in: data)
 
-        guard SecurePath.isValid(filePath, root: rootPath) else {
-            statusMessage = "Access denied: cannot save outside project root"
+            guard let content = String(data: data, encoding: .utf8) else {
+                throw CocoaError(.fileReadInapplicableStringEncoding)
+            }
+            return LoadedFile(content: content, lineEnding: lineEnding)
+        }.value
+    }
+
+    func saveFile() {
+        if bufferManager.activeBuffer == nil {
+            beginNewFile()
+        }
+
+        if filePath.isEmpty {
+            beginSavePrompt()
             return
         }
 
-        writeBufferToDisk()
+        _ = writeBufferToDisk(at: filePath)
     }
 
-    func writeBufferToDisk() {
-        guard !filePath.isEmpty else { return }
-        let content = documentText
+    @discardableResult
+    func writeBufferToDisk(at destinationPath: String) -> Bool {
+        guard !destinationPath.isEmpty else {
+            statusMessage = "Path required"
+            return false
+        }
+
+        guard let activeBuffer = bufferManager.activeBuffer else {
+            statusMessage = "No active buffer"
+            return false
+        }
+
+        guard SecurePath.isValid(destinationPath, root: rootPath) else {
+            statusMessage = "Access denied: cannot save outside project root"
+            return false
+        }
+
+        if let existingIndex = bufferManager.bufferIndex(forPath: destinationPath),
+           existingIndex != bufferManager.activeIndex {
+            statusMessage = "Already open: \(URL(fileURLWithPath: destinationPath).lastPathComponent)"
+            return false
+        }
+
+        let targetURL = URL(fileURLWithPath: destinationPath)
+        let targetDirectory = targetURL.deletingLastPathComponent()
+        let previousPath = activeBuffer.filePath
+        let previousName = activeBuffer.fileName
+        let previousLanguage = activeBuffer.language
+        let content = TextDocument.serializedText(from: documentText, lineEnding: currentLineEnding)
+
         do {
-            try content.write(toFile: filePath, atomically: true, encoding: .utf8)
-            bufferManager.activeBuffer?.isDirty = false
-            bufferManager.activeBuffer?.lastModifiedDate = Date()
-            gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
-            statusMessage = "Saved: \(fileName)"
-            if let provider = fileStatusProvider {
+            try FileManager.default.createDirectory(
+                at: targetDirectory,
+                withIntermediateDirectories: true,
+                attributes: nil
+            )
+            fileWatcherIntegration?.suppressForSave(destinationPath)
+            try content.write(to: targetURL, atomically: true, encoding: .utf8)
+
+            let savedDate = Date()
+            let savedName = targetURL.lastPathComponent
+            let savedLanguage = Self.detectLanguage(for: savedName)
+
+            filePath = destinationPath
+            fileName = savedName
+            currentLanguage = savedLanguage
+            noteSelectedPath(targetDirectory.path, isDirectory: true)
+
+            if previousLanguage != savedLanguage {
+                invalidateHighlightSession()
+                refreshHighlights()
+            }
+
+            activeBuffer.filePath = destinationPath
+            activeBuffer.fileName = savedName
+            activeBuffer.language = savedLanguage
+            activeBuffer.lineEnding = currentLineEnding
+            activeBuffer.isDirty = false
+            activeBuffer.lastModifiedDate = savedDate
+
+            if !previousPath.isEmpty && previousPath != destinationPath {
+                fileWatcherIntegration?.unwatchClosedFile(previousPath)
+            }
+            fileWatcherIntegration?.watchOpenedFile(destinationPath)
+
+            if previousPath != destinationPath {
                 Task { [weak self] in
-                    await provider.refresh()
+                    await self?.loadInitialTree()
                     await MainActor.run {
-                        self?.gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
                         self?.renderRefreshSource?.invalidate()
                     }
                 }
             }
+
+            gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
+            statusMessage = "Saved: \(savedName)"
+            refreshGitStatusAfterSave()
+            return true
         } catch {
+            activeBuffer.filePath = previousPath
+            activeBuffer.fileName = previousName
+            activeBuffer.language = previousLanguage
             statusMessage = "Error saving: \(error.localizedDescription)"
+            return false
         }
+    }
+
+    func writeBufferToDisk() {
+        guard !filePath.isEmpty else { return }
+        _ = writeBufferToDisk(at: filePath)
     }
 
     func closeCurrentTab() {
         guard bufferManager.count > 0 else { return }
         let index = bufferManager.activeIndex
+        let closedPath = bufferManager.buffers[index].filePath
         let result = bufferManager.close(at: index)
         switch result {
         case .promptSave:
             statusMessage = "Buffer has unsaved changes. Save first (^O) or force close."
         case .closed:
+            if !closedPath.isEmpty {
+                fileWatcherIntegration?.unwatchClosedFile(closedPath)
+            }
             if bufferManager.isEmpty {
                 // Reset to empty editor state
                 fileName = ""
@@ -218,6 +289,7 @@ extension EditorState {
                 textCursor = TextCursor()
                 highlightedLines = [[StyledSpan(text: "", style: .default)]]
                 invalidateHighlightSession()
+                prompt = nil
                 mode = .tree
                 statusMessage = "All buffers closed"
             } else {
@@ -255,5 +327,156 @@ extension EditorState {
         }
 
         return languages
+    }
+
+    private func refreshGitStatusAfterSave() {
+        guard let provider = fileStatusProvider else { return }
+
+        Task { [weak self] in
+            await provider.refresh()
+            await MainActor.run {
+                self?.gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
+                self?.renderRefreshSource?.invalidate()
+            }
+        }
+    }
+
+    private func finishOpeningFile(
+        requestID: UInt64,
+        path: String,
+        name: String,
+        content: String,
+        language: String?,
+        modificationDate: Date?,
+        lineEnding: TextDocument.LineEnding
+    ) {
+        guard isCurrentOpenRequest(requestID) else { return }
+
+        let newIndex: Int
+        if config.tabPersistence == .preview {
+            newIndex = bufferManager.openPreview(
+                filePath: path,
+                fileName: name,
+                content: content,
+                language: language,
+                lineEnding: lineEnding
+            )
+        } else {
+            newIndex = bufferManager.open(
+                filePath: path,
+                fileName: name,
+                content: content,
+                language: language,
+                lineEnding: lineEnding
+            )
+        }
+
+        let buffer = bufferManager.buffers[newIndex]
+        buffer.lastModifiedDate = modificationDate
+        buffer.highlightedLines = []
+        buffer.highlightSession = nil
+        buffer.cachedMaxLineWidth = nil
+        buffer.lineEnding = lineEnding
+
+        restoreStateFromActiveBuffer()
+        prompt = nil
+        highlightedLines = []
+        highlightSession = nil
+        cachedMaxLineWidth = nil
+        currentLineEnding = lineEnding
+        noteSelectedPath(path, isDirectory: false)
+
+        gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
+        mode = .editor
+        statusMessage = "Opened \(name) | ^O: Save, ^X: Tree/Quit"
+        if config.keybindingMode == .vim {
+            vimMode = .normal
+            statusMessage = "-- NORMAL -- [\(name)] :w=Save, :q=Quit"
+        }
+
+        fileWatcherIntegration?.watchOpenedFile(path)
+        renderRefreshSource?.invalidate()
+        schedulePostLoadProcessing(for: buffer, content: content)
+    }
+
+    func schedulePostLoadProcessing(for buffer: DocumentBuffer, content: String) {
+        buffer.postOpenProcessingTask?.cancel()
+
+        let version = buffer.documentVersion
+        let language = buffer.language
+        let theme = syntaxTheme
+        let textBuffer = buffer.textBuffer
+        let shouldHighlight = config.syntaxHighlighting && !(language.map(config.disabledLanguages.contains) ?? false)
+        let showGrammarLoading = shouldHighlight && language != nil
+        let tabSize = config.editor.tabSize
+
+        if bufferManager.activeBuffer === buffer {
+            isLoadingGrammar = showGrammarLoading
+        }
+
+        buffer.postOpenProcessingTask = Task { [weak self, weak buffer] in
+            enum PostLoadResult {
+                case maxLineWidth(Int)
+                case highlightedLines([[StyledSpan]])
+            }
+
+            let (maxLineWidth, highlightedLines) = await withTaskGroup(
+                of: PostLoadResult.self,
+                returning: (Int, [[StyledSpan]]?).self
+            ) { group in
+                group.addTask(priority: .utility) {
+                    .maxLineWidth(TextDocument.computeMaxLineWidth(in: textBuffer, tabSize: tabSize))
+                }
+
+                if shouldHighlight {
+                    group.addTask(priority: .userInitiated) {
+                        if let language {
+                            _ = await LanguageHighlighter.ensureArtifacts(for: language)
+                        }
+                        return .highlightedLines(
+                            LanguageHighlighter.highlightDocument(
+                                source: content,
+                                language: language,
+                                theme: theme
+                            )
+                        )
+                    }
+                }
+
+                var resolvedMaxLineWidth = 0
+                var resolvedHighlightedLines: [[StyledSpan]]?
+
+                for await result in group {
+                    switch result {
+                    case .maxLineWidth(let width):
+                        resolvedMaxLineWidth = width
+                    case .highlightedLines(let lines):
+                        resolvedHighlightedLines = lines
+                    }
+                }
+
+                return (resolvedMaxLineWidth, resolvedHighlightedLines)
+            }
+
+            guard !Task.isCancelled else { return }
+            guard let self, let buffer else { return }
+            guard buffer.documentVersion == version else { return }
+
+            buffer.cachedMaxLineWidth = maxLineWidth
+            if let highlightedLines {
+                buffer.highlightedLines = highlightedLines
+                buffer.highlightSession = nil
+            }
+            buffer.postOpenProcessingTask = nil
+
+            if self.bufferManager.activeBuffer === buffer {
+                self.cachedMaxLineWidth = maxLineWidth
+                if let highlightedLines {
+                    self.highlightedLines = highlightedLines
+                }
+                self.isLoadingGrammar = false
+                self.renderRefreshSource?.invalidate()
+            }
+        }
     }
 }

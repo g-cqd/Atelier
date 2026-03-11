@@ -61,6 +61,7 @@ func renderEditorPanel(
         horizontalScrollIndicatorStyle: colorScheme.horizontalScrollIndicator,
         modeShowsCursor: state.mode == .editor,
         maxLineWidth: state.maxLineWidth,
+        tabSize: state.config.editor.tabSize,
         whitespaceConfig: wsConfig
     )
 

@@ -334,6 +334,27 @@ struct TextEditorTests {
     }
 
     @Test
+    func `Horizontal scroll metrics reserve space for the end-of-line caret`() {
+        let editor = TextEditor(
+            lines: ["abcdef"],
+            lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
+            showLineNumbers: false,
+            wrapLines: false,
+            showsHorizontalScrollIndicator: true
+        )
+        let rect = Rect(x: 0, y: 0, width: 4, height: 1)
+
+        let metrics = TextEditorLayout.horizontalScrollMetrics(
+            for: editor,
+            in: rect,
+            maxLineWidth: 6
+        )
+
+        #expect(metrics.contentLength == 7)
+        #expect(metrics.maxOffset == 3)
+    }
+
+    @Test
     func `Wrapped scroll indicator drag maps visual rows back to line offsets`() {
         let lines = Array(repeating: "abcdef", count: 4)
         let editor = TextEditor(

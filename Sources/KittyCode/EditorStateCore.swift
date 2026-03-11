@@ -89,6 +89,36 @@ final class EditorState {
         case insert
     }
 
+    enum ContextMenuTarget: Equatable {
+        case editor
+        case treeNode(index: Int)
+    }
+
+    enum ContextMenuAction: Equatable {
+        case openSelected
+        case openSelectedPinned
+        case toggleSelectedDirectory
+        case beginNewFile(inDirectory: String)
+        case beginSavePrompt(inDirectory: String)
+        case saveFile
+        case focusTree
+        case closeTab
+    }
+
+    struct ContextMenuItem: Equatable {
+        var title: String
+        var shortcut: String
+        var action: ContextMenuAction
+    }
+
+    struct ContextMenuState: Equatable {
+        var title: String
+        var subtitle: String?
+        var target: ContextMenuTarget
+        var items: [ContextMenuItem]
+        var selectedIndex: Int = 0
+    }
+
     enum ScrollDragTarget: Equatable {
         case tree
         case editor
@@ -132,9 +162,15 @@ final class EditorState {
     var textCursor = TextCursor()
     private var cachedFileLines: [String]?
     private var cachedDocumentText: String?
+    private var cachedSerializedByteCount: Int?
     var highlightSession: LanguageHighlighter.Session?
     private var fileOpenTask: Task<Void, Never>?
     private var pendingOpenRequestID: UInt64 = 0
+    var currentLineEnding: TextDocument.LineEnding = .lf {
+        didSet {
+            cachedSerializedByteCount = nil
+        }
+    }
 
     /// Backward-compatible computed access to file content lines.
     var fileContent: [String] {
@@ -152,7 +188,11 @@ final class EditorState {
             textBuffer = TextBuffer(lines: normalizedLines)
             cachedFileLines = normalizedLines
             cachedDocumentText = normalizedLines.joined(separator: "\n")
-            cachedMaxLineWidth = TextDocument.computeMaxLineWidth(for: normalizedLines)
+            cachedMaxLineWidth = TextDocument.computeMaxLineWidth(for: normalizedLines, tabSize: config.editor.tabSize)
+            cachedSerializedByteCount = TextDocument.computeSerializedByteCount(
+                for: normalizedLines,
+                lineEnding: currentLineEnding
+            )
             highlightSession = nil
         }
     }
@@ -183,6 +223,7 @@ final class EditorState {
         cachedFileLines = nil
         cachedDocumentText = nil
         cachedMaxLineWidth = nil
+        cachedSerializedByteCount = nil
     }
 
     func invalidateHighlightSession() {
@@ -224,8 +265,19 @@ final class EditorState {
         textBuffer = TextBuffer(lines: lines)
         cachedFileLines = lines
         cachedDocumentText = content
-        cachedMaxLineWidth = TextDocument.computeMaxLineWidth(for: lines)
+        cachedMaxLineWidth = TextDocument.computeMaxLineWidth(for: lines, tabSize: config.editor.tabSize)
+        cachedSerializedByteCount = TextDocument.computeSerializedByteCount(for: lines, lineEnding: currentLineEnding)
         highlightSession = nil
+    }
+
+    var serializedByteCount: Int {
+        if let cachedSerializedByteCount {
+            return cachedSerializedByteCount
+        }
+
+        let count = TextDocument.computeSerializedByteCount(in: textBuffer, lineEnding: currentLineEnding)
+        cachedSerializedByteCount = count
+        return count
     }
 
     /// Backward-compatible cursor row.
@@ -264,7 +316,9 @@ final class EditorState {
         buf.cachedFileLines = cachedFileLines
         buf.cachedDocumentText = cachedDocumentText
         buf.cachedMaxLineWidth = cachedMaxLineWidth
+        buf.cachedSerializedByteCount = cachedSerializedByteCount
         buf.language = currentLanguage
+        buf.lineEnding = currentLineEnding
     }
 
     /// Restore editor state from the active DocumentBuffer.
@@ -280,6 +334,8 @@ final class EditorState {
         cachedFileLines = buf.cachedFileLines
         cachedDocumentText = buf.cachedDocumentText
         cachedMaxLineWidth = buf.cachedMaxLineWidth
+        cachedSerializedByteCount = buf.cachedSerializedByteCount
+        currentLineEnding = buf.lineEnding
     }
 
     /// Switch to a different tab by index, saving/restoring state.
@@ -304,6 +360,7 @@ final class EditorState {
     var cachedFlatTree: [(depth: Int, node: FileNode)] = []
     var selectedTreeIndex = 0
     var treeScrollOffset = 0
+    var lastSelectedDirectoryPath: String?
 
     // MARK: - Activity bar & sidebar
 
@@ -423,6 +480,7 @@ final class EditorState {
     var treePanelWidth = 30
     var statusMessage = ""
     var prompt: EditorPrompt?
+    var contextMenu: ContextMenuState?
     var mode: Mode = .tree
     var vimMode: VimMode = .normal
     var symbolTheme: TerminalSymbolTheme
@@ -446,6 +504,7 @@ final class EditorState {
         self.symbolTheme = TerminalSymbolTheme.make(symbolsEnabled: config.useSFSymbolsInTerminal, catalog: catalog)
         self.treeNodes = DirectoryScanner.scan(rootPath, maxDepth: 1)
         self.cachedFlatTree = FileTreeNavigator.flatten(treeNodes)
+        self.lastSelectedDirectoryPath = rootPath
         self.statusMessage = "Opened \(rootPath) | ^O Save | ^X Quit"
         refreshHighlights()
     }
@@ -483,5 +542,16 @@ final class EditorState {
         }
 
         cachedMaxLineWidth = max(cachedMaxLineWidth ?? 0, widenedWidth)
+    }
+
+    func noteSelectedPath(_ path: String, isDirectory: Bool) {
+        let directoryPath: String
+        if isDirectory {
+            directoryPath = path
+        } else {
+            directoryPath = URL(fileURLWithPath: path).deletingLastPathComponent().path
+        }
+
+        lastSelectedDirectoryPath = directoryPath
     }
 }

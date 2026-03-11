@@ -1,3 +1,5 @@
+import KittyText
+
 @MainActor
 final class BufferManager {
     enum CloseResult {
@@ -18,7 +20,13 @@ final class BufferManager {
     var isEmpty: Bool { buffers.isEmpty }
 
     @discardableResult
-    func open(filePath: String, fileName: String, content: String, language: String?) -> Int {
+    func open(
+        filePath: String,
+        fileName: String,
+        content: String,
+        language: String?,
+        lineEnding: TextDocument.LineEnding = .lf
+    ) -> Int {
         if let existing = bufferIndex(forPath: filePath) {
             activeIndex = existing
             return existing
@@ -28,7 +36,8 @@ final class BufferManager {
             filePath: filePath,
             fileName: fileName,
             content: content,
-            language: language
+            language: language,
+            lineEnding: lineEnding
         )
         buffers.append(buffer)
         activeIndex = buffers.count - 1
@@ -89,7 +98,13 @@ final class BufferManager {
 
     /// Open a file as a preview tab, replacing any existing preview buffer.
     @discardableResult
-    func openPreview(filePath: String, fileName: String, content: String, language: String?) -> Int {
+    func openPreview(
+        filePath: String,
+        fileName: String,
+        content: String,
+        language: String?,
+        lineEnding: TextDocument.LineEnding = .lf
+    ) -> Int {
         if let existing = bufferIndex(forPath: filePath) {
             activeIndex = existing
             return existing
@@ -109,7 +124,8 @@ final class BufferManager {
             filePath: filePath,
             fileName: fileName,
             content: content,
-            language: language
+            language: language,
+            lineEnding: lineEnding
         )
         buffer.isPreview = true
         buffers.append(buffer)

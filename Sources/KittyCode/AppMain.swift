@@ -46,6 +46,7 @@ struct KittyCodeEntry {
             let watcher = FileWatcher()
             let integration = FileWatcherIntegration(watcher: watcher, state: state)
             integration.start()
+            state.fileWatcherIntegration = integration
             fileWatcherIntegration = integration
         }
 

@@ -28,8 +28,8 @@ struct KittySymbolsTests {
     func `Terminal symbol theme uses mapped glyphs`() {
         let catalog = SymbolCatalog(entries: [
             "folder": SymbolMappingEntry(name: "folder", visibility: .publicSymbol, assetGlyphIndex: 77, codepoint: 0x100215),
-            "folder.fill": SymbolMappingEntry(name: "folder.fill", visibility: .publicSymbol, assetGlyphIndex: 78, codepoint: 0x100216),
-            "doc.text": SymbolMappingEntry(name: "doc.text", visibility: .publicSymbol, assetGlyphIndex: 575, codepoint: 0x10023F),
+            "folder.badge.minus": SymbolMappingEntry(name: "folder.badge.minus", visibility: .publicSymbol, assetGlyphIndex: 78, codepoint: 0x100216),
+            "doc": SymbolMappingEntry(name: "doc", visibility: .publicSymbol, assetGlyphIndex: 575, codepoint: 0x10023F),
         ])
 
         let theme = TerminalSymbolTheme.make(symbolsEnabled: true, catalog: catalog)
@@ -51,14 +51,14 @@ struct KittySymbolsTests {
     @Test
     func `Explorer and openDocuments roles have correct fallbacks`() {
         let theme = TerminalSymbolTheme.make(symbolsEnabled: false, catalog: nil)
-        #expect(theme[.explorer].text == "E")
-        #expect(theme[.openDocuments].text == "D")
+        #expect(theme[.explorer].text == "F")
+        #expect(theme[.openDocuments].text == "O")
     }
 
     @Test
     func `Explorer role resolves to SF Symbol glyph when catalog available`() {
         let catalog = SymbolCatalog(entries: [
-            "folder.fill": SymbolMappingEntry(name: "folder.fill", visibility: .publicSymbol, assetGlyphIndex: 78, codepoint: 0x100216),
+            "folder": SymbolMappingEntry(name: "folder", visibility: .publicSymbol, assetGlyphIndex: 78, codepoint: 0x100216),
         ])
         let theme = TerminalSymbolTheme.make(symbolsEnabled: true, catalog: catalog)
         #expect(theme[.explorer].prefersSymbol)
@@ -75,5 +75,32 @@ struct KittySymbolsTests {
         #expect(theme[.gitConflicted].text == "!")
         #expect(theme[.dirty].text == "●")
         #expect(theme[.close].text == "×")
+    }
+
+    @Test
+    func `Symbol catalog loader discovers and caches mappings when file is missing`() {
+        let mappingURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+        let collection = SymbolCollection(records: [
+            SymbolRecord(
+                name: "folder.fill",
+                visibility: .publicSymbol,
+                assetGlyphIndex: 78,
+                codepoint: 0x100216,
+                glyph: "􀈖",
+                availability: nil,
+                categories: [],
+                searchTerms: []
+            ),
+        ])
+
+        let catalog = SymbolCatalogLoader.loadOrDiscover(
+            mappingURL: mappingURL,
+            discover: { collection }
+        )
+
+        #expect(catalog?["folder.fill"]?.glyph == "􀈖")
+        #expect(FileManager.default.fileExists(atPath: mappingURL.path))
     }
 }

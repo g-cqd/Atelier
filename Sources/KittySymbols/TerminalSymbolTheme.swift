@@ -71,13 +71,13 @@ public struct TerminalSymbolTheme: Sendable {
         case .folderClosed:
             return "folder"
         case .folderOpen:
-            return "folder.fill"
+            return "folder.badge.minus"
         case .file:
-            return "doc.text"
+            return "doc"
         case .modeTree:
             return "list.bullet.indent"
         case .modeEdit:
-            return "square.and.pencil"
+            return "pencil"
         case .search:
             return "magnifyingglass"
         case .status:
@@ -85,7 +85,7 @@ public struct TerminalSymbolTheme: Sendable {
         case .warning:
             return "exclamationmark.triangle"
         case .position:
-            return "character.cursor.ibeam"
+            return "cursorarrow"
         case .dimensions:
             return "arrow.up.left.and.arrow.down.right"
         case .gitBranch:
@@ -101,13 +101,13 @@ public struct TerminalSymbolTheme: Sendable {
         case .gitConflicted:
             return "exclamationmark.triangle"
         case .dirty:
-            return "circle.fill"
+            return "circle"
         case .close:
             return "xmark"
         case .explorer:
-            return "folder.fill"
+            return "folder"
         case .openDocuments:
-            return "doc.on.doc"
+            return "doc.text"
         }
     }
 
@@ -154,9 +154,9 @@ public struct TerminalSymbolTheme: Sendable {
         case .close:
             return "×"
         case .explorer:
-            return "E"
+            return "F"
         case .openDocuments:
-            return "D"
+            return "O"
         }
     }
 }
