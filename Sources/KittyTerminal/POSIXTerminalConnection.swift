@@ -1,9 +1,4 @@
-#if canImport(Darwin)
 import Darwin
-#elseif canImport(Glibc)
-import Glibc
-#endif
-import Foundation
 import KittySync
 
 // SAFETY: `fd` and `writeFd` are immutable (let). `originalTermios` is guarded
@@ -41,12 +36,9 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
     /// - Throws: `TerminalError.readFailed` on a negative return from `read(2)`,
     ///   or `TerminalError.connectionClosed` when the descriptor is at EOF.
     public func read(into buffer: UnsafeMutableRawBufferPointer) throws(TerminalError) -> Int {
-        let n: Int
-        #if canImport(Darwin)
-        n = Darwin.read(fd, buffer.baseAddress, buffer.count)
-        #else
-        n = Glibc.read(fd, buffer.baseAddress, buffer.count)
-        #endif
+        let n = retryOnInterrupt {
+            Darwin.read(fd, buffer.baseAddress, buffer.count)
+        }
         guard n >= 0 else {
             throw .readFailed(errno)
         }
@@ -63,16 +55,11 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
     public func write(_ bytes: [UInt8]) throws(TerminalError) {
         var offset = 0
         while offset < bytes.count {
-            let n: Int
-            #if canImport(Darwin)
-            n = bytes.withUnsafeBufferPointer { buf in
+            let n = retryOnInterrupt {
+                bytes.withUnsafeBufferPointer { buf in
                 Darwin.write(self.writeFd, buf.baseAddress! + offset, buf.count - offset)
             }
-            #else
-            n = bytes.withUnsafeBufferPointer { buf in
-                Glibc.write(self.writeFd, buf.baseAddress! + offset, buf.count - offset)
             }
-            #endif
             guard n >= 0 else {
                 throw .writeFailed(errno)
             }
@@ -88,16 +75,11 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
         var offset = 0
         let count = bytes.count
         while offset < count {
-            let n: Int
-            #if canImport(Darwin)
-            n = bytes.withUnsafeBufferPointer { buf in
+            let n = retryOnInterrupt {
+                bytes.withUnsafeBufferPointer { buf in
                 Darwin.write(self.writeFd, buf.baseAddress! + offset, count - offset)
             }
-            #else
-            n = bytes.withUnsafeBufferPointer { buf in
-                Glibc.write(self.writeFd, buf.baseAddress! + offset, count - offset)
             }
-            #endif
             guard n >= 0 else {
                 throw .writeFailed(errno)
             }
@@ -119,7 +101,7 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
             throw .alreadyInRawMode
         }
         var raw = termios()
-        guard tcgetattr(fd, &raw) == 0 else {
+        guard retryOnInterrupt({ Int(tcgetattr(fd, &raw)) }) == 0 else {
             throw .failedToEnterRawMode
         }
         let saved = raw
@@ -127,14 +109,8 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
         raw.c_oflag &= ~tcflag_t(OPOST)
         raw.c_cflag |= tcflag_t(CS8)
         raw.c_lflag &= ~tcflag_t(ECHO | ICANON | IEXTEN | ISIG)
-        #if canImport(Darwin)
-        raw.c_cc.16 = 1  // VMIN — block until at least 1 byte
-        raw.c_cc.17 = 0  // VTIME — no timeout
-        #else
-        raw.c_cc.6 = 1   // VMIN on Linux
-        raw.c_cc.5 = 0   // VTIME on Linux
-        #endif
-        guard tcsetattr(fd, TCSAFLUSH, &raw) == 0 else {
+        setRawModeControlCharacters(on: &raw)
+        guard retryOnInterrupt({ Int(tcsetattr(fd, TCSAFLUSH, &raw)) }) == 0 else {
             throw .failedToEnterRawMode
         }
         withTermiosLock { $0 = saved }
@@ -146,7 +122,7 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
     /// - Throws: `TerminalError.failedToRestoreTerminal` if `tcsetattr` fails.
     public func restoreMode() throws(TerminalError) {
         guard var original = withTermiosLock({ $0 }) else { return }
-        guard tcsetattr(fd, TCSAFLUSH, &original) == 0 else {
+        guard retryOnInterrupt({ Int(tcsetattr(fd, TCSAFLUSH, &original)) }) == 0 else {
             throw .failedToRestoreTerminal
         }
         withTermiosLock { $0 = nil }
@@ -160,32 +136,48 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
     /// - Throws: `TerminalError.failedToGetSize` if no descriptor reports a valid size.
     public func getSize() throws(TerminalError) -> TerminalSize {
         var ws = winsize()
-        #if canImport(Darwin)
-        let tiocgwinsz: UInt = 0x40087468
-        #else
-        let tiocgwinsz: UInt = UInt(TIOCGWINSZ)
-        #endif
-        // Try the configured fd first, then stdout, then stderr
-        let fds: [Int32] = [fd, STDOUT_FILENO, STDERR_FILENO]
-        var success = false
-        for tryFd in fds {
-            if ioctl(tryFd, tiocgwinsz, &ws) == 0 && ws.ws_col > 0 && ws.ws_row > 0 {
-                success = true
-                break
+        let tiocgwinsz = UInt(TIOCGWINSZ)
+        var candidateFds = [fd]
+        if fd != STDOUT_FILENO {
+            candidateFds.append(STDOUT_FILENO)
+        }
+        if fd != STDERR_FILENO && STDOUT_FILENO != STDERR_FILENO {
+            candidateFds.append(STDERR_FILENO)
+        }
+
+        for tryFd in candidateFds {
+            if retryOnInterrupt({ Int(ioctl(tryFd, tiocgwinsz, &ws)) }) == 0,
+               ws.ws_col > 0,
+               ws.ws_row > 0 {
+                return TerminalSize(
+                    columns: Int(ws.ws_col),
+                    rows: Int(ws.ws_row),
+                    pixelWidth: Int(ws.ws_xpixel),
+                    pixelHeight: Int(ws.ws_ypixel)
+                )
             }
         }
-        guard success else {
-            throw .failedToGetSize
-        }
-        return TerminalSize(
-            columns: Int(ws.ws_col),
-            rows: Int(ws.ws_row),
-            pixelWidth: Int(ws.ws_xpixel),
-            pixelHeight: Int(ws.ws_ypixel)
-        )
+        throw .failedToGetSize
     }
 
-    // MARK: - Cross-platform lock helpers
+    // MARK: - Darwin helpers
+
+    @inline(__always)
+    private func retryOnInterrupt(_ body: () -> Int) -> Int {
+        var result: Int
+        repeat {
+            result = body()
+        } while result == -1 && errno == EINTR
+        return result
+    }
+
+    private func setRawModeControlCharacters(on raw: inout termios) {
+        withUnsafeMutablePointer(to: &raw.c_cc) { pointer in
+            let controlCharacters = UnsafeMutableRawPointer(pointer).assumingMemoryBound(to: cc_t.self)
+            controlCharacters[Int(VMIN)] = 1
+            controlCharacters[Int(VTIME)] = 0
+        }
+    }
 
     private func withTermiosLock<T: Sendable>(_ body: @Sendable (inout termios?) -> T) -> T {
         termiosState.withLock(body)
