@@ -31,10 +31,35 @@ struct KittyCodeEntry {
         let state = EditorState(rootPath: rootPath, config: config)
         await state.loadInitialTree()
 
-        if let repositoryRoot = GitStatusProvider.repositoryRoot(for: rootPath) {
+        if config.showGitStatus, let repositoryRoot = GitStatusProvider.repositoryRoot(for: rootPath) {
             let gitProvider = GitStatusProvider(rootPath: repositoryRoot)
             await gitProvider.refresh()
             state.fileStatusProvider = gitProvider
+        }
+
+        // File watcher (Phase 3)
+        var fileWatcherIntegration: FileWatcherIntegration?
+        if config.fileWatcherEnabled {
+            let watcher = FileWatcher()
+            let integration = FileWatcherIntegration(watcher: watcher, state: state)
+            integration.start()
+            fileWatcherIntegration = integration
+        }
+
+        // Auto-save (Phase 5)
+        var autoSaveManager: AutoSaveManager?
+        if config.autoSave {
+            let manager = AutoSaveManager(state: state, fileWatcherIntegration: fileWatcherIntegration)
+            manager.start()
+            autoSaveManager = manager
+        }
+
+        // Git refresh (Phase 6)
+        var gitRefreshManager: GitRefreshManager?
+        if config.showGitStatus, state.fileStatusProvider != nil {
+            let manager = GitRefreshManager(state: state)
+            manager.start()
+            gitRefreshManager = manager
         }
 
         let connection = POSIXTerminalConnection()
@@ -53,5 +78,15 @@ struct KittyCodeEntry {
                 return shouldContinue
             }
         )
+
+        // Cleanup
+        autoSaveManager?.stop()
+        gitRefreshManager?.stop()
+        fileWatcherIntegration?.stop()
+
+        // Suppress unused variable warnings
+        _ = autoSaveManager
+        _ = gitRefreshManager
+        _ = fileWatcherIntegration
     }
 }

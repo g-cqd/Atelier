@@ -111,6 +111,33 @@ struct HighlighterTests {
         ])
     }
 
+    @Test("Earlier identical-range captures override later generic captures")
+    func earlierIdenticalRangeCaptureWins() {
+        var theme = Theme(defaultStyle: .default)
+        let keyStyle = Style(fg: .rgb(r: 1, g: 2, b: 3))
+        let stringStyle = Style(fg: .rgb(r: 4, g: 5, b: 6))
+        theme.setStyle(keyStyle, for: "string.special.key")
+        theme.setStyle(stringStyle, for: "string")
+
+        let stringNode = SyntaxNode(type: "string", byteRange: 0..<6, isNamed: true)
+        let tree = SyntaxTree(
+            root: SyntaxNode(type: "document", children: [stringNode], byteRange: 0..<6),
+            source: "\"name\""
+        )
+        let query = Query(patterns: [
+            .nodeMatch(type: "string", children: [], capture: "string.special.key"),
+            .nodeMatch(type: "string", children: [], capture: "string"),
+        ])
+
+        let spans = Highlighter(theme: theme).highlight(
+            source: tree.source,
+            tree: tree,
+            query: query
+        )
+
+        #expect(spans == [StyledSpan(text: "\"name\"", style: keyStyle)])
+    }
+
     @Test("LanguageHighlighter session matches one-shot grammar-backed highlighting")
     func sessionMatchesOneShotHighlighting() async {
         let source = "true"
@@ -146,6 +173,30 @@ struct HighlighterTests {
         #expect(LanguageHighlighter.detectLanguage(for: "main.SWIFT") == "swift")
         #expect(LanguageHighlighter.detectLanguage(for: "settings.yaml") == "yaml")
         #expect(LanguageHighlighter.detectLanguage(for: "Makefile") == nil)
+    }
+
+    @Test("Grammar-backed json highlighting keeps object keys distinct from string values")
+    func grammarBackedJSONKeys() async {
+        var theme = Theme(defaultStyle: .default)
+        let keyStyle = Style(fg: .rgb(r: 10, g: 20, b: 30))
+        let stringStyle = Style(fg: .rgb(r: 40, g: 50, b: 60))
+        let numberStyle = Style(fg: .rgb(r: 70, g: 80, b: 90))
+        let constantStyle = Style(fg: .rgb(r: 100, g: 110, b: 120))
+        theme.setStyle(keyStyle, for: "string.special")
+        theme.setStyle(stringStyle, for: "string")
+        theme.setStyle(numberStyle, for: "number")
+        theme.setStyle(constantStyle, for: "constant.builtin")
+
+        let source = #"{"name":"value","count":42,"enabled":true}"#
+        let available = await LanguageHighlighter.ensureArtifacts(for: "json")
+        let session = LanguageHighlighter.makeSession(language: "json", theme: theme)
+        let spans = session.highlightDocument(source: source).flatMap { $0 }
+
+        #expect(available)
+        #expect(spans.first(where: { $0.text == "\"name\"" })?.style == keyStyle)
+        #expect(spans.first(where: { $0.text == "\"value\"" })?.style == stringStyle)
+        #expect(spans.first(where: { $0.text == "42" })?.style == numberStyle)
+        #expect(spans.first(where: { $0.text == "true" })?.style == constantStyle)
     }
 }
 

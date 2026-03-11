@@ -32,7 +32,7 @@ public enum LanguageHighlighter: Sendable {
 
         private let language: String?
         private let theme: Theme
-        private let strategy: Strategy
+        private var strategy: Strategy
         private var splitScratch = SplitLinesScratch()
 
         public var prefersLineInput: Bool {
@@ -65,6 +65,11 @@ public enum LanguageHighlighter: Sendable {
             case .grammar(let grammarSession):
                 do {
                     let tree = try grammarSession.parser.parse(source, oldTree: grammarSession.previousTree)
+                    guard tree.root.type != "_start" else {
+                        grammarSession.previousTree = nil
+                        strategy = .fallback
+                        return fallbackHighlightDocument(source: source, language: language, theme: theme)
+                    }
                     grammarSession.previousTree = tree
                     let spans = grammarSession.highlighter.highlight(
                         source: source,
