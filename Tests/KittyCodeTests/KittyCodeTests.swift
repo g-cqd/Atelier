@@ -244,7 +244,9 @@ struct KittyCodeNavigationTests {
         )
 
         #expect(sut.state.cursorRow == 0)
-        #expect(sut.state.cursorCol == 4)
+        // Content width is 4 (no scrollbar since 1 line fits in 4-row viewport),
+        // so "abcdef" wraps as "abcd"+"ef"; click at wrap row 1, col 1 → char 5.
+        #expect(sut.state.cursorCol == 5)
     }
 
     @Test("dragging the editor scroll indicator updates the shared scroll offset")
@@ -272,6 +274,40 @@ struct KittyCodeNavigationTests {
         #expect(sut.state.scrollOffset == 19)
         #expect(sut.state.scrollDragState == nil)
         #expect(sut.state.mode == .editor)
+    }
+
+    @Test("dragging the tree scroll indicator updates the tree scroll offset")
+    func handleMouseDragOnTreeScrollIndicator() {
+        let sut = makeSUT(fileContent: [""], columns: 18, rows: 8)
+        sut.state.treePanelWidth = 5
+        sut.state.mode = .tree
+        sut.state.treeNodes = (0..<30).map { i in
+            FileNode(name: "f\(i)", path: "p\(i)", isDirectory: false)
+        }
+        sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
+
+        // Tree indicator is at col 5 (treeWidth = min(5, 9) = 5, treeRect.maxX - 1 = 5)
+        handleMouse(
+            MouseEvent(button: .left, row: 2, col: 5, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        #expect(sut.state.scrollDragState != nil)
+
+        handleMouse(
+            MouseEvent(button: .left, row: 6, col: 5, kind: .drag),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        handleMouse(
+            MouseEvent(button: .release, row: 6, col: 5, kind: .release),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.treeScrollOffset > 0)
+        #expect(sut.state.scrollDragState == nil)
+        #expect(sut.state.mode == .tree)
     }
 }
 

@@ -1,6 +1,7 @@
 import Foundation
 import KittyCodecs
 import KittyFileTree
+import KittySymbols
 import KittySyntax
 import KittyText
 import KittyWidgets
@@ -241,6 +242,7 @@ final class EditorState {
     var statusMessage = ""
     var mode: Mode = .tree
     var vimMode: VimMode = .normal
+    var symbolTheme: TerminalSymbolTheme
     var lastClickTime: Date = .distantPast
     var lastClickIndex = -1
     var isScrolling = false
@@ -251,9 +253,11 @@ final class EditorState {
         self.config = config
         self.treePanelWidth = config.treeWidth
         self.colorScheme = Self.makeColorScheme(config: config)
+        let catalog = try? SymbolCatalog.load(from: SymbolCatalogLocator.defaultMappingURL())
+        self.symbolTheme = TerminalSymbolTheme.make(symbolsEnabled: config.useSFSymbolsInTerminal, catalog: catalog)
         self.treeNodes = DirectoryScanner.scan(rootPath, maxDepth: 1)
         self.cachedFlatTree = FileTreeNavigator.flatten(treeNodes)
-        self.statusMessage = "Opened: \(rootPath) | ^O: Save, ^X: Quit"
+        self.statusMessage = "Opened \(rootPath) | ^O Save | ^X Quit"
         refreshHighlights()
     }
 }

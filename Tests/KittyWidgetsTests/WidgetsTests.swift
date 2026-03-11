@@ -79,6 +79,47 @@ struct TreeViewTests {
         #expect(gripOffset == 1)
         #expect(TreeViewLayout.scrollOffset(for: tree, in: rect, pointerRow: 5, gripOffset: gripOffset ?? 0) == 19)
     }
+
+    @Test("Tree scroll indicator hidden when all items fit in viewport")
+    func treeScrollIndicatorHiddenWhenFits() {
+        let tree = TreeView(
+            root: (0..<3).map { TreeNode(value: "node-\($0)") },
+            scrollOffset: 0,
+            showsVerticalScrollIndicator: true,
+            label: { $0 }
+        )
+        let rect = Rect(x: 0, y: 0, width: 10, height: 5)
+
+        // 3 items in 5-row viewport → no scrollbar needed
+        #expect(TreeViewLayout.verticalScrollIndicatorRect(for: tree, in: rect) == nil)
+        #expect(TreeViewLayout.contentWidth(for: tree, in: rect) == 10)
+    }
+
+    @Test("Tree scroll indicator hidden when rendered with fewer items than viewport")
+    func treeScrollIndicatorHiddenInRenderedOutput() {
+        var buffer = ScreenBuffer(columns: 10, rows: 5)
+        let tree = TreeView(
+            root: (0..<3).map { TreeNode(value: "n\($0)") },
+            scrollOffset: 0,
+            showsVerticalScrollIndicator: true,
+            style: TreeView<String>.TreeViewStyle(
+                scrollIndicatorStyle: VerticalScrollIndicatorStyle(
+                    trackCharacter: "|",
+                    thumbCharacter: "#"
+                )
+            ),
+            label: { $0 }
+        )
+        let rect = Rect(x: 0, y: 0, width: 10, height: 5)
+
+        tree.render(to: &buffer, in: rect)
+
+        // Last column should NOT have scrollbar characters since 3 items < 5 rows
+        for row in 0..<5 {
+            #expect(buffer[row, 9].character != "#")
+            #expect(buffer[row, 9].character != "|")
+        }
+    }
 }
 
 @Suite("StatusBar")
@@ -212,9 +253,11 @@ struct TextEditorTests {
 
     @Test("Scroll indicator geometry reserves content width and ignores indicator hit testing")
     func textEditorScrollIndicatorGeometry() {
+        // Need more lines than viewport height to trigger scrollbar
+        let lines = ["abcdef", "ghijkl", "mnopqr"]
         let editor = TextEditor(
-            lines: ["abcdef"],
-            lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
+            lines: lines,
+            lineSpans: lines.map { [StyledSpan(text: $0, style: .default)] },
             showLineNumbers: true,
             wrapLines: false,
             showsVerticalScrollIndicator: true
@@ -224,6 +267,22 @@ struct TextEditorTests {
         #expect(TextEditorLayout.contentWidth(for: editor, in: rect) == 4)
         #expect(TextEditorLayout.verticalScrollIndicatorRect(for: editor, in: rect) == Rect(x: 12, y: 3, width: 1, height: 1))
         #expect(TextEditorLayout.textPosition(for: editor, in: rect, row: 3, col: 12) == nil)
+    }
+
+    @Test("Scroll indicator hidden when content fits in viewport")
+    func textEditorScrollIndicatorHiddenWhenContentFits() {
+        let editor = TextEditor(
+            lines: ["abcdef"],
+            lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
+            showLineNumbers: true,
+            wrapLines: false,
+            showsVerticalScrollIndicator: true
+        )
+        let rect = Rect(x: 5, y: 3, width: 8, height: 5)
+
+        // 1 line in 5-row viewport → not scrollable → full width for content
+        #expect(TextEditorLayout.contentWidth(for: editor, in: rect) == 5)
+        #expect(TextEditorLayout.verticalScrollIndicatorRect(for: editor, in: rect) == nil)
     }
 
     @Test("Wrapped scroll indicator drag maps visual rows back to line offsets")
@@ -526,6 +585,198 @@ struct TextRenderingTests {
         #expect(buffer[0, 7].character == "#")
         #expect(buffer[1, 7].character == "#")
         #expect(buffer[3, 7].character == "|")
+    }
+}
+
+// MARK: - ScrollView Tests
+
+@Suite("ScrollView")
+struct ScrollViewTests {
+    private func makeSUT(columns: Int = 20, rows: Int = 5) -> ScreenBuffer {
+        ScreenBuffer(columns: columns, rows: rows)
+    }
+
+    @Test("ScrollView hides scrollbar when content fits in viewport")
+    func hidesScrollbarWhenContentFits() {
+        let scrollView = ScrollView(contentHeight: 3, scrollOffset: 0) {
+            Text("Hello")
+        }
+        let rect = Rect(x: 0, y: 0, width: 10, height: 5)
+
+        #expect(ScrollViewLayout.scrollIndicatorWidth(for: scrollView, in: rect) == 0)
+        #expect(ScrollViewLayout.contentWidth(for: scrollView, in: rect) == 10)
+        #expect(ScrollViewLayout.verticalScrollIndicatorRect(for: scrollView, in: rect) == nil)
+    }
+
+    @Test("ScrollView shows scrollbar when content overflows viewport")
+    func showsScrollbarWhenContentOverflows() {
+        let scrollView = ScrollView(contentHeight: 20, scrollOffset: 0) {
+            Text("Hello")
+        }
+        let rect = Rect(x: 0, y: 0, width: 10, height: 5)
+
+        #expect(ScrollViewLayout.scrollIndicatorWidth(for: scrollView, in: rect) == 1)
+        #expect(ScrollViewLayout.contentWidth(for: scrollView, in: rect) == 9)
+        #expect(ScrollViewLayout.verticalScrollIndicatorRect(for: scrollView, in: rect) == Rect(x: 9, y: 0, width: 1, height: 5))
+    }
+
+    @Test("ScrollView content rect excludes scrollbar when scrollable")
+    func contentRectExcludesScrollbar() {
+        let scrollView = ScrollView(contentHeight: 20, scrollOffset: 0) {
+            Text("Hello")
+        }
+        let rect = Rect(x: 2, y: 3, width: 10, height: 5)
+
+        let contentRect = ScrollViewLayout.contentRect(for: scrollView, in: rect)
+        #expect(contentRect == Rect(x: 2, y: 3, width: 9, height: 5))
+    }
+
+    @Test("ScrollView content rect uses full width when content fits")
+    func contentRectUsesFullWidth() {
+        let scrollView = ScrollView(contentHeight: 3, scrollOffset: 0) {
+            Text("Hello")
+        }
+        let rect = Rect(x: 0, y: 0, width: 10, height: 5)
+
+        let contentRect = ScrollViewLayout.contentRect(for: scrollView, in: rect)
+        #expect(contentRect == Rect(x: 0, y: 0, width: 10, height: 5))
+    }
+
+    @Test("ScrollView drag maps pointer rows to scroll offsets")
+    func scrollDragMapping() {
+        let scrollView = ScrollView(contentHeight: 20, scrollOffset: 0) {
+            Text("Hello")
+        }
+        let rect = Rect(x: 0, y: 0, width: 10, height: 5)
+
+        let gripOffset = ScrollViewLayout.scrollGripOffset(for: scrollView, in: rect, pointerRow: 0)
+        #expect(gripOffset == 0)
+
+        let offset = ScrollViewLayout.scrollOffset(
+            for: scrollView, in: rect, pointerRow: 4, gripOffset: 0
+        )
+        #expect(offset == 15)
+    }
+
+    @Test("ScrollView clampedOffset respects bounds")
+    func clampedOffsetBounds() {
+        let scrollView = ScrollView(contentHeight: 20, scrollOffset: 0) {
+            Text("Hello")
+        }
+        let rect = Rect(x: 0, y: 0, width: 10, height: 5)
+
+        #expect(ScrollViewLayout.clampedOffset(for: scrollView, in: rect, offset: -5) == 0)
+        #expect(ScrollViewLayout.clampedOffset(for: scrollView, in: rect, offset: 100) == 15)
+        #expect(ScrollViewLayout.clampedOffset(for: scrollView, in: rect, offset: 10) == 10)
+    }
+
+    @Test("ScrollView renders content into full width when content fits")
+    func rendersContentFullWidth() {
+        var buffer = makeSUT(columns: 10, rows: 3)
+        let rect = Rect(x: 0, y: 0, width: 10, height: 3)
+
+        ScrollView(contentHeight: 2, scrollOffset: 0) {
+            Text("Hello")
+        }.render(to: &buffer, in: rect)
+
+        #expect(buffer[0, 0].character == "H")
+        #expect(buffer[0, 4].character == "o")
+        #expect(buffer[0, 9].character == " ")
+    }
+
+    @Test("ScrollView renders scrollbar thumb when content overflows")
+    func rendersScrollbarThumb() {
+        let thumbStyle = Style(fg: .rgb(r: 200, g: 200, b: 200))
+        let style = ScrollViewStyle(
+            thumbStyle: thumbStyle,
+            thumbCharacter: "#"
+        )
+        var buffer = makeSUT(columns: 10, rows: 4)
+        let rect = Rect(x: 0, y: 0, width: 10, height: 4)
+
+        ScrollView(contentHeight: 16, scrollOffset: 0, style: style) {
+            Text("Hi")
+        }.render(to: &buffer, in: rect)
+
+        #expect(buffer[0, 9].character == "#")
+        #expect(buffer[0, 9].style.fg == thumbStyle.fg)
+    }
+
+    @Test("ScrollView does not render scrollbar column when content fits")
+    func noScrollbarColumnWhenContentFits() {
+        let style = ScrollViewStyle(trackCharacter: "|", thumbCharacter: "#")
+        var buffer = makeSUT(columns: 10, rows: 5)
+        let rect = Rect(x: 0, y: 0, width: 10, height: 5)
+
+        ScrollView(contentHeight: 3, scrollOffset: 0, style: style) {
+            Text("Hi")
+        }.render(to: &buffer, in: rect)
+
+        // Last column should not have scrollbar characters
+        for row in 0..<5 {
+            #expect(buffer[row, 9].character != "#")
+            #expect(buffer[row, 9].character != "|")
+        }
+    }
+
+    @Test("ScrollView default style uses translucent gray")
+    func defaultStyleIsTranslucentGray() {
+        let style = ScrollViewStyle()
+        #expect(style.thumbStyle.dim == true)
+        #expect(style.thumbStyle.fg == .rgb(r: 140, g: 140, b: 140))
+        #expect(style.thumbCharacter == "\u{2593}") // dark shade
+        #expect(style.trackCharacter == " ")
+    }
+
+    @Test("ScrollView scroll metrics reports not scrollable when content fits")
+    func metricsNotScrollableWhenFits() {
+        let scrollView = ScrollView(contentHeight: 3, scrollOffset: 0) {
+            Text("Hello")
+        }
+        let rect = Rect(x: 0, y: 0, width: 10, height: 5)
+        let metrics = ScrollViewLayout.verticalScrollMetrics(for: scrollView, in: rect)
+
+        #expect(!metrics.isScrollable)
+    }
+
+    @Test("ScrollView scroll metrics reports scrollable when content overflows")
+    func metricsScrollableWhenOverflows() {
+        let scrollView = ScrollView(contentHeight: 20, scrollOffset: 5) {
+            Text("Hello")
+        }
+        let rect = Rect(x: 0, y: 0, width: 10, height: 5)
+        let metrics = ScrollViewLayout.verticalScrollMetrics(for: scrollView, in: rect)
+
+        #expect(metrics.isScrollable)
+        #expect(metrics.offset == 5)
+        #expect(metrics.contentLength == 20)
+        #expect(metrics.viewportLength == 5)
+    }
+
+    @Test("ScrollView gripOffset returns nil when content fits")
+    func gripOffsetNilWhenFits() {
+        let scrollView = ScrollView(contentHeight: 3, scrollOffset: 0) {
+            Text("Hello")
+        }
+        let rect = Rect(x: 0, y: 0, width: 10, height: 5)
+
+        #expect(ScrollViewLayout.scrollGripOffset(for: scrollView, in: rect, pointerRow: 2) == nil)
+    }
+
+    @Test("ScrollViewStyle converts to VerticalScrollIndicatorStyle")
+    func styleConvertsToIndicatorStyle() {
+        let style = ScrollViewStyle(
+            trackStyle: Style(fg: .rgb(r: 10, g: 20, b: 30)),
+            thumbStyle: Style(fg: .rgb(r: 40, g: 50, b: 60)),
+            trackCharacter: "|",
+            thumbCharacter: "#"
+        )
+        let indicator = style.indicatorStyle
+
+        #expect(indicator.trackStyle.fg == .rgb(r: 10, g: 20, b: 30))
+        #expect(indicator.thumbStyle.fg == .rgb(r: 40, g: 50, b: 60))
+        #expect(indicator.trackCharacter == "|")
+        #expect(indicator.thumbCharacter == "#")
     }
 }
 

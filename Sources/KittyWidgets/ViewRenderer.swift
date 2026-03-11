@@ -112,6 +112,44 @@ public enum ViewRenderer {
         }
     }
 
+    private static func renderScrollView(
+        _ scrollView: any _ScrollViewProtocol,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        guard !rect.isEmpty else { return }
+
+        let metrics = ScrollMetrics(
+            contentLength: scrollView.contentHeight,
+            viewportLength: rect.height,
+            offset: scrollView.scrollOffset
+        )
+
+        if metrics.isScrollable, rect.width > 1 {
+            let contentRect = Rect(
+                x: rect.x,
+                y: rect.y,
+                width: rect.width - 1,
+                height: rect.height
+            )
+            scrollView.contentView.render(to: &buffer, in: contentRect, context: context)
+
+            let indicatorRect = Rect(
+                x: rect.maxX - 1,
+                y: rect.y,
+                width: 1,
+                height: rect.height
+            )
+            VerticalScrollIndicator(
+                metrics: metrics,
+                style: scrollView.scrollViewStyle.indicatorStyle
+            ).render(to: &buffer, in: indicatorRect, context: context)
+        } else {
+            scrollView.contentView.render(to: &buffer, in: rect, context: context)
+        }
+    }
+
     private static func renderTree(
         _ tree: any _TreeViewProtocol,
         into buffer: inout ScreenBuffer,
@@ -120,19 +158,17 @@ public enum ViewRenderer {
     ) {
         let rows = tree.rowsForRendering
         let normalStyle = context.applyTo(tree.normalStyle)
-        let contentWidth = max(0, rect.width - (tree.showsVerticalScrollIndicator && rect.width > 0 ? 1 : 0))
+        let metrics = ScrollMetrics(
+            contentLength: rows.count,
+            viewportLength: rect.height,
+            offset: tree.scrollOffset,
+            maxOffset: max(0, rows.count - 1)
+        )
+        let showIndicator = tree.showsVerticalScrollIndicator && rect.width > 0 && rows.count > rect.height
+        let contentWidth = max(0, rect.width - (showIndicator ? 1 : 0))
+
         guard !rows.isEmpty else {
             fillRect(into: &buffer, in: rect, style: normalStyle)
-            if tree.showsVerticalScrollIndicator, rect.width > 0 {
-                VerticalScrollIndicator(
-                    metrics: ScrollMetrics(contentLength: 0, viewportLength: rect.height, offset: 0),
-                    style: tree.scrollIndicatorStyle
-                ).render(
-                    to: &buffer,
-                    in: Rect(x: rect.maxX - 1, y: rect.y, width: 1, height: rect.height),
-                    context: context
-                )
-            }
             return
         }
 
@@ -156,14 +192,9 @@ public enum ViewRenderer {
             }
         }
 
-        if tree.showsVerticalScrollIndicator, rect.width > 0 {
+        if showIndicator {
             VerticalScrollIndicator(
-                metrics: ScrollMetrics(
-                    contentLength: tree.rowCount,
-                    viewportLength: rect.height,
-                    offset: tree.scrollOffset,
-                    maxOffset: max(0, tree.rowCount - 1)
-                ),
+                metrics: metrics,
                 style: tree.scrollIndicatorStyle
             ).render(
                 to: &buffer,
@@ -393,6 +424,11 @@ public enum ViewRenderer {
         in rect: Rect,
         context: RenderContext
     ) {
+        if let scrollView = view as? any _ScrollViewProtocol {
+            renderScrollView(scrollView, into: &buffer, in: rect, context: context)
+            return
+        }
+
         if let tree = view as? any _TreeViewProtocol {
             renderTree(tree, into: &buffer, in: rect, context: context)
             return
@@ -538,6 +574,13 @@ private protocol _ZStackProtocol {
     var childViews: [any View] { get }
 }
 
+private protocol _ScrollViewProtocol {
+    var contentView: any View { get }
+    var contentHeight: Int { get }
+    var scrollOffset: Int { get }
+    var scrollViewStyle: ScrollViewStyle { get }
+}
+
 private struct _TreeRow: Sendable {
     let depth: Int
     let icon: String
@@ -643,4 +686,9 @@ extension TreeView: _TreeViewProtocol {
     fileprivate var selectedStyle: Style { style.selectedStyle }
     fileprivate var indentWidth: Int { style.indent }
     fileprivate var scrollIndicatorStyle: VerticalScrollIndicatorStyle { style.scrollIndicatorStyle }
+}
+
+extension ScrollView: _ScrollViewProtocol {
+    fileprivate var contentView: any View { content }
+    fileprivate var scrollViewStyle: ScrollViewStyle { style }
 }
