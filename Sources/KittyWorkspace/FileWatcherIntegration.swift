@@ -3,21 +3,30 @@ import KittyFileTree
 import KittyText
 
 @MainActor
-final class FileWatcherIntegration {
+public protocol FileWatcherDelegate: AnyObject {
+    func fileWatcherDidDetectDirectoryChange() async
+    func fileWatcherDidDetectExternalModification(bufferName: String)
+    func fileWatcherDidReloadActiveBuffer(buffer: DocumentBuffer, content: String)
+    func fileWatcherDidReloadInactiveBuffer(buffer: DocumentBuffer, content: String)
+}
+
+@MainActor
+public final class FileWatcherIntegration {
     private let watcher: FileWatcher
-    private let state: EditorState
+    private let workspace: WorkspaceSession
+    private weak var delegate: FileWatcherDelegate?
     private var watchTask: Task<Void, Never>?
 
-    init(watcher: FileWatcher, state: EditorState) {
+    public init(watcher: FileWatcher, workspace: WorkspaceSession, delegate: FileWatcherDelegate) {
         self.watcher = watcher
-        self.state = state
+        self.workspace = workspace
+        self.delegate = delegate
     }
 
-    func start() {
-        Task { await watcher.watchDirectory(state.rootPath) }
+    public func start() {
+        Task { await watcher.watchDirectory(workspace.rootPath) }
 
-        // Watch all currently open files
-        for buffer in state.bufferManager.buffers {
+        for buffer in workspace.bufferManager.buffers {
             Task { await watcher.watchFile(buffer.filePath) }
         }
 
@@ -29,21 +38,21 @@ final class FileWatcherIntegration {
         }
     }
 
-    func stop() {
+    public func stop() {
         watchTask?.cancel()
         watchTask = nil
         Task { await watcher.stop() }
     }
 
-    func watchOpenedFile(_ path: String) {
+    public func watchOpenedFile(_ path: String) {
         Task { await watcher.watchFile(path) }
     }
 
-    func unwatchClosedFile(_ path: String) {
+    public func unwatchClosedFile(_ path: String) {
         Task { await watcher.unwatchFile(path) }
     }
 
-    func suppressForSave(_ path: String) {
+    public func suppressForSave(_ path: String) {
         Task { await watcher.suppressNotifications(for: path) }
     }
 
@@ -52,15 +61,15 @@ final class FileWatcherIntegration {
         case .fileChanged(let path):
             await handleFileChanged(path)
         case .directoryChanged:
-            await state.loadInitialTree()
+            await delegate?.fileWatcherDidDetectDirectoryChange()
         }
     }
 
     private func handleFileChanged(_ path: String) async {
-        guard let index = state.bufferManager.bufferIndex(forPath: path) else { return }
-        let buffer = state.bufferManager.buffers[index]
+        let bufferManager = workspace.bufferManager
+        guard let index = bufferManager.bufferIndex(forPath: path) else { return }
+        let buffer = bufferManager.buffers[index]
 
-        // Check if file actually changed on disk
         let fileManager = FileManager.default
         guard let attrs = try? fileManager.attributesOfItem(atPath: path),
               let diskDate = attrs[.modificationDate] as? Date else { return }
@@ -71,12 +80,11 @@ final class FileWatcherIntegration {
 
         if buffer.isDirty {
             buffer.externallyModified = true
-            if index == state.bufferManager.activeIndex {
-                state.statusMessage = "\(buffer.fileName) changed on disk (unsaved changes)"
+            if index == bufferManager.activeIndex {
+                delegate?.fileWatcherDidDetectExternalModification(bufferName: buffer.fileName)
             }
         } else {
-            // Auto-reload clean buffer
-            guard let loadedFile = try? await EditorState.readUTF8File(at: path) else { return }
+            guard let loadedFile = try? await WorkspaceFileLoading.readUTF8File(at: path) else { return }
             let content = loadedFile.content
 
             buffer.postOpenProcessingTask?.cancel()
@@ -92,24 +100,16 @@ final class FileWatcherIntegration {
             buffer.cachedSerializedByteCount = nil
             buffer.documentVersion += 1
 
-            // Clamp cursor to valid bounds instead of resetting
             let lineCount = buffer.textBuffer.lineCount
             buffer.textCursor.row = min(buffer.textCursor.row, max(0, lineCount - 1))
             let lineLength = buffer.textBuffer.line(at: buffer.textCursor.row).count
             buffer.textCursor.col = min(buffer.textCursor.col, lineLength)
             buffer.textCursor.scrollRow = min(buffer.textCursor.scrollRow, max(0, lineCount - 1))
 
-            if index == state.bufferManager.activeIndex {
-                state.restoreStateFromActiveBuffer()
-                state.highlightedLines = []
-                state.invalidateHighlightSession()
-                state.isLoadingGrammar = false
-                state.gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
-                state.schedulePostLoadProcessing(for: buffer, content: content)
-                state.renderRefreshSource?.invalidate()
-                state.statusMessage = "\(buffer.fileName) reloaded from disk"
+            if index == bufferManager.activeIndex {
+                delegate?.fileWatcherDidReloadActiveBuffer(buffer: buffer, content: content)
             } else {
-                state.schedulePostLoadProcessing(for: buffer, content: content)
+                delegate?.fileWatcherDidReloadInactiveBuffer(buffer: buffer, content: content)
             }
         }
     }

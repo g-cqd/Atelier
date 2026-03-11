@@ -26,6 +26,7 @@ let package = Package(
         .library(name: "KittyFileTree", targets: ["KittyFileTree"]),
         .library(name: "KittySymbols", targets: ["KittySymbols"]),
         .library(name: "KittyGit", targets: ["KittyGit"]),
+        .library(name: "KittyWorkspace", targets: ["KittyWorkspace"]),
         .executable(name: "Demo", targets: ["Demo"]),
         .executable(name: "KittyCode", targets: ["KittyCode"]),
         .executable(name: "KittySymbolsCLI", targets: ["KittySymbolsCLI"]),
@@ -77,14 +78,17 @@ let package = Package(
         // Layer 4 — View protocol, layout, tree/text widgets
         .target(name: "KittyWidgets", dependencies: ["KittySyntax", "KittyInput"], swiftSettings: defaultSwiftSettings),
 
+        // Layer 4b — Workspace domain: document, tab, file lifecycle, git coordination
+        .target(name: "KittyWorkspace", dependencies: ["KittyText", "KittySyntax", "KittyFileTree", "KittyGit", "KittySync"], swiftSettings: defaultSwiftSettings),
+
         // Layer 5 — App lifecycle, event loop, signals
-        .target(name: "KittyApp", dependencies: ["KittyWidgets"], swiftSettings: defaultSwiftSettings),
+        .target(name: "KittyApp", dependencies: ["KittyWidgets", "KittyInput", "KittySync"], swiftSettings: defaultSwiftSettings),
 
         // Demo executable
         .executableTarget(name: "Demo", dependencies: ["KittyApp"], path: "Demo", swiftSettings: defaultSwiftSettings),
 
         // KittyCode — Terminal code editor
-        .executableTarget(name: "KittyCode", dependencies: ["KittyApp", "KittyInput", "KittyText", "KittyFileTree", "KittySyntax", "KittySymbols", "KittyGit"], swiftSettings: defaultSwiftSettings),
+        .executableTarget(name: "KittyCode", dependencies: ["KittyApp", "KittyWorkspace", "KittyInput", "KittyText", "KittyFileTree", "KittySyntax", "KittySymbols", "KittyGit"], swiftSettings: defaultSwiftSettings),
 
         // KittySymbols CLI
         .executableTarget(name: "KittySymbolsCLI", dependencies: ["KittySymbols"], swiftSettings: defaultSwiftSettings),
@@ -100,10 +104,11 @@ let package = Package(
         .testTarget(name: "KittySyntaxTests", dependencies: ["KittySyntax"], swiftSettings: defaultSwiftSettings),
         .testTarget(name: "KittyWidgetsTests", dependencies: ["KittyWidgets"], swiftSettings: defaultSwiftSettings),
         .testTarget(name: "KittyAppTests", dependencies: ["KittyApp"], swiftSettings: defaultSwiftSettings),
-        .testTarget(name: "KittyCodeTests", dependencies: ["KittyCode", "KittyFileTree"], swiftSettings: defaultSwiftSettings),
+        .testTarget(name: "KittyCodeTests", dependencies: ["KittyCode", "KittyFileTree", "KittyWorkspace"], swiftSettings: defaultSwiftSettings),
         .testTarget(name: "KittyTextTests", dependencies: ["KittyText"], swiftSettings: defaultSwiftSettings),
         .testTarget(name: "KittyFileTreeTests", dependencies: ["KittyFileTree"], swiftSettings: defaultSwiftSettings),
         .testTarget(name: "KittySymbolsTests", dependencies: ["KittySymbols"], swiftSettings: defaultSwiftSettings),
+        .testTarget(name: "KittyWorkspaceTests", dependencies: ["KittyWorkspace"], swiftSettings: defaultSwiftSettings),
         .testTarget(name: "KittyGitTests", dependencies: ["KittyGit"], swiftSettings: defaultSwiftSettings),
     ]
 )

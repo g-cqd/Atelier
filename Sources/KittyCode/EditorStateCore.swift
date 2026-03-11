@@ -1,4 +1,5 @@
 import Foundation
+import KittyApp
 import KittyCodecs
 import KittyFileTree
 import KittyGit
@@ -6,6 +7,7 @@ import KittySymbols
 import KittySyntax
 import KittyText
 import KittyWidgets
+import KittyWorkspace
 
 @MainActor
 final class EditorState {
@@ -130,6 +132,12 @@ final class EditorState {
         var gripOffset: Int
     }
 
+    // MARK: - Workspace (domain state)
+
+    let workspace: WorkspaceSession
+
+    // MARK: - Shell state
+
     var config: KittyConfig
     var fileStatusProvider: (any FileStatusProvider)?
     var gitLineDecorationProvider: (any GitLineDecorationProvider)?
@@ -141,241 +149,109 @@ final class EditorState {
             highlightSession = nil
         }
     }
-    var rootPath: String
-    var currentLanguage: String? {
-        didSet {
-            if currentLanguage != oldValue {
-                highlightSession = nil
-            }
-        }
-    }
-    var highlightedLines: [[StyledSpan]] = [[StyledSpan(text: "", style: .default)]]
-
-    // MARK: - Multi-buffer management
-
-    let bufferManager = BufferManager()
     var tabScrollOffset: Int = 0
 
-    // MARK: - Text buffer (backed by KittyText)
+    // MARK: - Forwarding properties to workspace
 
-    var textBuffer = TextBuffer()
-    var textCursor = TextCursor()
-    private var cachedFileLines: [String]?
-    private var cachedDocumentText: String?
-    private var cachedSerializedByteCount: Int?
-    var highlightSession: LanguageHighlighter.Session?
-    private var fileOpenTask: Task<Void, Never>?
-    private var pendingOpenRequestID: UInt64 = 0
-    var currentLineEnding: TextDocument.LineEnding = .lf {
-        didSet {
-            cachedSerializedByteCount = nil
-        }
+    var rootPath: String {
+        get { workspace.rootPath }
+        set { workspace.rootPath = newValue }
     }
 
-    /// Backward-compatible computed access to file content lines.
-    var fileContent: [String] {
-        get {
-            if let cachedFileLines {
-                return cachedFileLines
-            }
+    let bufferManager: BufferManager
 
-            let lines = textBuffer.lines
-            cachedFileLines = lines
-            return lines
-        }
+    var textBuffer: TextBuffer {
+        get { workspace.textBuffer }
+        set { workspace.textBuffer = newValue }
+    }
+
+    var textCursor: TextCursor {
+        get { workspace.textCursor }
+        set { workspace.textCursor = newValue }
+    }
+
+    var currentLanguage: String? {
+        get { workspace.currentLanguage }
         set {
-            let normalizedLines = newValue.isEmpty ? [""] : newValue
-            textBuffer = TextBuffer(lines: normalizedLines)
-            cachedFileLines = normalizedLines
-            cachedDocumentText = normalizedLines.joined(separator: "\n")
-            cachedMaxLineWidth = TextDocument.computeMaxLineWidth(for: normalizedLines, tabSize: config.editor.tabSize)
-            cachedSerializedByteCount = TextDocument.computeSerializedByteCount(
-                for: normalizedLines,
-                lineEnding: currentLineEnding
-            )
-            highlightSession = nil
+            if workspace.currentLanguage != newValue {
+                workspace.highlightSession = nil
+            }
+            workspace.currentLanguage = newValue
         }
     }
 
-    var documentText: String {
-        if let cachedDocumentText {
-            return cachedDocumentText
-        }
-
-        let text = textBuffer.text
-        cachedDocumentText = text
-        return text
+    var highlightedLines: [[StyledSpan]] {
+        get { workspace.highlightedLines }
+        set { workspace.highlightedLines = newValue }
     }
 
-    var fileLineCount: Int {
-        textBuffer.lineCount
+    var highlightSession: LanguageHighlighter.Session? {
+        get { workspace.highlightSession }
+        set { workspace.highlightSession = newValue }
     }
 
-    var isFileEmpty: Bool {
-        textBuffer.isEmpty
-    }
-
-    func fileLine(at index: Int) -> String {
-        textBuffer.line(at: index)
-    }
-
-    func invalidateTextSnapshotCache() {
-        cachedFileLines = nil
-        cachedDocumentText = nil
-        cachedMaxLineWidth = nil
-        cachedSerializedByteCount = nil
-    }
-
-    func invalidateHighlightSession() {
-        highlightSession = nil
-    }
-
-    func textDidChange() {
-        invalidateTextSnapshotCache()
-        if let buf = bufferManager.activeBuffer {
-            buf.postOpenProcessingTask?.cancel()
-            buf.postOpenProcessingTask = nil
-            buf.isDirty = true
-            if buf.isPreview { buf.isPreview = false }
-            buf.documentVersion += 1
-            isLoadingGrammar = false
-        }
-        widenCachedMaxLineWidth(for: textCursor.row..<(textCursor.row + 1))
-        refreshHighlights()
-        gitDecorationManager?.scheduleRefreshForActiveBuffer()
-    }
-
-    func textDidChange(_ mutation: TextMutation) {
-        invalidateTextSnapshotCache()
-        if let buf = bufferManager.activeBuffer {
-            buf.postOpenProcessingTask?.cancel()
-            buf.postOpenProcessingTask = nil
-            buf.isDirty = true
-            if buf.isPreview { buf.isPreview = false }
-            buf.documentVersion += 1
-            isLoadingGrammar = false
-        }
-        widenCachedMaxLineWidth(for: mutation.updatedLineRange)
-        refreshHighlights(after: mutation)
-        gitDecorationManager?.scheduleRefreshForActiveBuffer()
-    }
-
-    func replaceDocumentText(with content: String) {
-        let lines = TextBuffer.splitLines(from: content)
-        textBuffer = TextBuffer(lines: lines)
-        cachedFileLines = lines
-        cachedDocumentText = content
-        cachedMaxLineWidth = TextDocument.computeMaxLineWidth(for: lines, tabSize: config.editor.tabSize)
-        cachedSerializedByteCount = TextDocument.computeSerializedByteCount(for: lines, lineEnding: currentLineEnding)
-        highlightSession = nil
-    }
-
-    var serializedByteCount: Int {
-        if let cachedSerializedByteCount {
-            return cachedSerializedByteCount
-        }
-
-        let count = TextDocument.computeSerializedByteCount(in: textBuffer, lineEnding: currentLineEnding)
-        cachedSerializedByteCount = count
-        return count
-    }
-
-    /// Backward-compatible cursor row.
-    var cursorRow: Int {
-        get { textCursor.row }
-        set { textCursor.row = newValue }
-    }
-
-    /// Backward-compatible cursor column.
-    var cursorCol: Int {
-        get { textCursor.col }
-        set { textCursor.col = newValue }
-    }
-
-    /// Backward-compatible vertical scroll offset.
-    var scrollOffset: Int {
-        get { textCursor.scrollRow }
-        set { textCursor.scrollRow = newValue }
-    }
-
-    /// Backward-compatible horizontal scroll offset.
-    var hScrollOffset: Int {
-        get { textCursor.scrollCol }
-        set { textCursor.scrollCol = newValue }
-    }
-
-    // MARK: - Active buffer synchronization
-
-    /// Save current editor state to the active DocumentBuffer.
-    func saveStateToActiveBuffer() {
-        guard let buf = bufferManager.activeBuffer else { return }
-        buf.textBuffer = textBuffer
-        buf.textCursor = textCursor
-        buf.highlightedLines = highlightedLines
-        buf.highlightSession = highlightSession
-        buf.cachedFileLines = cachedFileLines
-        buf.cachedDocumentText = cachedDocumentText
-        buf.cachedMaxLineWidth = cachedMaxLineWidth
-        buf.cachedSerializedByteCount = cachedSerializedByteCount
-        buf.language = currentLanguage
-        buf.lineEnding = currentLineEnding
-    }
-
-    /// Restore editor state from the active DocumentBuffer.
-    func restoreStateFromActiveBuffer() {
-        guard let buf = bufferManager.activeBuffer else { return }
-        textBuffer = buf.textBuffer
-        textCursor = buf.textCursor
-        highlightedLines = buf.highlightedLines
-        highlightSession = buf.highlightSession
-        currentLanguage = buf.language
-        fileName = buf.fileName
-        filePath = buf.filePath
-        cachedFileLines = buf.cachedFileLines
-        cachedDocumentText = buf.cachedDocumentText
-        cachedMaxLineWidth = buf.cachedMaxLineWidth
-        cachedSerializedByteCount = buf.cachedSerializedByteCount
-        currentLineEnding = buf.lineEnding
-    }
-
-    /// Switch to a different tab by index, saving/restoring state.
-    func switchToTab(_ index: Int) {
-        guard index != bufferManager.activeIndex, index >= 0, index < bufferManager.count else { return }
-        saveStateToActiveBuffer()
-        bufferManager.switchTo(index: index)
-        restoreStateFromActiveBuffer()
-        gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
-    }
-
-    /// Adjust `tabScrollOffset` so the active tab is visible within the given ribbon width.
-    func ensureActiveTabVisible(ribbonWidth: Int) {
-        let tabs = tabRibbonTabs()
-        let ribbon = TabRibbon(tabs: tabs, activeIndex: bufferManager.activeIndex, scrollOffset: tabScrollOffset)
-        tabScrollOffset = ribbon.clampedScrollOffset(activeIndex: bufferManager.activeIndex, ribbonWidth: ribbonWidth)
-    }
-
-    func tabRibbonTabs() -> [TabRibbon.Tab] {
-        bufferManager.buffers.map { buf in
-            let status = config.showGitStatus && config.gitDecorations.showTabRibbonStatus
-                ? fileStatusProvider?.status(for: buf.filePath)
-                : nil
-            return TabRibbon.Tab(
-                name: buf.fileName,
-                isDirty: buf.isDirty,
-                isPreview: buf.isPreview,
-                statusIndicator: status?.indicator.isEmpty == false ? status?.indicator : nil,
-                statusStyle: status.map { colorScheme.gitStatusStyle(for: $0.statusColor) }
-            )
+    var currentLineEnding: TextDocument.LineEnding {
+        get { workspace.currentLineEnding }
+        set {
+            workspace.currentLineEnding = newValue
+            workspace.cachedSerializedByteCount = nil
         }
     }
 
-    // MARK: - File tree (backed by KittyFileTree)
+    private var cachedFileLines: [String]? {
+        get { workspace.cachedFileLines }
+        set { workspace.cachedFileLines = newValue }
+    }
 
-    var treeNodes: [FileNode] = []
-    var cachedFlatTree: [(depth: Int, node: FileNode)] = []
-    var selectedTreeIndex = 0
-    var treeScrollOffset = 0
-    var lastSelectedDirectoryPath: String?
+    private var cachedDocumentText: String? {
+        get { workspace.cachedDocumentText }
+        set { workspace.cachedDocumentText = newValue }
+    }
+
+    private var cachedSerializedByteCount: Int? {
+        get { workspace.cachedSerializedByteCount }
+        set { workspace.cachedSerializedByteCount = newValue }
+    }
+
+    var cachedMaxLineWidth: Int? {
+        get { workspace.cachedMaxLineWidth }
+        set { workspace.cachedMaxLineWidth = newValue }
+    }
+
+    var fileName: String {
+        get { workspace.fileName }
+        set { workspace.fileName = newValue }
+    }
+
+    var filePath: String {
+        get { workspace.filePath }
+        set { workspace.filePath = newValue }
+    }
+
+    // MARK: - Tree state forwarding
+
+    let treeState: WorkspaceTreeState
+
+    var treeNodes: [FileNode] {
+        get { treeState.treeNodes }
+        set { treeState.treeNodes = newValue }
+    }
+    var cachedFlatTree: [(depth: Int, node: FileNode)] {
+        get { treeState.cachedFlatTree }
+        set { treeState.cachedFlatTree = newValue }
+    }
+    var selectedTreeIndex: Int {
+        get { treeState.selectedTreeIndex }
+        set { treeState.selectedTreeIndex = newValue }
+    }
+    var treeScrollOffset: Int {
+        get { treeState.treeScrollOffset }
+        set { treeState.treeScrollOffset = newValue }
+    }
+    var lastSelectedDirectoryPath: String? {
+        get { treeState.lastSelectedDirectoryPath }
+        set { treeState.lastSelectedDirectoryPath = newValue }
+    }
 
     // MARK: - Activity bar & sidebar
 
@@ -490,8 +366,157 @@ final class EditorState {
         highlightedLines.replaceSubrange(mutation.originalLineRange, with: updatedHighlights)
     }
 
-    var fileName = ""
-    var filePath = ""
+    // MARK: - Backward-compatible text access
+
+    var fileContent: [String] {
+        get {
+            if let cachedFileLines {
+                return cachedFileLines
+            }
+
+            let lines = textBuffer.lines
+            cachedFileLines = lines
+            return lines
+        }
+        set {
+            let normalizedLines = newValue.isEmpty ? [""] : newValue
+            textBuffer = TextBuffer(lines: normalizedLines)
+            cachedFileLines = normalizedLines
+            cachedDocumentText = normalizedLines.joined(separator: "\n")
+            cachedMaxLineWidth = TextDocument.computeMaxLineWidth(for: normalizedLines, tabSize: config.editor.tabSize)
+            cachedSerializedByteCount = TextDocument.computeSerializedByteCount(
+                for: normalizedLines,
+                lineEnding: currentLineEnding
+            )
+            highlightSession = nil
+        }
+    }
+
+    var documentText: String {
+        if let cachedDocumentText {
+            return cachedDocumentText
+        }
+
+        let text = textBuffer.text
+        cachedDocumentText = text
+        return text
+    }
+
+    var fileLineCount: Int {
+        textBuffer.lineCount
+    }
+
+    var isFileEmpty: Bool {
+        textBuffer.isEmpty
+    }
+
+    func fileLine(at index: Int) -> String {
+        textBuffer.line(at: index)
+    }
+
+    func invalidateTextSnapshotCache() {
+        workspace.invalidateTextSnapshotCache()
+    }
+
+    func invalidateHighlightSession() {
+        workspace.invalidateHighlightSession()
+    }
+
+    func textDidChange() {
+        invalidateTextSnapshotCache()
+        if let buf = bufferManager.activeBuffer {
+            buf.postOpenProcessingTask?.cancel()
+            buf.postOpenProcessingTask = nil
+            buf.isDirty = true
+            if buf.isPreview { buf.isPreview = false }
+            buf.documentVersion += 1
+            isLoadingGrammar = false
+        }
+        widenCachedMaxLineWidth(for: textCursor.row..<(textCursor.row + 1))
+        refreshHighlights()
+        gitDecorationManager?.scheduleRefreshForActiveBuffer()
+    }
+
+    func textDidChange(_ mutation: TextMutation) {
+        invalidateTextSnapshotCache()
+        if let buf = bufferManager.activeBuffer {
+            buf.postOpenProcessingTask?.cancel()
+            buf.postOpenProcessingTask = nil
+            buf.isDirty = true
+            if buf.isPreview { buf.isPreview = false }
+            buf.documentVersion += 1
+            isLoadingGrammar = false
+        }
+        widenCachedMaxLineWidth(for: mutation.updatedLineRange)
+        refreshHighlights(after: mutation)
+        gitDecorationManager?.scheduleRefreshForActiveBuffer()
+    }
+
+    func replaceDocumentText(with content: String) {
+        workspace.replaceDocumentText(with: content, tabSize: config.editor.tabSize, lineEnding: currentLineEnding)
+    }
+
+    var serializedByteCount: Int {
+        workspace.serializedByteCount
+    }
+
+    var cursorRow: Int {
+        get { textCursor.row }
+        set { textCursor.row = newValue }
+    }
+
+    var cursorCol: Int {
+        get { textCursor.col }
+        set { textCursor.col = newValue }
+    }
+
+    var scrollOffset: Int {
+        get { textCursor.scrollRow }
+        set { textCursor.scrollRow = newValue }
+    }
+
+    var hScrollOffset: Int {
+        get { textCursor.scrollCol }
+        set { textCursor.scrollCol = newValue }
+    }
+
+    // MARK: - Active buffer synchronization
+
+    func saveStateToActiveBuffer() {
+        workspace.saveStateToActiveBuffer()
+    }
+
+    func restoreStateFromActiveBuffer() {
+        workspace.restoreStateFromActiveBuffer()
+    }
+
+    func switchToTab(_ index: Int) {
+        workspace.switchToTab(index)
+    }
+
+    func ensureActiveTabVisible(ribbonWidth: Int) {
+        let tabs = tabRibbonTabs()
+        let ribbon = TabRibbon(tabs: tabs, activeIndex: bufferManager.activeIndex, scrollOffset: tabScrollOffset)
+        tabScrollOffset = ribbon.clampedScrollOffset(activeIndex: bufferManager.activeIndex, ribbonWidth: ribbonWidth)
+    }
+
+    func tabRibbonTabs() -> [TabRibbon.Tab] {
+        bufferManager.buffers.map { buf in
+            let status = config.showGitStatus && config.gitDecorations.showTabRibbonStatus
+                ? fileStatusProvider?.status(for: buf.filePath)
+                : nil
+            return TabRibbon.Tab(
+                name: buf.fileName,
+                isDirty: buf.isDirty,
+                isPreview: buf.isPreview,
+                statusIndicator: status?.indicator.isEmpty == false ? status?.indicator : nil,
+                statusStyle: status.map { colorScheme.gitStatusStyle(for: $0.statusColor) }
+            )
+        }
+    }
+
+    // MARK: - Remaining shell state
+
     var treePanelWidth = 30
     var statusMessage = ""
     var prompt: EditorPrompt?
@@ -504,47 +529,44 @@ final class EditorState {
     var isScrolling = false
     var scrollDragState: ScrollDragState?
     var isLoadingGrammar = false
-    var cachedMaxLineWidth: Int?
 
     var maxLineWidth: Int {
         cachedMaxLineWidth ?? 0
     }
 
     init(rootPath: String, config: KittyConfig) {
-        self.rootPath = rootPath
+        self.workspace = WorkspaceSession(rootPath: rootPath)
+        self.bufferManager = workspace.bufferManager
+        self.treeState = workspace.treeState
         self.config = config
         self.treePanelWidth = config.treeWidth
         self.colorScheme = Self.makeColorScheme(config: config)
         let catalog = config.useSFSymbolsInTerminal ? SymbolCatalogLoader.loadOrDiscover() : nil
         self.symbolTheme = TerminalSymbolTheme.make(symbolsEnabled: config.useSFSymbolsInTerminal, catalog: catalog)
-        self.treeNodes = DirectoryScanner.scan(rootPath, maxDepth: 1)
-        self.cachedFlatTree = FileTreeNavigator.flatten(treeNodes)
-        self.lastSelectedDirectoryPath = rootPath
         self.statusMessage = "Opened \(rootPath) | ^O Save | ^X Quit"
+
+        // Wire up workspace callbacks
+        workspace.onTabSwitched = { [weak self] in
+            self?.gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
+        }
+
         refreshHighlights()
     }
 
-    deinit {
-        fileOpenTask?.cancel()
-    }
-
     func nextOpenRequestID() -> UInt64 {
-        pendingOpenRequestID &+= 1
-        return pendingOpenRequestID
+        workspace.nextOpenRequestID()
     }
 
     func replaceFileOpenTask(with task: Task<Void, Never>) {
-        fileOpenTask?.cancel()
-        fileOpenTask = task
+        workspace.replaceFileOpenTask(with: task)
     }
 
     func cancelPendingFileOpen() {
-        fileOpenTask?.cancel()
-        fileOpenTask = nil
+        workspace.cancelPendingFileOpen()
     }
 
     func isCurrentOpenRequest(_ requestID: UInt64) -> Bool {
-        pendingOpenRequestID == requestID
+        workspace.isCurrentOpenRequest(requestID)
     }
 
     private func widenCachedMaxLineWidth(for range: Range<Int>) {
@@ -560,13 +582,6 @@ final class EditorState {
     }
 
     func noteSelectedPath(_ path: String, isDirectory: Bool) {
-        let directoryPath: String
-        if isDirectory {
-            directoryPath = path
-        } else {
-            directoryPath = URL(fileURLWithPath: path).deletingLastPathComponent().path
-        }
-
-        lastSelectedDirectoryPath = directoryPath
+        treeState.noteSelectedPath(path, isDirectory: isDirectory)
     }
 }
