@@ -1,27 +1,51 @@
 /// Shared text-display measurements used by widgets and editor logic.
 public enum TextDisplayMetrics {
     /// Converts a character offset within a line to a terminal display column.
-    public static func displayColumn(forCharacterOffset targetOffset: Int, in line: String) -> Int {
+    public static func displayColumn(forCharacterOffset targetOffset: Int, in line: String, tabSize: Int = 4) -> Int {
         guard targetOffset > 0 else { return 0 }
 
         var column = 0
         for (offset, char) in line.enumerated() {
             if offset >= targetOffset { break }
-            column += UnicodeWidth.displayWidth(of: char)
+            if char == "\t" {
+                let ts = max(1, tabSize)
+                column += ts - (column % ts)
+            } else {
+                column += UnicodeWidth.displayWidth(of: char)
+            }
         }
         return column
     }
 
     /// Converts a terminal display column to the nearest character offset within a line.
-    public static func characterOffset(forDisplayColumn targetColumn: Int, in line: String) -> Int {
+    public static func characterOffset(forDisplayColumn targetColumn: Int, in line: String, tabSize: Int = 4) -> Int {
         guard targetColumn > 0 else { return 0 }
 
         var column = 0
         for (offset, char) in line.enumerated() {
             if column >= targetColumn { return offset }
-            column += UnicodeWidth.displayWidth(of: char)
+            if char == "\t" {
+                let ts = max(1, tabSize)
+                column += ts - (column % ts)
+            } else {
+                column += UnicodeWidth.displayWidth(of: char)
+            }
         }
         return line.count
+    }
+
+    /// Computes the display width of a line accounting for tab stops.
+    public static func displayWidth(of line: String, tabSize: Int = 4) -> Int {
+        var column = 0
+        for char in line {
+            if char == "\t" {
+                let ts = max(1, tabSize)
+                column += ts - (column % ts)
+            } else {
+                column += UnicodeWidth.displayWidth(of: char)
+            }
+        }
+        return column
     }
 
     /// Returns the number of decimal digits required to render line numbers.

@@ -11,6 +11,10 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
         guard key.eventType != .release else { return true }
         state.isScrolling = false
 
+        if state.contextMenu != nil {
+            return state.handleContextMenuKey(key)
+        }
+
         if state.prompt != nil {
             return state.handlePromptKey(key)
         }

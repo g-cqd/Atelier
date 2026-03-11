@@ -269,9 +269,14 @@ public enum ViewRenderer {
             var lineIndex = max(0, min(editor.scrollOffset, editor.lineCount))
             while screenRow < rect.height && lineIndex < editor.lineCount {
                 let spans = editor.spans(at: lineIndex)
+                let wrapTabSize = max(1, editor.tabSize)
                 let totalWidth = max(1, spans.reduce(into: 0) { partial, span in
                     for char in span.text {
-                        partial += UnicodeWidth.displayWidth(of: char)
+                        if char == "\t" {
+                            partial += wrapTabSize - (partial % wrapTabSize)
+                        } else {
+                            partial += UnicodeWidth.displayWidth(of: char)
+                        }
                     }
                 })
                 let wrappedRows = max(1, contentWidth > 0 ? (totalWidth + contentWidth - 1) / contentWidth : 1)
@@ -346,7 +351,7 @@ public enum ViewRenderer {
                         for char in span.text {
                             var displayChar = char
                             var charStyle = span.style
-                            var width = UnicodeWidth.displayWidth(of: char)
+                            var width = char == "\t" ? (wrapTabSize - (widthPos % wrapTabSize)) : UnicodeWidth.displayWidth(of: char)
 
                             if wsConfig.isEnabled {
                                 let category = WhitespaceRenderer.classify(char, isLeading: wrapIsLeading)
@@ -375,6 +380,12 @@ public enum ViewRenderer {
                                 if char != " " && char != "\t" { wrapIsLeading = false }
                             }
 
+                            let isControl = displayChar.asciiValue.map({ $0 < 0x20 && $0 != 0 }) == true
+                            if isControl {
+                                displayChar = " "
+                                if width == 0 { width = 1 }
+                            }
+
                             if widthPos + width > segEnd { break }
                             if widthPos >= segStart && col < contentMaxX {
                                 let style = resolvedLineStyle(
@@ -383,7 +394,12 @@ public enum ViewRenderer {
                                     isCurrentLine: isCurrentLine,
                                     currentLineStyle: currentLineStyle
                                 )
-                                if width == 2 && col + 1 < contentMaxX {
+                                if isControl && width > 1 {
+                                    for _ in 0..<width where col < contentMaxX {
+                                        buffer[row, col] = Cell(character: " ", style: style)
+                                        col += 1
+                                    }
+                                } else if width == 2 && col + 1 < contentMaxX {
                                     buffer[row, col] = Cell(character: displayChar, style: style, width: 2)
                                     buffer[row, col + 1] = Cell(character: "\0", style: style, width: 0)
                                     col += 2
@@ -541,7 +557,8 @@ public enum ViewRenderer {
                 isCurrentLine: isCurrentLine,
                 editorStyle: editorStyle,
                 currentLineStyle: currentLineStyle,
-                whitespaceConfig: editor.whitespaceConfig
+                whitespaceConfig: editor.whitespaceConfig,
+                tabSize: editor.tabSize
             )
         }
 
@@ -724,19 +741,21 @@ public enum ViewRenderer {
         isCurrentLine: Bool,
         editorStyle: Style,
         currentLineStyle: Style,
-        whitespaceConfig: WhitespaceRenderer.Config = .disabled
+        whitespaceConfig: WhitespaceRenderer.Config = .disabled,
+        tabSize: Int = 4
     ) {
         guard availWidth > 0 else { return }
         var currentCol = col
         var currentX = 0
         var isLeading = true
+        let ts = max(1, tabSize)
 
         for span in spans {
             for char in span.text {
                 let category: WhitespaceRenderer.CharCategory
                 var displayChar = char
                 var charStyle = span.style
-                var width = UnicodeWidth.displayWidth(of: char)
+                var width = char == "\t" ? (ts - (currentX % ts)) : UnicodeWidth.displayWidth(of: char)
 
                 if whitespaceConfig.isEnabled {
                     category = WhitespaceRenderer.classify(char, isLeading: isLeading)
@@ -767,6 +786,14 @@ public enum ViewRenderer {
                     }
                 }
 
+                // Control characters (tab, CR, etc.) must never reach the terminal
+                // output — they'd cause cursor jumps and corrupt the display.
+                let isControl = displayChar.asciiValue.map({ $0 < 0x20 && $0 != 0 }) == true
+                if isControl {
+                    displayChar = " "
+                    if width == 0 { width = 1 }
+                }
+
                 if currentX >= hScrollOffset && currentX + width <= hScrollOffset + availWidth {
                     let style = resolvedLineStyle(
                         from: charStyle,
@@ -774,7 +801,13 @@ public enum ViewRenderer {
                         isCurrentLine: isCurrentLine,
                         currentLineStyle: currentLineStyle
                     )
-                    if width == 2 && currentCol + 1 < col + availWidth {
+                    if isControl && width > 1 {
+                        // Tab: render as multiple spaces
+                        for _ in 0..<width where currentCol < col + availWidth {
+                            buffer[row, currentCol] = Cell(character: " ", style: style)
+                            currentCol += 1
+                        }
+                    } else if width == 2 && currentCol + 1 < col + availWidth {
                         buffer[row, currentCol] = Cell(character: displayChar, style: style, width: 2)
                         buffer[row, currentCol + 1] = Cell(character: "\0", style: style, width: 0)
                         currentCol += 2
