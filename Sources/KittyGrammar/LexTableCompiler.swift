@@ -17,7 +17,10 @@ public enum LexTableCompiler: Sendable {
         // Build a simple trie-based DFA for keywords
         let states = buildTrieDFA(keywords: keywords)
 
-        return LexTable(states: states, keywords: keywords)
+        // Extract comment patterns from extras
+        let commentPatterns = extractCommentPatterns(from: grammar)
+
+        return LexTable(states: states, keywords: keywords, commentPatterns: commentPatterns)
     }
 
     // MARK: - Private
@@ -48,6 +51,97 @@ public enum LexTableCompiler: Sendable {
             break
         }
     }
+
+    // MARK: - Comment Pattern Extraction
+
+    private static func extractCommentPatterns(from grammar: GrammarDefinition) -> [CommentPattern] {
+        var patterns: [CommentPattern] = []
+        let ruleMap = Dictionary(grammar.rules.map { ($0.name, $0.rule) }, uniquingKeysWith: { first, _ in first })
+
+        for extra in grammar.extras {
+            if case .symbol(let name) = extra, let rule = ruleMap[name] {
+                extractCommentPatternsFromRule(rule, into: &patterns)
+            }
+        }
+        return patterns
+    }
+
+    private static func extractCommentPatternsFromRule(_ rule: Rule, into patterns: inout [CommentPattern]) {
+        switch rule {
+        case .token(let content), .immediateToken(let content):
+            extractCommentPatternsFromRule(content, into: &patterns)
+        case .choice(let members):
+            for m in members { extractCommentPatternsFromRule(m, into: &patterns) }
+        case .seq(let members):
+            if let first = members.first {
+                extractCommentPatternsFromRule(first, into: &patterns)
+            }
+        case .pattern(let regex):
+            if let cp = classifyCommentRegex(regex) {
+                patterns.append(cp)
+            }
+        case .prec(_, let c), .precLeft(_, let c), .precRight(_, let c), .precDynamic(_, let c):
+            extractCommentPatternsFromRule(c, into: &patterns)
+        default:
+            break
+        }
+    }
+
+    private static func classifyCommentRegex(_ regex: String) -> CommentPattern? {
+        let prefix = extractLiteralPrefix(from: regex)
+        guard prefix.count >= 1 else { return nil }
+
+        // Block comment: starts with /* and regex contains closing */
+        if prefix.hasPrefix("/*") {
+            return .block(open: "/*", close: "*/")
+        }
+        // Line comment: starts with //, #, --, or ;;
+        if prefix.hasPrefix("//") || prefix.hasPrefix("#") || prefix.hasPrefix("--") || prefix.hasPrefix(";;") {
+            return .line(prefix: prefix)
+        }
+        return nil
+    }
+
+    /// Extracts the leading literal characters from a tree-sitter regex pattern.
+    private static func extractLiteralPrefix(from regex: String) -> String {
+        var result = ""
+        var chars = Array(regex.unicodeScalars)
+        var i = 0
+
+        while i < chars.count && result.count < 4 {
+            let ch = chars[i]
+            if ch == "\\" && i + 1 < chars.count {
+                let escaped = chars[i + 1]
+                // Common regex escapes for literal characters
+                if "/.*+?[](){}|^$\\".unicodeScalars.contains(escaped) {
+                    result.append(Character(escaped))
+                    i += 2
+                    // Handle quantifier like {2,3} — repeat the char to its minimum
+                    if i < chars.count && chars[i] == "{" {
+                        let qStart = i + 1
+                        var qEnd = qStart
+                        while qEnd < chars.count && chars[qEnd] != "," && chars[qEnd] != "}" { qEnd += 1 }
+                        if let minCount = Int(String(chars[qStart..<qEnd].map { Character($0) })), minCount > 1 {
+                            result.append(contentsOf: repeatElement(Character(escaped), count: minCount - 1))
+                        }
+                        while i < chars.count && chars[i] != "}" { i += 1 }
+                        if i < chars.count { i += 1 }
+                    }
+                } else {
+                    break
+                }
+            } else if ch.properties.isAlphabetic || ch.properties.isASCIIHexDigit || ch == "_" || ch == "-" || ch == " " || ch == "#" || ch == ";" {
+                result.append(Character(ch))
+                i += 1
+            } else {
+                break
+            }
+        }
+
+        return result
+    }
+
+    // MARK: - Trie DFA
 
     private static func buildTrieDFA(keywords: [String: Int]) -> [LexState] {
         guard !keywords.isEmpty else { return [LexState()] }
