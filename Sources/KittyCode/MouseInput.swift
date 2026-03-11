@@ -11,17 +11,15 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     let scrollStep = scrollLinesPerTick(visibleRows: max(1, layout.contentRows))
 
     let treeRect = Rect(
-        x: layout.activityBarWidth + 1,
+        x: layout.activityBarWidth,
         y: layout.contentStartRow,
         width: layout.sidebarWidth,
         height: layout.contentRows
     )
-    // Mouse editorRect uses +1 on x to account for the separator→content gap,
-    // matching the original coordinate convention for TextEditorLayout hit testing.
     let editorRect = Rect(
-        x: layout.editorStart + 1,
+        x: layout.editorStart,
         y: layout.contentStartRow,
-        width: max(0, pipeline.columns - layout.totalSidebarWidth - 1),
+        width: max(0, pipeline.columns - layout.editorStart),
         height: layout.contentRows
     )
 
@@ -45,7 +43,7 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     if mouse.button.isScroll {
         state.scrollDragState = nil
         state.isScrolling = true
-        if mouse.col < layout.editorStart {
+        if mouse.col - 1 < layout.editorStart {
             if mouse.button == .scrollUp {
                 state.treeScrollOffset = max(0, state.treeScrollOffset - scrollStep)
             } else if mouse.button == .scrollDown {
@@ -63,8 +61,8 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
 
     guard mouse.kind == .press, mouse.button == .left else { return }
 
-    // Tab ribbon click
-    if layout.showTabRibbon && mouse.row == 1 && mouse.col >= layout.editorStart {
+    // Tab ribbon click (mouse coords are 1-based, tab ribbon is at screen row 1)
+    if layout.showTabRibbon && mouse.row == 2 && mouse.col - 1 >= layout.editorStart {
         let tabs = state.bufferManager.buffers.map { buf in
             TabRibbon.Tab(name: buf.fileName, isDirty: buf.isDirty)
         }
@@ -73,7 +71,7 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
             activeIndex: state.bufferManager.activeIndex,
             scrollOffset: state.tabScrollOffset
         )
-        if let tabIdx = ribbon.tabIndex(atColumn: mouse.col, ribbonX: layout.editorStart) {
+        if let tabIdx = ribbon.tabIndex(atColumn: mouse.col - 1, ribbonX: layout.editorStart) {
             state.switchToTab(tabIdx)
             state.mode = .editor
         }
@@ -81,9 +79,9 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     }
 
     // Activity bar click
-    if state.config.activityBar.show && mouse.col < layout.activityBarWidth && mouse.row >= layout.contentStartRow {
+    if state.config.activityBar.show && mouse.col - 1 < layout.activityBarWidth && mouse.row - 1 >= layout.contentStartRow {
         let items = state.config.activityBar.items
-        let relativeRow = mouse.row - layout.contentStartRow
+        let relativeRow = mouse.row - 1 - layout.contentStartRow
         if relativeRow >= 0, relativeRow < items.count {
             switch items[relativeRow] {
             case "explorer":
@@ -100,9 +98,9 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
 
     // Open files panel click
     if state.activeSidebarPanel == .openDocuments && !state.sidebarCollapsed
-       && mouse.col >= layout.activityBarWidth && mouse.col < layout.editorStart - 1
-       && mouse.row >= layout.contentStartRow {
-        let relativeRow = mouse.row - layout.contentStartRow
+       && mouse.col - 1 >= layout.activityBarWidth && mouse.col - 1 < layout.editorStart - 1
+       && mouse.row - 1 >= layout.contentStartRow {
+        let relativeRow = mouse.row - 1 - layout.contentStartRow
         let bufferIdx = state.openFilesScrollOffset + relativeRow
         if bufferIdx >= 0, bufferIdx < state.bufferManager.count {
             state.switchToTab(bufferIdx)
@@ -119,11 +117,11 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     state.isScrolling = false
     let now = Date()
     let isDoubleClick = now.timeIntervalSince(state.lastClickTime) < 0.3
-    let contentRow = mouse.row - layout.contentStartRow
+    let contentRow = mouse.row - 1 - layout.contentStartRow
 
-    if mouse.col >= layout.activityBarWidth && mouse.col < layout.editorStart - 1 && contentRow >= 0 {
+    if mouse.col - 1 >= layout.activityBarWidth && mouse.col - 1 < layout.editorStart - 1 && contentRow >= 0 {
         handleTreeClick(contentRow: contentRow, isDoubleClick: isDoubleClick, state: state)
-    } else if mouse.col >= layout.editorStart && contentRow >= 0 {
+    } else if mouse.col - 1 >= layout.editorStart && contentRow >= 0 {
         handleEditorClick(mouseRow: mouse.row, mouseCol: mouse.col, editorRect: editorRect, state: state)
     }
 
@@ -187,7 +185,7 @@ private func handleEditorClick(mouseRow: Int, mouseCol: Int, editorRect: Rect, s
         for: editor,
         in: editorRect,
         row: mouseRow - 1,
-        col: mouseCol
+        col: mouseCol - 1
     ) else {
         return
     }
@@ -204,12 +202,14 @@ private func beginScrollDragIfNeeded(
     editorRect: Rect,
     state: EditorState
 ) -> Bool {
+    // Convert 1-based mouse coords to 0-based screen coords
     let pointerRow = mouse.row - 1
+    let pointerCol = mouse.col - 1
 
     let tree = makeTreeView(state: state)
     if let indicatorRect = TreeViewLayout.verticalScrollIndicatorRect(for: tree, in: treeRect),
-       mouse.col >= indicatorRect.x,
-       mouse.col < indicatorRect.maxX,
+       pointerCol >= indicatorRect.x,
+       pointerCol < indicatorRect.maxX,
        let gripOffset = TreeViewLayout.scrollGripOffset(for: tree, in: treeRect, pointerRow: pointerRow) {
         state.scrollDragState = EditorState.ScrollDragState(target: .tree, gripOffset: gripOffset)
         state.treeScrollOffset = TreeViewLayout.scrollOffset(
@@ -225,8 +225,8 @@ private func beginScrollDragIfNeeded(
 
     let editor = makeEditorView(state: state)
     if let indicatorRect = TextEditorLayout.verticalScrollIndicatorRect(for: editor, in: editorRect),
-       mouse.col >= indicatorRect.x,
-       mouse.col < indicatorRect.maxX,
+       pointerCol >= indicatorRect.x,
+       pointerCol < indicatorRect.maxX,
        let gripOffset = TextEditorLayout.scrollGripOffset(for: editor, in: editorRect, pointerRow: pointerRow) {
         state.scrollDragState = EditorState.ScrollDragState(target: .editor, gripOffset: gripOffset)
         state.scrollOffset = TextEditorLayout.scrollOffset(

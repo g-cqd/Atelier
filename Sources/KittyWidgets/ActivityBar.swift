@@ -29,7 +29,7 @@ public struct ActivityBar: Sendable {
     public var activeIndex: Int
     public var style: ActivityBarStyle
 
-    public static let width = 2
+    public static let width = 3
 
     public init(
         items: [Item],
@@ -52,7 +52,8 @@ public struct ActivityBar: Sendable {
             let row = rect.y + i
             let itemStyle = (i == activeIndex) ? style.activeStyle : style.normalStyle
             let icon = item.icon.first ?? " "
-            buffer[row, rect.x] = Cell(character: icon, style: itemStyle)
+            // Center icon in the 3-column bar: [space][icon][space]
+            buffer[row, rect.x + 1] = Cell(character: icon, style: itemStyle)
         }
     }
 
