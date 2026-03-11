@@ -161,6 +161,18 @@ struct DiffRendererTests {
         // Should contain cursor move to 1;1 and the character A
         #expect(output.contains(0x41)) // 'A'
     }
+
+    @Test
+    func `Dirty cells matching front buffer produce no output`() {
+        var front = ScreenBuffer(columns: 5, rows: 1)
+        front.write("hello", row: 0, col: 0, style: .default)
+
+        var back = front
+        back.dirty.markRange(0..<5)
+
+        let output = DiffRenderer.render(front: front, back: back)
+        #expect(output.isEmpty)
+    }
 }
 
 @Suite

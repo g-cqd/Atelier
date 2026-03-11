@@ -32,32 +32,45 @@ public enum DiffRenderer: Sendable {
 
         for range in ranges {
             let row = range.row
-
-            // Move cursor if needed
-            if row != lastRow || range.colStart != lastCol {
-                KittySequences.appendMoveCursor(
-                    row: row + 1,
-                    col: range.colStart + 1,
-                    to: &bytes
-                )
-            }
+            var runStart: Int?
 
             for col in range.colStart..<range.colEnd {
-                let cell = back[row, col]
+                if front[row, col] == back[row, col] {
+                    if let start = runStart {
+                        emitChangedRun(
+                            front: front,
+                            back: back,
+                            row: row,
+                            colStart: start,
+                            colEnd: col,
+                            lastRow: &lastRow,
+                            lastCol: &lastCol,
+                            lastStyle: &lastStyle,
+                            into: &bytes
+                        )
+                        runStart = nil
+                    }
+                    continue
+                }
 
-                // Skip continuation cells — the terminal fills the 2nd column of wide chars automatically
-                if cell.isContinuation { continue }
-
-                // Emit style change
-                SGREncoder.encodeDiff(from: lastStyle, to: cell.style, into: &bytes)
-                lastStyle = cell.style
-
-                // Emit character
-                appendUTF8(cell.character, to: &bytes)
+                if runStart == nil {
+                    runStart = col
+                }
             }
 
-            lastRow = row
-            lastCol = range.colEnd
+            if let start = runStart {
+                emitChangedRun(
+                    front: front,
+                    back: back,
+                    row: row,
+                    colStart: start,
+                    colEnd: range.colEnd,
+                    lastRow: &lastRow,
+                    lastCol: &lastCol,
+                    lastStyle: &lastStyle,
+                    into: &bytes
+                )
+            }
         }
 
         // Reset style at end
@@ -108,5 +121,47 @@ public enum DiffRenderer: Sendable {
         for byte in char.utf8 {
             bytes.append(byte)
         }
+    }
+
+    private static func emitChangedRun(
+        front: ScreenBuffer,
+        back: ScreenBuffer,
+        row: Int,
+        colStart: Int,
+        colEnd: Int,
+        lastRow: inout Int,
+        lastCol: inout Int,
+        lastStyle: inout Style,
+        into bytes: inout ContiguousArray<UInt8>
+    ) {
+        guard colStart < colEnd else { return }
+
+        var emittedAnyCell = false
+
+        for col in colStart..<colEnd {
+            let cell = back[row, col]
+            guard front[row, col] != cell else { continue }
+            guard !cell.isContinuation else { continue }
+
+            if !emittedAnyCell {
+                if row != lastRow || col != lastCol {
+                    KittySequences.appendMoveCursor(
+                        row: row + 1,
+                        col: col + 1,
+                        to: &bytes
+                    )
+                }
+                emittedAnyCell = true
+            }
+
+            SGREncoder.encodeDiff(from: lastStyle, to: cell.style, into: &bytes)
+            lastStyle = cell.style
+            appendUTF8(cell.character, to: &bytes)
+        }
+
+        guard emittedAnyCell else { return }
+
+        lastRow = row
+        lastCol = colEnd
     }
 }

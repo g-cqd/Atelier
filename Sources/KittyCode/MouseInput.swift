@@ -1,6 +1,5 @@
 import Foundation
 import KittyCodecs
-import KittyFileTree
 import KittyRenderer
 import KittyText
 import KittyWidgets
@@ -248,14 +247,20 @@ private func beginScrollDragIfNeeded(
     let pointerRow = mouse.row - 1
     let pointerCol = mouse.col - 1
 
-    let tree = makeTreeView(state: state)
-    if let indicatorRect = TreeViewLayout.verticalScrollIndicatorRect(for: tree, in: treeRect),
+    let treeRowCount = state.cachedFlatTree.count
+    if let indicatorRect = TreePanelLayout.verticalScrollIndicatorRect(rowCount: treeRowCount, in: treeRect),
        pointerCol >= indicatorRect.x,
        pointerCol < indicatorRect.maxX,
-       let gripOffset = TreeViewLayout.scrollGripOffset(for: tree, in: treeRect, pointerRow: pointerRow) {
+       let gripOffset = TreePanelLayout.scrollGripOffset(
+           rowCount: treeRowCount,
+           scrollOffset: state.treeScrollOffset,
+           in: treeRect,
+           pointerRow: pointerRow
+       ) {
         state.scrollDragState = EditorState.ScrollDragState(target: .tree, gripOffset: gripOffset)
-        state.treeScrollOffset = TreeViewLayout.scrollOffset(
-            for: tree,
+        state.treeScrollOffset = TreePanelLayout.scrollOffset(
+            rowCount: treeRowCount,
+            currentOffset: state.treeScrollOffset,
             in: treeRect,
             pointerRow: pointerRow,
             gripOffset: gripOffset
@@ -319,9 +324,9 @@ private func updateScrollDrag(
 
     switch dragState.target {
     case .tree:
-        let tree = makeTreeView(state: state)
-        state.treeScrollOffset = TreeViewLayout.scrollOffset(
-            for: tree,
+        state.treeScrollOffset = TreePanelLayout.scrollOffset(
+            rowCount: state.cachedFlatTree.count,
+            currentOffset: state.treeScrollOffset,
             in: treeRect,
             pointerRow: pointerRow,
             gripOffset: dragState.gripOffset
@@ -356,18 +361,6 @@ private func updateScrollDrag(
 }
 
 @MainActor
-private func makeTreeView(state: EditorState) -> TreeView<FileNode> {
-    TreeView(
-        root: state.treeNodes.map(makeTreeNodeForMouseInput),
-        selectedIndex: state.selectedTreeIndex,
-        scrollOffset: state.treeScrollOffset,
-        showsVerticalScrollIndicator: true,
-        label: { $0.name },
-        rowStyle: { _ in .default }
-    )
-}
-
-@MainActor
 func makeEditorView(state: EditorState) -> TextEditor {
     TextEditor(
         buffer: state.textBuffer,
@@ -383,14 +376,6 @@ func makeEditorView(state: EditorState) -> TextEditor {
         showsHorizontalScrollIndicator: !state.config.wrapLines,
         maxLineWidth: state.maxLineWidth,
         tabSize: state.config.editor.tabSize
-    )
-}
-
-private func makeTreeNodeForMouseInput(_ node: FileNode) -> TreeNode<FileNode> {
-    TreeNode(
-        value: node,
-        children: node.children.map(makeTreeNodeForMouseInput),
-        isExpanded: node.isExpanded
     )
 }
 
