@@ -64,6 +64,11 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
         return
     }
 
+    if mouse.kind == .drag, mouse.button == .left, state.scrollDragState == nil, state.selection != nil {
+        handleSelectionDrag(mouse: mouse, editorRect: editorRect, layout: layout, state: state)
+        return
+    }
+
     if mouse.button.isScroll {
         state.scrollDragState = nil
         let now = Date()
@@ -375,10 +380,13 @@ private func applyWrapModeScrollDelta(_ delta: Int, state: EditorState) -> Bool 
     var wrapRow = oldWrapRow
 
     let contentWidth = wrapModeContentWidth(state: state)
+    state.buildWrapCache(contentWidth: contentWidth)
 
     if delta > 0 {
         for _ in 0..<delta {
-            let lineCount = wrapRowCount(lineIndex: lineIndex, state: state, contentWidth: contentWidth)
+            let lineCount = state.wrapCache.lineWrapCounts.indices.contains(lineIndex)
+                ? state.wrapCache.lineWrapCounts[lineIndex]
+                : 1
             wrapRow += 1
             if wrapRow >= lineCount {
                 if lineIndex >= state.fileLineCount - 1 {
@@ -395,7 +403,9 @@ private func applyWrapModeScrollDelta(_ delta: Int, state: EditorState) -> Bool 
             if wrapRow < 0 {
                 if lineIndex <= 0 { wrapRow = 0; break }
                 lineIndex -= 1
-                wrapRow = wrapRowCount(lineIndex: lineIndex, state: state, contentWidth: contentWidth) - 1
+                wrapRow = (state.wrapCache.lineWrapCounts.indices.contains(lineIndex)
+                    ? state.wrapCache.lineWrapCounts[lineIndex]
+                    : 1) - 1
             }
         }
     }
@@ -404,13 +414,6 @@ private func applyWrapModeScrollDelta(_ delta: Int, state: EditorState) -> Bool 
     state.scrollOffset = lineIndex
     state.wrapRowOffset = wrapRow
     return true
-}
-
-@MainActor
-private func wrapRowCount(lineIndex: Int, state: EditorState, contentWidth: Int) -> Int {
-    guard lineIndex >= 0, lineIndex < state.fileLineCount else { return 1 }
-    let line = state.textBuffer.line(at: lineIndex)
-    return wrappedRowStartColumns(for: line, contentWidth: max(1, contentWidth), tabSize: state.config.editor.tabSize).count
 }
 
 @MainActor
@@ -424,33 +427,6 @@ private func wrapModeContentWidth(state: EditorState) -> Int {
     let gutterDecoWidth = (state.config.git.enabled && state.config.git.decorations.showLineChanges && state.gitLineDecorationProvider != nil) ? 2 : 0
     let gutterWidth = gutterDecoWidth + lineNumberWidth
     return max(1, layout.editorWidth - gutterWidth - 1)
-}
-
-private func wrappedRowStartColumns(for line: String, contentWidth: Int, tabSize: Int) -> [Int] {
-    guard contentWidth > 0 else { return [0] }
-
-    var starts = [0]
-    var currentRowWidth = 0
-
-    for char in line {
-        let width: Int
-        if char == "\t" {
-            let ts = max(1, tabSize)
-            width = ts - (currentRowWidth % ts)
-        } else {
-            width = UnicodeWidth.displayWidth(of: char)
-        }
-        guard width > 0 else { continue }
-
-        if currentRowWidth > 0, currentRowWidth + width > contentWidth {
-            starts.append(starts[starts.count - 1] + currentRowWidth)
-            currentRowWidth = 0
-        }
-
-        currentRowWidth += width
-    }
-
-    return starts
 }
 
 @MainActor
@@ -606,9 +582,28 @@ private func handleEditorClick(mouseRow: Int, mouseCol: Int, editorRect: Rect, s
         return
     }
 
+    state.clearSelection()
+    state.selection = TextSelection(anchor: position, head: position)
     state.cursorRow = position.row
     state.cursorCol = position.col
     state.mode = .editor
+}
+
+@MainActor
+private func handleSelectionDrag(mouse: MouseEvent, editorRect: Rect, layout: LayoutMetrics, state: EditorState) {
+    let contentTop = layout.contentStartRow
+    let contentBottom = layout.contentStartRow + layout.contentRows
+
+    if mouse.row <= contentTop {
+        state.scrollOffset = max(0, state.scrollOffset - 1)
+    } else if mouse.row >= contentBottom {
+        state.scrollOffset = min(state.fileLineCount - 1, state.scrollOffset + 1)
+    }
+
+    let editor = makeEditorView(state: state)
+    if let pos = TextEditorLayout.textPosition(for: editor, in: editorRect, row: mouse.row - 1, col: mouse.col - 1) {
+        state.selection?.head = pos
+    }
 }
 
 @MainActor
