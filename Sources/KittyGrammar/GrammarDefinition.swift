@@ -87,5 +87,6 @@ public enum GrammarError: Error, Sendable, Equatable {
     case invalidJSON(String)
     case missingField(String)
     case invalidRuleType(String)
+    case resourceLimitExceeded(String)
     case unsupportedVersion(Int)
 }
