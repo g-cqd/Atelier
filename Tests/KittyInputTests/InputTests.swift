@@ -168,6 +168,47 @@ struct SequenceRouterTests {
         assertSingleKeyEvent(in: recoveryEvents, expectedKeyCode: 97)
     }
 
+    @Test("Routes mouse drag sequence (button-event tracking)")
+    func mouseDragSequence() {
+        var router = makeSUT()
+
+        // Press: CSI < 0 ; 10 ; 5 M (left press at col 10, row 5)
+        let press = router.feedAll([0x1b, 0x5b, 0x3c, 0x30, 0x3b, 0x31, 0x30, 0x3b, 0x35, 0x4d])
+        #expect(press.count == 1)
+        if case let .some(.mouse(m)) = press.first {
+            #expect(m.button == .left)
+            #expect(m.kind == .press)
+            #expect(m.col == 10)
+            #expect(m.row == 5)
+        } else {
+            Issue.record("Expected mouse press event")
+        }
+
+        // Drag: CSI < 32 ; 10 ; 8 M (left drag to col 10, row 8)
+        let drag = router.feedAll([0x1b, 0x5b, 0x3c, 0x33, 0x32, 0x3b, 0x31, 0x30, 0x3b, 0x38, 0x4d])
+        #expect(drag.count == 1)
+        if case let .some(.mouse(m)) = drag.first {
+            #expect(m.button == .left)
+            #expect(m.kind == .drag)
+            #expect(m.col == 10)
+            #expect(m.row == 8)
+        } else {
+            Issue.record("Expected mouse drag event")
+        }
+
+        // Release: CSI < 0 ; 10 ; 8 m (left release at col 10, row 8)
+        let release = router.feedAll([0x1b, 0x5b, 0x3c, 0x30, 0x3b, 0x31, 0x30, 0x3b, 0x38, 0x6d])
+        #expect(release.count == 1)
+        if case let .some(.mouse(m)) = release.first {
+            #expect(m.button == .left)
+            #expect(m.kind == .release)
+            #expect(m.col == 10)
+            #expect(m.row == 8)
+        } else {
+            Issue.record("Expected mouse release event")
+        }
+    }
+
     private func assertSingleKeyEvent(in events: [InputEvent], expectedKeyCode: UInt32) {
         #expect(events.count == 1)
         if case let .some(.key(key)) = events.first {

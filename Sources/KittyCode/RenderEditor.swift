@@ -37,8 +37,10 @@ func renderEditorPanel(
         lineNumberStyle: colorScheme.lineNumber,
         currentLineStyle: colorScheme.editorCursorLine,
         verticalScrollIndicatorStyle: VerticalScrollIndicatorStyle(
-            trackStyle: colorScheme.lineNumber,
-            thumbStyle: colorScheme.editorCursorLine
+            trackStyle: Style(fg: .rgb(r: 60, g: 60, b: 60), dim: true),
+            thumbStyle: Style(fg: .rgb(r: 140, g: 140, b: 140), dim: true),
+            trackCharacter: " ",
+            thumbCharacter: "▓"
         ),
         modeShowsCursor: state.mode == .editor
     )
