@@ -14,7 +14,7 @@ func renderEditorPanel(
     contentRows: Int,
     colorScheme: EditorState.ColorScheme
 ) -> (row: Int, col: Int)? {
-    if state.isFileEmpty {
+    if state.bufferManager.isEmpty && state.isFileEmpty {
         renderEmptyEditor(
             pipeline: pipeline,
             editorStart: editorStart,
@@ -27,9 +27,21 @@ func renderEditorPanel(
     }
 
     let gutterDecorations = activeGutterDecorations(state: state, colorScheme: colorScheme)
+    let lineStyleOverlays = activeLineStyleOverlays(state: state, colorScheme: colorScheme)
+
+    let wsConfig = WhitespaceRenderer.Config(
+        showIndentation: state.config.whitespace.showIndentation,
+        showSpaces: state.config.whitespace.showSpaces,
+        showLineBreaks: state.config.whitespace.showLineBreaks,
+        showUnexpected: state.config.whitespace.showUnexpected,
+        indentationStyle: colorScheme.whitespaceIndentation,
+        spaceStyle: colorScheme.whitespaceSpace,
+        lineBreakStyle: colorScheme.whitespaceLineBreak,
+        unexpectedStyle: colorScheme.whitespaceUnexpected
+    )
 
     let editor = TextEditor(
-        lines: state.fileContent,
+        buffer: state.textBuffer,
         lineSpans: state.highlightedLines,
         scrollOffset: state.scrollOffset,
         horizontalScrollOffset: state.hScrollOffset,
@@ -41,16 +53,15 @@ func renderEditorPanel(
         wrapLines: state.config.wrapLines,
         showsVerticalScrollIndicator: true,
         showsHorizontalScrollIndicator: !state.config.wrapLines,
+        lineStyleOverlays: lineStyleOverlays,
         editorStyle: colorScheme.editorText,
         lineNumberStyle: colorScheme.lineNumber,
         currentLineStyle: colorScheme.editorCursorLine,
-        verticalScrollIndicatorStyle: VerticalScrollIndicatorStyle(
-            trackStyle: Style(fg: .rgb(r: 60, g: 60, b: 60), dim: true),
-            thumbStyle: Style(fg: .rgb(r: 140, g: 140, b: 140), dim: true),
-            trackCharacter: " ",
-            thumbCharacter: "\u{2593}"
-        ),
-        modeShowsCursor: state.mode == .editor
+        verticalScrollIndicatorStyle: colorScheme.verticalScrollIndicator,
+        horizontalScrollIndicatorStyle: colorScheme.horizontalScrollIndicator,
+        modeShowsCursor: state.mode == .editor,
+        maxLineWidth: state.maxLineWidth,
+        whitespaceConfig: wsConfig
     )
 
     let rect = Rect(x: editorStart, y: contentStartRow, width: editorWidth, height: contentRows)

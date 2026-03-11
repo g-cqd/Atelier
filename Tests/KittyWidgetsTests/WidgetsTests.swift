@@ -578,6 +578,50 @@ struct TextRenderingTests {
         #expect(buffer[0, 2].style.bg == currentLineStyle.bg)
     }
 
+    @Test func `render text editor applies current-line style across the full editor width`() {
+        var buffer = makeSUT(columns: 8, rows: 1)
+        let rect = Rect(x: 0, y: 0, width: 8, height: 1)
+        let currentLineStyle = Style(bg: .rgb(r: 40, g: 50, b: 60))
+        let editor = TextEditor(
+            lines: ["Hi"],
+            lineSpans: [[StyledSpan(text: "Hi", style: .default)]],
+            cursorRow: 0,
+            showLineNumbers: true,
+            currentLineStyle: currentLineStyle
+        )
+
+        editor.render(to: &buffer, in: rect)
+
+        #expect(buffer[0, 0].style.bg == currentLineStyle.bg)
+        #expect(buffer[0, 7].style.bg == currentLineStyle.bg)
+    }
+
+    @Test func `render text editor blends line overlays into text and trailing fill`() {
+        var buffer = makeSUT(columns: 4, rows: 1)
+        let rect = Rect(x: 0, y: 0, width: 4, height: 1)
+        let overlay = TextStyleOverlay(
+            foreground: ColorOverlay(color: .rgb(r: 220, g: 40, b: 60), alpha: 0.5),
+            background: ColorOverlay(color: .rgb(r: 110, g: 120, b: 130), alpha: 0.5)
+        )
+        let textStyle = Style(
+            fg: .rgb(r: 20, g: 40, b: 60),
+            bg: .rgb(r: 10, g: 20, b: 30)
+        )
+        let editor = TextEditor(
+            lines: ["A"],
+            lineSpans: [[StyledSpan(text: "A", style: textStyle)]],
+            showLineNumbers: false,
+            lineStyleOverlays: [0: overlay],
+            editorStyle: Style(bg: .rgb(r: 10, g: 20, b: 30))
+        )
+
+        editor.render(to: &buffer, in: rect)
+
+        #expect(buffer[0, 0].style.fg == .rgb(r: 120, g: 40, b: 60))
+        #expect(buffer[0, 0].style.bg == .rgb(r: 60, g: 70, b: 80))
+        #expect(buffer[0, 1].style.bg == .rgb(r: 60, g: 70, b: 80))
+    }
+
     @Test func `render wrapped text editor uses line-number gutter only on first visual row`() {
         var buffer = makeSUT(columns: 6, rows: 3)
         let rect = Rect(x: 0, y: 0, width: 6, height: 3)
@@ -1128,6 +1172,136 @@ struct FocusEngineTests {
         var sut = FocusEngine(focusedIndex: 0, focusableCount: 1)
         sut.focusPrevious()
         #expect(sut.focusedIndex == 0)
+    }
+}
+
+// MARK: - ListView Tests
+
+@Suite
+struct ListViewTests {
+    private func makeSUT(columns: Int = 20, rows: Int = 5) -> ScreenBuffer {
+        ScreenBuffer(columns: columns, rows: rows)
+    }
+
+    @Test func `empty list fills with normal style`() {
+        var buffer = makeSUT()
+        let list = ListView(items: [], style: ListView.ListViewStyle(normalStyle: Style(fg: .rgb(r: 100, g: 100, b: 100))))
+        list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 5))
+        #expect(buffer[0, 0].character == " ")
+        #expect(buffer[0, 0].style.fg == .rgb(r: 100, g: 100, b: 100))
+    }
+
+    @Test func `selected item uses selected style`() {
+        var buffer = makeSUT()
+        let items = [
+            ListView.Item(label: "alpha"),
+            ListView.Item(label: "beta"),
+        ]
+        let style = ListView.ListViewStyle(
+            normalStyle: Style(fg: .rgb(r: 100, g: 100, b: 100)),
+            selectedStyle: Style(fg: .rgb(r: 255, g: 255, b: 255), bold: true)
+        )
+        let list = ListView(items: items, selectedIndex: 1, style: style)
+        list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 5))
+        // Row 1 (beta) should be bold
+        #expect(buffer[1, 1].style.bold == true)
+        // Row 0 (alpha) should not be bold
+        #expect(buffer[0, 1].style.bold == false)
+    }
+
+    @Test func `dirty indicator appears for dirty items`() {
+        var buffer = makeSUT()
+        let items = [ListView.Item(label: "file.txt", isDirty: true)]
+        let list = ListView(items: items, style: ListView.ListViewStyle())
+        list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 5))
+        let rowChars = (0..<20).map { buffer[0, $0].character }
+        let rowText = String(rowChars)
+        #expect(rowText.contains("\u{25CF}"))
+    }
+
+    @Test func `suffix renders with suffix style`() {
+        var buffer = makeSUT(columns: 30)
+        let items = [ListView.Item(label: "file.txt", suffix: "M", suffixStyle: Style(fg: .rgb(r: 255, g: 0, b: 0)))]
+        let list = ListView(items: items, style: ListView.ListViewStyle())
+        list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 30, height: 5))
+        // Find the M character and check its style
+        let mCol = (0..<30).first { buffer[0, $0].character == "M" }
+        #expect(mCol != nil)
+        if let col = mCol {
+            #expect(buffer[0, col].style.fg == .rgb(r: 255, g: 0, b: 0))
+        }
+    }
+
+    @Test func `scroll offset shifts visible items`() {
+        var buffer = makeSUT(rows: 2)
+        let items = (0..<5).map { ListView.Item(label: "item\($0)") }
+        let list = ListView(items: items, selectedIndex: 3, scrollOffset: 2, style: ListView.ListViewStyle())
+        list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 2))
+        let row0Chars = (0..<20).map { buffer[0, $0].character }
+        let row0Text = String(row0Chars).trimmingCharacters(in: .whitespaces)
+        #expect(row0Text.contains("item2"))
+    }
+
+    @Test func `icon renders before label`() {
+        var buffer = makeSUT()
+        let items = [ListView.Item(label: "test.txt", icon: "F")]
+        let list = ListView(items: items, style: ListView.ListViewStyle())
+        list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 5))
+        let rowChars = (0..<20).map { buffer[0, $0].character }
+        let rowText = String(rowChars)
+        #expect(rowText.contains("F"))
+        #expect(rowText.contains("test.txt"))
+    }
+}
+
+// MARK: - CenteredText Tests
+
+@Suite
+struct CenteredTextTests {
+    @Test func `text is horizontally centered`() {
+        var buffer = ScreenBuffer(columns: 20, rows: 5)
+        let centered = CenteredText(
+            text: "Hi",
+            style: Style(fg: .rgb(r: 100, g: 100, b: 100)),
+            backgroundStyle: Style(fg: .rgb(r: 200, g: 200, b: 200))
+        )
+        centered.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 5))
+        // Text should be on the middle row (row 2 for height 5)
+        let midRow = 2
+        let rowChars = (0..<20).map { buffer[midRow, $0].character }
+        let rowText = String(rowChars).trimmingCharacters(in: .whitespaces)
+        #expect(rowText == "Hi")
+    }
+
+    @Test func `background rows use background style`() {
+        var buffer = ScreenBuffer(columns: 10, rows: 3)
+        let centered = CenteredText(
+            text: "X",
+            style: Style(fg: .rgb(r: 100, g: 100, b: 100)),
+            backgroundStyle: Style(fg: .rgb(r: 50, g: 50, b: 50))
+        )
+        centered.render(to: &buffer, in: Rect(x: 0, y: 0, width: 10, height: 3))
+        // Row 0 should use background style (text is on row 1 for height 3)
+        #expect(buffer[0, 0].style.fg == .rgb(r: 50, g: 50, b: 50))
+    }
+
+    @Test func `text row uses text style`() {
+        var buffer = ScreenBuffer(columns: 10, rows: 3)
+        let centered = CenteredText(
+            text: "X",
+            style: Style(fg: .rgb(r: 100, g: 100, b: 100)),
+            backgroundStyle: Style(fg: .rgb(r: 50, g: 50, b: 50))
+        )
+        centered.render(to: &buffer, in: Rect(x: 0, y: 0, width: 10, height: 3))
+        // Middle row (1 for height 3) should use text style
+        #expect(buffer[1, 0].style.fg == .rgb(r: 100, g: 100, b: 100))
+    }
+
+    @Test func `empty rect produces no crash`() {
+        var buffer = ScreenBuffer(columns: 10, rows: 10)
+        let centered = CenteredText(text: "Hello")
+        centered.render(to: &buffer, in: Rect(x: 0, y: 0, width: 0, height: 0))
+        // No crash is the assertion
     }
 }
 

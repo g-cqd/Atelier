@@ -36,6 +36,23 @@ struct KittyCodeConfigTests {
     }
 
     @Test
+    func `Color overlay config decodes shorthand and alpha object`() throws {
+        let shorthand = try JSONDecoder().decode(
+            ColorOverlayConfig.self,
+            from: Data("\"#abcdef\"".utf8)
+        )
+        let alphaOverlay = try JSONDecoder().decode(
+            ColorOverlayConfig.self,
+            from: Data("{\"color\":\"#112233\",\"alpha\":0.25}".utf8)
+        )
+
+        #expect(shorthand.color == ColorRGB(r: 0xab, g: 0xcd, b: 0xef))
+        #expect(shorthand.alpha == 1)
+        #expect(alphaOverlay.color == ColorRGB(r: 0x11, g: 0x22, b: 0x33))
+        #expect(alphaOverlay.alpha == 0.25)
+    }
+
+    @Test
     @MainActor
     func `Color scheme uses terminal default backgrounds`() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
@@ -102,6 +119,21 @@ struct KittyCodeNavigationTests {
     }
 
     @Test
+    func `horizontal mouse wheel events update horizontal scroll offset`() {
+        let sut = makeSUT(fileContent: ["0123456789abcdefghijklmnopqrstuvwxyz"], columns: 18, rows: 8)
+        sut.state.mode = .editor
+        sut.state.sidebarCollapsed = true
+
+        handleMouse(
+            MouseEvent(button: .scrollRight, row: 2, col: 5, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.hScrollOffset == 4)
+    }
+
+    @Test
     func `ensureTreeVisible scrolls selected row into viewport`() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         // Populate the underlying FileNode tree and flatten it
@@ -150,6 +182,66 @@ struct KittyCodeNavigationTests {
 
         #expect(handled)
         #expect(sut.state.cursorCol == 6)
+    }
+
+    @Test
+    func `left arrow wraps to previous line when enabled`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbonPosition = .hidden
+        config.editor.arrowKeysWrapAcrossLines = true
+
+        let state = EditorState(rootPath: ".", config: config)
+        state.mode = .editor
+        state.fileContent = ["ab", "cde"]
+        state.cursorRow = 1
+        state.cursorCol = 0
+
+        let pipeline = RenderPipeline(
+            connection: MockTerminalConnection(size: TerminalSize(columns: 40, rows: 10)),
+            columns: 40,
+            rows: 10
+        )
+
+        let handled = handleEvent(
+            event: .key(KeyEvent(keyCode: Key.left.rawValue)),
+            state: state,
+            pipeline: pipeline
+        )
+
+        #expect(handled)
+        #expect(state.cursorRow == 0)
+        #expect(state.cursorCol == 2)
+    }
+
+    @Test
+    func `right arrow wraps to next line when enabled`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbonPosition = .hidden
+        config.editor.arrowKeysWrapAcrossLines = true
+
+        let state = EditorState(rootPath: ".", config: config)
+        state.mode = .editor
+        state.fileContent = ["ab", "cde"]
+        state.cursorRow = 0
+        state.cursorCol = 2
+
+        let pipeline = RenderPipeline(
+            connection: MockTerminalConnection(size: TerminalSize(columns: 40, rows: 10)),
+            columns: 40,
+            rows: 10
+        )
+
+        let handled = handleEvent(
+            event: .key(KeyEvent(keyCode: Key.right.rawValue)),
+            state: state,
+            pipeline: pipeline
+        )
+
+        #expect(handled)
+        #expect(state.cursorRow == 1)
+        #expect(state.cursorCol == 0)
     }
 
     @Test
@@ -640,7 +732,8 @@ struct MultiBufferIntegrationTests {
     }
 
     @Test
-    func `opening and restoring a file preserves exact document snapshots`() throws {
+    @MainActor
+    func `opening and restoring a file preserves exact document snapshots`() async throws {
         let fileManager = FileManager.default
         let rootURL = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
@@ -656,11 +749,23 @@ struct MultiBufferIntegrationTests {
         config.tabRibbonPosition = .hidden
         let state = EditorState(rootPath: rootURL.path, config: config)
 
+        func waitUntil(_ condition: @escaping () -> Bool) async {
+            for _ in 0..<200 {
+                if condition() {
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+            Issue.record("Timed out waiting for asynchronous file open")
+        }
+
         state.openFilePath(firstFileURL.path, name: "first.txt")
+        await waitUntil { state.fileName == "first.txt" }
         #expect(state.fileContent == ["alpha", "beta", ""])
         #expect(state.documentText == "alpha\nbeta\n")
 
         state.openFilePath(secondFileURL.path, name: "second.txt")
+        await waitUntil { state.fileName == "second.txt" }
         state.switchToTab(0)
 
         #expect(state.fileName == "first.txt")
@@ -776,8 +881,12 @@ struct RuntimeRegressionsTests {
 
         render(pipeline: sut.pipeline, state: sut.state)
 
-        let rowText = String((0..<cols).map { sut.pipeline.buffer[1, $0].character })
-        #expect(rowText.contains("M"))
+        let mCol = (0..<cols).first { sut.pipeline.buffer[1, $0].character == "M" }
+        #expect(mCol != nil, "Expected 'M' indicator in tab ribbon row")
+        if let col = mCol {
+            let cell = sut.pipeline.buffer[1, col]
+            #expect(cell.style == sut.state.colorScheme.gitModified, "M indicator should use gitModified style")
+        }
     }
 
     @Test
@@ -792,8 +901,12 @@ struct RuntimeRegressionsTests {
 
         render(pipeline: sut.pipeline, state: sut.state)
 
-        let rowText = String((0..<16).map { sut.pipeline.buffer[1, $0].character })
-        #expect(rowText.contains("M"))
+        let mCol = (0..<16).first { sut.pipeline.buffer[1, $0].character == "M" }
+        #expect(mCol != nil, "Expected 'M' indicator in open files panel")
+        if let col = mCol {
+            let cell = sut.pipeline.buffer[1, col]
+            #expect(cell.style == sut.state.colorScheme.gitModified, "M indicator should use gitModified style")
+        }
     }
 
     // --- Activity bar ---
@@ -814,6 +927,79 @@ struct RuntimeRegressionsTests {
     @Test
     func `ActivityBar width is 3`() {
         #expect(ActivityBar.width == 3)
+    }
+
+    @Test
+    func `ctrl n creates an editable untitled buffer`() {
+        let sut = makeSUT(columns: 40, rows: 10)
+        sut.state.mode = .tree
+        sut.state.sidebarCollapsed = true
+
+        let handled = handleEvent(
+            event: .key(KeyEvent(keyCode: AsciiKey.n, modifiers: .ctrl)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(handled)
+        #expect(sut.state.bufferManager.count == 1)
+        #expect(sut.state.fileName == "Untitled")
+        #expect(sut.state.mode == .editor)
+
+        render(pipeline: sut.pipeline, state: sut.state)
+
+        #expect(sut.pipeline.cursorRow != nil)
+        #expect(sut.pipeline.cursorCol != nil)
+    }
+
+    @Test
+    func `save prompt writes a new file under the project root`() throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: rootURL,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbonPosition = .hidden
+        let state = EditorState(rootPath: rootURL.path, config: config)
+        let pipeline = RenderPipeline(
+            connection: MockTerminalConnection(size: TerminalSize(columns: 40, rows: 10)),
+            columns: 40,
+            rows: 10
+        )
+
+        state.beginNewFile()
+        insertText("hello", into: state)
+
+        let startedPrompt = handleEvent(
+            event: .key(KeyEvent(keyCode: AsciiKey.o, modifiers: .ctrl)),
+            state: state,
+            pipeline: pipeline
+        )
+        let enteredPath = handleEvent(
+            event: .key(KeyEvent(keyCode: 0, associatedText: "notes/new.txt")),
+            state: state,
+            pipeline: pipeline
+        )
+        let submittedPrompt = handleEvent(
+            event: .key(KeyEvent(keyCode: Key.enter.rawValue)),
+            state: state,
+            pipeline: pipeline
+        )
+
+        let savedURL = rootURL.appendingPathComponent("notes/new.txt")
+
+        #expect(startedPrompt)
+        #expect(enteredPath)
+        #expect(submittedPrompt)
+        #expect(state.prompt == nil)
+        #expect(state.filePath == savedURL.path)
+        #expect(state.fileName == "new.txt")
+        #expect(FileManager.default.fileExists(atPath: savedURL.path))
+        #expect(try String(contentsOf: savedURL, encoding: .utf8) == "hello")
     }
 
     // --- Mouse coordinate handling (1-based SGR to 0-based screen) ---
@@ -1144,6 +1330,113 @@ struct TabPersistenceConfigTests {
         """
         let config = try JSONDecoder().decode(KittyConfig.self, from: Data(json.utf8))
         #expect(config.tabPersistence == .pinned)
+    }
+}
+
+// MARK: - LayoutMetrics Tests
+
+@Suite
+@MainActor
+struct LayoutMetricsTests {
+    @Test
+    func `editorStart with sidebar visible`() {
+        var config = KittyConfig()
+        config.activityBar.show = true
+        let state = EditorState(rootPath: ".", config: config)
+        state.treePanelWidth = 20
+        state.sidebarCollapsed = false
+
+        let layout = LayoutMetrics(state: state, columns: 80, rows: 24)
+        // activityBarWidth(3) + sidebarWidth(20) + separator(1) = 24
+        #expect(layout.editorStart == 24)
+        #expect(layout.editorWidth == 56)
+        #expect(layout.activityBarWidth == 3)
+        #expect(layout.sidebarWidth == 20)
+    }
+
+    @Test
+    func `editorStart with sidebar collapsed`() {
+        var config = KittyConfig()
+        config.activityBar.show = true
+        let state = EditorState(rootPath: ".", config: config)
+        state.sidebarCollapsed = true
+
+        let layout = LayoutMetrics(state: state, columns: 80, rows: 24)
+        #expect(layout.editorStart == 0)
+        #expect(layout.editorWidth == 80)
+        #expect(layout.activityBarWidth == 0)
+        #expect(layout.sidebarWidth == 0)
+    }
+
+    @Test
+    func `contentRows accounts for tab ribbon`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbonPosition = .top
+        let state = EditorState(rootPath: ".", config: config)
+        state.sidebarCollapsed = true
+        // Need at least one buffer for tab ribbon to show
+        state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "", language: nil)
+
+        let layout = LayoutMetrics(state: state, columns: 80, rows: 24)
+        #expect(layout.showTabRibbon == true)
+        #expect(layout.contentStartRow == 2)
+        #expect(layout.contentRows == 21) // rows - 2 - tabRows = 24 - 2 - 1 = 21
+    }
+
+    @Test
+    func `static editorStart matches instance editorStart`() {
+        var config = KittyConfig()
+        config.activityBar.show = true
+        let state = EditorState(rootPath: ".", config: config)
+        state.treePanelWidth = 15
+        state.sidebarCollapsed = false
+
+        let layout = LayoutMetrics(state: state, columns: 60, rows: 20)
+        let staticStart = LayoutMetrics.editorStart(state: state, columns: 60)
+        #expect(layout.editorStart == staticStart)
+    }
+
+    @Test
+    func `sidebarWidth is clamped to half of columns`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        let state = EditorState(rootPath: ".", config: config)
+        state.treePanelWidth = 100
+        state.sidebarCollapsed = false
+
+        let layout = LayoutMetrics(state: state, columns: 40, rows: 24)
+        #expect(layout.sidebarWidth == 20)
+    }
+}
+
+// MARK: - resolvedStyle Tests
+
+@Suite
+struct ResolvedStyleTests {
+    @Test
+    func `resolvedStyle returns nil for nil color`() {
+        let theme = KittyConfig.Theme()
+        #expect(theme.resolvedStyle(nil) == nil)
+    }
+
+    @Test
+    func `resolvedStyle returns style for non-nil color`() {
+        let theme = KittyConfig.Theme()
+        let color = ColorRGB(r: 0xff, g: 0x00, b: 0x00)
+        let style = theme.resolvedStyle(color)
+        #expect(style != nil)
+        #expect(style?.fg == Color.rgb(r: 0xff, g: 0x00, b: 0x00))
+        #expect(style?.bold == false)
+    }
+
+    @Test
+    func `resolvedStyle with bold flag`() {
+        let theme = KittyConfig.Theme()
+        let color = ColorRGB(r: 0x00, g: 0xff, b: 0x00)
+        let style = theme.resolvedStyle(color, bold: true)
+        #expect(style != nil)
+        #expect(style?.bold == true)
     }
 }
 
