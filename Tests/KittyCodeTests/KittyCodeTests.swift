@@ -158,6 +158,32 @@ struct KittyCodeNavigationTests {
     }
 
     @Test
+    func `tree panel scrollbar drag preserves existing mapping`() {
+        let rect = Rect(x: 1, y: 1, width: 10, height: 5)
+
+        #expect(TreePanelLayout.contentWidth(rowCount: 20, in: rect) == 9)
+        #expect(TreePanelLayout.verticalScrollIndicatorRect(rowCount: 20, in: rect) == Rect(x: 10, y: 1, width: 1, height: 5))
+
+        let gripOffset = TreePanelLayout.scrollGripOffset(
+            rowCount: 20,
+            scrollOffset: 0,
+            in: rect,
+            pointerRow: 2
+        )
+
+        #expect(gripOffset == 1)
+        #expect(
+            TreePanelLayout.scrollOffset(
+                rowCount: 20,
+                currentOffset: 0,
+                in: rect,
+                pointerRow: 5,
+                gripOffset: gripOffset ?? 0
+            ) == 19
+        )
+    }
+
+    @Test
     func `handleEvent moves cursor for repeated arrow keys`() {
         let sut = makeSUT(fileContent: ["one", "two", "three"])
 
