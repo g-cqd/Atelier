@@ -1,5 +1,6 @@
 import Foundation
 import KittyApp
+import KittyGit
 import KittyRenderer
 import KittyTerminal
 
@@ -29,6 +30,13 @@ struct KittyCodeEntry {
         let config = KittyConfig.load()
         let state = EditorState(rootPath: rootPath, config: config)
         await state.loadInitialTree()
+
+        if let repositoryRoot = GitStatusProvider.repositoryRoot(for: rootPath) {
+            let gitProvider = GitStatusProvider(rootPath: repositoryRoot)
+            await gitProvider.refresh()
+            state.fileStatusProvider = gitProvider
+        }
+
         let connection = POSIXTerminalConnection()
         let runtime = ApplicationRuntime(connection: connection)
 

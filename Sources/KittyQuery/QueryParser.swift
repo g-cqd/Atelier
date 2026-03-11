@@ -47,6 +47,8 @@ public enum QueryParser: Sendable {
             pattern = try parseLiteralPattern(&scanner)
         case "_":
             pattern = try parseWildcard(&scanner)
+        case ".":
+            pattern = parseAnchor(&scanner)
         case "[":
             pattern = try parseAlternation(&scanner)
         case "#":
@@ -64,6 +66,7 @@ public enum QueryParser: Sendable {
 
         let predicates = try parsePredicates(&scanner)
         pattern = wrap(pattern, with: predicates)
+        consumeQuantifier(&scanner)
 
         return pattern
     }
@@ -77,6 +80,8 @@ public enum QueryParser: Sendable {
             return .literal(value, capture: existing ?? capture)
         case .wildcard(let existing):
             return .wildcard(capture: existing ?? capture)
+        case .alternation(let patterns):
+            return .alternation(patterns.map { attachCapture(capture, to: $0) })
         case .sequence(let patterns):
             guard !patterns.isEmpty else { return pattern }
             var updatedPatterns = patterns
@@ -99,6 +104,19 @@ public enum QueryParser: Sendable {
             }
             scanner.advance()
             return predicate
+        }
+
+        if scanner.isGroupStart() {
+            var patterns: [QueryPattern] = []
+            while let ch = scanner.peek(), ch != ")" {
+                patterns.append(try parsePattern(&scanner))
+                scanner.skipWhitespaceAndComments()
+            }
+            guard scanner.peek() == ")" else {
+                throw .syntaxError("Expected )")
+            }
+            scanner.advance()
+            return patterns.count == 1 ? patterns[0] : .sequence(patterns)
         }
 
         // Check for wildcard (_)
@@ -187,6 +205,11 @@ public enum QueryParser: Sendable {
         return .alternation(alternatives)
     }
 
+    private static func parseAnchor(_ scanner: inout Scanner) -> QueryPattern {
+        scanner.advance()
+        return .anchor
+    }
+
     private static func parsePredicatePattern(_ scanner: inout Scanner) throws(QueryError) -> QueryPattern {
         guard scanner.peek() == "#" else {
             throw .syntaxError("Expected #")
@@ -271,13 +294,20 @@ public enum QueryParser: Sendable {
             guard args.count >= 2 else { throw .syntaxError("is-not? requires 2 arguments") }
             return .isNot(capture: args[0], property: args[1])
         default:
-            throw .unknownPredicate(name)
+            return .directive(name: name, arguments: args)
         }
     }
 
     private static func wrap(_ pattern: QueryPattern, with predicates: [QueryPattern]) -> QueryPattern {
         guard !predicates.isEmpty else { return pattern }
         return .sequence([pattern] + predicates)
+    }
+
+    private static func consumeQuantifier(_ scanner: inout Scanner) {
+        guard let next = scanner.peek(), next == "+" || next == "*" || next == "?" else {
+            return
+        }
+        scanner.advance()
     }
 }
 
@@ -407,5 +437,10 @@ private struct Scanner: Sendable {
         }
 
         return false
+    }
+
+    func isGroupStart() -> Bool {
+        guard let next = peek() else { return false }
+        return next == "(" || next == "[" || next == "\"" || next == "_" || next == "."
     }
 }

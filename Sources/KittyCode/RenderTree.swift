@@ -13,6 +13,7 @@ func renderTreePanel(
     colorScheme: EditorState.ColorScheme
 ) {
     let root = state.treeNodes.map(makeTreeNode)
+    let provider = state.fileStatusProvider
     let view = TreeView(
         root: root,
         selectedIndex: state.selectedTreeIndex,
@@ -33,7 +34,16 @@ func renderTreePanel(
             )
         ),
         label: { $0.name },
-        rowStyle: { $0.isDirectory ? colorScheme.treeDir : colorScheme.treeBg }
+        rowStyle: { $0.isDirectory ? colorScheme.treeDir : colorScheme.treeBg },
+        rowSuffix: { node in
+            provider?.status(for: node.path)?.indicator ?? ""
+        },
+        rowSuffixStyle: { node in
+            guard let status = provider?.status(for: node.path) else {
+                return colorScheme.treeBg
+            }
+            return colorScheme.gitStatusStyle(for: status.statusColor)
+        }
     )
     view.render(to: &pipeline.buffer, in: Rect(x: 0, y: 1, width: treeWidth, height: contentRows))
 

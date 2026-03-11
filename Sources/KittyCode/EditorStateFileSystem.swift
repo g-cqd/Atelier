@@ -64,47 +64,22 @@ extension EditorState {
             vimMode = .normal
             statusMessage = "-- NORMAL -- [\(node.name)] :w=Save, :q=Quit"
         }
+
+        // Load grammar artifacts off the main thread, then re-highlight with full syntax
+        if let language = currentLanguage {
+            Task {
+                let available = await LanguageHighlighter.ensureArtifacts(for: language)
+                if available {
+                    self.invalidateHighlightSession()
+                    self.refreshHighlights()
+                }
+            }
+        }
     }
 
     /// Detect language name from file extension.
     static func detectLanguage(for filename: String) -> String? {
-        let ext = (filename as NSString).pathExtension
-        let extensionMap: [String: String] = [
-            "swift": "swift",
-            "json": "json",
-            "js": "javascript",
-            "mjs": "javascript",
-            "cjs": "javascript",
-            "ts": "typescript",
-            "mts": "typescript",
-            "cts": "typescript",
-            "py": "python",
-            "pyi": "python",
-            "rs": "rust",
-            "go": "go",
-            "c": "c",
-            "h": "c",
-            "cpp": "cpp",
-            "hpp": "cpp",
-            "cc": "cpp",
-            "cxx": "cpp",
-            "html": "html",
-            "htm": "html",
-            "css": "css",
-            "sh": "bash",
-            "bash": "bash",
-            "rb": "ruby",
-            "java": "java",
-            "kt": "kotlin",
-            "kts": "kotlin",
-            "lua": "lua",
-            "toml": "toml",
-            "yml": "yaml",
-            "yaml": "yaml",
-            "md": "markdown",
-            "markdown": "markdown",
-        ]
-        return extensionMap[ext]
+        LanguageHighlighter.detectLanguage(for: filename)
     }
 
     func saveFile() {
@@ -119,6 +94,9 @@ extension EditorState {
         do {
             try content.write(toFile: filePath, atomically: true, encoding: .utf8)
             statusMessage = "Saved: \(fileName)"
+            if let provider = fileStatusProvider {
+                Task { await provider.refresh() }
+            }
         } catch {
             statusMessage = "Error saving: \(error.localizedDescription)"
         }

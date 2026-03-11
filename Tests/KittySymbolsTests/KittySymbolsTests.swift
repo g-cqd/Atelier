@@ -29,7 +29,7 @@ struct KittySymbolsTests {
         let catalog = SymbolCatalog(entries: [
             "folder": SymbolMappingEntry(name: "folder", visibility: .publicSymbol, assetGlyphIndex: 77, codepoint: 0x100215),
             "folder.fill": SymbolMappingEntry(name: "folder.fill", visibility: .publicSymbol, assetGlyphIndex: 78, codepoint: 0x100216),
-            "text.document": SymbolMappingEntry(name: "text.document", visibility: .publicSymbol, assetGlyphIndex: 575, codepoint: 0x10023F),
+            "doc.text": SymbolMappingEntry(name: "doc.text", visibility: .publicSymbol, assetGlyphIndex: 575, codepoint: 0x10023F),
         ])
 
         let theme = TerminalSymbolTheme.make(symbolsEnabled: true, catalog: catalog)
@@ -38,5 +38,25 @@ struct KittySymbolsTests {
         #expect(theme[.folderClosed].text == "􀈕")
         #expect(theme[.folderOpen].text == "􀈖")
         #expect(theme[.file].text == "􀈿")
+    }
+
+    @Test("All roles have non-empty fallback text")
+    func allRolesHaveFallbacks() {
+        let theme = TerminalSymbolTheme.make(symbolsEnabled: false, catalog: nil)
+        for role in TerminalSymbolTheme.Role.allCases {
+            #expect(!theme[role].text.isEmpty, "Role \(role) has empty fallback")
+        }
+    }
+
+    @Test("New git roles have correct fallbacks")
+    func gitRoleFallbacks() {
+        let theme = TerminalSymbolTheme.make(symbolsEnabled: false, catalog: nil)
+        #expect(theme[.gitModified].text == "M")
+        #expect(theme[.gitAdded].text == "A")
+        #expect(theme[.gitUntracked].text == "?")
+        #expect(theme[.gitDeleted].text == "D")
+        #expect(theme[.gitConflicted].text == "!")
+        #expect(theme[.dirty].text == "●")
+        #expect(theme[.close].text == "×")
     }
 }

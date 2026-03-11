@@ -181,9 +181,20 @@ public enum ViewRenderer {
             let baseStyle = row.index == tree.selectedIndex ? tree.selectedStyle : row.style
             let style = context.applyTo(baseStyle)
             let indent = String(repeating: " ", count: row.depth * indentWidth)
-            let line = String((indent + row.icon + row.label).prefix(contentWidth))
+            let labelText = indent + row.icon + row.label
+            let line = String(labelText.prefix(contentWidth))
             fillRow(into: &buffer, row: rect.y + offset, col: rect.x, width: rect.width, style: style)
             buffer.write(line, row: rect.y + offset, col: rect.x, style: style)
+
+            if !row.suffix.isEmpty {
+                let suffixLen = row.suffix.count
+                let labelLen = line.count
+                let suffixCol = rect.x + contentWidth - suffixLen - 1
+                if suffixCol > rect.x + labelLen {
+                    let resolvedSuffixStyle = context.applyTo(row.suffixStyle)
+                    buffer.write(" " + row.suffix, row: rect.y + offset, col: suffixCol, style: resolvedSuffixStyle)
+                }
+            }
         }
 
         if visibleCount < rect.height {
@@ -587,6 +598,8 @@ private struct _TreeRow: Sendable {
     let label: String
     let index: Int
     let style: Style
+    let suffix: String
+    let suffixStyle: Style
 }
 
 private protocol _TreeViewProtocol {
@@ -673,7 +686,9 @@ extension TreeView: _TreeViewProtocol {
                 icon: icon,
                 label: label(row.node.value),
                 index: row.index,
-                style: rowStyle(row.node.value)
+                style: rowStyle(row.node.value),
+                suffix: rowSuffix(row.node.value),
+                suffixStyle: rowSuffixStyle(row.node.value)
             )
         }
     }
