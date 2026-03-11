@@ -3,10 +3,10 @@ import Testing
 @testable import KittyCodecs
 @testable import KittyTerminal
 
-@Suite("Cell")
+@Suite
 struct CellTests {
-    @Test("Default cell is space with default style")
-    func defaultCell() {
+    @Test
+    func `Default cell is space with default style`() {
         let cell = Cell.empty
         #expect(cell.character == " ")
         #expect(cell.style == .default)
@@ -14,10 +14,10 @@ struct CellTests {
     }
 }
 
-@Suite("DirtyTracker")
+@Suite
 struct DirtyTrackerTests {
-    @Test("Mark and check dirty")
-    func markAndCheck() {
+    @Test
+    func `Mark and check dirty`() {
         var tracker = DirtyTracker(capacity: 100)
         #expect(!tracker.isDirty(5))
         tracker.mark(5)
@@ -25,8 +25,8 @@ struct DirtyTrackerTests {
         #expect(!tracker.isDirty(4))
     }
 
-    @Test("Out of bounds indices are ignored")
-    func outOfBoundsIndicesAreIgnored() {
+    @Test
+    func `Out of bounds indices are ignored`() {
         var tracker = DirtyTracker(capacity: 10)
 
         tracker.mark(-1)
@@ -37,8 +37,8 @@ struct DirtyTrackerTests {
         #expect(tracker.isEmpty)
     }
 
-    @Test("Clear resets all bits")
-    func clear() {
+    @Test
+    func `Clear resets all bits`() {
         var tracker = DirtyTracker(capacity: 100)
         tracker.mark(0)
         tracker.mark(99)
@@ -46,8 +46,8 @@ struct DirtyTrackerTests {
         #expect(tracker.isEmpty)
     }
 
-    @Test("Dirty ranges")
-    func dirtyRanges() {
+    @Test
+    func `Dirty ranges`() {
         var tracker = DirtyTracker(capacity: 30)  // 10 cols × 3 rows
         tracker.mark(10) // row 1, col 0
         tracker.mark(11) // row 1, col 1
@@ -60,10 +60,10 @@ struct DirtyTrackerTests {
     }
 }
 
-@Suite("ScreenBuffer")
+@Suite
 struct ScreenBufferTests {
-    @Test("Write string to buffer")
-    func writeString() {
+    @Test
+    func `Write string to buffer`() {
         var buffer = ScreenBuffer(columns: 20, rows: 5)
         let style = Style(bold: true)
         buffer.write("Hello", row: 0, col: 0, style: style)
@@ -72,8 +72,8 @@ struct ScreenBufferTests {
         #expect(buffer[0, 4].character == "o")
     }
 
-    @Test("Clear marks all dirty")
-    func clearBuffer() {
+    @Test
+    func `Clear marks all dirty`() {
         var buffer = ScreenBuffer(columns: 10, rows: 3)
         buffer[0, 0] = Cell(character: "X", style: .default)
         buffer.dirty.clear()
@@ -81,8 +81,8 @@ struct ScreenBufferTests {
         #expect(buffer[0, 0].character == " ")
     }
 
-    @Test("Writing narrow text clears stale wide-character continuation cells")
-    func writeClearsWideCharacterContinuationCells() {
+    @Test
+    func `Writing narrow text clears stale wide-character continuation cells`() {
         var buffer = ScreenBuffer(columns: 10, rows: 1)
 
         buffer.write("界", row: 0, col: 0, style: .default)
@@ -96,16 +96,16 @@ struct ScreenBufferTests {
         #expect(buffer.dirty.isDirty(1))
     }
 
-    @Test("Subscript marks dirty")
-    func subscriptDirty() {
+    @Test
+    func `Subscript marks dirty`() {
         var buffer = ScreenBuffer(columns: 10, rows: 3)
         buffer.dirty.clear()
         buffer[1, 5] = Cell(character: "A", style: .default)
         #expect(buffer.dirty.isDirty(15)) // row 1 * 10 + col 5
     }
 
-    @Test("Out of bounds reads return empty")
-    func outOfBoundsReadReturnsEmpty() {
+    @Test
+    func `Out of bounds reads return empty`() {
         let buffer = ScreenBuffer(columns: 10, rows: 3)
 
         #expect(buffer[-1, 0] == .empty)
@@ -114,8 +114,8 @@ struct ScreenBufferTests {
         #expect(buffer[0, 10] == .empty)
     }
 
-    @Test("Out of bounds writes are ignored")
-    func outOfBoundsWritesAreIgnored() {
+    @Test
+    func `Out of bounds writes are ignored`() {
         var buffer = ScreenBuffer(columns: 5, rows: 2)
 
         buffer[-1, 0] = Cell(character: "X", style: .default)
@@ -128,8 +128,8 @@ struct ScreenBufferTests {
         #expect(buffer.dirty.isEmpty)
     }
 
-    @Test("Out of bounds fills are ignored")
-    func outOfBoundsFillsAreIgnored() {
+    @Test
+    func `Out of bounds fills are ignored`() {
         var buffer = ScreenBuffer(columns: 5, rows: 2)
 
         buffer.fill(row: -1, col: 0, width: 2, height: 1, cell: Cell(character: "A", style: .default))
@@ -141,18 +141,18 @@ struct ScreenBufferTests {
     }
 }
 
-@Suite("DiffRenderer")
+@Suite
 struct DiffRendererTests {
-    @Test("No dirty cells produces empty output")
-    func noDirty() {
+    @Test
+    func `No dirty cells produces empty output`() {
         let buffer = ScreenBuffer(columns: 10, rows: 3)
         let front = buffer
         let output = DiffRenderer.render(front: front, back: buffer)
         #expect(output.isEmpty)
     }
 
-    @Test("Dirty cell produces cursor move + character")
-    func dirtyCell() {
+    @Test
+    func `Dirty cell produces cursor move plus character`() {
         var back = ScreenBuffer(columns: 10, rows: 3)
         let front = ScreenBuffer(columns: 10, rows: 3)
         back[0, 0] = Cell(character: "A", style: .default)
@@ -163,11 +163,11 @@ struct DiffRendererTests {
     }
 }
 
-@Suite("RenderPipeline")
+@Suite
 struct RenderPipelineTests {
-    @Test("Flush writes to connection")
+    @Test
     @MainActor
-    func flushWrites() throws {
+    func `Flush writes to connection`() throws {
         let mock = MockTerminalConnection()
         let pipeline = RenderPipeline(connection: mock, columns: 10, rows: 3)
         pipeline.buffer[0, 0] = Cell(character: "X", style: .default)

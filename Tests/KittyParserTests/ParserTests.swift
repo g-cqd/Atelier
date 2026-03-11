@@ -3,24 +3,24 @@ import Foundation
 @testable import KittyParser
 @testable import KittyGrammar
 
-@Suite("SyntaxNode")
+@Suite
 struct SyntaxNodeTests {
-    @Test("Node text extraction")
-    func nodeText() {
+    @Test
+    func `Node text extraction`() {
         let source = "hello world"
         let node = SyntaxNode(type: "word", byteRange: 0..<5)
         #expect(node.text(from: source) == "hello")
     }
 
-    @Test("Node text extraction returns empty string for out-of-bounds lower bound")
-    func nodeTextOutOfBoundsLowerBound() {
+    @Test
+    func `Node text extraction returns empty string for out-of-bounds lower bound`() {
         let source = "hello"
         let node = SyntaxNode(type: "word", byteRange: 20..<25)
         #expect(node.text(from: source).isEmpty)
     }
 
-    @Test("Named children filter")
-    func namedChildren() {
+    @Test
+    func `Named children filter`() {
         let child1 = SyntaxNode(type: "name", isNamed: true)
         let child2 = SyntaxNode(type: ",", isNamed: false)
         let parent = SyntaxNode(type: "list", children: [child1, child2])
@@ -29,10 +29,10 @@ struct SyntaxNodeTests {
     }
 }
 
-@Suite("SyntaxTree")
+@Suite
 struct SyntaxTreeTests {
-    @Test("Walk visits all nodes")
-    func walkTree() {
+    @Test
+    func `Walk visits all nodes`() {
         let leaf = SyntaxNode(type: "leaf", byteRange: 0..<3)
         let root = SyntaxNode(type: "root", children: [leaf], byteRange: 0..<3)
         let tree = SyntaxTree(root: root, source: "abc")
@@ -45,8 +45,8 @@ struct SyntaxTreeTests {
         #expect(visited == ["root", "leaf"])
     }
 
-    @Test("Node at byte offset")
-    func nodeAtOffset() {
+    @Test
+    func `Node at byte offset`() {
         let child1 = SyntaxNode(type: "a", byteRange: 0..<3)
         let child2 = SyntaxNode(type: "b", byteRange: 3..<6)
         let root = SyntaxNode(type: "root", children: [child1, child2], byteRange: 0..<6)
@@ -57,10 +57,10 @@ struct SyntaxTreeTests {
     }
 }
 
-@Suite("TextEdit")
+@Suite
 struct TextEditTests {
-    @Test("Apply edit shifts byte ranges")
-    func applyEdit() {
+    @Test
+    func `Apply edit shifts byte ranges`() {
         let child1 = SyntaxNode(type: "a", byteRange: 0..<3)
         let child2 = SyntaxNode(type: "b", byteRange: 3..<6)
         let root = SyntaxNode(type: "root", children: [child1, child2], byteRange: 0..<6)
@@ -74,8 +74,8 @@ struct TextEditTests {
         #expect(edited.root.children[1].byteRange.lowerBound == 5)
     }
 
-    @Test("Apply edit shifts point ranges and field nodes")
-    func applyEditShiftsPointRangesAndFields() {
+    @Test
+    func `Apply edit shifts point ranges and field nodes`() {
         let left = SyntaxNode(
             type: "left",
             byteRange: 0..<3,
@@ -112,10 +112,10 @@ struct TextEditTests {
     }
 }
 
-@Suite("Lexer")
+@Suite
 struct LexerTests {
-    @Test("Tokenize with keywords")
-    func tokenizeKeywords() {
+    @Test
+    func `Tokenize with keywords`() {
         let lexTable = LexTable(
             states: [
                 LexState(transitions: [
@@ -133,8 +133,8 @@ struct LexerTests {
         #expect(tokens.contains(where: { $0.text == "if" }))
     }
 
-    @Test("Tokenize skips whitespace")
-    func tokenizeWhitespace() {
+    @Test
+    func `Tokenize skips whitespace`() {
         let lexer = Lexer(lexTable: LexTable())
         let tokens = lexer.tokenize("a b")
         #expect(tokens.count == 3) // 'a', whitespace, 'b'
@@ -142,8 +142,8 @@ struct LexerTests {
     }
 }
 
-@Suite("Lexer comment tokenization")
-struct LexerCommentTests {
+@Suite
+struct LexerCommentTokenizationTests {
     private func makeLexTable(comments: [CommentPattern], keywords: [String: Int] = [:]) -> LexTable {
         var states: [LexState] = []
         if !keywords.isEmpty {
@@ -162,8 +162,8 @@ struct LexerCommentTests {
         ).states
     }
 
-    @Test("Line comment is tokenized as a single extra token")
-    func lineCommentSingleToken() {
+    @Test
+    func `Line comment is tokenized as a single extra token`() {
         let lexTable = makeLexTable(comments: [.line(prefix: "//")])
         let lexer = Lexer(lexTable: lexTable)
         let tokens = lexer.tokenize("// this is a comment")
@@ -173,8 +173,8 @@ struct LexerCommentTests {
         #expect(commentTokens[0].isExtra)
     }
 
-    @Test("Line comment stops at newline")
-    func lineCommentStopsAtNewline() {
+    @Test
+    func `Line comment stops at newline`() {
         let lexTable = makeLexTable(comments: [.line(prefix: "//")])
         let lexer = Lexer(lexTable: lexTable)
         let tokens = lexer.tokenize("// comment\ncode")
@@ -183,8 +183,8 @@ struct LexerCommentTests {
         #expect(commentTokens[0].text == "// comment")
     }
 
-    @Test("Doc comment (///) is captured by // prefix")
-    func docCommentCapturedByLinePrefix() {
+    @Test
+    func `Doc comment is captured by prefix`() {
         let lexTable = makeLexTable(comments: [.line(prefix: "//")])
         let lexer = Lexer(lexTable: lexTable)
         let tokens = lexer.tokenize("/// doc comment with if keyword")
@@ -193,8 +193,8 @@ struct LexerCommentTests {
         #expect(commentTokens[0].text == "/// doc comment with if keyword")
     }
 
-    @Test("Keywords inside line comments are NOT tokenized separately")
-    func keywordsInsideLineCommentNotTokenized() {
+    @Test
+    func `Keywords inside line comments are NOT tokenized separately`() {
         let lexTable = LexTable(
             states: LexTableCompiler.compile(
                 GrammarDefinition(name: "t", rules: [("s", .string("if"))])
@@ -208,8 +208,8 @@ struct LexerCommentTests {
         #expect(keywordTokens.isEmpty, "Keywords inside comments should not be tokenized")
     }
 
-    @Test("Block comment is tokenized as a single extra token")
-    func blockCommentSingleToken() {
+    @Test
+    func `Block comment is tokenized as a single extra token`() {
         let lexTable = makeLexTable(comments: [.block(open: "/*", close: "*/")])
         let lexer = Lexer(lexTable: lexTable)
         let tokens = lexer.tokenize("/* block comment */")
@@ -219,8 +219,8 @@ struct LexerCommentTests {
         #expect(commentTokens[0].isExtra)
     }
 
-    @Test("Block comment spans multiple lines")
-    func blockCommentMultiline() {
+    @Test
+    func `Block comment spans multiple lines`() {
         let lexTable = makeLexTable(comments: [.block(open: "/*", close: "*/")])
         let lexer = Lexer(lexTable: lexTable)
         let tokens = lexer.tokenize("/* line1\nline2 */")
@@ -229,8 +229,8 @@ struct LexerCommentTests {
         #expect(commentTokens[0].text == "/* line1\nline2 */")
     }
 
-    @Test("Keywords inside block comments are NOT tokenized separately")
-    func keywordsInsideBlockCommentNotTokenized() {
+    @Test
+    func `Keywords inside block comments are NOT tokenized separately`() {
         let lexTable = LexTable(
             states: LexTableCompiler.compile(
                 GrammarDefinition(name: "t", rules: [("s", .string("if"))])
@@ -244,8 +244,8 @@ struct LexerCommentTests {
         #expect(keywordTokens.isEmpty, "Keywords inside block comments should not be tokenized")
     }
 
-    @Test("Comment is matched before keyword when at same position")
-    func commentMatchedBeforeKeyword() {
+    @Test
+    func `Comment is matched before keyword when at same position`() {
         let lexTable = LexTable(
             states: LexTableCompiler.compile(
                 GrammarDefinition(name: "t", rules: [("s", .choice([.string("if"), .string("//")]))])
@@ -258,8 +258,8 @@ struct LexerCommentTests {
         #expect(tokens.first?.type == "comment")
     }
 
-    @Test("Hash comment prefix works for Python-style comments")
-    func hashCommentPrefix() {
+    @Test
+    func `Hash comment prefix works for Python-style comments`() {
         let lexTable = makeLexTable(comments: [.line(prefix: "#")])
         let lexer = Lexer(lexTable: lexTable)
         let tokens = lexer.tokenize("# this is a comment")
@@ -268,8 +268,8 @@ struct LexerCommentTests {
         #expect(commentTokens[0].text == "# this is a comment")
     }
 
-    @Test("Code after line comment on next line is tokenized normally")
-    func codeAfterCommentTokenizedNormally() {
+    @Test
+    func `Code after line comment on next line is tokenized normally`() {
         let lexTable = LexTable(
             states: LexTableCompiler.compile(
                 GrammarDefinition(name: "t", rules: [("s", .string("if"))])
@@ -286,10 +286,10 @@ struct LexerCommentTests {
     }
 }
 
-@Suite("GLRParser")
+@Suite
 struct GLRParserTests {
-    @Test("Parse produces syntax tree")
-    func parseSimple() throws {
+    @Test
+    func `Parse produces syntax tree`() throws {
         // Build a minimal grammar and parse table
         let json = """
         {
@@ -312,8 +312,8 @@ struct GLRParserTests {
         #expect(tree.root.type != "")
     }
 
-    @Test("Parse continues reducing later stacks after an earlier conflict")
-    func parseProcessesAllStacksAfterConflict() throws {
+    @Test
+    func `Parse continues reducing later stacks after an earlier conflict`() throws {
         let parser = GLRParser(
             parseTable: makeConflictParseTable(),
             lexTable: LexTable(),
@@ -333,10 +333,10 @@ struct GLRParserTests {
     }
 }
 
-@Suite("GLRParser comment nodes")
-struct GLRParserCommentNodeTests {
-    @Test("Comment tokens appear as extra nodes in the tree")
-    func commentNodesInTree() throws {
+@Suite
+struct GLRParserCommentNodesTests {
+    @Test
+    func `Comment tokens appear as extra nodes in the tree`() throws {
         let json = """
         {
             "name": "comment_tree_test",
@@ -373,8 +373,8 @@ struct GLRParserCommentNodeTests {
         #expect(commentNodes[0].text(from: tree.source) == "// a comment")
     }
 
-    @Test("Multiple comments produce multiple extra nodes")
-    func multipleCommentNodes() throws {
+    @Test
+    func `Multiple comments produce multiple extra nodes`() throws {
         let json = """
         {
             "name": "multi_comment_test",
@@ -415,10 +415,10 @@ struct GLRParserCommentNodeTests {
     }
 }
 
-@Suite("IncrementalParser")
+@Suite
 struct IncrementalParserTests {
-    @Test("Incremental parse produces tree")
-    func incrementalParse() throws {
+    @Test
+    func `Incremental parse produces tree`() throws {
         let json = """
         {
             "name": "inc_test",

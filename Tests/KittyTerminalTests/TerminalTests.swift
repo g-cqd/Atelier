@@ -1,27 +1,27 @@
 import Testing
 @testable import KittyTerminal
 
-@Suite("Terminal Types")
+@Suite
 struct TerminalTypesTests {
-    @Test("TerminalSize equality")
-    func terminalSizeEquality() {
+    @Test
+    func `TerminalSize equality`() {
         let a = TerminalSize(columns: 80, rows: 24)
         let b = TerminalSize(columns: 80, rows: 24)
         #expect(a == b)
     }
 
-    @Test("TerminalSize with pixel dimensions")
-    func terminalSizePixels() {
+    @Test
+    func `TerminalSize with pixel dimensions`() {
         let size = TerminalSize(columns: 120, rows: 40, pixelWidth: 1920, pixelHeight: 1080)
         #expect(size.columns == 120)
         #expect(size.pixelWidth == 1920)
     }
 }
 
-@Suite("MockTerminalConnection")
+@Suite
 struct MockTerminalConnectionTests {
-    @Test("Read returns fed input")
-    func readInput() throws {
+    @Test
+    func `Read returns fed input`() throws {
         let mock = MockTerminalConnection()
         mock.feedInput([0x41, 0x42, 0x43])
 
@@ -35,22 +35,22 @@ struct MockTerminalConnectionTests {
         #expect(buffer[2] == 0x43)
     }
 
-    @Test("Write accumulates output")
-    func writeOutput() throws {
+    @Test
+    func `Write accumulates output`() throws {
         let mock = MockTerminalConnection()
         try mock.write([0x1b, 0x5b, 0x48])
         #expect(mock.writtenOutput == [0x1b, 0x5b, 0x48])
     }
 
-    @Test("writeContiguous accumulates output")
-    func writeContiguousOutput() throws {
+    @Test
+    func `writeContiguous accumulates output`() throws {
         let mock = MockTerminalConnection()
         try mock.writeContiguous(ContiguousArray([0x1b, 0x5b, 0x48]))
         #expect(mock.writtenOutput == [0x1b, 0x5b, 0x48])
     }
 
-    @Test("Raw mode tracking")
-    func rawModeTracking() throws {
+    @Test
+    func `Raw mode tracking`() throws {
         let mock = MockTerminalConnection()
         #expect(!mock.isRawMode)
         try mock.enterRawMode()
@@ -61,8 +61,8 @@ struct MockTerminalConnectionTests {
         #expect(mock.restoreModeCallCount == 1)
     }
 
-    @Test("Read throws on empty buffer")
-    func readEmpty() {
+    @Test
+    func `Read throws on empty buffer`() {
         let mock = MockTerminalConnection()
         let buffer = UnsafeMutableRawBufferPointer.allocate(byteCount: 16, alignment: 1)
         defer { buffer.deallocate() }
@@ -72,8 +72,8 @@ struct MockTerminalConnectionTests {
         }
     }
 
-    @Test("RawModeGuard enters and restores")
-    func rawModeGuard() throws {
+    @Test
+    func `RawModeGuard enters and restores`() throws {
         let mock = MockTerminalConnection()
         do {
             let _guard = try RawModeGuard(connection: mock)
