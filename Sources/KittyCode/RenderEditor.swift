@@ -9,6 +9,7 @@ func renderEditorPanel(
     state: EditorState,
     editorStart: Int,
     editorWidth: Int,
+    contentStartRow: Int,
     contentRows: Int,
     colorScheme: EditorState.ColorScheme
 ) -> (row: Int, col: Int)? {
@@ -17,6 +18,7 @@ func renderEditorPanel(
             pipeline: pipeline,
             editorStart: editorStart,
             editorWidth: editorWidth,
+            contentStartRow: contentStartRow,
             contentRows: contentRows,
             colorScheme: colorScheme
         )
@@ -40,12 +42,12 @@ func renderEditorPanel(
             trackStyle: Style(fg: .rgb(r: 60, g: 60, b: 60), dim: true),
             thumbStyle: Style(fg: .rgb(r: 140, g: 140, b: 140), dim: true),
             trackCharacter: " ",
-            thumbCharacter: "▓"
+            thumbCharacter: "\u{2593}"
         ),
         modeShowsCursor: state.mode == .editor
     )
 
-    let rect = Rect(x: editorStart, y: 1, width: editorWidth, height: contentRows)
+    let rect = Rect(x: editorStart, y: contentStartRow, width: editorWidth, height: contentRows)
     editor.render(to: &pipeline.buffer, in: rect)
     guard let cursor = TextEditorLayout.cursorPosition(for: editor, in: rect) else {
         return nil

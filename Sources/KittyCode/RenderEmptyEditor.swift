@@ -6,6 +6,7 @@ func renderEmptyEditor(
     pipeline: RenderPipeline,
     editorStart: Int,
     editorWidth: Int,
+    contentStartRow: Int,
     contentRows: Int,
     colorScheme: EditorState.ColorScheme
 ) {
@@ -19,12 +20,12 @@ func renderEmptyEditor(
                 + String(repeating: " ", count: max(0, editorWidth - leftPadding - message.count))
             pipeline.buffer.write(
                 String(line.prefix(editorWidth)),
-                row: row + 1,
+                row: contentStartRow + row,
                 col: editorStart,
                 style: Style(fg: .rgb(r: 100, g: 100, b: 100))
             )
         } else {
-            pipeline.buffer.fill(row: row + 1, col: editorStart, width: editorWidth, height: 1, cell: Cell(character: " ", style: colorScheme.editorText))
+            pipeline.buffer.fill(row: contentStartRow + row, col: editorStart, width: editorWidth, height: 1, cell: Cell(character: " ", style: colorScheme.editorText))
         }
     }
 }

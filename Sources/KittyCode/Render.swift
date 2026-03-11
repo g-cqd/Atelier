@@ -55,6 +55,9 @@ func render(pipeline: RenderPipeline, state: EditorState) {
             scrollOffset: state.tabScrollOffset,
             style: tabStyle
         )
+        // Fill row 1 background across full width, then render tabs over editor area
+        let tabBg = Cell(character: " ", style: tabStyle.inactiveStyle)
+        pipeline.buffer.fill(row: 1, col: 0, width: cols, height: 1, cell: tabBg)
         ribbon.render(
             to: &pipeline.buffer,
             in: Rect(x: editorStart, y: 1, width: editorWidth, height: 1)
@@ -105,6 +108,7 @@ func render(pipeline: RenderPipeline, state: EditorState) {
         state: state,
         editorStart: editorStart,
         editorWidth: editorWidth,
+        contentStartRow: contentStartRow,
         contentRows: contentRows,
         colorScheme: colorScheme
     )
