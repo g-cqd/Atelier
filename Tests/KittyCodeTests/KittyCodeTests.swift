@@ -202,16 +202,8 @@ struct KittyCodeNavigationTests {
         return (state, pipeline)
     }
 
-    private func waitForPendingScrollAccelerationToSettle(_ state: EditorState) async {
-        let deadline = Date().addingTimeInterval(1)
-        while (state.pendingAcceleratedScrollLines != 0 || state.scrollAccelerationTask != nil),
-              Date() < deadline {
-            try? await Task.sleep(for: .milliseconds(5))
-        }
-
-        if state.pendingAcceleratedScrollLines != 0 || state.scrollAccelerationTask != nil {
-            Issue.record("Timed out waiting for pending accelerated scroll to settle")
-        }
+    private func settlePendingAcceleratedScroll(_ state: EditorState) {
+        drainPendingAcceleratedScroll(state: state)
     }
 
     @Test
@@ -268,6 +260,7 @@ struct KittyCodeNavigationTests {
     @Test
     func `reversing scroll direction keeps accepting the new direction`() {
         let sut = makeSUT(fileContent: (0..<200).map(String.init), rows: 12)
+        sut.state.config.editor.scrollLines = 1
         sut.state.config.editor.scrollAccelerationEnabled = false
         sut.state.scrollOffset = 30
         sut.state.sidebarCollapsed = true
@@ -294,6 +287,7 @@ struct KittyCodeNavigationTests {
     @Test
     func `stale rebound event is ignored once after a reversal`() {
         let sut = makeSUT(fileContent: (0..<200).map(String.init), rows: 12)
+        sut.state.config.editor.scrollLines = 1
         sut.state.config.editor.scrollAccelerationEnabled = false
         sut.state.scrollOffset = 30
         sut.state.sidebarCollapsed = true
@@ -318,9 +312,10 @@ struct KittyCodeNavigationTests {
     }
 
     @Test
-    func `rapid same-direction scroll bursts enqueue extra line-by-line steps`() async {
+    func `rapid same-direction scroll bursts enqueue extra line-by-line steps`() {
         let sut = makeSUT(fileContent: (0..<200).map(String.init), rows: 12)
         sut.state.sidebarCollapsed = true
+        sut.state.config.editor.scrollLines = 1
         sut.state.config.editor.scrollAccelerationEnabled = true
         sut.state.config.editor.scrollAccelerationWindowMilliseconds = 100
         sut.state.config.editor.scrollAccelerationStepIntervalMilliseconds = 5
@@ -344,15 +339,16 @@ struct KittyCodeNavigationTests {
 
         #expect(sut.state.scrollOffset == 3)
 
-        await waitForPendingScrollAccelerationToSettle(sut.state)
+        settlePendingAcceleratedScroll(sut.state)
 
         #expect(sut.state.scrollOffset == 7)
     }
 
     @Test
-    func `opposing direction cancels pending accelerated scroll immediately`() async {
+    func `opposing direction cancels pending accelerated scroll immediately`() {
         let sut = makeSUT(fileContent: (0..<200).map(String.init), rows: 12)
         sut.state.sidebarCollapsed = true
+        sut.state.config.editor.scrollLines = 1
         sut.state.config.editor.scrollAccelerationEnabled = true
         sut.state.config.editor.scrollAccelerationWindowMilliseconds = 100
         sut.state.config.editor.scrollAccelerationStepIntervalMilliseconds = 200
@@ -383,7 +379,7 @@ struct KittyCodeNavigationTests {
             pipeline: sut.pipeline
         )
 
-        await waitForPendingScrollAccelerationToSettle(sut.state)
+        settlePendingAcceleratedScroll(sut.state)
 
         #expect(sut.state.scrollOffset == 2)
         #expect(sut.state.pendingAcceleratedScrollLines == 0)
@@ -393,6 +389,7 @@ struct KittyCodeNavigationTests {
     func `scrolling past vertical limits cancels immediately`() {
         let top = makeSUT(fileContent: (0..<5).map(String.init), rows: 12)
         top.state.sidebarCollapsed = true
+        top.state.config.editor.scrollLines = 1
         top.state.config.editor.scrollAccelerationEnabled = true
         top.state.config.editor.scrollAccelerationWindowMilliseconds = 100
         top.state.config.editor.scrollAccelerationStepIntervalMilliseconds = 200
@@ -417,6 +414,7 @@ struct KittyCodeNavigationTests {
 
         let bottom = makeSUT(fileContent: (0..<5).map(String.init), rows: 12)
         bottom.state.sidebarCollapsed = true
+        bottom.state.config.editor.scrollLines = 1
         bottom.state.config.editor.scrollAccelerationEnabled = true
         bottom.state.config.editor.scrollAccelerationWindowMilliseconds = 100
         bottom.state.config.editor.scrollAccelerationStepIntervalMilliseconds = 200
@@ -501,17 +499,17 @@ struct KittyCodeNavigationTests {
 
     @Test
     func `scrollLinesPerTick scales with viewport height`() {
-        #expect(scrollLinesPerTick(visibleRows: 10, configured: nil) == 1)
-        #expect(scrollLinesPerTick(visibleRows: 24, configured: nil) == 1)
-        #expect(scrollLinesPerTick(visibleRows: 48, configured: nil) == 1)
-        #expect(scrollLinesPerTick(visibleRows: 200, configured: nil) == 1)
+        #expect(scrollLinesPerTick(visibleRows: 10, configured: nil) == 3)
+        #expect(scrollLinesPerTick(visibleRows: 24, configured: nil) == 3)
+        #expect(scrollLinesPerTick(visibleRows: 48, configured: nil) == 6)
+        #expect(scrollLinesPerTick(visibleRows: 200, configured: nil) == 12)
     }
 
     @Test
     func `scrollLinesPerTick respects configured value`() {
         #expect(scrollLinesPerTick(visibleRows: 48, configured: 1) == 1)
         #expect(scrollLinesPerTick(visibleRows: 48, configured: 20) == 20)
-        #expect(scrollLinesPerTick(visibleRows: 48, configured: 0) == 1)
+        #expect(scrollLinesPerTick(visibleRows: 48, configured: 0) == 6)
     }
 
     @Test
@@ -2016,6 +2014,7 @@ struct ScrollRenderingTests {
         config.tabRibbon.position = .hidden
         config.statusBar.show = false
         config.editor.wrapLines = true
+        config.editor.scrollLines = 1
         config.editor.scrollAccelerationEnabled = false
         let state = EditorState(rootPath: ".", config: config)
         state.sidebarCollapsed = true
@@ -2055,6 +2054,7 @@ struct ScrollRenderingTests {
         config.tabRibbon.position = .hidden
         config.statusBar.show = false
         config.editor.wrapLines = true
+        config.editor.scrollLines = 1
         config.editor.scrollAccelerationEnabled = true
         config.editor.scrollAccelerationWindowMilliseconds = 200
         config.editor.scrollAccelerationStepIntervalMilliseconds = 1
@@ -2365,5 +2365,40 @@ struct SyntaxConfigurationTests {
         #expect(state.highlightedLines.count == 1)
         #expect(state.highlightedLines[0].count == 1)
         #expect(state.highlightedLines[0][0].text == "let x = 42")
+    }
+}
+
+// MARK: - Scroll speed regression tests
+
+@Suite
+@MainActor
+struct ScrollSpeedRegressionTests {
+    /// Regression: scrollLinesPerTick was changed to return 1 unconditionally,
+    /// making scroll-wheel unusably slow. The default should scale with viewport size.
+    @Test
+    func `default scroll speed scales with viewport size`() {
+        let small = scrollLinesPerTick(visibleRows: 10, configured: nil)
+        let medium = scrollLinesPerTick(visibleRows: 40, configured: nil)
+        let large = scrollLinesPerTick(visibleRows: 100, configured: nil)
+
+        #expect(small >= 3, "Small viewport should scroll at least 3 lines/tick")
+        #expect(medium >= 3, "Medium viewport should scroll at least 3 lines/tick")
+        #expect(large >= 3, "Large viewport should scroll at least 3 lines/tick")
+        #expect(large <= 12, "Large viewport should scroll at most 12 lines/tick")
+        #expect(large > small, "Larger viewport should scroll faster")
+    }
+
+    @Test
+    func `configured scroll speed overrides default`() {
+        let result = scrollLinesPerTick(visibleRows: 40, configured: 5)
+        #expect(result == 5, "Configured value should be used directly")
+    }
+
+    @Test
+    func `zero or negative configured value falls back to default`() {
+        let zero = scrollLinesPerTick(visibleRows: 40, configured: 0)
+        let negative = scrollLinesPerTick(visibleRows: 40, configured: -1)
+        #expect(zero >= 3, "Zero configured should fall back to adaptive default")
+        #expect(negative >= 3, "Negative configured should fall back to adaptive default")
     }
 }
