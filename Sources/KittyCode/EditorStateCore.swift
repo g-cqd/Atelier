@@ -11,6 +11,11 @@ import KittyWorkspace
 
 @MainActor
 final class EditorState {
+    enum AcceleratedScrollTarget: Sendable {
+        case tree
+        case editor
+    }
+
     struct ColorScheme {
         var bg: Style
         var treeBg: Style
@@ -305,8 +310,8 @@ final class EditorState {
     }
 
     private var syntaxHighlightingEnabled: Bool {
-        guard config.syntaxHighlighting else { return false }
-        if let lang = currentLanguage, config.disabledLanguages.contains(lang) {
+        guard config.syntax.enabled else { return false }
+        if let lang = currentLanguage, config.syntax.disabledLanguages.contains(lang) {
             return false
         }
         return true
@@ -502,7 +507,7 @@ final class EditorState {
 
     func tabRibbonTabs() -> [TabRibbon.Tab] {
         bufferManager.buffers.map { buf in
-            let status = config.showGitStatus && config.gitDecorations.showTabRibbonStatus
+            let status = config.git.enabled && config.git.decorations.showTabRibbonStatus
                 ? fileStatusProvider?.status(for: buf.filePath)
                 : nil
             return TabRibbon.Tab(
@@ -518,6 +523,7 @@ final class EditorState {
     // MARK: - Remaining shell state
 
     var treePanelWidth = 30
+    var fileVisibility: FileVisibility = .defaultHidden
     var statusMessage = ""
     var prompt: EditorPrompt?
     var contextMenu: ContextMenuState?
@@ -528,6 +534,16 @@ final class EditorState {
     var lastClickIndex = -1
     var isScrolling = false
     var scrollDragState: ScrollDragState?
+    var lastScrollDirection: MouseButton?
+    var blockedMomentumDirection: MouseButton?
+    var blockedMomentumDeadline: Date = .distantPast
+    var scrollAccelerationDirection: MouseButton?
+    var scrollAccelerationTarget: AcceleratedScrollTarget?
+    var scrollAccelerationBurstCount = 0
+    var scrollAccelerationLastEventAt: Date = .distantPast
+    var pendingAcceleratedScrollLines = 0
+    var pendingAcceleratedScrollTarget: AcceleratedScrollTarget?
+    var scrollAccelerationTask: Task<Void, Never>?
     var isLoadingGrammar = false
 
     var maxLineWidth: Int {
@@ -583,5 +599,37 @@ final class EditorState {
 
     func noteSelectedPath(_ path: String, isDirectory: Bool) {
         treeState.noteSelectedPath(path, isDirectory: isDirectory)
+    }
+
+    var isGitFilterAvailable: Bool {
+        guard config.git.enabled, fileStatusProvider != nil else { return false }
+        return FileManager.default.fileExists(atPath: (rootPath as NSString).appendingPathComponent(".gitignore"))
+    }
+
+    func cycleFileVisibility() async {
+        switch fileVisibility {
+        case .defaultHidden:
+            if isGitFilterAvailable {
+                let ignored = await GitIgnoreChecker.ignoredPaths(in: rootPath)
+                fileVisibility = .gitFiltered(ignoredPaths: ignored)
+            } else {
+                fileVisibility = .showAll
+            }
+        case .gitFiltered:
+            fileVisibility = .showAll
+        case .showAll:
+            fileVisibility = .defaultHidden
+        }
+        await loadInitialTree()
+    }
+
+    func applyConfig(_ newConfig: KittyConfig) {
+        cancelPendingAcceleratedScroll(state: self, resetBurst: true)
+        config = newConfig
+        colorScheme = Self.makeColorScheme(config: newConfig)
+        treePanelWidth = newConfig.treeWidth
+        let catalog = newConfig.useSFSymbolsInTerminal ? SymbolCatalogLoader.loadOrDiscover() : nil
+        symbolTheme = TerminalSymbolTheme.make(symbolsEnabled: newConfig.useSFSymbolsInTerminal, catalog: catalog)
+        refreshHighlights()
     }
 }

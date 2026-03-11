@@ -17,6 +17,6 @@ func ensureEditorVisible(_ state: EditorState, contentRows: Int = 20, availWidth
         cursor: &state.textCursor,
         visibleRows: contentRows,
         visibleCols: availWidth,
-        wrapLines: state.config.wrapLines
+        wrapLines: state.config.editor.wrapLines
     )
 }

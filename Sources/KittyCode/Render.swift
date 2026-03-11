@@ -1,6 +1,5 @@
 import KittyCodecs
 import KittyRenderer
-import KittySymbols
 import KittyWidgets
 
 @MainActor
@@ -8,7 +7,7 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     let cols = pipeline.columns
     let rows = pipeline.rows
     let colorScheme = state.colorScheme
-    guard cols > 0 && rows > 2 else { return }
+    guard cols > 0 && rows > 1 else { return }
 
     // Layout calculations
     let layout = LayoutMetrics(state: state, columns: cols, rows: rows)
@@ -21,12 +20,6 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     let editorWidth = layout.editorWidth
 
     guard contentRows > 0 else { return }
-
-    // Title bar
-    StatusBar(
-        left: " " + TerminalSymbolRenderer.label(state.symbolTheme[.project], "KittyCode") + " \(state.rootPath) ",
-        style: colorScheme.titleBar
-    ).render(to: &pipeline.buffer, in: Rect(x: 0, y: 0, width: cols, height: 1))
 
     // Tab ribbon
     if showTabRibbon {
@@ -48,12 +41,11 @@ func render(pipeline: RenderPipeline, state: EditorState) {
             scrollOffset: state.tabScrollOffset,
             style: tabStyle
         )
-        // Fill row 1 background across full width, then render tabs over editor area
         let tabBg = Cell(character: " ", style: tabStyle.inactiveStyle)
-        pipeline.buffer.fill(row: 1, col: 0, width: cols, height: 1, cell: tabBg)
+        pipeline.buffer.fill(row: 0, col: 0, width: cols, height: 1, cell: tabBg)
         ribbon.render(
             to: &pipeline.buffer,
-            in: Rect(x: editorStart, y: 1, width: editorWidth, height: 1)
+            in: Rect(x: editorStart, y: 0, width: editorWidth, height: 1)
         )
     }
 

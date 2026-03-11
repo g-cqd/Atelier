@@ -27,7 +27,6 @@ let package = Package(
         .library(name: "KittySymbols", targets: ["KittySymbols"]),
         .library(name: "KittyGit", targets: ["KittyGit"]),
         .library(name: "KittyWorkspace", targets: ["KittyWorkspace"]),
-        .executable(name: "Demo", targets: ["Demo"]),
         .executable(name: "KittyCode", targets: ["KittyCode"]),
         .executable(name: "KittySymbolsCLI", targets: ["KittySymbolsCLI"]),
     ],
@@ -83,9 +82,6 @@ let package = Package(
 
         // Layer 5 — App lifecycle, event loop, signals
         .target(name: "KittyApp", dependencies: ["KittyWidgets", "KittyInput", "KittySync"], swiftSettings: defaultSwiftSettings),
-
-        // Demo executable
-        .executableTarget(name: "Demo", dependencies: ["KittyApp"], path: "Demo", swiftSettings: defaultSwiftSettings),
 
         // KittyCode — Terminal code editor
         .executableTarget(name: "KittyCode", dependencies: ["KittyApp", "KittyWorkspace", "KittyInput", "KittyText", "KittyFileTree", "KittySyntax", "KittySymbols", "KittyGit"], swiftSettings: defaultSwiftSettings),
