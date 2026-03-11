@@ -24,8 +24,10 @@ let package = Package(
         .library(name: "KittyApp", targets: ["KittyApp"]),
         .library(name: "KittyText", targets: ["KittyText"]),
         .library(name: "KittyFileTree", targets: ["KittyFileTree"]),
+        .library(name: "KittySymbols", targets: ["KittySymbols"]),
         .executable(name: "Demo", targets: ["Demo"]),
         .executable(name: "KittyCode", targets: ["KittyCode"]),
+        .executable(name: "KittySymbolsCLI", targets: ["KittySymbolsCLI"]),
     ],
     targets: [
         .target(name: "KittySync", swiftSettings: defaultSwiftSettings),
@@ -47,6 +49,9 @@ let package = Package(
 
         // Layer 2d — File system browsing
         .target(name: "KittyFileTree", dependencies: ["KittySync"], swiftSettings: defaultSwiftSettings),
+
+        // Layer 2e — SF Symbols discovery + terminal glyph helpers
+        .target(name: "KittySymbols", swiftSettings: defaultSwiftSettings),
 
         // Layer 3a — grammar.json loader + LR table compiler
         .target(name: "KittyGrammar", swiftSettings: defaultSwiftSettings),
@@ -75,7 +80,10 @@ let package = Package(
         .executableTarget(name: "Demo", dependencies: ["KittyApp"], path: "Demo", swiftSettings: defaultSwiftSettings),
 
         // KittyCode — Terminal code editor
-        .executableTarget(name: "KittyCode", dependencies: ["KittyApp", "KittyText", "KittyFileTree", "KittySyntax"], swiftSettings: defaultSwiftSettings),
+        .executableTarget(name: "KittyCode", dependencies: ["KittyApp", "KittyText", "KittyFileTree", "KittySyntax", "KittySymbols"], swiftSettings: defaultSwiftSettings),
+
+        // KittySymbols CLI
+        .executableTarget(name: "KittySymbolsCLI", dependencies: ["KittySymbols"], swiftSettings: defaultSwiftSettings),
 
         // Tests
         .testTarget(name: "KittyTerminalTests", dependencies: ["KittyTerminal"], swiftSettings: defaultSwiftSettings),
@@ -91,5 +99,6 @@ let package = Package(
         .testTarget(name: "KittyCodeTests", dependencies: ["KittyCode", "KittyFileTree"], swiftSettings: defaultSwiftSettings),
         .testTarget(name: "KittyTextTests", dependencies: ["KittyText"], swiftSettings: defaultSwiftSettings),
         .testTarget(name: "KittyFileTreeTests", dependencies: ["KittyFileTree"], swiftSettings: defaultSwiftSettings),
+        .testTarget(name: "KittySymbolsTests", dependencies: ["KittySymbols"], swiftSettings: defaultSwiftSettings),
     ]
 )

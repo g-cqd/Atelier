@@ -1,6 +1,7 @@
 import KittyCodecs
 import KittyFileTree
 import KittyRenderer
+import KittySymbols
 import KittyWidgets
 
 @MainActor
@@ -20,13 +21,15 @@ func renderTreePanel(
         style: TreeView<FileNode>.TreeViewStyle(
             normalStyle: colorScheme.treeBg,
             selectedStyle: colorScheme.treeSelected,
-            expandedIcon: "[-]",
-            collapsedIcon: "[+]",
-            leafIcon: "   ",
+            expandedIcon: state.symbolTheme[.folderOpen].text + " ",
+            collapsedIcon: state.symbolTheme[.folderClosed].text + " ",
+            leafIcon: state.symbolTheme[.file].text + " ",
             indent: 2,
             scrollIndicatorStyle: VerticalScrollIndicatorStyle(
-                trackStyle: colorScheme.separator,
-                thumbStyle: colorScheme.treeSelected
+                trackStyle: Style(fg: .rgb(r: 60, g: 60, b: 60), dim: true),
+                thumbStyle: Style(fg: .rgb(r: 140, g: 140, b: 140), dim: true),
+                trackCharacter: " ",
+                thumbCharacter: "▓"
             )
         ),
         label: { $0.name },

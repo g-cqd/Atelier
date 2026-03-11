@@ -193,7 +193,18 @@ public enum TextEditorLayout {
     }
 
     private static func verticalScrollIndicatorWidth(for editor: TextEditor, in rect: Rect) -> Int {
-        editor.showsVerticalScrollIndicator && rect.width > 0 ? 1 : 0
+        needsScrollIndicator(for: editor, in: rect) ? 1 : 0
+    }
+
+    private static func needsScrollIndicator(for editor: TextEditor, in rect: Rect) -> Bool {
+        guard editor.showsVerticalScrollIndicator, rect.width > 0, rect.height > 0 else { return false }
+        if editor.wrapLines {
+            let gutter = editor.showLineNumbers ? max(3, editor.lineNumberWidth + 1) : 0
+            let pessimisticContentWidth = max(1, rect.width - gutter - 1)
+            let visualRows = totalWrappedRowCount(for: editor.lines, contentWidth: pessimisticContentWidth)
+            return visualRows > rect.height
+        }
+        return editor.lines.count > rect.height
     }
 
     private static func wrappedRowCount(for line: String, contentWidth: Int) -> Int {
