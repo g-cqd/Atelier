@@ -48,7 +48,11 @@ public struct SequenceRouter: Sendable {
 
     public mutating func feed(_ byte: UInt8) -> [InputEvent] {
         var events: [InputEvent] = []
+        feed(byte, into: &events)
+        return events
+    }
 
+    private mutating func feed(_ byte: UInt8, into events: inout [InputEvent]) {
         switch routeState {
         case .ground:
             if byte == 0x1b {
@@ -219,11 +223,9 @@ public struct SequenceRouter: Sendable {
             } else {
                 events.append(contentsOf: decodeKeyboardSequence([0x1b, 0x4f]))
                 resetRouting()
-                events.append(contentsOf: feed(byte))
+                feed(byte, into: &events)
             }
         }
-
-        return events
     }
 
     /// Feed a chunk of bytes and collect all emitted events.
@@ -245,9 +247,9 @@ public struct SequenceRouter: Sendable {
 
     private mutating func feedAll<S: Sequence>(_ bytes: S, into events: inout [InputEvent]) where S.Element == UInt8 {
         events.removeAll(keepingCapacity: true)
-        events.reserveCapacity(max(events.count, bytes.underestimatedCount))
+        events.reserveCapacity(max(1, bytes.underestimatedCount))
         for byte in bytes {
-            events.append(contentsOf: feed(byte))
+            feed(byte, into: &events)
         }
     }
 

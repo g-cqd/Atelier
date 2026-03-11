@@ -1,8 +1,4 @@
-#if canImport(Darwin)
 import Darwin
-#elseif canImport(Glibc)
-import Glibc
-#endif
 import Dispatch
 
 /// Installs signal handlers for SIGWINCH (resize), SIGINT, and SIGTERM.
