@@ -43,8 +43,16 @@ public struct TextBuffer: Sendable {
 
     public var isEmpty: Bool { lineCount == 1 && line(at: 0).isEmpty }
 
+    public static func splitLines(from content: String) -> [String] {
+        if content.isEmpty {
+            return [""]
+        }
+
+        return content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    }
+
     public init(_ content: String = "") {
-        let split = content.isEmpty ? [""] : content.components(separatedBy: "\n")
+        let split = Self.splitLines(from: content)
         storage = ContiguousArray(split)
         gapStart = split.count
         gapLength = 0
