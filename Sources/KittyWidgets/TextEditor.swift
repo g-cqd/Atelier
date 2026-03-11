@@ -4,10 +4,7 @@ import KittyText
 
 /// Scrollable syntax-highlighted text display widget.
 public struct TextEditor: View, Sendable {
-    private enum LineStorage: Sendable {
-        case lines([String])
-        case buffer(TextBuffer)
-    }
+    private var source: any DocumentSource
 
     public struct GutterDecoration: Sendable, Equatable {
         public var symbol: Character
@@ -19,7 +16,6 @@ public struct TextEditor: View, Sendable {
         }
     }
 
-    private var lineStorage: LineStorage
     public var lineSpans: [[StyledSpan]]
     public var scrollOffset: Int
     public var horizontalScrollOffset: Int
@@ -67,7 +63,7 @@ public struct TextEditor: View, Sendable {
         whitespaceConfig: WhitespaceRenderer.Config = .disabled
     ) {
         let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        self.lineStorage = .lines(lines)
+        self.source = ArrayDocumentSource(lines)
         self.lineSpans = lines.map { _ in spans }
         self.scrollOffset = scrollOffset
         self.horizontalScrollOffset = horizontalScrollOffset
@@ -115,7 +111,7 @@ public struct TextEditor: View, Sendable {
         tabSize: Int = 4,
         whitespaceConfig: WhitespaceRenderer.Config = .disabled
     ) {
-        self.lineStorage = .lines(lines.isEmpty ? [""] : lines)
+        self.source = ArrayDocumentSource(lines)
         self.lineSpans = lineSpans
         self.scrollOffset = scrollOffset
         self.horizontalScrollOffset = horizontalScrollOffset
@@ -163,7 +159,7 @@ public struct TextEditor: View, Sendable {
         tabSize: Int = 4,
         whitespaceConfig: WhitespaceRenderer.Config = .disabled
     ) {
-        self.lineStorage = .buffer(buffer.lineCount == 0 ? TextBuffer(lines: [""]) : buffer)
+        self.source = buffer.lineCount == 0 ? TextBuffer(lines: [""]) : buffer
         self.lineSpans = lineSpans
         self.scrollOffset = scrollOffset
         self.horizontalScrollOffset = horizontalScrollOffset
@@ -190,31 +186,15 @@ public struct TextEditor: View, Sendable {
     public var body: Never { fatalError() }
 
     public var lines: [String] {
-        switch lineStorage {
-        case .lines(let lines):
-            lines
-        case .buffer(let buffer):
-            buffer.lines
-        }
+        source.lines(in: 0..<source.lineCount)
     }
 
     public var lineCount: Int {
-        switch lineStorage {
-        case .lines(let lines):
-            lines.count
-        case .buffer(let buffer):
-            max(1, buffer.lineCount)
-        }
+        max(1, source.lineCount)
     }
 
     public func line(at index: Int) -> String {
-        switch lineStorage {
-        case .lines(let lines):
-            guard index >= 0, index < lines.count else { return "" }
-            return lines[index]
-        case .buffer(let buffer):
-            return buffer.line(at: index)
-        }
+        source.line(at: index)
     }
 
     public func spans(at index: Int) -> [StyledSpan] {
