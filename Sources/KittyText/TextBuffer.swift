@@ -192,3 +192,34 @@ public struct TextBuffer: Sendable {
         gapLength += newGapSize
     }
 }
+
+// MARK: - DocumentSource
+
+extension TextBuffer: DocumentSource {
+    public func lines(in range: Range<Int>) -> [String] {
+        let clamped = range.clamped(to: 0..<lineCount)
+        var result = [String]()
+        result.reserveCapacity(clamped.count)
+        for i in clamped {
+            result.append(line(at: i))
+        }
+        return result
+    }
+
+    public func serializedByteCount(lineEndingSize: Int) -> Int {
+        var total = 0
+        for i in 0..<lineCount {
+            total += line(at: i).lengthOfBytes(using: .utf8)
+        }
+        return total + max(0, lineCount - 1) * lineEndingSize
+    }
+
+    public func maxLineWidth(in range: Range<Int>, tabSize: Int) -> Int {
+        let clamped = range.clamped(to: 0..<lineCount)
+        var maxWidth = 0
+        for i in clamped {
+            maxWidth = max(maxWidth, TextDisplayMetrics.displayWidth(of: line(at: i), tabSize: tabSize))
+        }
+        return maxWidth
+    }
+}
