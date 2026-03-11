@@ -9,10 +9,10 @@ import KittyWidgets
 import Testing
 @testable import KittyCode
 
-@Suite("KittyCode Config")
+@Suite
 struct KittyCodeConfigTests {
-    @Test("ColorRGB parses hex string")
-    func colorRGBHexParsing() {
+    @Test
+    func `ColorRGB parses hex string`() {
         let parsed = ColorRGB(hex: "#1e2f3a")
         #expect(parsed != nil)
         #expect(parsed?.r == 0x1e)
@@ -20,23 +20,23 @@ struct KittyCodeConfigTests {
         #expect(parsed?.b == 0x3a)
     }
 
-    @Test("ColorRGB codable supports hex string")
-    func colorRGBCodableHex() throws {
+    @Test
+    func `ColorRGB codable supports hex string`() throws {
         let json = "\"#abcdef\""
         let data = Data(json.utf8)
         let color = try JSONDecoder().decode(ColorRGB.self, from: data)
         #expect(color == ColorRGB(r: 0xab, g: 0xcd, b: 0xef))
     }
 
-    @Test("ColorRGB rejects invalid hex")
-    func colorRGBInvalidHex() {
+    @Test
+    func `ColorRGB rejects invalid hex`() {
         #expect(ColorRGB(hex: "#zzz999") == nil)
         #expect(ColorRGB(hex: "#12345") == nil)
     }
 
-    @Test("Color scheme uses terminal default backgrounds")
+    @Test
     @MainActor
-    func colorSchemeUsesDefaultBackgrounds() {
+    func `Color scheme uses terminal default backgrounds`() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         #expect(state.colorScheme.editorText.bg == .default)
         #expect(state.colorScheme.treeBg.bg == .default)
@@ -44,7 +44,7 @@ struct KittyCodeConfigTests {
     }
 }
 
-@Suite("KittyCode Navigation")
+@Suite
 @MainActor
 struct KittyCodeNavigationTests {
     private func makeSUT(fileContent: [String], columns: Int = 80, rows: Int = 24) -> (state: EditorState, pipeline: RenderPipeline) {
@@ -64,8 +64,8 @@ struct KittyCodeNavigationTests {
         return (state, pipeline)
     }
 
-    @Test("Word jump forward moves to next token")
-    func jumpForward() {
+    @Test
+    func `Word jump forward moves to next token`() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         state.fileContent = ["alpha   beta"]
         state.cursorRow = 0
@@ -75,8 +75,8 @@ struct KittyCodeNavigationTests {
         #expect(state.cursorCol == 8)
     }
 
-    @Test("Word jump backward moves to previous token start")
-    func jumpBackward() {
+    @Test
+    func `Word jump backward moves to previous token start`() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         state.fileContent = ["alpha   beta"]
         state.cursorRow = 0
@@ -86,8 +86,8 @@ struct KittyCodeNavigationTests {
         #expect(state.cursorCol == 8)
     }
 
-    @Test("ensureEditorVisible updates horizontal scroll")
-    func ensureHorizontalVisible() {
+    @Test
+    func `ensureEditorVisible updates horizontal scroll`() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         state.fileContent = ["0123456789abcdefghijklmnopqrstuvwxyz"]
         state.cursorRow = 0
@@ -100,8 +100,8 @@ struct KittyCodeNavigationTests {
         #expect(state.hScrollOffset == 18)
     }
 
-    @Test("ensureTreeVisible scrolls selected row into viewport")
-    func ensureTreeVisibleScrollsSelection() {
+    @Test
+    func `ensureTreeVisible scrolls selected row into viewport`() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         // Populate the underlying FileNode tree and flatten it
         state.treeNodes = (0..<40).map { i in
@@ -115,16 +115,16 @@ struct KittyCodeNavigationTests {
         #expect(state.treeScrollOffset == 16)
     }
 
-    @Test("scrollLinesPerTick scales with viewport height")
-    func scrollLinesPerTickScalesWithViewportHeight() {
+    @Test
+    func `scrollLinesPerTick scales with viewport height`() {
         #expect(scrollLinesPerTick(visibleRows: 10) == 3)
         #expect(scrollLinesPerTick(visibleRows: 24) == 3)
         #expect(scrollLinesPerTick(visibleRows: 48) == 6)
         #expect(scrollLinesPerTick(visibleRows: 200) == 12)
     }
 
-    @Test("handleEvent moves cursor for repeated arrow keys")
-    func handleEventMovesCursorForRepeatedArrowKeys() {
+    @Test
+    func `handleEvent moves cursor for repeated arrow keys`() {
         let sut = makeSUT(fileContent: ["one", "two", "three"])
 
         let handled = handleEvent(
@@ -137,8 +137,8 @@ struct KittyCodeNavigationTests {
         #expect(sut.state.cursorRow == 1)
     }
 
-    @Test("handleEvent keeps option arrow repeat semantics")
-    func handleEventKeepsOptionArrowRepeatSemantics() {
+    @Test
+    func `handleEvent keeps option arrow repeat semantics`() {
         let sut = makeSUT(fileContent: ["alpha beta gamma"])
 
         let handled = handleEvent(
@@ -151,8 +151,8 @@ struct KittyCodeNavigationTests {
         #expect(sut.state.cursorCol == 6)
     }
 
-    @Test("modifier-only key presses do not scroll the editor to an offscreen cursor")
-    func handleEventIgnoresModifierOnlyEditorKeys() {
+    @Test
+    func `modifier-only key presses do not scroll the editor to an offscreen cursor`() {
         let sut = makeSUT(fileContent: (0..<80).map(String.init), rows: 12)
         sut.state.cursorRow = 40
         sut.state.scrollOffset = 0
@@ -168,8 +168,8 @@ struct KittyCodeNavigationTests {
         #expect(sut.state.scrollOffset == 0)
     }
 
-    @Test("handleEvent keeps page navigation working for repeated fn style keys")
-    func handleEventKeepsPageNavigationWorkingForRepeatedFnStyleKeys() {
+    @Test
+    func `handleEvent keeps page navigation working for repeated fn style keys`() {
         let sut = makeSUT(fileContent: (0..<100).map(String.init), rows: 12)
 
         let handled = handleEvent(
@@ -182,8 +182,8 @@ struct KittyCodeNavigationTests {
         #expect(sut.state.cursorRow == 10)
     }
 
-    @Test("handleEvent ignores repeated escape after leaving the editor")
-    func handleEventIgnoresRepeatedEscapeAfterLeavingTheEditor() {
+    @Test
+    func `handleEvent ignores repeated escape after leaving the editor`() {
         let sut = makeSUT(fileContent: ["one"])
 
         let firstHandled = handleEvent(
@@ -202,8 +202,8 @@ struct KittyCodeNavigationTests {
         #expect(sut.state.mode == .tree)
     }
 
-    @Test("insertText invalidates cached file snapshot")
-    func insertTextInvalidatesCachedFileSnapshot() {
+    @Test
+    func `insertText invalidates cached file snapshot`() {
         let sut = makeSUT(fileContent: ["hello"])
         _ = sut.state.fileContent
         sut.state.cursorCol = 5
@@ -214,8 +214,8 @@ struct KittyCodeNavigationTests {
         #expect(sut.state.fileLineCount == 1)
     }
 
-    @Test("handleEvent enter invalidates cached file snapshot")
-    func handleEventEnterInvalidatesCachedFileSnapshot() {
+    @Test
+    func `handleEvent enter invalidates cached file snapshot`() {
         let sut = makeSUT(fileContent: ["hello"])
         _ = sut.state.fileContent
         sut.state.cursorCol = 2
@@ -232,8 +232,8 @@ struct KittyCodeNavigationTests {
         #expect(sut.state.cursorCol == 0)
     }
 
-    @Test("handleEvent backspace invalidates cached file snapshot")
-    func handleEventBackspaceInvalidatesCachedFileSnapshot() {
+    @Test
+    func `handleEvent backspace invalidates cached file snapshot`() {
         let sut = makeSUT(fileContent: ["he", "llo"])
         _ = sut.state.fileContent
         sut.state.cursorRow = 1
@@ -251,8 +251,8 @@ struct KittyCodeNavigationTests {
         #expect(sut.state.cursorCol == 2)
     }
 
-    @Test("mouse click on wrapped editor row uses shared widget hit testing")
-    func handleMouseClickForWrappedLine() {
+    @Test
+    func `mouse click on wrapped editor row uses shared widget hit testing`() {
         let sut = makeSUT(fileContent: ["abcdef"], columns: 11, rows: 6)
         sut.state.config.wrapLines = true
         sut.state.treePanelWidth = 3
@@ -270,8 +270,8 @@ struct KittyCodeNavigationTests {
         #expect(sut.state.cursorCol == 5)
     }
 
-    @Test("dragging the editor scroll indicator updates the shared scroll offset")
-    func handleMouseDragOnEditorScrollIndicator() {
+    @Test
+    func `dragging the editor scroll indicator updates the shared scroll offset`() {
         let sut = makeSUT(fileContent: (0..<20).map(String.init), columns: 18, rows: 8)
         sut.state.treePanelWidth = 3
         sut.state.mode = .editor
@@ -297,8 +297,8 @@ struct KittyCodeNavigationTests {
         #expect(sut.state.mode == .editor)
     }
 
-    @Test("dragging the tree scroll indicator updates the tree scroll offset")
-    func handleMouseDragOnTreeScrollIndicator() {
+    @Test
+    func `dragging the tree scroll indicator updates the tree scroll offset`() {
         let sut = makeSUT(fileContent: [""], columns: 18, rows: 8)
         sut.state.treePanelWidth = 5
         sut.state.mode = .tree
@@ -332,7 +332,7 @@ struct KittyCodeNavigationTests {
     }
 }
 
-@Suite("KittyCode Syntax Wiring")
+@Suite
 struct KittyCodeSyntaxWiringTests {
     @Test func `language highlighter returns styled json output when bundled resources are available`() async {
         let available = await LanguageHighlighter.ensureArtifacts(for: "json")
@@ -356,9 +356,9 @@ struct KittyCodeSyntaxWiringTests {
         #expect(lines[0][0].text == "// comment")
     }
 
-    @Test("EditorState refreshHighlights populates per-line styled output")
+    @Test
     @MainActor
-    func editorStateRefreshHighlights() {
+    func `EditorState refreshHighlights populates per-line styled output`() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         state.fileContent = ["true", "42"]
         state.currentLanguage = "json"
@@ -370,9 +370,9 @@ struct KittyCodeSyntaxWiringTests {
         #expect(!state.highlightedLine(at: 1).isEmpty)
     }
 
-    @Test("EditorState fallback highlighting reuses line-based input for unsupported languages")
+    @Test
     @MainActor
-    func editorStateRefreshHighlightsForFallbackLanguage() {
+    func `EditorState fallback highlighting reuses line-based input for unsupported languages`() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         state.fileContent = ["// comment", "value"]
         state.currentLanguage = "unknown_lang"
@@ -384,9 +384,9 @@ struct KittyCodeSyntaxWiringTests {
         #expect(state.highlightedLines[1].map(\.text).joined() == "value")
     }
 
-    @Test("EditorState patches only the affected fallback highlight range")
+    @Test
     @MainActor
-    func editorStateIncrementalFallbackHighlighting() throws {
+    func `EditorState patches only the affected fallback highlight range`() throws {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         state.currentLanguage = "unknown_lang"
         state.fileContent = ["hello", "world", "tail"]
@@ -410,7 +410,7 @@ struct KittyCodeSyntaxWiringTests {
 
 // MARK: - detectLanguage tests
 
-@Suite("detectLanguage")
+@Suite
 @MainActor
 struct DetectLanguageTests {
     @Test func `swift extension maps to swift`() {
@@ -444,11 +444,11 @@ struct DetectLanguageTests {
 
 // MARK: - BufferManager tests
 
-@Suite("BufferManager")
+@Suite
 @MainActor
 struct BufferManagerTests {
-    @Test("open creates a new buffer")
-    func openCreatesBuffer() {
+    @Test
+    func `open creates a new buffer`() {
         let manager = BufferManager()
         let idx = manager.open(filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
         #expect(idx == 0)
@@ -457,8 +457,8 @@ struct BufferManagerTests {
         #expect(manager.activeBuffer?.fileName == "a.swift")
     }
 
-    @Test("open same file twice returns existing index")
-    func openSameFileTwice() {
+    @Test
+    func `open same file twice returns existing index`() {
         let manager = BufferManager()
         let idx1 = manager.open(filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
         let idx2 = manager.open(filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
@@ -466,8 +466,8 @@ struct BufferManagerTests {
         #expect(manager.count == 1)
     }
 
-    @Test("open two different files yields count 2")
-    func openTwoDifferentFiles() {
+    @Test
+    func `open two different files yields count 2`() {
         let manager = BufferManager()
         manager.open(filePath: "/a.swift", fileName: "a.swift", content: "a", language: "swift")
         manager.open(filePath: "/b.swift", fileName: "b.swift", content: "b", language: "swift")
@@ -475,8 +475,8 @@ struct BufferManagerTests {
         #expect(manager.activeIndex == 1)
     }
 
-    @Test("nextTab and prevTab cycle through buffers")
-    func tabCycling() {
+    @Test
+    func `nextTab and prevTab cycle through buffers`() {
         let manager = BufferManager()
         manager.open(filePath: "/a.swift", fileName: "a.swift", content: "a", language: "swift")
         manager.open(filePath: "/b.swift", fileName: "b.swift", content: "b", language: "swift")
@@ -490,8 +490,8 @@ struct BufferManagerTests {
         #expect(manager.activeIndex == 2)
     }
 
-    @Test("close dirty buffer returns promptSave")
-    func closeDirtyBuffer() {
+    @Test
+    func `close dirty buffer returns promptSave`() {
         let manager = BufferManager()
         manager.open(filePath: "/a.swift", fileName: "a.swift", content: "a", language: "swift")
         manager.activeBuffer?.isDirty = true
@@ -501,8 +501,8 @@ struct BufferManagerTests {
         #expect(manager.count == 1)
     }
 
-    @Test("close clean buffer removes it")
-    func closeCleanBuffer() {
+    @Test
+    func `close clean buffer removes it`() {
         let manager = BufferManager()
         manager.open(filePath: "/a.swift", fileName: "a.swift", content: "a", language: "swift")
         manager.open(filePath: "/b.swift", fileName: "b.swift", content: "b", language: "swift")
@@ -513,8 +513,8 @@ struct BufferManagerTests {
         #expect(manager.activeBuffer?.fileName == "b.swift")
     }
 
-    @Test("forceClose removes dirty buffer")
-    func forceCloseDirtyBuffer() {
+    @Test
+    func `forceClose removes dirty buffer`() {
         let manager = BufferManager()
         manager.open(filePath: "/a.swift", fileName: "a.swift", content: "a", language: "swift")
         manager.activeBuffer?.isDirty = true
@@ -527,10 +527,10 @@ struct BufferManagerTests {
 
 // MARK: - Config extension tests
 
-@Suite("KittyConfig Extension")
+@Suite
 struct KittyConfigExtensionTests {
-    @Test("old JSON without new fields decodes with defaults")
-    func oldJSONDecodesWithDefaults() throws {
+    @Test
+    func `old JSON without new fields decodes with defaults`() throws {
         let json = """
         {"keybindingMode": "vim", "treeWidth": 25}
         """
@@ -551,8 +551,8 @@ struct KittyConfigExtensionTests {
         #expect(config.keybindings.toggleSidebar == "ctrl+b")
     }
 
-    @Test("new JSON fields roundtrip correctly")
-    func newFieldsRoundtrip() throws {
+    @Test
+    func `new JSON fields roundtrip correctly`() throws {
         var config = KittyConfig()
         config.autoSave = true
         config.autoSaveInterval = 60
@@ -569,8 +569,8 @@ struct KittyConfigExtensionTests {
         #expect(decoded.disabledLanguages == ["python", "ruby"])
     }
 
-    @Test("theme new optional fields default to nil")
-    func themeOptionalFieldsDefault() {
+    @Test
+    func `theme new optional fields default to nil`() {
         let theme = KittyConfig.Theme()
         #expect(theme.tabActiveBackground == nil)
         #expect(theme.tabActiveForeground == nil)
@@ -581,11 +581,11 @@ struct KittyConfigExtensionTests {
 
 // MARK: - Multi-buffer integration tests
 
-@Suite("Multi-Buffer Integration")
+@Suite
 @MainActor
 struct MultiBufferIntegrationTests {
-    @Test("switching tabs preserves cursor position")
-    func switchTabsPreservesCursor() {
+    @Test
+    func `switching tabs preserves cursor position`() {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbonPosition = .hidden
@@ -617,8 +617,8 @@ struct MultiBufferIntegrationTests {
         #expect(state.fileName == "b.txt")
     }
 
-    @Test("textDidChange marks active buffer dirty")
-    func textDidChangeMarksDirty() {
+    @Test
+    func `textDidChange marks active buffer dirty`() {
         var config = KittyConfig()
         config.activityBar.show = false
         let state = EditorState(rootPath: ".", config: config)
@@ -631,8 +631,8 @@ struct MultiBufferIntegrationTests {
         #expect(state.bufferManager.activeBuffer?.isDirty == true)
     }
 
-    @Test("opening and restoring a file preserves exact document snapshots")
-    func openAndRestorePreservesExactSnapshots() throws {
+    @Test
+    func `opening and restoring a file preserves exact document snapshots`() throws {
         let fileManager = FileManager.default
         let rootURL = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
@@ -663,9 +663,9 @@ struct MultiBufferIntegrationTests {
 
 // MARK: - Runtime regression tests
 
-@Suite("Runtime Regressions")
+@Suite
 @MainActor
-struct RuntimeRegressionTests {
+struct RuntimeRegressionsTests {
     private func makeSUT(
         fileContent: [String] = [""],
         columns: Int = 80,
@@ -688,8 +688,8 @@ struct RuntimeRegressionTests {
 
     // --- Editor content placement ---
 
-    @Test("editor content renders at contentStartRow, not row 1")
-    func editorContentStartRow() {
+    @Test
+    func `editor content renders at contentStartRow not row 1`() {
         let sut = makeSUT(fileContent: ["hello"], columns: 40, rows: 10)
         sut.state.mode = .editor
         sut.state.sidebarCollapsed = true
@@ -703,8 +703,8 @@ struct RuntimeRegressionTests {
         #expect(row1Text.contains("hello"), "Editor content should appear at row 1 (contentStartRow)")
     }
 
-    @Test("editor content starts at row 2 when tab ribbon is shown")
-    func editorContentBelowTabRibbon() {
+    @Test
+    func `editor content starts at row 2 when tab ribbon is shown`() {
         let cols = 40
         let sut = makeSUT(columns: cols, rows: 10, tabRibbon: .top)
         sut.state.mode = .editor
@@ -726,8 +726,8 @@ struct RuntimeRegressionTests {
         #expect(!row1Text.contains("world"), "Tab ribbon row should not contain editor text")
     }
 
-    @Test("tab ribbon fills full terminal width")
-    func tabRibbonFullWidth() {
+    @Test
+    func `tab ribbon fills full terminal width`() {
         let cols = 40
         let sut = makeSUT(fileContent: ["x"], columns: cols, rows: 10, tabRibbon: .top)
         sut.state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "x", language: nil)
@@ -744,8 +744,8 @@ struct RuntimeRegressionTests {
 
     // --- Activity bar ---
 
-    @Test("activity bar renders in the first 3 columns")
-    func activityBarRendersWidth3() {
+    @Test
+    func `activity bar renders in the first 3 columns`() {
         let sut = makeSUT(fileContent: ["test"], columns: 40, rows: 10, activityBar: true)
         sut.state.mode = .editor
         render(pipeline: sut.pipeline, state: sut.state)
@@ -757,15 +757,15 @@ struct RuntimeRegressionTests {
                 "Activity bar center column should have styled content")
     }
 
-    @Test("ActivityBar.width is 3")
-    func activityBarWidthIs3() {
+    @Test
+    func `ActivityBar width is 3`() {
         #expect(ActivityBar.width == 3)
     }
 
     // --- Mouse coordinate handling (1-based SGR to 0-based screen) ---
 
-    @Test("editor click converts 1-based mouse coordinates correctly")
-    func editorClickCoordinateConversion() {
+    @Test
+    func `editor click converts 1-based mouse coordinates correctly`() {
         let sut = makeSUT(fileContent: ["line one", "line two", "line three"], columns: 40, rows: 10)
         sut.state.mode = .editor
         sut.state.treePanelWidth = 0
@@ -783,8 +783,8 @@ struct RuntimeRegressionTests {
         #expect(sut.state.mode == .editor)
     }
 
-    @Test("tree click converts 1-based mouse coordinates correctly")
-    func treeClickCoordinateConversion() {
+    @Test
+    func `tree click converts 1-based mouse coordinates correctly`() {
         let sut = makeSUT(columns: 40, rows: 10)
         sut.state.treePanelWidth = 10
         sut.state.mode = .tree
@@ -806,8 +806,8 @@ struct RuntimeRegressionTests {
 
     // --- Scroll position preservation ---
 
-    @Test("tree refresh preserves scroll offset")
-    func treeRefreshPreservesScroll() async {
+    @Test
+    func `tree refresh preserves scroll offset`() async {
         let sut = makeSUT(columns: 40, rows: 10)
         sut.state.treeScrollOffset = 5
         sut.state.selectedTreeIndex = 7
@@ -825,8 +825,8 @@ struct RuntimeRegressionTests {
         #expect(sut.state.selectedTreeIndex == 7)
     }
 
-    @Test("tree refresh clamps scroll offset when tree shrinks")
-    func treeRefreshClampsScroll() {
+    @Test
+    func `tree refresh clamps scroll offset when tree shrinks`() {
         let sut = makeSUT(columns: 40, rows: 10)
         sut.state.treeScrollOffset = 15
         sut.state.selectedTreeIndex = 18
@@ -850,8 +850,8 @@ struct RuntimeRegressionTests {
 
     // --- Empty editor ---
 
-    @Test("empty editor message renders at contentStartRow, not row 1")
-    func emptyEditorAtContentStartRow() {
+    @Test
+    func `empty editor message renders at contentStartRow not row 1`() {
         let sut = makeSUT(columns: 60, rows: 10, tabRibbon: .top)
         sut.state.mode = .editor
         sut.state.sidebarCollapsed = true
@@ -869,8 +869,8 @@ struct RuntimeRegressionTests {
 
     // --- Status bar at bottom ---
 
-    @Test("status bar renders on the last row")
-    func statusBarOnLastRow() {
+    @Test
+    func `status bar renders on the last row`() {
         let rows = 10
         let sut = makeSUT(fileContent: ["test"], columns: 40, rows: rows)
         sut.state.mode = .editor
@@ -882,8 +882,8 @@ struct RuntimeRegressionTests {
         #expect(lastRowText.contains("Edit") || lastRowText.contains("Tree"))
     }
 
-    @Test("no empty/blank row between content and status bar")
-    func noBlankRowAboveStatusBar() {
+    @Test
+    func `no empty blank row between content and status bar`() {
         let rows = 10
         let sut = makeSUT(fileContent: (0..<20).map { "line \($0)" }, columns: 40, rows: rows)
         sut.state.mode = .editor
@@ -897,8 +897,8 @@ struct RuntimeRegressionTests {
 
     // --- Layout with activity bar + tab ribbon ---
 
-    @Test("full layout with activity bar and tab ribbon renders without overlap")
-    func fullLayoutNoOverlap() {
+    @Test
+    func `full layout with activity bar and tab ribbon renders without overlap`() {
         let sut = makeSUT(
             fileContent: ["hello world"],
             columns: 60,
@@ -940,8 +940,8 @@ struct RuntimeRegressionTests {
 
     // --- Sidebar toggle ---
 
-    @Test("toggling sidebar resets layout cleanly on re-render")
-    func sidebarToggleCleanLayout() {
+    @Test
+    func `toggling sidebar resets layout cleanly on re-render`() {
         let sut = makeSUT(fileContent: ["content line"], columns: 40, rows: 10)
         sut.state.mode = .editor
         sut.state.treePanelWidth = 10
@@ -966,11 +966,11 @@ struct RuntimeRegressionTests {
 
 // MARK: - Syntax config tests
 
-@Suite("Syntax Configuration")
+@Suite
 @MainActor
-struct SyntaxConfigTests {
-    @Test("syntaxHighlighting=false produces plain spans")
-    func syntaxHighlightingDisabled() {
+struct SyntaxConfigurationTests {
+    @Test
+    func `syntaxHighlighting=false produces plain spans`() {
         var config = KittyConfig()
         config.syntaxHighlighting = false
         let state = EditorState(rootPath: ".", config: config)
@@ -984,8 +984,8 @@ struct SyntaxConfigTests {
         #expect(state.highlightedLines[0][0].text == "func hello() {")
     }
 
-    @Test("disabled language produces plain spans")
-    func disabledLanguage() {
+    @Test
+    func `disabled language produces plain spans`() {
         var config = KittyConfig()
         config.disabledLanguages = ["swift"]
         let state = EditorState(rootPath: ".", config: config)
