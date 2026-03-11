@@ -174,6 +174,17 @@ struct TextEditorTests {
     }
 
     @Test
+    func `Gutter width includes decoration column when enabled`() {
+        let editor = TextEditor(
+            content: "a",
+            showsGutterDecorations: true,
+            gutterDecorations: [0: .init(symbol: "+", style: .default)]
+        )
+
+        #expect(TextEditorLayout.gutterWidth(for: editor) == 5)
+    }
+
+    @Test
     func `Cursor layout accounts for line-number gutter and horizontal scroll`() {
         let editor = TextEditor(
             lines: ["abcdef"],
@@ -210,6 +221,43 @@ struct TextEditorTests {
         )
 
         #expect(position == .init(row: 4, col: 9))
+    }
+
+    @Test
+    func `Render text editor writes gutter decoration before line numbers`() {
+        var buffer = ScreenBuffer(columns: 12, rows: 1)
+        let markerStyle = Style(fg: .rgb(r: 1, g: 2, b: 3))
+        let editor = TextEditor(
+            lines: ["hello"],
+            lineSpans: [[StyledSpan(text: "hello", style: .default)]],
+            showLineNumbers: true,
+            showsGutterDecorations: true,
+            gutterDecorations: [0: .init(symbol: "+", style: markerStyle)]
+        )
+
+        editor.render(to: &buffer, in: Rect(x: 0, y: 0, width: 12, height: 1))
+
+        #expect(buffer[0, 0].character == "+")
+        #expect(buffer[0, 0].style.fg == markerStyle.fg)
+        #expect(buffer[0, 3].character == "1")
+    }
+
+    @Test
+    func `Wrapped text editor shows gutter decoration only on first visual row`() {
+        var buffer = ScreenBuffer(columns: 8, rows: 2)
+        let editor = TextEditor(
+            lines: ["abcdef"],
+            lineSpans: [[StyledSpan(text: "abcdef", style: .default)]],
+            showLineNumbers: true,
+            showsGutterDecorations: true,
+            gutterDecorations: [0: .init(symbol: "~", style: .default)],
+            wrapLines: true
+        )
+
+        editor.render(to: &buffer, in: Rect(x: 0, y: 0, width: 8, height: 2))
+
+        #expect(buffer[0, 0].character == "~")
+        #expect(buffer[1, 0].character == " ")
     }
 
     @Test

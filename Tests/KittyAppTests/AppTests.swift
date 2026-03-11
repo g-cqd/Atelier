@@ -1,5 +1,6 @@
 import Testing
 @testable import KittyApp
+@testable import KittyInput
 @testable import KittyWidgets
 @testable import KittyTerminal
 @testable import KittyCodecs
@@ -63,6 +64,48 @@ struct ApplicationRuntimeTests {
         #expect(containsSubsequence(KittySequences.leaveAlternateScreen, in: mock.writtenOutput))
     }
 
+    @Test
+    @MainActor
+    func `configureInputSource can inject refresh events into the runtime loop`() async throws {
+        let mock = MockTerminalConnection()
+        let runtime = ApplicationRuntime(connection: mock)
+        var events: [InputEvent] = []
+        var renderCount = 0
+
+        try await runtime.run(
+            render: { _ in
+                renderCount += 1
+            },
+            onEvent: { event, _ in
+                events.append(event)
+                switch event {
+                case .refresh:
+                    renderCount += 1
+                    return true
+                case .key(let key):
+                    return key.keyCode != 3
+                default:
+                    return true
+                }
+            },
+            configureInputSource: { inputSource in
+                inputSource.inject(.refresh)
+                inputSource.inject(.key(KeyEvent(keyCode: 3)))
+            }
+        )
+
+        #expect(renderCount == 2)
+        #expect(events.count == 2)
+        let refreshEvent = try #require(events.first)
+        guard case .refresh = refreshEvent else {
+            throw RuntimeEventExpectationError.expectedRefresh
+        }
+        guard case .key(let key) = try #require(events.last) else {
+            throw RuntimeEventExpectationError.expectedQuitKey
+        }
+        #expect(key.keyCode == 3)
+    }
+
     struct TestApp: App {
         var body: some View {
             Text("Test")
@@ -74,4 +117,9 @@ struct ApplicationRuntimeTests {
             bytes[index...].starts(with: subsequence)
         }
     }
+}
+
+private enum RuntimeEventExpectationError: Error {
+    case expectedQuitKey
+    case expectedRefresh
 }

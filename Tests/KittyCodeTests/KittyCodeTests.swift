@@ -1,5 +1,6 @@
 import Foundation
 import KittyCodecs
+import KittyGit
 import KittyFileTree
 import KittyRenderer
 import KittySyntax
@@ -542,6 +543,9 @@ struct KittyConfigExtensionTests {
         #expect(config.autoSaveInterval == 30)
         #expect(config.showGitStatus == true)
         #expect(config.gitRefreshInterval == 10)
+        #expect(config.gitDecorations.showLineChanges == true)
+        #expect(config.gitDecorations.showTabRibbonStatus == true)
+        #expect(config.gitDecorations.showOpenFilesStatus == true)
         #expect(config.syntaxHighlighting == true)
         #expect(config.disabledLanguages.isEmpty)
         #expect(config.tabRibbonPosition == .top)
@@ -558,6 +562,8 @@ struct KittyConfigExtensionTests {
         config.autoSaveInterval = 60
         config.tabRibbonPosition = .hidden
         config.activityBar.show = false
+        config.gitDecorations.showTabRibbonStatus = false
+        config.gitDecorations.maxLineDiffBytes = 2048
         config.disabledLanguages = ["python", "ruby"]
 
         let data = try JSONEncoder().encode(config)
@@ -566,6 +572,8 @@ struct KittyConfigExtensionTests {
         #expect(decoded.autoSaveInterval == 60)
         #expect(decoded.tabRibbonPosition == .hidden)
         #expect(decoded.activityBar.show == false)
+        #expect(decoded.gitDecorations.showTabRibbonStatus == false)
+        #expect(decoded.gitDecorations.maxLineDiffBytes == 2048)
         #expect(decoded.disabledLanguages == ["python", "ruby"])
     }
 
@@ -740,6 +748,52 @@ struct RuntimeRegressionsTests {
             let cell = sut.pipeline.buffer[1, col]
             #expect(cell.character != "\0", "Tab ribbon row should be filled at col \(col)")
         }
+    }
+
+    @Test
+    func `editor gutter renders git line decorations`() {
+        let sut = makeSUT(fileContent: ["hello"], columns: 40, rows: 10)
+        sut.state.mode = .editor
+        sut.state.sidebarCollapsed = true
+        sut.state.bufferManager.open(filePath: "/note.txt", fileName: "note.txt", content: "hello", language: nil)
+        sut.state.restoreStateFromActiveBuffer()
+        sut.state.bufferManager.activeBuffer?.gitLineDecorations = GitLineDecorations(markers: [0: .added])
+        sut.state.gitLineDecorationProvider = TestGitProvider()
+
+        render(pipeline: sut.pipeline, state: sut.state)
+
+        #expect(sut.pipeline.buffer[1, 0].character == "+")
+        #expect(sut.pipeline.buffer[1, 3].character == "1")
+    }
+
+    @Test
+    func `tab ribbon renders git status indicators for open buffers`() {
+        let cols = 40
+        let sut = makeSUT(fileContent: ["x"], columns: cols, rows: 10, tabRibbon: .top)
+        sut.state.bufferManager.open(filePath: "/note.txt", fileName: "note.txt", content: "x", language: nil)
+        sut.state.restoreStateFromActiveBuffer()
+        sut.state.fileStatusProvider = TestGitProvider(statuses: ["/note.txt": .modified])
+
+        render(pipeline: sut.pipeline, state: sut.state)
+
+        let rowText = String((0..<cols).map { sut.pipeline.buffer[1, $0].character })
+        #expect(rowText.contains("M"))
+    }
+
+    @Test
+    func `open files panel renders git status indicators`() {
+        let cols = 40
+        let sut = makeSUT(columns: cols, rows: 10)
+        sut.state.treePanelWidth = 16
+        sut.state.activeSidebarPanel = .openDocuments
+        sut.state.bufferManager.open(filePath: "/note.txt", fileName: "note.txt", content: "x", language: nil)
+        sut.state.restoreStateFromActiveBuffer()
+        sut.state.fileStatusProvider = TestGitProvider(statuses: ["/note.txt": .modified])
+
+        render(pipeline: sut.pipeline, state: sut.state)
+
+        let rowText = String((0..<16).map { sut.pipeline.buffer[1, $0].character })
+        #expect(rowText.contains("M"))
     }
 
     // --- Activity bar ---
@@ -961,6 +1015,23 @@ struct RuntimeRegressionsTests {
         let row1Text = String(row1Chars).trimmingCharacters(in: .whitespaces)
         #expect(row1Text.contains("content") || row1Text.contains("1"),
                 "Editor should render from column 0 when sidebar is collapsed")
+    }
+}
+
+private struct TestGitProvider: FileStatusProvider, GitLineDecorationProvider {
+    var statuses: [String: FileStatus] = [:]
+    var decorations: [String: GitLineDecorations] = [:]
+    var branchName: String? = nil
+    var summary: FileStatusSummary = .init()
+
+    func status(for path: String) -> FileStatus? {
+        statuses[path]
+    }
+
+    func refresh() async {}
+
+    func lineDecorations(for path: String, lines _: [String]) async -> GitLineDecorations {
+        decorations[path] ?? .empty
     }
 }
 
