@@ -4,6 +4,16 @@ import KittyText
 
 /// Scrollable syntax-highlighted text display widget.
 public struct TextEditor: View, Sendable {
+    public struct GutterDecoration: Sendable, Equatable {
+        public var symbol: Character
+        public var style: Style
+
+        public init(symbol: Character, style: Style) {
+            self.symbol = symbol
+            self.style = style
+        }
+    }
+
     public var lines: [String]
     public var lineSpans: [[StyledSpan]]
     public var scrollOffset: Int
@@ -11,8 +21,11 @@ public struct TextEditor: View, Sendable {
     public var cursorRow: Int
     public var cursorCol: Int
     public var showLineNumbers: Bool
+    public var showsGutterDecorations: Bool
+    public var gutterDecorations: [Int: GutterDecoration]
     public var wrapLines: Bool
     public var showsVerticalScrollIndicator: Bool
+    public var showsHorizontalScrollIndicator: Bool
     public var editorStyle: Style
     public var lineNumberStyle: Style
     public var currentLineStyle: Style
@@ -27,8 +40,11 @@ public struct TextEditor: View, Sendable {
         cursorRow: Int = 0,
         cursorCol: Int = 0,
         showLineNumbers: Bool = true,
+        showsGutterDecorations: Bool = false,
+        gutterDecorations: [Int: GutterDecoration] = [:],
         wrapLines: Bool = false,
         showsVerticalScrollIndicator: Bool = false,
+        showsHorizontalScrollIndicator: Bool = false,
         editorStyle: Style = .default,
         lineNumberStyle: Style = .default,
         currentLineStyle: Style = .default,
@@ -42,8 +58,11 @@ public struct TextEditor: View, Sendable {
         self.cursorRow = cursorRow
         self.cursorCol = cursorCol
         self.showLineNumbers = showLineNumbers
+        self.showsGutterDecorations = showsGutterDecorations
+        self.gutterDecorations = gutterDecorations
         self.wrapLines = wrapLines
         self.showsVerticalScrollIndicator = showsVerticalScrollIndicator
+        self.showsHorizontalScrollIndicator = showsHorizontalScrollIndicator
         self.editorStyle = editorStyle
         self.lineNumberStyle = lineNumberStyle
         self.currentLineStyle = currentLineStyle
@@ -59,8 +78,11 @@ public struct TextEditor: View, Sendable {
         cursorRow: Int = 0,
         cursorCol: Int = 0,
         showLineNumbers: Bool = true,
+        showsGutterDecorations: Bool = false,
+        gutterDecorations: [Int: GutterDecoration] = [:],
         wrapLines: Bool = false,
         showsVerticalScrollIndicator: Bool = false,
+        showsHorizontalScrollIndicator: Bool = false,
         editorStyle: Style = .default,
         lineNumberStyle: Style = .default,
         currentLineStyle: Style = .default,
@@ -83,8 +105,11 @@ public struct TextEditor: View, Sendable {
         self.cursorRow = cursorRow
         self.cursorCol = cursorCol
         self.showLineNumbers = showLineNumbers
+        self.showsGutterDecorations = showsGutterDecorations
+        self.gutterDecorations = gutterDecorations
         self.wrapLines = wrapLines
         self.showsVerticalScrollIndicator = showsVerticalScrollIndicator
+        self.showsHorizontalScrollIndicator = showsHorizontalScrollIndicator
         self.editorStyle = editorStyle
         self.lineNumberStyle = lineNumberStyle
         self.currentLineStyle = currentLineStyle

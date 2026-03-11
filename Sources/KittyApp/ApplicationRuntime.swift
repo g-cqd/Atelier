@@ -18,7 +18,8 @@ public final class ApplicationRuntime: Sendable {
     /// `onEvent` is called for every input event; return `false` to quit.
     public func run(
         render: @MainActor (RenderPipeline) -> Void,
-        onEvent: @MainActor (InputEvent, RenderPipeline) -> Bool = { _, _ in true }
+        onEvent: @MainActor (InputEvent, RenderPipeline) -> Bool = { _, _ in true },
+        configureInputSource: @MainActor (InputSource) -> Void = { _ in }
     ) async throws(AppError) {
         // Enter raw mode
         do {
@@ -76,6 +77,7 @@ public final class ApplicationRuntime: Sendable {
         )
 
         let inputSource = InputSource(connection: connection)
+        configureInputSource(inputSource)
         let readTask = inputSource.start()
 
         // Start signal handler for SIGWINCH
@@ -158,7 +160,8 @@ public final class ApplicationRuntime: Sendable {
                     rootView.render(to: &pipeline.buffer, in: rect)
                 }
                 return true
-            }
+            },
+            configureInputSource: { _ in }
         )
     }
 }

@@ -18,12 +18,14 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
                 state.saveStateToActiveBuffer()
                 state.bufferManager.nextTab()
                 state.restoreStateFromActiveBuffer()
+                state.ensureActiveTabVisible(ribbonWidth: max(0, pipeline.columns - LayoutMetrics.editorStart(state: state, columns: pipeline.columns)))
                 return true
             }
             if key.keyCode == Key.pageUp.rawValue {
                 state.saveStateToActiveBuffer()
                 state.bufferManager.prevTab()
                 state.restoreStateFromActiveBuffer()
+                state.ensureActiveTabVisible(ribbonWidth: max(0, pipeline.columns - LayoutMetrics.editorStart(state: state, columns: pipeline.columns)))
                 return true
             }
         }

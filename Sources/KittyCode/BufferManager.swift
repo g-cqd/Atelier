@@ -81,4 +81,45 @@ final class BufferManager {
     func bufferIndex(forPath path: String) -> Int? {
         buffers.firstIndex(where: { $0.filePath == path })
     }
+
+    /// Index of the current preview buffer, if any.
+    var previewIndex: Int? {
+        buffers.firstIndex(where: { $0.isPreview })
+    }
+
+    /// Open a file as a preview tab, replacing any existing preview buffer.
+    @discardableResult
+    func openPreview(filePath: String, fileName: String, content: String, language: String?) -> Int {
+        if let existing = bufferIndex(forPath: filePath) {
+            activeIndex = existing
+            return existing
+        }
+
+        // Replace existing preview buffer
+        if let previewIdx = previewIndex {
+            buffers.remove(at: previewIdx)
+            if activeIndex >= buffers.count {
+                activeIndex = max(0, buffers.count - 1)
+            } else if activeIndex > previewIdx {
+                activeIndex -= 1
+            }
+        }
+
+        let buffer = DocumentBuffer(
+            filePath: filePath,
+            fileName: fileName,
+            content: content,
+            language: language
+        )
+        buffer.isPreview = true
+        buffers.append(buffer)
+        activeIndex = buffers.count - 1
+        return activeIndex
+    }
+
+    /// Pin the buffer at the given index (remove its preview status).
+    func pinBuffer(at index: Int) {
+        guard index >= 0, index < buffers.count else { return }
+        buffers[index].isPreview = false
+    }
 }

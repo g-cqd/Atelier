@@ -22,6 +22,8 @@ public struct TerminalSymbolTheme: Sendable {
         case gitConflicted
         case dirty
         case close
+        case explorer
+        case openDocuments
     }
 
     public struct Glyph: Sendable, Equatable {
@@ -102,6 +104,10 @@ public struct TerminalSymbolTheme: Sendable {
             return "circle.fill"
         case .close:
             return "xmark"
+        case .explorer:
+            return "folder.fill"
+        case .openDocuments:
+            return "doc.on.doc"
         }
     }
 
@@ -147,6 +153,10 @@ public struct TerminalSymbolTheme: Sendable {
             return "●"
         case .close:
             return "×"
+        case .explorer:
+            return "E"
+        case .openDocuments:
+            return "D"
         }
     }
 }

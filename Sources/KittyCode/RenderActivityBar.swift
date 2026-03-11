@@ -16,9 +16,9 @@ func renderActivityBar(
         let icon: String
         switch id {
         case "explorer":
-            icon = state.symbolTheme[.panel].text.isEmpty ? "E" : state.symbolTheme[.panel].text
+            icon = state.symbolTheme[.explorer].text
         case "openDocuments":
-            icon = state.symbolTheme[.file].text.isEmpty ? "D" : state.symbolTheme[.file].text
+            icon = state.symbolTheme[.openDocuments].text
         default:
             icon = "?"
         }
