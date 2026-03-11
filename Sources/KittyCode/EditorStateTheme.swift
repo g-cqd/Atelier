@@ -73,7 +73,11 @@ extension EditorState {
                 trackCharacter: " ",
                 thumbCharacter: "\u{2501}"
             ),
-            emptyEditorMessage: Style(fg: .rgb(r: 100, g: 100, b: 100))
+            emptyEditorMessage: Style(fg: .rgb(r: 100, g: 100, b: 100)),
+            selection: Style(
+                fg: theme.selectionForeground?.color ?? .default,
+                bg: (theme.selectionBackground ?? ColorRGB(r: 0x26, g: 0x4f, b: 0x78)).color
+            )
         )
     }
 
