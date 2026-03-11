@@ -114,7 +114,9 @@ private func activeSelectionRanges(state: EditorState) -> [Int: ClosedRange<Int>
     var ranges: [Int: ClosedRange<Int>] = [:]
 
     if start.row == end.row {
-        ranges[start.row] = start.col...end.col - 1
+        if end.col > start.col {
+            ranges[start.row] = start.col...end.col - 1
+        }
     } else {
         let firstLineLength = state.fileLine(at: start.row).count
         ranges[start.row] = start.col...firstLineLength
@@ -124,7 +126,7 @@ private func activeSelectionRanges(state: EditorState) -> [Int: ClosedRange<Int>
             ranges[row] = 0...lineLength
         }
 
-        if end.row > start.row {
+        if end.row > start.row && end.col > 0 {
             ranges[end.row] = 0...end.col - 1
         }
     }

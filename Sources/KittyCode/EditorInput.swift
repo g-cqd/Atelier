@@ -14,15 +14,51 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
     )
     let availWidth = max(1, TextEditorLayout.contentWidth(for: makeEditorView(state: state), in: editorRect))
     var shouldEnsureVisible = false
+    var didDeleteSelection = false
+    let isShiftHeld = key.modifiers.contains(.shift)
 
     if !isClipboardShortcut(key) {
         if state.hasActiveSelection {
-            let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
-            state.textDidChange(mutation)
-            state.clearSelection()
+            if isNavigationKey(key) {
+                if !isShiftHeld {
+                    // Plain navigation key: collapse selection to the appropriate edge
+                    let (start, end) = state.selection!.ordered
+                    switch key.keyCode {
+                    case Key.left.rawValue, Key.up.rawValue, Key.home.rawValue, Key.pageUp.rawValue:
+                        state.cursorRow = start.row
+                        state.cursorCol = start.col
+                    case Key.right.rawValue, Key.down.rawValue, Key.end.rawValue, Key.pageDown.rawValue:
+                        state.cursorRow = end.row
+                        state.cursorCol = end.col
+                    default:
+                        break
+                    }
+                    state.clearSelection()
+                    ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+                    return true
+                }
+                // shift+navigation: fall through to extend selection below
+            } else if !isShiftHeld {
+                // Editing key: delete the selection, then proceed with the key action
+                let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
+                state.textDidChange(mutation)
+                state.clearSelection()
+                didDeleteSelection = true
+            }
         }
     } else {
         state.clearSelection()
+    }
+
+    // Capture selection anchor before cursor movement for shift+navigation
+    let anchorBeforeMove: TextPosition? = if isShiftHeld && isNavigationKey(key) {
+        if let sel = state.selection {
+            sel.anchor
+        } else {
+            TextPosition(row: state.cursorRow, col: state.cursorCol)
+        }
+    } else {
+        nil
     }
 
     if state.config.keybindingMode == .vim && state.vimMode == .normal {
@@ -119,7 +155,10 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         state.textDidChange(mutation)
         shouldEnsureVisible = true
     case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
-        if let mutation = TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor) {
+        if didDeleteSelection {
+            // Selection was already deleted; don't also delete backward
+            shouldEnsureVisible = true
+        } else if let mutation = TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor) {
             state.textDidChange(mutation)
             shouldEnsureVisible = true
         }
@@ -147,6 +186,12 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         }
     }
 
+    // Update selection for shift+navigation keys
+    if let anchor = anchorBeforeMove {
+        let head = TextPosition(row: state.cursorRow, col: state.cursorCol)
+        state.selection = TextSelection(anchor: anchor, head: head)
+    }
+
     if shouldEnsureVisible {
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     }
@@ -156,4 +201,15 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
 @MainActor
 private func isClipboardShortcut(_ key: KeyEvent) -> Bool {
     key.modifiers == .ctrl && (key.keyCode == AsciiKey.c || key.keyCode == AsciiKey.x || key.keyCode == 118)
+}
+
+@MainActor
+private func isNavigationKey(_ key: KeyEvent) -> Bool {
+    switch key.keyCode {
+    case Key.up.rawValue, Key.down.rawValue, Key.left.rawValue, Key.right.rawValue,
+         Key.home.rawValue, Key.end.rawValue, Key.pageUp.rawValue, Key.pageDown.rawValue:
+        return true
+    default:
+        return false
+    }
 }
