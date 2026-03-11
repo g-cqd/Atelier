@@ -1,8 +1,10 @@
 import Foundation
 import KittyApp
+import KittyFileTree
 import KittyGit
 import KittyRenderer
 import KittyTerminal
+import KittyWorkspace
 
 @main
 struct KittyCodeEntry {
@@ -37,14 +39,24 @@ struct KittyCodeEntry {
             let gitProvider = GitStatusProvider(rootPath: repositoryRoot)
             state.fileStatusProvider = gitProvider
             state.gitLineDecorationProvider = gitProvider
-            state.gitDecorationManager = GitDecorationManager(state: state, refreshSource: refreshSource)
+            state.gitDecorationManager = GitDecorationManager(
+                workspace: state.workspace,
+                gitConfig: GitDecorationConfig(
+                    showGitStatus: config.showGitStatus,
+                    showLineChanges: config.gitDecorations.showLineChanges,
+                    lineChangeDebounceMilliseconds: config.gitDecorations.lineChangeDebounceMilliseconds,
+                    maxLineDiffBytes: config.gitDecorations.maxLineDiffBytes
+                ),
+                gitLineDecorationProvider: gitProvider,
+                invalidateRender: { [refreshSource] in refreshSource.invalidate() }
+            )
         }
 
         // File watcher (Phase 3)
         var fileWatcherIntegration: FileWatcherIntegration?
         if config.fileWatcherEnabled {
             let watcher = FileWatcher()
-            let integration = FileWatcherIntegration(watcher: watcher, state: state)
+            let integration = FileWatcherIntegration(watcher: watcher, workspace: state.workspace, delegate: state)
             integration.start()
             state.fileWatcherIntegration = integration
             fileWatcherIntegration = integration
@@ -53,7 +65,12 @@ struct KittyCodeEntry {
         // Auto-save (Phase 5)
         var autoSaveManager: AutoSaveManager?
         if config.autoSave {
-            let manager = AutoSaveManager(state: state, fileWatcherIntegration: fileWatcherIntegration)
+            let manager = AutoSaveManager(
+                workspace: state.workspace,
+                fileWatcherIntegration: fileWatcherIntegration,
+                autoSaveInterval: config.autoSaveInterval,
+                saveActiveBuffer: { [weak state] in state?.writeBufferToDisk() }
+            )
             manager.start()
             autoSaveManager = manager
         }
@@ -61,7 +78,12 @@ struct KittyCodeEntry {
         // Git refresh (Phase 6)
         var gitRefreshManager: GitRefreshManager?
         if config.showGitStatus, state.fileStatusProvider != nil {
-            let manager = GitRefreshManager(state: state, refreshSource: refreshSource)
+            let manager = GitRefreshManager(
+                fileStatusProvider: state.fileStatusProvider,
+                gitDecorationManager: state.gitDecorationManager,
+                refreshInterval: config.gitRefreshInterval,
+                invalidateRender: { [refreshSource] in refreshSource.invalidate() }
+            )
             manager.refreshNow()
             manager.start()
             gitRefreshManager = manager

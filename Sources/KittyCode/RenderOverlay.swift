@@ -2,13 +2,6 @@ import KittyCodecs
 import KittyRenderer
 import KittyWidgets
 
-private struct OverlayBoxLayout {
-    let boxRect: Rect
-    let titleRow: Int
-    let subtitleRow: Int?
-    let contentRect: Rect
-}
-
 @MainActor
 func renderOverlay(
     pipeline: RenderPipeline,
@@ -74,6 +67,14 @@ func isWithinContextMenu(
     return row >= layout.boxRect.y && row < layout.boxRect.maxY && col >= layout.boxRect.x && col < layout.boxRect.maxX
 }
 
+private func overlayBoxStyle(from colorScheme: EditorState.ColorScheme) -> OverlayBoxStyle {
+    OverlayBoxStyle(
+        borderStyle: colorScheme.titleBar,
+        fillStyle: colorScheme.statusBar,
+        bodyStyle: colorScheme.editorText
+    )
+}
+
 private func renderPromptOverlay(
     _ prompt: EditorPrompt,
     into buffer: inout ScreenBuffer,
@@ -85,7 +86,7 @@ private func renderPromptOverlay(
     let messageLine = prompt.message ?? "Enter a destination path."
     let width = min(max(max(promptLine.count, messageLine.count) + 6, 34), max(20, columns - 4))
     let height = 6
-    let layout = overlayBoxLayout(
+    let layout = OverlayBox.layout(
         title: "Save File",
         subtitle: messageLine,
         width: width,
@@ -94,11 +95,11 @@ private func renderPromptOverlay(
         rows: rows
     )
 
-    drawOverlayBox(
+    OverlayBox.draw(
         into: &buffer,
         layout: layout,
         title: "Save File",
-        colorScheme: colorScheme
+        style: overlayBoxStyle(from: colorScheme)
     )
     if let subtitleRow = layout.subtitleRow {
         buffer.write(
@@ -127,11 +128,11 @@ private func renderContextMenuOverlay(
     colorScheme: EditorState.ColorScheme
 ) {
     let layout = contextMenuOverlayLayout(for: contextMenu, columns: columns, rows: rows)
-    drawOverlayBox(
+    OverlayBox.draw(
         into: &buffer,
         layout: layout,
         title: contextMenu.title,
-        colorScheme: colorScheme
+        style: overlayBoxStyle(from: colorScheme)
     )
     if let subtitle = contextMenu.subtitle, let subtitleRow = layout.subtitleRow {
         buffer.write(
@@ -175,7 +176,7 @@ private func contextMenuOverlayLayout(
     let preferredWidth = min(max(max(contextMenu.title.count, widestItem) + 8, 28), max(20, columns - 4))
     let subtitleRows = contextMenu.subtitle == nil ? 0 : 1
     let preferredHeight = min(max(contextMenu.items.count + subtitleRows + 4, 6), max(6, rows - 4))
-    return overlayBoxLayout(
+    return OverlayBox.layout(
         title: contextMenu.title,
         subtitle: contextMenu.subtitle,
         width: preferredWidth,
@@ -183,69 +184,4 @@ private func contextMenuOverlayLayout(
         columns: columns,
         rows: rows
     )
-}
-
-private func overlayBoxLayout(
-    title: String,
-    subtitle: String?,
-    width: Int,
-    height: Int,
-    columns: Int,
-    rows: Int
-) -> OverlayBoxLayout {
-    let boxWidth = min(max(12, width), max(12, columns - 2))
-    let boxHeight = min(max(5, height), max(5, rows - 2))
-    let boxX = max(0, (columns - boxWidth) / 2)
-    let boxY = max(0, (rows - boxHeight) / 2)
-    let titleRow = boxY + 1
-    let subtitleRow = subtitle == nil ? nil : titleRow + 1
-    let contentStartY = boxY + (subtitle == nil ? 2 : 3)
-    let contentHeight = max(1, boxHeight - (subtitle == nil ? 3 : 4))
-
-    return OverlayBoxLayout(
-        boxRect: Rect(x: boxX, y: boxY, width: boxWidth, height: boxHeight),
-        titleRow: titleRow,
-        subtitleRow: subtitleRow,
-        contentRect: Rect(x: boxX + 2, y: contentStartY, width: max(1, boxWidth - 4), height: contentHeight)
-    )
-}
-
-private func drawOverlayBox(
-    into buffer: inout ScreenBuffer,
-    layout: OverlayBoxLayout,
-    title: String,
-    colorScheme: EditorState.ColorScheme
-) {
-    let borderStyle = colorScheme.titleBar
-    let fillStyle = colorScheme.statusBar
-    let bodyStyle = colorScheme.editorText
-    let rect = layout.boxRect
-
-    buffer.fill(
-        row: rect.y,
-        col: rect.x,
-        width: rect.width,
-        height: rect.height,
-        cell: Cell(character: " ", style: fillStyle)
-    )
-
-    guard rect.width >= 2, rect.height >= 2 else { return }
-
-    buffer[rect.y, rect.x] = Cell(character: "┌", style: borderStyle)
-    buffer[rect.y, rect.maxX - 1] = Cell(character: "┐", style: borderStyle)
-    buffer[rect.maxY - 1, rect.x] = Cell(character: "└", style: borderStyle)
-    buffer[rect.maxY - 1, rect.maxX - 1] = Cell(character: "┘", style: borderStyle)
-
-    for col in (rect.x + 1)..<(rect.maxX - 1) {
-        buffer[rect.y, col] = Cell(character: "─", style: borderStyle)
-        buffer[rect.maxY - 1, col] = Cell(character: "─", style: borderStyle)
-    }
-
-    for row in (rect.y + 1)..<(rect.maxY - 1) {
-        buffer[row, rect.x] = Cell(character: "│", style: borderStyle)
-        buffer[row, rect.maxX - 1] = Cell(character: "│", style: borderStyle)
-    }
-
-    let titleText = String(title.prefix(max(0, rect.width - 4)))
-    buffer.write(titleText, row: layout.titleRow, col: rect.x + 2, style: bodyStyle)
 }
