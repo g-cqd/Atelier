@@ -68,55 +68,61 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
         state.scrollDragState = nil
         let now = Date()
         let momentumBlockInterval = TimeInterval(max(0, state.config.editor.scrollMomentumBlockMilliseconds)) / 1000
+        let isVerticalWheel = mouse.button == .scrollUp || mouse.button == .scrollDown
+        let isHorizontalEditorWheel = mouse.col - 1 >= layout.editorStart &&
+            !state.config.editor.wrapLines &&
+            (mouse.button == .scrollLeft || mouse.button == .scrollRight ||
+             (mouse.modifiers.contains(.shift) && isVerticalWheel))
+        let isTabRibbonWheel = layout.showTabRibbon &&
+            mouse.row == layout.contentStartRow &&
+            mouse.col - 1 >= layout.editorStart
+        let isTreeVerticalWheel = !isTabRibbonWheel &&
+            mouse.col - 1 < layout.editorStart &&
+            isVerticalWheel
+        let isEditorVerticalWheel = !isTabRibbonWheel &&
+            !isTreeVerticalWheel &&
+            !isHorizontalEditorWheel &&
+            isVerticalWheel
+        let handlesVerticalMomentum = isTreeVerticalWheel || isEditorVerticalWheel
 
-        if shouldCancelPendingAcceleratedScroll(for: mouse.button, state: state) {
+        if handlesVerticalMomentum, shouldCancelPendingAcceleratedScroll(for: mouse.button, state: state) {
             cancelPendingAcceleratedScroll(state: state, resetBurst: true)
         }
 
-        if let blockedDirection = state.blockedMomentumDirection {
-            if now < state.blockedMomentumDeadline, mouse.button == blockedDirection {
-                state.blockedMomentumDirection = nil
-                state.blockedMomentumDeadline = .distantPast
-                return
-            }
+        if handlesVerticalMomentum {
+            if let blockedDirection = state.blockedMomentumDirection {
+                if now < state.blockedMomentumDeadline, mouse.button == blockedDirection {
+                    state.blockedMomentumDirection = nil
+                    state.blockedMomentumDeadline = .distantPast
+                    state.isScrolling = false
+                    return
+                }
 
-            if now >= state.blockedMomentumDeadline {
-                state.blockedMomentumDirection = nil
-                state.blockedMomentumDeadline = .distantPast
+                if now >= state.blockedMomentumDeadline {
+                    state.blockedMomentumDirection = nil
+                    state.blockedMomentumDeadline = .distantPast
+                }
             }
         }
-
-        let previousDirection = state.lastScrollDirection
-        if let previousDirection, previousDirection.isScroll, previousDirection != mouse.button, momentumBlockInterval > 0 {
-            // After a reversal, ignore at most one immediate rebound event from the old direction.
-            state.blockedMomentumDirection = previousDirection
-            state.blockedMomentumDeadline = now.addingTimeInterval(momentumBlockInterval)
-        }
-        state.lastScrollDirection = mouse.button
-
-        state.isScrolling = true
 
         // Scroll wheel on tab ribbon row
-        if layout.showTabRibbon && mouse.row == layout.contentStartRow && mouse.col - 1 >= layout.editorStart {
-            if mouse.button == .scrollUp || mouse.button == .scrollLeft {
-                state.tabScrollOffset = max(0, state.tabScrollOffset - 1)
-            } else if mouse.button == .scrollDown || mouse.button == .scrollRight {
-                state.tabScrollOffset = min(max(0, state.bufferManager.count - 1), state.tabScrollOffset + 1)
-            }
+        if isTabRibbonWheel {
+            state.isScrolling = scrollTabRibbon(direction: mouse.button, state: state)
             return
         }
 
-        if mouse.col - 1 < layout.editorStart {
+        if isTreeVerticalWheel {
+            let didScroll: Bool
             if mouse.button == .scrollUp {
-                scrollVertically(
+                didScroll = scrollVertically(
                     target: .tree,
                     direction: mouse.button,
                     scrollStep: scrollStep,
                     state: state,
                     at: now
                 )
-            } else if mouse.button == .scrollDown {
-                scrollVertically(
+            } else {
+                didScroll = scrollVertically(
                     target: .tree,
                     direction: mouse.button,
                     scrollStep: scrollStep,
@@ -124,33 +130,52 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
                     at: now
                 )
             }
-        } else if !state.config.editor.wrapLines,
-                  mouse.button == .scrollLeft || mouse.button == .scrollRight ||
-                  (mouse.modifiers.contains(.shift) && (mouse.button == .scrollUp || mouse.button == .scrollDown)) {
+            state.isScrolling = didScroll
+            if didScroll {
+                updateMomentumTracking(
+                    afterAcceptedVerticalScroll: mouse.button,
+                    at: now,
+                    momentumBlockInterval: momentumBlockInterval,
+                    state: state
+                )
+            }
+        } else if isHorizontalEditorWheel {
             let hStep = state.config.editor.scrollHorizontalStep
             if mouse.button == .scrollUp || mouse.button == .scrollLeft {
-                scrollEditorHorizontally(state: state, editorRect: editorRect, delta: -hStep)
+                state.isScrolling = scrollEditorHorizontally(state: state, editorRect: editorRect, delta: -hStep)
             } else if mouse.button == .scrollDown || mouse.button == .scrollRight {
-                scrollEditorHorizontally(state: state, editorRect: editorRect, delta: hStep)
+                state.isScrolling = scrollEditorHorizontally(state: state, editorRect: editorRect, delta: hStep)
+            }
+        } else if isEditorVerticalWheel {
+            let didScroll: Bool
+            if mouse.button == .scrollUp {
+                didScroll = scrollVertically(
+                    target: .editor,
+                    direction: mouse.button,
+                    scrollStep: scrollStep,
+                    state: state,
+                    at: now
+                )
+            } else {
+                didScroll = scrollVertically(
+                    target: .editor,
+                    direction: mouse.button,
+                    scrollStep: scrollStep,
+                    state: state,
+                    at: now
+                )
+            }
+            state.isScrolling = didScroll
+            if didScroll {
+                updateMomentumTracking(
+                    afterAcceptedVerticalScroll: mouse.button,
+                    at: now,
+                    momentumBlockInterval: momentumBlockInterval,
+                    state: state
+                )
             }
         } else {
-            if mouse.button == .scrollUp {
-                scrollVertically(
-                    target: .editor,
-                    direction: mouse.button,
-                    scrollStep: scrollStep,
-                    state: state,
-                    at: now
-                )
-            } else if mouse.button == .scrollDown {
-                scrollVertically(
-                    target: .editor,
-                    direction: mouse.button,
-                    scrollStep: scrollStep,
-                    state: state,
-                    at: now
-                )
-            }
+            state.isScrolling = false
         }
         return
     }
@@ -267,20 +292,39 @@ private func shouldCancelPendingAcceleratedScroll(for direction: MouseButton, st
 }
 
 @MainActor
+private func updateMomentumTracking(
+    afterAcceptedVerticalScroll direction: MouseButton,
+    at now: Date,
+    momentumBlockInterval: TimeInterval,
+    state: EditorState
+) {
+    let previousDirection = state.lastScrollDirection
+    if let previousDirection, previousDirection.isScroll, previousDirection != direction, momentumBlockInterval > 0 {
+        // After a reversal, ignore at most one immediate rebound event from the old direction.
+        state.blockedMomentumDirection = previousDirection
+        state.blockedMomentumDeadline = now.addingTimeInterval(momentumBlockInterval)
+    }
+    state.lastScrollDirection = direction
+}
+
+@MainActor
 private func scrollVertically(
     target: EditorState.AcceleratedScrollTarget,
     direction: MouseButton,
     scrollStep: Int,
     state: EditorState,
     at now: Date
-) {
+) -> Bool {
     let unitDelta = direction == .scrollUp ? -scrollStep : scrollStep
     let directionChanged = state.scrollAccelerationDirection != nil && state.scrollAccelerationDirection != direction
     if directionChanged {
         cancelPendingAcceleratedScroll(state: state, resetBurst: false)
     }
 
-    applyVerticalScrollDelta(unitDelta, target: target, state: state)
+    guard applyVerticalScrollDelta(unitDelta, target: target, state: state) else {
+        cancelPendingAcceleratedScroll(state: state, resetBurst: true)
+        return false
+    }
 
     let extraLines = extraAcceleratedScrollLines(
         for: direction,
@@ -289,8 +333,9 @@ private func scrollVertically(
         state: state,
         at: now
     )
-    guard extraLines > 0 else { return }
+    guard extraLines > 0 else { return true }
     enqueueAcceleratedScroll(lineDelta: direction == .scrollUp ? -extraLines : extraLines, target: target, state: state)
+    return true
 }
 
 @MainActor
@@ -298,19 +343,114 @@ private func applyVerticalScrollDelta(
     _ delta: Int,
     target: EditorState.AcceleratedScrollTarget,
     state: EditorState
-) {
+) -> Bool {
     switch target {
     case .tree:
-        state.treeScrollOffset = min(
+        let nextOffset = min(
             max(0, state.cachedFlatTree.count - 1),
             max(0, state.treeScrollOffset + delta)
         )
+        guard nextOffset != state.treeScrollOffset else { return false }
+        state.treeScrollOffset = nextOffset
     case .editor:
-        state.scrollOffset = min(
-            max(0, state.fileLineCount - 1),
-            max(0, state.scrollOffset + delta)
-        )
+        if state.config.editor.wrapLines {
+            guard applyWrapModeScrollDelta(delta, state: state) else { return false }
+        } else {
+            let nextOffset = min(
+                max(0, state.fileLineCount - 1),
+                max(0, state.scrollOffset + delta)
+            )
+            guard nextOffset != state.scrollOffset else { return false }
+            state.scrollOffset = nextOffset
+        }
     }
+    return true
+}
+
+@MainActor
+private func applyWrapModeScrollDelta(_ delta: Int, state: EditorState) -> Bool {
+    let oldLine = state.scrollOffset
+    let oldWrapRow = state.wrapRowOffset
+    var lineIndex = oldLine
+    var wrapRow = oldWrapRow
+
+    let contentWidth = wrapModeContentWidth(state: state)
+
+    if delta > 0 {
+        for _ in 0..<delta {
+            let lineCount = wrapRowCount(lineIndex: lineIndex, state: state, contentWidth: contentWidth)
+            wrapRow += 1
+            if wrapRow >= lineCount {
+                if lineIndex >= state.fileLineCount - 1 {
+                    wrapRow = max(0, lineCount - 1)
+                    break
+                }
+                lineIndex += 1
+                wrapRow = 0
+            }
+        }
+    } else {
+        for _ in 0..<(-delta) {
+            wrapRow -= 1
+            if wrapRow < 0 {
+                if lineIndex <= 0 { wrapRow = 0; break }
+                lineIndex -= 1
+                wrapRow = wrapRowCount(lineIndex: lineIndex, state: state, contentWidth: contentWidth) - 1
+            }
+        }
+    }
+
+    guard lineIndex != oldLine || wrapRow != oldWrapRow else { return false }
+    state.scrollOffset = lineIndex
+    state.wrapRowOffset = wrapRow
+    return true
+}
+
+@MainActor
+private func wrapRowCount(lineIndex: Int, state: EditorState, contentWidth: Int) -> Int {
+    guard lineIndex >= 0, lineIndex < state.fileLineCount else { return 1 }
+    let line = state.textBuffer.line(at: lineIndex)
+    return wrappedRowStartColumns(for: line, contentWidth: max(1, contentWidth), tabSize: state.config.editor.tabSize).count
+}
+
+@MainActor
+private func wrapModeContentWidth(state: EditorState) -> Int {
+    let layout = LayoutMetrics(
+        state: state,
+        columns: max(1, state.lastRenderColumns),
+        rows: max(2, state.lastRenderRows)
+    )
+    let lineNumberWidth = max(3, TextDisplayMetrics.lineNumberDigits(forLineCount: state.fileLineCount) + 1)
+    let gutterDecoWidth = (state.config.git.enabled && state.config.git.decorations.showLineChanges && state.gitLineDecorationProvider != nil) ? 2 : 0
+    let gutterWidth = gutterDecoWidth + lineNumberWidth
+    return max(1, layout.editorWidth - gutterWidth - 1)
+}
+
+private func wrappedRowStartColumns(for line: String, contentWidth: Int, tabSize: Int) -> [Int] {
+    guard contentWidth > 0 else { return [0] }
+
+    var starts = [0]
+    var currentRowWidth = 0
+
+    for char in line {
+        let width: Int
+        if char == "\t" {
+            let ts = max(1, tabSize)
+            width = ts - (currentRowWidth % ts)
+        } else {
+            width = UnicodeWidth.displayWidth(of: char)
+        }
+        guard width > 0 else { continue }
+
+        if currentRowWidth > 0, currentRowWidth + width > contentWidth {
+            starts.append(starts[starts.count - 1] + currentRowWidth)
+            currentRowWidth = 0
+        }
+
+        currentRowWidth += width
+    }
+
+    return starts
 }
 
 @MainActor
@@ -341,7 +481,7 @@ private func extraAcceleratedScrollLines(
     state.scrollAccelerationLastEventAt = now
 
     let maxExtraLines = max(0, config.scrollAccelerationMaxExtraLines)
-    return min(maxExtraLines, state.scrollAccelerationBurstCount / 2)
+    return min(maxExtraLines, max(0, (state.scrollAccelerationBurstCount - 1) * 2))
 }
 
 @MainActor
@@ -384,7 +524,10 @@ private func enqueueAcceleratedScroll(
                 }
 
                 let step = state.pendingAcceleratedScrollLines > 0 ? 1 : -1
-                applyVerticalScrollDelta(step, target: resumedTarget, state: state)
+                guard applyVerticalScrollDelta(step, target: resumedTarget, state: state) else {
+                    cancelPendingAcceleratedScroll(state: state, resetBurst: true)
+                    return false
+                }
                 state.pendingAcceleratedScrollLines -= step
                 state.renderRefreshSource?.invalidate()
 
@@ -508,12 +651,9 @@ private func beginScrollDragIfNeeded(
        pointerCol < indicatorRect.maxX,
        let gripOffset = TextEditorLayout.scrollGripOffset(for: editor, in: editorRect, pointerRow: pointerRow) {
         state.scrollDragState = EditorState.ScrollDragState(target: .editor, gripOffset: gripOffset)
-        state.scrollOffset = TextEditorLayout.scrollOffset(
-            for: editor,
-            in: editorRect,
-            pointerRow: pointerRow,
-            gripOffset: gripOffset
-        )
+        let pos = TextEditorLayout.scrollPosition(for: editor, in: editorRect, pointerRow: pointerRow, gripOffset: gripOffset)
+        state.scrollOffset = pos.lineOffset
+        state.wrapRowOffset = pos.wrapRowOffset
         state.mode = .editor
         state.isScrolling = true
         return true
@@ -566,12 +706,9 @@ private func updateScrollDrag(
         state.mode = .tree
     case .editor:
         let editor = makeEditorView(state: state)
-        state.scrollOffset = TextEditorLayout.scrollOffset(
-            for: editor,
-            in: editorRect,
-            pointerRow: pointerRow,
-            gripOffset: dragState.gripOffset
-        )
+        let pos = TextEditorLayout.scrollPosition(for: editor, in: editorRect, pointerRow: pointerRow, gripOffset: dragState.gripOffset)
+        state.scrollOffset = pos.lineOffset
+        state.wrapRowOffset = pos.wrapRowOffset
         state.mode = .editor
     case .editorHorizontal:
         let editor = makeEditorView(state: state)
@@ -598,6 +735,7 @@ func makeEditorView(state: EditorState) -> TextEditor {
         buffer: state.textBuffer,
         lineSpans: state.highlightedLines,
         scrollOffset: state.scrollOffset,
+        wrapRowOffset: state.wrapRowOffset,
         horizontalScrollOffset: state.hScrollOffset,
         cursorRow: state.cursorRow,
         cursorCol: state.cursorCol,
@@ -612,17 +750,36 @@ func makeEditorView(state: EditorState) -> TextEditor {
 }
 
 @MainActor
-private func scrollEditorHorizontally(state: EditorState, editorRect: Rect, delta: Int) {
+private func scrollTabRibbon(direction: MouseButton, state: EditorState) -> Bool {
+    let nextOffset: Int
+    if direction == .scrollUp || direction == .scrollLeft {
+        nextOffset = max(0, state.tabScrollOffset - 1)
+    } else if direction == .scrollDown || direction == .scrollRight {
+        nextOffset = min(max(0, state.bufferManager.count - 1), state.tabScrollOffset + 1)
+    } else {
+        nextOffset = state.tabScrollOffset
+    }
+
+    guard nextOffset != state.tabScrollOffset else { return false }
+    state.tabScrollOffset = nextOffset
+    return true
+}
+
+@MainActor
+private func scrollEditorHorizontally(state: EditorState, editorRect: Rect, delta: Int) -> Bool {
     let editor = makeEditorView(state: state)
     let metrics = TextEditorLayout.horizontalScrollMetrics(
         for: editor,
         in: editorRect,
         maxLineWidth: state.maxLineWidth
     )
-    state.hScrollOffset = min(
+    let nextOffset = min(
         metrics.maxOffset,
         max(0, state.hScrollOffset + delta)
     )
+    guard nextOffset != state.hScrollOffset else { return false }
+    state.hScrollOffset = nextOffset
+    return true
 }
 
 @MainActor

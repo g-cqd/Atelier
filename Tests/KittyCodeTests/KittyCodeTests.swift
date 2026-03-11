@@ -202,6 +202,18 @@ struct KittyCodeNavigationTests {
         return (state, pipeline)
     }
 
+    private func waitForPendingScrollAccelerationToSettle(_ state: EditorState) async {
+        let deadline = Date().addingTimeInterval(1)
+        while (state.pendingAcceleratedScrollLines != 0 || state.scrollAccelerationTask != nil),
+              Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+
+        if state.pendingAcceleratedScrollLines != 0 || state.scrollAccelerationTask != nil {
+            Issue.record("Timed out waiting for pending accelerated scroll to settle")
+        }
+    }
+
     @Test
     func `Word jump forward moves to next token`() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
@@ -332,13 +344,9 @@ struct KittyCodeNavigationTests {
 
         #expect(sut.state.scrollOffset == 3)
 
-        let deadline = Date().addingTimeInterval(1)
-        while (sut.state.pendingAcceleratedScrollLines != 0 || sut.state.scrollAccelerationTask != nil),
-              Date() < deadline {
-            try? await Task.sleep(for: .milliseconds(5))
-        }
+        await waitForPendingScrollAccelerationToSettle(sut.state)
 
-        #expect(sut.state.scrollOffset == 5)
+        #expect(sut.state.scrollOffset == 7)
     }
 
     @Test
@@ -347,7 +355,7 @@ struct KittyCodeNavigationTests {
         sut.state.sidebarCollapsed = true
         sut.state.config.editor.scrollAccelerationEnabled = true
         sut.state.config.editor.scrollAccelerationWindowMilliseconds = 100
-        sut.state.config.editor.scrollAccelerationStepIntervalMilliseconds = 40
+        sut.state.config.editor.scrollAccelerationStepIntervalMilliseconds = 200
         sut.state.config.editor.scrollAccelerationMaxExtraLines = 2
 
         handleMouse(
@@ -366,11 +374,8 @@ struct KittyCodeNavigationTests {
             pipeline: sut.pipeline
         )
 
-        let midDrainDeadline = Date().addingTimeInterval(1)
-        while sut.state.pendingAcceleratedScrollLines != 1, Date() < midDrainDeadline {
-            try? await Task.sleep(for: .milliseconds(5))
-        }
-        #expect(sut.state.scrollOffset == 4)
+        #expect(sut.state.scrollOffset == 3)
+        #expect(sut.state.pendingAcceleratedScrollLines == 4)
 
         handleMouse(
             MouseEvent(button: .scrollUp, row: 2, col: 40, kind: .press),
@@ -378,14 +383,105 @@ struct KittyCodeNavigationTests {
             pipeline: sut.pipeline
         )
 
-        let drainDeadline = Date().addingTimeInterval(1)
-        while (sut.state.pendingAcceleratedScrollLines != 0 || sut.state.scrollAccelerationTask != nil),
-              Date() < drainDeadline {
-            try? await Task.sleep(for: .milliseconds(5))
-        }
+        await waitForPendingScrollAccelerationToSettle(sut.state)
 
-        #expect(sut.state.scrollOffset == 3)
+        #expect(sut.state.scrollOffset == 2)
         #expect(sut.state.pendingAcceleratedScrollLines == 0)
+    }
+
+    @Test
+    func `scrolling past vertical limits cancels immediately`() {
+        let top = makeSUT(fileContent: (0..<5).map(String.init), rows: 12)
+        top.state.sidebarCollapsed = true
+        top.state.config.editor.scrollAccelerationEnabled = true
+        top.state.config.editor.scrollAccelerationWindowMilliseconds = 100
+        top.state.config.editor.scrollAccelerationStepIntervalMilliseconds = 200
+        top.state.config.editor.scrollAccelerationMaxExtraLines = 2
+
+        handleMouse(
+            MouseEvent(button: .scrollUp, row: 2, col: 40, kind: .press),
+            state: top.state,
+            pipeline: top.pipeline
+        )
+        handleMouse(
+            MouseEvent(button: .scrollUp, row: 2, col: 40, kind: .press),
+            state: top.state,
+            pipeline: top.pipeline
+        )
+
+        #expect(top.state.scrollOffset == 0)
+        #expect(top.state.pendingAcceleratedScrollLines == 0)
+        #expect(top.state.scrollAccelerationTask == nil)
+        #expect(top.state.lastScrollDirection == nil)
+        #expect(top.state.isScrolling == false)
+
+        let bottom = makeSUT(fileContent: (0..<5).map(String.init), rows: 12)
+        bottom.state.sidebarCollapsed = true
+        bottom.state.config.editor.scrollAccelerationEnabled = true
+        bottom.state.config.editor.scrollAccelerationWindowMilliseconds = 100
+        bottom.state.config.editor.scrollAccelerationStepIntervalMilliseconds = 200
+        bottom.state.config.editor.scrollAccelerationMaxExtraLines = 2
+        bottom.state.scrollOffset = bottom.state.fileLineCount - 2
+
+        handleMouse(
+            MouseEvent(button: .scrollDown, row: 2, col: 40, kind: .press),
+            state: bottom.state,
+            pipeline: bottom.pipeline
+        )
+        handleMouse(
+            MouseEvent(button: .scrollDown, row: 2, col: 40, kind: .press),
+            state: bottom.state,
+            pipeline: bottom.pipeline
+        )
+        handleMouse(
+            MouseEvent(button: .scrollDown, row: 2, col: 40, kind: .press),
+            state: bottom.state,
+            pipeline: bottom.pipeline
+        )
+
+        #expect(bottom.state.scrollOffset == bottom.state.fileLineCount - 1)
+        #expect(bottom.state.pendingAcceleratedScrollLines == 0)
+        #expect(bottom.state.scrollAccelerationTask == nil)
+        #expect(bottom.state.isScrolling == false)
+    }
+
+    @Test
+    func `scrolling past horizontal limits cancels immediately`() {
+        let sut = makeSUT(fileContent: ["0123456789abcdefghijklmnopqrstuvwxyz"], columns: 18, rows: 8)
+        sut.state.mode = .editor
+        sut.state.sidebarCollapsed = true
+        sut.state.config.editor.wrapLines = false
+
+        let layout = LayoutMetrics(state: sut.state, columns: sut.pipeline.columns, rows: sut.pipeline.rows)
+        let editorRect = Rect(
+            x: layout.editorStart,
+            y: layout.contentStartRow,
+            width: layout.editorWidth,
+            height: layout.contentRows
+        )
+        let metrics = TextEditorLayout.horizontalScrollMetrics(
+            for: makeEditorView(state: sut.state),
+            in: editorRect,
+            maxLineWidth: sut.state.maxLineWidth
+        )
+
+        sut.state.hScrollOffset = 0
+        handleMouse(
+            MouseEvent(button: .scrollLeft, row: 2, col: 5, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        #expect(sut.state.hScrollOffset == 0)
+        #expect(sut.state.isScrolling == false)
+
+        sut.state.hScrollOffset = metrics.maxOffset
+        handleMouse(
+            MouseEvent(button: .scrollRight, row: 2, col: 5, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+        #expect(sut.state.hScrollOffset == metrics.maxOffset)
+        #expect(sut.state.isScrolling == false)
     }
 
     @Test
@@ -934,9 +1030,9 @@ struct KittyConfigExtensionTests {
         #expect(config.keybindings.tabNext == "ctrl+pagedown")
         #expect(config.keybindings.toggleSidebar == "ctrl+b")
         #expect(config.editor.scrollAccelerationEnabled == true)
-        #expect(config.editor.scrollAccelerationWindowMilliseconds == 50)
-        #expect(config.editor.scrollAccelerationStepIntervalMilliseconds == 5)
-        #expect(config.editor.scrollAccelerationMaxExtraLines == 2)
+        #expect(config.editor.scrollAccelerationWindowMilliseconds == 120)
+        #expect(config.editor.scrollAccelerationStepIntervalMilliseconds == 1)
+        #expect(config.editor.scrollAccelerationMaxExtraLines == 8)
     }
 
     @Test
@@ -1908,6 +2004,95 @@ struct ScrollRenderingTests {
         let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
         let rowText = String(rowChars)
         #expect(rowText.contains("line 0"), "After scroll down+up, first row should show line 0, got: \(rowText)")
+    }
+
+    @Test
+    func `scrolling through an overheight wrapped line keeps later wrapped content visible`() throws {
+        let mock = MockTerminalConnection(size: TerminalSize(columns: 8, rows: 6))
+        let pipeline = RenderPipeline(connection: mock, columns: 8, rows: 6)
+
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        config.statusBar.show = false
+        config.editor.wrapLines = true
+        config.editor.scrollAccelerationEnabled = false
+        let state = EditorState(rootPath: ".", config: config)
+        state.sidebarCollapsed = true
+        state.mode = .editor
+        state.fileContent = ["AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH", "after"]
+        state.refreshHighlights()
+
+        renderFrame(pipeline: pipeline, state: state)
+
+        for _ in 0..<4 {
+            handleMouse(
+                MouseEvent(button: .scrollDown, row: 1, col: 8, kind: .press),
+                state: state,
+                pipeline: pipeline
+            )
+        }
+
+        #expect(state.scrollOffset == 0)
+        #expect(state.wrapRowOffset == 4)
+
+        renderFrame(pipeline: pipeline, state: state)
+
+        let topRowText = String((0..<8).map { pipeline.buffer[0, $0].character })
+        #expect(topRowText.contains("EEEE"), "Expected wrapped continuation to remain visible after scrolling, got: \(topRowText)")
+
+        let lastContentRowText = String((0..<8).map { pipeline.buffer[4, $0].character })
+        #expect(lastContentRowText.contains("afte"), "Expected following line to appear after wrapped continuation rows, got: \(lastContentRowText)")
+    }
+
+    @Test
+    func `accelerating into wrapped content edge does not crash or leave invalid state`() async throws {
+        let mock = MockTerminalConnection(size: TerminalSize(columns: 8, rows: 6))
+        let pipeline = RenderPipeline(connection: mock, columns: 8, rows: 6)
+
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        config.statusBar.show = false
+        config.editor.wrapLines = true
+        config.editor.scrollAccelerationEnabled = true
+        config.editor.scrollAccelerationWindowMilliseconds = 200
+        config.editor.scrollAccelerationStepIntervalMilliseconds = 1
+        config.editor.scrollAccelerationMaxExtraLines = 8
+        let state = EditorState(rootPath: ".", config: config)
+        state.sidebarCollapsed = true
+        state.mode = .editor
+        state.fileContent = ["AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH", "after", "tail", "done"]
+        state.refreshHighlights()
+
+        renderFrame(pipeline: pipeline, state: state)
+
+        for _ in 0..<12 {
+            handleMouse(
+                MouseEvent(button: .scrollDown, row: 1, col: 8, kind: .press),
+                state: state,
+                pipeline: pipeline
+            )
+        }
+
+        let deadline = Date().addingTimeInterval(1)
+        while (state.pendingAcceleratedScrollLines != 0 || state.scrollAccelerationTask != nil),
+              Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+
+        #expect(state.scrollOffset == 3)
+        #expect(state.wrapRowOffset == 0)
+        renderFrame(pipeline: pipeline, state: state)
+
+        #expect(state.pendingAcceleratedScrollLines == 0)
+        #expect(state.scrollAccelerationTask == nil)
+
+        let contentRows = (0..<5).map { row in
+            String((0..<8).map { pipeline.buffer[row, $0].character })
+        }
+        let hasDone = contentRows.contains { $0.contains("done") || $0.contains("done".prefix(4)) }
+        #expect(hasDone, "Expected bottom content to remain renderable after accelerated scrolling, got: \(contentRows)")
     }
 }
 

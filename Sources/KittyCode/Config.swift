@@ -61,9 +61,9 @@ struct KittyConfig: Codable, Sendable {
         var scrollHorizontalStep: Int = 4
         var scrollMomentumBlockMilliseconds: Int = 5
         var scrollAccelerationEnabled: Bool = true
-        var scrollAccelerationWindowMilliseconds: Int = 50
-        var scrollAccelerationStepIntervalMilliseconds: Int = 5
-        var scrollAccelerationMaxExtraLines: Int = 2
+        var scrollAccelerationWindowMilliseconds: Int = 120
+        var scrollAccelerationStepIntervalMilliseconds: Int = 1
+        var scrollAccelerationMaxExtraLines: Int = 8
 
         init() {}
 
