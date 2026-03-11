@@ -83,6 +83,7 @@ extension EditorState {
             if existingIndex != bufferManager.activeIndex {
                 switchToTab(existingIndex)
             }
+            gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
             mode = .editor
             statusMessage = "Opened \(name) | ^O: Save, ^X: Tree/Quit"
             if config.keybindingMode == .vim {
@@ -111,17 +112,28 @@ extension EditorState {
         let language = Self.detectLanguage(for: name)
         let modDate = attributes?[.modificationDate] as? Date
 
-        let newIndex = bufferManager.open(
-            filePath: path,
-            fileName: name,
-            content: content,
-            language: language
-        )
+        let newIndex: Int
+        if config.tabPersistence == .preview {
+            newIndex = bufferManager.openPreview(
+                filePath: path,
+                fileName: name,
+                content: content,
+                language: language
+            )
+        } else {
+            newIndex = bufferManager.open(
+                filePath: path,
+                fileName: name,
+                content: content,
+                language: language
+            )
+        }
         bufferManager.buffers[newIndex].lastModifiedDate = modDate
 
         // Restore from the new buffer
         restoreStateFromActiveBuffer()
         refreshHighlights()
+        gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
         mode = .editor
         statusMessage = "Opened \(name) | ^O: Save, ^X: Tree/Quit"
         if config.keybindingMode == .vim {
@@ -133,11 +145,15 @@ extension EditorState {
         if let language = currentLanguage,
            config.syntaxHighlighting,
            !config.disabledLanguages.contains(language) {
+            isLoadingGrammar = true
             Task {
                 let available = await LanguageHighlighter.ensureArtifacts(for: language)
+                self.isLoadingGrammar = false
+                guard self.currentLanguage == language else { return }
                 if available {
                     self.invalidateHighlightSession()
                     self.refreshHighlights()
+                    self.renderRefreshSource?.invalidate()
                 }
             }
         }
@@ -169,9 +185,16 @@ extension EditorState {
             try content.write(toFile: filePath, atomically: true, encoding: .utf8)
             bufferManager.activeBuffer?.isDirty = false
             bufferManager.activeBuffer?.lastModifiedDate = Date()
+            gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
             statusMessage = "Saved: \(fileName)"
             if let provider = fileStatusProvider {
-                Task { await provider.refresh() }
+                Task { [weak self] in
+                    await provider.refresh()
+                    await MainActor.run {
+                        self?.gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
+                        self?.renderRefreshSource?.invalidate()
+                    }
+                }
             }
         } catch {
             statusMessage = "Error saving: \(error.localizedDescription)"
@@ -200,6 +223,7 @@ extension EditorState {
             } else {
                 restoreStateFromActiveBuffer()
                 refreshHighlights()
+                gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
             }
         }
     }

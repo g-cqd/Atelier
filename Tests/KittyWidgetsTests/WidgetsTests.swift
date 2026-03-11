@@ -1135,3 +1135,119 @@ struct StatePropertyWrapperTests {
         #expect(binding.wrappedValue == 7)
     }
 }
+
+// MARK: - Tab Ribbon Scroll Tests
+
+@Suite
+struct TabRibbonScrollTests {
+    @Test func `tabIndex with non-zero scrollOffset skips earlier tabs`() {
+        let tabs = (0..<5).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
+        let ribbon = TabRibbon(tabs: tabs, activeIndex: 3, scrollOffset: 2)
+        // scrollOffset > 0 adds 1 col for the "<" overflow indicator
+        // Tab 2 starts at ribbonX + 1, tab 0 and 1 are scrolled out
+        #expect(ribbon.tabIndex(atColumn: 1, ribbonX: 0) == 2)
+        // Column 0 is the overflow indicator, not a tab
+        #expect(ribbon.tabIndex(atColumn: 0, ribbonX: 0) == nil)
+    }
+
+    @Test func `clampedScrollOffset scrolls active tab into view`() {
+        let tabs = (0..<10).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
+        let ribbon = TabRibbon(tabs: tabs, activeIndex: 8, scrollOffset: 0)
+        let offset = ribbon.clampedScrollOffset(activeIndex: 8, ribbonWidth: 30)
+        #expect(offset > 0)
+    }
+
+    @Test func `clampedScrollOffset scrolls left when active tab is before window`() {
+        let tabs = (0..<10).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
+        let ribbon = TabRibbon(tabs: tabs, activeIndex: 1, scrollOffset: 5)
+        let offset = ribbon.clampedScrollOffset(activeIndex: 1, ribbonWidth: 40)
+        #expect(offset <= 1)
+    }
+
+    @Test func `tabsExtendBeyond returns true when tabs overflow`() {
+        let tabs = (0..<10).map { TabRibbon.Tab(name: "long_tab_name_\($0)", isDirty: false) }
+        let ribbon = TabRibbon(tabs: tabs, activeIndex: 0, scrollOffset: 0)
+        #expect(ribbon.tabsExtendBeyond(ribbonWidth: 30))
+    }
+
+    @Test func `tabsExtendBeyond returns false when tabs fit`() {
+        let tabs = [TabRibbon.Tab(name: "a", isDirty: false)]
+        let ribbon = TabRibbon(tabs: tabs, activeIndex: 0, scrollOffset: 0)
+        #expect(!ribbon.tabsExtendBeyond(ribbonWidth: 30))
+    }
+
+    @Test func `overflow indicators rendered when tabs overflow`() {
+        var buffer = ScreenBuffer(columns: 20, rows: 1)
+        let tabs = (0..<10).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
+        let ribbon = TabRibbon(tabs: tabs, activeIndex: 3, scrollOffset: 2)
+        ribbon.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 1))
+        #expect(buffer[0, 0].character == "<")
+        #expect(buffer[0, 19].character == ">")
+    }
+
+    @Test func `preview tab renders in italic style`() {
+        var buffer = ScreenBuffer(columns: 20, rows: 1)
+        let tabs = [TabRibbon.Tab(name: "preview", isDirty: false, isPreview: true)]
+        let ribbon = TabRibbon(tabs: tabs, activeIndex: 0, scrollOffset: 0)
+        ribbon.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 1))
+        // First content cell (after space) should be italic
+        #expect(buffer[0, 1].style.italic == true)
+    }
+}
+
+// MARK: - Horizontal Scroll Indicator Tests
+
+@Suite
+struct HorizontalScrollIndicatorTests {
+    @Test func `thumbRect proportional to viewport vs content`() {
+        let metrics = ScrollMetrics(contentLength: 100, viewportLength: 25, offset: 0)
+        let rect = Rect(x: 0, y: 0, width: 40, height: 1)
+        let thumb = HorizontalScrollIndicatorLayout.thumbRect(for: metrics, in: rect)
+        #expect(thumb != nil)
+        #expect(thumb!.width == 10) // 40 * 25 / 100 = 10
+        #expect(thumb!.x == 0) // offset 0
+    }
+
+    @Test func `thumbRect moves with offset`() {
+        let metrics = ScrollMetrics(contentLength: 100, viewportLength: 25, offset: 75)
+        let rect = Rect(x: 0, y: 0, width: 40, height: 1)
+        let thumb = HorizontalScrollIndicatorLayout.thumbRect(for: metrics, in: rect)
+        #expect(thumb != nil)
+        #expect(thumb!.x == 30) // at max offset, thumb at right edge
+    }
+
+    @Test func `gripOffset returns non-nil when pointer is within track`() {
+        let metrics = ScrollMetrics(contentLength: 100, viewportLength: 25, offset: 0)
+        let rect = Rect(x: 0, y: 0, width: 40, height: 1)
+        let grip = HorizontalScrollIndicatorLayout.gripOffset(for: metrics, in: rect, pointerCol: 5)
+        #expect(grip != nil)
+    }
+
+    @Test func `gripOffset returns nil when pointer is outside track`() {
+        let metrics = ScrollMetrics(contentLength: 100, viewportLength: 25, offset: 0)
+        let rect = Rect(x: 10, y: 0, width: 40, height: 1)
+        let grip = HorizontalScrollIndicatorLayout.gripOffset(for: metrics, in: rect, pointerCol: 5)
+        #expect(grip == nil)
+    }
+
+    @Test func `offset maps pointer position to scroll offset`() {
+        let metrics = ScrollMetrics(contentLength: 100, viewportLength: 25, offset: 0)
+        let rect = Rect(x: 0, y: 0, width: 40, height: 1)
+        let offset = HorizontalScrollIndicatorLayout.offset(
+            for: metrics, in: rect, pointerCol: 30, gripOffset: 0
+        )
+        #expect(offset == 75)
+    }
+
+    @Test func `horizontal scroll indicator needs check respects wrapLines`() {
+        let editor = TextEditor(
+            lines: ["a very long line that should trigger horizontal scrolling when not wrapped"],
+            lineSpans: [[StyledSpan(text: "a very long line that should trigger horizontal scrolling when not wrapped", style: .default)]],
+            showLineNumbers: false,
+            wrapLines: true,
+            showsHorizontalScrollIndicator: true
+        )
+        let rect = Rect(x: 0, y: 0, width: 20, height: 5)
+        #expect(!TextEditorLayout.needsHorizontalScrollIndicator(for: editor, in: rect, maxLineWidth: 80))
+    }
+}

@@ -44,14 +44,34 @@ func renderOpenFilesPanel(
             let buffer = buffers[bufferIdx]
             let isActive = (bufferIdx == activeIdx)
             let rowStyle = isActive ? selectedStyle : normalStyle
+            let status = state.config.showGitStatus && state.config.gitDecorations.showOpenFilesStatus
+                ? state.fileStatusProvider?.status(for: buffer.filePath)
+                : nil
+            let statusIndicator = status?.indicator.isEmpty == false ? status?.indicator : nil
 
-            let dirty = buffer.isDirty ? " \u{25CF}" : ""
             let icon = state.symbolTheme[.file].text
             let prefix = icon.isEmpty ? " " : " \(icon) "
-            let label = prefix + buffer.fileName + dirty
+            var label = prefix + buffer.fileName
+            if let statusIndicator {
+                label += " \(statusIndicator)"
+            }
+            if buffer.isDirty {
+                label += " \u{25CF}"
+            }
             let padded = String(label.prefix(rect.width)).padding(toLength: rect.width, withPad: " ", startingAt: 0)
 
             pipeline.buffer.write(padded, row: screenRow, col: rect.x, style: rowStyle)
+            if let status,
+               let statusIndicator,
+               let indicatorRange = padded.range(of: " \(statusIndicator)") {
+                let indicatorCol = padded.distance(from: padded.startIndex, to: indicatorRange.lowerBound) + 1
+                pipeline.buffer.write(
+                    statusIndicator,
+                    row: screenRow,
+                    col: rect.x + indicatorCol,
+                    style: colorScheme.gitStatusStyle(for: status.statusColor)
+                )
+            }
         } else {
             let emptyCell = Cell(character: " ", style: normalStyle)
             pipeline.buffer.fill(row: screenRow, col: rect.x, width: rect.width, height: 1, cell: emptyCell)

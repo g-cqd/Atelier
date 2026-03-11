@@ -40,7 +40,16 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     // Tab ribbon
     if showTabRibbon {
         let tabs = state.bufferManager.buffers.map { buf in
-            TabRibbon.Tab(name: buf.fileName, isDirty: buf.isDirty)
+            let status = state.config.showGitStatus && state.config.gitDecorations.showTabRibbonStatus
+                ? state.fileStatusProvider?.status(for: buf.filePath)
+                : nil
+            return TabRibbon.Tab(
+                name: buf.fileName,
+                isDirty: buf.isDirty,
+                isPreview: buf.isPreview,
+                statusIndicator: status?.indicator.isEmpty == false ? status?.indicator : nil,
+                statusStyle: status.map { colorScheme.gitStatusStyle(for: $0.statusColor) }
+            )
         }
         var tabStyle = TabRibbon.TabRibbonStyle()
         if let fg = state.config.theme.tabActiveForeground {
@@ -48,6 +57,9 @@ func render(pipeline: RenderPipeline, state: EditorState) {
         }
         if let fg = state.config.theme.tabInactiveForeground {
             tabStyle.inactiveStyle = Style(fg: fg.color)
+        }
+        if let fg = state.config.theme.tabDirtyIndicator {
+            tabStyle.dirtyStyle = Style(fg: fg.color)
         }
         let ribbon = TabRibbon(
             tabs: tabs,
@@ -117,7 +129,8 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     let modeGlyph = state.mode == .tree ? state.symbolTheme[.modeTree] : state.symbolTheme[.modeEdit]
     let mode = state.mode == .tree ? "Tree" : "Edit"
     let position = state.isFileEmpty ? "" : "Ln \(state.cursorRow + 1)/\(state.fileLineCount)"
-    let statusLeft = " " + TerminalSymbolRenderer.label(modeGlyph, mode) + "  \(state.statusMessage)"
+    let grammarIndicator = state.isLoadingGrammar ? " [loading grammar...]" : ""
+    let statusLeft = " " + TerminalSymbolRenderer.label(modeGlyph, mode) + "  \(state.statusMessage)" + grammarIndicator
     let branchSegment: String? = state.fileStatusProvider?.branchName.map { name in
         TerminalSymbolRenderer.label(state.symbolTheme[.gitBranch], name)
     }

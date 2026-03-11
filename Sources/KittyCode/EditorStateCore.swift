@@ -57,6 +57,7 @@ final class EditorState {
     enum ScrollDragTarget: Equatable {
         case tree
         case editor
+        case editorHorizontal
     }
 
     struct ScrollDragState: Equatable {
@@ -66,6 +67,9 @@ final class EditorState {
 
     var config: KittyConfig
     var fileStatusProvider: (any FileStatusProvider)?
+    var gitLineDecorationProvider: (any GitLineDecorationProvider)?
+    var gitDecorationManager: GitDecorationManager?
+    var renderRefreshSource: RenderRefreshSource?
     var colorScheme: ColorScheme {
         didSet {
             highlightSession = nil
@@ -110,6 +114,7 @@ final class EditorState {
             textBuffer = TextBuffer(lines: normalizedLines)
             cachedFileLines = normalizedLines
             cachedDocumentText = normalizedLines.joined(separator: "\n")
+            cachedMaxLineWidth = nil
             highlightSession = nil
         }
     }
@@ -139,6 +144,7 @@ final class EditorState {
     func invalidateTextSnapshotCache() {
         cachedFileLines = nil
         cachedDocumentText = nil
+        cachedMaxLineWidth = nil
     }
 
     func invalidateHighlightSession() {
@@ -147,14 +153,26 @@ final class EditorState {
 
     func textDidChange() {
         invalidateTextSnapshotCache()
-        bufferManager.activeBuffer?.isDirty = true
+        cachedMaxLineWidth = nil
+        if let buf = bufferManager.activeBuffer {
+            buf.isDirty = true
+            if buf.isPreview { buf.isPreview = false }
+            buf.documentVersion += 1
+        }
         refreshHighlights()
+        gitDecorationManager?.scheduleRefreshForActiveBuffer()
     }
 
     func textDidChange(_ mutation: TextMutation) {
         invalidateTextSnapshotCache()
-        bufferManager.activeBuffer?.isDirty = true
+        cachedMaxLineWidth = nil
+        if let buf = bufferManager.activeBuffer {
+            buf.isDirty = true
+            if buf.isPreview { buf.isPreview = false }
+            buf.documentVersion += 1
+        }
         refreshHighlights(after: mutation)
+        gitDecorationManager?.scheduleRefreshForActiveBuffer()
     }
 
     func replaceDocumentText(with content: String) {
@@ -162,6 +180,7 @@ final class EditorState {
         textBuffer = TextBuffer(lines: lines)
         cachedFileLines = lines
         cachedDocumentText = content
+        cachedMaxLineWidth = nil
         highlightSession = nil
     }
 
@@ -223,6 +242,14 @@ final class EditorState {
         saveStateToActiveBuffer()
         bufferManager.switchTo(index: index)
         restoreStateFromActiveBuffer()
+        gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
+    }
+
+    /// Adjust `tabScrollOffset` so the active tab is visible within the given ribbon width.
+    func ensureActiveTabVisible(ribbonWidth: Int) {
+        let tabs = bufferManager.buffers.map { TabRibbon.Tab(name: $0.fileName, isDirty: $0.isDirty) }
+        let ribbon = TabRibbon(tabs: tabs, activeIndex: bufferManager.activeIndex, scrollOffset: tabScrollOffset)
+        tabScrollOffset = ribbon.clampedScrollOffset(activeIndex: bufferManager.activeIndex, ribbonWidth: ribbonWidth)
     }
 
     // MARK: - File tree (backed by KittyFileTree)
@@ -355,6 +382,15 @@ final class EditorState {
     var lastClickIndex = -1
     var isScrolling = false
     var scrollDragState: ScrollDragState?
+    var isLoadingGrammar = false
+    private var cachedMaxLineWidth: Int?
+
+    var maxLineWidth: Int {
+        if let cached = cachedMaxLineWidth { return cached }
+        let width = textBuffer.lines.reduce(0) { max($0, UnicodeWidth.displayWidth(of: $1)) }
+        cachedMaxLineWidth = width
+        return width
+    }
 
     init(rootPath: String, config: KittyConfig) {
         self.rootPath = rootPath
