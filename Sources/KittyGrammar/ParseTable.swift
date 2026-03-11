@@ -95,16 +95,61 @@ public enum Action: Sendable, Equatable, Codable {
     }
 }
 
+// MARK: - Comment Pattern
+
+/// Describes how comments look in a language, extracted from grammar extras.
+public enum CommentPattern: Sendable, Equatable {
+    case line(prefix: String)                   // e.g. "//" → scan to end of line
+    case block(open: String, close: String)     // e.g. "/*" … "*/"
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, prefix, open, close
+    }
+}
+
+extension CommentPattern: Codable {
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let kind = try c.decode(String.self, forKey: .kind)
+        switch kind {
+        case "line":
+            self = .line(prefix: try c.decode(String.self, forKey: .prefix))
+        case "block":
+            self = .block(
+                open: try c.decode(String.self, forKey: .open),
+                close: try c.decode(String.self, forKey: .close)
+            )
+        default:
+            throw DecodingError.dataCorruptedError(forKey: .kind, in: c, debugDescription: "Unknown CommentPattern kind: \(kind)")
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .line(let prefix):
+            try c.encode("line", forKey: .kind)
+            try c.encode(prefix, forKey: .prefix)
+        case .block(let open, let close):
+            try c.encode("block", forKey: .kind)
+            try c.encode(open, forKey: .open)
+            try c.encode(close, forKey: .close)
+        }
+    }
+}
+
 // MARK: - Lex Table
 
 /// DFA states for tokenization.
 public struct LexTable: Sendable, Equatable, Codable {
     public var states: [LexState]
     public var keywords: [String: Int]  // keyword string → token ID
+    public var commentPatterns: [CommentPattern]
 
-    public init(states: [LexState] = [], keywords: [String: Int] = [:]) {
+    public init(states: [LexState] = [], keywords: [String: Int] = [:], commentPatterns: [CommentPattern] = []) {
         self.states = states
         self.keywords = keywords
+        self.commentPatterns = commentPatterns
     }
 }
 

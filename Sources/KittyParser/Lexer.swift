@@ -47,7 +47,15 @@ public struct Lexer: Sendable {
         var point = pointAt(utf8: utf8, byte: offset)
 
         while pos < utf8.count {
-            // Try keyword match first
+            // Try comment match first (before keywords)
+            if let token = matchComment(utf8: utf8, pos: pos, point: point) {
+                tokens.append(token)
+                point = advancePoint(point, over: utf8, from: pos, to: token.byteRange.upperBound)
+                pos = token.byteRange.upperBound
+                continue
+            }
+
+            // Try keyword match
             if let token = matchKeyword(utf8: utf8, pos: pos, point: point) {
                 tokens.append(token)
                 point = advancePoint(point, over: utf8, from: pos, to: token.byteRange.upperBound)
@@ -96,6 +104,55 @@ public struct Lexer: Sendable {
         }
 
         return tokens
+    }
+
+    private func matchComment(utf8: UnsafeBufferPointer<UInt8>, pos: Int, point: Point) -> Token? {
+        for pattern in lexTable.commentPatterns {
+            switch pattern {
+            case .line(let prefix):
+                let prefixBytes = Array(prefix.utf8)
+                guard pos + prefixBytes.count <= utf8.count else { continue }
+                var matches = true
+                for (j, b) in prefixBytes.enumerated() {
+                    if utf8[pos + j] != b { matches = false; break }
+                }
+                guard matches else { continue }
+                // Scan to end of line
+                var end = pos + prefixBytes.count
+                while end < utf8.count && utf8[end] != 0x0a { end += 1 }
+                let text = String(decoding: UnsafeBufferPointer(rebasing: utf8[pos..<end]), as: UTF8.self)
+                let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
+                return Token(type: "comment", byteRange: pos..<end, pointRange: point..<endPoint, text: text, isExtra: true)
+
+            case .block(let open, let close):
+                let openBytes = Array(open.utf8)
+                let closeBytes = Array(close.utf8)
+                guard pos + openBytes.count <= utf8.count else { continue }
+                var matches = true
+                for (j, b) in openBytes.enumerated() {
+                    if utf8[pos + j] != b { matches = false; break }
+                }
+                guard matches else { continue }
+                // Scan for close delimiter
+                var end = pos + openBytes.count
+                while end + closeBytes.count <= utf8.count {
+                    var found = true
+                    for (j, b) in closeBytes.enumerated() {
+                        if utf8[end + j] != b { found = false; break }
+                    }
+                    if found {
+                        end += closeBytes.count
+                        break
+                    }
+                    end += 1
+                }
+                if end > utf8.count { end = utf8.count }
+                let text = String(decoding: UnsafeBufferPointer(rebasing: utf8[pos..<end]), as: UTF8.self)
+                let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
+                return Token(type: "comment", byteRange: pos..<end, pointRange: point..<endPoint, text: text, isExtra: true)
+            }
+        }
+        return nil
     }
 
     private func matchKeyword(utf8: UnsafeBufferPointer<UInt8>, pos: Int, point: Point) -> Token? {
