@@ -15,6 +15,10 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
     let availWidth = max(1, TextEditorLayout.contentWidth(for: makeEditorView(state: state), in: editorRect))
     var shouldEnsureVisible = false
 
+    if !isClipboardShortcut(key) {
+        state.clearSelection()
+    }
+
     if state.config.keybindingMode == .vim && state.vimMode == .normal {
         switch key.keyCode {
         case AsciiKey.i:
@@ -81,16 +85,12 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
             moveCursorRight(state: state)
         }
         shouldEnsureVisible = true
-    case AsciiKey.b:
-        if key.modifiers == .alt {
-            jumpWordBackward(state: state)
-            shouldEnsureVisible = true
-        }
-    case AsciiKey.f:
-        if key.modifiers == .alt {
-            jumpWordForward(state: state)
-            shouldEnsureVisible = true
-        }
+    case AsciiKey.b where key.modifiers == .alt:
+        jumpWordBackward(state: state)
+        shouldEnsureVisible = true
+    case AsciiKey.f where key.modifiers == .alt:
+        jumpWordForward(state: state)
+        shouldEnsureVisible = true
     case Key.home.rawValue:
         state.cursorCol = 0
         shouldEnsureVisible = true
@@ -117,18 +117,20 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
             state.textDidChange(mutation)
             shouldEnsureVisible = true
         }
-    case AsciiKey.g:
-        if key.modifiers == .shift {
-            state.cursorRow = max(0, state.fileLineCount - 1)
-        } else {
-            state.cursorRow = 0
-            state.cursorCol = 0
-            state.scrollOffset = 0
-        }
+    case AsciiKey.g where key.modifiers == .shift:
+        state.cursorRow = max(0, state.fileLineCount - 1)
+        shouldEnsureVisible = true
+    case AsciiKey.g where key.modifiers == []:
+        state.cursorRow = 0
+        state.cursorCol = 0
+        state.scrollOffset = 0
         shouldEnsureVisible = true
     default:
         if !key.associatedText.isEmpty {
             insertText(key.associatedText, into: state)
+            shouldEnsureVisible = true
+        } else if key.keyCode == 9 {
+            insertText("\t", into: state)
             shouldEnsureVisible = true
         } else if key.keyCode < 256, let scalar = UnicodeScalar(key.keyCode) {
             let char = Character(scalar)
@@ -143,4 +145,9 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     }
     return true
+}
+
+@MainActor
+private func isClipboardShortcut(_ key: KeyEvent) -> Bool {
+    key.modifiers == .ctrl && (key.keyCode == AsciiKey.c || key.keyCode == AsciiKey.x || key.keyCode == 118)
 }
