@@ -49,6 +49,23 @@ struct KittySymbolsTests {
     }
 
     @Test
+    func `Explorer and openDocuments roles have correct fallbacks`() {
+        let theme = TerminalSymbolTheme.make(symbolsEnabled: false, catalog: nil)
+        #expect(theme[.explorer].text == "E")
+        #expect(theme[.openDocuments].text == "D")
+    }
+
+    @Test
+    func `Explorer role resolves to SF Symbol glyph when catalog available`() {
+        let catalog = SymbolCatalog(entries: [
+            "folder.fill": SymbolMappingEntry(name: "folder.fill", visibility: .publicSymbol, assetGlyphIndex: 78, codepoint: 0x100216),
+        ])
+        let theme = TerminalSymbolTheme.make(symbolsEnabled: true, catalog: catalog)
+        #expect(theme[.explorer].prefersSymbol)
+        #expect(theme[.explorer].text == "􀈖")
+    }
+
+    @Test
     func `New git roles have correct fallbacks`() {
         let theme = TerminalSymbolTheme.make(symbolsEnabled: false, catalog: nil)
         #expect(theme[.gitModified].text == "M")

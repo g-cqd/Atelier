@@ -84,6 +84,7 @@ final class FileWatcherIntegration {
             buffer.highlightSession = nil
             buffer.cachedFileLines = nil
             buffer.cachedDocumentText = nil
+            buffer.documentVersion += 1
 
             // Clamp cursor to valid bounds instead of resetting
             let lineCount = buffer.textBuffer.lineCount
@@ -95,6 +96,8 @@ final class FileWatcherIntegration {
             if index == state.bufferManager.activeIndex {
                 state.restoreStateFromActiveBuffer()
                 state.refreshHighlights()
+                state.gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
+                state.renderRefreshSource?.invalidate()
                 state.statusMessage = "\(buffer.fileName) reloaded from disk"
             }
         }

@@ -3,10 +3,12 @@ import Foundation
 @MainActor
 final class GitRefreshManager {
     private let state: EditorState
+    private let refreshSource: RenderRefreshSource
     private var task: Task<Void, Never>?
 
-    init(state: EditorState) {
+    init(state: EditorState, refreshSource: RenderRefreshSource) {
         self.state = state
+        self.refreshSource = refreshSource
     }
 
     func start() {
@@ -27,8 +29,16 @@ final class GitRefreshManager {
         task = nil
     }
 
+    func refreshNow() {
+        Task { [weak self] in
+            await self?.refreshGitStatus()
+        }
+    }
+
     private func refreshGitStatus() async {
         guard let provider = state.fileStatusProvider else { return }
         await provider.refresh()
+        state.gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
+        refreshSource.invalidate()
     }
 }

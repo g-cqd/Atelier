@@ -2,11 +2,17 @@ import Foundation
 import KittyFileTree
 import KittySync
 
-public final class GitStatusProvider: FileStatusProvider, @unchecked Sendable {
+public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvider, @unchecked Sendable {
+    private enum BaseContent: Sendable {
+        case missing
+        case text(String)
+    }
+
     private struct State: Sendable {
         var statuses: [String: FileStatus] = [:]
         var branch: String?
         var summary: FileStatusSummary = FileStatusSummary()
+        var baseContents: [String: BaseContent] = [:]
     }
 
     private let rootPath: String
@@ -39,6 +45,37 @@ public final class GitStatusProvider: FileStatusProvider, @unchecked Sendable {
             state.branch = branch
             state.statuses = statuses
             state.summary = summary
+            state.baseContents.removeAll(keepingCapacity: true)
+        }
+    }
+
+    public func lineDecorations(for path: String, lines: [String]) async -> GitLineDecorations {
+        let normalizedPath = Self.normalizePath(path)
+        let status = status(for: normalizedPath)
+
+        if lines.isEmpty {
+            return .empty
+        }
+
+        if status == .untracked {
+            return Self.addedLineDecorations(for: lines, color: .untracked)
+        }
+
+        guard let relativePath = relativePath(for: normalizedPath) else {
+            return .empty
+        }
+
+        let baseContent = await readBaseContent(for: normalizedPath, relativePath: relativePath)
+        switch baseContent {
+        case .missing:
+            guard status == .added else {
+                return .empty
+            }
+            return Self.addedLineDecorations(for: lines, color: .added)
+        case .text(let content):
+            let addedColor: FileStatusColor = status == .untracked ? .untracked : .added
+            let baseLines = Self.splitLines(content)
+            return makeLineDecorations(baseLines: baseLines, currentLines: lines, addedColor: addedColor)
         }
     }
 
@@ -78,6 +115,23 @@ public final class GitStatusProvider: FileStatusProvider, @unchecked Sendable {
 
         guard process.terminationStatus == 0 else { return nil }
         return String(data: data, encoding: .utf8)
+    }
+
+    private func readBaseContent(for normalizedPath: String, relativePath: String) async -> BaseContent {
+        if let cached = lock.withLock({ $0.baseContents[normalizedPath] }) {
+            return cached
+        }
+
+        let content = await loadBaseContent(relativePath: relativePath)
+        lock.withLock { $0.baseContents[normalizedPath] = content }
+        return content
+    }
+
+    private func loadBaseContent(relativePath: String) async -> BaseContent {
+        guard let output = await runGit(arguments: ["show", "HEAD:\(relativePath)"]) else {
+            return .missing
+        }
+        return .text(output)
     }
 
     // MARK: - Parsing
@@ -176,6 +230,17 @@ public final class GitStatusProvider: FileStatusProvider, @unchecked Sendable {
         }
     }
 
+    private func relativePath(for normalizedPath: String) -> String? {
+        guard normalizedPath != rootPath else { return nil }
+
+        let rootPrefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+        guard normalizedPath.hasPrefix(rootPrefix) else {
+            return nil
+        }
+
+        return String(normalizedPath.dropFirst(rootPrefix.count))
+    }
+
     // MARK: - Repository detection
 
     public static func isGitRepository(_ path: String) -> Bool {
@@ -191,6 +256,133 @@ public final class GitStatusProvider: FileStatusProvider, @unchecked Sendable {
 
     private static func normalizePath(_ path: String) -> String {
         URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL.path
+    }
+
+    static func splitLines(_ content: String) -> [String] {
+        let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        return lines.isEmpty ? [""] : lines
+    }
+
+    static func addedLineDecorations(for lines: [String], color: FileStatusColor) -> GitLineDecorations {
+        guard !lines.isEmpty else { return .empty }
+        return GitLineDecorations(
+            markers: Dictionary(uniqueKeysWithValues: lines.indices.map { ($0, color) })
+        )
+    }
+
+    func makeLineDecorations(
+        baseLines: [String],
+        currentLines: [String],
+        addedColor: FileStatusColor
+    ) -> GitLineDecorations {
+        guard !currentLines.isEmpty else {
+            return .empty
+        }
+
+        let difference = currentLines.difference(from: baseLines)
+        let removalOffsets = difference.removals.compactMap { change -> Int? in
+            if case .remove(let offset, _, _) = change { return offset }
+            return nil
+        }.sorted()
+        let insertionOffsets = difference.insertions.compactMap { change -> Int? in
+            if case .insert(let offset, _, _) = change { return offset }
+            return nil
+        }.sorted()
+
+        if removalOffsets.isEmpty, insertionOffsets.isEmpty {
+            return .empty
+        }
+
+        var markers: [Int: FileStatusColor] = [:]
+        var baseIndex = 0
+        var currentIndex = 0
+        var removalIndex = 0
+        var insertionIndex = 0
+
+        while baseIndex < baseLines.count || currentIndex < currentLines.count {
+            let removalCount = Self.consumeConsecutiveOffsets(
+                removalOffsets,
+                index: &removalIndex,
+                startingAt: baseIndex
+            )
+            let insertionCount = Self.consumeConsecutiveOffsets(
+                insertionOffsets,
+                index: &insertionIndex,
+                startingAt: currentIndex
+            )
+
+            if removalCount == 0, insertionCount == 0 {
+                if baseIndex < baseLines.count {
+                    baseIndex += 1
+                }
+                if currentIndex < currentLines.count {
+                    currentIndex += 1
+                }
+                continue
+            }
+
+            let modifiedCount = min(removalCount, insertionCount)
+            for offset in 0..<modifiedCount {
+                markers[currentIndex + offset] = .modified
+            }
+
+            if insertionCount > modifiedCount {
+                for offset in modifiedCount..<insertionCount {
+                    Self.mergeMarker(addedColor, into: &markers, at: currentIndex + offset)
+                }
+            }
+
+            if removalCount > insertionCount {
+                let anchor = min(currentIndex + modifiedCount, max(0, currentLines.count - 1))
+                Self.mergeMarker(.deleted, into: &markers, at: anchor)
+            }
+
+            baseIndex += removalCount
+            currentIndex += insertionCount
+        }
+
+        return GitLineDecorations(markers: markers)
+    }
+
+    private static func consumeConsecutiveOffsets(
+        _ offsets: [Int],
+        index: inout Int,
+        startingAt start: Int
+    ) -> Int {
+        guard index < offsets.count, offsets[index] == start else {
+            return 0
+        }
+
+        var count = 0
+        var expected = start
+        while index < offsets.count, offsets[index] == expected {
+            count += 1
+            index += 1
+            expected += 1
+        }
+        return count
+    }
+
+    private static func mergeMarker(
+        _ incoming: FileStatusColor,
+        into markers: inout [Int: FileStatusColor],
+        at index: Int
+    ) {
+        let existing = markers[index]
+        if existing == nil || markerPriority(of: incoming) > markerPriority(of: existing!) {
+            markers[index] = incoming
+        }
+    }
+
+    private static func markerPriority(of color: FileStatusColor) -> Int {
+        switch color {
+        case .deleted: return 4
+        case .modified: return 3
+        case .added: return 2
+        case .untracked: return 1
+        case .conflicted: return 5
+        case .clean: return 0
+        }
     }
 
     private static func runGitSync(arguments: [String]) -> String {

@@ -8,5 +8,6 @@ public enum InputEvent: Sendable {
     case paste(String)
     case focusIn
     case focusOut
+    case refresh
     case unknown([UInt8])
 }
