@@ -7,8 +7,36 @@ extension EditorState {
     private static let maxFileSize = 50_000_000  // 50MB
 
     func loadInitialTree() async {
+        let expandedPaths = collectExpandedPaths(treeNodes)
         treeNodes = await DirectoryScanner.scanAsync(rootPath, maxDepth: 1)
+        if !expandedPaths.isEmpty {
+            restoreExpandedPaths(expandedPaths, in: &treeNodes)
+        }
         refreshFlatTree()
+    }
+
+    private func collectExpandedPaths(_ nodes: [FileNode]) -> Set<String> {
+        var paths = Set<String>()
+        for node in nodes {
+            if node.isDirectory && node.isExpanded {
+                paths.insert(node.path)
+                paths.formUnion(collectExpandedPaths(node.children))
+            }
+        }
+        return paths
+    }
+
+    private func restoreExpandedPaths(_ paths: Set<String>, in nodes: inout [FileNode]) {
+        for i in nodes.indices {
+            if nodes[i].isDirectory && paths.contains(nodes[i].path) {
+                if !nodes[i].isExpanded {
+                    FileTreeNavigator.toggleExpand(in: &nodes, at: nodes[i].path)
+                }
+                if !nodes[i].children.isEmpty {
+                    restoreExpandedPaths(paths, in: &nodes[i].children)
+                }
+            }
+        }
     }
 
     func refreshFlatTree() {
@@ -167,11 +195,11 @@ extension EditorState {
         }
     }
 
-    private func prewarmVisibleSyntaxArtifacts(limit: Int = 8) {
+    private func prewarmVisibleSyntaxArtifacts(limit: Int = 16) {
         let languages = visibleLanguagesForSyntaxPrewarm(limit: limit)
         guard !languages.isEmpty else { return }
 
-        Task(priority: .utility) {
+        Task(priority: .userInitiated) {
             await LanguageHighlighter.prewarmArtifacts(for: languages)
         }
     }
