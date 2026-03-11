@@ -56,6 +56,7 @@ public enum TreeViewLayout {
         for tree: TreeView<Value>,
         in rect: Rect
     ) -> Int {
-        tree.showsVerticalScrollIndicator && rect.width > 0 ? 1 : 0
+        guard tree.showsVerticalScrollIndicator, rect.width > 0, rect.height > 0 else { return 0 }
+        return tree.visibleRows().count > rect.height ? 1 : 0
     }
 }

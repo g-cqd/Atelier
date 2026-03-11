@@ -1,5 +1,6 @@
 import KittyCodecs
 import KittyRenderer
+import KittySymbols
 import KittyWidgets
 
 @MainActor
@@ -15,7 +16,7 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     let contentRows = rows - 2
 
     StatusBar(
-        left: " KittyCode — \(state.rootPath) ",
+        left: " " + TerminalSymbolRenderer.label(state.symbolTheme[.project], "KittyCode") + " \(state.rootPath) ",
         style: colorScheme.titleBar
     ).render(to: &pipeline.buffer, in: Rect(x: 0, y: 0, width: cols, height: 1))
 
@@ -36,10 +37,15 @@ func render(pipeline: RenderPipeline, state: EditorState) {
         colorScheme: colorScheme
     )
 
-    let mode = state.mode == .tree ? "TREE" : "EDIT"
+    let modeGlyph = state.mode == .tree ? state.symbolTheme[.modeTree] : state.symbolTheme[.modeEdit]
+    let mode = state.mode == .tree ? "Tree" : "Edit"
     let position = state.isFileEmpty ? "" : "Ln \(state.cursorRow + 1)/\(state.fileLineCount)"
-    let statusLeft = " [\(mode)] \(state.statusMessage)"
-    let statusRight = "\(position)  \(cols)x\(rows) "
+    let statusLeft = " " + TerminalSymbolRenderer.label(modeGlyph, mode) + "  \(state.statusMessage)"
+    let statusRightCore = [
+        position.isEmpty ? nil : TerminalSymbolRenderer.label(state.symbolTheme[.position], position),
+        TerminalSymbolRenderer.label(state.symbolTheme[.dimensions], "\(cols)x\(rows)")
+    ].compactMap { $0 }.joined(separator: "  ")
+    let statusRight = statusRightCore + " "
     StatusBar(
         left: statusLeft,
         right: statusRight,

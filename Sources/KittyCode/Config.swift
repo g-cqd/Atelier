@@ -86,6 +86,7 @@ struct KittyConfig: Codable, Sendable {
     var keybindingMode: KeybindingMode = .nano
     var wrapLines = false
     var treeWidth = 30
+    var useSFSymbolsInTerminal = true
     var theme = Theme()
 
     static func load() -> KittyConfig {
