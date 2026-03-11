@@ -52,8 +52,52 @@ struct KittyConfig: Codable, Sendable {
         }
     }
 
+    struct EditorConfig: Codable, Sendable {
+        var highlightCurrentLine: Bool = false
+        var arrowKeysWrapAcrossLines: Bool = true
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let d = EditorConfig()
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            highlightCurrentLine = try c.decodeIfPresent(Bool.self, forKey: .highlightCurrentLine) ?? d.highlightCurrentLine
+            arrowKeysWrapAcrossLines = try c.decodeIfPresent(Bool.self, forKey: .arrowKeysWrapAcrossLines) ?? d.arrowKeysWrapAcrossLines
+        }
+    }
+
+    struct StatusBarConfig: Codable, Sendable {
+        enum Item: String, Codable, Sendable {
+            case file
+            case status
+            case language
+            case size
+            case lineEnding
+            case git
+            case position
+        }
+
+        var show: Bool = true
+        var leftItems: [Item] = [.file, .status]
+        var rightItems: [Item] = [.language, .size, .lineEnding, .git, .position]
+        var showContextHints: Bool = true
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let d = StatusBarConfig()
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            show = try c.decodeIfPresent(Bool.self, forKey: .show) ?? d.show
+            leftItems = try c.decodeIfPresent([Item].self, forKey: .leftItems) ?? d.leftItems
+            rightItems = try c.decodeIfPresent([Item].self, forKey: .rightItems) ?? d.rightItems
+            showContextHints = try c.decodeIfPresent(Bool.self, forKey: .showContextHints) ?? d.showContextHints
+        }
+    }
+
     struct GitDecorationsConfig: Codable, Sendable {
         var showLineChanges: Bool = true
+        var showLineBackgrounds: Bool = false
+        var showLineForegrounds: Bool = false
         var showTabRibbonStatus: Bool = true
         var showOpenFilesStatus: Bool = true
         var lineChangeDebounceMilliseconds: UInt64 = 150
@@ -65,10 +109,30 @@ struct KittyConfig: Codable, Sendable {
             let d = GitDecorationsConfig()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             showLineChanges = try c.decodeIfPresent(Bool.self, forKey: .showLineChanges) ?? d.showLineChanges
+            showLineBackgrounds = try c.decodeIfPresent(Bool.self, forKey: .showLineBackgrounds) ?? d.showLineBackgrounds
+            showLineForegrounds = try c.decodeIfPresent(Bool.self, forKey: .showLineForegrounds) ?? d.showLineForegrounds
             showTabRibbonStatus = try c.decodeIfPresent(Bool.self, forKey: .showTabRibbonStatus) ?? d.showTabRibbonStatus
             showOpenFilesStatus = try c.decodeIfPresent(Bool.self, forKey: .showOpenFilesStatus) ?? d.showOpenFilesStatus
             lineChangeDebounceMilliseconds = try c.decodeIfPresent(UInt64.self, forKey: .lineChangeDebounceMilliseconds) ?? d.lineChangeDebounceMilliseconds
             maxLineDiffBytes = try c.decodeIfPresent(Int.self, forKey: .maxLineDiffBytes) ?? d.maxLineDiffBytes
+        }
+    }
+
+    struct WhitespaceConfig: Codable, Sendable {
+        var showIndentation: Bool = false
+        var showSpaces: Bool = false
+        var showLineBreaks: Bool = false
+        var showUnexpected: Bool = true
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let d = WhitespaceConfig()
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            showIndentation = try c.decodeIfPresent(Bool.self, forKey: .showIndentation) ?? d.showIndentation
+            showSpaces = try c.decodeIfPresent(Bool.self, forKey: .showSpaces) ?? d.showSpaces
+            showLineBreaks = try c.decodeIfPresent(Bool.self, forKey: .showLineBreaks) ?? d.showLineBreaks
+            showUnexpected = try c.decodeIfPresent(Bool.self, forKey: .showUnexpected) ?? d.showUnexpected
         }
     }
 
@@ -113,6 +177,28 @@ struct KittyConfig: Codable, Sendable {
         var openFilesForeground: ColorRGB?
         var openFilesSelectedForeground: ColorRGB?
 
+        // Editor line highlighting
+        var cursorLineBackground: ColorRGB?
+        var cursorLineForeground: ColorRGB?
+
+        // Whitespace rendering
+        var whitespaceIndentationForeground: ColorRGB?
+        var whitespaceSpaceForeground: ColorRGB?
+        var whitespaceLineBreakForeground: ColorRGB?
+        var whitespaceUnexpectedForeground: ColorRGB?
+
+        // Git line highlighting
+        var gitModifiedLineBackground: ColorOverlayConfig?
+        var gitModifiedLineForeground: ColorOverlayConfig?
+        var gitAddedLineBackground: ColorOverlayConfig?
+        var gitAddedLineForeground: ColorOverlayConfig?
+        var gitUntrackedLineBackground: ColorOverlayConfig?
+        var gitUntrackedLineForeground: ColorOverlayConfig?
+        var gitDeletedLineBackground: ColorOverlayConfig?
+        var gitDeletedLineForeground: ColorOverlayConfig?
+        var gitConflictedLineBackground: ColorOverlayConfig?
+        var gitConflictedLineForeground: ColorOverlayConfig?
+
         init() {}
 
         init(from decoder: Decoder) throws {
@@ -147,6 +233,22 @@ struct KittyConfig: Codable, Sendable {
             activityBarActiveForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .activityBarActiveForeground)
             openFilesForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .openFilesForeground)
             openFilesSelectedForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .openFilesSelectedForeground)
+            cursorLineBackground = try c.decodeIfPresent(ColorRGB.self, forKey: .cursorLineBackground)
+            cursorLineForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .cursorLineForeground)
+            whitespaceIndentationForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .whitespaceIndentationForeground)
+            whitespaceSpaceForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .whitespaceSpaceForeground)
+            whitespaceLineBreakForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .whitespaceLineBreakForeground)
+            whitespaceUnexpectedForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .whitespaceUnexpectedForeground)
+            gitModifiedLineBackground = try c.decodeIfPresent(ColorOverlayConfig.self, forKey: .gitModifiedLineBackground)
+            gitModifiedLineForeground = try c.decodeIfPresent(ColorOverlayConfig.self, forKey: .gitModifiedLineForeground)
+            gitAddedLineBackground = try c.decodeIfPresent(ColorOverlayConfig.self, forKey: .gitAddedLineBackground)
+            gitAddedLineForeground = try c.decodeIfPresent(ColorOverlayConfig.self, forKey: .gitAddedLineForeground)
+            gitUntrackedLineBackground = try c.decodeIfPresent(ColorOverlayConfig.self, forKey: .gitUntrackedLineBackground)
+            gitUntrackedLineForeground = try c.decodeIfPresent(ColorOverlayConfig.self, forKey: .gitUntrackedLineForeground)
+            gitDeletedLineBackground = try c.decodeIfPresent(ColorOverlayConfig.self, forKey: .gitDeletedLineBackground)
+            gitDeletedLineForeground = try c.decodeIfPresent(ColorOverlayConfig.self, forKey: .gitDeletedLineForeground)
+            gitConflictedLineBackground = try c.decodeIfPresent(ColorOverlayConfig.self, forKey: .gitConflictedLineBackground)
+            gitConflictedLineForeground = try c.decodeIfPresent(ColorOverlayConfig.self, forKey: .gitConflictedLineForeground)
         }
     }
 
@@ -154,7 +256,9 @@ struct KittyConfig: Codable, Sendable {
     var wrapLines = false
     var treeWidth = 30
     var useSFSymbolsInTerminal = true
+    var editor = EditorConfig()
     var theme = Theme()
+    var statusBar: StatusBarConfig = .init()
 
     // File watching
     var fileWatcherEnabled: Bool = true
@@ -182,6 +286,9 @@ struct KittyConfig: Codable, Sendable {
     // Keybindings
     var keybindings: KeybindingsConfig = .init()
 
+    // Whitespace rendering
+    var whitespace: WhitespaceConfig = .init()
+
     init() {}
 
     init(from decoder: Decoder) throws {
@@ -191,7 +298,9 @@ struct KittyConfig: Codable, Sendable {
         wrapLines = try c.decodeIfPresent(Bool.self, forKey: .wrapLines) ?? d.wrapLines
         treeWidth = try c.decodeIfPresent(Int.self, forKey: .treeWidth) ?? d.treeWidth
         useSFSymbolsInTerminal = try c.decodeIfPresent(Bool.self, forKey: .useSFSymbolsInTerminal) ?? d.useSFSymbolsInTerminal
+        editor = try c.decodeIfPresent(EditorConfig.self, forKey: .editor) ?? d.editor
         theme = try c.decodeIfPresent(Theme.self, forKey: .theme) ?? d.theme
+        statusBar = try c.decodeIfPresent(StatusBarConfig.self, forKey: .statusBar) ?? d.statusBar
         fileWatcherEnabled = try c.decodeIfPresent(Bool.self, forKey: .fileWatcherEnabled) ?? d.fileWatcherEnabled
         autoSave = try c.decodeIfPresent(Bool.self, forKey: .autoSave) ?? d.autoSave
         autoSaveInterval = try c.decodeIfPresent(TimeInterval.self, forKey: .autoSaveInterval) ?? d.autoSaveInterval
@@ -204,6 +313,7 @@ struct KittyConfig: Codable, Sendable {
         tabPersistence = try c.decodeIfPresent(TabPersistence.self, forKey: .tabPersistence) ?? d.tabPersistence
         activityBar = try c.decodeIfPresent(ActivityBarConfig.self, forKey: .activityBar) ?? d.activityBar
         keybindings = try c.decodeIfPresent(KeybindingsConfig.self, forKey: .keybindings) ?? d.keybindings
+        whitespace = try c.decodeIfPresent(WhitespaceConfig.self, forKey: .whitespace) ?? d.whitespace
     }
 
     static func load() -> KittyConfig {
@@ -221,5 +331,12 @@ struct KittyConfig: Codable, Sendable {
             )
             return KittyConfig()
         }
+    }
+}
+
+extension KittyConfig.Theme {
+    func resolvedStyle(_ color: ColorRGB?, bold: Bool = false) -> Style? {
+        guard let color else { return nil }
+        return Style(fg: color.color, bold: bold)
     }
 }

@@ -1,8 +1,20 @@
 import KittyCodecs
+import KittyWidgets
 
 extension EditorState {
     static func makeColorScheme(config: KittyConfig) -> ColorScheme {
         let theme = config.theme
+        let whitespaceDefault = ColorRGB(r: 0x48, g: 0x4f, b: 0x58)
+        let scrollTrack = Style(fg: .rgb(r: 60, g: 60, b: 60), dim: true)
+        let scrollThumb = Style(fg: .rgb(r: 140, g: 140, b: 140), dim: true)
+        let cursorLineStyle = if config.editor.highlightCurrentLine {
+            Style(
+                fg: theme.cursorLineForeground?.color ?? .default,
+                bg: (theme.cursorLineBackground ?? theme.separatorForeground).color
+            )
+        } else {
+            Style()
+        }
         return ColorScheme(
             bg: Style(),
             treeBg: Style(fg: theme.treePanelForeground.color),
@@ -10,7 +22,27 @@ extension EditorState {
             treeDir: Style(fg: theme.treeDirectoryForeground.color, bold: true),
             lineNumber: Style(fg: theme.lineNumberForeground.color),
             editorText: Style(fg: theme.editorForeground.color),
-            editorCursorLine: Style(fg: theme.editorForeground.color),
+            editorCursorLine: cursorLineStyle,
+            gitModifiedLine: makeGitLineOverlay(
+                foreground: theme.gitModifiedLineForeground ?? ColorOverlayConfig(color: theme.gitModifiedForeground, alpha: 0.45),
+                background: theme.gitModifiedLineBackground ?? ColorOverlayConfig(color: theme.gitModifiedForeground, alpha: 0.18)
+            ),
+            gitAddedLine: makeGitLineOverlay(
+                foreground: theme.gitAddedLineForeground ?? ColorOverlayConfig(color: theme.gitAddedForeground, alpha: 0.45),
+                background: theme.gitAddedLineBackground ?? ColorOverlayConfig(color: theme.gitAddedForeground, alpha: 0.18)
+            ),
+            gitUntrackedLine: makeGitLineOverlay(
+                foreground: theme.gitUntrackedLineForeground ?? ColorOverlayConfig(color: theme.gitUntrackedForeground, alpha: 0.45),
+                background: theme.gitUntrackedLineBackground ?? ColorOverlayConfig(color: theme.gitUntrackedForeground, alpha: 0.18)
+            ),
+            gitDeletedLine: makeGitLineOverlay(
+                foreground: theme.gitDeletedLineForeground ?? ColorOverlayConfig(color: theme.gitDeletedForeground, alpha: 0.45),
+                background: theme.gitDeletedLineBackground ?? ColorOverlayConfig(color: theme.gitDeletedForeground, alpha: 0.18)
+            ),
+            gitConflictedLine: makeGitLineOverlay(
+                foreground: theme.gitConflictedLineForeground ?? ColorOverlayConfig(color: theme.gitConflictedForeground, alpha: 0.45),
+                background: theme.gitConflictedLineBackground ?? ColorOverlayConfig(color: theme.gitConflictedForeground, alpha: 0.18)
+            ),
             statusBar: Style(fg: theme.statusBarForeground.color),
             titleBar: Style(fg: theme.titleBarForeground.color),
             separator: Style(fg: theme.separatorForeground.color),
@@ -24,7 +56,34 @@ extension EditorState {
             gitAdded: Style(fg: theme.gitAddedForeground.color),
             gitUntracked: Style(fg: theme.gitUntrackedForeground.color, dim: true),
             gitDeleted: Style(fg: theme.gitDeletedForeground.color),
-            gitConflicted: Style(fg: theme.gitConflictedForeground.color, bold: true)
+            gitConflicted: Style(fg: theme.gitConflictedForeground.color, bold: true),
+            whitespaceIndentation: Style(fg: (theme.whitespaceIndentationForeground ?? whitespaceDefault).color, dim: true),
+            whitespaceSpace: Style(fg: (theme.whitespaceSpaceForeground ?? whitespaceDefault).color, dim: true),
+            whitespaceLineBreak: Style(fg: (theme.whitespaceLineBreakForeground ?? whitespaceDefault).color, dim: true),
+            whitespaceUnexpected: Style(fg: (theme.whitespaceUnexpectedForeground ?? ColorRGB(r: 0xff, g: 0x7b, b: 0x72)).color),
+            verticalScrollIndicator: VerticalScrollIndicatorStyle(
+                trackStyle: scrollTrack,
+                thumbStyle: scrollThumb,
+                trackCharacter: " ",
+                thumbCharacter: "\u{2593}"
+            ),
+            horizontalScrollIndicator: HorizontalScrollIndicatorStyle(
+                trackStyle: scrollTrack,
+                thumbStyle: scrollThumb,
+                trackCharacter: " ",
+                thumbCharacter: "\u{2501}"
+            ),
+            emptyEditorMessage: Style(fg: .rgb(r: 100, g: 100, b: 100))
+        )
+    }
+
+    private static func makeGitLineOverlay(
+        foreground: ColorOverlayConfig,
+        background: ColorOverlayConfig
+    ) -> TextStyleOverlay {
+        TextStyleOverlay(
+            foreground: ColorOverlay(color: foreground.color.color, alpha: foreground.alpha),
+            background: ColorOverlay(color: background.color.color, alpha: background.alpha)
         )
     }
 }

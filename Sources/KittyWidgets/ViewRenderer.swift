@@ -28,6 +28,10 @@ public enum ViewRenderer {
             renderHorizontalScrollIndicator(hIndicator, into: &buffer, in: rect, context: context)
         case let editor as TextEditor:
             renderTextEditor(editor, into: &buffer, in: rect, context: context)
+        case let list as ListView:
+            renderListView(list, into: &buffer, in: rect, context: context)
+        case let centered as CenteredText:
+            renderCenteredText(centered, into: &buffer, in: rect, context: context)
         case is EmptyView:
             break
         default:
@@ -262,38 +266,72 @@ public enum ViewRenderer {
 
         if editor.wrapLines {
             var screenRow = 0
-            var lineIndex = max(0, min(editor.scrollOffset, editor.lines.count))
-            while screenRow < rect.height && lineIndex < editor.lines.count {
-                let spans = editor.lineSpans[lineIndex]
+            var lineIndex = max(0, min(editor.scrollOffset, editor.lineCount))
+            while screenRow < rect.height && lineIndex < editor.lineCount {
+                let spans = editor.spans(at: lineIndex)
                 let totalWidth = max(1, spans.reduce(into: 0) { partial, span in
                     for char in span.text {
                         partial += UnicodeWidth.displayWidth(of: char)
                     }
                 })
                 let wrappedRows = max(1, contentWidth > 0 ? (totalWidth + contentWidth - 1) / contentWidth : 1)
+                let lineOverlay = editor.lineStyleOverlays[lineIndex]
+                let isCurrentLine = lineIndex == editor.cursorRow
+                let resolvedEditorStyle = resolvedLineStyle(
+                    from: editorStyle,
+                    lineOverlay: lineOverlay,
+                    isCurrentLine: isCurrentLine,
+                    currentLineStyle: currentLineStyle
+                )
+                let resolvedLineNumberStyle = resolvedLineStyle(
+                    from: lineNumberStyle,
+                    lineOverlay: lineOverlay,
+                    isCurrentLine: isCurrentLine,
+                    currentLineStyle: currentLineStyle
+                )
 
                 for wrapRow in 0..<wrappedRows where screenRow < rect.height {
                     let row = rect.y + screenRow
+                    if isCurrentLine || lineOverlay != nil {
+                        fillRow(
+                            into: &buffer,
+                            row: row,
+                            col: rect.x,
+                            width: rect.width,
+                            style: resolvedEditorStyle
+                        )
+                    }
                     if gutterWidth > 0 {
                         if wrapRow == 0 {
                             renderGutterDecoration(
-                                editor.gutterDecorations[lineIndex],
+                                resolvedGutterDecoration(
+                                    editor.gutterDecorations[lineIndex],
+                                    lineOverlay: lineOverlay,
+                                    isCurrentLine: isCurrentLine,
+                                    currentLineStyle: currentLineStyle
+                                ),
                                 into: &buffer,
                                 row: row,
                                 col: rect.x,
                                 width: gutterDecorationWidth,
-                                fallbackStyle: lineNumberStyle
+                                fallbackStyle: resolvedLineNumberStyle
                             )
                             if lineNumberColumnWidth > 0 {
                                 buffer.write(
                                     formattedLineNumber(lineIndex + 1, width: lineNumberColumnWidth - 1) + " ",
                                     row: row,
                                     col: rect.x + gutterDecorationWidth,
-                                    style: lineNumberStyle
+                                    style: resolvedLineNumberStyle
                                 )
                             }
                         } else {
-                            buffer.fill(row: row, col: rect.x, width: gutterWidth, height: 1, cell: Cell(character: " ", style: lineNumberStyle))
+                            buffer.fill(
+                                row: row,
+                                col: rect.x,
+                                width: gutterWidth,
+                                height: 1,
+                                cell: Cell(character: " ", style: resolvedLineNumberStyle)
+                            )
                         }
                     }
 
@@ -301,19 +339,56 @@ public enum ViewRenderer {
                     let segEnd = min(segStart + max(1, contentWidth), totalWidth)
                     var col = rect.x + gutterWidth
                     var widthPos = 0
+                    var wrapIsLeading = true
+                    let wsConfig = editor.whitespaceConfig
                     for span in spans {
                         if widthPos >= segEnd { break }
                         for char in span.text {
-                            let width = UnicodeWidth.displayWidth(of: char)
+                            var displayChar = char
+                            var charStyle = span.style
+                            var width = UnicodeWidth.displayWidth(of: char)
+
+                            if wsConfig.isEnabled {
+                                let category = WhitespaceRenderer.classify(char, isLeading: wrapIsLeading)
+                                switch category {
+                                case .normal:
+                                    wrapIsLeading = false
+                                case .indentSpace, .indentTab:
+                                    if wsConfig.showIndentation, let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                                        displayChar = glyph
+                                        charStyle = wsConfig.indentationStyle
+                                        if width == 0 { width = 1 }
+                                    }
+                                case .space:
+                                    if wsConfig.showSpaces, let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                                        displayChar = glyph
+                                        charStyle = wsConfig.spaceStyle
+                                    }
+                                case .unexpectedInvisible:
+                                    if wsConfig.showUnexpected, let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                                        displayChar = glyph
+                                        charStyle = wsConfig.unexpectedStyle
+                                        if width == 0 { width = 1 }
+                                    }
+                                }
+                            } else {
+                                if char != " " && char != "\t" { wrapIsLeading = false }
+                            }
+
                             if widthPos + width > segEnd { break }
                             if widthPos >= segStart && col < contentMaxX {
-                                let style = lineIndex == editor.cursorRow ? overlay(backgroundFrom: currentLineStyle, onto: span.style) : span.style
+                                let style = resolvedLineStyle(
+                                    from: charStyle,
+                                    lineOverlay: lineOverlay,
+                                    isCurrentLine: isCurrentLine,
+                                    currentLineStyle: currentLineStyle
+                                )
                                 if width == 2 && col + 1 < contentMaxX {
-                                    buffer[row, col] = Cell(character: char, style: style, width: 2)
+                                    buffer[row, col] = Cell(character: displayChar, style: style, width: 2)
                                     buffer[row, col + 1] = Cell(character: "\0", style: style, width: 0)
                                     col += 2
                                 } else if width == 1 {
-                                    buffer[row, col] = Cell(character: char, style: style)
+                                    buffer[row, col] = Cell(character: displayChar, style: style)
                                     col += 1
                                 }
                             }
@@ -321,9 +396,8 @@ public enum ViewRenderer {
                         }
                     }
 
-                    let fillStyle = lineIndex == editor.cursorRow ? currentLineStyle : editorStyle
                     while col < contentMaxX {
-                        buffer[row, col] = Cell(character: " ", style: fillStyle)
+                        buffer[row, col] = Cell(character: " ", style: resolvedEditorStyle)
                         col += 1
                     }
                     screenRow += 1
@@ -370,8 +444,8 @@ public enum ViewRenderer {
             return
         }
 
-        let startLine = max(0, min(editor.scrollOffset, editor.lines.count))
-        let endLine = min(editor.lines.count, startLine + rect.height)
+        let startLine = max(0, min(editor.scrollOffset, editor.lineCount))
+        let endLine = min(editor.lineCount, startLine + rect.height)
 
         for rowOffset in 0..<rect.height {
             let row = rect.y + rowOffset
@@ -406,26 +480,56 @@ public enum ViewRenderer {
                 continue
             }
 
+            let lineOverlay = editor.lineStyleOverlays[lineIndex]
+            let isCurrentLine = lineIndex == editor.cursorRow
+            let resolvedEditorStyle = resolvedLineStyle(
+                from: editorStyle,
+                lineOverlay: lineOverlay,
+                isCurrentLine: isCurrentLine,
+                currentLineStyle: currentLineStyle
+            )
+            let resolvedLineNumberStyle = resolvedLineStyle(
+                from: lineNumberStyle,
+                lineOverlay: lineOverlay,
+                isCurrentLine: isCurrentLine,
+                currentLineStyle: currentLineStyle
+            )
+
+            if isCurrentLine || lineOverlay != nil {
+                fillRow(
+                    into: &buffer,
+                    row: row,
+                    col: rect.x,
+                    width: rect.width,
+                    style: resolvedEditorStyle
+                )
+            }
+
             if gutterWidth > 0 {
                 renderGutterDecoration(
-                    editor.gutterDecorations[lineIndex],
+                    resolvedGutterDecoration(
+                        editor.gutterDecorations[lineIndex],
+                        lineOverlay: lineOverlay,
+                        isCurrentLine: isCurrentLine,
+                        currentLineStyle: currentLineStyle
+                    ),
                     into: &buffer,
                     row: row,
                     col: rect.x,
                     width: gutterDecorationWidth,
-                    fallbackStyle: lineNumberStyle
+                    fallbackStyle: resolvedLineNumberStyle
                 )
                 if lineNumberColumnWidth > 0 {
                     buffer.write(
                         formattedLineNumber(lineIndex + 1, width: lineNumberColumnWidth - 1) + " ",
                         row: row,
                         col: rect.x + gutterDecorationWidth,
-                        style: lineNumberStyle
+                        style: resolvedLineNumberStyle
                     )
                 }
             }
 
-            let spans = editor.lineSpans[lineIndex]
+            let spans = editor.spans(at: lineIndex)
             renderStyledLine(
                 spans: spans,
                 into: &buffer,
@@ -433,9 +537,11 @@ public enum ViewRenderer {
                 col: rect.x + gutterWidth,
                 availWidth: contentWidth,
                 hScrollOffset: editor.horizontalScrollOffset,
-                isCurrentLine: lineIndex == editor.cursorRow,
+                lineOverlay: lineOverlay,
+                isCurrentLine: isCurrentLine,
                 editorStyle: editorStyle,
-                currentLineStyle: currentLineStyle
+                currentLineStyle: currentLineStyle,
+                whitespaceConfig: editor.whitespaceConfig
             )
         }
 
@@ -448,22 +554,113 @@ public enum ViewRenderer {
 
         // Horizontal scroll indicator (only for non-wrapped mode)
         if editor.showsHorizontalScrollIndicator, !editor.wrapLines {
-            let maxWidth = editor.lines.reduce(0) { max($0, UnicodeWidth.displayWidth(of: $1)) }
             if let hRect = TextEditorLayout.horizontalScrollIndicatorRect(
-                for: editor, in: rect, maxLineWidth: maxWidth
+                for: editor, in: rect, maxLineWidth: editor.maxLineWidth
             ) {
                 let hMetrics = TextEditorLayout.horizontalScrollMetrics(
-                    for: editor, in: rect, maxLineWidth: maxWidth
+                    for: editor, in: rect, maxLineWidth: editor.maxLineWidth
                 )
                 HorizontalScrollIndicator(
                     metrics: hMetrics,
-                    style: HorizontalScrollIndicatorStyle(
-                        trackStyle: Style(fg: .rgb(r: 60, g: 60, b: 60), dim: true),
-                        thumbStyle: Style(fg: .rgb(r: 140, g: 140, b: 140), dim: true),
-                        trackCharacter: " ",
-                        thumbCharacter: "\u{2501}"
-                    )
+                    style: editor.horizontalScrollIndicatorStyle
                 ).render(to: &buffer, in: hRect, context: context)
+            }
+        }
+    }
+
+    private static func renderListView(
+        _ list: ListView,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        guard rect.width > 0, rect.height > 0 else { return }
+
+        let normalStyle = context.applyTo(list.style.normalStyle)
+        let selectedStyle = context.applyTo(list.style.selectedStyle)
+        let showIndicator = list.showsVerticalScrollIndicator && list.items.count > rect.height
+        let contentWidth = max(0, rect.width - (showIndicator ? 1 : 0))
+
+        for row in 0..<rect.height {
+            let itemIdx = list.scrollOffset + row
+            let screenRow = rect.y + row
+
+            guard itemIdx < list.items.count else {
+                fillRow(into: &buffer, row: screenRow, col: rect.x, width: rect.width, style: normalStyle)
+                continue
+            }
+
+            let item = list.items[itemIdx]
+            let isSelected = (itemIdx == list.selectedIndex)
+            let rowStyle = isSelected ? selectedStyle : normalStyle
+
+            let icon = item.icon
+            let prefix = icon.isEmpty ? " " : " \(icon) "
+            var label = prefix + item.label
+            let indicatorCol = UnicodeWidth.displayWidth(of: label) + 1
+
+            if !item.suffix.isEmpty {
+                label += " \(item.suffix)"
+            }
+            if item.isDirty {
+                label += " \(list.style.dirtyIndicator)"
+            }
+            let padded = String(label.prefix(contentWidth)).padding(toLength: contentWidth, withPad: " ", startingAt: 0)
+
+            fillRow(into: &buffer, row: screenRow, col: rect.x, width: rect.width, style: rowStyle)
+            buffer.write(padded, row: screenRow, col: rect.x, style: rowStyle)
+
+            if !item.suffix.isEmpty && indicatorCol < contentWidth {
+                let suffixStyle = context.applyTo(item.suffixStyle)
+                buffer.write(item.suffix, row: screenRow, col: rect.x + indicatorCol, style: suffixStyle)
+            }
+        }
+
+        if showIndicator {
+            let metrics = ScrollMetrics(
+                contentLength: list.items.count,
+                viewportLength: rect.height,
+                offset: list.scrollOffset,
+                maxOffset: max(0, list.items.count - 1)
+            )
+            VerticalScrollIndicator(
+                metrics: metrics,
+                style: list.style.scrollIndicatorStyle
+            ).render(
+                to: &buffer,
+                in: Rect(x: rect.maxX - 1, y: rect.y, width: 1, height: rect.height),
+                context: context
+            )
+        }
+    }
+
+    private static func renderCenteredText(
+        _ centered: CenteredText,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        guard rect.width > 0, rect.height > 0 else { return }
+
+        let bgStyle = context.applyTo(centered.backgroundStyle)
+        let textStyle = context.applyTo(centered.style)
+        let messageRow = rect.height / 2
+
+        for row in 0..<rect.height {
+            let screenRow = rect.y + row
+            if row == messageRow {
+                let leftPadding = max(0, (rect.width - centered.text.count) / 2)
+                let line = String(repeating: " ", count: leftPadding)
+                    + centered.text
+                    + String(repeating: " ", count: max(0, rect.width - leftPadding - centered.text.count))
+                buffer.write(
+                    String(line.prefix(rect.width)),
+                    row: screenRow,
+                    col: rect.x,
+                    style: textStyle
+                )
+            } else {
+                fillRow(into: &buffer, row: screenRow, col: rect.x, width: rect.width, style: bgStyle)
             }
         }
     }
@@ -523,25 +720,66 @@ public enum ViewRenderer {
         col: Int,
         availWidth: Int,
         hScrollOffset: Int,
+        lineOverlay: TextStyleOverlay?,
         isCurrentLine: Bool,
         editorStyle: Style,
-        currentLineStyle: Style
+        currentLineStyle: Style,
+        whitespaceConfig: WhitespaceRenderer.Config = .disabled
     ) {
         guard availWidth > 0 else { return }
         var currentCol = col
         var currentX = 0
+        var isLeading = true
 
         for span in spans {
             for char in span.text {
-                let width = UnicodeWidth.displayWidth(of: char)
+                let category: WhitespaceRenderer.CharCategory
+                var displayChar = char
+                var charStyle = span.style
+                var width = UnicodeWidth.displayWidth(of: char)
+
+                if whitespaceConfig.isEnabled {
+                    category = WhitespaceRenderer.classify(char, isLeading: isLeading)
+                    switch category {
+                    case .normal:
+                        isLeading = false
+                    case .indentSpace, .indentTab:
+                        if whitespaceConfig.showIndentation, let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                            displayChar = glyph
+                            charStyle = whitespaceConfig.indentationStyle
+                            if width == 0 { width = 1 }
+                        }
+                    case .space:
+                        if whitespaceConfig.showSpaces, let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                            displayChar = glyph
+                            charStyle = whitespaceConfig.spaceStyle
+                        }
+                    case .unexpectedInvisible:
+                        if whitespaceConfig.showUnexpected, let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                            displayChar = glyph
+                            charStyle = whitespaceConfig.unexpectedStyle
+                            if width == 0 { width = 1 }
+                        }
+                    }
+                } else {
+                    if char != " " && char != "\t" {
+                        isLeading = false
+                    }
+                }
+
                 if currentX >= hScrollOffset && currentX + width <= hScrollOffset + availWidth {
-                    let style = isCurrentLine ? overlay(backgroundFrom: currentLineStyle, onto: span.style) : span.style
+                    let style = resolvedLineStyle(
+                        from: charStyle,
+                        lineOverlay: lineOverlay,
+                        isCurrentLine: isCurrentLine,
+                        currentLineStyle: currentLineStyle
+                    )
                     if width == 2 && currentCol + 1 < col + availWidth {
-                        buffer[row, currentCol] = Cell(character: char, style: style, width: 2)
+                        buffer[row, currentCol] = Cell(character: displayChar, style: style, width: 2)
                         buffer[row, currentCol + 1] = Cell(character: "\0", style: style, width: 0)
                         currentCol += 2
                     } else if width == 1 {
-                        buffer[row, currentCol] = Cell(character: char, style: style)
+                        buffer[row, currentCol] = Cell(character: displayChar, style: style)
                         currentCol += 1
                     }
                 }
@@ -549,17 +787,120 @@ public enum ViewRenderer {
             }
         }
 
-        let fillStyle = isCurrentLine ? currentLineStyle : editorStyle
+        if whitespaceConfig.showLineBreaks && currentCol < col + availWidth {
+            let lbStyle = resolvedLineStyle(
+                from: whitespaceConfig.lineBreakStyle,
+                lineOverlay: lineOverlay,
+                isCurrentLine: isCurrentLine,
+                currentLineStyle: currentLineStyle
+            )
+            buffer[row, currentCol] = Cell(character: WhitespaceRenderer.lineBreakGlyph, style: lbStyle)
+            currentCol += 1
+        }
+
+        let fillStyle = resolvedLineStyle(
+            from: editorStyle,
+            lineOverlay: lineOverlay,
+            isCurrentLine: isCurrentLine,
+            currentLineStyle: currentLineStyle
+        )
         while currentCol < col + availWidth {
             buffer[row, currentCol] = Cell(character: " ", style: fillStyle)
             currentCol += 1
         }
     }
 
-    private static func overlay(backgroundFrom overlay: Style, onto base: Style) -> Style {
+    private static func resolvedGutterDecoration(
+        _ decoration: TextEditor.GutterDecoration?,
+        lineOverlay: TextStyleOverlay?,
+        isCurrentLine: Bool,
+        currentLineStyle: Style
+    ) -> TextEditor.GutterDecoration? {
+        guard let decoration else { return nil }
+        return TextEditor.GutterDecoration(
+            symbol: decoration.symbol,
+            style: resolvedLineStyle(
+                from: decoration.style,
+                lineOverlay: lineOverlay,
+                isCurrentLine: isCurrentLine,
+                currentLineStyle: currentLineStyle
+            )
+        )
+    }
+
+    private static func resolvedLineStyle(
+        from base: Style,
+        lineOverlay: TextStyleOverlay?,
+        isCurrentLine: Bool,
+        currentLineStyle: Style
+    ) -> Style {
         var style = base
-        style.bg = overlay.bg
+        if let lineOverlay {
+            style = apply(lineOverlay: lineOverlay, to: style)
+        }
+        if isCurrentLine {
+            style = apply(lineStyle: currentLineStyle, to: style)
+        }
         return style
+    }
+
+    private static func apply(lineStyle: Style, to base: Style) -> Style {
+        var style = base
+        if lineStyle.fg != .default {
+            style.fg = lineStyle.fg
+        }
+        if lineStyle.bg != .default {
+            style.bg = lineStyle.bg
+        }
+        if lineStyle.underlineColor != .default {
+            style.underlineColor = lineStyle.underlineColor
+        }
+        style.bold = style.bold || lineStyle.bold
+        style.dim = style.dim || lineStyle.dim
+        style.italic = style.italic || lineStyle.italic
+        if lineStyle.underline != .none {
+            style.underline = lineStyle.underline
+        }
+        style.strikethrough = style.strikethrough || lineStyle.strikethrough
+        style.inverse = style.inverse || lineStyle.inverse
+        return style
+    }
+
+    private static func apply(lineOverlay: TextStyleOverlay, to base: Style) -> Style {
+        var style = base
+        if let foreground = lineOverlay.foreground {
+            style.fg = blendedColor(overlay: foreground, base: style.fg)
+        }
+        if let background = lineOverlay.background {
+            style.bg = blendedColor(overlay: background, base: style.bg)
+        }
+        return style
+    }
+
+    private static func blendedColor(overlay: ColorOverlay, base: Color) -> Color {
+        let alpha = min(1, max(0, overlay.alpha))
+        guard alpha > 0 else { return base }
+        guard alpha < 1 else { return overlay.color }
+
+        guard case let .rgb(r: overlayRed, g: overlayGreen, b: overlayBlue) = overlay.color,
+              case let .rgb(r: baseRed, g: baseGreen, b: baseBlue) = base
+        else {
+            return overlay.color
+        }
+
+        return .rgb(
+            r: blendChannel(base: baseRed, overlay: overlayRed, alpha: alpha),
+            g: blendChannel(base: baseGreen, overlay: overlayGreen, alpha: alpha),
+            b: blendChannel(base: baseBlue, overlay: overlayBlue, alpha: alpha)
+        )
+    }
+
+    private static func blendChannel(base: UInt8, overlay: UInt8, alpha: Double) -> UInt8 {
+        let baseComponent = Double(base) * (1 - alpha)
+        let overlayComponent = Double(overlay) * alpha
+        let blendedValue = Int((baseComponent + overlayComponent).rounded())
+        let clampedValue = min(255, max(0, blendedValue))
+        return UInt8(clampedValue)
     }
 
     // MARK: - Generic/Container Rendering

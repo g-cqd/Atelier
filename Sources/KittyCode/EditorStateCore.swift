@@ -17,6 +17,11 @@ final class EditorState {
         var lineNumber: Style
         var editorText: Style
         var editorCursorLine: Style
+        var gitModifiedLine: TextStyleOverlay
+        var gitAddedLine: TextStyleOverlay
+        var gitUntrackedLine: TextStyleOverlay
+        var gitDeletedLine: TextStyleOverlay
+        var gitConflictedLine: TextStyleOverlay
         var statusBar: Style
         var titleBar: Style
         var separator: Style
@@ -31,15 +36,45 @@ final class EditorState {
         var gitUntracked: Style
         var gitDeleted: Style
         var gitConflicted: Style
+        var whitespaceIndentation: Style
+        var whitespaceSpace: Style
+        var whitespaceLineBreak: Style
+        var whitespaceUnexpected: Style
+        var verticalScrollIndicator: VerticalScrollIndicatorStyle
+        var horizontalScrollIndicator: HorizontalScrollIndicatorStyle
+        var emptyEditorMessage: Style
 
         func gitStatusStyle(for color: FileStatusColor) -> Style {
             switch color {
-            case .modified: return gitModified
-            case .added: return gitAdded
-            case .untracked: return gitUntracked
-            case .deleted: return gitDeleted
-            case .conflicted: return gitConflicted
-            case .clean: return treeBg
+            case .modified:
+                return gitModified
+            case .added:
+                return gitAdded
+            case .untracked:
+                return gitUntracked
+            case .deleted:
+                return gitDeleted
+            case .conflicted:
+                return gitConflicted
+            case .clean:
+                return treeBg
+            }
+        }
+
+        func gitLineOverlay(for color: FileStatusColor) -> TextStyleOverlay {
+            switch color {
+            case .modified:
+                return gitModifiedLine
+            case .added:
+                return gitAddedLine
+            case .untracked:
+                return gitUntrackedLine
+            case .deleted:
+                return gitDeletedLine
+            case .conflicted:
+                return gitConflictedLine
+            case .clean:
+                return TextStyleOverlay()
             }
         }
     }
@@ -70,6 +105,7 @@ final class EditorState {
     var gitLineDecorationProvider: (any GitLineDecorationProvider)?
     var gitDecorationManager: GitDecorationManager?
     var renderRefreshSource: RenderRefreshSource?
+    weak var fileWatcherIntegration: FileWatcherIntegration?
     var colorScheme: ColorScheme {
         didSet {
             highlightSession = nil
@@ -96,7 +132,9 @@ final class EditorState {
     var textCursor = TextCursor()
     private var cachedFileLines: [String]?
     private var cachedDocumentText: String?
-    private var highlightSession: LanguageHighlighter.Session?
+    var highlightSession: LanguageHighlighter.Session?
+    private var fileOpenTask: Task<Void, Never>?
+    private var pendingOpenRequestID: UInt64 = 0
 
     /// Backward-compatible computed access to file content lines.
     var fileContent: [String] {
@@ -114,7 +152,7 @@ final class EditorState {
             textBuffer = TextBuffer(lines: normalizedLines)
             cachedFileLines = normalizedLines
             cachedDocumentText = normalizedLines.joined(separator: "\n")
-            cachedMaxLineWidth = nil
+            cachedMaxLineWidth = TextDocument.computeMaxLineWidth(for: normalizedLines)
             highlightSession = nil
         }
     }
@@ -153,24 +191,30 @@ final class EditorState {
 
     func textDidChange() {
         invalidateTextSnapshotCache()
-        cachedMaxLineWidth = nil
         if let buf = bufferManager.activeBuffer {
+            buf.postOpenProcessingTask?.cancel()
+            buf.postOpenProcessingTask = nil
             buf.isDirty = true
             if buf.isPreview { buf.isPreview = false }
             buf.documentVersion += 1
+            isLoadingGrammar = false
         }
+        widenCachedMaxLineWidth(for: textCursor.row..<(textCursor.row + 1))
         refreshHighlights()
         gitDecorationManager?.scheduleRefreshForActiveBuffer()
     }
 
     func textDidChange(_ mutation: TextMutation) {
         invalidateTextSnapshotCache()
-        cachedMaxLineWidth = nil
         if let buf = bufferManager.activeBuffer {
+            buf.postOpenProcessingTask?.cancel()
+            buf.postOpenProcessingTask = nil
             buf.isDirty = true
             if buf.isPreview { buf.isPreview = false }
             buf.documentVersion += 1
+            isLoadingGrammar = false
         }
+        widenCachedMaxLineWidth(for: mutation.updatedLineRange)
         refreshHighlights(after: mutation)
         gitDecorationManager?.scheduleRefreshForActiveBuffer()
     }
@@ -180,7 +224,7 @@ final class EditorState {
         textBuffer = TextBuffer(lines: lines)
         cachedFileLines = lines
         cachedDocumentText = content
-        cachedMaxLineWidth = nil
+        cachedMaxLineWidth = TextDocument.computeMaxLineWidth(for: lines)
         highlightSession = nil
     }
 
@@ -219,6 +263,7 @@ final class EditorState {
         buf.highlightSession = highlightSession
         buf.cachedFileLines = cachedFileLines
         buf.cachedDocumentText = cachedDocumentText
+        buf.cachedMaxLineWidth = cachedMaxLineWidth
         buf.language = currentLanguage
     }
 
@@ -234,6 +279,7 @@ final class EditorState {
         filePath = buf.filePath
         cachedFileLines = buf.cachedFileLines
         cachedDocumentText = buf.cachedDocumentText
+        cachedMaxLineWidth = buf.cachedMaxLineWidth
     }
 
     /// Switch to a different tab by index, saving/restoring state.
@@ -340,7 +386,8 @@ final class EditorState {
 
         let newSession = LanguageHighlighter.makeSession(
             language: currentLanguage,
-            theme: syntaxTheme
+            theme: syntaxTheme,
+            preferGrammar: false
         )
         highlightSession = newSession
         return newSession
@@ -375,6 +422,7 @@ final class EditorState {
     var filePath = ""
     var treePanelWidth = 30
     var statusMessage = ""
+    var prompt: EditorPrompt?
     var mode: Mode = .tree
     var vimMode: VimMode = .normal
     var symbolTheme: TerminalSymbolTheme
@@ -383,13 +431,10 @@ final class EditorState {
     var isScrolling = false
     var scrollDragState: ScrollDragState?
     var isLoadingGrammar = false
-    private var cachedMaxLineWidth: Int?
+    var cachedMaxLineWidth: Int?
 
     var maxLineWidth: Int {
-        if let cached = cachedMaxLineWidth { return cached }
-        let width = textBuffer.lines.reduce(0) { max($0, UnicodeWidth.displayWidth(of: $1)) }
-        cachedMaxLineWidth = width
-        return width
+        cachedMaxLineWidth ?? 0
     }
 
     init(rootPath: String, config: KittyConfig) {
@@ -397,11 +442,46 @@ final class EditorState {
         self.config = config
         self.treePanelWidth = config.treeWidth
         self.colorScheme = Self.makeColorScheme(config: config)
-        let catalog = try? SymbolCatalog.load(from: SymbolCatalogLocator.defaultMappingURL())
+        let catalog = config.useSFSymbolsInTerminal ? SymbolCatalogLoader.loadOrDiscover() : nil
         self.symbolTheme = TerminalSymbolTheme.make(symbolsEnabled: config.useSFSymbolsInTerminal, catalog: catalog)
         self.treeNodes = DirectoryScanner.scan(rootPath, maxDepth: 1)
         self.cachedFlatTree = FileTreeNavigator.flatten(treeNodes)
         self.statusMessage = "Opened \(rootPath) | ^O Save | ^X Quit"
         refreshHighlights()
+    }
+
+    deinit {
+        fileOpenTask?.cancel()
+    }
+
+    func nextOpenRequestID() -> UInt64 {
+        pendingOpenRequestID &+= 1
+        return pendingOpenRequestID
+    }
+
+    func replaceFileOpenTask(with task: Task<Void, Never>) {
+        fileOpenTask?.cancel()
+        fileOpenTask = task
+    }
+
+    func cancelPendingFileOpen() {
+        fileOpenTask?.cancel()
+        fileOpenTask = nil
+    }
+
+    func isCurrentOpenRequest(_ requestID: UInt64) -> Bool {
+        pendingOpenRequestID == requestID
+    }
+
+    private func widenCachedMaxLineWidth(for range: Range<Int>) {
+        let lowerBound = max(0, range.lowerBound)
+        let upperBound = min(fileLineCount, range.upperBound)
+        guard lowerBound < upperBound else { return }
+
+        let widenedWidth = (lowerBound..<upperBound).reduce(0) { partial, lineIndex in
+            max(partial, UnicodeWidth.displayWidth(of: textBuffer.line(at: lineIndex)))
+        }
+
+        cachedMaxLineWidth = max(cachedMaxLineWidth ?? 0, widenedWidth)
     }
 }
