@@ -130,7 +130,23 @@ public final class GLRParser: Sendable {
         // Pick the best stack (prefer one with fewer errors)
         let best = stacks.min(by: { $0.errorCount < $1.errorCount }) ?? stacks[0]
 
-        let root = buildRootNode(from: best, source: source)
+        var root = buildRootNode(from: best, source: source)
+
+        // Insert extra comment tokens into the tree so query matchers can find them
+        let extraComments = tokens.filter { $0.isExtra && $0.type == "comment" }
+        if !extraComments.isEmpty {
+            for token in extraComments {
+                root.children.append(SyntaxNode(
+                    type: "comment",
+                    byteRange: token.byteRange,
+                    pointRange: token.pointRange,
+                    isExtra: true,
+                    isNamed: true
+                ))
+            }
+            root.children.sort { $0.byteRange.lowerBound < $1.byteRange.lowerBound }
+        }
+
         return SyntaxTree(root: root, source: source)
     }
 
