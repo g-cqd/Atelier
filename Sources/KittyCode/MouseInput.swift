@@ -23,6 +23,27 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
         height: layout.contentRows
     )
 
+    if state.contextMenu != nil {
+        if mouse.kind == .release {
+            return
+        }
+
+        if mouse.kind == .press, mouse.button == .left,
+           let itemIndex = contextMenuItemIndex(at: mouse, state: state, columns: pipeline.columns, rows: pipeline.rows) {
+            state.performContextMenuSelection(at: itemIndex)
+            return
+        }
+
+        if isWithinContextMenu(mouse, state: state, columns: pipeline.columns, rows: pipeline.rows) {
+            return
+        }
+
+        state.dismissContextMenu()
+        if mouse.button != .right || mouse.kind != .press {
+            return
+        }
+    }
+
     if mouse.kind == .release {
         state.scrollDragState = nil
         state.isScrolling = false
@@ -79,15 +100,27 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
         return
     }
 
-    guard mouse.kind == .press, mouse.button == .left else { return }
+    guard mouse.kind == .press else { return }
+    guard mouse.button == .left || mouse.button == .right else { return }
+    let isRightClick = mouse.button == .right
 
     let now = Date()
-    let isDoubleClick = now.timeIntervalSince(state.lastClickTime) < 0.3
+    let isDoubleClick = !isRightClick && now.timeIntervalSince(state.lastClickTime) < 0.3
 
     // Tab ribbon click (mouse coords are 1-based, tab ribbon row uses layout.contentStartRow)
     if layout.showTabRibbon && mouse.row == layout.contentStartRow && mouse.col - 1 >= layout.editorStart {
+        guard !isRightClick else { return }
         let tabs = state.bufferManager.buffers.map { buf in
-            TabRibbon.Tab(name: buf.fileName, isDirty: buf.isDirty)
+            let status = state.config.showGitStatus && state.config.gitDecorations.showTabRibbonStatus
+                ? state.fileStatusProvider?.status(for: buf.filePath)
+                : nil
+            return TabRibbon.Tab(
+                name: buf.fileName,
+                isDirty: buf.isDirty,
+                isPreview: buf.isPreview,
+                statusIndicator: status?.indicator.isEmpty == false ? status?.indicator : nil,
+                statusStyle: status.map { state.colorScheme.gitStatusStyle(for: $0.statusColor) }
+            )
         }
         let ribbon = TabRibbon(
             tabs: tabs,
@@ -109,6 +142,7 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
 
     // Activity bar click
     if state.config.activityBar.show && mouse.col - 1 < layout.activityBarWidth && mouse.row - 1 >= layout.contentStartRow {
+        guard !isRightClick else { return }
         let items = state.config.activityBar.items
         let relativeRow = mouse.row - 1 - layout.contentStartRow
         if relativeRow >= 0, relativeRow < items.count {
@@ -129,6 +163,7 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     if state.activeSidebarPanel == .openDocuments && !state.sidebarCollapsed
        && mouse.col - 1 >= layout.activityBarWidth && mouse.col - 1 < layout.editorStart - 1
        && mouse.row - 1 >= layout.contentStartRow {
+        guard !isRightClick else { return }
         let relativeRow = mouse.row - 1 - layout.contentStartRow
         let bufferIdx = state.openFilesScrollOffset + relativeRow
         if bufferIdx >= 0, bufferIdx < state.bufferManager.count {
@@ -139,7 +174,7 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
         return
     }
 
-    if beginScrollDragIfNeeded(mouse: mouse, treeRect: treeRect, editorRect: editorRect, state: state) {
+    if !isRightClick, beginScrollDragIfNeeded(mouse: mouse, treeRect: treeRect, editorRect: editorRect, state: state) {
         return
     }
 
@@ -147,21 +182,33 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     let contentRow = mouse.row - 1 - layout.contentStartRow
 
     if mouse.col - 1 >= layout.activityBarWidth && mouse.col - 1 < layout.editorStart - 1 && contentRow >= 0 {
-        handleTreeClick(contentRow: contentRow, isDoubleClick: isDoubleClick, state: state)
+        if isRightClick {
+            state.showTreeContextMenu(at: state.treeScrollOffset + contentRow)
+        } else {
+            handleTreeClick(contentRow: contentRow, isDoubleClick: isDoubleClick, state: state)
+        }
     } else if mouse.col - 1 >= layout.editorStart && contentRow >= 0 {
-        handleEditorClick(mouseRow: mouse.row, mouseCol: mouse.col, editorRect: editorRect, state: state)
+        if isRightClick {
+            state.mode = .editor
+            state.showEditorContextMenu()
+        } else {
+            handleEditorClick(mouseRow: mouse.row, mouseCol: mouse.col, editorRect: editorRect, state: state)
+        }
     }
 
-    state.lastClickTime = now
+    if !isRightClick {
+        state.lastClickTime = now
+    }
 }
 
 @MainActor
 private func handleTreeClick(contentRow: Int, isDoubleClick: Bool, state: EditorState) {
     let clickIndex = state.treeScrollOffset + contentRow
     guard clickIndex >= 0 && clickIndex < state.cachedFlatTree.count else { return }
+    let entry = state.cachedFlatTree[clickIndex].node
+    state.noteSelectedPath(entry.path, isDirectory: entry.isDirectory)
 
     if isDoubleClick && clickIndex == state.lastClickIndex {
-        let entry = state.cachedFlatTree[clickIndex].node
         if entry.isDirectory {
             state.toggleExpand(at: clickIndex)
         } else {
@@ -328,7 +375,7 @@ private func makeTreeView(state: EditorState) -> TreeView<FileNode> {
 }
 
 @MainActor
-private func makeEditorView(state: EditorState) -> TextEditor {
+func makeEditorView(state: EditorState) -> TextEditor {
     TextEditor(
         buffer: state.textBuffer,
         lineSpans: state.highlightedLines,
@@ -337,9 +384,12 @@ private func makeEditorView(state: EditorState) -> TextEditor {
         cursorRow: state.cursorRow,
         cursorCol: state.cursorCol,
         showLineNumbers: true,
+        showsGutterDecorations: state.config.showGitStatus && state.config.gitDecorations.showLineChanges && state.gitLineDecorationProvider != nil,
         wrapLines: state.config.wrapLines,
         showsVerticalScrollIndicator: true,
-        maxLineWidth: state.maxLineWidth
+        showsHorizontalScrollIndicator: !state.config.wrapLines,
+        maxLineWidth: state.maxLineWidth,
+        tabSize: state.config.editor.tabSize
     )
 }
 

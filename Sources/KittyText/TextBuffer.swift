@@ -109,8 +109,14 @@ public struct TextBuffer: Sendable {
 
     /// Reconstructs the full text by joining lines with newlines.
     public var text: String {
-        var result = ""
         let count = lineCount
+        guard count > 0 else { return "" }
+        var totalBytes = count - 1 // newlines between lines
+        for i in 0..<count {
+            totalBytes += storage[physicalIndex(i)].utf8.count
+        }
+        var result = ""
+        result.reserveCapacity(totalBytes)
         for i in 0..<count {
             if i > 0 { result += "\n" }
             result += storage[physicalIndex(i)]
@@ -162,9 +168,9 @@ public struct TextBuffer: Sendable {
         gapStart = index
     }
 
-    /// Doubles the gap size when it's exhausted.
+    /// Grows the gap when exhausted. Uses half-of-lineCount growth to bound memory overhead.
     private mutating func growGap() {
-        let newGapSize = max(16, lineCount)
+        let newGapSize = max(16, min(lineCount / 2 + 1, 4096))
         // Insert newGapSize empty slots at gapStart + gapLength
         var newStorage = ContiguousArray<String>()
         newStorage.reserveCapacity(storage.count + newGapSize)

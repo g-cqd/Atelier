@@ -79,7 +79,7 @@ public struct Lexer: Sendable {
                     type: "_whitespace",
                     byteRange: start..<pos,
                     pointRange: startPoint..<point,
-                    text: String(decoding: UnsafeBufferPointer(rebasing: utf8[start..<pos]), as: UTF8.self),
+                    text: "",
                     isExtra: true
                 ))
                 continue

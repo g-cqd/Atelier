@@ -55,6 +55,7 @@ struct KittyConfig: Codable, Sendable {
     struct EditorConfig: Codable, Sendable {
         var highlightCurrentLine: Bool = false
         var arrowKeysWrapAcrossLines: Bool = true
+        var tabSize: Int = 4
 
         init() {}
 
@@ -63,6 +64,7 @@ struct KittyConfig: Codable, Sendable {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             highlightCurrentLine = try c.decodeIfPresent(Bool.self, forKey: .highlightCurrentLine) ?? d.highlightCurrentLine
             arrowKeysWrapAcrossLines = try c.decodeIfPresent(Bool.self, forKey: .arrowKeysWrapAcrossLines) ?? d.arrowKeysWrapAcrossLines
+            tabSize = try c.decodeIfPresent(Int.self, forKey: .tabSize) ?? d.tabSize
         }
     }
 

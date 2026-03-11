@@ -1,5 +1,6 @@
 import KittyCodecs
 import KittyRenderer
+import KittyText
 
 public struct TabRibbon: Sendable {
     public struct Tab: Sendable {
@@ -140,7 +141,7 @@ public struct TabRibbon: Sendable {
             label += style.dirtyIndicator
         }
         label += " "
-        return label.count + 1 // +1 for separator
+        return UnicodeWidth.displayWidth(of: label) + 1 // +1 for separator
     }
 
     /// Returns a clamped scrollOffset that ensures the given tab index is visible.

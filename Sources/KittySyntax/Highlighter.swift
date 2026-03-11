@@ -6,13 +6,39 @@ import KittyQuery
 final class HighlightScratch {
     struct RawCaptureSpan {
         var byteRange: Range<Int>
-        var style: Style
+        var styleIndex: UInt8
         var patternIndex: Int
     }
 
     var rawSpans: [RawCaptureSpan] = []
-    var byteStyles: [Style?] = []
+    /// Palette of unique styles used in current highlight pass (max 255 + 1 sentinel).
+    var stylePalette: [Style] = []
+    /// Maps Style → palette index for deduplication.
+    var styleMap: [Style: UInt8] = [:]
+    /// Per-byte style index (0xFF = no style / use default).
+    var byteStyleIndices: [UInt8] = []
     var spans: [StyledSpan] = []
+
+    /// Returns the palette index for a style, inserting it if new.
+    func paletteIndex(for style: Style) -> UInt8 {
+        if let existing = styleMap[style] {
+            return existing
+        }
+        let idx = UInt8(clamping: stylePalette.count)
+        stylePalette.append(style)
+        styleMap[style] = idx
+        return idx
+    }
+
+    /// Resets the palette and registers the default style at index 0.
+    func resetPalette(defaultStyle: Style) {
+        stylePalette.removeAll(keepingCapacity: true)
+        styleMap.removeAll(keepingCapacity: true)
+        // Default style is always index 0 — ensures unstyled bytes
+        // coalesce with explicitly-default-styled bytes.
+        stylePalette.append(defaultStyle)
+        styleMap[defaultStyle] = 0
+    }
 }
 
 /// Combines parsing, querying, and theming to produce styled text.
@@ -66,16 +92,19 @@ public final class Highlighter: Sendable {
             return [StyledSpan(text: source, style: theme.defaultStyle)]
         }
 
+        let defaultStyle = theme.defaultStyle
+        scratch.resetPalette(defaultStyle: defaultStyle)
         scratch.rawSpans.removeAll(keepingCapacity: true)
         scratch.rawSpans.reserveCapacity(matches.reduce(into: 0) { $0 += $1.captures.count })
 
         for match in matches {
             for capture in match.captures {
                 let style = theme.style(for: capture.name)
+                let idx = scratch.paletteIndex(for: style)
                 scratch.rawSpans.append(
                     .init(
                         byteRange: capture.node.byteRange,
-                        style: style,
+                        styleIndex: idx,
                         patternIndex: match.patternIndex
                     )
                 )
@@ -98,32 +127,37 @@ public final class Highlighter: Sendable {
             return a.byteRange.upperBound < b.byteRange.upperBound
         }
 
-        // Build per-byte style map
-        scratch.byteStyles.removeAll(keepingCapacity: true)
-        scratch.byteStyles.reserveCapacity(utf8.count)
-        scratch.byteStyles.append(contentsOf: repeatElement(nil, count: utf8.count))
+        // Build per-byte style index map (1 byte per source byte instead of ~32)
+        // Index 0 = defaultStyle, registered in resetPalette().
+        let defaultIdx: UInt8 = 0
+        scratch.byteStyleIndices.removeAll(keepingCapacity: true)
+        scratch.byteStyleIndices.reserveCapacity(utf8.count)
+        scratch.byteStyleIndices.append(contentsOf: repeatElement(defaultIdx, count: utf8.count))
 
         for span in scratch.rawSpans {
             let start = min(max(span.byteRange.lowerBound, 0), utf8.count)
             let end = min(max(span.byteRange.upperBound, start), utf8.count)
+            let idx = span.styleIndex
             for i in start..<end {
-                scratch.byteStyles[i] = span.style
+                scratch.byteStyleIndices[i] = idx
             }
         }
 
-        // Coalesce into spans
+        // Coalesce into spans — index comparison works because defaultStyle
+        // is always palette index 0, so unstyled and explicitly-default bytes match.
+        let palette = scratch.stylePalette
         scratch.spans.removeAll(keepingCapacity: true)
         scratch.spans.reserveCapacity(min(scratch.rawSpans.count + 1, utf8.count))
         var pos = 0
         while pos < utf8.count {
-            let style = scratch.byteStyles[pos] ?? theme.defaultStyle
+            let styleIdx = scratch.byteStyleIndices[pos]
             var end = pos + 1
-            while end < utf8.count && (scratch.byteStyles[end] ?? theme.defaultStyle) == style {
+            while end < utf8.count && scratch.byteStyleIndices[end] == styleIdx {
                 end += 1
             }
             let text = String(decoding: UnsafeBufferPointer(rebasing: utf8[pos..<end]), as: UTF8.self)
             if !text.isEmpty {
-                scratch.spans.append(StyledSpan(text: text, style: style))
+                scratch.spans.append(StyledSpan(text: text, style: palette[Int(styleIdx)]))
             }
             pos = end
         }

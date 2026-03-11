@@ -70,17 +70,18 @@ struct ApplicationRuntimeTests {
         let mock = MockTerminalConnection()
         let runtime = ApplicationRuntime(connection: mock)
         var events: [InputEvent] = []
-        var renderCount = 0
+        var renderCallCount = 0
+        var refreshEventCount = 0
 
         try await runtime.run(
             render: { _ in
-                renderCount += 1
+                renderCallCount += 1
             },
             onEvent: { event, _ in
                 events.append(event)
                 switch event {
                 case .refresh:
-                    renderCount += 1
+                    refreshEventCount += 1
                     return true
                 case .key(let key):
                     return key.keyCode != 3
@@ -94,14 +95,17 @@ struct ApplicationRuntimeTests {
             }
         )
 
-        #expect(renderCount == 2)
+        #expect(renderCallCount == 1)
+        #expect(refreshEventCount == 1)
         #expect(events.count == 2)
         let refreshEvent = try #require(events.first)
-        guard case .refresh = refreshEvent else {
-            throw RuntimeEventExpectationError.expectedRefresh
+        if case .refresh = refreshEvent { } else {
+            Issue.record("Expected .refresh, got \(refreshEvent)")
         }
-        guard case .key(let key) = try #require(events.last) else {
-            throw RuntimeEventExpectationError.expectedQuitKey
+        let lastEvent = try #require(events.last)
+        guard case .key(let key) = lastEvent else {
+            Issue.record("Expected .key, got \(lastEvent)")
+            return
         }
         #expect(key.keyCode == 3)
     }
@@ -117,9 +121,4 @@ struct ApplicationRuntimeTests {
             bytes[index...].starts(with: subsequence)
         }
     }
-}
-
-private enum RuntimeEventExpectationError: Error {
-    case expectedQuitKey
-    case expectedRefresh
 }
