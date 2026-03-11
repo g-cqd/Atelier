@@ -30,18 +30,7 @@ func render(pipeline: RenderPipeline, state: EditorState) {
 
     // Tab ribbon
     if showTabRibbon {
-        let tabs = state.bufferManager.buffers.map { buf in
-            let status = state.config.showGitStatus && state.config.gitDecorations.showTabRibbonStatus
-                ? state.fileStatusProvider?.status(for: buf.filePath)
-                : nil
-            return TabRibbon.Tab(
-                name: buf.fileName,
-                isDirty: buf.isDirty,
-                isPreview: buf.isPreview,
-                statusIndicator: status?.indicator.isEmpty == false ? status?.indicator : nil,
-                statusStyle: status.map { colorScheme.gitStatusStyle(for: $0.statusColor) }
-            )
-        }
+        let tabs = state.tabRibbonTabs()
         let theme = state.config.theme
         var tabStyle = TabRibbon.TabRibbonStyle()
         if let s = theme.resolvedStyle(theme.tabActiveForeground, bold: true) {

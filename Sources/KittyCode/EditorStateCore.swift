@@ -349,9 +349,24 @@ final class EditorState {
 
     /// Adjust `tabScrollOffset` so the active tab is visible within the given ribbon width.
     func ensureActiveTabVisible(ribbonWidth: Int) {
-        let tabs = bufferManager.buffers.map { TabRibbon.Tab(name: $0.fileName, isDirty: $0.isDirty) }
+        let tabs = tabRibbonTabs()
         let ribbon = TabRibbon(tabs: tabs, activeIndex: bufferManager.activeIndex, scrollOffset: tabScrollOffset)
         tabScrollOffset = ribbon.clampedScrollOffset(activeIndex: bufferManager.activeIndex, ribbonWidth: ribbonWidth)
+    }
+
+    func tabRibbonTabs() -> [TabRibbon.Tab] {
+        bufferManager.buffers.map { buf in
+            let status = config.showGitStatus && config.gitDecorations.showTabRibbonStatus
+                ? fileStatusProvider?.status(for: buf.filePath)
+                : nil
+            return TabRibbon.Tab(
+                name: buf.fileName,
+                isDirty: buf.isDirty,
+                isPreview: buf.isPreview,
+                statusIndicator: status?.indicator.isEmpty == false ? status?.indicator : nil,
+                statusStyle: status.map { colorScheme.gitStatusStyle(for: $0.statusColor) }
+            )
+        }
     }
 
     // MARK: - File tree (backed by KittyFileTree)

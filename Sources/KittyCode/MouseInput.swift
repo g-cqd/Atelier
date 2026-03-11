@@ -110,24 +110,17 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     // Tab ribbon click (mouse coords are 1-based, tab ribbon row uses layout.contentStartRow)
     if layout.showTabRibbon && mouse.row == layout.contentStartRow && mouse.col - 1 >= layout.editorStart {
         guard !isRightClick else { return }
-        let tabs = state.bufferManager.buffers.map { buf in
-            let status = state.config.showGitStatus && state.config.gitDecorations.showTabRibbonStatus
-                ? state.fileStatusProvider?.status(for: buf.filePath)
-                : nil
-            return TabRibbon.Tab(
-                name: buf.fileName,
-                isDirty: buf.isDirty,
-                isPreview: buf.isPreview,
-                statusIndicator: status?.indicator.isEmpty == false ? status?.indicator : nil,
-                statusStyle: status.map { state.colorScheme.gitStatusStyle(for: $0.statusColor) }
-            )
-        }
+        let tabs = state.tabRibbonTabs()
         let ribbon = TabRibbon(
             tabs: tabs,
             activeIndex: state.bufferManager.activeIndex,
             scrollOffset: state.tabScrollOffset
         )
-        if let tabIdx = ribbon.tabIndex(atColumn: mouse.col - 1, ribbonX: layout.editorStart) {
+        if let tabIdx = ribbon.tabIndex(
+            atColumn: mouse.col - 1,
+            ribbonX: layout.editorStart,
+            ribbonWidth: layout.editorWidth
+        ) {
             if isDoubleClick && tabIdx == state.bufferManager.activeIndex,
                let buf = state.bufferManager.activeBuffer, buf.isPreview {
                 buf.isPreview = false

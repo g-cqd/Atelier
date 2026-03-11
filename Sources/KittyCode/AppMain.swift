@@ -72,13 +72,12 @@ struct KittyCodeEntry {
 
         try await runtime.run(
             render: { pipeline in
-                pipeline.buffer.clear()
-                render(pipeline: pipeline, state: state)
+                renderFrame(pipeline: pipeline, state: state)
             },
             onEvent: { event, pipeline in
                 let shouldContinue = handleEvent(event: event, state: state, pipeline: pipeline)
                 if shouldContinue {
-                    render(pipeline: pipeline, state: state)
+                    renderFrame(pipeline: pipeline, state: state)
                 }
                 return shouldContinue
             },
