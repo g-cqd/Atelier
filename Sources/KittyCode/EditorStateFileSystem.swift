@@ -8,7 +8,7 @@ extension EditorState {
 
     func loadInitialTree() async {
         let expandedPaths = collectExpandedPaths(treeNodes)
-        treeNodes = await DirectoryScanner.scanAsync(rootPath, maxDepth: 1)
+        treeNodes = await DirectoryScanner.scanAsync(rootPath, maxDepth: 1, visibility: fileVisibility)
         if !expandedPaths.isEmpty {
             restoreExpandedPaths(expandedPaths, in: &treeNodes)
         }
@@ -35,7 +35,7 @@ extension EditorState {
         for i in nodes.indices {
             if nodes[i].isDirectory && paths.contains(nodes[i].path) {
                 if !nodes[i].isExpanded {
-                    FileTreeNavigator.toggleExpand(in: &nodes, at: nodes[i].path)
+                    FileTreeNavigator.toggleExpand(in: &nodes, at: nodes[i].path, visibility: fileVisibility)
                 }
                 if !nodes[i].children.isEmpty {
                     restoreExpandedPaths(paths, in: &nodes[i].children)
@@ -58,7 +58,7 @@ extension EditorState {
         guard index < flat.count else { return }
         let node = flat[index].node
         guard node.isDirectory else { return }
-        FileTreeNavigator.toggleExpand(in: &treeNodes, at: node.path)
+        FileTreeNavigator.toggleExpand(in: &treeNodes, at: node.path, visibility: fileVisibility)
         refreshFlatTree()
     }
 
@@ -334,7 +334,7 @@ extension EditorState {
         guard isCurrentOpenRequest(requestID) else { return }
 
         let newIndex: Int
-        if config.tabPersistence == .preview {
+        if config.tabRibbon.persistence == .preview {
             newIndex = bufferManager.openPreview(
                 filePath: path,
                 fileName: name,
@@ -387,7 +387,7 @@ extension EditorState {
         let language = buffer.language
         let theme = syntaxTheme
         let textBuffer = buffer.textBuffer
-        let shouldHighlight = config.syntaxHighlighting && !(language.map(config.disabledLanguages.contains) ?? false)
+        let shouldHighlight = config.syntax.enabled && !(language.map(config.syntax.disabledLanguages.contains) ?? false)
         let showGrammarLoading = shouldHighlight && language != nil
         let tabSize = config.editor.tabSize
 

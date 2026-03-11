@@ -35,21 +35,39 @@ struct KittyCodeEntry {
         let refreshSource = RenderRefreshSource()
         state.renderRefreshSource = refreshSource
 
-        if config.showGitStatus, let repositoryRoot = GitStatusProvider.repositoryRoot(for: rootPath) {
+        if config.git.enabled, let repositoryRoot = GitStatusProvider.repositoryRoot(for: rootPath) {
             let gitProvider = GitStatusProvider(rootPath: repositoryRoot)
             state.fileStatusProvider = gitProvider
             state.gitLineDecorationProvider = gitProvider
             state.gitDecorationManager = GitDecorationManager(
                 workspace: state.workspace,
                 gitConfig: GitDecorationConfig(
-                    showGitStatus: config.showGitStatus,
-                    showLineChanges: config.gitDecorations.showLineChanges,
-                    lineChangeDebounceMilliseconds: config.gitDecorations.lineChangeDebounceMilliseconds,
-                    maxLineDiffBytes: config.gitDecorations.maxLineDiffBytes
+                    showGitStatus: config.git.enabled,
+                    showLineChanges: config.git.decorations.showLineChanges,
+                    lineChangeDebounceMilliseconds: config.git.decorations.lineChangeDebounceMilliseconds,
+                    maxLineDiffBytes: config.git.decorations.maxLineDiffBytes
                 ),
                 gitLineDecorationProvider: gitProvider,
                 invalidateRender: { [refreshSource] in refreshSource.invalidate() }
             )
+        }
+
+        // Config file watcher
+        let configWatcher = FileWatcher()
+        let configPath = KittyConfig.configURL.path
+        let configWatchTask: Task<Void, Never>?
+        if FileManager.default.fileExists(atPath: configPath) {
+            await configWatcher.watchFile(configPath)
+            configWatchTask = Task { @MainActor in
+                for await event in configWatcher.events {
+                    guard case .fileChanged = event else { continue }
+                    let newConfig = KittyConfig.load()
+                    state.applyConfig(newConfig)
+                    refreshSource.invalidate()
+                }
+            }
+        } else {
+            configWatchTask = nil
         }
 
         // File watcher (Phase 3)
@@ -64,11 +82,11 @@ struct KittyCodeEntry {
 
         // Auto-save (Phase 5)
         var autoSaveManager: AutoSaveManager?
-        if config.autoSave {
+        if config.autoSave.enabled {
             let manager = AutoSaveManager(
                 workspace: state.workspace,
                 fileWatcherIntegration: fileWatcherIntegration,
-                autoSaveInterval: config.autoSaveInterval,
+                autoSaveInterval: config.autoSave.interval,
                 saveActiveBuffer: { [weak state] in state?.writeBufferToDisk() }
             )
             manager.start()
@@ -77,11 +95,11 @@ struct KittyCodeEntry {
 
         // Git refresh (Phase 6)
         var gitRefreshManager: GitRefreshManager?
-        if config.showGitStatus, state.fileStatusProvider != nil {
+        if config.git.enabled, state.fileStatusProvider != nil {
             let manager = GitRefreshManager(
                 fileStatusProvider: state.fileStatusProvider,
                 gitDecorationManager: state.gitDecorationManager,
-                refreshInterval: config.gitRefreshInterval,
+                refreshInterval: config.git.refreshInterval,
                 invalidateRender: { [refreshSource] in refreshSource.invalidate() }
             )
             manager.refreshNow()
@@ -109,6 +127,8 @@ struct KittyCodeEntry {
         )
 
         // Cleanup
+        configWatchTask?.cancel()
+        await configWatcher.stop()
         autoSaveManager?.stop()
         gitRefreshManager?.stop()
         state.gitDecorationManager?.stop()

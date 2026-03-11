@@ -9,6 +9,7 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
     switch event {
     case .key(let key):
         guard key.eventType != .release else { return true }
+        cancelPendingAcceleratedScroll(state: state, resetBurst: true)
         state.isScrolling = false
 
         if state.contextMenu != nil {
@@ -63,6 +64,14 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
             // Ctrl+W closes current tab (nano mode)
             if key.keyCode == AsciiKey.w, state.config.keybindingMode == .nano, state.bufferManager.count > 0 {
                 state.closeCurrentTab()
+                return true
+            }
+            // Ctrl+H cycles file visibility (default → git-filtered → all)
+            if key.keyCode == AsciiKey.h {
+                Task { @MainActor in
+                    await state.cycleFileVisibility()
+                    state.renderRefreshSource?.invalidate()
+                }
                 return true
             }
         }

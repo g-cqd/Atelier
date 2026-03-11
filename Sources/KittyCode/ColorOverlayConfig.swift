@@ -6,11 +6,19 @@ struct ColorOverlayConfig: Codable, Sendable, Equatable {
     var alpha: Double = 1
 
     init(color: ColorRGB, alpha: Double = 1) {
-        self.color = color
-        self.alpha = min(1, max(0, alpha))
+        self.color = ColorRGB(r: color.r, g: color.g, b: color.b)
+        self.alpha = min(1, max(0, alpha * color.alpha))
     }
 
     init(from decoder: Decoder) throws {
+        if let singleValue = try? decoder.singleValueContainer(),
+           let hex = try? singleValue.decode(String.self),
+           let parsed = ColorRGB(hex: hex) {
+            self.color = ColorRGB(r: parsed.r, g: parsed.g, b: parsed.b)
+            self.alpha = parsed.alpha
+            return
+        }
+
         if let singleValue = try? decoder.singleValueContainer(),
            let color = try? singleValue.decode(ColorRGB.self) {
             self = ColorOverlayConfig(color: color)

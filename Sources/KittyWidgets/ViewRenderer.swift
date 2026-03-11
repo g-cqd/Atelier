@@ -417,6 +417,17 @@ public enum ViewRenderer {
                         }
                     }
 
+                    if wsConfig.showLineBreaks && wrapRow == wrappedRows - 1 && col < contentMaxX {
+                        let lbStyle = resolvedLineStyle(
+                            from: wsConfig.lineBreakStyle,
+                            lineOverlay: lineOverlay,
+                            isCurrentLine: isCurrentLine,
+                            currentLineStyle: currentLineStyle
+                        )
+                        buffer[row, col] = Cell(character: WhitespaceRenderer.lineBreakGlyph, style: lbStyle)
+                        col += 1
+                    }
+
                     while col < contentMaxX {
                         buffer[row, col] = Cell(character: " ", style: resolvedEditorStyle)
                         col += 1
@@ -920,10 +931,16 @@ public enum ViewRenderer {
         guard alpha > 0 else { return base }
         guard alpha < 1 else { return overlay.color }
 
-        guard case let .rgb(r: overlayRed, g: overlayGreen, b: overlayBlue) = overlay.color,
-              case let .rgb(r: baseRed, g: baseGreen, b: baseBlue) = base
+        guard case let .rgb(r: overlayRed, g: overlayGreen, b: overlayBlue) = overlay.color
         else {
             return overlay.color
+        }
+
+        let (baseRed, baseGreen, baseBlue): (UInt8, UInt8, UInt8)
+        if case let .rgb(r: r, g: g, b: b) = base {
+            (baseRed, baseGreen, baseBlue) = (r, g, b)
+        } else {
+            (baseRed, baseGreen, baseBlue) = (0, 0, 0)
         }
 
         return .rgb(

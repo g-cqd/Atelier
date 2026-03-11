@@ -25,10 +25,11 @@ public enum DirectoryScanner {
     public static func scan(
         _ path: String,
         maxDepth: Int = defaultMaxDepth,
-        maxEntries: Int = defaultMaxEntries
+        maxEntries: Int = defaultMaxEntries,
+        visibility: FileVisibility = .defaultHidden
     ) -> [FileNode] {
         var count = 0
-        return scanDirectory(path, maxDepth: maxDepth, maxEntries: maxEntries, entryCount: &count)
+        return scanDirectory(path, maxDepth: maxDepth, maxEntries: maxEntries, visibility: visibility, entryCount: &count)
     }
 
     /// Async variant that parallelizes subdirectory scanning using a TaskGroup.
@@ -46,10 +47,11 @@ public enum DirectoryScanner {
     public static func scanAsync(
         _ path: String,
         maxDepth: Int = defaultMaxDepth,
-        maxEntries: Int = defaultMaxEntries
+        maxEntries: Int = defaultMaxEntries,
+        visibility: FileVisibility = .defaultHidden
     ) async -> [FileNode] {
         let counter = EntryCounter(limit: maxEntries)
-        return await scanDirectoryAsync(path, maxDepth: maxDepth, counter: counter)
+        return await scanDirectoryAsync(path, maxDepth: maxDepth, visibility: visibility, counter: counter)
     }
 
     // MARK: - Synchronous (original)
@@ -58,16 +60,18 @@ public enum DirectoryScanner {
         _ path: String,
         maxDepth: Int,
         maxEntries: Int,
+        visibility: FileVisibility,
         entryCount: inout Int
     ) -> [FileNode] {
         let fm = FileManager.default
         guard let items = try? fm.contentsOfDirectory(atPath: path) else { return [] }
         var entries: [FileNode] = []
 
-        for item in items.sorted() where !item.hasPrefix(".") {
+        for item in items.sorted() {
             guard entryCount < maxEntries else { break }
             let fullPath = (path as NSString).appendingPathComponent(item)
 
+            guard visibility.shouldInclude(name: item, path: fullPath) else { continue }
             guard isWithinRoot(fullPath, root: path) else { continue }
 
             var isDir: ObjCBool = false
@@ -80,6 +84,7 @@ public enum DirectoryScanner {
                     fullPath,
                     maxDepth: maxDepth - 1,
                     maxEntries: maxEntries,
+                    visibility: visibility,
                     entryCount: &entryCount
                 )
             }
@@ -120,6 +125,7 @@ public enum DirectoryScanner {
     private static func scanDirectoryAsync(
         _ path: String,
         maxDepth: Int,
+        visibility: FileVisibility,
         counter: EntryCounter
     ) async -> [FileNode] {
         let fm = FileManager.default
@@ -129,9 +135,11 @@ public enum DirectoryScanner {
         var fileEntries: [FileNode] = []
         var dirItems: [(name: String, path: String)] = []
 
-        for item in items.sorted() where !item.hasPrefix(".") {
+        for item in items.sorted() {
             guard counter.tryIncrement() else { break }
             let fullPath = (path as NSString).appendingPathComponent(item)
+
+            guard visibility.shouldInclude(name: item, path: fullPath) else { continue }
             guard isWithinRoot(fullPath, root: path) else { continue }
 
             var isDir: ObjCBool = false
@@ -153,6 +161,7 @@ public enum DirectoryScanner {
                         let children = await scanDirectoryAsync(
                             dir.path,
                             maxDepth: maxDepth - 1,
+                            visibility: visibility,
                             counter: counter
                         )
                         return (idx, FileNode(name: dir.name, path: dir.path, isDirectory: true, children: children))
