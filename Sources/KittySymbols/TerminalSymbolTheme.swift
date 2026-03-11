@@ -14,6 +14,14 @@ public struct TerminalSymbolTheme: Sendable {
         case warning
         case position
         case dimensions
+        case gitBranch
+        case gitModified
+        case gitAdded
+        case gitUntracked
+        case gitDeleted
+        case gitConflicted
+        case dirty
+        case close
     }
 
     public struct Glyph: Sendable, Equatable {
@@ -63,9 +71,9 @@ public struct TerminalSymbolTheme: Sendable {
         case .folderOpen:
             return "folder.fill"
         case .file:
-            return "text.document"
+            return "doc.text"
         case .modeTree:
-            return "sidebar.left"
+            return "list.bullet.indent"
         case .modeEdit:
             return "square.and.pencil"
         case .search:
@@ -75,9 +83,25 @@ public struct TerminalSymbolTheme: Sendable {
         case .warning:
             return "exclamationmark.triangle"
         case .position:
-            return "location.fill"
+            return "character.cursor.ibeam"
         case .dimensions:
-            return "rectangle"
+            return "arrow.up.left.and.arrow.down.right"
+        case .gitBranch:
+            return "arrow.triangle.branch"
+        case .gitModified:
+            return "pencil.circle"
+        case .gitAdded:
+            return "plus.circle"
+        case .gitUntracked:
+            return "questionmark.circle"
+        case .gitDeleted:
+            return "minus.circle"
+        case .gitConflicted:
+            return "exclamationmark.triangle"
+        case .dirty:
+            return "circle.fill"
+        case .close:
+            return "xmark"
         }
     }
 
@@ -107,6 +131,22 @@ public struct TerminalSymbolTheme: Sendable {
             return "@"
         case .dimensions:
             return "#"
+        case .gitBranch:
+            return "\u{e0a0}"
+        case .gitModified:
+            return "M"
+        case .gitAdded:
+            return "A"
+        case .gitUntracked:
+            return "?"
+        case .gitDeleted:
+            return "D"
+        case .gitConflicted:
+            return "!"
+        case .dirty:
+            return "●"
+        case .close:
+            return "×"
         }
     }
 }

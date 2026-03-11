@@ -37,6 +37,7 @@ public enum Predicate: Sendable, Equatable {
     case contains(capture: String, value: String)
     case `is`(capture: String, property: String)
     case isNot(capture: String, property: String)
+    case directive(name: String, arguments: [String])
 }
 
 // MARK: - Query Match

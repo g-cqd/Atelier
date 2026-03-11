@@ -153,7 +153,7 @@ public enum QueryMatcher: Sendable {
             return true
 
         case .anchor:
-            return !node.isNamed
+            return true
         }
     }
 

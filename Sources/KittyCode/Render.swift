@@ -41,7 +41,11 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     let mode = state.mode == .tree ? "Tree" : "Edit"
     let position = state.isFileEmpty ? "" : "Ln \(state.cursorRow + 1)/\(state.fileLineCount)"
     let statusLeft = " " + TerminalSymbolRenderer.label(modeGlyph, mode) + "  \(state.statusMessage)"
+    let branchSegment: String? = state.fileStatusProvider?.branchName.map { name in
+        TerminalSymbolRenderer.label(state.symbolTheme[.gitBranch], name)
+    }
     let statusRightCore = [
+        branchSegment,
         position.isEmpty ? nil : TerminalSymbolRenderer.label(state.symbolTheme[.position], position),
         TerminalSymbolRenderer.label(state.symbolTheme[.dimensions], "\(cols)x\(rows)")
     ].compactMap { $0 }.joined(separator: "  ")

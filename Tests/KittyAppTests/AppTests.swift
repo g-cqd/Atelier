@@ -25,7 +25,7 @@ struct ApplicationRuntimeTests {
     @MainActor
     func setupSequences() async throws {
         let mock = MockTerminalConnection()
-        mock.feedInput([0x71]) // 'q' to quit immediately
+        mock.feedInput([0x03]) // Ctrl+C (keyCode 3) to quit immediately
 
         let runtime = ApplicationRuntime(connection: mock)
 

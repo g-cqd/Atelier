@@ -42,6 +42,13 @@ public enum LanguageHighlighter: Sendable {
             return false
         }
 
+        public var isGrammarBacked: Bool {
+            if case .grammar = strategy {
+                return true
+            }
+            return false
+        }
+
         public init(language: String?, theme: Theme = .monokai) {
             self.language = language
             self.theme = theme
@@ -117,6 +124,34 @@ public enum LanguageHighlighter: Sendable {
         Session(language: language, theme: theme)
     }
 
+    public static func detectLanguage(for filename: String) -> String? {
+        BundledLanguageManifest.entry(forFilename: filename)?.name
+    }
+
+    public static var bundledLanguageNames: [String] {
+        BundledLanguageManifest.entries.map(\.name)
+    }
+
+    public static func hasBundledResources(for language: String) -> Bool {
+        guard let entry = BundledLanguageManifest.entry(forLanguage: language) else {
+            return false
+        }
+
+        let bundle = KittySyntaxResources.bundle
+        let subdirectory = "Grammars/\(entry.path)"
+        return bundle.url(forResource: "grammar", withExtension: "json", subdirectory: subdirectory) != nil &&
+            bundle.url(forResource: "highlights", withExtension: "scm", subdirectory: subdirectory) != nil
+    }
+
+    /// Ensures grammar artifacts are loaded for a language, compiling off the main thread.
+    /// Returns true if artifacts became available (newly loaded or already cached).
+    public static func ensureArtifacts(for language: String) async -> Bool {
+        await Task.detached(priority: .userInitiated) {
+            SyntaxArtifactsCache.loadIfNeeded(for: language)
+            return SyntaxArtifactsCache.artifacts(for: language) != nil
+        }.value
+    }
+
     @discardableResult
     public static func prewarmArtifacts<S: Sequence>(for languages: S) async -> Set<String> where S.Element == String {
         await SyntaxArtifactsCache.prewarm(languages: languages)
@@ -138,18 +173,17 @@ private enum SyntaxArtifactsCache {
     private static let storage = StateLock(initialState: [String: SyntaxArtifacts?]())
 
     static func artifacts(for language: String) -> SyntaxArtifacts? {
-        if let cached = storage.withLock({ $0[language] }) {
-            return cached
-        }
+        storage.withLock { $0[language] } ?? nil
+    }
+
+    static func loadIfNeeded(for language: String) {
+        let alreadyCached: Bool = storage.withLock { $0[language] != nil }
+        guard !alreadyCached else { return }
 
         let loaded = loadArtifacts(for: language)
-        return storage.withLock { cache in
-            if let cached = cache[language] {
-                return cached
-            }
-
+        storage.withLock { cache in
+            guard !cache.keys.contains(language) else { return }
             cache[language] = loaded
-            return loaded
         }
     }
 
@@ -185,21 +219,26 @@ private enum SyntaxArtifactsCache {
     }
 
     private static func loadArtifacts(for language: String) -> SyntaxArtifacts? {
+        guard let entry = BundledLanguageManifest.entry(forLanguage: language) else {
+            return nil
+        }
+
         let bundle = KittySyntaxResources.bundle
         guard let grammarURL = bundle.url(
             forResource: "grammar",
             withExtension: "json",
-            subdirectory: "Grammars/\(language)"
+            subdirectory: "Grammars/\(entry.path)"
         ), let queryURL = bundle.url(
             forResource: "highlights",
             withExtension: "scm",
-            subdirectory: "Grammars/\(language)"
+            subdirectory: "Grammars/\(entry.path)"
         ) else {
             return nil
         }
 
         guard let querySource = try? String(contentsOf: queryURL, encoding: .utf8),
               let grammar = try? GrammarLoader.load(from: grammarURL.path),
+              grammar.externals.isEmpty,
               let compiled = try? ParseTableCompiler.compile(grammar),
               let query = try? QueryParser.parse(querySource)
         else {
@@ -259,11 +298,14 @@ private enum HighlightLexicon {
         "import", "from", "as", "is", "in", "not", "and", "or",
         "with", "try", "except", "finally", "raise", "pass", "break",
         "continue", "yield", "lambda", "global", "nonlocal", "assert",
-        "del", "True", "False", "None", "async", "await", "self",
+        "del", "True", "False", "None", "true", "false", "null", "nil",
+        "async", "await", "self", "then", "fi", "done", "esac", "function",
+        "local", "export", "source", "end", "elsif", "unless", "module",
+        "begin", "rescue", "alias", "undef", "repeat", "until",
     ]
     static let pythonTypes: Set<String> = [
         "int", "float", "str", "bool", "list", "dict", "tuple",
-        "set", "bytes", "type", "object", "range",
+        "set", "bytes", "type", "object", "range", "table",
     ]
     static let javaScriptKeywords: Set<String> = [
         "function", "const", "let", "var", "if", "else", "for", "while",
@@ -272,11 +314,19 @@ private enum HighlightLexicon {
         "finally", "throw", "typeof", "instanceof", "in", "of", "async",
         "await", "yield", "void", "delete", "extends", "implements",
         "interface", "type", "enum", "abstract", "static", "public",
-        "private", "protected", "readonly", "override",
+        "private", "protected", "readonly", "override", "struct",
+        "typedef", "union", "goto", "sizeof", "volatile", "inline",
+        "package", "func", "go", "defer", "select", "chan", "range",
+        "map", "trait", "impl", "match", "mut", "pub", "crate", "where",
+        "macro_rules", "unsafe", "extern", "sealed", "record", "when",
+        "companion", "object", "val",
     ]
     static let javaScriptTypes: Set<String> = [
         "string", "number", "boolean", "any", "void", "never",
         "unknown", "undefined", "null", "Array", "Promise", "Map", "Set",
+        "int", "char", "float", "double", "long", "short", "byte",
+        "bool", "usize", "isize", "u8", "u16", "u32", "u64", "i8", "i16",
+        "i32", "i64", "String", "Vec", "Result", "Option",
     ]
     static let swiftKeywords: Set<String> = [
         "import", "struct", "class", "enum", "func", "var", "let", "guard", "if", "else", "switch", "case", "return", "default",
@@ -303,9 +353,9 @@ private func fallbackHighlightLine(_ line: String, language: String?, theme: The
     switch language {
     case "json":
         return fallbackHighlightJSON(line, theme: theme)
-    case "python":
+    case "python", "bash", "ruby", "lua", "toml", "yaml":
         return fallbackHighlightPython(line, theme: theme)
-    case "javascript", "typescript":
+    case "javascript", "typescript", "c", "cpp", "css", "go", "java", "kotlin", "rust":
         return fallbackHighlightJavaScript(line, theme: theme)
     case "swift":
         return fallbackHighlightSwift(line, theme: theme)
