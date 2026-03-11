@@ -27,10 +27,17 @@ public struct ItemSet: Sendable, Equatable, Hashable {
     public func closure(
         productions: [(name: String, symbols: [String])],
         firstSets: [String: Set<String>],
-        rulesByNonTerminal: [String: [Int]]
-    ) -> ItemSet {
+        rulesByNonTerminal: [String: [Int]],
+        limits: GrammarCompilationLimits
+    ) throws(GrammarError) -> ItemSet {
         var result = self.items
         var worklist = Array(self.items)
+
+        guard result.count <= limits.maxItemsPerState else {
+            throw .resourceLimitExceeded(
+                "Parser state exceeded item limit (\(result.count) items, limit \(limits.maxItemsPerState))"
+            )
+        }
 
         while let item = worklist.popLast() {
             let prod = productions[item.ruleIndex]
@@ -47,6 +54,11 @@ public struct ItemSet: Sendable, Equatable, Hashable {
                 for la in lookaheads {
                     let newItem = LRItem(ruleIndex: ruleIdx, dotPosition: 0, lookahead: la)
                     if result.insert(newItem).inserted {
+                        guard result.count <= limits.maxItemsPerState else {
+                            throw .resourceLimitExceeded(
+                                "Parser state exceeded item limit (\(result.count) items, limit \(limits.maxItemsPerState))"
+                            )
+                        }
                         worklist.append(newItem)
                     }
                 }
@@ -61,8 +73,9 @@ public struct ItemSet: Sendable, Equatable, Hashable {
         symbol: String,
         productions: [(name: String, symbols: [String])],
         firstSets: [String: Set<String>],
-        rulesByNonTerminal: [String: [Int]]
-    ) -> ItemSet {
+        rulesByNonTerminal: [String: [Int]],
+        limits: GrammarCompilationLimits
+    ) throws(GrammarError) -> ItemSet {
         var kernel = Set<LRItem>()
         for item in items {
             let prod = productions[item.ruleIndex]
@@ -75,10 +88,11 @@ public struct ItemSet: Sendable, Equatable, Hashable {
                 ))
             }
         }
-        return ItemSet(items: kernel).closure(
+        return try ItemSet(items: kernel).closure(
             productions: productions,
             firstSets: firstSets,
-            rulesByNonTerminal: rulesByNonTerminal
+            rulesByNonTerminal: rulesByNonTerminal,
+            limits: limits
         )
     }
 
