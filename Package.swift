@@ -84,7 +84,7 @@ let package = Package(
         .executableTarget(name: "Demo", dependencies: ["KittyApp"], path: "Demo", swiftSettings: defaultSwiftSettings),
 
         // KittyCode — Terminal code editor
-        .executableTarget(name: "KittyCode", dependencies: ["KittyApp", "KittyText", "KittyFileTree", "KittySyntax", "KittySymbols", "KittyGit"], swiftSettings: defaultSwiftSettings),
+        .executableTarget(name: "KittyCode", dependencies: ["KittyApp", "KittyInput", "KittyText", "KittyFileTree", "KittySyntax", "KittySymbols", "KittyGit"], swiftSettings: defaultSwiftSettings),
 
         // KittySymbols CLI
         .executableTarget(name: "KittySymbolsCLI", dependencies: ["KittySymbols"], swiftSettings: defaultSwiftSettings),

@@ -81,6 +81,11 @@ final class EditorState {
     }
     var highlightedLines: [[StyledSpan]] = [[StyledSpan(text: "", style: .default)]]
 
+    // MARK: - Multi-buffer management
+
+    let bufferManager = BufferManager()
+    var tabScrollOffset: Int = 0
+
     // MARK: - Text buffer (backed by KittyText)
 
     var textBuffer = TextBuffer()
@@ -142,17 +147,20 @@ final class EditorState {
 
     func textDidChange() {
         invalidateTextSnapshotCache()
+        bufferManager.activeBuffer?.isDirty = true
         refreshHighlights()
     }
 
     func textDidChange(_ mutation: TextMutation) {
         invalidateTextSnapshotCache()
+        bufferManager.activeBuffer?.isDirty = true
         refreshHighlights(after: mutation)
     }
 
     func replaceDocumentText(with content: String) {
-        textBuffer = TextBuffer(content)
-        cachedFileLines = nil
+        let lines = TextBuffer.splitLines(from: content)
+        textBuffer = TextBuffer(lines: lines)
+        cachedFileLines = lines
         cachedDocumentText = content
         highlightSession = nil
     }
@@ -181,12 +189,60 @@ final class EditorState {
         set { textCursor.scrollCol = newValue }
     }
 
+    // MARK: - Active buffer synchronization
+
+    /// Save current editor state to the active DocumentBuffer.
+    func saveStateToActiveBuffer() {
+        guard let buf = bufferManager.activeBuffer else { return }
+        buf.textBuffer = textBuffer
+        buf.textCursor = textCursor
+        buf.highlightedLines = highlightedLines
+        buf.highlightSession = highlightSession
+        buf.cachedFileLines = cachedFileLines
+        buf.cachedDocumentText = cachedDocumentText
+        buf.language = currentLanguage
+    }
+
+    /// Restore editor state from the active DocumentBuffer.
+    func restoreStateFromActiveBuffer() {
+        guard let buf = bufferManager.activeBuffer else { return }
+        textBuffer = buf.textBuffer
+        textCursor = buf.textCursor
+        highlightedLines = buf.highlightedLines
+        highlightSession = buf.highlightSession
+        currentLanguage = buf.language
+        fileName = buf.fileName
+        filePath = buf.filePath
+        cachedFileLines = buf.cachedFileLines
+        cachedDocumentText = buf.cachedDocumentText
+    }
+
+    /// Switch to a different tab by index, saving/restoring state.
+    func switchToTab(_ index: Int) {
+        guard index != bufferManager.activeIndex, index >= 0, index < bufferManager.count else { return }
+        saveStateToActiveBuffer()
+        bufferManager.switchTo(index: index)
+        restoreStateFromActiveBuffer()
+    }
+
     // MARK: - File tree (backed by KittyFileTree)
 
     var treeNodes: [FileNode] = []
     var cachedFlatTree: [(depth: Int, node: FileNode)] = []
     var selectedTreeIndex = 0
     var treeScrollOffset = 0
+
+    // MARK: - Activity bar & sidebar
+
+    enum SidebarPanel {
+        case explorer
+        case openDocuments
+    }
+
+    var activeSidebarPanel: SidebarPanel = .explorer
+    var sidebarCollapsed: Bool = false
+    var openFilesScrollOffset: Int = 0
+    var openFilesSelectedIndex: Int = 0
 
     // MARK: - Highlighted document
 
@@ -227,7 +283,21 @@ final class EditorState {
         return theme
     }
 
+    private var syntaxHighlightingEnabled: Bool {
+        guard config.syntaxHighlighting else { return false }
+        if let lang = currentLanguage, config.disabledLanguages.contains(lang) {
+            return false
+        }
+        return true
+    }
+
     func refreshHighlights() {
+        guard syntaxHighlightingEnabled else {
+            highlightedLines = fileContent.map { line in
+                [StyledSpan(text: line, style: colorScheme.editorText)]
+            }
+            return
+        }
         let session = currentHighlightSession()
         if session.prefersLineInput {
             highlightedLines = session.highlightLines(fileContent)
@@ -250,6 +320,10 @@ final class EditorState {
     }
 
     private func refreshHighlights(after mutation: TextMutation) {
+        guard syntaxHighlightingEnabled else {
+            refreshHighlights()
+            return
+        }
         let session = currentHighlightSession()
         guard session.prefersLineInput else {
             refreshHighlights()

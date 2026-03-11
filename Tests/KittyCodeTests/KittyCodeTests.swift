@@ -47,7 +47,10 @@ struct KittyCodeConfigTests {
 @MainActor
 struct KittyCodeNavigationTests {
     private func makeSUT(fileContent: [String], columns: Int = 80, rows: Int = 24) -> (state: EditorState, pipeline: RenderPipeline) {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbonPosition = .hidden
+        let state = EditorState(rootPath: ".", config: config)
         state.mode = .editor
         state.fileContent = fileContent
 
@@ -440,5 +443,231 @@ struct DetectLanguageTests {
 
     @Test func `filename with no extension returns nil`() {
         #expect(EditorState.detectLanguage(for: "Makefile") == nil)
+    }
+}
+
+// MARK: - BufferManager tests
+
+@Suite("BufferManager")
+@MainActor
+struct BufferManagerTests {
+    @Test("open creates a new buffer")
+    func openCreatesBuffer() {
+        let manager = BufferManager()
+        let idx = manager.open(filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
+        #expect(idx == 0)
+        #expect(manager.count == 1)
+        #expect(manager.activeIndex == 0)
+        #expect(manager.activeBuffer?.fileName == "a.swift")
+    }
+
+    @Test("open same file twice returns existing index")
+    func openSameFileTwice() {
+        let manager = BufferManager()
+        let idx1 = manager.open(filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
+        let idx2 = manager.open(filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
+        #expect(idx1 == idx2)
+        #expect(manager.count == 1)
+    }
+
+    @Test("open two different files yields count 2")
+    func openTwoDifferentFiles() {
+        let manager = BufferManager()
+        manager.open(filePath: "/a.swift", fileName: "a.swift", content: "a", language: "swift")
+        manager.open(filePath: "/b.swift", fileName: "b.swift", content: "b", language: "swift")
+        #expect(manager.count == 2)
+        #expect(manager.activeIndex == 1)
+    }
+
+    @Test("nextTab and prevTab cycle through buffers")
+    func tabCycling() {
+        let manager = BufferManager()
+        manager.open(filePath: "/a.swift", fileName: "a.swift", content: "a", language: "swift")
+        manager.open(filePath: "/b.swift", fileName: "b.swift", content: "b", language: "swift")
+        manager.open(filePath: "/c.swift", fileName: "c.swift", content: "c", language: "swift")
+        #expect(manager.activeIndex == 2)
+
+        manager.nextTab()
+        #expect(manager.activeIndex == 0)
+
+        manager.prevTab()
+        #expect(manager.activeIndex == 2)
+    }
+
+    @Test("close dirty buffer returns promptSave")
+    func closeDirtyBuffer() {
+        let manager = BufferManager()
+        manager.open(filePath: "/a.swift", fileName: "a.swift", content: "a", language: "swift")
+        manager.activeBuffer?.isDirty = true
+
+        let result = manager.close(at: 0)
+        #expect(result == .promptSave)
+        #expect(manager.count == 1)
+    }
+
+    @Test("close clean buffer removes it")
+    func closeCleanBuffer() {
+        let manager = BufferManager()
+        manager.open(filePath: "/a.swift", fileName: "a.swift", content: "a", language: "swift")
+        manager.open(filePath: "/b.swift", fileName: "b.swift", content: "b", language: "swift")
+
+        let result = manager.close(at: 0)
+        #expect(result == .closed)
+        #expect(manager.count == 1)
+        #expect(manager.activeBuffer?.fileName == "b.swift")
+    }
+
+    @Test("forceClose removes dirty buffer")
+    func forceCloseDirtyBuffer() {
+        let manager = BufferManager()
+        manager.open(filePath: "/a.swift", fileName: "a.swift", content: "a", language: "swift")
+        manager.activeBuffer?.isDirty = true
+
+        manager.forceClose(at: 0)
+        #expect(manager.count == 0)
+        #expect(manager.isEmpty)
+    }
+}
+
+// MARK: - Config extension tests
+
+@Suite("KittyConfig Extension")
+struct KittyConfigExtensionTests {
+    @Test("old JSON without new fields decodes with defaults")
+    func oldJSONDecodesWithDefaults() throws {
+        let json = """
+        {"keybindingMode": "vim", "treeWidth": 25}
+        """
+        let config = try JSONDecoder().decode(KittyConfig.self, from: Data(json.utf8))
+        #expect(config.keybindingMode == .vim)
+        #expect(config.treeWidth == 25)
+        #expect(config.fileWatcherEnabled == true)
+        #expect(config.autoSave == false)
+        #expect(config.autoSaveInterval == 30)
+        #expect(config.showGitStatus == true)
+        #expect(config.gitRefreshInterval == 10)
+        #expect(config.syntaxHighlighting == true)
+        #expect(config.disabledLanguages.isEmpty)
+        #expect(config.tabRibbonPosition == .top)
+        #expect(config.activityBar.show == true)
+        #expect(config.activityBar.position == .left)
+        #expect(config.keybindings.tabNext == "ctrl+pagedown")
+        #expect(config.keybindings.toggleSidebar == "ctrl+b")
+    }
+
+    @Test("new JSON fields roundtrip correctly")
+    func newFieldsRoundtrip() throws {
+        var config = KittyConfig()
+        config.autoSave = true
+        config.autoSaveInterval = 60
+        config.tabRibbonPosition = .hidden
+        config.activityBar.show = false
+        config.disabledLanguages = ["python", "ruby"]
+
+        let data = try JSONEncoder().encode(config)
+        let decoded = try JSONDecoder().decode(KittyConfig.self, from: data)
+        #expect(decoded.autoSave == true)
+        #expect(decoded.autoSaveInterval == 60)
+        #expect(decoded.tabRibbonPosition == .hidden)
+        #expect(decoded.activityBar.show == false)
+        #expect(decoded.disabledLanguages == ["python", "ruby"])
+    }
+
+    @Test("theme new optional fields default to nil")
+    func themeOptionalFieldsDefault() {
+        let theme = KittyConfig.Theme()
+        #expect(theme.tabActiveBackground == nil)
+        #expect(theme.tabActiveForeground == nil)
+        #expect(theme.activityBarBackground == nil)
+        #expect(theme.openFilesForeground == nil)
+    }
+}
+
+// MARK: - Multi-buffer integration tests
+
+@Suite("Multi-Buffer Integration")
+@MainActor
+struct MultiBufferIntegrationTests {
+    @Test("switching tabs preserves cursor position")
+    func switchTabsPreservesCursor() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbonPosition = .hidden
+        let state = EditorState(rootPath: ".", config: config)
+
+        // Simulate opening first file via bufferManager
+        state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
+        state.restoreStateFromActiveBuffer()
+        state.cursorRow = 0
+        state.cursorCol = 5
+
+        // Simulate opening second file
+        state.saveStateToActiveBuffer()
+        state.bufferManager.open(filePath: "/b.txt", fileName: "b.txt", content: "line1\nline2\nline3", language: nil)
+        state.restoreStateFromActiveBuffer()
+        state.cursorRow = 2
+        state.cursorCol = 3
+
+        // Switch back to first file
+        state.switchToTab(0)
+        #expect(state.cursorRow == 0)
+        #expect(state.cursorCol == 5)
+        #expect(state.fileName == "a.txt")
+
+        // Switch back to second file
+        state.switchToTab(1)
+        #expect(state.cursorRow == 2)
+        #expect(state.cursorCol == 3)
+        #expect(state.fileName == "b.txt")
+    }
+
+    @Test("textDidChange marks active buffer dirty")
+    func textDidChangeMarksDirty() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        let state = EditorState(rootPath: ".", config: config)
+
+        state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
+        state.restoreStateFromActiveBuffer()
+        #expect(state.bufferManager.activeBuffer?.isDirty == false)
+
+        state.textDidChange()
+        #expect(state.bufferManager.activeBuffer?.isDirty == true)
+    }
+}
+
+// MARK: - Syntax config tests
+
+@Suite("Syntax Configuration")
+@MainActor
+struct SyntaxConfigTests {
+    @Test("syntaxHighlighting=false produces plain spans")
+    func syntaxHighlightingDisabled() {
+        var config = KittyConfig()
+        config.syntaxHighlighting = false
+        let state = EditorState(rootPath: ".", config: config)
+        state.fileContent = ["func hello() {", "}"]
+        state.currentLanguage = "swift"
+
+        state.refreshHighlights()
+
+        #expect(state.highlightedLines.count == 2)
+        #expect(state.highlightedLines[0].count == 1)
+        #expect(state.highlightedLines[0][0].text == "func hello() {")
+    }
+
+    @Test("disabled language produces plain spans")
+    func disabledLanguage() {
+        var config = KittyConfig()
+        config.disabledLanguages = ["swift"]
+        let state = EditorState(rootPath: ".", config: config)
+        state.fileContent = ["let x = 42"]
+        state.currentLanguage = "swift"
+
+        state.refreshHighlights()
+
+        #expect(state.highlightedLines.count == 1)
+        #expect(state.highlightedLines[0].count == 1)
+        #expect(state.highlightedLines[0][0].text == "let x = 42")
     }
 }

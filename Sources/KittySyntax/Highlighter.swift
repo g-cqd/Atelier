@@ -85,13 +85,15 @@ public final class Highlighter: Sendable {
             return [StyledSpan(text: source, style: theme.defaultStyle)]
         }
 
-        // Sort: larger ranges first, then earlier patterns first.
-        // This way, more specific (smaller/later) captures override broader ones.
+        // Sort: broader ranges first, then later patterns first.
+        // Since styles are written in order and later writes win, this keeps
+        // smaller captures more specific than broader ones while still honoring
+        // query-file precedence for identical ranges.
         scratch.rawSpans.sort { a, b in
             let aSize = a.byteRange.count
             let bSize = b.byteRange.count
             if aSize != bSize { return aSize > bSize }
-            if a.patternIndex != b.patternIndex { return a.patternIndex < b.patternIndex }
+            if a.patternIndex != b.patternIndex { return a.patternIndex > b.patternIndex }
             if a.byteRange.lowerBound != b.byteRange.lowerBound { return a.byteRange.lowerBound < b.byteRange.lowerBound }
             return a.byteRange.upperBound < b.byteRange.upperBound
         }

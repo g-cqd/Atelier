@@ -31,42 +31,71 @@ extension EditorState {
         let node = flat[index].node
         guard !node.isDirectory else { return }
 
+        openFilePath(node.path, name: node.name)
+    }
+
+    func openFilePath(_ path: String, name: String) {
         // Path traversal protection
-        guard SecurePath.isValid(node.path, root: rootPath) else {
+        guard SecurePath.isValid(path, root: rootPath) else {
             statusMessage = "Access denied: path outside project root"
             return
         }
 
-        // File size check
+        // If already open, just switch to it
+        if let existingIndex = bufferManager.bufferIndex(forPath: path) {
+            if existingIndex != bufferManager.activeIndex {
+                switchToTab(existingIndex)
+            }
+            mode = .editor
+            statusMessage = "Opened \(name) | ^O: Save, ^X: Tree/Quit"
+            if config.keybindingMode == .vim {
+                vimMode = .normal
+                statusMessage = "-- NORMAL -- [\(name)] :w=Save, :q=Quit"
+            }
+            return
+        }
+
         let fileManager = FileManager.default
-        if let attrs = try? fileManager.attributesOfItem(atPath: node.path),
-           let fileSize = attrs[.size] as? Int,
+        let attributes = try? fileManager.attributesOfItem(atPath: path)
+        if let fileSize = attributes?[.size] as? Int,
            fileSize > Self.maxFileSize {
             statusMessage = "File too large (\(fileSize / 1_000_000)MB, limit \(Self.maxFileSize / 1_000_000)MB)"
             return
         }
 
-        guard let data = fileManager.contents(atPath: node.path),
-              let content = String(data: data, encoding: .utf8) else {
-            statusMessage = "Cannot read: \(node.name)"
+        guard let content = try? String(contentsOfFile: path, encoding: .utf8) else {
+            statusMessage = "Cannot read: \(name)"
             return
         }
 
-        fileName = node.name
-        filePath = node.path
-        replaceDocumentText(with: content)
-        textCursor = TextCursor()
-        currentLanguage = Self.detectLanguage(for: node.name)
+        // Save current buffer state before switching
+        saveStateToActiveBuffer()
+
+        let language = Self.detectLanguage(for: name)
+        let modDate = attributes?[.modificationDate] as? Date
+
+        let newIndex = bufferManager.open(
+            filePath: path,
+            fileName: name,
+            content: content,
+            language: language
+        )
+        bufferManager.buffers[newIndex].lastModifiedDate = modDate
+
+        // Restore from the new buffer
+        restoreStateFromActiveBuffer()
         refreshHighlights()
         mode = .editor
-        statusMessage = "Opened \(node.name) | ^O: Save, ^X: Tree/Quit"
+        statusMessage = "Opened \(name) | ^O: Save, ^X: Tree/Quit"
         if config.keybindingMode == .vim {
             vimMode = .normal
-            statusMessage = "-- NORMAL -- [\(node.name)] :w=Save, :q=Quit"
+            statusMessage = "-- NORMAL -- [\(name)] :w=Save, :q=Quit"
         }
 
         // Load grammar artifacts off the main thread, then re-highlight with full syntax
-        if let language = currentLanguage {
+        if let language = currentLanguage,
+           config.syntaxHighlighting,
+           !config.disabledLanguages.contains(language) {
             Task {
                 let available = await LanguageHighlighter.ensureArtifacts(for: language)
                 if available {
@@ -75,6 +104,9 @@ extension EditorState {
                 }
             }
         }
+
+        // Watch the new file
+        // (FileWatcherIntegration handles this via AppMain)
     }
 
     /// Detect language name from file extension.
@@ -90,15 +122,48 @@ extension EditorState {
             return
         }
 
+        writeBufferToDisk()
+    }
+
+    func writeBufferToDisk() {
+        guard !filePath.isEmpty else { return }
         let content = documentText
         do {
             try content.write(toFile: filePath, atomically: true, encoding: .utf8)
+            bufferManager.activeBuffer?.isDirty = false
+            bufferManager.activeBuffer?.lastModifiedDate = Date()
             statusMessage = "Saved: \(fileName)"
             if let provider = fileStatusProvider {
                 Task { await provider.refresh() }
             }
         } catch {
             statusMessage = "Error saving: \(error.localizedDescription)"
+        }
+    }
+
+    func closeCurrentTab() {
+        guard bufferManager.count > 0 else { return }
+        let index = bufferManager.activeIndex
+        let result = bufferManager.close(at: index)
+        switch result {
+        case .promptSave:
+            statusMessage = "Buffer has unsaved changes. Save first (^O) or force close."
+        case .closed:
+            if bufferManager.isEmpty {
+                // Reset to empty editor state
+                fileName = ""
+                filePath = ""
+                currentLanguage = nil
+                replaceDocumentText(with: "")
+                textCursor = TextCursor()
+                highlightedLines = [[StyledSpan(text: "", style: .default)]]
+                invalidateHighlightSession()
+                mode = .tree
+                statusMessage = "All buffers closed"
+            } else {
+                restoreStateFromActiveBuffer()
+                refreshHighlights()
+            }
         }
     }
 

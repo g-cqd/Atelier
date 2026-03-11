@@ -1,66 +1,50 @@
 import Foundation
 import KittyCodecs
 
-struct ColorRGB: Sendable, Equatable {
-    var r: UInt8
-    var g: UInt8
-    var b: UInt8
-
-    var color: Color { .rgb(r: r, g: g, b: b) }
-
-    init(r: UInt8, g: UInt8, b: UInt8) {
-        self.r = r
-        self.g = g
-        self.b = b
-    }
-
-    init?(hex: String) {
-        var value = hex
-        if value.hasPrefix("#") {
-            value = String(value.dropFirst())
-        }
-
-        guard value.count == 6, let rgb = UInt32(value, radix: 16) else {
-            return nil
-        }
-
-        self.r = UInt8((rgb >> 16) & 0xFF)
-        self.g = UInt8((rgb >> 8) & 0xFF)
-        self.b = UInt8(rgb & 0xFF)
-    }
-}
-
-extension ColorRGB: Codable {
-    init(from decoder: Decoder) throws {
-        if let container = try? decoder.singleValueContainer(),
-           let hex = try? container.decode(String.self),
-           let color = ColorRGB(hex: hex) {
-            self = color
-            return
-        }
-
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.r = try container.decode(UInt8.self, forKey: .r)
-        self.g = try container.decode(UInt8.self, forKey: .g)
-        self.b = try container.decode(UInt8.self, forKey: .b)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(String(format: "#%02x%02x%02x", r, g, b))
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case r
-        case g
-        case b
-    }
-}
-
 struct KittyConfig: Codable, Sendable {
     enum KeybindingMode: String, Codable, Sendable {
         case nano
         case vim
+    }
+
+    enum TabRibbonPosition: String, Codable, Sendable {
+        case top
+        case hidden
+    }
+
+    struct ActivityBarConfig: Codable, Sendable {
+        var show: Bool = true
+        var position: Position = .left
+        var items: [String] = ["explorer", "openDocuments"]
+        enum Position: String, Codable, Sendable { case left, right }
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let d = ActivityBarConfig()
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            show = try c.decodeIfPresent(Bool.self, forKey: .show) ?? d.show
+            position = try c.decodeIfPresent(Position.self, forKey: .position) ?? d.position
+            items = try c.decodeIfPresent([String].self, forKey: .items) ?? d.items
+        }
+    }
+
+    struct KeybindingsConfig: Codable, Sendable {
+        var tabNext: String = "ctrl+pagedown"
+        var tabPrev: String = "ctrl+pageup"
+        var tabClose: String? = nil
+        var toggleSidebar: String = "ctrl+b"
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let d = KeybindingsConfig()
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            tabNext = try c.decodeIfPresent(String.self, forKey: .tabNext) ?? d.tabNext
+            tabPrev = try c.decodeIfPresent(String.self, forKey: .tabPrev) ?? d.tabPrev
+            tabClose = try c.decodeIfPresent(String.self, forKey: .tabClose) ?? d.tabClose
+            toggleSidebar = try c.decodeIfPresent(String.self, forKey: .toggleSidebar) ?? d.toggleSidebar
+        }
     }
 
     struct Theme: Codable, Sendable {
@@ -87,6 +71,58 @@ struct KittyConfig: Codable, Sendable {
         var gitUntrackedForeground = ColorRGB(r: 0x8b, g: 0x94, b: 0x9e)
         var gitDeletedForeground = ColorRGB(r: 0xf8, g: 0x51, b: 0x49)
         var gitConflictedForeground = ColorRGB(r: 0xff, g: 0x7b, b: 0x72)
+
+        // Tab ribbon
+        var tabActiveBackground: ColorRGB?
+        var tabActiveForeground: ColorRGB?
+        var tabInactiveBackground: ColorRGB?
+        var tabInactiveForeground: ColorRGB?
+        var tabDirtyIndicator: ColorRGB?
+
+        // Activity bar
+        var activityBarBackground: ColorRGB?
+        var activityBarForeground: ColorRGB?
+        var activityBarActiveForeground: ColorRGB?
+
+        // Open files panel
+        var openFilesForeground: ColorRGB?
+        var openFilesSelectedForeground: ColorRGB?
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let d = Theme()
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            treePanelForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .treePanelForeground) ?? d.treePanelForeground
+            treeSelectedForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .treeSelectedForeground) ?? d.treeSelectedForeground
+            treeDirectoryForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .treeDirectoryForeground) ?? d.treeDirectoryForeground
+            editorForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .editorForeground) ?? d.editorForeground
+            lineNumberForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .lineNumberForeground) ?? d.lineNumberForeground
+            statusBarForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .statusBarForeground) ?? d.statusBarForeground
+            titleBarForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .titleBarForeground) ?? d.titleBarForeground
+            separatorForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .separatorForeground) ?? d.separatorForeground
+            keywordForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .keywordForeground) ?? d.keywordForeground
+            typeForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .typeForeground) ?? d.typeForeground
+            commentForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .commentForeground) ?? d.commentForeground
+            stringForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .stringForeground) ?? d.stringForeground
+            numberForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .numberForeground) ?? d.numberForeground
+            attributeForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .attributeForeground) ?? d.attributeForeground
+            gitModifiedForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .gitModifiedForeground) ?? d.gitModifiedForeground
+            gitAddedForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .gitAddedForeground) ?? d.gitAddedForeground
+            gitUntrackedForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .gitUntrackedForeground) ?? d.gitUntrackedForeground
+            gitDeletedForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .gitDeletedForeground) ?? d.gitDeletedForeground
+            gitConflictedForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .gitConflictedForeground) ?? d.gitConflictedForeground
+            tabActiveBackground = try c.decodeIfPresent(ColorRGB.self, forKey: .tabActiveBackground)
+            tabActiveForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .tabActiveForeground)
+            tabInactiveBackground = try c.decodeIfPresent(ColorRGB.self, forKey: .tabInactiveBackground)
+            tabInactiveForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .tabInactiveForeground)
+            tabDirtyIndicator = try c.decodeIfPresent(ColorRGB.self, forKey: .tabDirtyIndicator)
+            activityBarBackground = try c.decodeIfPresent(ColorRGB.self, forKey: .activityBarBackground)
+            activityBarForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .activityBarForeground)
+            activityBarActiveForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .activityBarActiveForeground)
+            openFilesForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .openFilesForeground)
+            openFilesSelectedForeground = try c.decodeIfPresent(ColorRGB.self, forKey: .openFilesSelectedForeground)
+        }
     }
 
     var keybindingMode: KeybindingMode = .nano
@@ -94,6 +130,52 @@ struct KittyConfig: Codable, Sendable {
     var treeWidth = 30
     var useSFSymbolsInTerminal = true
     var theme = Theme()
+
+    // File watching
+    var fileWatcherEnabled: Bool = true
+
+    // Auto-save
+    var autoSave: Bool = false
+    var autoSaveInterval: TimeInterval = 30
+
+    // Git
+    var showGitStatus: Bool = true
+    var gitRefreshInterval: TimeInterval = 10
+
+    // Syntax
+    var syntaxHighlighting: Bool = true
+    var disabledLanguages: [String] = []
+
+    // Tab ribbon
+    var tabRibbonPosition: TabRibbonPosition = .top
+
+    // Activity bar
+    var activityBar: ActivityBarConfig = .init()
+
+    // Keybindings
+    var keybindings: KeybindingsConfig = .init()
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let d = KittyConfig()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        keybindingMode = try c.decodeIfPresent(KeybindingMode.self, forKey: .keybindingMode) ?? d.keybindingMode
+        wrapLines = try c.decodeIfPresent(Bool.self, forKey: .wrapLines) ?? d.wrapLines
+        treeWidth = try c.decodeIfPresent(Int.self, forKey: .treeWidth) ?? d.treeWidth
+        useSFSymbolsInTerminal = try c.decodeIfPresent(Bool.self, forKey: .useSFSymbolsInTerminal) ?? d.useSFSymbolsInTerminal
+        theme = try c.decodeIfPresent(Theme.self, forKey: .theme) ?? d.theme
+        fileWatcherEnabled = try c.decodeIfPresent(Bool.self, forKey: .fileWatcherEnabled) ?? d.fileWatcherEnabled
+        autoSave = try c.decodeIfPresent(Bool.self, forKey: .autoSave) ?? d.autoSave
+        autoSaveInterval = try c.decodeIfPresent(TimeInterval.self, forKey: .autoSaveInterval) ?? d.autoSaveInterval
+        showGitStatus = try c.decodeIfPresent(Bool.self, forKey: .showGitStatus) ?? d.showGitStatus
+        gitRefreshInterval = try c.decodeIfPresent(TimeInterval.self, forKey: .gitRefreshInterval) ?? d.gitRefreshInterval
+        syntaxHighlighting = try c.decodeIfPresent(Bool.self, forKey: .syntaxHighlighting) ?? d.syntaxHighlighting
+        disabledLanguages = try c.decodeIfPresent([String].self, forKey: .disabledLanguages) ?? d.disabledLanguages
+        tabRibbonPosition = try c.decodeIfPresent(TabRibbonPosition.self, forKey: .tabRibbonPosition) ?? d.tabRibbonPosition
+        activityBar = try c.decodeIfPresent(ActivityBarConfig.self, forKey: .activityBar) ?? d.activityBar
+        keybindings = try c.decodeIfPresent(KeybindingsConfig.self, forKey: .keybindings) ?? d.keybindings
+    }
 
     static func load() -> KittyConfig {
         let fileManager = FileManager.default
