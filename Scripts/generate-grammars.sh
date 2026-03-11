@@ -25,19 +25,39 @@ set -euo pipefail
 
 GRAMMARS_DIR="Sources/KittySyntax/Grammars"
 
-# All 20 languages listed in languages.json
+# All languages listed in languages.json
 ALL_LANGUAGES=(
   json swift javascript typescript python rust go
   c cpp html css bash ruby java kotlin lua toml yaml markdown
 )
 
-# Some tree-sitter repos deviate from the standard naming convention.
-# Map language name -> repo name when they differ.
+# Some grammar sources deviate from the standard tree-sitter org, repo name,
+# or repository layout.
+declare -A OWNER_OVERRIDES=(
+  [kotlin]="fwcd"
+  [lua]="tree-sitter-grammars"
+  [yaml]="tree-sitter-grammars"
+  [markdown]="tree-sitter-grammars"
+)
+
 declare -A REPO_OVERRIDES=(
   [cpp]="tree-sitter-cpp"
-  [bash]="tree-sitter-bash"
+  [typescript]="tree-sitter-typescript"
+)
+
+declare -A SOURCE_SUBDIR_OVERRIDES=(
+  [typescript]="typescript"
   [markdown]="tree-sitter-markdown"
 )
+
+github_owner_for() {
+  local lang="$1"
+  if [[ -v OWNER_OVERRIDES[$lang] ]]; then
+    echo "${OWNER_OVERRIDES[$lang]}"
+  else
+    echo "tree-sitter"
+  fi
+}
 
 repo_name_for() {
   local lang="$1"
@@ -48,16 +68,25 @@ repo_name_for() {
   fi
 }
 
+source_subdir_for() {
+  local lang="$1"
+  if [[ -v SOURCE_SUBDIR_OVERRIDES[$lang] ]]; then
+    echo "${SOURCE_SUBDIR_OVERRIDES[$lang]}"
+  fi
+}
+
 clone_url_for() {
   local lang="$1"
-  echo "https://github.com/tree-sitter/$(repo_name_for "$lang").git"
+  echo "https://github.com/$(github_owner_for "$lang")/$(repo_name_for "$lang").git"
 }
 
 generate_language() {
   local lang="$1"
   local dest="${GRAMMARS_DIR}/${lang}"
   local clone_dir
+  local source_subdir
   clone_dir="$(mktemp -d)"
+  source_subdir="$(source_subdir_for "$lang")"
 
   echo "==> Generating grammar for: ${lang}"
   echo "    Cloning $(clone_url_for "$lang") ..."
@@ -71,25 +100,49 @@ generate_language() {
 
   mkdir -p "${dest}"
 
-  # Copy grammar.json — required
-  if [[ -f "${clone_dir}/grammar.json" ]]; then
-    cp "${clone_dir}/grammar.json" "${dest}/grammar.json"
-    echo "    Copied grammar.json"
-  else
-    echo "    WARNING: grammar.json not found in repo root. Skipping copy." >&2
-  fi
-
-  # Copy highlights.scm — optional (not all repos include one)
+  local grammar_candidates=(
+    "${clone_dir}/grammar.json"
+    "${clone_dir}/src/grammar.json"
+  )
   local scm_candidates=(
     "${clone_dir}/queries/highlights.scm"
     "${clone_dir}/queries/local.scm"
     "${clone_dir}/highlights.scm"
   )
+
+  if [[ -n "${source_subdir}" ]]; then
+    grammar_candidates=(
+      "${clone_dir}/${source_subdir}/grammar.json"
+      "${clone_dir}/${source_subdir}/src/grammar.json"
+      "${grammar_candidates[@]}"
+    )
+    scm_candidates=(
+      "${clone_dir}/${source_subdir}/queries/highlights.scm"
+      "${clone_dir}/${source_subdir}/queries/local.scm"
+      "${clone_dir}/${source_subdir}/highlights.scm"
+      "${scm_candidates[@]}"
+    )
+  fi
+
+  local grammar_copied=false
+  for candidate in "${grammar_candidates[@]}"; do
+    if [[ -f "${candidate}" ]]; then
+      cp "${candidate}" "${dest}/grammar.json"
+      echo "    Copied grammar.json"
+      grammar_copied=true
+      break
+    fi
+  done
+  if [[ "${grammar_copied}" == false ]]; then
+    echo "    WARNING: grammar.json not found. Skipping copy." >&2
+  fi
+
+  # Copy highlights.scm — optional (not all repos include one)
   local scm_copied=false
   for candidate in "${scm_candidates[@]}"; do
     if [[ -f "${candidate}" ]]; then
       cp "${candidate}" "${dest}/highlights.scm"
-      echo "    Copied highlights.scm (from ${candidate##*/clone_dir/})"
+      echo "    Copied highlights.scm"
       scm_copied=true
       break
     fi

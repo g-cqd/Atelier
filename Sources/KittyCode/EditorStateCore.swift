@@ -1,6 +1,7 @@
 import Foundation
 import KittyCodecs
 import KittyFileTree
+import KittyGit
 import KittySymbols
 import KittySyntax
 import KittyText
@@ -25,6 +26,22 @@ final class EditorState {
         var syntaxString: Style
         var syntaxNumber: Style
         var syntaxAttribute: Style
+        var gitModified: Style
+        var gitAdded: Style
+        var gitUntracked: Style
+        var gitDeleted: Style
+        var gitConflicted: Style
+
+        func gitStatusStyle(for color: FileStatusColor) -> Style {
+            switch color {
+            case .modified: return gitModified
+            case .added: return gitAdded
+            case .untracked: return gitUntracked
+            case .deleted: return gitDeleted
+            case .conflicted: return gitConflicted
+            case .clean: return treeBg
+            }
+        }
     }
 
     enum Mode {
@@ -48,6 +65,7 @@ final class EditorState {
     }
 
     var config: KittyConfig
+    var fileStatusProvider: (any FileStatusProvider)?
     var colorScheme: ColorScheme {
         didSet {
             highlightSession = nil
@@ -118,6 +136,10 @@ final class EditorState {
         cachedDocumentText = nil
     }
 
+    func invalidateHighlightSession() {
+        highlightSession = nil
+    }
+
     func textDidChange() {
         invalidateTextSnapshotCache()
         refreshHighlights()
@@ -186,10 +208,22 @@ final class EditorState {
         theme.setStyle(colorScheme.syntaxAttribute, for: "string.special")
         theme.setStyle(colorScheme.syntaxKeyword, for: "constant")
         theme.setStyle(colorScheme.syntaxKeyword, for: "constant.builtin")
+        theme.setStyle(colorScheme.syntaxKeyword, for: "operator")
+        theme.setStyle(colorScheme.syntaxKeyword, for: "keyword.operator")
         theme.setStyle(colorScheme.editorText, for: "variable")
         theme.setStyle(colorScheme.editorText, for: "variable.parameter")
+        theme.setStyle(colorScheme.editorText, for: "delimiter")
+        theme.setStyle(colorScheme.editorText, for: "punctuation")
+        theme.setStyle(colorScheme.editorText, for: "punctuation.delimiter")
+        theme.setStyle(colorScheme.editorText, for: "punctuation.bracket")
+        theme.setStyle(colorScheme.syntaxString, for: "escape")
         theme.setStyle(colorScheme.syntaxAttribute, for: "property")
         theme.setStyle(colorScheme.syntaxAttribute, for: "function")
+        theme.setStyle(colorScheme.syntaxAttribute, for: "label")
+        theme.setStyle(colorScheme.syntaxType, for: "module")
+        theme.setStyle(colorScheme.syntaxType, for: "namespace")
+        theme.setStyle(colorScheme.syntaxKeyword, for: "tag")
+        theme.setStyle(colorScheme.syntaxAttribute, for: "constructor")
         return theme
     }
 

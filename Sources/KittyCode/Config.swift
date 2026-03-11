@@ -81,6 +81,12 @@ struct KittyConfig: Codable, Sendable {
         var stringForeground = ColorRGB(r: 0xa5, g: 0xd6, b: 0xff)
         var numberForeground = ColorRGB(r: 0x79, g: 0xc0, b: 0xff)
         var attributeForeground = ColorRGB(r: 0xd2, g: 0xa8, b: 0xff)
+
+        var gitModifiedForeground = ColorRGB(r: 0xe3, g: 0xb3, b: 0x41)
+        var gitAddedForeground = ColorRGB(r: 0x3f, g: 0xb9, b: 0x50)
+        var gitUntrackedForeground = ColorRGB(r: 0x8b, g: 0x94, b: 0x9e)
+        var gitDeletedForeground = ColorRGB(r: 0xf8, g: 0x51, b: 0x49)
+        var gitConflictedForeground = ColorRGB(r: 0xff, g: 0x7b, b: 0x72)
     }
 
     var keybindingMode: KeybindingMode = .nano

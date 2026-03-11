@@ -26,6 +26,8 @@ public struct TreeView<Value: Sendable>: View, Sendable {
     public var showsVerticalScrollIndicator: Bool
     public var style: TreeViewStyle
     public let rowStyle: @Sendable (Value) -> Style
+    public let rowSuffix: @Sendable (Value) -> String
+    public let rowSuffixStyle: @Sendable (Value) -> Style
 
     public struct TreeViewStyle: Sendable {
         public var normalStyle: Style
@@ -62,7 +64,9 @@ public struct TreeView<Value: Sendable>: View, Sendable {
         showsVerticalScrollIndicator: Bool = false,
         style: TreeViewStyle = TreeViewStyle(),
         label: @escaping @Sendable (Value) -> String,
-        rowStyle: @escaping @Sendable (Value) -> Style = { _ in .default }
+        rowStyle: @escaping @Sendable (Value) -> Style = { _ in .default },
+        rowSuffix: @escaping @Sendable (Value) -> String = { _ in "" },
+        rowSuffixStyle: @escaping @Sendable (Value) -> Style = { _ in .default }
     ) {
         self.root = root
         self.selectedIndex = selectedIndex
@@ -71,6 +75,8 @@ public struct TreeView<Value: Sendable>: View, Sendable {
         self.style = style
         self.label = label
         self.rowStyle = rowStyle
+        self.rowSuffix = rowSuffix
+        self.rowSuffixStyle = rowSuffixStyle
     }
 
     public var body: Never { fatalError() }

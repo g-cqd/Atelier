@@ -43,6 +43,9 @@ public enum Predicates: Sendable {
 
         case .isNot(let capture, let property):
             return checkProperty(capture, property: property, expected: false, captures: captures)
+
+        case .directive:
+            return true
         }
     }
 

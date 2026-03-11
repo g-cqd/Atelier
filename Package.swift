@@ -25,6 +25,7 @@ let package = Package(
         .library(name: "KittyText", targets: ["KittyText"]),
         .library(name: "KittyFileTree", targets: ["KittyFileTree"]),
         .library(name: "KittySymbols", targets: ["KittySymbols"]),
+        .library(name: "KittyGit", targets: ["KittyGit"]),
         .executable(name: "Demo", targets: ["Demo"]),
         .executable(name: "KittyCode", targets: ["KittyCode"]),
         .executable(name: "KittySymbolsCLI", targets: ["KittySymbolsCLI"]),
@@ -53,6 +54,9 @@ let package = Package(
         // Layer 2e — SF Symbols discovery + terminal glyph helpers
         .target(name: "KittySymbols", swiftSettings: defaultSwiftSettings),
 
+        // Layer 2f — Git integration (pluggable)
+        .target(name: "KittyGit", dependencies: ["KittyFileTree", "KittySync"], swiftSettings: defaultSwiftSettings),
+
         // Layer 3a — grammar.json loader + LR table compiler
         .target(name: "KittyGrammar", swiftSettings: defaultSwiftSettings),
 
@@ -65,7 +69,7 @@ let package = Package(
         // Layer 3d — Themes + styled text producer
         .target(
             name: "KittySyntax",
-            dependencies: ["KittyQuery", "KittyRenderer"],
+            dependencies: ["KittyGrammar", "KittyParser", "KittyQuery", "KittyRenderer", "KittySync"],
             resources: [.copy("Grammars")],
             swiftSettings: defaultSwiftSettings
         ),
@@ -80,7 +84,7 @@ let package = Package(
         .executableTarget(name: "Demo", dependencies: ["KittyApp"], path: "Demo", swiftSettings: defaultSwiftSettings),
 
         // KittyCode — Terminal code editor
-        .executableTarget(name: "KittyCode", dependencies: ["KittyApp", "KittyText", "KittyFileTree", "KittySyntax", "KittySymbols"], swiftSettings: defaultSwiftSettings),
+        .executableTarget(name: "KittyCode", dependencies: ["KittyApp", "KittyText", "KittyFileTree", "KittySyntax", "KittySymbols", "KittyGit"], swiftSettings: defaultSwiftSettings),
 
         // KittySymbols CLI
         .executableTarget(name: "KittySymbolsCLI", dependencies: ["KittySymbols"], swiftSettings: defaultSwiftSettings),
@@ -100,5 +104,6 @@ let package = Package(
         .testTarget(name: "KittyTextTests", dependencies: ["KittyText"], swiftSettings: defaultSwiftSettings),
         .testTarget(name: "KittyFileTreeTests", dependencies: ["KittyFileTree"], swiftSettings: defaultSwiftSettings),
         .testTarget(name: "KittySymbolsTests", dependencies: ["KittySymbols"], swiftSettings: defaultSwiftSettings),
+        .testTarget(name: "KittyGitTests", dependencies: ["KittyGit"], swiftSettings: defaultSwiftSettings),
     ]
 )

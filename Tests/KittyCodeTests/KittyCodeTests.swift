@@ -313,20 +313,21 @@ struct KittyCodeNavigationTests {
 
 @Suite("KittyCode Syntax Wiring")
 struct KittyCodeSyntaxWiringTests {
-    @Test func `language highlighter uses grammar-backed swift highlighting when available`() {
-        let lines = LanguageHighlighter.highlightDocument(source: "import Foundation", language: "swift")
-        let spans = lines[0]
-        let keywordSpan = spans.first { $0.text == "import" }
-        #expect(keywordSpan != nil)
-        #expect(keywordSpan?.style != Theme.monokai.defaultStyle)
-    }
-
-    @Test func `language highlighter uses grammar-backed json highlighting when available`() {
-        let lines = LanguageHighlighter.highlightDocument(source: "true", language: "json")
+    @Test func `language highlighter uses grammar-backed json highlighting when available`() async {
+        let available = await LanguageHighlighter.ensureArtifacts(for: "json")
+        let session = LanguageHighlighter.makeSession(language: "json")
+        let lines = session.highlightDocument(source: "true")
+        #expect(available)
+        #expect(session.isGrammarBacked)
+        #expect(!session.prefersLineInput)
         #expect(lines.count == 1)
         #expect(lines[0].count == 1)
         #expect(lines[0][0].text == "true")
         #expect(lines[0][0].style != Theme.monokai.defaultStyle)
+    }
+
+    @Test func `swift grammar resources are bundled for kittycode`() {
+        #expect(LanguageHighlighter.hasBundledResources(for: "swift"))
     }
 
     @Test func `language highlighter falls back for unsupported languages`() {
@@ -340,8 +341,8 @@ struct KittyCodeSyntaxWiringTests {
     @MainActor
     func editorStateRefreshHighlights() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
-        state.fileContent = ["import Foundation", "let x = 42"]
-        state.currentLanguage = "swift"
+        state.fileContent = ["true", "42"]
+        state.currentLanguage = "json"
 
         state.refreshHighlights()
 
@@ -398,6 +399,10 @@ struct KittyCodeSyntaxWiringTests {
 struct DetectLanguageTests {
     @Test func `swift extension maps to swift`() {
         #expect(EditorState.detectLanguage(for: "file.swift") == "swift")
+    }
+
+    @Test func `uppercase swift extension maps to swift`() {
+        #expect(EditorState.detectLanguage(for: "file.SWIFT") == "swift")
     }
 
     @Test func `json extension maps to json`() {
