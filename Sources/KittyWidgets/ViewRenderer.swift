@@ -269,17 +269,15 @@ public enum ViewRenderer {
             var lineIndex = max(0, min(editor.scrollOffset, editor.lineCount))
             while screenRow < rect.height && lineIndex < editor.lineCount {
                 let spans = editor.spans(at: lineIndex)
+                let line = editor.line(at: lineIndex)
                 let wrapTabSize = max(1, editor.tabSize)
-                let totalWidth = max(1, spans.reduce(into: 0) { partial, span in
-                    for char in span.text {
-                        if char == "\t" {
-                            partial += wrapTabSize - (partial % wrapTabSize)
-                        } else {
-                            partial += UnicodeWidth.displayWidth(of: char)
-                        }
-                    }
-                })
-                let wrappedRows = max(1, contentWidth > 0 ? (totalWidth + contentWidth - 1) / contentWidth : 1)
+                let rowStarts = TextEditorLayout.wrappedRowStartColumns(
+                    for: line,
+                    contentWidth: max(1, contentWidth),
+                    tabSize: editor.tabSize
+                )
+                let totalWidth = max(1, TextDisplayMetrics.displayWidth(of: line, tabSize: editor.tabSize))
+                let wrappedRows = rowStarts.count
                 let lineOverlay = editor.lineStyleOverlays[lineIndex]
                 let isCurrentLine = lineIndex == editor.cursorRow
                 let resolvedEditorStyle = resolvedLineStyle(
@@ -340,14 +338,13 @@ public enum ViewRenderer {
                         }
                     }
 
-                    let segStart = wrapRow * max(1, contentWidth)
-                    let segEnd = min(segStart + max(1, contentWidth), totalWidth)
+                    let segStart = rowStarts[wrapRow]
+                    let segEnd = wrapRow + 1 < rowStarts.count ? rowStarts[wrapRow + 1] : totalWidth
                     var col = rect.x + gutterWidth
                     var widthPos = 0
                     var wrapIsLeading = true
                     let wsConfig = editor.whitespaceConfig
-                    for span in spans {
-                        if widthPos >= segEnd { break }
+                    spanLoop: for span in spans {
                         for char in span.text {
                             var displayChar = char
                             var charStyle = span.style
@@ -386,8 +383,16 @@ public enum ViewRenderer {
                                 if width == 0 { width = 1 }
                             }
 
-                            if widthPos + width > segEnd { break }
-                            if widthPos >= segStart && col < contentMaxX {
+                            if widthPos < segStart {
+                                widthPos += width
+                                continue
+                            }
+
+                            if widthPos >= segEnd {
+                                break spanLoop
+                            }
+
+                            if col < contentMaxX {
                                 let style = resolvedLineStyle(
                                     from: charStyle,
                                     lineOverlay: lineOverlay,

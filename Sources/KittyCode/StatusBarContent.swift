@@ -1,16 +1,20 @@
 import Foundation
 
 extension EditorState {
+    private static let statusBarSeparator = " │ "
+
     func statusBarSegments(columns: Int, rows: Int) -> (left: String, right: String) {
-        let left = config.statusBar.leftItems
-            .compactMap(statusBarText(for:))
-            .joined(separator: "  ")
+        let left = joinStatusBarSegments(config.statusBar.leftItems.compactMap(statusBarText(for:)))
         var rightSegments = config.statusBar.rightItems.compactMap(statusBarText(for:))
         if let contextHintText {
             rightSegments.append(contextHintText)
         }
-        let right = rightSegments.joined(separator: "  ")
+        let right = joinStatusBarSegments(rightSegments)
         return (left, right)
+    }
+
+    private func joinStatusBarSegments(_ segments: [String]) -> String {
+        segments.joined(separator: Self.statusBarSeparator)
     }
 
     private func statusBarText(for item: KittyConfig.StatusBarConfig.Item) -> String? {

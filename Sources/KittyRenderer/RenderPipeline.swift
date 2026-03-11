@@ -48,6 +48,16 @@ public final class RenderPipeline: Sendable {
         set { back = newValue }
     }
 
+    /// Resets the back buffer before composing a new frame.
+    ///
+    /// Top-level renderers should call this once per frame so regions that are
+    /// no longer drawn do not leave stale cells behind.
+    public func beginFrame() {
+        back.clear()
+        cursorRow = nil
+        cursorCol = nil
+    }
+
     /// Flushes the diff between the front and back buffers to the terminal.
     ///
     /// The output is wrapped in synchronized-update markers to prevent tearing. When there are
