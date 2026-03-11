@@ -94,6 +94,22 @@ struct SGREncoderTests {
         let expected: [UInt8] = [0x1b, 0x5b] + "59".utf8 + [0x6d]
         #expect(SGREncoder.encodeDiff(from: old, to: new) == expected)
     }
+
+    @Test("Diff encoding reapplies bold after clearing dim")
+    func diffReappliesBoldAfterClearingDim() {
+        let old = Style(dim: true)
+        let new = Style(bold: true)
+        let expected: [UInt8] = [0x1b, 0x5b] + "22;1".utf8 + [0x6d]
+        #expect(SGREncoder.encodeDiff(from: old, to: new) == expected)
+    }
+
+    @Test("Diff encoding reapplies dim after clearing bold")
+    func diffReappliesDimAfterClearingBold() {
+        let old = Style(bold: true)
+        let new = Style(dim: true)
+        let expected: [UInt8] = [0x1b, 0x5b] + "22;2".utf8 + [0x6d]
+        #expect(SGREncoder.encodeDiff(from: old, to: new) == expected)
+    }
 }
 
 @Suite("KeyboardDecoder")
