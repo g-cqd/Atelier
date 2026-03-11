@@ -7,17 +7,23 @@ import KittyWidgets
 
 @MainActor
 func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeline) {
-    let treeWidth = min(state.treePanelWidth, pipeline.columns / 2)
-    let editorStart = treeWidth + 2
-    let contentRows = max(0, pipeline.rows - 2)
-    let treeRect = Rect(x: 1, y: 1, width: treeWidth, height: contentRows)
-    let editorRect = Rect(
-        x: editorStart,
-        y: 1,
-        width: max(0, pipeline.columns - treeWidth - 1),
-        height: contentRows
+    let layout = LayoutMetrics(state: state, columns: pipeline.columns, rows: pipeline.rows)
+    let scrollStep = scrollLinesPerTick(visibleRows: max(1, layout.contentRows))
+
+    let treeRect = Rect(
+        x: layout.activityBarWidth + 1,
+        y: layout.contentStartRow,
+        width: layout.sidebarWidth,
+        height: layout.contentRows
     )
-    let scrollStep = scrollLinesPerTick(visibleRows: max(1, contentRows))
+    // Mouse editorRect uses +1 on x to account for the separator→content gap,
+    // matching the original coordinate convention for TextEditorLayout hit testing.
+    let editorRect = Rect(
+        x: layout.editorStart + 1,
+        y: layout.contentStartRow,
+        width: max(0, pipeline.columns - layout.totalSidebarWidth - 1),
+        height: layout.contentRows
+    )
 
     if mouse.kind == .release {
         state.scrollDragState = nil
@@ -39,7 +45,7 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     if mouse.button.isScroll {
         state.scrollDragState = nil
         state.isScrolling = true
-        if mouse.col <= treeWidth {
+        if mouse.col < layout.editorStart {
             if mouse.button == .scrollUp {
                 state.treeScrollOffset = max(0, state.treeScrollOffset - scrollStep)
             } else if mouse.button == .scrollDown {
@@ -57,6 +63,55 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
 
     guard mouse.kind == .press, mouse.button == .left else { return }
 
+    // Tab ribbon click
+    if layout.showTabRibbon && mouse.row == 1 && mouse.col >= layout.editorStart {
+        let tabs = state.bufferManager.buffers.map { buf in
+            TabRibbon.Tab(name: buf.fileName, isDirty: buf.isDirty)
+        }
+        let ribbon = TabRibbon(
+            tabs: tabs,
+            activeIndex: state.bufferManager.activeIndex,
+            scrollOffset: state.tabScrollOffset
+        )
+        if let tabIdx = ribbon.tabIndex(atColumn: mouse.col, ribbonX: layout.editorStart) {
+            state.switchToTab(tabIdx)
+            state.mode = .editor
+        }
+        return
+    }
+
+    // Activity bar click
+    if state.config.activityBar.show && mouse.col < layout.activityBarWidth && mouse.row >= layout.contentStartRow {
+        let items = state.config.activityBar.items
+        let relativeRow = mouse.row - layout.contentStartRow
+        if relativeRow >= 0, relativeRow < items.count {
+            switch items[relativeRow] {
+            case "explorer":
+                state.activeSidebarPanel = .explorer
+            case "openDocuments":
+                state.activeSidebarPanel = .openDocuments
+            default:
+                break
+            }
+            state.sidebarCollapsed = false
+        }
+        return
+    }
+
+    // Open files panel click
+    if state.activeSidebarPanel == .openDocuments && !state.sidebarCollapsed
+       && mouse.col >= layout.activityBarWidth && mouse.col < layout.editorStart - 1
+       && mouse.row >= layout.contentStartRow {
+        let relativeRow = mouse.row - layout.contentStartRow
+        let bufferIdx = state.openFilesScrollOffset + relativeRow
+        if bufferIdx >= 0, bufferIdx < state.bufferManager.count {
+            state.switchToTab(bufferIdx)
+            state.openFilesSelectedIndex = bufferIdx
+            state.mode = .editor
+        }
+        return
+    }
+
     if beginScrollDragIfNeeded(mouse: mouse, treeRect: treeRect, editorRect: editorRect, state: state) {
         return
     }
@@ -64,15 +119,44 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     state.isScrolling = false
     let now = Date()
     let isDoubleClick = now.timeIntervalSince(state.lastClickTime) < 0.3
-    let contentRow = mouse.row - 2
+    let contentRow = mouse.row - layout.contentStartRow
 
-    if mouse.col <= treeWidth && contentRow >= 0 {
+    if mouse.col >= layout.activityBarWidth && mouse.col < layout.editorStart - 1 && contentRow >= 0 {
         handleTreeClick(contentRow: contentRow, isDoubleClick: isDoubleClick, state: state)
-    } else if contentRow >= 0 {
+    } else if mouse.col >= layout.editorStart && contentRow >= 0 {
         handleEditorClick(mouseRow: mouse.row, mouseCol: mouse.col, editorRect: editorRect, state: state)
     }
 
     state.lastClickTime = now
+}
+
+struct LayoutMetrics {
+    let activityBarWidth: Int
+    let sidebarWidth: Int
+    let totalSidebarWidth: Int
+    let editorStart: Int
+    let contentStartRow: Int
+    let contentRows: Int
+    let showTabRibbon: Bool
+
+    @MainActor
+    init(state: EditorState, columns: Int, rows: Int) {
+        let showAB = state.config.activityBar.show && !state.sidebarCollapsed
+        self.activityBarWidth = showAB ? ActivityBar.width : 0
+        self.showTabRibbon = state.config.tabRibbonPosition == .top && state.bufferManager.count > 0
+        let tabRows = showTabRibbon ? 1 : 0
+        self.contentStartRow = 1 + tabRows
+        self.contentRows = max(0, rows - 2 - tabRows)
+
+        if state.sidebarCollapsed {
+            self.sidebarWidth = 0
+        } else {
+            self.sidebarWidth = min(state.treePanelWidth, columns / 2)
+        }
+        self.totalSidebarWidth = activityBarWidth + sidebarWidth
+        let separatorWidth = sidebarWidth > 0 ? 1 : 0
+        self.editorStart = totalSidebarWidth + separatorWidth
+    }
 }
 
 @MainActor

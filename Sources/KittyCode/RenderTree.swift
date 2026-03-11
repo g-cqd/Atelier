@@ -8,8 +8,7 @@ import KittyWidgets
 func renderTreePanel(
     pipeline: RenderPipeline,
     state: EditorState,
-    treeWidth: Int,
-    contentRows: Int,
+    treeRect: Rect,
     colorScheme: EditorState.ColorScheme
 ) {
     let root = state.treeNodes.map(makeTreeNode)
@@ -30,7 +29,7 @@ func renderTreePanel(
                 trackStyle: Style(fg: .rgb(r: 60, g: 60, b: 60), dim: true),
                 thumbStyle: Style(fg: .rgb(r: 140, g: 140, b: 140), dim: true),
                 trackCharacter: " ",
-                thumbCharacter: "▓"
+                thumbCharacter: "\u{2593}"
             )
         ),
         label: { $0.name },
@@ -45,11 +44,7 @@ func renderTreePanel(
             return colorScheme.gitStatusStyle(for: status.statusColor)
         }
     )
-    view.render(to: &pipeline.buffer, in: Rect(x: 0, y: 1, width: treeWidth, height: contentRows))
-
-    for row in 0..<contentRows {
-        pipeline.buffer.write("│", row: row + 1, col: treeWidth, style: colorScheme.separator)
-    }
+    view.render(to: &pipeline.buffer, in: treeRect)
 }
 
 private func makeTreeNode(_ node: FileNode) -> TreeNode<FileNode> {
