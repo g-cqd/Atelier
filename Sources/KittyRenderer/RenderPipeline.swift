@@ -48,12 +48,12 @@ public final class RenderPipeline: Sendable {
         set { back = newValue }
     }
 
-    /// Resets the back buffer before composing a new frame.
+    /// Prepares for composing a new frame.
     ///
-    /// Top-level renderers should call this once per frame so regions that are
-    /// no longer drawn do not leave stale cells behind.
+    /// The back buffer retains the previous frame's content so that renderers
+    /// that overwrite their entire area only mark truly changed cells as dirty.
+    /// This dramatically reduces diff output during scrolling.
     public func beginFrame() {
-        back.clear()
         cursorRow = nil
         cursorCol = nil
     }

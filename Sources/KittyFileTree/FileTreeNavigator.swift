@@ -35,17 +35,17 @@ public enum FileTreeNavigator {
     /// - Parameters:
     ///   - nodes: The root node array, mutated in place.
     ///   - path: Absolute path identifying the node to toggle.
-    public static func toggleExpand(in nodes: inout [FileNode], at path: String) {
+    public static func toggleExpand(in nodes: inout [FileNode], at path: String, visibility: FileVisibility = .defaultHidden) {
         for i in nodes.indices {
             if nodes[i].path == path {
                 nodes[i].isExpanded.toggle()
                 if nodes[i].isExpanded && nodes[i].children.isEmpty {
-                    nodes[i].children = DirectoryScanner.scan(nodes[i].path, maxDepth: 1)
+                    nodes[i].children = DirectoryScanner.scan(nodes[i].path, maxDepth: 1, visibility: visibility)
                 }
                 return
             }
             if nodes[i].isDirectory {
-                toggleExpand(in: &nodes[i].children, at: path)
+                toggleExpand(in: &nodes[i].children, at: path, visibility: visibility)
             }
         }
     }

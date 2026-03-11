@@ -26,7 +26,7 @@ func renderOpenFilesPanel(
     let icon = state.symbolTheme[.file].text
 
     let items: [ListView.Item] = buffers.map { buffer in
-        let status = state.config.showGitStatus && state.config.gitDecorations.showOpenFilesStatus
+        let status = state.config.git.enabled && state.config.git.decorations.showOpenFilesStatus
             ? state.fileStatusProvider?.status(for: buffer.filePath)
             : nil
         let statusIndicator = status?.indicator.isEmpty == false ? status?.indicator : nil

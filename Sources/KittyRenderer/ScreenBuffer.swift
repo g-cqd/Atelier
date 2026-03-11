@@ -107,6 +107,47 @@ public struct ScreenBuffer: Sendable {
         }
     }
 
+    /// Shifts rows within a rectangular region vertically by `delta` rows.
+    ///
+    /// Positive `delta` shifts content up (for scroll-down); negative shifts down (for scroll-up).
+    /// Cells in the vacated rows are left unchanged — the caller's renderer will overwrite them.
+    /// No dirty bits are set by the shift itself; the subsequent render marks only cells that
+    /// differ from the shifted content.
+    ///
+    /// - Parameters:
+    ///   - regionY: The top row of the region.
+    ///   - regionHeight: The number of rows in the region.
+    ///   - regionX: The left column of the region.
+    ///   - regionWidth: The number of columns in the region.
+    ///   - delta: Number of rows to shift (positive = up, negative = down).
+    public mutating func shiftRows(
+        regionY: Int, regionHeight: Int,
+        regionX: Int, regionWidth: Int,
+        delta: Int
+    ) {
+        guard delta != 0, regionWidth > 0, regionHeight > 0, abs(delta) < regionHeight else { return }
+
+        if delta > 0 {
+            // Scroll down: content moves up
+            for row in regionY..<(regionY + regionHeight - delta) {
+                let dstBase = row &* columns
+                let srcBase = (row &+ delta) &* columns
+                for col in regionX..<(regionX + regionWidth) {
+                    cells[dstBase &+ col] = cells[srcBase &+ col]
+                }
+            }
+        } else {
+            let absDelta = -delta
+            for row in stride(from: regionY + regionHeight - 1, through: regionY + absDelta, by: -1) {
+                let dstBase = row &* columns
+                let srcBase = (row &- absDelta) &* columns
+                for col in regionX..<(regionX + regionWidth) {
+                    cells[dstBase &+ col] = cells[srcBase &+ col]
+                }
+            }
+        }
+    }
+
     /// Resizes the buffer to the new dimensions, preserving the overlapping content.
     ///
     /// Cells within the intersection of the old and new dimensions are copied over.

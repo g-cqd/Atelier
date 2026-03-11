@@ -28,10 +28,10 @@ struct LayoutMetrics {
     init(state: EditorState, columns: Int, rows: Int) {
         let showAB = state.config.activityBar.show && !state.sidebarCollapsed
         self.activityBarWidth = showAB ? ActivityBar.width : 0
-        self.showTabRibbon = state.config.tabRibbonPosition == .top && state.bufferManager.count > 0
+        self.showTabRibbon = state.config.tabRibbon.position == .top && state.bufferManager.count > 0
         let tabRows = showTabRibbon ? 1 : 0
-        self.contentStartRow = 1 + tabRows
-        self.contentRows = max(0, rows - 2 - tabRows)
+        self.contentStartRow = tabRows
+        self.contentRows = max(0, rows - 1 - tabRows)
 
         if state.sidebarCollapsed {
             self.sidebarWidth = 0
