@@ -235,6 +235,56 @@ public enum KittySequences: Sendable {
     public static let disableBracketedPaste: [UInt8] = [0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x6c]
     // CSI ? 2004 l
 
+    // MARK: - Scroll Regions (DECSTBM) & Index
+
+    /// Sets the scrolling region to rows `top`…`bottom` (1-based, inclusive).
+    ///
+    /// Content outside this region is unaffected by SU/SD scroll commands.
+    /// Call `appendResetScrollRegion` to restore full-screen scrolling.
+    @inline(__always)
+    public static func appendSetScrollRegion(top: Int, bottom: Int, to bytes: inout ContiguousArray<UInt8>) {
+        // CSI top ; bottom r
+        bytes.append(0x1b)
+        bytes.append(0x5b)
+        appendDecimal(&bytes, clampedCursorCoordinate(top))
+        bytes.append(0x3b)
+        appendDecimal(&bytes, clampedCursorCoordinate(bottom))
+        bytes.append(0x72) // r
+    }
+
+    /// Resets the scrolling region to the full terminal screen.
+    @inline(__always)
+    public static func appendResetScrollRegion(to bytes: inout ContiguousArray<UInt8>) {
+        // CSI r
+        bytes.append(0x1b)
+        bytes.append(0x5b)
+        bytes.append(0x72)
+    }
+
+    /// Scrolls the content within the active scroll region up by `n` lines.
+    ///
+    /// Lines at the top are removed; new blank lines appear at the bottom.
+    @inline(__always)
+    public static func appendScrollUp(lines: Int, to bytes: inout ContiguousArray<UInt8>) {
+        // CSI n S
+        bytes.append(0x1b)
+        bytes.append(0x5b)
+        appendDecimal(&bytes, clampedCursorCoordinate(lines))
+        bytes.append(0x53) // S
+    }
+
+    /// Scrolls the content within the active scroll region down by `n` lines.
+    ///
+    /// Lines at the bottom are removed; new blank lines appear at the top.
+    @inline(__always)
+    public static func appendScrollDown(lines: Int, to bytes: inout ContiguousArray<UInt8>) {
+        // CSI n T
+        bytes.append(0x1b)
+        bytes.append(0x5b)
+        appendDecimal(&bytes, clampedCursorCoordinate(lines))
+        bytes.append(0x54) // T
+    }
+
     // MARK: - Private
 
     /// Decimal encoding for the optimized ContiguousArray path using lookup table.

@@ -1,6 +1,28 @@
 import KittyTerminal
 import KittyCodecs
 
+/// Describes a terminal-level scroll operation to apply before diffing.
+///
+/// The pipeline uses DECSTBM to restrict scrolling to the given row region,
+/// then SU or SD to physically scroll the terminal display. The front buffer
+/// is shifted to match so the subsequent diff only covers newly exposed rows
+/// and any cells (e.g. sidebar) that were incorrectly scrolled.
+public struct ScrollHint: Sendable {
+    /// Zero-based row index of the top of the scroll region.
+    public var regionTop: Int
+    /// Number of rows in the scroll region.
+    public var regionHeight: Int
+    /// Number of rows to scroll. Positive = content moves up (scroll down);
+    /// negative = content moves down (scroll up).
+    public var delta: Int
+
+    public init(regionTop: Int, regionHeight: Int, delta: Int) {
+        self.regionTop = regionTop
+        self.regionHeight = regionHeight
+        self.delta = delta
+    }
+}
+
 /// Double-buffered render pipeline with synchronized output.
 @MainActor
 public final class RenderPipeline: Sendable {
@@ -26,6 +48,14 @@ public final class RenderPipeline: Sendable {
     ///
     /// When `nil`, the cursor is hidden at the end of the flush sequence.
     public var cursorCol: Int?
+
+    /// Optional hint for terminal-level scrolling via DECSTBM + SU/SD.
+    ///
+    /// When set, `flush()` emits scroll region commands to physically scroll the
+    /// terminal display and shifts the front buffer to match, so DiffRenderer only
+    /// needs to emit newly exposed rows and any sidebar cells that were incorrectly
+    /// scrolled by the full-width terminal scroll.
+    public var scrollHint: ScrollHint?
 
     /// Creates a pipeline backed by the given terminal connection and initial viewport dimensions.
     ///
@@ -70,6 +100,56 @@ public final class RenderPipeline: Sendable {
         outputBuffer.removeAll(keepingCapacity: true)
 
         KittySequences.appendBeginSyncUpdate(to: &outputBuffer)
+
+        // Apply terminal scroll region optimization before diffing.
+        // This physically scrolls the terminal display, then shifts the front
+        // buffer to match, so DiffRenderer only emits the delta.
+        if let hint = scrollHint, hint.delta != 0,
+           abs(hint.delta) < hint.regionHeight, hint.regionHeight > 0 {
+            let top1 = hint.regionTop + 1   // 1-based
+            let bottom1 = hint.regionTop + hint.regionHeight  // 1-based inclusive
+            KittySequences.appendSetScrollRegion(top: top1, bottom: bottom1, to: &outputBuffer)
+            if hint.delta > 0 {
+                KittySequences.appendScrollUp(lines: hint.delta, to: &outputBuffer)
+            } else {
+                KittySequences.appendScrollDown(lines: -hint.delta, to: &outputBuffer)
+            }
+            KittySequences.appendResetScrollRegion(to: &outputBuffer)
+
+            // Shift front buffer rows (full width) to mirror the terminal scroll.
+            front.shiftRows(
+                regionY: hint.regionTop,
+                regionHeight: hint.regionHeight,
+                regionX: 0,
+                regionWidth: front.columns,
+                delta: hint.delta
+            )
+            // Terminal fills vacated rows with blank cells — do the same in front.
+            if hint.delta > 0 {
+                let blankStart = hint.regionTop + hint.regionHeight - hint.delta
+                front.fill(row: blankStart, col: 0, width: front.columns, height: hint.delta, cell: .empty)
+            } else {
+                front.fill(row: hint.regionTop, col: 0, width: front.columns, height: -hint.delta, cell: .empty)
+            }
+
+            // The terminal scroll moved ALL columns, but non-editor columns
+            // (sidebar, separators) weren't written to the back buffer this frame
+            // and thus aren't dirty. Mark any cell where shifted-front differs
+            // from back so DiffRenderer will re-emit it.
+            let cols = back.columns
+            let regionEnd = hint.regionTop + hint.regionHeight
+            for row in hint.regionTop..<regionEnd {
+                let base = row &* cols
+                for col in 0..<cols {
+                    let idx = base &+ col
+                    if front.cells[idx] != back.cells[idx] {
+                        back.dirty.mark(idx)
+                    }
+                }
+            }
+
+            scrollHint = nil
+        }
 
         // Render diff directly into our persistent buffer
         let hasDirty = !back.dirty.isEmpty
