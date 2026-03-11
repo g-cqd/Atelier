@@ -1,10 +1,12 @@
 import KittyInput
 import KittySync
 
-final class RenderRefreshSource: @unchecked Sendable {
+public final class RenderRefreshSource: @unchecked Sendable {
     private let lock = StateLock<(@Sendable () -> Void)?>(initialState: nil)
 
-    func bind(inputSource: InputSource) {
+    public init() {}
+
+    public func bind(inputSource: InputSource) {
         lock.withLock { invalidate in
             invalidate = {
                 inputSource.inject(.refresh)
@@ -12,7 +14,7 @@ final class RenderRefreshSource: @unchecked Sendable {
         }
     }
 
-    func invalidate() {
+    public func invalidate() {
         lock.withLock { invalidate in
             invalidate?()
         }

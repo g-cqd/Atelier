@@ -1,34 +1,63 @@
 import KittyGit
+import KittyText
+
+public struct GitDecorationConfig: Sendable {
+    public var showGitStatus: Bool
+    public var showLineChanges: Bool
+    public var lineChangeDebounceMilliseconds: UInt64
+    public var maxLineDiffBytes: Int
+
+    public init(
+        showGitStatus: Bool,
+        showLineChanges: Bool,
+        lineChangeDebounceMilliseconds: UInt64,
+        maxLineDiffBytes: Int
+    ) {
+        self.showGitStatus = showGitStatus
+        self.showLineChanges = showLineChanges
+        self.lineChangeDebounceMilliseconds = lineChangeDebounceMilliseconds
+        self.maxLineDiffBytes = maxLineDiffBytes
+    }
+}
 
 @MainActor
-final class GitDecorationManager {
-    private let state: EditorState
-    private let refreshSource: RenderRefreshSource
+public final class GitDecorationManager {
+    private let workspace: WorkspaceSession
+    private let gitConfig: GitDecorationConfig
+    private let gitLineDecorationProvider: (any GitLineDecorationProvider)?
+    private let invalidateRender: @MainActor () -> Void
     private var task: Task<Void, Never>?
 
-    init(state: EditorState, refreshSource: RenderRefreshSource) {
-        self.state = state
-        self.refreshSource = refreshSource
+    public init(
+        workspace: WorkspaceSession,
+        gitConfig: GitDecorationConfig,
+        gitLineDecorationProvider: (any GitLineDecorationProvider)?,
+        invalidateRender: @MainActor @escaping () -> Void
+    ) {
+        self.workspace = workspace
+        self.gitConfig = gitConfig
+        self.gitLineDecorationProvider = gitLineDecorationProvider
+        self.invalidateRender = invalidateRender
     }
 
-    func scheduleRefreshForActiveBuffer(debounced: Bool = true) {
+    public func scheduleRefreshForActiveBuffer(debounced: Bool = true) {
         task?.cancel()
 
-        guard state.config.showGitStatus,
-              state.config.gitDecorations.showLineChanges,
-              let provider = state.gitLineDecorationProvider,
-              let buffer = state.bufferManager.activeBuffer,
+        guard gitConfig.showGitStatus,
+              gitConfig.showLineChanges,
+              let provider = gitLineDecorationProvider,
+              let buffer = workspace.bufferManager.activeBuffer,
               !buffer.filePath.isEmpty
         else {
             clearActiveDecorations()
             return
         }
 
-        let textBuffer = state.textBuffer
+        let textBuffer = workspace.textBuffer
         let path = buffer.filePath
         let version = buffer.documentVersion
-        let debounceMilliseconds = state.config.gitDecorations.lineChangeDebounceMilliseconds
-        let maxLineDiffBytes = state.config.gitDecorations.maxLineDiffBytes
+        let debounceMilliseconds = gitConfig.lineChangeDebounceMilliseconds
+        let maxLineDiffBytes = gitConfig.maxLineDiffBytes
 
         task = Task { [weak self] in
             if debounced {
@@ -50,13 +79,13 @@ final class GitDecorationManager {
         }
     }
 
-    func stop() {
+    public func stop() {
         task?.cancel()
         task = nil
     }
 
     private func apply(_ decorations: GitLineDecorations, for path: String, version: Int) {
-        guard let buffer = state.bufferManager.activeBuffer,
+        guard let buffer = workspace.bufferManager.activeBuffer,
               buffer.filePath == path,
               buffer.documentVersion == version
         else {
@@ -64,25 +93,25 @@ final class GitDecorationManager {
         }
 
         buffer.gitLineDecorations = decorations
-        refreshSource.invalidate()
+        invalidateRender()
     }
 
     private func clearActiveDecorations() {
         task?.cancel()
         task = nil
 
-        guard let buffer = state.bufferManager.activeBuffer,
+        guard let buffer = workspace.bufferManager.activeBuffer,
               !buffer.gitLineDecorations.isEmpty
         else {
             return
         }
 
         buffer.gitLineDecorations = .empty
-        refreshSource.invalidate()
+        invalidateRender()
     }
 
     private func clearActiveDecorations(for path: String, version: Int) {
-        guard let buffer = state.bufferManager.activeBuffer,
+        guard let buffer = workspace.bufferManager.activeBuffer,
               buffer.filePath == path,
               buffer.documentVersion == version,
               !buffer.gitLineDecorations.isEmpty
@@ -91,7 +120,7 @@ final class GitDecorationManager {
         }
 
         buffer.gitLineDecorations = .empty
-        refreshSource.invalidate()
+        invalidateRender()
     }
 
     private nonisolated static func approximateDocumentByteCount(lines: [String]) -> Int {

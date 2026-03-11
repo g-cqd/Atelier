@@ -1,26 +1,28 @@
 import KittyText
 
 @MainActor
-final class BufferManager {
-    enum CloseResult {
+public final class BufferManager {
+    public enum CloseResult {
         case closed
         case promptSave
     }
 
-    private(set) var buffers: [DocumentBuffer] = []
-    private(set) var activeIndex: Int = -1
+    public private(set) var buffers: [DocumentBuffer] = []
+    public private(set) var activeIndex: Int = -1
 
-    var activeBuffer: DocumentBuffer? {
+    public var activeBuffer: DocumentBuffer? {
         guard activeIndex >= 0, activeIndex < buffers.count else { return nil }
         return buffers[activeIndex]
     }
 
-    var count: Int { buffers.count }
+    public var count: Int { buffers.count }
 
-    var isEmpty: Bool { buffers.isEmpty }
+    public var isEmpty: Bool { buffers.isEmpty }
+
+    public init() {}
 
     @discardableResult
-    func open(
+    public func open(
         filePath: String,
         fileName: String,
         content: String,
@@ -44,7 +46,7 @@ final class BufferManager {
         return activeIndex
     }
 
-    func close(at index: Int) -> CloseResult {
+    public func close(at index: Int) -> CloseResult {
         guard index >= 0, index < buffers.count else { return .closed }
         if buffers[index].isDirty {
             return .promptSave
@@ -60,7 +62,7 @@ final class BufferManager {
         return .closed
     }
 
-    func forceClose(at index: Int) {
+    public func forceClose(at index: Int) {
         guard index >= 0, index < buffers.count else { return }
         buffers.remove(at: index)
         if buffers.isEmpty {
@@ -72,33 +74,31 @@ final class BufferManager {
         }
     }
 
-    func switchTo(index: Int) {
+    public func switchTo(index: Int) {
         guard index >= 0, index < buffers.count else { return }
         activeIndex = index
     }
 
-    func nextTab() {
+    public func nextTab() {
         guard buffers.count > 1 else { return }
         activeIndex = (activeIndex + 1) % buffers.count
     }
 
-    func prevTab() {
+    public func prevTab() {
         guard buffers.count > 1 else { return }
         activeIndex = (activeIndex - 1 + buffers.count) % buffers.count
     }
 
-    func bufferIndex(forPath path: String) -> Int? {
+    public func bufferIndex(forPath path: String) -> Int? {
         buffers.firstIndex(where: { $0.filePath == path })
     }
 
-    /// Index of the current preview buffer, if any.
-    var previewIndex: Int? {
+    public var previewIndex: Int? {
         buffers.firstIndex(where: { $0.isPreview })
     }
 
-    /// Open a file as a preview tab, replacing any existing preview buffer.
     @discardableResult
-    func openPreview(
+    public func openPreview(
         filePath: String,
         fileName: String,
         content: String,
@@ -133,8 +133,7 @@ final class BufferManager {
         return activeIndex
     }
 
-    /// Pin the buffer at the given index (remove its preview status).
-    func pinBuffer(at index: Int) {
+    public func pinBuffer(at index: Int) {
         guard index >= 0, index < buffers.count else { return }
         buffers[index].isPreview = false
     }

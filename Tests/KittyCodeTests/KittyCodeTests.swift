@@ -7,6 +7,7 @@ import KittySyntax
 import KittyTerminal
 import KittyText
 import KittyWidgets
+import KittyWorkspace
 import Testing
 @testable import KittyCode
 

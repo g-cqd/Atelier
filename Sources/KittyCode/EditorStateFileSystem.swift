@@ -2,13 +2,9 @@ import Foundation
 import KittyFileTree
 import KittySyntax
 import KittyText
+import KittyWorkspace
 
 extension EditorState {
-    private static let maxFileSize = 50_000_000  // 50MB
-    struct LoadedFile {
-        let content: String
-        let lineEnding: TextDocument.LineEnding
-    }
 
     func loadInitialTree() async {
         let expandedPaths = collectExpandedPaths(treeNodes)
@@ -104,8 +100,8 @@ extension EditorState {
         let fileManager = FileManager.default
         let attributes = try? fileManager.attributesOfItem(atPath: path)
         if let fileSize = attributes?[.size] as? Int,
-           fileSize > Self.maxFileSize {
-            statusMessage = "File too large (\(fileSize / 1_000_000)MB, limit \(Self.maxFileSize / 1_000_000)MB)"
+           fileSize > WorkspaceFileLoading.maxFileSize {
+            statusMessage = "File too large (\(fileSize / 1_000_000)MB, limit \(WorkspaceFileLoading.maxFileSize / 1_000_000)MB)"
             return
         }
 
@@ -121,7 +117,7 @@ extension EditorState {
             guard let self else { return }
 
             do {
-                let loadedFile = try await Self.readUTF8File(at: path)
+                let loadedFile = try await WorkspaceFileLoading.readUTF8File(at: path)
                 guard !Task.isCancelled else { return }
                 guard self.isCurrentOpenRequest(requestID) else { return }
 
@@ -146,21 +142,6 @@ extension EditorState {
     /// Detect language name from file extension.
     static func detectLanguage(for filename: String) -> String? {
         LanguageHighlighter.detectLanguage(for: filename)
-    }
-
-    static func readUTF8File(at path: String) async throws -> LoadedFile {
-        try await Task.detached(priority: .userInitiated) {
-            try Task.checkCancellation()
-            let url = URL(fileURLWithPath: path)
-            let data = try Data(contentsOf: url, options: [.mappedIfSafe])
-            try Task.checkCancellation()
-            let lineEnding = TextDocument.detectLineEnding(in: data)
-
-            guard let content = String(data: data, encoding: .utf8) else {
-                throw CocoaError(.fileReadInapplicableStringEncoding)
-            }
-            return LoadedFile(content: content, lineEnding: lineEnding)
-        }.value
     }
 
     func saveFile() {

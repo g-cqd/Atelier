@@ -1,19 +1,28 @@
 import Foundation
 
 @MainActor
-final class AutoSaveManager {
-    private let state: EditorState
+public final class AutoSaveManager {
+    private let workspace: WorkspaceSession
     private let fileWatcherIntegration: FileWatcherIntegration?
+    private let autoSaveInterval: Double
+    private let saveActiveBuffer: @MainActor () -> Void
     private var task: Task<Void, Never>?
 
-    init(state: EditorState, fileWatcherIntegration: FileWatcherIntegration? = nil) {
-        self.state = state
+    public init(
+        workspace: WorkspaceSession,
+        fileWatcherIntegration: FileWatcherIntegration?,
+        autoSaveInterval: Double,
+        saveActiveBuffer: @MainActor @escaping () -> Void
+    ) {
+        self.workspace = workspace
         self.fileWatcherIntegration = fileWatcherIntegration
+        self.autoSaveInterval = autoSaveInterval
+        self.saveActiveBuffer = saveActiveBuffer
     }
 
-    func start() {
+    public func start() {
         guard task == nil else { return }
-        let interval = state.config.autoSaveInterval
+        let interval = autoSaveInterval
 
         task = Task { [weak self] in
             while !Task.isCancelled {
@@ -24,23 +33,21 @@ final class AutoSaveManager {
         }
     }
 
-    func stop() {
+    public func stop() {
         task?.cancel()
         task = nil
     }
 
     private func saveAllDirtyBuffers() {
-        for buffer in state.bufferManager.buffers where buffer.isDirty {
+        let bufferManager = workspace.bufferManager
+        for buffer in bufferManager.buffers where buffer.isDirty {
             guard !buffer.filePath.isEmpty else { continue }
 
-            // Suppress file watcher for this save
             fileWatcherIntegration?.suppressForSave(buffer.filePath)
 
-            // If this is the active buffer, use the state's save path
-            if buffer === state.bufferManager.activeBuffer {
-                state.writeBufferToDisk()
+            if buffer === bufferManager.activeBuffer {
+                saveActiveBuffer()
             } else {
-                // Save non-active buffer directly
                 let content = buffer.textBuffer.text
                 do {
                     try content.write(toFile: buffer.filePath, atomically: true, encoding: .utf8)

@@ -4,94 +4,94 @@ import KittySyntax
 import KittyText
 
 @MainActor
-final class DocumentBuffer {
-    let document: TextDocument
-    var highlightedLines: [[StyledSpan]]
-    var highlightSession: LanguageHighlighter.Session?
-    var highlightGeneration: Int = 0
-    var gitLineDecorations: GitLineDecorations = .empty
-    var postOpenProcessingTask: Task<Void, Never>?
+public final class DocumentBuffer {
+    public let document: TextDocument
+    public var highlightedLines: [[StyledSpan]]
+    public var highlightSession: LanguageHighlighter.Session?
+    public var highlightGeneration: Int = 0
+    public var gitLineDecorations: GitLineDecorations = .empty
+    public var postOpenProcessingTask: Task<Void, Never>?
 
-    var textBuffer: TextBuffer {
+    public var textBuffer: TextBuffer {
         get { document.textBuffer }
         set { document.textBuffer = newValue }
     }
 
-    var textCursor: TextCursor {
+    public var textCursor: TextCursor {
         get { document.textCursor }
         set { document.textCursor = newValue }
     }
 
-    var cachedFileLines: [String]? {
+    public var cachedFileLines: [String]? {
         get { document.cachedFileLines }
         set { document.cachedFileLines = newValue }
     }
 
-    var cachedDocumentText: String? {
+    public var cachedDocumentText: String? {
         get { document.cachedDocumentText }
         set { document.cachedDocumentText = newValue }
     }
 
-    var cachedMaxLineWidth: Int? {
+    public var cachedMaxLineWidth: Int? {
         get { document.cachedMaxLineWidth }
         set { document.cachedMaxLineWidth = newValue }
     }
 
-    var cachedSerializedByteCount: Int? {
+    public var cachedSerializedByteCount: Int? {
         get { document.cachedSerializedByteCount }
         set { document.cachedSerializedByteCount = newValue }
     }
 
-    var filePath: String {
+    public var filePath: String {
         get { document.filePath }
         set { document.filePath = newValue }
     }
 
-    var fileName: String {
+    public var fileName: String {
         get { document.fileName }
         set { document.fileName = newValue }
     }
 
-    var language: String? {
+    public var language: String? {
         get { document.language }
         set { document.language = newValue }
     }
 
-    var lineEnding: TextDocument.LineEnding {
+    public var lineEnding: TextDocument.LineEnding {
         get { document.lineEnding }
         set { document.lineEnding = newValue }
     }
 
-    var serializedByteCount: Int {
+    public var serializedByteCount: Int {
         document.serializedByteCount
     }
 
-    var isDirty: Bool {
+    public var isDirty: Bool {
         get { document.isDirty }
         set { document.isDirty = newValue }
     }
 
-    var isPreview: Bool {
+    public var isPreview: Bool {
         get { document.isPreview }
         set { document.isPreview = newValue }
     }
 
-    var lastModifiedDate: Date? {
+    public var lastModifiedDate: Date? {
         get { document.lastModifiedDate }
         set { document.lastModifiedDate = newValue }
     }
 
-    var externallyModified: Bool {
+    public var externallyModified: Bool {
         get { document.externallyModified }
         set { document.externallyModified = newValue }
     }
 
-    var documentVersion: Int {
+    public var documentVersion: Int {
         get { document.documentVersion }
         set { document.documentVersion = newValue }
     }
 
-    init(
+    public init(
         filePath: String,
         fileName: String,
         content: String,
