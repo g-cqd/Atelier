@@ -477,8 +477,13 @@ final class EditorState {
 
     var scrollOffset: Int {
         get { textCursor.scrollRow }
-        set { textCursor.scrollRow = newValue }
+        set {
+            textCursor.scrollRow = newValue
+            wrapRowOffset = 0
+        }
     }
+
+    var wrapRowOffset: Int = 0
 
     var hScrollOffset: Int {
         get { textCursor.scrollCol }
@@ -534,6 +539,8 @@ final class EditorState {
     var lastClickIndex = -1
     var isScrolling = false
     var scrollDragState: ScrollDragState?
+    var lastRenderColumns = 80
+    var lastRenderRows = 24
     var lastScrollDirection: MouseButton?
     var blockedMomentumDirection: MouseButton?
     var blockedMomentumDeadline: Date = .distantPast

@@ -44,6 +44,7 @@ func renderEditorPanel(
         buffer: state.textBuffer,
         lineSpans: state.highlightedLines,
         scrollOffset: state.scrollOffset,
+        wrapRowOffset: state.wrapRowOffset,
         horizontalScrollOffset: state.hScrollOffset,
         cursorRow: state.cursorRow,
         cursorCol: state.cursorCol,
