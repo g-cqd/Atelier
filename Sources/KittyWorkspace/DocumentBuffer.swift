@@ -6,11 +6,13 @@ import KittyText
 @MainActor
 public final class DocumentBuffer {
     public let document: TextDocument
+    public let editHistory: BufferEditHistory
     public var highlightedLines: [[StyledSpan]]
     public var highlightSession: LanguageHighlighter.Session?
     public var highlightGeneration: Int = 0
     public var gitLineDecorations: GitLineDecorations = .empty
     public var postOpenProcessingTask: Task<Void, Never>?
+    public var didInvalidateHistoryOnLastRefresh: Bool = false
 
     public var textBuffer: TextBuffer {
         get { document.textBuffer }
@@ -104,6 +106,13 @@ public final class DocumentBuffer {
             content: content,
             language: language,
             lineEnding: lineEnding
+        )
+        self.editHistory = BufferEditHistory(
+            initial: BufferEditSnapshot(
+                textBuffer: document.textBuffer,
+                textCursor: document.textCursor,
+                lineEnding: document.lineEnding
+            )
         )
         self.highlightedLines = [[StyledSpan(text: "", style: .default)]]
     }

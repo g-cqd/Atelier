@@ -17,7 +17,11 @@ extension EditorState: FileWatcherDelegate {
         gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
         schedulePostLoadProcessing(for: buffer, content: content)
         renderRefreshSource?.invalidate()
-        statusMessage = "\(buffer.fileName) reloaded from disk"
+        if buffer.didInvalidateHistoryOnLastRefresh {
+            statusMessage = "\(buffer.fileName) reloaded from disk; undo history cleared"
+        } else {
+            statusMessage = "\(buffer.fileName) reloaded from disk"
+        }
     }
 
     func fileWatcherDidReloadInactiveBuffer(buffer: DocumentBuffer, content: String) {

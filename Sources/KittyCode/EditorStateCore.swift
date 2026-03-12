@@ -131,8 +131,13 @@ final class EditorState {
         case openSelected
         case openSelectedPinned
         case toggleSelectedDirectory
-        case beginNewFile(inDirectory: String)
+        case beginCreateFile(inDirectory: String)
+        case beginCreateDirectory(inDirectory: String)
         case beginSavePrompt(inDirectory: String)
+        case beginRename(path: String)
+        case beginDuplicate(path: String)
+        case beginMove(path: String)
+        case beginDelete(path: String)
         case saveFile
         case focusTree
         case closeTab
@@ -453,30 +458,67 @@ final class EditorState {
         workspace.invalidateHighlightSession()
     }
 
-    func textDidChange() {
+    func activeBufferSnapshot() -> BufferEditSnapshot? {
+        guard bufferManager.activeBuffer != nil else { return nil }
+        return BufferEditSnapshot(
+            textBuffer: textBuffer,
+            textCursor: textCursor,
+            lineEnding: currentLineEnding
+        )
+    }
+
+    private var bufferUndoCoalescingWindow: TimeInterval? {
+        guard config.editor.undoCoalescingEnabled else { return nil }
+        return Double(max(0, config.editor.undoCoalescingMilliseconds)) / 1_000
+    }
+
+    func textDidChange(previousSnapshot: BufferEditSnapshot? = nil) {
         invalidateTextSnapshotCache()
         if let buf = bufferManager.activeBuffer {
             buf.postOpenProcessingTask?.cancel()
             buf.postOpenProcessingTask = nil
-            buf.isDirty = true
             if buf.isPreview { buf.isPreview = false }
             buf.documentVersion += 1
             isLoadingGrammar = false
+            if let previousSnapshot,
+               let currentSnapshot = activeBufferSnapshot()
+            {
+                buf.editHistory.recordChange(
+                    from: previousSnapshot,
+                    to: currentSnapshot,
+                    coalescingWindow: bufferUndoCoalescingWindow
+                )
+                buf.isDirty = buf.editHistory.isDirty(current: currentSnapshot)
+            } else {
+                buf.isDirty = true
+            }
         }
         widenCachedMaxLineWidth(for: textCursor.row..<(textCursor.row + 1))
         refreshHighlights()
         gitDecorationManager?.scheduleRefreshForActiveBuffer()
+        wrapCache.invalidate()
     }
 
-    func textDidChange(_ mutation: TextMutation) {
+    func textDidChange(_ mutation: TextMutation, previousSnapshot: BufferEditSnapshot? = nil) {
         invalidateTextSnapshotCache()
         if let buf = bufferManager.activeBuffer {
             buf.postOpenProcessingTask?.cancel()
             buf.postOpenProcessingTask = nil
-            buf.isDirty = true
             if buf.isPreview { buf.isPreview = false }
             buf.documentVersion += 1
             isLoadingGrammar = false
+            if let previousSnapshot,
+               let currentSnapshot = activeBufferSnapshot()
+            {
+                buf.editHistory.recordChange(
+                    from: previousSnapshot,
+                    to: currentSnapshot,
+                    coalescingWindow: bufferUndoCoalescingWindow
+                )
+                buf.isDirty = buf.editHistory.isDirty(current: currentSnapshot)
+            } else {
+                buf.isDirty = true
+            }
         }
         widenCachedMaxLineWidth(for: mutation.updatedLineRange)
         refreshHighlights(after: mutation)
@@ -631,6 +673,7 @@ final class EditorState {
     var wrapCache = WrapCache()
     var selection: TextSelection?
     var terminalWriter: (([UInt8]) -> Void)?
+    var fileTreeHistory = FileTreeOperationHistory()
 
     var maxLineWidth: Int {
         cachedMaxLineWidth ?? 0
@@ -693,6 +736,76 @@ final class EditorState {
 
     func noteSelectedPath(_ path: String, isDirectory: Bool) {
         treeState.noteSelectedPath(path, isDirectory: isDirectory)
+    }
+
+    private func applyActiveBufferSnapshot(_ snapshot: BufferEditSnapshot) {
+        textBuffer = snapshot.textBuffer
+        textCursor = snapshot.textCursor
+        currentLineEnding = snapshot.lineEnding
+        invalidateTextSnapshotCache()
+        cachedMaxLineWidth = TextDocument.computeMaxLineWidth(in: snapshot.textBuffer, tabSize: config.editor.tabSize)
+        highlightSession = nil
+        highlightedLines = []
+        selection = nil
+        wrapCache.invalidate()
+
+        if let buffer = bufferManager.activeBuffer {
+            buffer.postOpenProcessingTask?.cancel()
+            buffer.postOpenProcessingTask = nil
+            buffer.textBuffer = snapshot.textBuffer
+            buffer.textCursor = snapshot.textCursor
+            buffer.lineEnding = snapshot.lineEnding
+            buffer.cachedFileLines = nil
+            buffer.cachedDocumentText = nil
+            buffer.cachedMaxLineWidth = cachedMaxLineWidth
+            buffer.cachedSerializedByteCount = nil
+            buffer.highlightedLines = []
+            buffer.highlightSession = nil
+            buffer.documentVersion += 1
+            buffer.isDirty = buffer.editHistory.isDirty(current: snapshot)
+        }
+
+        refreshHighlights()
+        gitDecorationManager?.scheduleRefreshForActiveBuffer()
+        renderRefreshSource?.invalidate()
+    }
+
+    func undoActiveBuffer() {
+        guard let buffer = bufferManager.activeBuffer,
+              let currentSnapshot = activeBufferSnapshot()
+        else {
+            statusMessage = "No active buffer"
+            return
+        }
+
+        switch buffer.editHistory.undo(current: currentSnapshot) {
+        case .applied(let snapshot):
+            applyActiveBufferSnapshot(snapshot)
+            statusMessage = "Undo \(activeFileDisplayName)"
+        case .unavailable:
+            statusMessage = "Nothing to undo"
+        case .invalidated:
+            statusMessage = "Undo history cleared after external refresh"
+        }
+    }
+
+    func redoActiveBuffer() {
+        guard let buffer = bufferManager.activeBuffer,
+              let currentSnapshot = activeBufferSnapshot()
+        else {
+            statusMessage = "No active buffer"
+            return
+        }
+
+        switch buffer.editHistory.redo(current: currentSnapshot) {
+        case .applied(let snapshot):
+            applyActiveBufferSnapshot(snapshot)
+            statusMessage = "Redo \(activeFileDisplayName)"
+        case .unavailable:
+            statusMessage = "Nothing to redo"
+        case .invalidated:
+            statusMessage = "Redo history cleared after external refresh"
+        }
     }
 
     var isGitFilterAvailable: Bool {

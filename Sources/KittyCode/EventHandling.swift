@@ -23,6 +23,30 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
             return state.handlePromptKey(key)
         }
 
+        if key.eventType == .press, isUndoShortcut(key) {
+            switch state.mode {
+            case .editor:
+                state.undoActiveBuffer()
+            case .tree:
+                Task { @MainActor in
+                    await state.undoFileTreeOperation()
+                }
+            }
+            return true
+        }
+
+        if key.eventType == .press, isRedoShortcut(key) {
+            switch state.mode {
+            case .editor:
+                state.redoActiveBuffer()
+            case .tree:
+                Task { @MainActor in
+                    await state.redoFileTreeOperation()
+                }
+            }
+            return true
+        }
+
         // Tab navigation (checked before mode dispatch)
         if key.eventType == .press, key.modifiers == .ctrl {
             if key.keyCode == Key.pageDown.rawValue {
@@ -148,8 +172,9 @@ private func handleCut(state: EditorState) {
     let text = selection.extractText(from: { state.fileLine(at: $0) }, lineCount: state.fileLineCount)
     let base64 = Data(text.utf8).base64EncodedString()
     state.terminalWriter?(KittySequences.setClipboard(base64))
+    let previousSnapshot = state.activeBufferSnapshot()
     let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: selection)
-    state.textDidChange(mutation)
+    state.textDidChange(mutation, previousSnapshot: previousSnapshot)
     state.statusMessage = "Cut \(text.count) chars"
 }
 
@@ -164,16 +189,34 @@ private func handlePaste(_ text: String, state: EditorState) {
     let sanitized = TextSanitizer.sanitize(text)
 
     if state.hasActiveSelection {
+        let previousSnapshot = state.activeBufferSnapshot()
         let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
-        state.textDidChange(mutation)
+        state.textDidChange(mutation, previousSnapshot: previousSnapshot)
     }
 
+    let previousSnapshot = state.activeBufferSnapshot()
     let mutation = TextOperations.insert(sanitized.text, into: &state.textBuffer, at: &state.textCursor)
-    state.textDidChange(mutation)
+    state.textDidChange(mutation, previousSnapshot: previousSnapshot)
 
     if sanitized.replacedCount > 0 {
         state.statusMessage = "Pasted \(sanitized.text.count) chars (\(sanitized.replacedCount) non-printable replaced)"
     } else {
         state.statusMessage = "Pasted \(sanitized.text.count) chars"
     }
+}
+
+@MainActor
+private func isUndoShortcut(_ key: KeyEvent) -> Bool {
+    key.modifiers == .super && matchesShortcutKey(key, letter: AsciiKey.z)
+}
+
+@MainActor
+private func isRedoShortcut(_ key: KeyEvent) -> Bool {
+    (key.modifiers == .super && matchesShortcutKey(key, letter: AsciiKey.y)) ||
+    (key.modifiers == .super.union(.shift) && matchesShortcutKey(key, letter: AsciiKey.z))
+}
+
+@MainActor
+private func matchesShortcutKey(_ key: KeyEvent, letter: UInt32) -> Bool {
+    key.keyCode == letter || key.keyCode == letter - 32
 }
