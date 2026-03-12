@@ -24,11 +24,11 @@ public struct TextBuffer: Sendable {
         get {
             var result = [String]()
             result.reserveCapacity(lineCount)
-            for i in 0..<gapStart {
-                result.append(storage[i])
+            for storageIndex in 0..<gapStart {
+                result.append(storage[storageIndex])
             }
-            for i in (gapStart + gapLength)..<storage.count {
-                result.append(storage[i])
+            for storageIndex in (gapStart + gapLength)..<storage.count {
+                result.append(storage[storageIndex])
             }
             return result
         }
@@ -112,14 +112,14 @@ public struct TextBuffer: Sendable {
         let count = lineCount
         guard count > 0 else { return "" }
         var totalBytes = count - 1  // newlines between lines
-        for i in 0..<count {
-            totalBytes += storage[physicalIndex(i)].utf8.count
+        for logicalIndex in 0..<count {
+            totalBytes += storage[physicalIndex(logicalIndex)].utf8.count
         }
         var result = ""
         result.reserveCapacity(totalBytes)
-        for i in 0..<count {
-            if i > 0 { result += "\n" }
-            result += storage[physicalIndex(i)]
+        for logicalIndex in 0..<count {
+            if logicalIndex > 0 { result += "\n" }
+            result += storage[physicalIndex(logicalIndex)]
         }
         return result
     }
@@ -151,18 +151,18 @@ public struct TextBuffer: Sendable {
             let src = index
             let dst = index + gapLength
             // Move in reverse to avoid overwriting
-            for i in stride(from: moveCount - 1, through: 0, by: -1) {
-                storage[dst + i] = storage[src + i]
-                storage[src + i] = ""
+            for offset in stride(from: moveCount - 1, through: 0, by: -1) {
+                storage[dst + offset] = storage[src + offset]
+                storage[src + offset] = ""
             }
         } else {
             // Move elements from after gap to before gap
             let moveCount = index - gapStart
             let src = gapStart + gapLength
             let dst = gapStart
-            for i in 0..<moveCount {
-                storage[dst + i] = storage[src + i]
-                storage[src + i] = ""
+            for offset in 0..<moveCount {
+                storage[dst + offset] = storage[src + offset]
+                storage[src + offset] = ""
             }
         }
         gapStart = index
@@ -176,16 +176,16 @@ public struct TextBuffer: Sendable {
         newStorage.reserveCapacity(storage.count + newGapSize)
 
         // Copy before gap
-        for i in 0..<gapStart {
-            newStorage.append(storage[i])
+        for storageIndex in 0..<gapStart {
+            newStorage.append(storage[storageIndex])
         }
         // Add new gap
         for _ in 0..<(gapLength + newGapSize) {
             newStorage.append("")
         }
         // Copy after gap
-        for i in (gapStart + gapLength)..<storage.count {
-            newStorage.append(storage[i])
+        for storageIndex in (gapStart + gapLength)..<storage.count {
+            newStorage.append(storage[storageIndex])
         }
 
         storage = newStorage
@@ -200,16 +200,16 @@ extension TextBuffer: DocumentSource {
         let clamped = range.clamped(to: 0..<lineCount)
         var result = [String]()
         result.reserveCapacity(clamped.count)
-        for i in clamped {
-            result.append(line(at: i))
+        for lineIndex in clamped {
+            result.append(line(at: lineIndex))
         }
         return result
     }
 
     public func serializedByteCount(lineEndingSize: Int) -> Int {
         var total = 0
-        for i in 0..<lineCount {
-            total += line(at: i).lengthOfBytes(using: .utf8)
+        for lineIndex in 0..<lineCount {
+            total += line(at: lineIndex).lengthOfBytes(using: .utf8)
         }
         return total + max(0, lineCount - 1) * lineEndingSize
     }
@@ -217,9 +217,9 @@ extension TextBuffer: DocumentSource {
     public func maxLineWidth(in range: Range<Int>, tabSize: Int) -> Int {
         let clamped = range.clamped(to: 0..<lineCount)
         var maxWidth = 0
-        for i in clamped {
+        for lineIndex in clamped {
             maxWidth = max(
-                maxWidth, TextDisplayMetrics.displayWidth(of: line(at: i), tabSize: tabSize))
+                maxWidth, TextDisplayMetrics.displayWidth(of: line(at: lineIndex), tabSize: tabSize))
         }
         return maxWidth
     }

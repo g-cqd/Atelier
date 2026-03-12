@@ -80,11 +80,9 @@ public struct ScreenBuffer: Sendable {
 
     /// Replaces every cell in the buffer with `Cell.empty`, marking changed cells dirty.
     public mutating func clear() {
-        for i in cells.indices {
-            if cells[i] != .empty {
-                cells[i] = .empty
-                dirty.mark(i)
-            }
+        for i in cells.indices where cells[i] != .empty {
+            cells[i] = .empty
+            dirty.mark(i)
         }
     }
 
@@ -140,8 +138,7 @@ public struct ScreenBuffer: Sendable {
             }
         } else {
             let absDelta = -delta
-            for row in stride(from: regionY + regionHeight - 1, through: regionY + absDelta, by: -1)
-            {
+            for row in stride(from: regionY + regionHeight - 1, through: regionY + absDelta, by: -1) {
                 let dstBase = row &* columns
                 let srcBase = (row &- absDelta) &* columns
                 for col in regionX..<(regionX + regionWidth) {

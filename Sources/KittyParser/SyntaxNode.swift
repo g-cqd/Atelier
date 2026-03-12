@@ -77,7 +77,8 @@ public struct SyntaxNode: Sendable, Equatable {
         let lower = min(max(byteRange.lowerBound, 0), utf8.count)
         let upper = min(max(byteRange.upperBound, 0), utf8.count)
         guard lower < upper else { return "" }
-        return String(decoding: UnsafeBufferPointer(rebasing: utf8[lower..<upper]), as: UTF8.self)
+        let buf = UnsafeBufferPointer(rebasing: utf8[lower..<upper])
+        return String(bytes: buf, encoding: .utf8) ?? String(decoding: buf, as: UTF8.self)
     }
 }
 

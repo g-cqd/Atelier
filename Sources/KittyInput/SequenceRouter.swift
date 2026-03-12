@@ -231,8 +231,8 @@ public struct SequenceRouter: Sendable {
             } else if buffer.count >= Self.pasteEndMarker.count,
                 buffer.suffix(Self.pasteEndMarker.count).elementsEqual(Self.pasteEndMarker)
             {
-                let text = String(
-                    decoding: buffer.dropLast(Self.pasteEndMarker.count), as: UTF8.self)
+                let pasteBytes = buffer.dropLast(Self.pasteEndMarker.count)
+                let text = String(bytes: pasteBytes, encoding: .utf8) ?? ""
                 events.append(.paste(text))
                 resetRouting()
             }

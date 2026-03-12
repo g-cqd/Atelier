@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Testing
 
 @testable import KittyCodecs
@@ -1544,21 +1545,19 @@ struct TabRibbonScrollTests {
 
 @Suite
 struct HorizontalScrollIndicatorTests {
-    @Test func `thumbRect proportional to viewport vs content`() {
+    @Test func `thumbRect proportional to viewport vs content`() throws {
         let metrics = ScrollMetrics(contentLength: 100, viewportLength: 25, offset: 0)
         let rect = Rect(x: 0, y: 0, width: 40, height: 1)
-        let thumb = HorizontalScrollIndicatorLayout.thumbRect(for: metrics, in: rect)
-        #expect(thumb != nil)
-        #expect(thumb!.width == 10)  // 40 * 25 / 100 = 10
-        #expect(thumb!.x == 0)  // offset 0
+        let thumb = try #require(HorizontalScrollIndicatorLayout.thumbRect(for: metrics, in: rect))
+        #expect(thumb.width == 10)  // 40 * 25 / 100 = 10
+        #expect(thumb.x == 0)  // offset 0
     }
 
-    @Test func `thumbRect moves with offset`() {
+    @Test func `thumbRect moves with offset`() throws {
         let metrics = ScrollMetrics(contentLength: 100, viewportLength: 25, offset: 75)
         let rect = Rect(x: 0, y: 0, width: 40, height: 1)
-        let thumb = HorizontalScrollIndicatorLayout.thumbRect(for: metrics, in: rect)
-        #expect(thumb != nil)
-        #expect(thumb!.x == 30)  // at max offset, thumb at right edge
+        let thumb = try #require(HorizontalScrollIndicatorLayout.thumbRect(for: metrics, in: rect))
+        #expect(thumb.x == 30)  // at max offset, thumb at right edge
     }
 
     @Test func `gripOffset returns non-nil when pointer is within track`() {

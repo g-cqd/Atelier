@@ -27,7 +27,7 @@ public final class BufferManager {
         fileName: String,
         content: String,
         language: String?,
-        lineEnding: TextDocument.LineEnding = .lf
+        lineEnding: TextDocument.LineEnding = .lineFeed
     ) -> Int {
         if let existing = bufferIndex(forPath: filePath) {
             activeIndex = existing
@@ -103,7 +103,7 @@ public final class BufferManager {
         fileName: String,
         content: String,
         language: String?,
-        lineEnding: TextDocument.LineEnding = .lf
+        lineEnding: TextDocument.LineEnding = .lineFeed
     ) -> Int {
         if let existing = bufferIndex(forPath: filePath) {
             activeIndex = existing

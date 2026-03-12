@@ -70,8 +70,7 @@ public final class Highlighter: Sendable {
     }
 
     private func buildSpans(source: String, matches: [QueryMatch], scratch: HighlightScratch)
-        -> [StyledSpan]
-    {
+        -> [StyledSpan] {
         if let spans = source.utf8.withContiguousStorageIfAvailable({ utf8 in
             buildSpans(source: source, utf8: utf8, matches: matches, scratch: scratch)
         }) {
@@ -159,8 +158,8 @@ public final class Highlighter: Sendable {
             while end < utf8.count && scratch.byteStyleIndices[end] == styleIdx {
                 end += 1
             }
-            let text = String(
-                decoding: UnsafeBufferPointer(rebasing: utf8[pos..<end]), as: UTF8.self)
+            let textBuf = UnsafeBufferPointer(rebasing: utf8[pos..<end])
+            let text = String(bytes: textBuf, encoding: .utf8) ?? String(decoding: textBuf, as: UTF8.self)
             if !text.isEmpty {
                 scratch.spans.append(StyledSpan(text: text, style: palette[Int(styleIdx)]))
             }
