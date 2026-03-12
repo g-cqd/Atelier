@@ -99,7 +99,7 @@ public final class DocumentBuffer {
         fileName: String,
         content: String,
         language: String?,
-        lineEnding: TextDocument.LineEnding = .lf
+        lineEnding: TextDocument.LineEnding = .lineFeed
     ) {
         self.document = TextDocument(
             filePath: filePath,

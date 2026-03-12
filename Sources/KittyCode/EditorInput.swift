@@ -24,7 +24,8 @@ func handleEditorKey(
         if isNavigationKey(key) {
             if !isShiftHeld {
                 // Plain navigation key: collapse selection to the appropriate edge
-                let (start, end) = state.selection!.ordered
+                guard let selection = state.selection else { return false }
+                let (start, end) = selection.ordered
                 switch key.keyCode {
                 case Key.left.rawValue, Key.up.rawValue, Key.home.rawValue, Key.pageUp.rawValue:
                     state.cursorRow = start.row
@@ -40,10 +41,10 @@ func handleEditorKey(
                 return true
             }
             // shift+navigation: fall through to extend selection below
-        } else if shouldReplaceSelectionBeforeHandling(key) {
+        } else if shouldReplaceSelectionBeforeHandling(key), let selection = state.selection {
             let previousSnapshot = state.activeBufferSnapshot()
             let mutation = TextOperations.deleteRange(
-                in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
+                in: &state.textBuffer, at: &state.textCursor, selection: selection)
             state.textDidChange(mutation, previousSnapshot: previousSnapshot)
             state.clearSelection()
             didDeleteSelection = true

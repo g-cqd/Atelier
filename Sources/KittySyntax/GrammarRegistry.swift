@@ -67,8 +67,7 @@ public actor GrammarRegistry {
 
     /// Load and cache a grammar definition for a language.
     public func grammar(for languageName: String, grammarsPath: String) throws(GrammarError)
-        -> GrammarDefinition
-    {
+        -> GrammarDefinition {
         if let cached = loadedGrammars[languageName] { return cached }
 
         let entry = entries.values.first { $0.name == languageName }

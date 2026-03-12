@@ -98,10 +98,8 @@ public struct SymbolDiscovery {
         let charset = CTFontCopyCharacterSet(font)
 
         var codepoints: [UInt32] = []
-        for cp: UInt32 in 0x100000...0x103FFF {
-            if CFCharacterSetIsLongCharacterMember(charset, cp) {
-                codepoints.append(cp)
-            }
+        for cp: UInt32 in 0x100000...0x103FFF where CFCharacterSetIsLongCharacterMember(charset, cp) {
+            codepoints.append(cp)
         }
 
         return codepoints.isEmpty ? nil : codepoints

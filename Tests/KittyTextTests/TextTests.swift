@@ -115,7 +115,7 @@ struct TextDocumentTests {
             fileName: "example.txt",
             content: "alpha\nbeta\n",
             language: nil,
-            lineEnding: .crlf
+            lineEnding: .carriageReturnLineFeed
         )
 
         #expect(document.serializedText() == "alpha\r\nbeta\r\n")
@@ -123,10 +123,10 @@ struct TextDocumentTests {
     }
 
     @Test func `detectLineEnding recognizes common newline sequences`() {
-        #expect(TextDocument.detectLineEnding(in: Data("alpha\nbeta\n".utf8)) == .lf)
-        #expect(TextDocument.detectLineEnding(in: Data("alpha\r\nbeta\r\n".utf8)) == .crlf)
-        #expect(TextDocument.detectLineEnding(in: Data("alpha\rbeta\r".utf8)) == .cr)
-        #expect(TextDocument.detectLineEnding(in: Data("alpha".utf8)) == .lf)
+        #expect(TextDocument.detectLineEnding(in: Data("alpha\nbeta\n".utf8)) == .lineFeed)
+        #expect(TextDocument.detectLineEnding(in: Data("alpha\r\nbeta\r\n".utf8)) == .carriageReturnLineFeed)
+        #expect(TextDocument.detectLineEnding(in: Data("alpha\rbeta\r".utf8)) == .carriageReturn)
+        #expect(TextDocument.detectLineEnding(in: Data("alpha".utf8)) == .lineFeed)
     }
 }
 

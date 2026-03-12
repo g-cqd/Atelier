@@ -121,18 +121,16 @@ public struct Lexer: Sendable {
                 let prefixBytes = Array(prefix.utf8)
                 guard pos + prefixBytes.count <= utf8.count else { continue }
                 var matches = true
-                for (j, b) in prefixBytes.enumerated() {
-                    if utf8[pos + j] != b {
-                        matches = false
-                        break
-                    }
+                for (j, b) in prefixBytes.enumerated() where utf8[pos + j] != b {
+                    matches = false
+                    break
                 }
                 guard matches else { continue }
                 // Scan to end of line
                 var end = pos + prefixBytes.count
                 while end < utf8.count && utf8[end] != 0x0a { end += 1 }
-                let text = String(
-                    decoding: UnsafeBufferPointer(rebasing: utf8[pos..<end]), as: UTF8.self)
+                let textBuf = UnsafeBufferPointer(rebasing: utf8[pos..<end])
+                let text = String(bytes: textBuf, encoding: .utf8) ?? ""
                 let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
                 return Token(
                     type: "comment", byteRange: pos..<end, pointRange: point..<endPoint, text: text,
@@ -143,22 +141,18 @@ public struct Lexer: Sendable {
                 let closeBytes = Array(close.utf8)
                 guard pos + openBytes.count <= utf8.count else { continue }
                 var matches = true
-                for (j, b) in openBytes.enumerated() {
-                    if utf8[pos + j] != b {
-                        matches = false
-                        break
-                    }
+                for (j, b) in openBytes.enumerated() where utf8[pos + j] != b {
+                    matches = false
+                    break
                 }
                 guard matches else { continue }
                 // Scan for close delimiter
                 var end = pos + openBytes.count
                 while end + closeBytes.count <= utf8.count {
                     var found = true
-                    for (j, b) in closeBytes.enumerated() {
-                        if utf8[end + j] != b {
-                            found = false
-                            break
-                        }
+                    for (j, b) in closeBytes.enumerated() where utf8[end + j] != b {
+                        found = false
+                        break
                     }
                     if found {
                         end += closeBytes.count
@@ -167,8 +161,8 @@ public struct Lexer: Sendable {
                     end += 1
                 }
                 if end > utf8.count { end = utf8.count }
-                let text = String(
-                    decoding: UnsafeBufferPointer(rebasing: utf8[pos..<end]), as: UTF8.self)
+                let textBuf2 = UnsafeBufferPointer(rebasing: utf8[pos..<end])
+                let text = String(bytes: textBuf2, encoding: .utf8) ?? ""
                 let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
                 return Token(
                     type: "comment", byteRange: pos..<end, pointRange: point..<endPoint, text: text,
@@ -183,7 +177,7 @@ public struct Lexer: Sendable {
 
         var state = 0
         var current = pos
-        var lastAccepting: (id: Int, end: Int)? = nil
+        var lastAccepting: (id: Int, end: Int)?
 
         if let accepting = lexTable.states[0].accepting {
             lastAccepting = (accepting, current)
@@ -191,13 +185,11 @@ public struct Lexer: Sendable {
 
         while current < utf8.count {
             let char = UInt32(utf8[current])
-            var nextState: Int? = nil
+            var nextState: Int?
 
-            for (range, target) in lexTable.states[state].transitions {
-                if range.contains(char) {
-                    nextState = target
-                    break
-                }
+            for (range, target) in lexTable.states[state].transitions where range.contains(char) {
+                nextState = target
+                break
             }
 
             guard let next = nextState else { break }
@@ -210,7 +202,8 @@ public struct Lexer: Sendable {
         }
 
         guard let (_, end) = lastAccepting, end > pos else { return nil }
-        let text = String(decoding: UnsafeBufferPointer(rebasing: utf8[pos..<end]), as: UTF8.self)
+        let textBuf = UnsafeBufferPointer(rebasing: utf8[pos..<end])
+        let text = String(bytes: textBuf, encoding: .utf8) ?? ""
 
         // Find the keyword string that matched
         let tokenType: String

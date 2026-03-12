@@ -53,8 +53,7 @@ public struct TerminalSymbolTheme: Sendable {
                 let fallback = fallbackText(for: role)
                 if useSymbols,
                     let name = symbolName(for: role),
-                    let glyph = resolveGlyph(name: name, catalog: catalog)
-                {
+                    let glyph = resolveGlyph(name: name, catalog: catalog) {
                     result[role] = Glyph(text: glyph, prefersSymbol: true)
                 } else {
                     result[role] = Glyph(text: fallback, prefersSymbol: false)
@@ -95,6 +94,7 @@ public struct TerminalSymbolTheme: Sendable {
         "xmark": 0x100184,
     ]
 
+    // swiftlint:disable:next cyclomatic_complexity
     private static func symbolName(for role: Role) -> String? {
         switch role {
         case .project:
@@ -144,6 +144,7 @@ public struct TerminalSymbolTheme: Sendable {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private static func fallbackText(for role: Role) -> String {
         switch role {
         case .project:

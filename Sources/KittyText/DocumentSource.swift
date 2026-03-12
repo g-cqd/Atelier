@@ -44,9 +44,9 @@ public struct ArrayDocumentSource: DocumentSource, Sendable {
     public func maxLineWidth(in range: Range<Int>, tabSize: Int) -> Int {
         let clamped = range.clamped(to: 0..<storage.count)
         var maxWidth = 0
-        for i in clamped {
+        for lineIndex in clamped {
             maxWidth = max(
-                maxWidth, TextDisplayMetrics.displayWidth(of: storage[i], tabSize: tabSize))
+                maxWidth, TextDisplayMetrics.displayWidth(of: storage[lineIndex], tabSize: tabSize))
         }
         return maxWidth
     }

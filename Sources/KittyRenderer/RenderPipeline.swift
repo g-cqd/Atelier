@@ -105,8 +105,7 @@ public final class RenderPipeline: Sendable {
         // This physically scrolls the terminal display, then shifts the front
         // buffer to match, so DiffRenderer only emits the delta.
         if let hint = scrollHint, hint.delta != 0,
-            abs(hint.delta) < hint.regionHeight, hint.regionHeight > 0
-        {
+            abs(hint.delta) < hint.regionHeight, hint.regionHeight > 0 {
             let top1 = hint.regionTop + 1  // 1-based
             let bottom1 = hint.regionTop + hint.regionHeight  // 1-based inclusive
             KittySequences.appendSetScrollRegion(top: top1, bottom: bottom1, to: &outputBuffer)
