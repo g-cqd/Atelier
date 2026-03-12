@@ -1558,7 +1558,15 @@ struct RuntimeRegressionsTests {
         )
 
         #expect(sut.state.contextMenu?.target == .treeNode(index: 0))
-        #expect(sut.state.contextMenu?.items.map(\.title) == ["Open", "Open and Pin", "Save Here…"])
+        #expect(sut.state.contextMenu?.items.map(\.title) == [
+            "Open",
+            "Open and Pin",
+            "Rename…",
+            "Duplicate…",
+            "Move…",
+            "Delete…",
+            "Save Here…",
+        ])
         #expect(sut.state.bufferManager.count == 0)
     }
 
@@ -2400,5 +2408,141 @@ struct ScrollSpeedRegressionTests {
         let negative = scrollLinesPerTick(visibleRows: 40, configured: -1)
         #expect(zero >= 3, "Zero configured should fall back to adaptive default")
         #expect(negative >= 3, "Negative configured should fall back to adaptive default")
+    }
+}
+
+@Suite
+@MainActor
+struct UndoRedoTests {
+    private func makePipeline(columns: Int = 80, rows: Int = 24) -> RenderPipeline {
+        RenderPipeline(
+            connection: MockTerminalConnection(size: TerminalSize(columns: columns, rows: rows)),
+            columns: columns,
+            rows: rows
+        )
+    }
+
+    @Test
+    func `buffer undo redo is per active buffer`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        let state = EditorState(rootPath: ".", config: config)
+        let pipeline = makePipeline()
+
+        state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "a", language: nil)
+        state.restoreStateFromActiveBuffer()
+        state.mode = .editor
+        state.cursorCol = 1
+        insertText("1", into: state)
+
+        state.saveStateToActiveBuffer()
+        state.bufferManager.open(filePath: "/b.txt", fileName: "b.txt", content: "b", language: nil)
+        state.restoreStateFromActiveBuffer()
+        state.cursorCol = 1
+        insertText("2", into: state)
+
+        _ = handleEvent(
+            event: .key(KeyEvent(keyCode: AsciiKey.z, modifiers: .super)),
+            state: state,
+            pipeline: pipeline
+        )
+
+        #expect(state.documentText == "b")
+
+        state.switchToTab(0)
+        #expect(state.documentText == "a1")
+    }
+
+    @Test
+    func `buffer undo coalesces nearby edits by default`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        let state = EditorState(rootPath: ".", config: config)
+
+        state.beginNewFile()
+        state.mode = .editor
+        insertText("a", into: state)
+        insertText("b", into: state)
+
+        state.undoActiveBuffer()
+
+        #expect(state.documentText.isEmpty)
+    }
+
+    @Test
+    func `buffer undo invalidates after external refresh divergence`() throws {
+        let state = EditorState(rootPath: ".", config: KittyConfig())
+        state.beginNewFile()
+        state.mode = .editor
+        insertText("local", into: state)
+
+        let buffer = try #require(state.bufferManager.activeBuffer)
+        buffer.textBuffer = TextBuffer("external")
+        buffer.textCursor = TextCursor(col: 8)
+        buffer.didInvalidateHistoryOnLastRefresh = buffer.editHistory.reconcileWithRefresh(
+            BufferEditSnapshot(
+                textBuffer: buffer.textBuffer,
+                textCursor: buffer.textCursor,
+                lineEnding: buffer.lineEnding
+            )
+        )
+        state.restoreStateFromActiveBuffer()
+
+        state.undoActiveBuffer()
+
+        #expect(buffer.didInvalidateHistoryOnLastRefresh)
+        #expect(state.statusMessage == "Nothing to undo")
+        #expect(state.documentText == "external")
+    }
+}
+
+@Suite
+@MainActor
+struct TreeFileOperationTests {
+    @Test
+    func `tree file create undo redo roundtrips on disk`() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
+        await state.loadInitialTree(validateHistory: false)
+
+        let fileURL = rootURL.appendingPathComponent("created.txt")
+        #expect(await state.createTreeFile(at: fileURL.path, suggestedDirectory: rootURL.path))
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+
+        await state.undoFileTreeOperation()
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+
+        await state.redoFileTreeOperation()
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @Test
+    func `tree history invalidates on refreshed divergence`() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
+        await state.loadInitialTree(validateHistory: false)
+
+        let createdURL = rootURL.appendingPathComponent("created.txt")
+        #expect(await state.createTreeFile(at: createdURL.path, suggestedDirectory: rootURL.path))
+
+        let externalURL = rootURL.appendingPathComponent("external.txt")
+        guard FileManager.default.createFile(atPath: externalURL.path, contents: Data()) else {
+            Issue.record("Failed to create external file")
+            return
+        }
+
+        await state.loadInitialTree()
+        #expect(state.statusMessage == "File history cleared after tree refresh")
+
+        await state.undoFileTreeOperation()
+        #expect(state.statusMessage == "Nothing to undo")
     }
 }

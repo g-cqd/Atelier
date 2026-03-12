@@ -18,7 +18,8 @@ extension EditorState {
         }
 
         if prompt != nil {
-            return "Enter Save  Esc Cancel"
+            let label = prompt?.submitLabel ?? "Confirm"
+            return "Enter \(label)  Esc Cancel"
         }
 
         return nil
@@ -40,7 +41,12 @@ extension EditorState {
             let toggleTitle = entry.isExpanded ? "Collapse Folder" : "Expand Folder"
             items = [
                 ContextMenuItem(title: toggleTitle, shortcut: "Enter", action: .toggleSelectedDirectory),
-                ContextMenuItem(title: "New File Here", shortcut: "Ctrl+N", action: .beginNewFile(inDirectory: entry.path)),
+                ContextMenuItem(title: "New File…", shortcut: "", action: .beginCreateFile(inDirectory: entry.path)),
+                ContextMenuItem(title: "New Folder…", shortcut: "", action: .beginCreateDirectory(inDirectory: entry.path)),
+                ContextMenuItem(title: "Rename…", shortcut: "", action: .beginRename(path: entry.path)),
+                ContextMenuItem(title: "Duplicate…", shortcut: "", action: .beginDuplicate(path: entry.path)),
+                ContextMenuItem(title: "Move…", shortcut: "", action: .beginMove(path: entry.path)),
+                ContextMenuItem(title: "Delete…", shortcut: "", action: .beginDelete(path: entry.path)),
                 ContextMenuItem(title: "Save Here…", shortcut: "Ctrl+O", action: .beginSavePrompt(inDirectory: entry.path)),
             ]
         } else {
@@ -48,6 +54,10 @@ extension EditorState {
             items = [
                 ContextMenuItem(title: "Open", shortcut: "Enter", action: .openSelected),
                 ContextMenuItem(title: "Open and Pin", shortcut: "", action: .openSelectedPinned),
+                ContextMenuItem(title: "Rename…", shortcut: "", action: .beginRename(path: entry.path)),
+                ContextMenuItem(title: "Duplicate…", shortcut: "", action: .beginDuplicate(path: entry.path)),
+                ContextMenuItem(title: "Move…", shortcut: "", action: .beginMove(path: entry.path)),
+                ContextMenuItem(title: "Delete…", shortcut: "", action: .beginDelete(path: entry.path)),
                 ContextMenuItem(title: "Save Here…", shortcut: "Ctrl+O", action: .beginSavePrompt(inDirectory: directory)),
             ]
         }
@@ -126,13 +136,23 @@ extension EditorState {
         case .toggleSelectedDirectory:
             guard selectedTreeIndex >= 0, selectedTreeIndex < cachedFlatTree.count else { return }
             toggleExpand(at: selectedTreeIndex)
-        case .beginNewFile(let directory):
+        case .beginCreateFile(let directory):
             lastSelectedDirectoryPath = directory
-            beginNewFile()
-            beginSavePrompt(suggestedPath: directorySuggestion(for: directory))
+            beginCreateFilePrompt(in: directory)
+        case .beginCreateDirectory(let directory):
+            lastSelectedDirectoryPath = directory
+            beginCreateDirectoryPrompt(in: directory)
         case .beginSavePrompt(let directory):
             lastSelectedDirectoryPath = directory
             beginSavePrompt(suggestedPath: directorySuggestion(for: directory))
+        case .beginRename(let path):
+            beginRenamePrompt(for: path)
+        case .beginDuplicate(let path):
+            beginDuplicatePrompt(for: path)
+        case .beginMove(let path):
+            beginMovePrompt(for: path)
+        case .beginDelete(let path):
+            beginDeletePrompt(for: path)
         case .saveFile:
             saveFile()
         case .focusTree:

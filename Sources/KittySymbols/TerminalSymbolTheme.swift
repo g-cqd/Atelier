@@ -73,7 +73,7 @@ public struct TerminalSymbolTheme: Sendable {
         case .folderOpen:
             return "folder.badge.minus"
         case .file:
-            return "doc"
+            return "document"
         case .modeTree:
             return "list.bullet.indent"
         case .modeEdit:
@@ -85,11 +85,11 @@ public struct TerminalSymbolTheme: Sendable {
         case .warning:
             return "exclamationmark.triangle"
         case .position:
-            return "cursorarrow"
+            return "cursorarrow.rays"
         case .dimensions:
             return "arrow.up.left.and.arrow.down.right"
         case .gitBranch:
-            return "arrow.triangle.branch"
+            return "arrow.trianglehead.branch"
         case .gitModified:
             return "pencil.circle"
         case .gitAdded:
@@ -107,7 +107,7 @@ public struct TerminalSymbolTheme: Sendable {
         case .explorer:
             return "folder"
         case .openDocuments:
-            return "doc.text"
+            return "document.on.document"
         }
     }
 

@@ -6,13 +6,16 @@ import KittyWorkspace
 
 extension EditorState {
 
-    func loadInitialTree() async {
+    func loadInitialTree(validateHistory: Bool = true) async {
         let expandedPaths = collectExpandedPaths(treeNodes)
         treeNodes = await DirectoryScanner.scanAsync(rootPath, maxDepth: 1, visibility: fileVisibility)
         if !expandedPaths.isEmpty {
             restoreExpandedPaths(expandedPaths, in: &treeNodes)
         }
         refreshFlatTree()
+        if validateHistory, fileTreeHistory.validateRefresh(with: treeNodes) {
+            statusMessage = "File history cleared after tree refresh"
+        }
 
         // Clamp scroll/selection to valid range after rescan
         let maxIndex = max(0, cachedFlatTree.count - 1)
@@ -214,8 +217,14 @@ extension EditorState {
             activeBuffer.fileName = savedName
             activeBuffer.language = savedLanguage
             activeBuffer.lineEnding = currentLineEnding
-            activeBuffer.isDirty = false
             activeBuffer.lastModifiedDate = savedDate
+            activeBuffer.didInvalidateHistoryOnLastRefresh = false
+            if let currentSnapshot = activeBufferSnapshot() {
+                activeBuffer.editHistory.markSaved(currentSnapshot)
+                activeBuffer.isDirty = activeBuffer.editHistory.isDirty(current: currentSnapshot)
+            } else {
+                activeBuffer.isDirty = false
+            }
 
             if !previousPath.isEmpty && previousPath != destinationPath {
                 fileWatcherIntegration?.unwatchClosedFile(previousPath)
@@ -362,6 +371,14 @@ extension EditorState {
         buffer.highlightSession = nil
         buffer.cachedMaxLineWidth = nil
         buffer.lineEnding = lineEnding
+        buffer.didInvalidateHistoryOnLastRefresh = false
+        buffer.editHistory.reset(
+            to: BufferEditSnapshot(
+                textBuffer: buffer.textBuffer,
+                textCursor: buffer.textCursor,
+                lineEnding: buffer.lineEnding
+            )
+        )
 
         restoreStateFromActiveBuffer()
         prompt = nil
