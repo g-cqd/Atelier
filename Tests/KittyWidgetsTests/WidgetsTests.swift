@@ -261,6 +261,34 @@ struct TextEditorTests {
     }
 
     @Test
+    func `Wrapped text editor preserves selection aware whitespace visibility on later visual rows`() {
+        var buffer = ScreenBuffer(columns: 4, rows: 2)
+        let editor = TextEditor(
+            lines: ["abcd  "],
+            lineSpans: [[StyledSpan(text: "abcd  ", style: .default)]],
+            showLineNumbers: false,
+            wrapLines: true,
+            selectionRanges: [0: 4...5],
+            whitespaceConfig: .init(
+                showIndentation: false,
+                showSpaces: false,
+                showLineBreaks: false,
+                showUnexpected: true,
+                selectionVisibility: .all,
+                indentationStyle: .default,
+                spaceStyle: .default,
+                lineBreakStyle: .default,
+                unexpectedStyle: .default
+            )
+        )
+
+        editor.render(to: &buffer, in: Rect(x: 0, y: 0, width: 4, height: 2))
+
+        #expect(buffer[1, 0].character == "·")
+        #expect(buffer[1, 1].character == "·")
+    }
+
+    @Test
     func `Hit testing maps clicks into scrolled unwrapped content`() {
         let editor = TextEditor(
             lines: ["abcdef"],

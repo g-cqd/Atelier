@@ -52,8 +52,7 @@ public struct TerminalSymbolTheme: Sendable {
             let fallback = fallbackText(for: role)
             if useSymbols,
                let name = symbolName(for: role),
-               let entry = catalog?[name],
-               let glyph = entry.glyph
+               let glyph = resolveGlyph(name: name, catalog: catalog)
             {
                 result[role] = Glyph(text: glyph, prefersSymbol: true)
             } else {
@@ -61,6 +60,39 @@ public struct TerminalSymbolTheme: Sendable {
             }
         })
     }
+
+    private static func resolveGlyph(name: String, catalog: SymbolCatalog?) -> String? {
+        if let cp = puaCodepoints[name], let scalar = UnicodeScalar(cp) {
+            return String(Character(scalar))
+        }
+        return catalog?[name]?.glyph
+    }
+
+    // SF Pro PUA codepoints for symbols used by the theme.
+    // Discovered via bitmap comparison between NSImage(systemSymbolName:)
+    // renderings and CTFont PUA glyph renderings at 128x128 resolution.
+    private static let puaCodepoints: [String: UInt32] = [
+        "folder": 0x1003ED,
+        "folder.badge.minus": 0x100A9B,
+        "document": 0x1018F6,
+        "document.on.document": 0x101E62,
+        "sidebar.left": 0x1014A2,
+        "line.3.horizontal": 0x100962,
+        "list.bullet.indent": 0x101292,
+        "pencil": 0x10020A,
+        "magnifyingglass": 0x1002AB,
+        "location": 0x1002D1,
+        "exclamationmark.triangle": 0x1001FE,
+        "cursorarrow.rays": 0x1001F0,
+        "arrow.up.left.and.arrow.down.right": 0x10014A,
+        "arrow.trianglehead.branch": 0x100660,
+        "pencil.circle": 0x10020B,
+        "plus.circle": 0x10004C,
+        "questionmark.circle": 0x10005C,
+        "minus.circle": 0x10004E,
+        "circle": 0x100000,
+        "xmark": 0x100184,
+    ]
 
     private static func symbolName(for role: Role) -> String? {
         switch role {

@@ -391,6 +391,7 @@ public enum ViewRenderer {
 
                             if widthPos < segStart {
                                 widthPos += width
+                                charIndex += 1
                                 continue
                             }
 
