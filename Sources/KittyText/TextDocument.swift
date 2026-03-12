@@ -3,28 +3,28 @@ import Foundation
 @MainActor
 public final class TextDocument {
     public enum LineEnding: String, Sendable, Equatable {
-        case lf
-        case crlf
-        case cr
+        case lineFeed = "lf"
+        case carriageReturnLineFeed = "crlf"
+        case carriageReturn = "cr"
 
         public var label: String {
             switch self {
-            case .lf:
+            case .lineFeed:
                 "LF"
-            case .crlf:
+            case .carriageReturnLineFeed:
                 "CRLF"
-            case .cr:
+            case .carriageReturn:
                 "CR"
             }
         }
 
         public var sequence: String {
             switch self {
-            case .lf:
+            case .lineFeed:
                 "\n"
-            case .crlf:
+            case .carriageReturnLineFeed:
                 "\r\n"
-            case .cr:
+            case .carriageReturn:
                 "\r"
             }
         }
@@ -58,7 +58,7 @@ public final class TextDocument {
         fileName: String,
         content: String,
         language: String?,
-        lineEnding: LineEnding = .lf
+        lineEnding: LineEnding = .lineFeed
     ) {
         let lines = TextBuffer.splitLines(from: content)
         self.textBuffer = TextBuffer(lines: lines)
@@ -154,8 +154,7 @@ public final class TextDocument {
     }
 
     nonisolated public static func computeMaxLineWidth(in buffer: TextBuffer, tabSize: Int = 4)
-        -> Int
-    {
+        -> Int {
         computeMaxLineWidth(for: buffer.lines, tabSize: tabSize)
     }
 
@@ -185,9 +184,8 @@ public final class TextDocument {
     }
 
     nonisolated public static func serializedText(from text: String, lineEnding: LineEnding)
-        -> String
-    {
-        guard lineEnding != .lf else { return text }
+        -> String {
+        guard lineEnding != .lineFeed else { return text }
         return text.replacingOccurrences(of: "\n", with: lineEnding.sequence)
     }
 
@@ -220,14 +218,14 @@ public final class TextDocument {
         }
 
         if crlfCount >= lfCount, crlfCount >= crCount, crlfCount > 0 {
-            return .crlf
+            return .carriageReturnLineFeed
         }
         if lfCount >= crCount, lfCount > 0 {
-            return .lf
+            return .lineFeed
         }
         if crCount > 0 {
-            return .cr
+            return .carriageReturn
         }
-        return .lf
+        return .lineFeed
     }
 }

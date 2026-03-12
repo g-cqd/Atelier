@@ -18,7 +18,7 @@ struct WorkspaceTests {
         BufferEditSnapshot(
             textBuffer: TextBuffer(text),
             textCursor: TextCursor(),
-            lineEnding: .lf
+            lineEnding: .lineFeed
         )
     }
 

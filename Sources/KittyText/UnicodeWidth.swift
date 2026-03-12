@@ -10,12 +10,12 @@ public enum UnicodeWidth {
     @inline(__always)
     public static func displayWidth(of char: Character) -> Int {
         guard let scalar = char.unicodeScalars.first else { return 0 }
-        let v = scalar.value
-        if v == 0 { return 0 }
+        let scalarValue = scalar.value
+        if scalarValue == 0 { return 0 }
         // ASCII fast path: covers ~99% of typical source code
-        if v < 0x1100 { return 1 }
+        if scalarValue < 0x1100 { return 1 }
         if scalar.properties.isDefaultIgnorableCodePoint { return 0 }
-        if isCJKOrWide(v) { return 2 }
+        if isCJKOrWide(scalarValue) { return 2 }
         return 1
     }
 
@@ -46,16 +46,16 @@ public enum UnicodeWidth {
     ]
 
     /// Binary search over sorted wide ranges.
-    private static func isCJKOrWide(_ v: UInt32) -> Bool {
-        var lo = 0
-        var hi = wideRanges.count - 1
-        while lo <= hi {
-            let mid = (lo + hi) >> 1
+    private static func isCJKOrWide(_ value: UInt32) -> Bool {
+        var lowerBound = 0
+        var upperBound = wideRanges.count - 1
+        while lowerBound <= upperBound {
+            let mid = (lowerBound + upperBound) >> 1
             let range = wideRanges[mid]
-            if v < range.0 {
-                hi = mid - 1
-            } else if v > range.1 {
-                lo = mid + 1
+            if value < range.0 {
+                upperBound = mid - 1
+            } else if value > range.1 {
+                lowerBound = mid + 1
             } else {
                 return true
             }

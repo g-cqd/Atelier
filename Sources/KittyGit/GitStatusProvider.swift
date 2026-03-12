@@ -231,8 +231,11 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         var current = (path as NSString).deletingLastPathComponent
         while current.hasPrefix(root) || current + "/" == root {
             if current.count < root.count { break }
-            let existing = statuses[current]
-            if existing == nil || severity(of: status) > severity(of: existing!) {
+            if let existing = statuses[current] {
+                if severity(of: status) > severity(of: existing) {
+                    statuses[current] = status
+                }
+            } else {
                 statuses[current] = status
             }
             let parent = (current as NSString).deletingLastPathComponent
@@ -393,8 +396,11 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         into markers: inout [Int: FileStatusColor],
         at index: Int
     ) {
-        let existing = markers[index]
-        if existing == nil || markerPriority(of: incoming) > markerPriority(of: existing!) {
+        if let existing = markers[index] {
+            if markerPriority(of: incoming) > markerPriority(of: existing) {
+                markers[index] = incoming
+            }
+        } else {
             markers[index] = incoming
         }
     }

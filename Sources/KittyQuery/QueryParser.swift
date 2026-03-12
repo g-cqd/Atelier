@@ -278,6 +278,7 @@ public enum QueryParser: Sendable {
         return name
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private static func buildPredicate(name: String, args: [String]) throws(QueryError) -> Predicate
     {
         switch name {
