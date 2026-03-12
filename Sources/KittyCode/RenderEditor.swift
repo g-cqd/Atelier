@@ -35,6 +35,7 @@ func renderEditorPanel(
         showSpaces: state.config.whitespace.showSpaces,
         showLineBreaks: state.config.whitespace.showLineBreaks,
         showUnexpected: state.config.whitespace.showUnexpected,
+        selectionVisibility: selectionVisibility(from: state.config.whitespace.selectionWhitespace),
         indentationStyle: colorScheme.whitespaceIndentation,
         spaceStyle: colorScheme.whitespaceSpace,
         lineBreakStyle: colorScheme.whitespaceLineBreak,
@@ -132,4 +133,15 @@ private func activeSelectionRanges(state: EditorState) -> [Int: ClosedRange<Int>
     }
 
     return ranges
+}
+
+private func selectionVisibility(
+    from config: KittyConfig.WhitespaceVisibility
+) -> WhitespaceRenderer.SelectionVisibility {
+    switch config {
+    case .none: return .none
+    case .indentation: return .indentation
+    case .all: return .all
+    case .boundary: return .boundary
+    }
 }
