@@ -5,7 +5,9 @@ public enum TextOperations {
     /// The insert is clamped to the valid range of the current line so that
     /// an out-of-bounds `cursor.col` never causes a crash.
     @discardableResult
-    public static func insert(_ text: String, into buffer: inout TextBuffer, at cursor: inout TextCursor) -> TextMutation {
+    public static func insert(
+        _ text: String, into buffer: inout TextBuffer, at cursor: inout TextCursor
+    ) -> TextMutation {
         if buffer.lineCount == 0 { buffer.lines = [""] }
         let row = cursor.row
         let line = buffer.line(at: row)
@@ -23,7 +25,8 @@ public enum TextOperations {
             )
         }
 
-        let insertedLines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let insertedLines = text.split(separator: "\n", omittingEmptySubsequences: false).map(
+            String.init)
         let prefix = String(line[..<index])
         let suffix = String(line[index...])
 
@@ -47,7 +50,9 @@ public enum TextOperations {
     /// Text to the right of the cursor moves to the new line.
     /// The cursor moves to column 0 of the new line.
     @discardableResult
-    public static func insertNewline(into buffer: inout TextBuffer, at cursor: inout TextCursor) -> TextMutation {
+    public static func insertNewline(into buffer: inout TextBuffer, at cursor: inout TextCursor)
+        -> TextMutation
+    {
         insert("\n", into: &buffer, at: &cursor)
     }
 
@@ -56,7 +61,9 @@ public enum TextOperations {
     /// When cursor is at column 0 and not on the first line, the current
     /// line is merged into the previous line.
     @discardableResult
-    public static func deleteBackward(in buffer: inout TextBuffer, at cursor: inout TextCursor) -> TextMutation? {
+    public static func deleteBackward(in buffer: inout TextBuffer, at cursor: inout TextCursor)
+        -> TextMutation?
+    {
         if cursor.col > 0 {
             var line = buffer.line(at: cursor.row)
             let index = line.index(line.startIndex, offsetBy: cursor.col - 1)
@@ -83,7 +90,9 @@ public enum TextOperations {
     }
 
     @discardableResult
-    public static func deleteRange(in buffer: inout TextBuffer, at cursor: inout TextCursor, selection: TextSelection) -> TextMutation {
+    public static func deleteRange(
+        in buffer: inout TextBuffer, at cursor: inout TextCursor, selection: TextSelection
+    ) -> TextMutation {
         let (start, end) = selection.ordered
 
         if start.row == end.row {
@@ -100,11 +109,13 @@ public enum TextOperations {
             )
         } else {
             let firstLine = buffer.line(at: start.row)
-            let firstStartIndex = firstLine.index(firstLine.startIndex, offsetBy: min(start.col, firstLine.count))
+            let firstStartIndex = firstLine.index(
+                firstLine.startIndex, offsetBy: min(start.col, firstLine.count))
             let firstPrefix = String(firstLine[..<firstStartIndex])
 
             let lastLine = buffer.line(at: end.row)
-            let lastEndIndex = lastLine.index(lastLine.startIndex, offsetBy: min(end.col, lastLine.count))
+            let lastEndIndex = lastLine.index(
+                lastLine.startIndex, offsetBy: min(end.col, lastLine.count))
             let lastSuffix = String(lastLine[lastEndIndex...])
 
             buffer.setLine(at: start.row, to: firstPrefix + lastSuffix)

@@ -25,7 +25,9 @@ public enum LexTableCompiler: Sendable {
 
     // MARK: - Private
 
-    private static func extractTokens(from rule: Rule, keywords: inout [String: Int], tokenID: inout Int) {
+    private static func extractTokens(
+        from rule: Rule, keywords: inout [String: Int], tokenID: inout Int
+    ) {
         switch rule {
         case .string(let value):
             if keywords[value] == nil {
@@ -39,7 +41,7 @@ public enum LexTableCompiler: Sendable {
         case .repeat(let content), .repeat1(let content), .optional(let content):
             extractTokens(from: content, keywords: &keywords, tokenID: &tokenID)
         case .prec(_, let content), .precLeft(_, let content), .precRight(_, let content),
-             .precDynamic(_, let content):
+            .precDynamic(_, let content):
             extractTokens(from: content, keywords: &keywords, tokenID: &tokenID)
         case .token(let content), .immediateToken(let content):
             extractTokens(from: content, keywords: &keywords, tokenID: &tokenID)
@@ -54,9 +56,11 @@ public enum LexTableCompiler: Sendable {
 
     // MARK: - Comment Pattern Extraction
 
-    private static func extractCommentPatterns(from grammar: GrammarDefinition) -> [CommentPattern] {
+    private static func extractCommentPatterns(from grammar: GrammarDefinition) -> [CommentPattern]
+    {
         var patterns: [CommentPattern] = []
-        let ruleMap = Dictionary(grammar.rules.map { ($0.name, $0.rule) }, uniquingKeysWith: { first, _ in first })
+        let ruleMap = Dictionary(
+            grammar.rules.map { ($0.name, $0.rule) }, uniquingKeysWith: { first, _ in first })
 
         for extra in grammar.extras {
             if case .symbol(let name) = extra, let rule = ruleMap[name] {
@@ -66,7 +70,9 @@ public enum LexTableCompiler: Sendable {
         return patterns
     }
 
-    private static func extractCommentPatternsFromRule(_ rule: Rule, into patterns: inout [CommentPattern]) {
+    private static func extractCommentPatternsFromRule(
+        _ rule: Rule, into patterns: inout [CommentPattern]
+    ) {
         switch rule {
         case .token(let content), .immediateToken(let content):
             extractCommentPatternsFromRule(content, into: &patterns)
@@ -96,7 +102,9 @@ public enum LexTableCompiler: Sendable {
             return .block(open: "/*", close: "*/")
         }
         // Line comment: starts with //, #, --, or ;;
-        if prefix.hasPrefix("//") || prefix.hasPrefix("#") || prefix.hasPrefix("--") || prefix.hasPrefix(";;") {
+        if prefix.hasPrefix("//") || prefix.hasPrefix("#") || prefix.hasPrefix("--")
+            || prefix.hasPrefix(";;")
+        {
             return .line(prefix: prefix)
         }
         return nil
@@ -120,9 +128,14 @@ public enum LexTableCompiler: Sendable {
                     if i < chars.count && chars[i] == "{" {
                         let qStart = i + 1
                         var qEnd = qStart
-                        while qEnd < chars.count && chars[qEnd] != "," && chars[qEnd] != "}" { qEnd += 1 }
-                        if let minCount = Int(String(chars[qStart..<qEnd].map { Character($0) })), minCount > 1 {
-                            result.append(contentsOf: repeatElement(Character(escaped), count: minCount - 1))
+                        while qEnd < chars.count && chars[qEnd] != "," && chars[qEnd] != "}" {
+                            qEnd += 1
+                        }
+                        if let minCount = Int(String(chars[qStart..<qEnd].map { Character($0) })),
+                            minCount > 1
+                        {
+                            result.append(
+                                contentsOf: repeatElement(Character(escaped), count: minCount - 1))
                         }
                         while i < chars.count && chars[i] != "}" { i += 1 }
                         if i < chars.count { i += 1 }
@@ -130,7 +143,9 @@ public enum LexTableCompiler: Sendable {
                 } else {
                     break
                 }
-            } else if ch.properties.isAlphabetic || ch.properties.isASCIIHexDigit || ch == "_" || ch == "-" || ch == " " || ch == "#" || ch == ";" {
+            } else if ch.properties.isAlphabetic || ch.properties.isASCIIHexDigit || ch == "_"
+                || ch == "-" || ch == " " || ch == "#" || ch == ";"
+            {
                 result.append(Character(ch))
                 i += 1
             } else {
@@ -148,7 +163,7 @@ public enum LexTableCompiler: Sendable {
 
         // Build a trie
         struct TrieNode {
-            var children: [UInt32: Int] = [:] // char → node index
+            var children: [UInt32: Int] = [:]  // char → node index
             var accepting: Int? = nil
         }
 
@@ -172,7 +187,8 @@ public enum LexTableCompiler: Sendable {
 
         // Convert trie to LexState array
         return nodes.map { node in
-            let transitions = node.children.sorted(by: { $0.key < $1.key }).map { (charVal, nextIdx) in
+            let transitions = node.children.sorted(by: { $0.key < $1.key }).map {
+                (charVal, nextIdx) in
                 (charVal...charVal, nextIdx)
             }
             return LexState(transitions: transitions, accepting: node.accepting)

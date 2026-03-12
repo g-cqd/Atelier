@@ -1,7 +1,7 @@
-import KittyTerminal
 import KittyCodecs
 import KittyInput
 import KittyRenderer
+import KittyTerminal
 import KittyWidgets
 
 // MARK: - App Protocol

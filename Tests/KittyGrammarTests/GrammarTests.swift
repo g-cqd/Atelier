@@ -1,5 +1,6 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import KittyGrammar
 
 @Suite
@@ -48,28 +49,28 @@ struct GrammarLoaderTests {
     @Test
     func `Parse minimal JSON grammar`() throws {
         let json = """
-        {
-            "name": "test",
-            "rules": {
-                "source": {
-                    "type": "REPEAT",
-                    "content": {
-                        "type": "SYMBOL",
-                        "name": "statement"
+            {
+                "name": "test",
+                "rules": {
+                    "source": {
+                        "type": "REPEAT",
+                        "content": {
+                            "type": "SYMBOL",
+                            "name": "statement"
+                        }
+                    },
+                    "statement": {
+                        "type": "STRING",
+                        "value": "hello"
                     }
                 },
-                "statement": {
-                    "type": "STRING",
-                    "value": "hello"
-                }
-            },
-            "extras": [],
-            "conflicts": [],
-            "externals": [],
-            "inline": [],
-            "supertypes": []
-        }
-        """
+                "extras": [],
+                "conflicts": [],
+                "externals": [],
+                "inline": [],
+                "supertypes": []
+            }
+            """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         #expect(grammar.name == "test")
         #expect(grammar.rules.count == 2)
@@ -78,24 +79,24 @@ struct GrammarLoaderTests {
     @Test
     func `Preserves JSON rule order for start symbol`() throws {
         let json = """
-        {
-            "name": "ordering",
-            "rules": {
-                "z_entry": {
-                    "type": "SYMBOL",
-                    "name": "statement"
-                },
-                "a_helper": {
-                    "type": "STRING",
-                    "value": "helper"
-                },
-                "statement": {
-                    "type": "STRING",
-                    "value": "stmt"
+            {
+                "name": "ordering",
+                "rules": {
+                    "z_entry": {
+                        "type": "SYMBOL",
+                        "name": "statement"
+                    },
+                    "a_helper": {
+                        "type": "STRING",
+                        "value": "helper"
+                    },
+                    "statement": {
+                        "type": "STRING",
+                        "value": "stmt"
+                    }
                 }
             }
-        }
-        """
+            """
 
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         #expect(grammar.rules.map(\.name) == ["z_entry", "a_helper", "statement"])
@@ -109,26 +110,26 @@ struct GrammarLoaderTests {
     @Test
     func `Parse grammar with all rule types`() throws {
         let json = """
-        {
-            "name": "complex",
-            "rules": {
-                "program": {
-                    "type": "SEQ",
-                    "members": [
-                        {"type": "STRING", "value": "start"},
-                        {"type": "CHOICE", "members": [
-                            {"type": "SYMBOL", "name": "expr"},
-                            {"type": "BLANK"}
-                        ]},
-                        {"type": "REPEAT", "content": {"type": "SYMBOL", "name": "stmt"}},
-                        {"type": "PREC_LEFT", "value": 1, "content": {"type": "SYMBOL", "name": "expr"}}
-                    ]
-                },
-                "expr": {"type": "PATTERN", "value": "[0-9]+"},
-                "stmt": {"type": "SYMBOL", "name": "expr"}
+            {
+                "name": "complex",
+                "rules": {
+                    "program": {
+                        "type": "SEQ",
+                        "members": [
+                            {"type": "STRING", "value": "start"},
+                            {"type": "CHOICE", "members": [
+                                {"type": "SYMBOL", "name": "expr"},
+                                {"type": "BLANK"}
+                            ]},
+                            {"type": "REPEAT", "content": {"type": "SYMBOL", "name": "stmt"}},
+                            {"type": "PREC_LEFT", "value": 1, "content": {"type": "SYMBOL", "name": "expr"}}
+                        ]
+                    },
+                    "expr": {"type": "PATTERN", "value": "[0-9]+"},
+                    "stmt": {"type": "SYMBOL", "name": "expr"}
+                }
             }
-        }
-        """
+            """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         #expect(grammar.name == "complex")
     }
@@ -136,8 +137,8 @@ struct GrammarLoaderTests {
     @Test
     func `Missing name throws error`() {
         let json = """
-        {"rules": {}}
-        """
+            {"rules": {}}
+            """
         #expect(throws: GrammarError.missingField("name")) {
             try GrammarLoader.parse(Data(json.utf8))
         }
@@ -153,16 +154,16 @@ struct GrammarLoaderTests {
     @Test
     func `Parses surrogate-pair unicode escapes in JSON strings`() throws {
         let json = #"""
-        {
-            "name": "emoji",
-            "rules": {
-                "source": {
-                    "type": "STRING",
-                    "value": "\uD83D\uDE00"
+            {
+                "name": "emoji",
+                "rules": {
+                    "source": {
+                        "type": "STRING",
+                        "value": "\uD83D\uDE00"
+                    }
                 }
             }
-        }
-        """#
+            """#
 
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         #expect(grammar.rules.count == 1)
@@ -175,7 +176,7 @@ private enum GrammarRuleExpectationError: Error {
 }
 
 private func requireStringRule(_ rule: Rule?) throws -> String {
-    guard case let .some(.string(value)) = rule else {
+    guard case .some(.string(let value)) = rule else {
         throw GrammarRuleExpectationError.expectedStringRule
     }
     return value
@@ -189,14 +190,14 @@ struct ItemSetTests {
         let productions: [(name: String, symbols: [String])] = [
             ("S'", ["S"]),
             ("S", ["E"]),
-            ("E", ["\"a\""])
+            ("E", ["\"a\""]),
         ]
         let firstSets: [String: Set<String>] = [
             "S'": ["\"a\""],
             "S": ["\"a\""],
             "E": ["\"a\""],
             "\"a\"": ["\"a\""],
-            "$end": ["$end"]
+            "$end": ["$end"],
         ]
         let rulesByNT: [String: [Int]] = ["S'": [0], "S": [1], "E": [2]]
 
@@ -218,16 +219,16 @@ struct ParseTableCompilerTests {
     @Test
     func `Compile simple grammar`() throws {
         let json = """
-        {
-            "name": "simple",
-            "rules": {
-                "source": {
-                    "type": "STRING",
-                    "value": "hello"
+            {
+                "name": "simple",
+                "rules": {
+                    "source": {
+                        "type": "STRING",
+                        "value": "hello"
+                    }
                 }
             }
-        }
-        """
+            """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let result = try ParseTableCompiler.compile(grammar)
         #expect(result.parseTable.stateCount > 0)
@@ -237,23 +238,23 @@ struct ParseTableCompilerTests {
     @Test
     func `repeat compiles to recursive zero or more productions`() throws {
         let json = """
-        {
-            "name": "repeat_test",
-            "rules": {
-                "source": {
-                    "type": "REPEAT",
-                    "content": {
-                        "type": "SYMBOL",
-                        "name": "item"
+            {
+                "name": "repeat_test",
+                "rules": {
+                    "source": {
+                        "type": "REPEAT",
+                        "content": {
+                            "type": "SYMBOL",
+                            "name": "item"
+                        }
+                    },
+                    "item": {
+                        "type": "STRING",
+                        "value": "a"
                     }
-                },
-                "item": {
-                    "type": "STRING",
-                    "value": "a"
                 }
             }
-        }
-        """
+            """
 
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let result = try ParseTableCompiler.compile(grammar)
@@ -270,23 +271,23 @@ struct ParseTableCompilerTests {
     @Test
     func `repeat1 compiles to recursive one or more productions`() throws {
         let json = """
-        {
-            "name": "repeat1_test",
-            "rules": {
-                "source": {
-                    "type": "REPEAT1",
-                    "content": {
-                        "type": "SYMBOL",
-                        "name": "item"
+            {
+                "name": "repeat1_test",
+                "rules": {
+                    "source": {
+                        "type": "REPEAT1",
+                        "content": {
+                            "type": "SYMBOL",
+                            "name": "item"
+                        }
+                    },
+                    "item": {
+                        "type": "STRING",
+                        "value": "a"
                     }
-                },
-                "item": {
-                    "type": "STRING",
-                    "value": "a"
                 }
             }
-        }
-        """
+            """
 
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let result = try ParseTableCompiler.compile(grammar)
@@ -304,52 +305,53 @@ struct ParseTableCompilerTests {
     @Test
     func `Fields are preserved on flattened productions`() throws {
         let json = """
-        {
-            "name": "fields_test",
-            "rules": {
-                "source": {
-                    "type": "SEQ",
-                    "members": [
-                        {
-                            "type": "FIELD",
-                            "name": "left",
-                            "content": {
-                                "type": "SYMBOL",
-                                "name": "lhs"
+            {
+                "name": "fields_test",
+                "rules": {
+                    "source": {
+                        "type": "SEQ",
+                        "members": [
+                            {
+                                "type": "FIELD",
+                                "name": "left",
+                                "content": {
+                                    "type": "SYMBOL",
+                                    "name": "lhs"
+                                }
+                            },
+                            {
+                                "type": "STRING",
+                                "value": "="
+                            },
+                            {
+                                "type": "FIELD",
+                                "name": "right",
+                                "content": {
+                                    "type": "SYMBOL",
+                                    "name": "rhs"
+                                }
                             }
-                        },
-                        {
-                            "type": "STRING",
-                            "value": "="
-                        },
-                        {
-                            "type": "FIELD",
-                            "name": "right",
-                            "content": {
-                                "type": "SYMBOL",
-                                "name": "rhs"
-                            }
-                        }
-                    ]
-                },
-                "lhs": {
-                    "type": "STRING",
-                    "value": "a"
-                },
-                "rhs": {
-                    "type": "STRING",
-                    "value": "b"
+                        ]
+                    },
+                    "lhs": {
+                        "type": "STRING",
+                        "value": "a"
+                    },
+                    "rhs": {
+                        "type": "STRING",
+                        "value": "b"
+                    }
                 }
             }
-        }
-        """
+            """
 
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let result = try ParseTableCompiler.compile(grammar)
 
-        let sourceRule = try #require(result.productions.first {
-            $0.name == "source" && $0.symbols == ["lhs", "\"=\"", "rhs"]
-        })
+        let sourceRule = try #require(
+            result.productions.first {
+                $0.name == "source" && $0.symbols == ["lhs", "\"=\"", "rhs"]
+            })
 
         #expect(sourceRule.fields == [0: "left", 2: "right"])
     }
@@ -357,24 +359,24 @@ struct ParseTableCompilerTests {
     @Test
     func `Compile rejects rule expansion that exceeds configured limits`() throws {
         let json = """
-        {
-            "name": "explosive",
-            "rules": {
-                "source": {
-                    "type": "SEQ",
-                    "members": [
-                        {"type": "CHOICE", "members": [{"type": "STRING", "value": "a"}, {"type": "BLANK"}]},
-                        {"type": "CHOICE", "members": [{"type": "STRING", "value": "b"}, {"type": "BLANK"}]},
-                        {"type": "CHOICE", "members": [{"type": "STRING", "value": "c"}, {"type": "BLANK"}]},
-                        {"type": "CHOICE", "members": [{"type": "STRING", "value": "d"}, {"type": "BLANK"}]},
-                        {"type": "CHOICE", "members": [{"type": "STRING", "value": "e"}, {"type": "BLANK"}]},
-                        {"type": "CHOICE", "members": [{"type": "STRING", "value": "f"}, {"type": "BLANK"}]},
-                        {"type": "CHOICE", "members": [{"type": "STRING", "value": "g"}, {"type": "BLANK"}]}
-                    ]
+            {
+                "name": "explosive",
+                "rules": {
+                    "source": {
+                        "type": "SEQ",
+                        "members": [
+                            {"type": "CHOICE", "members": [{"type": "STRING", "value": "a"}, {"type": "BLANK"}]},
+                            {"type": "CHOICE", "members": [{"type": "STRING", "value": "b"}, {"type": "BLANK"}]},
+                            {"type": "CHOICE", "members": [{"type": "STRING", "value": "c"}, {"type": "BLANK"}]},
+                            {"type": "CHOICE", "members": [{"type": "STRING", "value": "d"}, {"type": "BLANK"}]},
+                            {"type": "CHOICE", "members": [{"type": "STRING", "value": "e"}, {"type": "BLANK"}]},
+                            {"type": "CHOICE", "members": [{"type": "STRING", "value": "f"}, {"type": "BLANK"}]},
+                            {"type": "CHOICE", "members": [{"type": "STRING", "value": "g"}, {"type": "BLANK"}]}
+                        ]
+                    }
                 }
             }
-        }
-        """
+            """
 
         let grammar = try GrammarLoader.parse(Data(json.utf8))
 
@@ -400,16 +402,16 @@ struct ParseTableCompilerTests {
     @Test
     func `Compile rejects parser state growth that exceeds configured limits`() throws {
         let json = """
-        {
-            "name": "simple",
-            "rules": {
-                "source": {
-                    "type": "STRING",
-                    "value": "hello"
+            {
+                "name": "simple",
+                "rules": {
+                    "source": {
+                        "type": "STRING",
+                        "value": "hello"
+                    }
                 }
             }
-        }
-        """
+            """
 
         let grammar = try GrammarLoader.parse(Data(json.utf8))
 
@@ -438,20 +440,20 @@ struct LexTableCompilerTests {
     @Test
     func `Extract keywords from grammar`() throws {
         let json = """
-        {
-            "name": "kw_test",
-            "rules": {
-                "source": {
-                    "type": "CHOICE",
-                    "members": [
-                        {"type": "STRING", "value": "if"},
-                        {"type": "STRING", "value": "else"},
-                        {"type": "STRING", "value": "while"}
-                    ]
+            {
+                "name": "kw_test",
+                "rules": {
+                    "source": {
+                        "type": "CHOICE",
+                        "members": [
+                            {"type": "STRING", "value": "if"},
+                            {"type": "STRING", "value": "else"},
+                            {"type": "STRING", "value": "while"}
+                        ]
+                    }
                 }
             }
-        }
-        """
+            """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let lexTable = LexTableCompiler.compile(grammar)
         #expect(lexTable.keywords.count == 3)
@@ -466,24 +468,24 @@ struct LexTableCompilerCommentPatternsTests {
     @Test
     func `Extracts line comment pattern from grammar extras`() throws {
         let json = """
-        {
-            "name": "comment_test",
-            "rules": {
-                "source": {"type": "STRING", "value": "x"},
-                "comment": {
-                    "type": "TOKEN",
-                    "content": {
-                        "type": "PATTERN",
-                        "value": "\\\\/\\\\/[^\\\\n]*"
+            {
+                "name": "comment_test",
+                "rules": {
+                    "source": {"type": "STRING", "value": "x"},
+                    "comment": {
+                        "type": "TOKEN",
+                        "content": {
+                            "type": "PATTERN",
+                            "value": "\\\\/\\\\/[^\\\\n]*"
+                        }
                     }
-                }
-            },
-            "extras": [
-                {"type": "PATTERN", "value": "\\\\s+"},
-                {"type": "SYMBOL", "name": "comment"}
-            ]
-        }
-        """
+                },
+                "extras": [
+                    {"type": "PATTERN", "value": "\\\\s+"},
+                    {"type": "SYMBOL", "name": "comment"}
+                ]
+            }
+            """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let lexTable = LexTableCompiler.compile(grammar)
         #expect(lexTable.commentPatterns.contains(.line(prefix: "//")))
@@ -492,27 +494,27 @@ struct LexTableCompilerCommentPatternsTests {
     @Test
     func `Extracts block comment pattern from grammar extras`() throws {
         let json = """
-        {
-            "name": "block_comment_test",
-            "rules": {
-                "source": {"type": "STRING", "value": "x"},
-                "comment": {
-                    "type": "TOKEN",
-                    "content": {
-                        "type": "CHOICE",
-                        "members": [
-                            {"type": "PATTERN", "value": "\\\\/\\\\/[^\\\\n]*"},
-                            {"type": "PATTERN", "value": "\\\\/\\\\*[^*]*\\\\*+([^\\\\/*][^*]*\\\\*+)*\\\\/"}
-                        ]
+            {
+                "name": "block_comment_test",
+                "rules": {
+                    "source": {"type": "STRING", "value": "x"},
+                    "comment": {
+                        "type": "TOKEN",
+                        "content": {
+                            "type": "CHOICE",
+                            "members": [
+                                {"type": "PATTERN", "value": "\\\\/\\\\/[^\\\\n]*"},
+                                {"type": "PATTERN", "value": "\\\\/\\\\*[^*]*\\\\*+([^\\\\/*][^*]*\\\\*+)*\\\\/"}
+                            ]
+                        }
                     }
-                }
-            },
-            "extras": [
-                {"type": "PATTERN", "value": "\\\\s+"},
-                {"type": "SYMBOL", "name": "comment"}
-            ]
-        }
-        """
+                },
+                "extras": [
+                    {"type": "PATTERN", "value": "\\\\s+"},
+                    {"type": "SYMBOL", "name": "comment"}
+                ]
+            }
+            """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let lexTable = LexTableCompiler.compile(grammar)
         #expect(lexTable.commentPatterns.contains(.line(prefix: "//")))
@@ -522,16 +524,16 @@ struct LexTableCompilerCommentPatternsTests {
     @Test
     func `Returns empty comment patterns when no extras define comments`() throws {
         let json = """
-        {
-            "name": "no_comments",
-            "rules": {
-                "source": {"type": "STRING", "value": "x"}
-            },
-            "extras": [
-                {"type": "PATTERN", "value": "\\\\s+"}
-            ]
-        }
-        """
+            {
+                "name": "no_comments",
+                "rules": {
+                    "source": {"type": "STRING", "value": "x"}
+                },
+                "extras": [
+                    {"type": "PATTERN", "value": "\\\\s+"}
+                ]
+            }
+            """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let lexTable = LexTableCompiler.compile(grammar)
         #expect(lexTable.commentPatterns.isEmpty)
@@ -540,33 +542,33 @@ struct LexTableCompilerCommentPatternsTests {
     @Test
     func `Swift grammar extras produce both line and block comment patterns`() throws {
         let json = """
-        {
-            "name": "swift_like",
-            "rules": {
-                "source": {"type": "STRING", "value": "x"},
-                "comment": {
-                    "type": "TOKEN",
-                    "content": {
-                        "type": "CHOICE",
-                        "members": [
-                            {
-                                "type": "SEQ",
-                                "members": [{"type": "PATTERN", "value": "\\\\/{2,3}[^\\\\/].*"}]
-                            },
-                            {
-                                "type": "SEQ",
-                                "members": [{"type": "PATTERN", "value": "\\\\/\\\\*{1,}[^*]*\\\\*+([^\\\\/*][^*]*\\\\*+)*\\\\/"}]
-                            }
-                        ]
+            {
+                "name": "swift_like",
+                "rules": {
+                    "source": {"type": "STRING", "value": "x"},
+                    "comment": {
+                        "type": "TOKEN",
+                        "content": {
+                            "type": "CHOICE",
+                            "members": [
+                                {
+                                    "type": "SEQ",
+                                    "members": [{"type": "PATTERN", "value": "\\\\/{2,3}[^\\\\/].*"}]
+                                },
+                                {
+                                    "type": "SEQ",
+                                    "members": [{"type": "PATTERN", "value": "\\\\/\\\\*{1,}[^*]*\\\\*+([^\\\\/*][^*]*\\\\*+)*\\\\/"}]
+                                }
+                            ]
+                        }
                     }
-                }
-            },
-            "extras": [
-                {"type": "PATTERN", "value": "\\\\s+"},
-                {"type": "SYMBOL", "name": "comment"}
-            ]
-        }
-        """
+                },
+                "extras": [
+                    {"type": "PATTERN", "value": "\\\\s+"},
+                    {"type": "SYMBOL", "name": "comment"}
+                ]
+            }
+            """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let lexTable = LexTableCompiler.compile(grammar)
         #expect(lexTable.commentPatterns.contains(.line(prefix: "//")))
@@ -576,23 +578,23 @@ struct LexTableCompilerCommentPatternsTests {
     @Test
     func `Hash line comment pattern is extracted`() throws {
         let json = """
-        {
-            "name": "hash_comment",
-            "rules": {
-                "source": {"type": "STRING", "value": "x"},
-                "comment": {
-                    "type": "TOKEN",
-                    "content": {
-                        "type": "PATTERN",
-                        "value": "#[^\\\\n]*"
+            {
+                "name": "hash_comment",
+                "rules": {
+                    "source": {"type": "STRING", "value": "x"},
+                    "comment": {
+                        "type": "TOKEN",
+                        "content": {
+                            "type": "PATTERN",
+                            "value": "#[^\\\\n]*"
+                        }
                     }
-                }
-            },
-            "extras": [
-                {"type": "SYMBOL", "name": "comment"}
-            ]
-        }
-        """
+                },
+                "extras": [
+                    {"type": "SYMBOL", "name": "comment"}
+                ]
+            }
+            """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let lexTable = LexTableCompiler.compile(grammar)
         #expect(lexTable.commentPatterns.contains(.line(prefix: "#")))
@@ -623,27 +625,27 @@ struct KeywordExtractorTests {
     @Test
     func `Extracts word-like keywords`() throws {
         let json = """
-        {
-            "name": "extract_test",
-            "word": "identifier",
-            "rules": {
-                "source": {
-                    "type": "CHOICE",
-                    "members": [
-                        {"type": "STRING", "value": "let"},
-                        {"type": "STRING", "value": "var"},
-                        {"type": "STRING", "value": "+"},
-                        {"type": "SYMBOL", "name": "identifier"}
-                    ]
-                },
-                "identifier": {"type": "PATTERN", "value": "[a-zA-Z_]\\\\w*"}
+            {
+                "name": "extract_test",
+                "word": "identifier",
+                "rules": {
+                    "source": {
+                        "type": "CHOICE",
+                        "members": [
+                            {"type": "STRING", "value": "let"},
+                            {"type": "STRING", "value": "var"},
+                            {"type": "STRING", "value": "+"},
+                            {"type": "SYMBOL", "name": "identifier"}
+                        ]
+                    },
+                    "identifier": {"type": "PATTERN", "value": "[a-zA-Z_]\\\\w*"}
+                }
             }
-        }
-        """
+            """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let keywords = KeywordExtractor.extract(from: grammar)
         #expect(keywords["let"] != nil)
         #expect(keywords["var"] != nil)
-        #expect(keywords["+"] == nil) // Not word-like
+        #expect(keywords["+"] == nil)  // Not word-like
     }
 }

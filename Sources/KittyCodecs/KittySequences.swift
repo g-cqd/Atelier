@@ -9,7 +9,8 @@ public enum KittySequences: Sendable {
 
     /// Pre-computed decimal digits for values 0-65535.
     private static let decimalTable: [(UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)] = {
-        var table = [(UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)](repeating: (0, 0, 0, 0, 0, 0), count: 65536)
+        var table = [(UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)](
+            repeating: (0, 0, 0, 0, 0, 0), count: 65536)
         for i in 0..<65536 {
             let d5 = UInt8(i / 10_000)
             let d4 = UInt8((i / 1_000) % 10)
@@ -17,11 +18,17 @@ public enum KittySequences: Sendable {
             let d2 = UInt8((i / 10) % 10)
             let d1 = UInt8(i % 10)
             let count: UInt8
-            if i >= 10_000 { count = 5 }
-            else if i >= 1_000 { count = 4 }
-            else if i >= 100 { count = 3 }
-            else if i >= 10 { count = 2 }
-            else { count = 1 }
+            if i >= 10_000 {
+                count = 5
+            } else if i >= 1_000 {
+                count = 4
+            } else if i >= 100 {
+                count = 3
+            } else if i >= 10 {
+                count = 2
+            } else {
+                count = 1
+            }
             table[i] = (0x30 + d5, 0x30 + d4, 0x30 + d3, 0x30 + d2, 0x30 + d1, count)
         }
         return table
@@ -46,9 +53,9 @@ public enum KittySequences: Sendable {
     /// - Returns: Raw bytes for the `CSI > flags u` sequence.
     public static func pushKeyboardMode(flags: UInt8) -> [UInt8] {
         // CSI > flags u
-        var bytes: [UInt8] = [0x1b, 0x5b, 0x3e] // ESC [ >
+        var bytes: [UInt8] = [0x1b, 0x5b, 0x3e]  // ESC [ >
         appendDecimalLegacy(&bytes, flags)
-        bytes.append(0x75) // u
+        bytes.append(0x75)  // u
         return bytes
     }
 
@@ -60,32 +67,32 @@ public enum KittySequences: Sendable {
 
     /// Enable SGR mouse mode (1006) — cell coordinates with button-event (drag) tracking.
     public static let enableMouseSGR: [UInt8] = [
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x30, 0x68, // CSI ? 1000 h (basic mouse)
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x32, 0x68, // CSI ? 1002 h (button-event / drag)
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x36, 0x68, // CSI ? 1006 h (SGR extended)
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x30, 0x68,  // CSI ? 1000 h (basic mouse)
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x32, 0x68,  // CSI ? 1002 h (button-event / drag)
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x36, 0x68,  // CSI ? 1006 h (SGR extended)
     ]
 
     /// Disable SGR mouse mode.
     public static let disableMouseSGR: [UInt8] = [
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x36, 0x6c, // CSI ? 1006 l
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x32, 0x6c, // CSI ? 1002 l
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x30, 0x6c, // CSI ? 1000 l
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x36, 0x6c,  // CSI ? 1006 l
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x32, 0x6c,  // CSI ? 1002 l
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x30, 0x6c,  // CSI ? 1000 l
     ]
 
     /// Enable SGR pixel mouse mode (1016).
     public static let enableMousePixel: [UInt8] = [
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x30, 0x68, // CSI ? 1000 h
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x32, 0x68, // CSI ? 1002 h
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x33, 0x68, // CSI ? 1003 h
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x31, 0x36, 0x68, // CSI ? 1016 h
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x30, 0x68,  // CSI ? 1000 h
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x32, 0x68,  // CSI ? 1002 h
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x33, 0x68,  // CSI ? 1003 h
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x31, 0x36, 0x68,  // CSI ? 1016 h
     ]
 
     /// Disable SGR pixel mouse mode.
     public static let disableMousePixel: [UInt8] = [
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x31, 0x36, 0x6c, // CSI ? 1016 l
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x33, 0x6c, // CSI ? 1003 l
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x32, 0x6c, // CSI ? 1002 l
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x30, 0x6c, // CSI ? 1000 l
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x31, 0x36, 0x6c,  // CSI ? 1016 l
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x33, 0x6c,  // CSI ? 1003 l
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x32, 0x6c,  // CSI ? 1002 l
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x30, 0x6c,  // CSI ? 1000 l
     ]
 
     // MARK: - Cursor
@@ -104,19 +111,20 @@ public enum KittySequences: Sendable {
         appendDecimalLegacy(&bytes, clampedCursorCoordinate(row))
         bytes.append(0x3b)
         appendDecimalLegacy(&bytes, clampedCursorCoordinate(col))
-        bytes.append(0x48) // H
+        bytes.append(0x48)  // H
         return bytes
     }
 
     /// Appends a cursor movement sequence directly into a ContiguousArray buffer (zero-allocation).
     @inline(__always)
-    public static func appendMoveCursor(row: Int, col: Int, to bytes: inout ContiguousArray<UInt8>) {
-        bytes.append(0x1b) // ESC
-        bytes.append(0x5b) // [
+    public static func appendMoveCursor(row: Int, col: Int, to bytes: inout ContiguousArray<UInt8>)
+    {
+        bytes.append(0x1b)  // ESC
+        bytes.append(0x5b)  // [
         appendDecimal(&bytes, clampedCursorCoordinate(row))
-        bytes.append(0x3b) // ;
+        bytes.append(0x3b)  // ;
         appendDecimal(&bytes, clampedCursorCoordinate(col))
-        bytes.append(0x48) // H
+        bytes.append(0x48)  // H
     }
 
     /// Appends begin sync update sequence to a buffer.
@@ -154,11 +162,15 @@ public enum KittySequences: Sendable {
     // MARK: - Screen
 
     /// Enter alternate screen buffer.
-    public static let enterAlternateScreen: [UInt8] = [0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x34, 0x39, 0x68]
+    public static let enterAlternateScreen: [UInt8] = [
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x34, 0x39, 0x68,
+    ]
     // CSI ? 1049 h
 
     /// Leave alternate screen buffer.
-    public static let leaveAlternateScreen: [UInt8] = [0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x34, 0x39, 0x6c]
+    public static let leaveAlternateScreen: [UInt8] = [
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x34, 0x39, 0x6c,
+    ]
     // CSI ? 1049 l
 
     /// Clear entire screen.
@@ -173,11 +185,11 @@ public enum KittySequences: Sendable {
     /// - Returns: Raw bytes for the `OSC 52 ; c ; <base64> ST` sequence.
     public static func setClipboard(_ base64Content: String) -> [UInt8] {
         // OSC 52 ; c ; <base64> ST
-        var bytes: [UInt8] = [0x1b, 0x5d] // ESC ]
+        var bytes: [UInt8] = [0x1b, 0x5d]  // ESC ]
         bytes.append(contentsOf: "52;c;".utf8)
         bytes.append(contentsOf: base64Content.utf8)
-        bytes.append(0x1b) // ESC
-        bytes.append(0x5c) // \ (ST)
+        bytes.append(0x1b)  // ESC
+        bytes.append(0x5c)  // \ (ST)
         return bytes
     }
 
@@ -199,7 +211,7 @@ public enum KittySequences: Sendable {
     /// - Returns: Raw bytes encoding one or two OSC 99 sequences.
     public static func notify(title: String, body: String = "") -> [UInt8] {
         // OSC 99 ; i=1:d=0:p=title ; <title> ST
-        var bytes: [UInt8] = [0x1b, 0x5d] // ESC ]
+        var bytes: [UInt8] = [0x1b, 0x5d]  // ESC ]
         bytes.append(contentsOf: "99;i=1:d=0:p=title;".utf8)
         bytes.append(contentsOf: title.utf8)
         bytes.append(0x1b)
@@ -222,17 +234,23 @@ public enum KittySequences: Sendable {
     // CSI ? 1004 h
 
     /// Disable focus event reporting.
-    public static let disableFocusEvents: [UInt8] = [0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x34, 0x6c]
+    public static let disableFocusEvents: [UInt8] = [
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x34, 0x6c,
+    ]
     // CSI ? 1004 l
 
     // MARK: - Bracketed Paste
 
     /// Enable bracketed paste mode.
-    public static let enableBracketedPaste: [UInt8] = [0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x68]
+    public static let enableBracketedPaste: [UInt8] = [
+        0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x68,
+    ]
     // CSI ? 2004 h
 
     /// Disable bracketed paste mode.
-    public static let disableBracketedPaste: [UInt8] = [0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x6c]
+    public static let disableBracketedPaste: [UInt8] = [
+        0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x6c,
+    ]
     // CSI ? 2004 l
 
     // MARK: - Scroll Regions (DECSTBM) & Index
@@ -242,14 +260,16 @@ public enum KittySequences: Sendable {
     /// Content outside this region is unaffected by SU/SD scroll commands.
     /// Call `appendResetScrollRegion` to restore full-screen scrolling.
     @inline(__always)
-    public static func appendSetScrollRegion(top: Int, bottom: Int, to bytes: inout ContiguousArray<UInt8>) {
+    public static func appendSetScrollRegion(
+        top: Int, bottom: Int, to bytes: inout ContiguousArray<UInt8>
+    ) {
         // CSI top ; bottom r
         bytes.append(0x1b)
         bytes.append(0x5b)
         appendDecimal(&bytes, clampedCursorCoordinate(top))
         bytes.append(0x3b)
         appendDecimal(&bytes, clampedCursorCoordinate(bottom))
-        bytes.append(0x72) // r
+        bytes.append(0x72)  // r
     }
 
     /// Resets the scrolling region to the full terminal screen.
@@ -270,7 +290,7 @@ public enum KittySequences: Sendable {
         bytes.append(0x1b)
         bytes.append(0x5b)
         appendDecimal(&bytes, clampedCursorCoordinate(lines))
-        bytes.append(0x53) // S
+        bytes.append(0x53)  // S
     }
 
     /// Scrolls the content within the active scroll region down by `n` lines.
@@ -282,7 +302,7 @@ public enum KittySequences: Sendable {
         bytes.append(0x1b)
         bytes.append(0x5b)
         appendDecimal(&bytes, clampedCursorCoordinate(lines))
-        bytes.append(0x54) // T
+        bytes.append(0x54)  // T
     }
 
     // MARK: - Private

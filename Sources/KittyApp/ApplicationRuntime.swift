@@ -1,7 +1,7 @@
-import KittyTerminal
 import KittyCodecs
 import KittyInput
 import KittyRenderer
+import KittyTerminal
 import KittyWidgets
 
 /// Orchestrates the application lifecycle.
@@ -29,7 +29,8 @@ public final class ApplicationRuntime: Sendable {
         }
 
         defer {
-            let cleanup = KittySequences.popKeyboardMode
+            let cleanup =
+                KittySequences.popKeyboardMode
                 + KittySequences.disableMouseSGR
                 + KittySequences.disableFocusEvents
                 + KittySequences.disableBracketedPaste
@@ -49,7 +50,8 @@ public final class ApplicationRuntime: Sendable {
         }
 
         // Setup terminal
-        let setup = KittySequences.enterAlternateScreen
+        let setup =
+            KittySequences.enterAlternateScreen
             + KittySequences.hideCursor
             + KittySequences.clearScreen
             + KittySequences.pushKeyboardMode(flags: 31)

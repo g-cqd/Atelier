@@ -7,7 +7,7 @@ public struct ParseTable: Sendable, Equatable, Codable {
     public var terminals: [String]
     public var nonTerminals: [String]
     public var actions: [[Action]]  // [state][symbolIndex] → Action
-    public var gotos: [[Int?]]      // [state][nonTerminalIndex] → state or nil
+    public var gotos: [[Int?]]  // [state][nonTerminalIndex] → state or nil
 
     public init(
         stateCount: Int,
@@ -29,11 +29,11 @@ public struct ParseTable: Sendable, Equatable, Codable {
 // MARK: - Action
 
 public enum Action: Sendable, Equatable, Codable {
-    case shift(Int)                     // Shift and go to state
+    case shift(Int)  // Shift and go to state
     case reduce(ruleIndex: Int, count: Int, nonTerminal: String)  // Reduce
     case accept
     case error
-    case conflict([Action])             // GLR conflict — fork the parser
+    case conflict([Action])  // GLR conflict — fork the parser
 
     // MARK: - Codable
 
@@ -99,8 +99,8 @@ public enum Action: Sendable, Equatable, Codable {
 
 /// Describes how comments look in a language, extracted from grammar extras.
 public enum CommentPattern: Sendable, Equatable {
-    case line(prefix: String)                   // e.g. "//" → scan to end of line
-    case block(open: String, close: String)     // e.g. "/*" … "*/"
+    case line(prefix: String)  // e.g. "//" → scan to end of line
+    case block(open: String, close: String)  // e.g. "/*" … "*/"
 
     private enum CodingKeys: String, CodingKey {
         case kind, prefix, open, close
@@ -120,7 +120,8 @@ extension CommentPattern: Codable {
                 close: try c.decode(String.self, forKey: .close)
             )
         default:
-            throw DecodingError.dataCorruptedError(forKey: .kind, in: c, debugDescription: "Unknown CommentPattern kind: \(kind)")
+            throw DecodingError.dataCorruptedError(
+                forKey: .kind, in: c, debugDescription: "Unknown CommentPattern kind: \(kind)")
         }
     }
 
@@ -146,7 +147,10 @@ public struct LexTable: Sendable, Equatable, Codable {
     public var keywords: [String: Int]  // keyword string → token ID
     public var commentPatterns: [CommentPattern]
 
-    public init(states: [LexState] = [], keywords: [String: Int] = [:], commentPatterns: [CommentPattern] = []) {
+    public init(
+        states: [LexState] = [], keywords: [String: Int] = [:],
+        commentPatterns: [CommentPattern] = []
+    ) {
         self.states = states
         self.keywords = keywords
         self.commentPatterns = commentPatterns
@@ -164,9 +168,8 @@ public struct LexState: Sendable, Equatable, Codable {
     }
 
     public static func == (lhs: LexState, rhs: LexState) -> Bool {
-        lhs.accepting == rhs.accepting &&
-        lhs.transitions.count == rhs.transitions.count &&
-        zip(lhs.transitions, rhs.transitions).allSatisfy { $0.0 == $1.0 && $0.1 == $1.1 }
+        lhs.accepting == rhs.accepting && lhs.transitions.count == rhs.transitions.count
+            && zip(lhs.transitions, rhs.transitions).allSatisfy { $0.0 == $1.0 && $0.1 == $1.1 }
     }
 
     // MARK: - Codable
@@ -191,7 +194,9 @@ public struct LexState: Sendable, Equatable, Codable {
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        let entries = transitions.map { TransitionEntry(lower: $0.0.lowerBound, upper: $0.0.upperBound, target: $0.1) }
+        let entries = transitions.map {
+            TransitionEntry(lower: $0.0.lowerBound, upper: $0.0.upperBound, target: $0.1)
+        }
         try container.encode(entries, forKey: .transitions)
         try container.encodeIfPresent(accepting, forKey: .accepting)
     }

@@ -30,19 +30,19 @@ public enum UnicodeWidth {
 
     // Sorted array of (start, end) ranges for binary search
     private static let wideRanges: [(UInt32, UInt32)] = [
-        (0x1100,  0x115F),  // Hangul Jamo
-        (0x2E80,  0x303E),  // CJK Radicals / Kangxi
-        (0x3041,  0x33BF),  // Hiragana, Katakana, Bopomofo, etc.
-        (0x3400,  0x4DBF),  // CJK Extension A
-        (0x4E00,  0x9FFF),  // CJK Unified Ideographs
-        (0xA000,  0xA4CF),  // Yi Syllables
-        (0xAC00,  0xD7AF),  // Hangul Syllables
-        (0xF900,  0xFAFF),  // CJK Compatibility Ideographs
-        (0xFE30,  0xFE6F),  // CJK Compatibility Forms
-        (0xFF01,  0xFF60),  // Fullwidth Latin / Katakana
-        (0xFFE0,  0xFFE6),  // Fullwidth Signs
-        (0x20000, 0x2FFFD), // CJK Extension B-F
-        (0x30000, 0x3FFFD), // CJK Extension G+
+        (0x1100, 0x115F),  // Hangul Jamo
+        (0x2E80, 0x303E),  // CJK Radicals / Kangxi
+        (0x3041, 0x33BF),  // Hiragana, Katakana, Bopomofo, etc.
+        (0x3400, 0x4DBF),  // CJK Extension A
+        (0x4E00, 0x9FFF),  // CJK Unified Ideographs
+        (0xA000, 0xA4CF),  // Yi Syllables
+        (0xAC00, 0xD7AF),  // Hangul Syllables
+        (0xF900, 0xFAFF),  // CJK Compatibility Ideographs
+        (0xFE30, 0xFE6F),  // CJK Compatibility Forms
+        (0xFF01, 0xFF60),  // Fullwidth Latin / Katakana
+        (0xFFE0, 0xFFE6),  // Fullwidth Signs
+        (0x20000, 0x2FFFD),  // CJK Extension B-F
+        (0x30000, 0x3FFFD),  // CJK Extension G+
     ]
 
     /// Binary search over sorted wide ranges.

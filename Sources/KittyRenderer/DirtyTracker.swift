@@ -11,8 +11,8 @@ public struct DirtyTracker: Sendable, Equatable {
 
     public mutating func mark(_ index: Int) {
         guard index >= 0, index < capacity else { return }
-        let word = index >> 6       // / 64
-        let bit = index & 63        // % 64
+        let word = index >> 6  // / 64
+        let bit = index & 63  // % 64
         bits[word] |= (1 &<< bit)
     }
 

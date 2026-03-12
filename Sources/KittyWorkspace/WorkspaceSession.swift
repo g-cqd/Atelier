@@ -74,7 +74,9 @@ public final class WorkspaceSession: ActiveDocumentView, WorkspaceCommands {
     }
 
     public func switchToTab(_ index: Int) {
-        guard index != bufferManager.activeIndex, index >= 0, index < bufferManager.count else { return }
+        guard index != bufferManager.activeIndex, index >= 0, index < bufferManager.count else {
+            return
+        }
         saveStateToActiveBuffer()
         bufferManager.switchTo(index: index)
         restoreStateFromActiveBuffer()
@@ -84,14 +86,12 @@ public final class WorkspaceSession: ActiveDocumentView, WorkspaceCommands {
     // MARK: - Document text access
 
     public var fileContent: [String] {
-        get {
-            if let cachedFileLines {
-                return cachedFileLines
-            }
-            let lines = textBuffer.lines
-            cachedFileLines = lines
-            return lines
+        if let cachedFileLines {
+            return cachedFileLines
         }
+        let lines = textBuffer.lines
+        cachedFileLines = lines
+        return lines
     }
 
     public var documentText: String {
@@ -126,7 +126,8 @@ public final class WorkspaceSession: ActiveDocumentView, WorkspaceCommands {
         if let cachedSerializedByteCount {
             return cachedSerializedByteCount
         }
-        let count = TextDocument.computeSerializedByteCount(in: textBuffer, lineEnding: currentLineEnding)
+        let count = TextDocument.computeSerializedByteCount(
+            in: textBuffer, lineEnding: currentLineEnding)
         cachedSerializedByteCount = count
         return count
     }
@@ -148,13 +149,16 @@ public final class WorkspaceSession: ActiveDocumentView, WorkspaceCommands {
         highlightSession = nil
     }
 
-    public func replaceDocumentText(with content: String, tabSize: Int, lineEnding: TextDocument.LineEnding) {
+    public func replaceDocumentText(
+        with content: String, tabSize: Int, lineEnding: TextDocument.LineEnding
+    ) {
         let lines = TextBuffer.splitLines(from: content)
         textBuffer = TextBuffer(lines: lines)
         cachedFileLines = lines
         cachedDocumentText = content
         cachedMaxLineWidth = TextDocument.computeMaxLineWidth(for: lines, tabSize: tabSize)
-        cachedSerializedByteCount = TextDocument.computeSerializedByteCount(for: lines, lineEnding: lineEnding)
+        cachedSerializedByteCount = TextDocument.computeSerializedByteCount(
+            for: lines, lineEnding: lineEnding)
         highlightSession = nil
     }
 

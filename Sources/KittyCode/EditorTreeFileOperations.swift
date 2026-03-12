@@ -20,7 +20,9 @@ extension EditorState {
 
             await loadInitialTree(validateHistory: false)
             selectTreePath(destinationPath)
-            fileTreeHistory.record(.create(snapshot: .file(path: destinationPath, data: Data())), currentNodes: treeNodes)
+            fileTreeHistory.record(
+                .create(snapshot: .file(path: destinationPath, data: Data())),
+                currentNodes: treeNodes)
             statusMessage = "Created \(destinationURL.lastPathComponent)"
             renderRefreshSource?.invalidate()
             return true
@@ -31,7 +33,8 @@ extension EditorState {
     }
 
     @discardableResult
-    func createTreeDirectory(at destinationPath: String, suggestedDirectory _: String) async -> Bool {
+    func createTreeDirectory(at destinationPath: String, suggestedDirectory _: String) async -> Bool
+    {
         guard validateCreatablePath(destinationPath) else { return false }
 
         do {
@@ -43,7 +46,9 @@ extension EditorState {
 
             await loadInitialTree(validateHistory: false)
             selectTreePath(destinationPath)
-            fileTreeHistory.record(.create(snapshot: .directory(path: destinationPath, children: [])), currentNodes: treeNodes)
+            fileTreeHistory.record(
+                .create(snapshot: .directory(path: destinationPath, children: [])),
+                currentNodes: treeNodes)
             statusMessage = "Created \(URL(fileURLWithPath: destinationPath).lastPathComponent)"
             renderRefreshSource?.invalidate()
             return true
@@ -60,7 +65,9 @@ extension EditorState {
 
     @discardableResult
     func moveTreeItem(from sourcePath: String, to destinationPath: String) async -> Bool {
-        guard validateMovablePath(sourcePath, destinationPath: destinationPath) else { return false }
+        guard validateMovablePath(sourcePath, destinationPath: destinationPath) else {
+            return false
+        }
 
         let destinationURL = URL(fileURLWithPath: destinationPath)
         do {

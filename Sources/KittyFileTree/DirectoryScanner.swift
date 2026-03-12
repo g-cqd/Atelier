@@ -29,7 +29,9 @@ public enum DirectoryScanner {
         visibility: FileVisibility = .defaultHidden
     ) -> [FileNode] {
         var count = 0
-        return scanDirectory(path, maxDepth: maxDepth, maxEntries: maxEntries, visibility: visibility, entryCount: &count)
+        return scanDirectory(
+            path, maxDepth: maxDepth, maxEntries: maxEntries, visibility: visibility,
+            entryCount: &count)
     }
 
     /// Async variant that parallelizes subdirectory scanning using a TaskGroup.
@@ -51,7 +53,8 @@ public enum DirectoryScanner {
         visibility: FileVisibility = .defaultHidden
     ) async -> [FileNode] {
         let counter = EntryCounter(limit: maxEntries)
-        return await scanDirectoryAsync(path, maxDepth: maxDepth, visibility: visibility, counter: counter)
+        return await scanDirectoryAsync(
+            path, maxDepth: maxDepth, visibility: visibility, counter: counter)
     }
 
     // MARK: - Synchronous (original)
@@ -88,7 +91,9 @@ public enum DirectoryScanner {
                     entryCount: &entryCount
                 )
             }
-            entries.append(FileNode(name: item, path: fullPath, isDirectory: isDir.boolValue, children: children))
+            entries.append(
+                FileNode(
+                    name: item, path: fullPath, isDirectory: isDir.boolValue, children: children))
         }
 
         return sortEntries(entries)
@@ -164,7 +169,12 @@ public enum DirectoryScanner {
                             visibility: visibility,
                             counter: counter
                         )
-                        return (idx, FileNode(name: dir.name, path: dir.path, isDirectory: true, children: children))
+                        return (
+                            idx,
+                            FileNode(
+                                name: dir.name, path: dir.path, isDirectory: true,
+                                children: children)
+                        )
                     }
                 }
 

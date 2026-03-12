@@ -37,20 +37,21 @@ public struct Theme: Sendable {
 
     // MARK: - Built-in Themes
 
-    public static let monokai = Theme(styles: [
-        "keyword": Style(fg: .rgb(r: 249, g: 38, b: 114), bold: true),
-        "function": Style(fg: .rgb(r: 166, g: 226, b: 46)),
-        "function.name": Style(fg: .rgb(r: 166, g: 226, b: 46)),
-        "type": Style(fg: .rgb(r: 102, g: 217, b: 239), italic: true),
-        "string": Style(fg: .rgb(r: 230, g: 219, b: 116)),
-        "number": Style(fg: .rgb(r: 174, g: 129, b: 255)),
-        "comment": Style(fg: .rgb(r: 117, g: 113, b: 94), italic: true),
-        "variable": Style(fg: .rgb(r: 248, g: 248, b: 242)),
-        "constant": Style(fg: .rgb(r: 174, g: 129, b: 255)),
-        "operator": Style(fg: .rgb(r: 249, g: 38, b: 114)),
-        "punctuation": Style(fg: .rgb(r: 248, g: 248, b: 242)),
-        "property": Style(fg: .rgb(r: 166, g: 226, b: 46)),
-        "tag": Style(fg: .rgb(r: 249, g: 38, b: 114)),
-        "attribute": Style(fg: .rgb(r: 166, g: 226, b: 46)),
-    ], defaultStyle: Style(fg: .rgb(r: 248, g: 248, b: 242)))
+    public static let monokai = Theme(
+        styles: [
+            "keyword": Style(fg: .rgb(r: 249, g: 38, b: 114), bold: true),
+            "function": Style(fg: .rgb(r: 166, g: 226, b: 46)),
+            "function.name": Style(fg: .rgb(r: 166, g: 226, b: 46)),
+            "type": Style(fg: .rgb(r: 102, g: 217, b: 239), italic: true),
+            "string": Style(fg: .rgb(r: 230, g: 219, b: 116)),
+            "number": Style(fg: .rgb(r: 174, g: 129, b: 255)),
+            "comment": Style(fg: .rgb(r: 117, g: 113, b: 94), italic: true),
+            "variable": Style(fg: .rgb(r: 248, g: 248, b: 242)),
+            "constant": Style(fg: .rgb(r: 174, g: 129, b: 255)),
+            "operator": Style(fg: .rgb(r: 249, g: 38, b: 114)),
+            "punctuation": Style(fg: .rgb(r: 248, g: 248, b: 242)),
+            "property": Style(fg: .rgb(r: 166, g: 226, b: 46)),
+            "tag": Style(fg: .rgb(r: 249, g: 38, b: 114)),
+            "attribute": Style(fg: .rgb(r: 166, g: 226, b: 46)),
+        ], defaultStyle: Style(fg: .rgb(r: 248, g: 248, b: 242)))
 }

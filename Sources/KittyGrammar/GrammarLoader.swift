@@ -10,9 +10,11 @@ public enum GrammarLoader: Sendable {
         let url = URL(fileURLWithPath: path)
         // Check file size before loading
         if let attrs = try? FileManager.default.attributesOfItem(atPath: path),
-           let fileSize = attrs[.size] as? Int,
-           fileSize > maxGrammarFileSize {
-            throw .invalidJSON("Grammar file too large (\(fileSize) bytes, limit \(maxGrammarFileSize))")
+            let fileSize = attrs[.size] as? Int,
+            fileSize > maxGrammarFileSize
+        {
+            throw .invalidJSON(
+                "Grammar file too large (\(fileSize) bytes, limit \(maxGrammarFileSize))")
         }
         let data: Data
         do {
@@ -40,7 +42,9 @@ public enum GrammarLoader: Sendable {
 
     // MARK: - Private
 
-    private static func parseGrammar(_ dict: [String: Any], ruleOrder: [String]) throws(GrammarError) -> GrammarDefinition {
+    private static func parseGrammar(_ dict: [String: Any], ruleOrder: [String])
+        throws(GrammarError) -> GrammarDefinition
+    {
         guard let name = dict["name"] as? String else {
             throw .missingField("name")
         }
@@ -359,7 +363,9 @@ private struct JSONOrderScanner: Sendable {
     }
 
     private mutating func skipScalarValue() {
-        while let character = currentCharacter, !character.isWhitespace, !isValueTerminator(character) {
+        while let character = currentCharacter, !character.isWhitespace,
+            !isValueTerminator(character)
+        {
             advance()
         }
     }
@@ -513,7 +519,9 @@ private struct JSONOrderScanner: Sendable {
         value >= 0xDC00 && value <= 0xDFFF
     }
 
-    private static func supplementaryScalarValue(highSurrogate: UInt32, lowSurrogate: UInt32) -> UInt32 {
+    private static func supplementaryScalarValue(highSurrogate: UInt32, lowSurrogate: UInt32)
+        -> UInt32
+    {
         let highOffset = highSurrogate - 0xD800
         let lowOffset = lowSurrogate - 0xDC00
         return 0x10000 + (highOffset << 10) + lowOffset

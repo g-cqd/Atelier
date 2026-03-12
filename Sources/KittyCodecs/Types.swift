@@ -64,12 +64,12 @@ public struct KeyModifiers: OptionSet, Sendable, Equatable, Hashable {
         self.rawValue = rawValue
     }
 
-    public static let shift   = KeyModifiers(rawValue: 1 << 0)
-    public static let alt     = KeyModifiers(rawValue: 1 << 1)
-    public static let ctrl    = KeyModifiers(rawValue: 1 << 2)
+    public static let shift = KeyModifiers(rawValue: 1 << 0)
+    public static let alt = KeyModifiers(rawValue: 1 << 1)
+    public static let ctrl = KeyModifiers(rawValue: 1 << 2)
     public static let `super` = KeyModifiers(rawValue: 1 << 3)
-    public static let hyper   = KeyModifiers(rawValue: 1 << 4)
-    public static let meta    = KeyModifiers(rawValue: 1 << 5)
+    public static let hyper = KeyModifiers(rawValue: 1 << 4)
+    public static let meta = KeyModifiers(rawValue: 1 << 5)
     public static let capsLock = KeyModifiers(rawValue: 1 << 6)
     public static let numLock = KeyModifiers(rawValue: 1 << 7)
 }

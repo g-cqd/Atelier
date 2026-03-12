@@ -1,7 +1,7 @@
 import Foundation
 import KittyCodecs
-import KittyGit
 import KittyFileTree
+import KittyGit
 import KittyRenderer
 import KittySyntax
 import KittyTerminal
@@ -9,6 +9,7 @@ import KittyText
 import KittyWidgets
 import KittyWorkspace
 import Testing
+
 @testable import KittyCode
 
 @Suite
@@ -185,7 +186,9 @@ struct KittyCodeConfigTests {
 @Suite
 @MainActor
 struct KittyCodeNavigationTests {
-    private func makeSUT(fileContent: [String], columns: Int = 80, rows: Int = 24) -> (state: EditorState, pipeline: RenderPipeline) {
+    private func makeSUT(fileContent: [String], columns: Int = 80, rows: Int = 24) -> (
+        state: EditorState, pipeline: RenderPipeline
+    ) {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
@@ -244,7 +247,8 @@ struct KittyCodeNavigationTests {
 
     @Test
     func `horizontal mouse wheel events update horizontal scroll offset`() {
-        let sut = makeSUT(fileContent: ["0123456789abcdefghijklmnopqrstuvwxyz"], columns: 18, rows: 8)
+        let sut = makeSUT(
+            fileContent: ["0123456789abcdefghijklmnopqrstuvwxyz"], columns: 18, rows: 8)
         sut.state.mode = .editor
         sut.state.sidebarCollapsed = true
 
@@ -445,12 +449,14 @@ struct KittyCodeNavigationTests {
 
     @Test
     func `scrolling past horizontal limits cancels immediately`() {
-        let sut = makeSUT(fileContent: ["0123456789abcdefghijklmnopqrstuvwxyz"], columns: 18, rows: 8)
+        let sut = makeSUT(
+            fileContent: ["0123456789abcdefghijklmnopqrstuvwxyz"], columns: 18, rows: 8)
         sut.state.mode = .editor
         sut.state.sidebarCollapsed = true
         sut.state.config.editor.wrapLines = false
 
-        let layout = LayoutMetrics(state: sut.state, columns: sut.pipeline.columns, rows: sut.pipeline.rows)
+        let layout = LayoutMetrics(
+            state: sut.state, columns: sut.pipeline.columns, rows: sut.pipeline.rows)
         let editorRect = Rect(
             x: layout.editorStart,
             y: layout.contentStartRow,
@@ -517,7 +523,9 @@ struct KittyCodeNavigationTests {
         let rect = Rect(x: 1, y: 1, width: 10, height: 5)
 
         #expect(TreePanelLayout.contentWidth(rowCount: 20, in: rect) == 9)
-        #expect(TreePanelLayout.verticalScrollIndicatorRect(rowCount: 20, in: rect) == Rect(x: 10, y: 1, width: 1, height: 5))
+        #expect(
+            TreePanelLayout.verticalScrollIndicatorRect(rowCount: 20, in: rect)
+                == Rect(x: 10, y: 1, width: 1, height: 5))
 
         let gripOffset = TreePanelLayout.scrollGripOffset(
             rowCount: 20,
@@ -646,7 +654,8 @@ struct KittyCodeNavigationTests {
     @Test
     func `modifier-only key presses preserve editor selection and text`() {
         let sut = makeSUT(fileContent: ["hello world"])
-        sut.state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
+        sut.state.bufferManager.open(
+            filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
         sut.state.restoreStateFromActiveBuffer()
         let selection = TextSelection(
             anchor: TextPosition(row: 0, col: 0),
@@ -670,7 +679,7 @@ struct KittyCodeNavigationTests {
         let sut = makeSUT(
             fileContent: [
                 "0123456789abcdefghijklmnopqrstuvwxyz",
-                "short"
+                "short",
             ],
             columns: 18,
             rows: 8
@@ -681,7 +690,8 @@ struct KittyCodeNavigationTests {
 
         insertText("!", into: sut.state)
 
-        let layout = LayoutMetrics(state: sut.state, columns: sut.pipeline.columns, rows: sut.pipeline.rows)
+        let layout = LayoutMetrics(
+            state: sut.state, columns: sut.pipeline.columns, rows: sut.pipeline.rows)
         let editorRect = Rect(
             x: layout.editorStart,
             y: layout.contentStartRow,
@@ -702,7 +712,8 @@ struct KittyCodeNavigationTests {
     @Test
     func `command copy uses the active selection by default`() {
         let sut = makeSUT(fileContent: ["hello world"])
-        sut.state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
+        sut.state.bufferManager.open(
+            filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
         sut.state.restoreStateFromActiveBuffer()
         sut.state.selection = TextSelection(
             anchor: TextPosition(row: 0, col: 0),
@@ -748,7 +759,8 @@ struct KittyCodeNavigationTests {
 
         let state = EditorState(rootPath: ".", config: config)
         state.mode = .editor
-        state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
+        state.bufferManager.open(
+            filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
         state.restoreStateFromActiveBuffer()
         state.selection = TextSelection(
             anchor: TextPosition(row: 0, col: 6),
@@ -782,7 +794,8 @@ struct KittyCodeNavigationTests {
 
         let state = EditorState(rootPath: ".", config: config)
         state.mode = .editor
-        state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
+        state.bufferManager.open(
+            filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
         state.restoreStateFromActiveBuffer()
         let pipeline = RenderPipeline(
             connection: MockTerminalConnection(size: TerminalSize(columns: 80, rows: 24)),
@@ -968,7 +981,10 @@ struct KittyCodeNavigationTests {
 
 @Suite
 struct KittyCodeSyntaxWiringTests {
-    @Test func `language highlighter returns styled json output when bundled resources are available`() async {
+    @Test
+    func `language highlighter returns styled json output when bundled resources are available`()
+        async
+    {
         let available = await LanguageHighlighter.ensureArtifacts(for: "json")
         let session = LanguageHighlighter.makeSession(language: "json")
         let lines = session.highlightDocument(source: "true")
@@ -984,7 +1000,8 @@ struct KittyCodeSyntaxWiringTests {
     }
 
     @Test func `language highlighter falls back for unsupported languages`() {
-        let lines = LanguageHighlighter.highlightDocument(source: "// comment", language: "unknown_lang")
+        let lines = LanguageHighlighter.highlightDocument(
+            source: "// comment", language: "unknown_lang")
         #expect(lines.count == 1)
         #expect(lines[0].count == 1)
         #expect(lines[0][0].text == "// comment")
@@ -1032,7 +1049,8 @@ struct KittyCodeSyntaxWiringTests {
         state.cursorRow = 1
         state.cursorCol = 0
 
-        let mutation = try #require(TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor))
+        let mutation = try #require(
+            TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor))
         state.textDidChange(mutation)
 
         #expect(state.fileContent == ["helloworld", "tail"])
@@ -1084,7 +1102,8 @@ struct BufferManagerTests {
     @Test
     func `open creates a new buffer`() {
         let manager = BufferManager()
-        let idx = manager.open(filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
+        let idx = manager.open(
+            filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
         #expect(idx == 0)
         #expect(manager.count == 1)
         #expect(manager.activeIndex == 0)
@@ -1094,8 +1113,10 @@ struct BufferManagerTests {
     @Test
     func `open same file twice returns existing index`() {
         let manager = BufferManager()
-        let idx1 = manager.open(filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
-        let idx2 = manager.open(filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
+        let idx1 = manager.open(
+            filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
+        let idx2 = manager.open(
+            filePath: "/a.swift", fileName: "a.swift", content: "hello", language: "swift")
         #expect(idx1 == idx2)
         #expect(manager.count == 1)
     }
@@ -1166,8 +1187,8 @@ struct KittyConfigExtensionTests {
     @Test
     func `old JSON without new fields decodes with defaults`() throws {
         let json = """
-        {"keybindingMode": "vim", "treeWidth": 25}
-        """
+            {"keybindingMode": "vim", "treeWidth": 25}
+            """
         let config = try JSONDecoder().decode(KittyConfig.self, from: Data(json.utf8))
         #expect(config.keybindingMode == .vim)
         #expect(config.treeWidth == 25)
@@ -1195,23 +1216,23 @@ struct KittyConfigExtensionTests {
     @Test
     func `status bar and editor config decode custom values`() throws {
         let json = """
-        {
-          "editor": {
-            "arrowKeysWrapAcrossLines": false,
-            "scrollMomentumBlockMilliseconds": 9,
-            "scrollAccelerationEnabled": false,
-            "scrollAccelerationWindowMilliseconds": 80,
-            "scrollAccelerationStepIntervalMilliseconds": 3,
-            "scrollAccelerationMaxExtraLines": 4
-          },
-          "statusBar": {
-            "show": false,
-            "leftItems": ["file"],
-            "rightItems": ["language", "lineEnding", "git"],
-            "showContextHints": false
-          }
-        }
-        """
+            {
+              "editor": {
+                "arrowKeysWrapAcrossLines": false,
+                "scrollMomentumBlockMilliseconds": 9,
+                "scrollAccelerationEnabled": false,
+                "scrollAccelerationWindowMilliseconds": 80,
+                "scrollAccelerationStepIntervalMilliseconds": 3,
+                "scrollAccelerationMaxExtraLines": 4
+              },
+              "statusBar": {
+                "show": false,
+                "leftItems": ["file"],
+                "rightItems": ["language", "lineEnding", "git"],
+                "showContextHints": false
+              }
+            }
+            """
 
         let config = try JSONDecoder().decode(KittyConfig.self, from: Data(json.utf8))
 
@@ -1274,10 +1295,12 @@ struct KittyConfigExtensionTests {
 struct StatusBarAndPromptTests {
     @Test
     func `beginSavePrompt defaults to last selected directory`() {
-        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            UUID().uuidString, isDirectory: true)
         let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
 
-        state.noteSelectedPath(rootURL.appendingPathComponent("Sources/App/main.swift").path, isDirectory: false)
+        state.noteSelectedPath(
+            rootURL.appendingPathComponent("Sources/App/main.swift").path, isDirectory: false)
         state.beginNewFile()
         state.beginSavePrompt()
 
@@ -1316,7 +1339,8 @@ struct StatusBarAndPromptTests {
 
     @Test
     func `writeBufferToDisk preserves configured line endings`() throws {
-        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -1348,14 +1372,16 @@ struct MultiBufferIntegrationTests {
         let state = EditorState(rootPath: ".", config: config)
 
         // Simulate opening first file via bufferManager
-        state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
+        state.bufferManager.open(
+            filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
         state.restoreStateFromActiveBuffer()
         state.cursorRow = 0
         state.cursorCol = 5
 
         // Simulate opening second file
         state.saveStateToActiveBuffer()
-        state.bufferManager.open(filePath: "/b.txt", fileName: "b.txt", content: "line1\nline2\nline3", language: nil)
+        state.bufferManager.open(
+            filePath: "/b.txt", fileName: "b.txt", content: "line1\nline2\nline3", language: nil)
         state.restoreStateFromActiveBuffer()
         state.cursorRow = 2
         state.cursorCol = 3
@@ -1420,7 +1446,8 @@ struct MultiBufferIntegrationTests {
         config.activityBar.show = false
         let state = EditorState(rootPath: ".", config: config)
 
-        state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
+        state.bufferManager.open(
+            filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
         state.restoreStateFromActiveBuffer()
         #expect(state.bufferManager.activeBuffer?.isDirty == false)
 
@@ -1432,7 +1459,8 @@ struct MultiBufferIntegrationTests {
     @MainActor
     func `opening and restoring a file preserves exact document snapshots`() async throws {
         let fileManager = FileManager.default
-        let rootURL = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let rootURL = fileManager.temporaryDirectory.appendingPathComponent(
+            UUID().uuidString, isDirectory: true)
         try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? fileManager.removeItem(at: rootURL) }
 
@@ -1510,7 +1538,8 @@ struct RuntimeRegressionsTests {
         // Without title bar, row 0 should have editor content (line numbers + text)
         let row1Chars = (0..<40).map { sut.pipeline.buffer[0, $0].character }
         let row1Text = String(row1Chars)
-        #expect(row1Text.contains("hello"), "Editor content should appear at row 0 (contentStartRow)")
+        #expect(
+            row1Text.contains("hello"), "Editor content should appear at row 0 (contentStartRow)")
     }
 
     @Test
@@ -1519,7 +1548,8 @@ struct RuntimeRegressionsTests {
         let sut = makeSUT(columns: cols, rows: 10, tabRibbon: .top)
         sut.state.mode = .editor
         sut.state.sidebarCollapsed = true
-        sut.state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "world", language: nil)
+        sut.state.bufferManager.open(
+            filePath: "/a.txt", fileName: "a.txt", content: "world", language: nil)
         sut.state.restoreStateFromActiveBuffer()
         sut.state.refreshHighlights()
 
@@ -1528,7 +1558,8 @@ struct RuntimeRegressionsTests {
         // Row 0: tab ribbon, Row 1: editor content
         let row2Chars = (0..<cols).map { sut.pipeline.buffer[1, $0].character }
         let row2Text = String(row2Chars)
-        #expect(row2Text.contains("world"), "Editor content should appear at row 1 below tab ribbon")
+        #expect(
+            row2Text.contains("world"), "Editor content should appear at row 1 below tab ribbon")
 
         // Row 0 should NOT contain editor content (it's the tab ribbon)
         let row1Chars = (0..<cols).map { sut.pipeline.buffer[0, $0].character }
@@ -1540,7 +1571,8 @@ struct RuntimeRegressionsTests {
     func `tab ribbon fills full terminal width`() {
         let cols = 40
         let sut = makeSUT(fileContent: ["x"], columns: cols, rows: 10, tabRibbon: .top)
-        sut.state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "x", language: nil)
+        sut.state.bufferManager.open(
+            filePath: "/a.txt", fileName: "a.txt", content: "x", language: nil)
         sut.state.restoreStateFromActiveBuffer()
 
         render(pipeline: sut.pipeline, state: sut.state)
@@ -1557,9 +1589,12 @@ struct RuntimeRegressionsTests {
         let sut = makeSUT(fileContent: ["hello"], columns: 40, rows: 10)
         sut.state.mode = .editor
         sut.state.sidebarCollapsed = true
-        sut.state.bufferManager.open(filePath: "/note.txt", fileName: "note.txt", content: "hello", language: nil)
+        sut.state.bufferManager.open(
+            filePath: "/note.txt", fileName: "note.txt", content: "hello", language: nil)
         sut.state.restoreStateFromActiveBuffer()
-        sut.state.bufferManager.activeBuffer?.gitLineDecorations = GitLineDecorations(markers: [0: .added])
+        sut.state.bufferManager.activeBuffer?.gitLineDecorations = GitLineDecorations(markers: [
+            0: .added
+        ])
         sut.state.gitLineDecorationProvider = TestGitProvider()
 
         render(pipeline: sut.pipeline, state: sut.state)
@@ -1572,7 +1607,8 @@ struct RuntimeRegressionsTests {
     func `tab ribbon renders git status indicators for open buffers`() {
         let cols = 40
         let sut = makeSUT(fileContent: ["x"], columns: cols, rows: 10, tabRibbon: .top)
-        sut.state.bufferManager.open(filePath: "/note.txt", fileName: "note.txt", content: "x", language: nil)
+        sut.state.bufferManager.open(
+            filePath: "/note.txt", fileName: "note.txt", content: "x", language: nil)
         sut.state.restoreStateFromActiveBuffer()
         sut.state.fileStatusProvider = TestGitProvider(statuses: ["/note.txt": .modified])
 
@@ -1582,7 +1618,9 @@ struct RuntimeRegressionsTests {
         #expect(mCol != nil, "Expected 'M' indicator in tab ribbon row")
         if let col = mCol {
             let cell = sut.pipeline.buffer[0, col]
-            #expect(cell.style == sut.state.colorScheme.gitModified, "M indicator should use gitModified style")
+            #expect(
+                cell.style == sut.state.colorScheme.gitModified,
+                "M indicator should use gitModified style")
         }
     }
 
@@ -1592,7 +1630,8 @@ struct RuntimeRegressionsTests {
         let sut = makeSUT(columns: cols, rows: 10)
         sut.state.treePanelWidth = 16
         sut.state.activeSidebarPanel = .openDocuments
-        sut.state.bufferManager.open(filePath: "/note.txt", fileName: "note.txt", content: "x", language: nil)
+        sut.state.bufferManager.open(
+            filePath: "/note.txt", fileName: "note.txt", content: "x", language: nil)
         sut.state.restoreStateFromActiveBuffer()
         sut.state.fileStatusProvider = TestGitProvider(statuses: ["/note.txt": .modified])
 
@@ -1602,7 +1641,9 @@ struct RuntimeRegressionsTests {
         #expect(mCol != nil, "Expected 'M' indicator in open files panel")
         if let col = mCol {
             let cell = sut.pipeline.buffer[0, col]
-            #expect(cell.style == sut.state.colorScheme.gitModified, "M indicator should use gitModified style")
+            #expect(
+                cell.style == sut.state.colorScheme.gitModified,
+                "M indicator should use gitModified style")
         }
     }
 
@@ -1617,8 +1658,9 @@ struct RuntimeRegressionsTests {
         // Activity bar renders at columns 0-2, contentStartRow=1
         // Column 1 (centered) should have an icon character for the first activity bar item
         let iconCell = sut.pipeline.buffer[1, 1]
-        #expect(iconCell.character != " " || iconCell.style != .default,
-                "Activity bar center column should have styled content")
+        #expect(
+            iconCell.character != " " || iconCell.style != .default,
+            "Activity bar center column should have styled content")
     }
 
     @Test
@@ -1651,7 +1693,8 @@ struct RuntimeRegressionsTests {
 
     @Test
     func `save prompt writes a new file under the project root`() throws {
-        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            UUID().uuidString)
         try FileManager.default.createDirectory(
             at: rootURL,
             withIntermediateDirectories: true,
@@ -1703,7 +1746,8 @@ struct RuntimeRegressionsTests {
 
     @Test
     func `editor click converts 1-based mouse coordinates correctly`() {
-        let sut = makeSUT(fileContent: ["line one", "line two", "line three"], columns: 40, rows: 10)
+        let sut = makeSUT(
+            fileContent: ["line one", "line two", "line three"], columns: 40, rows: 10)
         sut.state.mode = .editor
         sut.state.treePanelWidth = 0
         sut.state.sidebarCollapsed = true
@@ -1738,7 +1782,8 @@ struct RuntimeRegressionsTests {
             pipeline: sut.pipeline
         )
 
-        #expect(sut.state.selectedTreeIndex == 0, "First content row click should select tree index 0")
+        #expect(
+            sut.state.selectedTreeIndex == 0, "First content row click should select tree index 0")
     }
 
     @Test
@@ -1758,15 +1803,16 @@ struct RuntimeRegressionsTests {
         )
 
         #expect(sut.state.contextMenu?.target == .treeNode(index: 0))
-        #expect(sut.state.contextMenu?.items.map(\.title) == [
-            "Open",
-            "Open and Pin",
-            "Rename…",
-            "Duplicate…",
-            "Move…",
-            "Delete…",
-            "Save Here…",
-        ])
+        #expect(
+            sut.state.contextMenu?.items.map(\.title) == [
+                "Open",
+                "Open and Pin",
+                "Rename…",
+                "Duplicate…",
+                "Move…",
+                "Delete…",
+                "Save Here…",
+            ])
         #expect(sut.state.bufferManager.count == 0)
     }
 
@@ -1787,7 +1833,8 @@ struct RuntimeRegressionsTests {
             (1...10).lazy.compactMap { row in
                 (1...40).lazy.compactMap { col in
                     let mouse = MouseEvent(button: .left, row: row, col: col, kind: .press)
-                    return contextMenuItemIndex(at: mouse, state: sut.state, columns: 40, rows: 10) == 0 ? mouse : nil
+                    return contextMenuItemIndex(at: mouse, state: sut.state, columns: 40, rows: 10)
+                        == 0 ? mouse : nil
                 }.first
             }.first
         )
@@ -1907,7 +1954,8 @@ struct RuntimeRegressionsTests {
         )
         sut.state.mode = .editor
         sut.state.treePanelWidth = 15
-        sut.state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
+        sut.state.bufferManager.open(
+            filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
         sut.state.restoreStateFromActiveBuffer()
 
         render(pipeline: sut.pipeline, state: sut.state)
@@ -1923,8 +1971,9 @@ struct RuntimeRegressionsTests {
         // Editor content at row 1 (contentStartRow=1)
         let editorArea = (19..<60).map { sut.pipeline.buffer[1, $0].character }
         let editorText = String(editorArea).trimmingCharacters(in: .whitespaces)
-        #expect(editorText.contains("hello") || editorText.contains("1"),
-                "Editor area should have content at row 1")
+        #expect(
+            editorText.contains("hello") || editorText.contains("1"),
+            "Editor area should have content at row 1")
 
         // Status bar at last row
         let statusChars = (0..<60).map { sut.pipeline.buffer[11, $0].character }
@@ -1952,8 +2001,9 @@ struct RuntimeRegressionsTests {
         // Editor should now start at column 0 (no sidebar)
         let row1Chars = (0..<40).map { sut.pipeline.buffer[0, $0].character }
         let row1Text = String(row1Chars).trimmingCharacters(in: .whitespaces)
-        #expect(row1Text.contains("content") || row1Text.contains("1"),
-                "Editor should render from column 0 when sidebar is collapsed")
+        #expect(
+            row1Text.contains("content") || row1Text.contains("1"),
+            "Editor should render from column 0 when sidebar is collapsed")
     }
 
     @Test
@@ -1962,7 +2012,8 @@ struct RuntimeRegressionsTests {
         sut.state.sidebarCollapsed = false
         sut.state.treePanelWidth = 18
         sut.state.treeNodes = (0..<20).map { i in
-            FileNode(name: String(format: "file%02d.txt", i), path: "/file\(i).txt", isDirectory: false)
+            FileNode(
+                name: String(format: "file%02d.txt", i), path: "/file\(i).txt", isDirectory: false)
         }
         sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
 
@@ -1972,7 +2023,8 @@ struct RuntimeRegressionsTests {
         sut.state.treeScrollOffset = 1
         renderFrame(pipeline: sut.pipeline, state: sut.state)
 
-        let layout = LayoutMetrics(state: sut.state, columns: sut.pipeline.columns, rows: sut.pipeline.rows)
+        let layout = LayoutMetrics(
+            state: sut.state, columns: sut.pipeline.columns, rows: sut.pipeline.rows)
         let topRow = layout.contentStartRow
         let treeStartCol = layout.activityBarWidth
         let treeEndCol = treeStartCol + layout.sidebarWidth
@@ -2051,7 +2103,9 @@ struct ScrollRenderingTests {
         let contentRow = 0
         let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
         let rowText = String(rowChars)
-        #expect(rowText.contains("line 3"), "First editor row should show line 3 after scrolling down, got: \(rowText)")
+        #expect(
+            rowText.contains("line 3"),
+            "First editor row should show line 3 after scrolling down, got: \(rowText)")
     }
 
     @Test
@@ -2069,7 +2123,9 @@ struct ScrollRenderingTests {
         let contentRow = 0
         let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
         let rowText = String(rowChars)
-        #expect(rowText.contains("line 7"), "First editor row should show line 7 after scrolling up, got: \(rowText)")
+        #expect(
+            rowText.contains("line 7"),
+            "First editor row should show line 7 after scrolling up, got: \(rowText)")
     }
 
     @Test
@@ -2098,7 +2154,10 @@ struct ScrollRenderingTests {
         // Line numbers change by 1 digit on every row, so expect roughly:
         //   1 full row (new content) + small gutter changes ≈ < 220 cells
         let totalContentCells = 11 * cols
-        #expect(dirtyCount < totalContentCells, "Dirty cells (\(dirtyCount)) should be less than total content cells (\(totalContentCells))")
+        #expect(
+            dirtyCount < totalContentCells,
+            "Dirty cells (\(dirtyCount)) should be less than total content cells (\(totalContentCells))"
+        )
     }
 
     @Test
@@ -2123,7 +2182,10 @@ struct ScrollRenderingTests {
         }
 
         let totalContentCells = 11 * cols
-        #expect(dirtyCount < totalContentCells, "Dirty cells (\(dirtyCount)) should be less than total content cells (\(totalContentCells))")
+        #expect(
+            dirtyCount < totalContentCells,
+            "Dirty cells (\(dirtyCount)) should be less than total content cells (\(totalContentCells))"
+        )
     }
 
     @Test
@@ -2153,7 +2215,10 @@ struct ScrollRenderingTests {
         try pipeline.flush()
         let scrolledSize = mock.writtenOutput.count
 
-        #expect(scrolledSize < initialSize, "Scrolled flush (\(scrolledSize) bytes) should be smaller than initial flush (\(initialSize) bytes)")
+        #expect(
+            scrolledSize < initialSize,
+            "Scrolled flush (\(scrolledSize) bytes) should be smaller than initial flush (\(initialSize) bytes)"
+        )
     }
 
     @Test
@@ -2169,7 +2234,9 @@ struct ScrollRenderingTests {
         let contentRow = 0
         let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
         let rowText = String(rowChars)
-        #expect(rowText.contains("line 50"), "First editor row should show line 50 after large jump, got: \(rowText)")
+        #expect(
+            rowText.contains("line 50"),
+            "First editor row should show line 50 after large jump, got: \(rowText)")
     }
 
     @Test
@@ -2188,7 +2255,9 @@ struct ScrollRenderingTests {
         let contentRow = 0
         let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
         let rowText = String(rowChars)
-        #expect(rowText.contains("line 5"), "After 5 scroll-down steps, first row should show line 5, got: \(rowText)")
+        #expect(
+            rowText.contains("line 5"),
+            "After 5 scroll-down steps, first row should show line 5, got: \(rowText)")
     }
 
     @Test
@@ -2209,11 +2278,14 @@ struct ScrollRenderingTests {
         let contentRow = 0
         let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
         let rowText = String(rowChars)
-        #expect(rowText.contains("line 0"), "After scroll down+up, first row should show line 0, got: \(rowText)")
+        #expect(
+            rowText.contains("line 0"),
+            "After scroll down+up, first row should show line 0, got: \(rowText)")
     }
 
     @Test
-    func `scrolling through an overheight wrapped line keeps later wrapped content visible`() throws {
+    func `scrolling through an overheight wrapped line keeps later wrapped content visible`() throws
+    {
         let mock = MockTerminalConnection(size: TerminalSize(columns: 8, rows: 6))
         let pipeline = RenderPipeline(connection: mock, columns: 8, rows: 6)
 
@@ -2246,14 +2318,21 @@ struct ScrollRenderingTests {
         renderFrame(pipeline: pipeline, state: state)
 
         let topRowText = String((0..<8).map { pipeline.buffer[0, $0].character })
-        #expect(topRowText.contains("EEEE"), "Expected wrapped continuation to remain visible after scrolling, got: \(topRowText)")
+        #expect(
+            topRowText.contains("EEEE"),
+            "Expected wrapped continuation to remain visible after scrolling, got: \(topRowText)")
 
         let lastContentRowText = String((0..<8).map { pipeline.buffer[4, $0].character })
-        #expect(lastContentRowText.contains("afte"), "Expected following line to appear after wrapped continuation rows, got: \(lastContentRowText)")
+        #expect(
+            lastContentRowText.contains("afte"),
+            "Expected following line to appear after wrapped continuation rows, got: \(lastContentRowText)"
+        )
     }
 
     @Test
-    func `accelerating into wrapped content edge does not crash or leave invalid state`() async throws {
+    func `accelerating into wrapped content edge does not crash or leave invalid state`()
+        async throws
+    {
         let mock = MockTerminalConnection(size: TerminalSize(columns: 8, rows: 6))
         let pipeline = RenderPipeline(connection: mock, columns: 8, rows: 6)
 
@@ -2284,8 +2363,9 @@ struct ScrollRenderingTests {
         }
 
         let deadline = Date().addingTimeInterval(1)
-        while (state.pendingAcceleratedScrollLines != 0 || state.scrollAccelerationTask != nil),
-              Date() < deadline {
+        while state.pendingAcceleratedScrollLines != 0 || state.scrollAccelerationTask != nil,
+            Date() < deadline
+        {
             try? await Task.sleep(for: .milliseconds(5))
         }
 
@@ -2300,7 +2380,10 @@ struct ScrollRenderingTests {
             String((0..<8).map { pipeline.buffer[row, $0].character })
         }
         let hasDone = contentRows.contains { $0.contains("done") || $0.contains("done".prefix(4)) }
-        #expect(hasDone, "Expected bottom content to remain renderable after accelerated scrolling, got: \(contentRows)")
+        #expect(
+            hasDone,
+            "Expected bottom content to remain renderable after accelerated scrolling, got: \(contentRows)"
+        )
     }
 }
 
@@ -2329,7 +2412,8 @@ struct PreviewModeTests {
     @Test
     func `openPreview creates a preview buffer`() {
         let manager = BufferManager()
-        let idx = manager.openPreview(filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
+        let idx = manager.openPreview(
+            filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
         #expect(idx == 0)
         #expect(manager.count == 1)
         #expect(manager.activeBuffer?.isPreview == true)
@@ -2362,7 +2446,8 @@ struct PreviewModeTests {
         config.activityBar.show = false
         config.tabRibbon.persistence = .preview
         let state = EditorState(rootPath: ".", config: config)
-        state.bufferManager.openPreview(filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
+        state.bufferManager.openPreview(
+            filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
         state.restoreStateFromActiveBuffer()
         #expect(state.bufferManager.activeBuffer?.isPreview == true)
 
@@ -2417,8 +2502,8 @@ struct TabPersistenceConfigTests {
     @Test
     func `tabPersistence decodes from JSON`() throws {
         let json = """
-        {"tabRibbon": {"persistence": "preview"}}
-        """
+            {"tabRibbon": {"persistence": "preview"}}
+            """
         let config = try JSONDecoder().decode(KittyConfig.self, from: Data(json.utf8))
         #expect(config.tabRibbon.persistence == .preview)
     }
@@ -2426,8 +2511,8 @@ struct TabPersistenceConfigTests {
     @Test
     func `old JSON without tabPersistence uses default`() throws {
         let json = """
-        {"keybindingMode": "nano"}
-        """
+            {"keybindingMode": "nano"}
+            """
         let config = try JSONDecoder().decode(KittyConfig.self, from: Data(json.utf8))
         #expect(config.tabRibbon.persistence == .pinned)
     }
@@ -2481,7 +2566,7 @@ struct LayoutMetricsTests {
         let layout = LayoutMetrics(state: state, columns: 80, rows: 24)
         #expect(layout.showTabRibbon == true)
         #expect(layout.contentStartRow == 1)
-        #expect(layout.contentRows == 22) // rows - 1 - tabRows = 24 - 1 - 1 = 22
+        #expect(layout.contentRows == 22)  // rows - 1 - tabRows = 24 - 1 - 1 = 22
     }
 
     @Test
@@ -2672,6 +2757,27 @@ struct UndoRedoTests {
     }
 
     @Test
+    func `buffer undo coalescing disabled keeps each keystroke separately undoable`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        config.editor.undoCoalescingEnabled = false
+
+        let state = EditorState(rootPath: ".", config: config)
+        state.beginNewFile()
+        state.mode = .editor
+
+        insertText("a", into: state)
+        insertText("b", into: state)
+
+        state.undoActiveBuffer()
+        #expect(state.documentText == "a")
+
+        state.undoActiveBuffer()
+        #expect(state.documentText.isEmpty)
+    }
+
+    @Test
     func `buffer undo invalidates after external refresh divergence`() throws {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         state.beginNewFile()
@@ -2703,7 +2809,8 @@ struct UndoRedoTests {
 struct TreeFileOperationTests {
     @Test
     func `tree file create undo redo roundtrips on disk`() async throws {
-        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -2723,7 +2830,8 @@ struct TreeFileOperationTests {
 
     @Test
     func `tree history invalidates on refreshed divergence`() async throws {
-        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -2744,5 +2852,660 @@ struct TreeFileOperationTests {
 
         await state.undoFileTreeOperation()
         #expect(state.statusMessage == "Nothing to undo")
+    }
+}
+
+@Suite
+struct CLIArgumentsTests {
+
+    // MARK: - No arguments
+
+    @Test
+    func `parse with no arguments returns run with current directory`() {
+        let action = CLIArguments.parse(["kittycode"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.initialFile == nil)
+        #expect(config.initialLine == nil)
+        #expect(config.initialColumn == nil)
+        #expect(config.readOnly == false)
+        #expect(config.configPath == nil)
+        #expect(config.gitEnabled == nil)
+        #expect(config.syntaxEnabled == nil)
+        #expect(config.fileWatcherEnabled == nil)
+        #expect(config.symbolsEnabled == nil)
+        #expect(config.keybindingMode == nil)
+        #expect(config.tabSize == nil)
+        #expect(config.wrapLines == nil)
+        #expect(config.themeForeground == nil)
+    }
+
+    // MARK: - --version / --help
+
+    @Test
+    func `parse --version returns printVersion`() {
+        let action = CLIArguments.parse(["kittycode", "--version"])
+        guard case .printVersion = action else {
+            Issue.record("Expected .printVersion")
+            return
+        }
+    }
+
+    @Test
+    func `parse -v returns printVersion`() {
+        let action = CLIArguments.parse(["kittycode", "-v"])
+        guard case .printVersion = action else {
+            Issue.record("Expected .printVersion")
+            return
+        }
+    }
+
+    @Test
+    func `parse --help returns printHelp`() {
+        let action = CLIArguments.parse(["kittycode", "--help"])
+        guard case .printHelp = action else {
+            Issue.record("Expected .printHelp")
+            return
+        }
+    }
+
+    @Test
+    func `parse -h returns printHelp`() {
+        let action = CLIArguments.parse(["kittycode", "-h"])
+        guard case .printHelp = action else {
+            Issue.record("Expected .printHelp")
+            return
+        }
+    }
+
+    // MARK: - Boolean flags
+
+    @Test
+    func `parse --read-only sets readOnly true`() {
+        let action = CLIArguments.parse(["kittycode", "--read-only"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.readOnly == true)
+    }
+
+    @Test
+    func `parse -R sets readOnly true`() {
+        let action = CLIArguments.parse(["kittycode", "-R"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.readOnly == true)
+    }
+
+    @Test
+    func `parse --no-git sets gitEnabled false`() {
+        let action = CLIArguments.parse(["kittycode", "--no-git"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.gitEnabled == false)
+    }
+
+    @Test
+    func `parse --no-syntax sets syntaxEnabled false`() {
+        let action = CLIArguments.parse(["kittycode", "--no-syntax"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.syntaxEnabled == false)
+    }
+
+    @Test
+    func `parse --no-file-watcher sets fileWatcherEnabled false`() {
+        let action = CLIArguments.parse(["kittycode", "--no-file-watcher"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.fileWatcherEnabled == false)
+    }
+
+    @Test
+    func `parse --no-symbols sets symbolsEnabled false`() {
+        let action = CLIArguments.parse(["kittycode", "--no-symbols"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.symbolsEnabled == false)
+    }
+
+    @Test
+    func `parse --wrap sets wrapLines true`() {
+        let action = CLIArguments.parse(["kittycode", "--wrap"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.wrapLines == true)
+    }
+
+    @Test
+    func `parse --no-wrap sets wrapLines false`() {
+        let action = CLIArguments.parse(["kittycode", "--no-wrap"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.wrapLines == false)
+    }
+
+    // MARK: - Options with values
+
+    @Test
+    func `parse --config sets configPath`() {
+        let action = CLIArguments.parse(["kittycode", "--config", "/tmp/my.json"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.configPath == "/tmp/my.json")
+    }
+
+    @Test
+    func `parse -c sets configPath`() {
+        let action = CLIArguments.parse(["kittycode", "-c", "/tmp/other.json"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.configPath == "/tmp/other.json")
+    }
+
+    @Test
+    func `parse --mode nano sets keybindingMode nano`() {
+        let action = CLIArguments.parse(["kittycode", "--mode", "nano"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.keybindingMode == "nano")
+    }
+
+    @Test
+    func `parse --mode vim sets keybindingMode vim`() {
+        let action = CLIArguments.parse(["kittycode", "--mode", "vim"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.keybindingMode == "vim")
+    }
+
+    @Test
+    func `parse --tab-size sets tabSize`() {
+        let action = CLIArguments.parse(["kittycode", "--tab-size", "2"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.tabSize == 2)
+    }
+
+    @Test
+    func `parse --theme-fg sets themeForeground`() {
+        let action = CLIArguments.parse(["kittycode", "--theme-fg", "c9d1d9"])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.themeForeground == "c9d1d9")
+    }
+
+    // MARK: - Multiple flags
+
+    @Test
+    func `parse multiple flags combines all overrides`() {
+        let action = CLIArguments.parse([
+            "kittycode", "--read-only", "--no-git", "--tab-size", "4", "--wrap",
+        ])
+        guard case .run(let config) = action else {
+            Issue.record("Expected .run action")
+            return
+        }
+        #expect(config.readOnly == true)
+        #expect(config.gitEnabled == false)
+        #expect(config.tabSize == 4)
+        #expect(config.wrapLines == true)
+    }
+
+    // MARK: - Positional path parsing
+
+    @Test
+    func `parsePositional with plain path returns path unchanged`() {
+        let (path, line, col) = CLIArguments.parsePositional("/tmp/foo.swift")
+        #expect(path == "/tmp/foo.swift")
+        #expect(line == nil)
+        #expect(col == nil)
+    }
+
+    @Test
+    func `parsePositional with line suffix returns line number`() {
+        let (path, line, col) = CLIArguments.parsePositional("/tmp/foo.swift:42")
+        #expect(path == "/tmp/foo.swift")
+        #expect(line == 42)
+        #expect(col == nil)
+    }
+
+    @Test
+    func `parsePositional with line and column suffix`() {
+        let (path, line, col) = CLIArguments.parsePositional("/tmp/foo.swift:42:10")
+        #expect(path == "/tmp/foo.swift")
+        #expect(line == 42)
+        #expect(col == 10)
+    }
+
+    @Test
+    func `parsePositional with non-numeric suffix treats as plain path`() {
+        let (path, line, col) = CLIArguments.parsePositional("/tmp/foo.swift:notanumber")
+        #expect(path == "/tmp/foo.swift:notanumber")
+        #expect(line == nil)
+        #expect(col == nil)
+    }
+
+    @Test
+    func `parsePositional with tilde expands home`() {
+        let (path, _, _) = CLIArguments.parsePositional("~/foo.swift")
+        #expect(path.hasPrefix("/"))
+        #expect(!path.hasPrefix("~"))
+    }
+
+    @Test
+    func `parsePositional line one column one are valid`() {
+        let (path, line, col) = CLIArguments.parsePositional("/tmp/x.py:1:1")
+        #expect(path == "/tmp/x.py")
+        #expect(line == 1)
+        #expect(col == 1)
+    }
+
+    @Test
+    func `parsePositional ignores zero as line number`() {
+        // Zero is not a valid line number (1-based), so :0 should not be parsed as a line.
+        let (path, line, col) = CLIArguments.parsePositional("/tmp/foo.swift:0")
+        #expect(path == "/tmp/foo.swift:0")
+        #expect(line == nil)
+        #expect(col == nil)
+    }
+
+    @Test
+    func `parsePositional with three colon segments uses last two as line and col`() {
+        // Extra colons in filename-like paths — only last two numeric segments are used.
+        let (path, line, col) = CLIArguments.parsePositional("/tmp/foo:bar:10:5")
+        #expect(line == 10)
+        #expect(col == 5)
+        _ = path
+    }
+
+    // MARK: - Version string and help text
+
+    @Test
+    func `versionString contains KittyCode`() {
+        #expect(CLIArguments.versionString.contains("KittyCode"))
+    }
+
+    @Test
+    func `helpText contains all documented options`() {
+        let help = CLIArguments.helpText
+        #expect(help.contains("--help"))
+        #expect(help.contains("--version"))
+        #expect(help.contains("--read-only"))
+        #expect(help.contains("--config"))
+        #expect(help.contains("--mode"))
+        #expect(help.contains("--tab-size"))
+        #expect(help.contains("--wrap"))
+        #expect(help.contains("--no-wrap"))
+        #expect(help.contains("--no-git"))
+        #expect(help.contains("--no-syntax"))
+        #expect(help.contains("--no-file-watcher"))
+        #expect(help.contains("--no-symbols"))
+    }
+}
+
+// MARK: - ShortcutMatching tests
+
+@Suite
+@MainActor
+struct ShortcutMatchingTests {
+    private func makeConfig(
+        clipboard: KittyConfig.KeybindingsConfig.ShortcutModifier = .command,
+        history: KittyConfig.KeybindingsConfig.ShortcutModifier = .command
+    ) -> KittyConfig {
+        var config = KittyConfig()
+        config.keybindings.clipboardModifier = clipboard
+        config.keybindings.historyModifier = history
+        return config
+    }
+
+    @Test
+    func `isConfiguredCopyShortcut with clipboardModifier both matches super`() {
+        let config = makeConfig(clipboard: .both)
+        let key = KeyEvent(keyCode: AsciiKey.c, modifiers: .super)
+        #expect(isConfiguredCopyShortcut(key, config: config))
+    }
+
+    @Test
+    func `isConfiguredCopyShortcut with clipboardModifier both matches ctrl`() {
+        let config = makeConfig(clipboard: .both)
+        let key = KeyEvent(keyCode: AsciiKey.c, modifiers: .ctrl)
+        #expect(isConfiguredCopyShortcut(key, config: config))
+    }
+
+    @Test
+    func `isConfiguredCopyShortcut with clipboardModifier both rejects no modifier`() {
+        let config = makeConfig(clipboard: .both)
+        let key = KeyEvent(keyCode: AsciiKey.c, modifiers: [])
+        #expect(!isConfiguredCopyShortcut(key, config: config))
+    }
+
+    @Test
+    func `isConfiguredCopyShortcut capsLock plus Cmd C still matches`() {
+        let config = makeConfig(clipboard: .command)
+        let key = KeyEvent(keyCode: AsciiKey.c, modifiers: [.super, .capsLock])
+        #expect(isConfiguredCopyShortcut(key, config: config))
+    }
+
+    @Test
+    func `isConfiguredCopyShortcut Shift Cmd C does not match copy`() {
+        let config = makeConfig(clipboard: .command)
+        let key = KeyEvent(keyCode: AsciiKey.c, modifiers: [.super, .shift])
+        #expect(!isConfiguredCopyShortcut(key, config: config))
+    }
+
+    @Test
+    func `isConfiguredCutShortcut matches super X`() {
+        let config = makeConfig(clipboard: .command)
+        let key = KeyEvent(keyCode: AsciiKey.x, modifiers: .super)
+        #expect(isConfiguredCutShortcut(key, config: config))
+    }
+
+    @Test
+    func `isConfiguredPasteShortcut matches super V`() {
+        let config = makeConfig(clipboard: .command)
+        let key = KeyEvent(keyCode: AsciiKey.v, modifiers: .super)
+        #expect(isConfiguredPasteShortcut(key, config: config))
+    }
+
+    @Test
+    func `isConfiguredRedoShortcut matches Cmd Y`() {
+        let config = makeConfig(history: .command)
+        let key = KeyEvent(keyCode: AsciiKey.y, modifiers: .super)
+        #expect(isConfiguredRedoShortcut(key, config: config))
+    }
+
+    @Test
+    func `isConfiguredRedoShortcut matches Cmd Shift Z`() {
+        let config = makeConfig(history: .command)
+        let key = KeyEvent(keyCode: AsciiKey.z, modifiers: [.super, .shift])
+        #expect(isConfiguredRedoShortcut(key, config: config))
+    }
+
+    @Test
+    func `isConfiguredRedoShortcut does not match plain Cmd Z`() {
+        let config = makeConfig(history: .command)
+        let key = KeyEvent(keyCode: AsciiKey.z, modifiers: .super)
+        #expect(!isConfiguredRedoShortcut(key, config: config))
+    }
+
+    @Test
+    func `isConfiguredUndoShortcut with historyModifier control matches Ctrl Z`() {
+        let config = makeConfig(history: .control)
+        let key = KeyEvent(keyCode: AsciiKey.z, modifiers: .ctrl)
+        #expect(isConfiguredUndoShortcut(key, config: config))
+    }
+
+    @Test
+    func `isConfiguredUndoShortcut with historyModifier control rejects super Z`() {
+        let config = makeConfig(history: .control)
+        let key = KeyEvent(keyCode: AsciiKey.z, modifiers: .super)
+        #expect(!isConfiguredUndoShortcut(key, config: config))
+    }
+
+    @Test
+    func `isConfiguredCopyShortcut uppercase C key code matches lowercase c shortcut`() {
+        // 0x43 = 'C', 0x63 = 'c'; matchesShortcutKey uses letter - 32 to support uppercase
+        let config = makeConfig(clipboard: .command)
+        let uppercaseC: UInt32 = 0x43
+        let key = KeyEvent(keyCode: uppercaseC, modifiers: .super)
+        #expect(isConfiguredCopyShortcut(key, config: config))
+    }
+
+    @Test
+    func `isConfiguredRedoShortcut with historyModifier both matches Ctrl Y`() {
+        let config = makeConfig(history: .both)
+        let key = KeyEvent(keyCode: AsciiKey.y, modifiers: .ctrl)
+        #expect(isConfiguredRedoShortcut(key, config: config))
+    }
+}
+
+// MARK: - Selection editing and read-only tests
+
+@Suite
+@MainActor
+struct SelectionEditingTests {
+    private func makeSUT(fileContent: [String] = ["hello world"]) -> (
+        state: EditorState, pipeline: RenderPipeline
+    ) {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        let state = EditorState(rootPath: ".", config: config)
+        state.mode = .editor
+        state.bufferManager.open(
+            filePath: "/test.txt", fileName: "test.txt",
+            content: fileContent.joined(separator: "\n"), language: nil)
+        state.restoreStateFromActiveBuffer()
+        let pipeline = RenderPipeline(
+            connection: MockTerminalConnection(size: TerminalSize(columns: 80, rows: 24)),
+            columns: 80,
+            rows: 24
+        )
+        return (state, pipeline)
+    }
+
+    private func setSelection(
+        _ state: EditorState, from: (row: Int, col: Int), to: (row: Int, col: Int)
+    ) {
+        state.selection = TextSelection(
+            anchor: TextPosition(row: from.row, col: from.col),
+            head: TextPosition(row: to.row, col: to.col)
+        )
+    }
+
+    // MARK: shouldReplaceSelectionBeforeHandling (tested via handleEditorKey behaviour)
+
+    @Test
+    func `enter key replaces active selection`() {
+        let sut = makeSUT(fileContent: ["hello world"])
+        setSelection(sut.state, from: (0, 0), to: (0, 5))
+
+        _ = handleEvent(
+            event: .key(KeyEvent(keyCode: Key.enter.rawValue)), state: sut.state,
+            pipeline: sut.pipeline)
+
+        #expect(sut.state.fileContent == ["", " world"])
+        #expect(!sut.state.hasActiveSelection)
+    }
+
+    @Test
+    func `backspace key replaces active selection`() {
+        let sut = makeSUT(fileContent: ["hello world"])
+        setSelection(sut.state, from: (0, 0), to: (0, 5))
+
+        _ = handleEvent(
+            event: .key(KeyEvent(keyCode: Key.backspace.rawValue)), state: sut.state,
+            pipeline: sut.pipeline)
+
+        #expect(sut.state.fileContent == [" world"])
+        #expect(!sut.state.hasActiveSelection)
+    }
+
+    @Test
+    func `tab key replaces active selection`() {
+        let sut = makeSUT(fileContent: ["hello world"])
+        setSelection(sut.state, from: (0, 0), to: (0, 5))
+
+        _ = handleEvent(event: .key(KeyEvent(keyCode: 9)), state: sut.state, pipeline: sut.pipeline)
+
+        #expect(sut.state.fileContent == ["\t world"])
+        #expect(!sut.state.hasActiveSelection)
+    }
+
+    @Test
+    func `associated text key replaces active selection`() {
+        let sut = makeSUT(fileContent: ["hello world"])
+        setSelection(sut.state, from: (0, 0), to: (0, 5))
+
+        _ = handleEvent(
+            event: .key(KeyEvent(keyCode: AsciiKey.x, modifiers: [], associatedText: "X")),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.fileContent == ["X world"])
+        #expect(!sut.state.hasActiveSelection)
+    }
+
+    @Test
+    func `ctrl combo does not replace active selection`() {
+        let sut = makeSUT(fileContent: ["hello world"])
+        setSelection(sut.state, from: (0, 0), to: (0, 5))
+        let contentBefore = sut.state.fileContent
+
+        _ = handleEvent(
+            event: .key(KeyEvent(keyCode: AsciiKey.b, modifiers: .ctrl)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.fileContent == contentBefore)
+    }
+
+    @Test
+    func `function key above 256 does not replace active selection`() {
+        let sut = makeSUT(fileContent: ["hello world"])
+        setSelection(sut.state, from: (0, 0), to: (0, 5))
+        let contentBefore = sut.state.fileContent
+
+        _ = handleEvent(
+            event: .key(KeyEvent(keyCode: Key.pageDown.rawValue, modifiers: [])),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.fileContent == contentBefore)
+    }
+
+    @Test
+    func `printable character replaces active selection`() {
+        let sut = makeSUT(fileContent: ["hello world"])
+        setSelection(sut.state, from: (0, 0), to: (0, 5))
+
+        _ = handleEvent(
+            event: .key(KeyEvent(keyCode: UInt32(Character("a").asciiValue!), modifiers: [])),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.fileContent == ["a world"])
+        #expect(!sut.state.hasActiveSelection)
+    }
+
+    // MARK: Read-only mode
+
+    @Test
+    func `textDidChange with readOnly true sets status message and does not modify buffer`() {
+        let sut = makeSUT(fileContent: ["original"])
+        sut.state.readOnly = true
+        let contentBefore = sut.state.fileContent
+
+        sut.state.textDidChange()
+
+        #expect(sut.state.statusMessage == "Read-only mode")
+        #expect(sut.state.fileContent == contentBefore)
+    }
+
+    @Test
+    func
+        `textDidChange mutation with readOnly true sets status message and does not modify buffer`()
+    {
+        let sut = makeSUT(fileContent: ["original"])
+        sut.state.readOnly = true
+        let contentBefore = sut.state.fileContent
+
+        // Build a dummy mutation via a throwaway operation on a local copy
+        var tmpBuffer = sut.state.textBuffer
+        var tmpCursor = sut.state.textCursor
+        let mutation = TextOperations.insert("x", into: &tmpBuffer, at: &tmpCursor)
+
+        sut.state.textDidChange(mutation)
+
+        #expect(sut.state.statusMessage == "Read-only mode")
+        #expect(sut.state.fileContent == contentBefore)
+    }
+
+    @Test
+    func `typing into readOnly editor does not mutate content`() {
+        let sut = makeSUT(fileContent: ["original"])
+        sut.state.readOnly = true
+        let contentBefore = sut.state.fileContent
+
+        _ = handleEvent(
+            event: .key(KeyEvent(keyCode: UInt32(Character("z").asciiValue!), modifiers: [])),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.fileContent == contentBefore)
+    }
+
+    // MARK: Paste-over-selection undo roundtrip
+
+    @Test
+    func `paste over selection can be undone back to pre-paste state`() {
+        let sut = makeSUT(fileContent: ["hello world"])
+        setSelection(sut.state, from: (0, 0), to: (0, 5))
+
+        _ = handleEvent(event: .paste("REPLACED"), state: sut.state, pipeline: sut.pipeline)
+
+        #expect(sut.state.fileContent == ["REPLACED world"])
+
+        sut.state.undoActiveBuffer()
+        sut.state.undoActiveBuffer()
+
+        #expect(sut.state.fileContent == ["hello world"])
+    }
+
+    // MARK: Cut undo roundtrip
+
+    @Test
+    func `cut records undo history so undoing restores the text`() {
+        let sut = makeSUT(fileContent: ["hello world"])
+        setSelection(sut.state, from: (0, 6), to: (0, 11))
+        var writes: [[UInt8]] = []
+        sut.state.terminalWriter = { writes.append($0) }
+
+        _ = handleEvent(
+            event: .key(KeyEvent(keyCode: AsciiKey.x, modifiers: .super)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.fileContent == ["hello "])
+
+        sut.state.undoActiveBuffer()
+
+        #expect(sut.state.fileContent == ["hello world"])
     }
 }

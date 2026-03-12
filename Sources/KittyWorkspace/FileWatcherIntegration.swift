@@ -72,7 +72,8 @@ public final class FileWatcherIntegration {
 
         let fileManager = FileManager.default
         guard let attrs = try? fileManager.attributesOfItem(atPath: path),
-              let diskDate = attrs[.modificationDate] as? Date else { return }
+            let diskDate = attrs[.modificationDate] as? Date
+        else { return }
 
         if let lastMod = buffer.lastModifiedDate, diskDate <= lastMod {
             return
@@ -84,7 +85,9 @@ public final class FileWatcherIntegration {
                 delegate?.fileWatcherDidDetectExternalModification(bufferName: buffer.fileName)
             }
         } else {
-            guard let loadedFile = try? await WorkspaceFileLoading.readUTF8File(at: path) else { return }
+            guard let loadedFile = try? await WorkspaceFileLoading.readUTF8File(at: path) else {
+                return
+            }
             let content = loadedFile.content
 
             buffer.postOpenProcessingTask?.cancel()

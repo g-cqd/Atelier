@@ -7,11 +7,14 @@ func activeLineStyleOverlays(
     colorScheme: EditorState.ColorScheme
 ) -> [Int: TextStyleOverlay] {
     guard state.config.git.enabled else { return [:] }
-    guard state.config.git.decorations.showLineBackgrounds || state.config.git.decorations.showLineForegrounds else {
+    guard
+        state.config.git.decorations.showLineBackgrounds
+            || state.config.git.decorations.showLineForegrounds
+    else {
         return [:]
     }
     guard let decorations = state.bufferManager.activeBuffer?.gitLineDecorations.markers,
-          !decorations.isEmpty
+        !decorations.isEmpty
     else {
         return [:]
     }

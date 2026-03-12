@@ -6,7 +6,9 @@ public struct SymbolMappingEntry: Sendable, Codable, Equatable {
     public let assetGlyphIndex: Int?
     public let codepoint: UInt32?
 
-    public init(name: String, visibility: SymbolRecord.Visibility, assetGlyphIndex: Int?, codepoint: UInt32?) {
+    public init(
+        name: String, visibility: SymbolRecord.Visibility, assetGlyphIndex: Int?, codepoint: UInt32?
+    ) {
         self.name = name
         self.visibility = visibility
         self.assetGlyphIndex = assetGlyphIndex

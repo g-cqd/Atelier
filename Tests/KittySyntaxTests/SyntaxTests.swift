@@ -1,10 +1,11 @@
-import Testing
 import Foundation
-@testable import KittySyntax
+import Testing
+
 @testable import KittyCodecs
 @testable import KittyGrammar
-@testable import KittyQuery
 @testable import KittyParser
+@testable import KittyQuery
+@testable import KittySyntax
 
 @Suite
 struct ThemeTests {
@@ -103,12 +104,13 @@ struct HighlighterTests {
             query: query
         )
 
-        #expect(spans == [
-            StyledSpan(text: "abcde", style: functionStyle),
-            StyledSpan(text: "fghij", style: functionNameStyle),
-            StyledSpan(text: "klmnopqrst", style: functionStyle),
-            StyledSpan(text: "uvw", style: keywordStyle),
-        ])
+        #expect(
+            spans == [
+                StyledSpan(text: "abcde", style: functionStyle),
+                StyledSpan(text: "fghij", style: functionNameStyle),
+                StyledSpan(text: "klmnopqrst", style: functionStyle),
+                StyledSpan(text: "uvw", style: keywordStyle),
+            ])
     }
 
     @Test
@@ -146,7 +148,9 @@ struct HighlighterTests {
 
         #expect(available)
         #expect(session.isGrammarBacked)
-        #expect(session.highlightDocument(source: source) == LanguageHighlighter.highlightDocument(source: source, language: "json"))
+        #expect(
+            session.highlightDocument(source: source)
+                == LanguageHighlighter.highlightDocument(source: source, language: "json"))
     }
 
     @Test
@@ -206,7 +210,8 @@ struct FallbackSwiftCommentHighlightingTests {
     func `Line comment is fully styled as comment not keyword`() {
         let theme = Theme.monokai
         let commentStyle = theme.style(for: "comment")
-        let spans = LanguageHighlighter.highlightLine("// this is a comment", language: "swift", theme: theme)
+        let spans = LanguageHighlighter.highlightLine(
+            "// this is a comment", language: "swift", theme: theme)
         #expect(spans.count == 1)
         #expect(spans[0].text == "// this is a comment")
         #expect(spans[0].style == commentStyle)
@@ -216,7 +221,8 @@ struct FallbackSwiftCommentHighlightingTests {
     func `Doc comment with keywords is fully styled as comment`() {
         let theme = Theme.monokai
         let commentStyle = theme.style(for: "comment")
-        let spans = LanguageHighlighter.highlightLine("/// if the read syscall fails, or", language: "swift", theme: theme)
+        let spans = LanguageHighlighter.highlightLine(
+            "/// if the read syscall fails, or", language: "swift", theme: theme)
         #expect(spans.count == 1)
         #expect(spans[0].text == "/// if the read syscall fails, or")
         #expect(spans[0].style == commentStyle)
@@ -226,7 +232,8 @@ struct FallbackSwiftCommentHighlightingTests {
     func `Keywords after comment line are still highlighted`() {
         let theme = Theme.monokai
         let keywordStyle = theme.style(for: "keyword")
-        let spans = LanguageHighlighter.highlightLine("    func read(into buffer: Int)", language: "swift", theme: theme)
+        let spans = LanguageHighlighter.highlightLine(
+            "    func read(into buffer: Int)", language: "swift", theme: theme)
         let funcSpan = spans.first { $0.text == "func" }
         #expect(funcSpan?.style == keywordStyle)
     }
@@ -235,7 +242,8 @@ struct FallbackSwiftCommentHighlightingTests {
     func `Comment in middle of code line captures rest of line`() {
         let theme = Theme.monokai
         let commentStyle = theme.style(for: "comment")
-        let spans = LanguageHighlighter.highlightLine("let x = 1 // inline comment with if", language: "swift", theme: theme)
+        let spans = LanguageHighlighter.highlightLine(
+            "let x = 1 // inline comment with if", language: "swift", theme: theme)
         let commentSpan = spans.last { $0.style == commentStyle }
         #expect(commentSpan != nil)
         #expect(commentSpan?.text == "// inline comment with if")
@@ -245,7 +253,8 @@ struct FallbackSwiftCommentHighlightingTests {
     func `Block comment is styled as comment`() {
         let theme = Theme.monokai
         let commentStyle = theme.style(for: "comment")
-        let spans = LanguageHighlighter.highlightLine("/* block if for while */", language: "swift", theme: theme)
+        let spans = LanguageHighlighter.highlightLine(
+            "/* block if for while */", language: "swift", theme: theme)
         let commentSpan = spans.first { $0.style == commentStyle }
         #expect(commentSpan != nil)
         #expect(commentSpan?.text == "/* block if for while */")
@@ -256,7 +265,8 @@ struct FallbackSwiftCommentHighlightingTests {
         let theme = Theme.monokai
         let commentStyle = theme.style(for: "comment")
         let keywordStyle = theme.style(for: "keyword")
-        let spans = LanguageHighlighter.highlightLine("// Layer 4 — View protocol, layout", language: "swift", theme: theme)
+        let spans = LanguageHighlighter.highlightLine(
+            "// Layer 4 — View protocol, layout", language: "swift", theme: theme)
         #expect(spans.count == 1)
         #expect(spans[0].style == commentStyle)
         #expect(!spans.contains { $0.style == keywordStyle })
@@ -266,7 +276,8 @@ struct FallbackSwiftCommentHighlightingTests {
     func `override in doc comment is not highlighted as keyword`() {
         let theme = Theme.monokai
         let keywordStyle = theme.style(for: "keyword")
-        let spans = LanguageHighlighter.highlightLine("/// Conforming types may override", language: "swift", theme: theme)
+        let spans = LanguageHighlighter.highlightLine(
+            "/// Conforming types may override", language: "swift", theme: theme)
         #expect(!spans.contains { $0.style == keywordStyle })
     }
 
@@ -274,7 +285,9 @@ struct FallbackSwiftCommentHighlightingTests {
     func `for in doc comment is not highlighted as keyword`() {
         let theme = Theme.monokai
         let keywordStyle = theme.style(for: "keyword")
-        let spans = LanguageHighlighter.highlightLine("/// for zero-copy writes using `withUnsafeBufferPointer`.", language: "swift", theme: theme)
+        let spans = LanguageHighlighter.highlightLine(
+            "/// for zero-copy writes using `withUnsafeBufferPointer`.", language: "swift",
+            theme: theme)
         #expect(!spans.contains { $0.style == keywordStyle })
     }
 
@@ -282,7 +295,8 @@ struct FallbackSwiftCommentHighlightingTests {
     func `is in doc comment is not highlighted as keyword`() {
         let theme = Theme.monokai
         let keywordStyle = theme.style(for: "keyword")
-        let spans = LanguageHighlighter.highlightLine("/// if the connection is at end-of-file.", language: "swift", theme: theme)
+        let spans = LanguageHighlighter.highlightLine(
+            "/// if the connection is at end-of-file.", language: "swift", theme: theme)
         #expect(!spans.contains { $0.style == keywordStyle })
     }
 }
@@ -292,9 +306,10 @@ struct GrammarRegistryTests {
     @Test
     func `Register and lookup by extension`() async {
         let registry = GrammarRegistry()
-        await registry.register(GrammarRegistry.LanguageEntry(
-            name: "swift", extensions: [".swift"], path: "swift"
-        ))
+        await registry.register(
+            GrammarRegistry.LanguageEntry(
+                name: "swift", extensions: [".swift"], path: "swift"
+            ))
         let entry = await registry.entry(forExtension: ".swift")
         #expect(entry?.name == "swift")
     }
@@ -302,8 +317,10 @@ struct GrammarRegistryTests {
     @Test
     func `Language names are sorted`() async {
         let registry = GrammarRegistry()
-        await registry.register(GrammarRegistry.LanguageEntry(name: "swift", extensions: [".swift"], path: "swift"))
-        await registry.register(GrammarRegistry.LanguageEntry(name: "python", extensions: [".py"], path: "python"))
+        await registry.register(
+            GrammarRegistry.LanguageEntry(name: "swift", extensions: [".swift"], path: "swift"))
+        await registry.register(
+            GrammarRegistry.LanguageEntry(name: "python", extensions: [".py"], path: "python"))
         let names = await registry.languageNames
         #expect(names == ["python", "swift"])
     }
@@ -320,7 +337,8 @@ struct GrammarRegistryTests {
     @Test
     func `entry forExtension normalises extension without leading dot`() async {
         let registry = GrammarRegistry()
-        await registry.register(GrammarRegistry.LanguageEntry(name: "json", extensions: [".json"], path: "json"))
+        await registry.register(
+            GrammarRegistry.LanguageEntry(name: "json", extensions: [".json"], path: "json"))
         let entry = await registry.entry(forExtension: "json")
         #expect(entry?.name == "json")
     }
@@ -343,8 +361,12 @@ struct GrammarRegistryTests {
             let grammarPath = "\(resourcePath)/Grammars/\(entry.path)/grammar.json"
             let highlightsPath = "\(resourcePath)/Grammars/\(entry.path)/highlights.scm"
 
-            #expect(FileManager.default.fileExists(atPath: grammarPath), "Missing grammar for \(entry.name)")
-            #expect(FileManager.default.fileExists(atPath: highlightsPath), "Missing highlights for \(entry.name)")
+            #expect(
+                FileManager.default.fileExists(atPath: grammarPath),
+                "Missing grammar for \(entry.name)")
+            #expect(
+                FileManager.default.fileExists(atPath: highlightsPath),
+                "Missing highlights for \(entry.name)")
         }
     }
 }
@@ -371,7 +393,10 @@ struct GrammarLoaderBundledGrammarTests {
         let path = try jsonGrammarPath()
         let grammar = try GrammarLoader.load(from: path)
         let ruleNames = grammar.rules.map(\.name)
-        let expectedNames = ["document", "_value", "object", "pair", "array", "string", "number", "true", "false", "null"]
+        let expectedNames = [
+            "document", "_value", "object", "pair", "array", "string", "number", "true", "false",
+            "null",
+        ]
         for name in expectedNames {
             #expect(ruleNames.contains(name), "Expected rule '\(name)' in grammar")
         }
@@ -506,9 +531,10 @@ struct HighlighterAdditionalTests {
         ])
 
         let spans = Highlighter(theme: theme).highlight(source: "if42", tree: tree, query: query)
-        #expect(spans == [
-            StyledSpan(text: "if", style: keywordStyle),
-            StyledSpan(text: "42", style: numberStyle),
-        ])
+        #expect(
+            spans == [
+                StyledSpan(text: "if", style: keywordStyle),
+                StyledSpan(text: "42", style: numberStyle),
+            ])
     }
 }

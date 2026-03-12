@@ -45,7 +45,7 @@ public struct KeyboardDecoder: Sendable {
             return .complete(event)
 
         case .escape:
-            if byte == 0x5b { // [
+            if byte == 0x5b {  // [
                 state = .csi
                 return .pending
             }
@@ -60,7 +60,7 @@ public struct KeyboardDecoder: Sendable {
                 keyCodeValue = UInt32(byte - 0x30)
                 return .pending
             }
-            if byte == 0x75 { // u — empty CSI u
+            if byte == 0x75 {  // u — empty CSI u
                 let event = KeyEvent(keyCode: 0)
                 reset()
                 return .complete(event)
@@ -77,17 +77,17 @@ public struct KeyboardDecoder: Sendable {
                 }
                 return .pending
             }
-            if byte == 0x3a { // : — alternate key codes follow
+            if byte == 0x3a {  // : — alternate key codes follow
                 state = .alternateKeys
                 currentAlternate = 0
                 return .pending
             }
-            if byte == 0x3b { // ; — modifiers follow
+            if byte == 0x3b {  // ; — modifiers follow
                 state = .modifiers
                 hasModifiers = true
                 return .pending
             }
-            if byte == 0x75 { // u — end
+            if byte == 0x75 {  // u — end
                 let event = KeyEvent(keyCode: keyCodeValue)
                 reset()
                 return .complete(event)
@@ -98,23 +98,24 @@ public struct KeyboardDecoder: Sendable {
 
         case .alternateKeys:
             if isDigit(byte) {
-                guard Self.appendDigit(byte - 0x30, to: &currentAlternate, maximum: UInt32.max) else {
+                guard Self.appendDigit(byte - 0x30, to: &currentAlternate, maximum: UInt32.max)
+                else {
                     return invalidResult()
                 }
                 return .pending
             }
-            if byte == 0x3a { // : — next alternate
+            if byte == 0x3a {  // : — next alternate
                 alternateKeys.append(currentAlternate)
                 currentAlternate = 0
                 return .pending
             }
-            if byte == 0x3b { // ; — modifiers follow
+            if byte == 0x3b {  // ; — modifiers follow
                 alternateKeys.append(currentAlternate)
                 state = .modifiers
                 hasModifiers = true
                 return .pending
             }
-            if byte == 0x75 { // u — end
+            if byte == 0x75 {  // u — end
                 alternateKeys.append(currentAlternate)
                 let event = KeyEvent(
                     keyCode: keyCodeValue,
@@ -134,17 +135,17 @@ public struct KeyboardDecoder: Sendable {
                 }
                 return .pending
             }
-            if byte == 0x3a { // : — event type follows
+            if byte == 0x3a {  // : — event type follows
                 state = .eventType
                 hasEventType = true
                 return .pending
             }
-            if byte == 0x3b { // ; — text codepoints follow
+            if byte == 0x3b {  // ; — text codepoints follow
                 state = .textCodepoints
                 hasText = true
                 return .pending
             }
-            if byte == 0x75 { // u — end
+            if byte == 0x75 {  // u — end
                 let event = makeEvent()
                 reset()
                 return .complete(event)
@@ -160,12 +161,12 @@ public struct KeyboardDecoder: Sendable {
                 }
                 return .pending
             }
-            if byte == 0x3b { // ; — text codepoints follow
+            if byte == 0x3b {  // ; — text codepoints follow
                 state = .textCodepoints
                 hasText = true
                 return .pending
             }
-            if byte == 0x75 { // u — end
+            if byte == 0x75 {  // u — end
                 let event = makeEvent()
                 reset()
                 return .complete(event)
@@ -181,12 +182,12 @@ public struct KeyboardDecoder: Sendable {
                 }
                 return .pending
             }
-            if byte == 0x3a { // : — next codepoint
+            if byte == 0x3a {  // : — next codepoint
                 textCodepoints.append(currentTextCP)
                 currentTextCP = 0
                 return .pending
             }
-            if byte == 0x75 { // u — end
+            if byte == 0x75 {  // u — end
                 textCodepoints.append(currentTextCP)
                 let event = makeEvent()
                 reset()

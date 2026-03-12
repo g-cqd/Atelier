@@ -9,7 +9,7 @@ public enum LanguageHighlighter: Sendable {
     /// Maximum source size in bytes for grammar-backed highlighting.
     /// Beyond this, the session falls back to the lightweight lexical highlighter
     /// to prevent runaway memory from per-byte style arrays and token lists.
-    public static let maxGrammarSourceBytes = 512_000 // 512 KB
+    public static let maxGrammarSourceBytes = 512_000  // 512 KB
 
     public final class Session {
         private enum Strategy {
@@ -63,8 +63,9 @@ public enum LanguageHighlighter: Sendable {
             self.theme = theme
 
             if preferGrammar,
-               let language,
-               let artifacts = SyntaxArtifactsCache.artifacts(for: language) {
+                let language,
+                let artifacts = SyntaxArtifactsCache.artifacts(for: language)
+            {
                 strategy = .grammar(GrammarSession(artifacts: artifacts, theme: theme))
             } else {
                 strategy = .fallback
@@ -75,14 +76,17 @@ public enum LanguageHighlighter: Sendable {
             switch strategy {
             case .grammar(let grammarSession):
                 guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
-                    return fallbackHighlightDocument(source: source, language: language, theme: theme)
+                    return fallbackHighlightDocument(
+                        source: source, language: language, theme: theme)
                 }
                 do {
-                    let tree = try grammarSession.parser.parse(source, oldTree: grammarSession.previousTree)
+                    let tree = try grammarSession.parser.parse(
+                        source, oldTree: grammarSession.previousTree)
                     guard tree.root.type != "_start" else {
                         grammarSession.previousTree = nil
                         strategy = .fallback
-                        return fallbackHighlightDocument(source: source, language: language, theme: theme)
+                        return fallbackHighlightDocument(
+                            source: source, language: language, theme: theme)
                     }
                     grammarSession.previousTree = tree
                     let spans = grammarSession.highlighter.highlight(
@@ -98,7 +102,8 @@ public enum LanguageHighlighter: Sendable {
                         scratch: &splitScratch
                     )
                 } catch {
-                    return fallbackHighlightDocument(source: source, language: language, theme: theme)
+                    return fallbackHighlightDocument(
+                        source: source, language: language, theme: theme)
                 }
 
             case .fallback:
@@ -106,7 +111,8 @@ public enum LanguageHighlighter: Sendable {
             }
         }
 
-        public func highlightLines<C: Collection>(_ lines: C) -> [[StyledSpan]] where C.Element == String {
+        public func highlightLines<C: Collection>(_ lines: C) -> [[StyledSpan]]
+        where C.Element == String {
             switch strategy {
             case .fallback:
                 if lines.isEmpty {
@@ -126,7 +132,8 @@ public enum LanguageHighlighter: Sendable {
         theme: Theme = .monokai
     ) -> [[StyledSpan]] {
         let useGrammar = source.utf8.count <= maxGrammarSourceBytes
-        return Session(language: language, theme: theme, preferGrammar: useGrammar).highlightDocument(source: source)
+        return Session(language: language, theme: theme, preferGrammar: useGrammar)
+            .highlightDocument(source: source)
     }
 
     public static func highlightLine(
@@ -160,8 +167,10 @@ public enum LanguageHighlighter: Sendable {
 
         let bundle = KittySyntaxResources.bundle
         let subdirectory = "Grammars/\(entry.path)"
-        return bundle.url(forResource: "grammar", withExtension: "json", subdirectory: subdirectory) != nil &&
-            bundle.url(forResource: "highlights", withExtension: "scm", subdirectory: subdirectory) != nil
+        return bundle.url(forResource: "grammar", withExtension: "json", subdirectory: subdirectory)
+            != nil
+            && bundle.url(
+                forResource: "highlights", withExtension: "scm", subdirectory: subdirectory) != nil
     }
 
     /// Ensures grammar artifacts are loaded for a language, compiling off the main thread.
@@ -174,7 +183,8 @@ public enum LanguageHighlighter: Sendable {
     }
 
     @discardableResult
-    public static func prewarmArtifacts<S: Sequence>(for languages: S) async -> Set<String> where S.Element == String {
+    public static func prewarmArtifacts<S: Sequence>(for languages: S) async -> Set<String>
+    where S.Element == String {
         await SyntaxArtifactsCache.prewarm(languages: languages)
     }
 }
@@ -229,14 +239,15 @@ private enum SyntaxArtifactsCache {
             }
         }
 
-        return Set(uniqueLanguages.filter { language in
-            storage.withLock {
-                if case .some(.some(_)) = $0[language] {
-                    return true
+        return Set(
+            uniqueLanguages.filter { language in
+                storage.withLock {
+                    if case .some(.some(_)) = $0[language] {
+                        return true
+                    }
+                    return false
                 }
-                return false
-            }
-        })
+            })
     }
 
     private static func loadArtifacts(for language: String) -> SyntaxArtifacts? {
@@ -245,23 +256,26 @@ private enum SyntaxArtifactsCache {
         }
 
         let bundle = KittySyntaxResources.bundle
-        guard let grammarURL = bundle.url(
-            forResource: "grammar",
-            withExtension: "json",
-            subdirectory: "Grammars/\(entry.path)"
-        ), let queryURL = bundle.url(
-            forResource: "highlights",
-            withExtension: "scm",
-            subdirectory: "Grammars/\(entry.path)"
-        ) else {
+        guard
+            let grammarURL = bundle.url(
+                forResource: "grammar",
+                withExtension: "json",
+                subdirectory: "Grammars/\(entry.path)"
+            ),
+            let queryURL = bundle.url(
+                forResource: "highlights",
+                withExtension: "scm",
+                subdirectory: "Grammars/\(entry.path)"
+            )
+        else {
             return nil
         }
 
         guard let querySource = try? String(contentsOf: queryURL, encoding: .utf8),
-              let grammar = try? GrammarLoader.load(from: grammarURL.path),
-              grammar.externals.isEmpty,
-              let compiled = try? ParseTableCompiler.compile(grammar),
-              let query = try? QueryParser.parse(querySource)
+            let grammar = try? GrammarLoader.load(from: grammarURL.path),
+            grammar.externals.isEmpty,
+            let compiled = try? ParseTableCompiler.compile(grammar),
+            let query = try? QueryParser.parse(querySource)
         else {
             return nil
         }
@@ -353,27 +367,42 @@ private enum HighlightLexicon {
         "i32", "i64", "String", "Vec", "Result", "Option",
     ]
     static let swiftKeywords: Set<String> = [
-        "import", "struct", "class", "enum", "func", "var", "let", "guard", "if", "else", "switch", "case", "return", "default",
-        "final", "extension", "public", "private", "static", "mutating", "override", "init", "deinit", "typealias", "where", "while", "for",
-        "in", "do", "catch", "try", "throw", "throws", "as", "is", "self", "nil", "true", "false", "protocol", "associatedtype",
-        "internal", "fileprivate", "open", "weak", "unowned", "lazy", "async", "await", "some", "any", "defer", "break", "continue",
-        "fallthrough", "repeat", "super", "inout", "convenience", "required", "dynamic", "optional", "indirect", "nonisolated",
-        "consuming", "borrowing", "@MainActor", "@Sendable", "@escaping", "@autoclosure", "@discardableResult",
+        "import", "struct", "class", "enum", "func", "var", "let", "guard", "if", "else", "switch",
+        "case", "return", "default",
+        "final", "extension", "public", "private", "static", "mutating", "override", "init",
+        "deinit", "typealias", "where", "while", "for",
+        "in", "do", "catch", "try", "throw", "throws", "as", "is", "self", "nil", "true", "false",
+        "protocol", "associatedtype",
+        "internal", "fileprivate", "open", "weak", "unowned", "lazy", "async", "await", "some",
+        "any", "defer", "break", "continue",
+        "fallthrough", "repeat", "super", "inout", "convenience", "required", "dynamic", "optional",
+        "indirect", "nonisolated",
+        "consuming", "borrowing", "@MainActor", "@Sendable", "@escaping", "@autoclosure",
+        "@discardableResult",
     ]
     static let swiftTypes: Set<String> = [
-        "String", "Int", "Bool", "Double", "Float", "Any", "Array", "Dictionary", "Optional", "UInt32", "UInt8", "UInt16", "UInt64",
-        "UInt", "Int8", "Int16", "Int32", "Int64", "Date", "Data", "URL", "Error", "Result", "Void", "Never", "Character",
-        "Substring", "Set", "ClosedRange", "Range", "Comparable", "Equatable", "Hashable", "Codable", "Decodable", "Encodable",
-        "Sendable", "Identifiable", "CustomStringConvertible", "View", "Task", "AsyncStream", "MainActor",
+        "String", "Int", "Bool", "Double", "Float", "Any", "Array", "Dictionary", "Optional",
+        "UInt32", "UInt8", "UInt16", "UInt64",
+        "UInt", "Int8", "Int16", "Int32", "Int64", "Date", "Data", "URL", "Error", "Result", "Void",
+        "Never", "Character",
+        "Substring", "Set", "ClosedRange", "Range", "Comparable", "Equatable", "Hashable",
+        "Codable", "Decodable", "Encodable",
+        "Sendable", "Identifiable", "CustomStringConvertible", "View", "Task", "AsyncStream",
+        "MainActor",
     ]
 }
 
-private func fallbackHighlightDocument(source: String, language: String?, theme: Theme) -> [[StyledSpan]] {
-    let lines = source.isEmpty ? [""] : source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+private func fallbackHighlightDocument(source: String, language: String?, theme: Theme)
+    -> [[StyledSpan]]
+{
+    let lines =
+        source.isEmpty
+        ? [""] : source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
     return lines.map { fallbackHighlightLine($0, language: language, theme: theme) }
 }
 
-private func fallbackHighlightLine(_ line: String, language: String?, theme: Theme) -> [StyledSpan] {
+private func fallbackHighlightLine(_ line: String, language: String?, theme: Theme) -> [StyledSpan]
+{
     switch language {
     case "json":
         return fallbackHighlightJSON(line, theme: theme)
@@ -423,11 +452,14 @@ private func fallbackHighlightJSON(_ line: String, theme: Theme) -> [StyledSpan]
             while peek < chars.count && chars[peek] == " " { peek += 1 }
             let isKey = peek < chars.count && chars[peek] == ":"
             spans.append(StyledSpan(text: token, style: isKey ? keyStyle : stringStyle))
-        } else if char.isNumber || (char == "-" && index + 1 < chars.count && chars[index + 1].isNumber) {
+        } else if char.isNumber
+            || (char == "-" && index + 1 < chars.count && chars[index + 1].isNumber)
+        {
             var token = String(char)
             index += 1
-            while index < chars.count && (chars[index].isNumber || chars[index] == "." || chars[index] == "e"
-                || chars[index] == "E" || chars[index] == "+" || chars[index] == "-")
+            while index < chars.count
+                && (chars[index].isNumber || chars[index] == "." || chars[index] == "e"
+                    || chars[index] == "E" || chars[index] == "+" || chars[index] == "-")
             {
                 token.append(chars[index])
                 index += 1
@@ -470,7 +502,9 @@ private func fallbackHighlightPython(_ line: String, theme: Theme) -> [StyledSpa
             style = keywordStyle
         } else if HighlightLexicon.pythonTypes.contains(current) {
             style = typeStyle
-        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }), let first = current.first, first.isNumber {
+        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
+            let first = current.first, first.isNumber
+        {
             style = numberStyle
         } else {
             style = defaultStyle
@@ -512,7 +546,9 @@ private func fallbackHighlightPython(_ line: String, theme: Theme) -> [StyledSpa
         } else if char.isNumber && current.isEmpty {
             var token = String(char)
             index += 1
-            while index < chars.count && (chars[index].isNumber || chars[index] == "." || chars[index] == "_") {
+            while index < chars.count
+                && (chars[index].isNumber || chars[index] == "." || chars[index] == "_")
+            {
                 token.append(chars[index])
                 index += 1
             }
@@ -552,7 +588,9 @@ private func fallbackHighlightJavaScript(_ line: String, theme: Theme) -> [Style
             style = keywordStyle
         } else if HighlightLexicon.javaScriptTypes.contains(current) {
             style = typeStyle
-        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }), let first = current.first, first.isNumber {
+        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
+            let first = current.first, first.isNumber
+        {
             style = numberStyle
         } else {
             style = defaultStyle
@@ -598,7 +636,9 @@ private func fallbackHighlightJavaScript(_ line: String, theme: Theme) -> [Style
         } else if char.isNumber && current.isEmpty {
             var token = String(char)
             index += 1
-            while index < chars.count && (chars[index].isNumber || chars[index] == "." || chars[index] == "_") {
+            while index < chars.count
+                && (chars[index].isNumber || chars[index] == "." || chars[index] == "_")
+            {
                 token.append(chars[index])
                 index += 1
             }
@@ -696,7 +736,9 @@ private func fallbackHighlightSwift(_ line: String, theme: Theme) -> [StyledSpan
             style = keywordStyle
         } else if HighlightLexicon.swiftTypes.contains(current) {
             style = typeStyle
-        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }), let first = current.first, first.isNumber {
+        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
+            let first = current.first, first.isNumber
+        {
             style = numberStyle
         } else {
             style = defaultStyle
@@ -734,7 +776,9 @@ private func fallbackHighlightSwift(_ line: String, theme: Theme) -> [StyledSpan
             flushCurrent()
             current = "@"
             index += 1
-            while index < chars.count && (chars[index].isLetter || chars[index].isNumber || chars[index] == "_") {
+            while index < chars.count
+                && (chars[index].isLetter || chars[index].isNumber || chars[index] == "_")
+            {
                 current.append(chars[index])
                 index += 1
             }
