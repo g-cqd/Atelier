@@ -103,6 +103,16 @@ Available status bar items: `file`, `status`, `language`, `size`, `lineEnding`, 
 | `whitespace.showSpaces` | `bool` | `false` | Show `·` for mid-line and trailing spaces. |
 | `whitespace.showLineBreaks` | `bool` | `false` | Show `¶` at the end of each line. |
 | `whitespace.showUnexpected` | `bool` | `true` | Show `⌀` for non-breaking spaces, zero-width spaces, and other invisible characters. |
+| `whitespace.selectionWhitespace` | `string` | `"none"` | Show invisible characters inside selected text. Values: `"none"`, `"indentation"`, `"all"`, `"boundary"`. |
+
+### `selectionWhitespace` values
+
+| Value | What is revealed in the selection |
+|-------|-----------------------------------|
+| `"none"` | Nothing extra (default). |
+| `"indentation"` | Leading spaces (`·`) and tabs (`→`). |
+| `"all"` | Indentation + mid-line/trailing spaces. |
+| `"boundary"` | Indentation + spaces + line-break markers (`¶`). |
 
 ## Theme Colors (`theme`)
 
@@ -279,7 +289,8 @@ These are hardcoded and not configurable via JSON.
     "showIndentation": true,
     "showSpaces": false,
     "showLineBreaks": false,
-    "showUnexpected": true
+    "showUnexpected": true,
+    "selectionWhitespace": "all"
   },
   "theme": {
     "editorForeground": "#c9d1d9",
