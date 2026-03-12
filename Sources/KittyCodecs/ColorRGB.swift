@@ -80,13 +80,13 @@ public struct ColorRGB: Sendable, Equatable {
         let a = c * cos(hRad)
         let b = c * sin(hRad)
 
-        let l_ = l + 0.3963377774 * a + 0.2158037573 * b
-        let m_ = l - 0.1055613458 * a - 0.0638541728 * b
-        let s_ = l - 0.0894841775 * a - 1.2914855480 * b
+        let lPrime = l + 0.3963377774 * a + 0.2158037573 * b
+        let mPrime = l - 0.1055613458 * a - 0.0638541728 * b
+        let sPrime = l - 0.0894841775 * a - 1.2914855480 * b
 
-        let lc = l_ * l_ * l_
-        let mc = m_ * m_ * m_
-        let sc = s_ * s_ * s_
+        let lc = lPrime * lPrime * lPrime
+        let mc = mPrime * mPrime * mPrime
+        let sc = sPrime * sPrime * sPrime
 
         let rLinear = +4.0767416621 * lc - 3.3077115913 * mc + 0.2309699292 * sc
         let gLinear = -1.2684380046 * lc + 2.6097574011 * mc - 0.3413193965 * sc
@@ -112,8 +112,9 @@ public struct ColorRGB: Sendable, Equatable {
 extension ColorRGB: Codable {
     public init(from decoder: Decoder) throws {
         if let container = try? decoder.singleValueContainer(),
-           let hex = try? container.decode(String.self),
-           let color = ColorRGB(hex: hex) {
+            let hex = try? container.decode(String.self),
+            let color = ColorRGB(hex: hex)
+        {
             self = color
             return
         }

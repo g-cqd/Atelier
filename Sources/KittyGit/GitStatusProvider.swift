@@ -2,7 +2,9 @@ import Foundation
 import KittyFileTree
 import KittySync
 
-public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvider, @unchecked Sendable {
+public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvider,
+    @unchecked Sendable
+{
     private enum BaseContent: Sendable {
         case missing
         case text(String)
@@ -76,7 +78,8 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         case .text(let content):
             let addedColor: FileStatusColor = status == .untracked ? .untracked : .added
             let baseLines = Self.splitLines(content)
-            return makeLineDecorations(baseLines: baseLines, currentLines: lines, addedColor: addedColor)
+            return makeLineDecorations(
+                baseLines: baseLines, currentLines: lines, addedColor: addedColor)
         }
     }
 
@@ -118,7 +121,9 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         return String(data: data, encoding: .utf8)
     }
 
-    private func readBaseContent(for normalizedPath: String, relativePath: String) async -> BaseContent {
+    private func readBaseContent(for normalizedPath: String, relativePath: String) async
+        -> BaseContent
+    {
         if let cached = lock.withLock({ $0.baseContents[normalizedPath] }) {
             return cached
         }
@@ -149,7 +154,9 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
 
     // MARK: - Parsing
 
-    func parseGitStatus(_ output: String, rootPath: String) -> ([String: FileStatus], FileStatusSummary) {
+    func parseGitStatus(_ output: String, rootPath: String) -> (
+        [String: FileStatus], FileStatusSummary
+    ) {
         var statuses: [String: FileStatus] = [:]
         var summary = FileStatusSummary()
         let normalizedRoot = Self.normalizePath(rootPath)
@@ -218,7 +225,9 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         return .modified
     }
 
-    private func propagateToParents(_ path: String, status: FileStatus, root: String, into statuses: inout [String: FileStatus]) {
+    private func propagateToParents(
+        _ path: String, status: FileStatus, root: String, into statuses: inout [String: FileStatus]
+    ) {
         var current = (path as NSString).deletingLastPathComponent
         while current.hasPrefix(root) || current + "/" == root {
             if current.count < root.count { break }
@@ -272,11 +281,14 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
     }
 
     static func splitLines(_ content: String) -> [String] {
-        let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(
+            String.init)
         return lines.isEmpty ? [""] : lines
     }
 
-    static func addedLineDecorations(for lines: [String], color: FileStatusColor) -> GitLineDecorations {
+    static func addedLineDecorations(for lines: [String], color: FileStatusColor)
+        -> GitLineDecorations
+    {
         guard !lines.isEmpty else { return .empty }
         return GitLineDecorations(
             markers: Dictionary(uniqueKeysWithValues: lines.indices.map { ($0, color) })

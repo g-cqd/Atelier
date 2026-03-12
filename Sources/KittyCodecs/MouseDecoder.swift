@@ -38,7 +38,7 @@ public struct MouseDecoder: Sendable {
             return .invalid(invalid)
 
         case .escape:
-            if byte == 0x5b { // [
+            if byte == 0x5b {  // [
                 state = .csi
                 return .pending
             }
@@ -47,7 +47,7 @@ public struct MouseDecoder: Sendable {
             return .invalid(invalid)
 
         case .csi:
-            if byte == 0x3c { // <
+            if byte == 0x3c {  // <
                 state = .lt
                 return .pending
             }
@@ -72,7 +72,7 @@ public struct MouseDecoder: Sendable {
                 }
                 return .pending
             }
-            if byte == 0x3b { // ;
+            if byte == 0x3b {  // ;
                 state = .coordX
                 return .pending
             }
@@ -87,7 +87,7 @@ public struct MouseDecoder: Sendable {
                 }
                 return .pending
             }
-            if byte == 0x3b { // ;
+            if byte == 0x3b {  // ;
                 state = .coordY
                 return .pending
             }
@@ -102,7 +102,7 @@ public struct MouseDecoder: Sendable {
                 }
                 return .pending
             }
-            if byte == 0x4d || byte == 0x6d { // M (press) or m (release)
+            if byte == 0x4d || byte == 0x6d {  // M (press) or m (release)
                 let isRelease = byte == 0x6d
                 let event = decodeEvent(isRelease: isRelease)
                 reset()
@@ -127,8 +127,10 @@ public struct MouseDecoder: Sendable {
             button = extraButton(from: rawButton)
             kind = eventKind(isRelease: isRelease, isMotion: isMotion, rawButton: rawButton)
         } else if isScroll {
-            button = rawButton == 0 ? .scrollUp : rawButton == 1 ? .scrollDown :
-                     rawButton == 2 ? .scrollLeft : .scrollRight
+            button =
+                rawButton == 0
+                ? .scrollUp
+                : rawButton == 1 ? .scrollDown : rawButton == 2 ? .scrollLeft : .scrollRight
             kind = .press
         } else {
             button = standardButton(from: rawButton)

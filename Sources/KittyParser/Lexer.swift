@@ -18,7 +18,10 @@ public struct Lexer: Sendable {
         public var text: String
         public var isExtra: Bool
 
-        public init(type: String, byteRange: Range<Int>, pointRange: Range<Point>, text: String, isExtra: Bool = false) {
+        public init(
+            type: String, byteRange: Range<Int>, pointRange: Range<Point>, text: String,
+            isExtra: Bool = false
+        ) {
             self.type = type
             self.byteRange = byteRange
             self.pointRange = pointRange
@@ -67,7 +70,10 @@ public struct Lexer: Sendable {
             if utf8[pos] == 0x20 || utf8[pos] == 0x0a || utf8[pos] == 0x09 || utf8[pos] == 0x0d {
                 let start = pos
                 let startPoint = point
-                while pos < utf8.count && (utf8[pos] == 0x20 || utf8[pos] == 0x0a || utf8[pos] == 0x09 || utf8[pos] == 0x0d) {
+                while pos < utf8.count
+                    && (utf8[pos] == 0x20 || utf8[pos] == 0x0a || utf8[pos] == 0x09
+                        || utf8[pos] == 0x0d)
+                {
                     if utf8[pos] == 0x0a {
                         point = Point(row: point.row + 1, column: 0)
                     } else {
@@ -75,13 +81,14 @@ public struct Lexer: Sendable {
                     }
                     pos += 1
                 }
-                tokens.append(Token(
-                    type: "_whitespace",
-                    byteRange: start..<pos,
-                    pointRange: startPoint..<point,
-                    text: "",
-                    isExtra: true
-                ))
+                tokens.append(
+                    Token(
+                        type: "_whitespace",
+                        byteRange: start..<pos,
+                        pointRange: startPoint..<point,
+                        text: "",
+                        isExtra: true
+                    ))
                 continue
             }
 
@@ -95,12 +102,13 @@ public struct Lexer: Sendable {
                 point = Point(row: point.row, column: point.column + 1)
             }
             pos += 1
-            tokens.append(Token(
-                type: text,
-                byteRange: (pos - 1)..<pos,
-                pointRange: startPoint..<point,
-                text: text
-            ))
+            tokens.append(
+                Token(
+                    type: text,
+                    byteRange: (pos - 1)..<pos,
+                    pointRange: startPoint..<point,
+                    text: text
+                ))
         }
 
         return tokens
@@ -114,15 +122,21 @@ public struct Lexer: Sendable {
                 guard pos + prefixBytes.count <= utf8.count else { continue }
                 var matches = true
                 for (j, b) in prefixBytes.enumerated() {
-                    if utf8[pos + j] != b { matches = false; break }
+                    if utf8[pos + j] != b {
+                        matches = false
+                        break
+                    }
                 }
                 guard matches else { continue }
                 // Scan to end of line
                 var end = pos + prefixBytes.count
                 while end < utf8.count && utf8[end] != 0x0a { end += 1 }
-                let text = String(decoding: UnsafeBufferPointer(rebasing: utf8[pos..<end]), as: UTF8.self)
+                let text = String(
+                    decoding: UnsafeBufferPointer(rebasing: utf8[pos..<end]), as: UTF8.self)
                 let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
-                return Token(type: "comment", byteRange: pos..<end, pointRange: point..<endPoint, text: text, isExtra: true)
+                return Token(
+                    type: "comment", byteRange: pos..<end, pointRange: point..<endPoint, text: text,
+                    isExtra: true)
 
             case .block(let open, let close):
                 let openBytes = Array(open.utf8)
@@ -130,7 +144,10 @@ public struct Lexer: Sendable {
                 guard pos + openBytes.count <= utf8.count else { continue }
                 var matches = true
                 for (j, b) in openBytes.enumerated() {
-                    if utf8[pos + j] != b { matches = false; break }
+                    if utf8[pos + j] != b {
+                        matches = false
+                        break
+                    }
                 }
                 guard matches else { continue }
                 // Scan for close delimiter
@@ -138,7 +155,10 @@ public struct Lexer: Sendable {
                 while end + closeBytes.count <= utf8.count {
                     var found = true
                     for (j, b) in closeBytes.enumerated() {
-                        if utf8[end + j] != b { found = false; break }
+                        if utf8[end + j] != b {
+                            found = false
+                            break
+                        }
                     }
                     if found {
                         end += closeBytes.count
@@ -147,9 +167,12 @@ public struct Lexer: Sendable {
                     end += 1
                 }
                 if end > utf8.count { end = utf8.count }
-                let text = String(decoding: UnsafeBufferPointer(rebasing: utf8[pos..<end]), as: UTF8.self)
+                let text = String(
+                    decoding: UnsafeBufferPointer(rebasing: utf8[pos..<end]), as: UTF8.self)
                 let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
-                return Token(type: "comment", byteRange: pos..<end, pointRange: point..<endPoint, text: text, isExtra: true)
+                return Token(
+                    type: "comment", byteRange: pos..<end, pointRange: point..<endPoint, text: text,
+                    isExtra: true)
             }
         }
         return nil
@@ -220,7 +243,9 @@ public struct Lexer: Sendable {
         return Point(row: row, column: col)
     }
 
-    private func advancePoint(_ point: Point, over utf8: UnsafeBufferPointer<UInt8>, from: Int, to: Int) -> Point {
+    private func advancePoint(
+        _ point: Point, over utf8: UnsafeBufferPointer<UInt8>, from: Int, to: Int
+    ) -> Point {
         var p = point
         for i in from..<min(to, utf8.count) {
             if utf8[i] == 0x0a {

@@ -8,7 +8,8 @@ extension EditorState {
 
     func loadInitialTree(validateHistory: Bool = true) async {
         let expandedPaths = collectExpandedPaths(treeNodes)
-        treeNodes = await DirectoryScanner.scanAsync(rootPath, maxDepth: 1, visibility: fileVisibility)
+        treeNodes = await DirectoryScanner.scanAsync(
+            rootPath, maxDepth: 1, visibility: fileVisibility)
         if !expandedPaths.isEmpty {
             restoreExpandedPaths(expandedPaths, in: &treeNodes)
         }
@@ -38,7 +39,8 @@ extension EditorState {
         for i in nodes.indices {
             if nodes[i].isDirectory && paths.contains(nodes[i].path) {
                 if !nodes[i].isExpanded {
-                    FileTreeNavigator.toggleExpand(in: &nodes, at: nodes[i].path, visibility: fileVisibility)
+                    FileTreeNavigator.toggleExpand(
+                        in: &nodes, at: nodes[i].path, visibility: fileVisibility)
                 }
                 if !nodes[i].children.isEmpty {
                     restoreExpandedPaths(paths, in: &nodes[i].children)
@@ -103,8 +105,10 @@ extension EditorState {
         let fileManager = FileManager.default
         let attributes = try? fileManager.attributesOfItem(atPath: path)
         if let fileSize = attributes?[.size] as? Int,
-           fileSize > WorkspaceFileLoading.maxFileSize {
-            statusMessage = "File too large (\(fileSize / 1_000_000)MB, limit \(WorkspaceFileLoading.maxFileSize / 1_000_000)MB)"
+            fileSize > WorkspaceFileLoading.maxFileSize
+        {
+            statusMessage =
+                "File too large (\(fileSize / 1_000_000)MB, limit \(WorkspaceFileLoading.maxFileSize / 1_000_000)MB)"
             return
         }
 
@@ -162,6 +166,10 @@ extension EditorState {
 
     @discardableResult
     func writeBufferToDisk(at destinationPath: String) -> Bool {
+        guard !readOnly else {
+            statusMessage = "Read-only mode"
+            return false
+        }
         guard !destinationPath.isEmpty else {
             statusMessage = "Path required"
             return false
@@ -178,8 +186,10 @@ extension EditorState {
         }
 
         if let existingIndex = bufferManager.bufferIndex(forPath: destinationPath),
-           existingIndex != bufferManager.activeIndex {
-            statusMessage = "Already open: \(URL(fileURLWithPath: destinationPath).lastPathComponent)"
+            existingIndex != bufferManager.activeIndex
+        {
+            statusMessage =
+                "Already open: \(URL(fileURLWithPath: destinationPath).lastPathComponent)"
             return false
         }
 
@@ -309,7 +319,7 @@ extension EditorState {
 
         for (_, node) in cachedFlatTree where !node.isDirectory {
             guard let language = Self.detectLanguage(for: node.name),
-                  seenLanguages.insert(language).inserted
+                seenLanguages.insert(language).inserted
             else {
                 continue
             }
@@ -409,7 +419,9 @@ extension EditorState {
         let language = buffer.language
         let theme = syntaxTheme
         let textBuffer = buffer.textBuffer
-        let shouldHighlight = config.syntax.enabled && !(language.map(config.syntax.disabledLanguages.contains) ?? false)
+        let shouldHighlight =
+            config.syntax.enabled
+            && !(language.map(config.syntax.disabledLanguages.contains) ?? false)
         let showGrammarLoading = shouldHighlight && language != nil
         let tabSize = config.editor.tabSize
 
@@ -428,7 +440,8 @@ extension EditorState {
                 returning: (Int, [[StyledSpan]]?).self
             ) { group in
                 group.addTask(priority: .utility) {
-                    .maxLineWidth(TextDocument.computeMaxLineWidth(in: textBuffer, tabSize: tabSize))
+                    .maxLineWidth(
+                        TextDocument.computeMaxLineWidth(in: textBuffer, tabSize: tabSize))
                 }
 
                 if shouldHighlight {

@@ -3,7 +3,9 @@ public enum TreeViewLayout {
         max(0, rect.width - verticalScrollIndicatorWidth(for: tree, in: rect))
     }
 
-    public static func verticalScrollMetrics<Value>(for tree: TreeView<Value>, in rect: Rect) -> ScrollMetrics {
+    public static func verticalScrollMetrics<Value>(for tree: TreeView<Value>, in rect: Rect)
+        -> ScrollMetrics
+    {
         let rowCount = tree.visibleRows().count
         return ScrollMetrics(
             contentLength: rowCount,
@@ -26,7 +28,9 @@ public enum TreeViewLayout {
         in rect: Rect,
         pointerRow: Int
     ) -> Int? {
-        guard let indicatorRect = verticalScrollIndicatorRect(for: tree, in: rect) else { return nil }
+        guard let indicatorRect = verticalScrollIndicatorRect(for: tree, in: rect) else {
+            return nil
+        }
         return VerticalScrollIndicatorLayout.gripOffset(
             for: verticalScrollMetrics(for: tree, in: rect),
             in: indicatorRect,

@@ -16,17 +16,21 @@ func renderOpenFilesPanel(
     let buffers = state.bufferManager.buffers
     guard !buffers.isEmpty else {
         let emptyCell = Cell(character: " ", style: colorScheme.treeBg)
-        pipeline.buffer.fill(row: rect.y, col: rect.x, width: rect.width, height: rect.height, cell: emptyCell)
+        pipeline.buffer.fill(
+            row: rect.y, col: rect.x, width: rect.width, height: rect.height, cell: emptyCell)
         return
     }
 
     let theme = state.config.theme
     let normalStyle = theme.resolvedStyle(theme.openFilesForeground) ?? colorScheme.treeBg
-    let selectedStyle = theme.resolvedStyle(theme.openFilesSelectedForeground, bold: true) ?? colorScheme.treeSelected
+    let selectedStyle =
+        theme.resolvedStyle(theme.openFilesSelectedForeground, bold: true)
+        ?? colorScheme.treeSelected
     let icon = state.symbolTheme[.file].text
 
     let items: [ListView.Item] = buffers.map { buffer in
-        let status = state.config.git.enabled && state.config.git.decorations.showOpenFilesStatus
+        let status =
+            state.config.git.enabled && state.config.git.decorations.showOpenFilesStatus
             ? state.fileStatusProvider?.status(for: buffer.filePath)
             : nil
         let statusIndicator = status?.indicator.isEmpty == false ? status?.indicator : nil

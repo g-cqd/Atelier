@@ -13,8 +13,10 @@ public struct SymbolDiscovery {
     public func discover() throws -> SymbolCollection {
         let frameworkURL = try locateFramework()
 
-        let publicBundle = frameworkURL.appending(path: "CoreGlyphs.bundle", directoryHint: .isDirectory)
-        let privateBundle = frameworkURL.appending(path: "CoreGlyphsPrivate.bundle", directoryHint: .isDirectory)
+        let publicBundle = frameworkURL.appending(
+            path: "CoreGlyphs.bundle", directoryHint: .isDirectory)
+        let privateBundle = frameworkURL.appending(
+            path: "CoreGlyphsPrivate.bundle", directoryHint: .isDirectory)
 
         let publicNames = try loadSymbolOrder(from: publicBundle)
         let publicMetadata = try metadataLoader.loadFrameworkMetadata(from: publicBundle)
@@ -43,7 +45,10 @@ public struct SymbolDiscovery {
     private func loadSymbolOrder(from bundleURL: URL) throws -> [String] {
         let url = bundleURL.appending(path: "symbol_order.plist")
         let data = try Data(contentsOf: url)
-        guard let names = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String] else {
+        guard
+            let names = try PropertyListSerialization.propertyList(from: data, format: nil)
+                as? [String]
+        else {
             throw SymbolDiscoveryError.invalidPropertyList(url.path)
         }
         return names
@@ -112,23 +117,32 @@ public struct SymbolDiscovery {
             at: volumesDirectory,
             includingPropertiesForKeys: [.isDirectoryKey]
         ).filter { $0.lastPathComponent.hasPrefix("iOS_") }
-         .sorted { $0.lastPathComponent > $1.lastPathComponent }
+            .sorted { $0.lastPathComponent > $1.lastPathComponent }
 
         for volume in volumes {
             // Walk into the volume to find .simruntime directories
-            let runtimesPath = volume
-                .appending(path: "Library/Developer/CoreSimulator/Profiles/Runtimes", directoryHint: .isDirectory)
+            let runtimesPath =
+                volume
+                .appending(
+                    path: "Library/Developer/CoreSimulator/Profiles/Runtimes",
+                    directoryHint: .isDirectory)
 
-            guard let runtimeDirs = try? fileManager.contentsOfDirectory(
-                at: runtimesPath,
-                includingPropertiesForKeys: [.isDirectoryKey]
-            ) else {
+            guard
+                let runtimeDirs = try? fileManager.contentsOfDirectory(
+                    at: runtimesPath,
+                    includingPropertiesForKeys: [.isDirectoryKey]
+                )
+            else {
                 continue
             }
 
             for runtimeDir in runtimeDirs {
-                let framework = runtimeDir
-                    .appending(path: "Contents/Resources/RuntimeRoot/System/Library/PrivateFrameworks/SFSymbols.framework", directoryHint: .isDirectory)
+                let framework =
+                    runtimeDir
+                    .appending(
+                        path:
+                            "Contents/Resources/RuntimeRoot/System/Library/PrivateFrameworks/SFSymbols.framework",
+                        directoryHint: .isDirectory)
                 let orderPlist = framework.appending(path: "CoreGlyphs.bundle/symbol_order.plist")
 
                 if fileManager.fileExists(atPath: orderPlist.path) {

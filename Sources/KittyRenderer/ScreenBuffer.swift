@@ -125,7 +125,9 @@ public struct ScreenBuffer: Sendable {
         regionX: Int, regionWidth: Int,
         delta: Int
     ) {
-        guard delta != 0, regionWidth > 0, regionHeight > 0, abs(delta) < regionHeight else { return }
+        guard delta != 0, regionWidth > 0, regionHeight > 0, abs(delta) < regionHeight else {
+            return
+        }
 
         if delta > 0 {
             // Scroll down: content moves up
@@ -138,7 +140,8 @@ public struct ScreenBuffer: Sendable {
             }
         } else {
             let absDelta = -delta
-            for row in stride(from: regionY + regionHeight - 1, through: regionY + absDelta, by: -1) {
+            for row in stride(from: regionY + regionHeight - 1, through: regionY + absDelta, by: -1)
+            {
                 let dstBase = row &* columns
                 let srcBase = (row &- absDelta) &* columns
                 for col in regionX..<(regionX + regionWidth) {
@@ -168,7 +171,9 @@ public struct ScreenBuffer: Sendable {
         self = ScreenBuffer._fromParts(cells: newCells, columns: newCols, rows: newRows)
     }
 
-    private static func _fromParts(cells: ContiguousArray<Cell>, columns: Int, rows: Int) -> ScreenBuffer {
+    private static func _fromParts(cells: ContiguousArray<Cell>, columns: Int, rows: Int)
+        -> ScreenBuffer
+    {
         var buf = ScreenBuffer(columns: columns, rows: rows)
         buf.cells = cells
         // Mark everything dirty after resize (batch operation, O(words) not O(cells))

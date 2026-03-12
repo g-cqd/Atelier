@@ -10,7 +10,9 @@ public struct ViewBuilder {
         content
     }
 
-    public static func buildBlock<each C: View>(_ content: repeat each C) -> TupleView<(repeat each C)> {
+    public static func buildBlock<each C: View>(_ content: repeat each C) -> TupleView<
+        (repeat each C)
+    > {
         TupleView(value: (repeat each content))
     }
 
@@ -21,11 +23,15 @@ public struct ViewBuilder {
         return ConditionalView.second(EmptyView())
     }
 
-    public static func buildEither<First: View, Second: View>(first component: First) -> ConditionalView<First, Second> {
+    public static func buildEither<First: View, Second: View>(first component: First)
+        -> ConditionalView<First, Second>
+    {
         .first(component)
     }
 
-    public static func buildEither<First: View, Second: View>(second component: Second) -> ConditionalView<First, Second> {
+    public static func buildEither<First: View, Second: View>(second component: Second)
+        -> ConditionalView<First, Second>
+    {
         .second(component)
     }
 }

@@ -31,16 +31,20 @@ public enum GraphicsEncoder: Sendable {
 
         var isFirst = true
         while offset < base64Payload.endIndex {
-            let end = base64Payload.index(offset, offsetBy: chunkSize, limitedBy: base64Payload.endIndex)
+            let end =
+                base64Payload.index(offset, offsetBy: chunkSize, limitedBy: base64Payload.endIndex)
                 ?? base64Payload.endIndex
             let chunk = String(base64Payload[offset..<end])
             let hasMore = end < base64Payload.endIndex
 
             if isFirst {
-                result.append(contentsOf: buildChunk(control: controlPart, payload: chunk, more: hasMore))
+                result.append(
+                    contentsOf: buildChunk(control: controlPart, payload: chunk, more: hasMore))
                 isFirst = false
             } else {
-                result.append(contentsOf: buildChunk(control: "m=\(hasMore ? 1 : 0)", payload: chunk, more: false))
+                result.append(
+                    contentsOf: buildChunk(
+                        control: "m=\(hasMore ? 1 : 0)", payload: chunk, more: false))
             }
 
             offset = end
@@ -64,18 +68,18 @@ public enum GraphicsEncoder: Sendable {
         var bytes: [UInt8] = []
         // ESC_G = ESC ] _ in APC form, but Kitty uses ESC_G as custom
         // Actually: APC = ESC _ ... ST (ESC \)
-        bytes.append(0x1b) // ESC
-        bytes.append(0x5f) // _ (APC)
+        bytes.append(0x1b)  // ESC
+        bytes.append(0x5f)  // _ (APC)
         bytes.append(contentsOf: "G".utf8)
         if more {
             bytes.append(contentsOf: "\(control),m=1".utf8)
         } else {
             bytes.append(contentsOf: control.utf8)
         }
-        bytes.append(0x3b) // ;
+        bytes.append(0x3b)  // ;
         bytes.append(contentsOf: payload.utf8)
-        bytes.append(0x1b) // ESC
-        bytes.append(0x5c) // \ (ST)
+        bytes.append(0x1b)  // ESC
+        bytes.append(0x5c)  // \ (ST)
         return bytes
     }
 }

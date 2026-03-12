@@ -1,5 +1,5 @@
-import KittyTerminal
 import KittyCodecs
+import KittyTerminal
 
 /// Describes a terminal-level scroll operation to apply before diffing.
 ///
@@ -105,8 +105,9 @@ public final class RenderPipeline: Sendable {
         // This physically scrolls the terminal display, then shifts the front
         // buffer to match, so DiffRenderer only emits the delta.
         if let hint = scrollHint, hint.delta != 0,
-           abs(hint.delta) < hint.regionHeight, hint.regionHeight > 0 {
-            let top1 = hint.regionTop + 1   // 1-based
+            abs(hint.delta) < hint.regionHeight, hint.regionHeight > 0
+        {
+            let top1 = hint.regionTop + 1  // 1-based
             let bottom1 = hint.regionTop + hint.regionHeight  // 1-based inclusive
             KittySequences.appendSetScrollRegion(top: top1, bottom: bottom1, to: &outputBuffer)
             if hint.delta > 0 {
@@ -127,9 +128,12 @@ public final class RenderPipeline: Sendable {
             // Terminal fills vacated rows with blank cells — do the same in front.
             if hint.delta > 0 {
                 let blankStart = hint.regionTop + hint.regionHeight - hint.delta
-                front.fill(row: blankStart, col: 0, width: front.columns, height: hint.delta, cell: .empty)
+                front.fill(
+                    row: blankStart, col: 0, width: front.columns, height: hint.delta, cell: .empty)
             } else {
-                front.fill(row: hint.regionTop, col: 0, width: front.columns, height: -hint.delta, cell: .empty)
+                front.fill(
+                    row: hint.regionTop, col: 0, width: front.columns, height: -hint.delta,
+                    cell: .empty)
             }
 
             // The terminal scroll moved ALL columns, but non-editor columns

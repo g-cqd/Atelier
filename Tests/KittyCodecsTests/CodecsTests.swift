@@ -1,4 +1,5 @@
 import Testing
+
 @testable import KittyCodecs
 
 @Suite
@@ -65,9 +66,9 @@ struct SGREncoderTests {
         let style = Style(underline: .curly)
         let bytes = SGREncoder.encode(style)
         // Should contain 4:3 (curly underline)
-        #expect(bytes.contains(0x34)) // 4
-        #expect(bytes.contains(0x3a)) // :
-        #expect(bytes.contains(0x33)) // 3
+        #expect(bytes.contains(0x34))  // 4
+        #expect(bytes.contains(0x3a))  // :
+        #expect(bytes.contains(0x33))  // 3
     }
 
     @Test
@@ -117,7 +118,7 @@ struct KeyboardDecoderTests {
     @Test
     func `Plain ASCII character`() throws {
         var decoder = KeyboardDecoder()
-        let result = decoder.feed(0x61) // 'a'
+        let result = decoder.feed(0x61)  // 'a'
         let event = try requireCompletedKeyboardEvent(result)
         #expect(event.keyCode == 97)
         #expect(event.modifiers == [])
@@ -129,10 +130,10 @@ struct KeyboardDecoderTests {
         // ESC [ 97 u → 'a'
         #expect(decoder.feed(0x1b) == .pending)
         #expect(decoder.feed(0x5b) == .pending)
-        #expect(decoder.feed(0x39) == .pending) // 9
-        #expect(decoder.feed(0x37) == .pending) // 7
-        let event = try requireCompletedKeyboardEvent(decoder.feed(0x75)) // u
-        #expect(event.keyCode == 97) // 'a'
+        #expect(decoder.feed(0x39) == .pending)  // 9
+        #expect(decoder.feed(0x37) == .pending)  // 7
+        let event = try requireCompletedKeyboardEvent(decoder.feed(0x75))  // u
+        #expect(event.keyCode == 97)  // 'a'
     }
 
     @Test
@@ -162,12 +163,13 @@ struct KeyboardDecoderTests {
     @Test
     func `ESC plus char produces Alt modifier`() throws {
         var decoder = KeyboardDecoder()
-        _ = decoder.feed(0x1b) // ESC
-        let event = try requireCompletedKeyboardEvent(decoder.feed(0x61)) // 'a'
+        _ = decoder.feed(0x1b)  // ESC
+        let event = try requireCompletedKeyboardEvent(decoder.feed(0x61))  // 'a'
         #expect(event.modifiers == .alt)
     }
 
-    @Test( arguments: [        ("\u{1B}[42949672960u", "\u{1B}[4294967296"),
+    @Test(arguments: [
+        ("\u{1B}[42949672960u", "\u{1B}[4294967296"),
         ("\u{1B}[1:42949672960u", "\u{1B}[1:4294967296"),
         ("\u{1B}[1;256u", "\u{1B}[1;256"),
         ("\u{1B}[1;1:256u", "\u{1B}[1;1:256"),
@@ -189,7 +191,7 @@ struct MouseDecoderTests {
         for byte in [0x1b, 0x5b, 0x3c, 0x30, 0x3b, 0x31, 0x30, 0x3b, 0x35] as [UInt8] {
             _ = decoder.feed(byte)
         }
-        let event = try requireCompletedMouseEvent(decoder.feed(0x4d)) // M
+        let event = try requireCompletedMouseEvent(decoder.feed(0x4d))  // M
         #expect(event.button == .left)
         #expect(event.kind == .press)
         #expect(event.col == 10)
@@ -203,7 +205,7 @@ struct MouseDecoderTests {
         for byte in [0x1b, 0x5b, 0x3c, 0x32, 0x3b, 0x31, 0x3b, 0x31] as [UInt8] {
             _ = decoder.feed(byte)
         }
-        let event = try requireCompletedMouseEvent(decoder.feed(0x6d)) // m
+        let event = try requireCompletedMouseEvent(decoder.feed(0x6d))  // m
         #expect(event.button == .right)
         #expect(event.kind == .release)
     }
@@ -228,7 +230,8 @@ struct MouseDecoderTests {
         #expect(try requireCompletedMouseEvent(decoder.feed(0x4d)).modifiers.contains(.shift))
     }
 
-    @Test( arguments: [        ("\u{1B}[<65536;1;1M", "\u{1B}[<65536"),
+    @Test(arguments: [
+        ("\u{1B}[<65536;1;1M", "\u{1B}[<65536"),
         ("\u{1B}[<0;65536;1M", "\u{1B}[<0;65536"),
         ("\u{1B}[<0;1;65536M", "\u{1B}[<0;1;65536"),
     ])
@@ -238,10 +241,13 @@ struct MouseDecoderTests {
         #expect(decoder.feed(0x1b) == .pending)
     }
 
-    @Test( arguments: [        ("\u{1B}[<128;1;1M", MouseButton.button4),
+    @Test(arguments: [
+        ("\u{1B}[<128;1;1M", MouseButton.button4),
         ("\u{1B}[<129;1;1M", MouseButton.button5),
     ])
-    func `Extra buttons decode from high values`(sequence: String, expectedButton: MouseButton) throws {
+    func `Extra buttons decode from high values`(sequence: String, expectedButton: MouseButton)
+        throws
+    {
         var decoder = MouseDecoder()
         let event = try requireCompletedMouseEvent(feedMouse(sequence, into: &decoder))
         #expect(event.button == expectedButton)
@@ -272,7 +278,8 @@ struct KittySequencesTests {
         #expect(bytes == [0x1b, 0x5b, 0x35, 0x3b, 0x31, 0x30, 0x48])
     }
 
-    @Test( arguments: [        (-5, 0, "\u{1B}[1;1H"),
+    @Test(arguments: [
+        (-5, 0, "\u{1B}[1;1H"),
         (65_535, 65_535, "\u{1B}[65535;65535H"),
         (70_000, 80_000, "\u{1B}[65535;65535H"),
     ])
@@ -291,13 +298,13 @@ struct GraphicsEncoderTests {
             action: .transmitAndDisplay,
             format: .png,
             transmission: .direct,
-            payload: [0x89, 0x50, 0x4E, 0x47] // PNG magic bytes
+            payload: [0x89, 0x50, 0x4E, 0x47]  // PNG magic bytes
         )
         let bytes = GraphicsEncoder.encode(cmd)
         // Should contain APC start (ESC _), 'G', control params, ';', base64 payload, ST (ESC \)
         #expect(bytes.first == 0x1b)
-        #expect(bytes[1] == 0x5f) // _ (APC)
-        #expect(bytes[2] == 0x47) // G
+        #expect(bytes[1] == 0x5f)  // _ (APC)
+        #expect(bytes[2] == 0x47)  // G
         // Should end with ESC \ (ST)
         #expect(bytes[bytes.count - 2] == 0x1b)
         #expect(bytes[bytes.count - 1] == 0x5c)
@@ -378,11 +385,11 @@ struct GraphicsEncoderTests {
 struct ClipboardTests {
     @Test
     func `setClipboard produces OSC 52 sequence`() {
-        let bytes = KittySequences.setClipboard("SGVsbG8=") // "Hello" in base64
+        let bytes = KittySequences.setClipboard("SGVsbG8=")  // "Hello" in base64
         // OSC 52 ; c ; <base64> ST
         #expect(bytes[0] == 0x1b)
-        #expect(bytes[1] == 0x5d) // ] (OSC)
-        let body = String(bytes: Array(bytes[2 ..< bytes.count - 2]), encoding: .utf8) ?? ""
+        #expect(bytes[1] == 0x5d)  // ] (OSC)
+        let body = String(bytes: Array(bytes[2..<bytes.count - 2]), encoding: .utf8) ?? ""
         #expect(body == "52;c;SGVsbG8=")
         #expect(bytes[bytes.count - 2] == 0x1b)
         #expect(bytes[bytes.count - 1] == 0x5c)
@@ -435,9 +442,41 @@ struct NotificationsTests {
     }
 }
 
+// MARK: - Keyboard decoder extended tests
+
+@Suite
+struct KeyboardDecoderExtendedTests {
+    @Test
+    func `CSI u with text codepoints field decodes keyCode and associatedText`() throws {
+        var decoder = KeyboardDecoder()
+        // ESC [ 97 ; 1 ; 65 u  →  keyCode=97, modifiers=[] (1-1=0), text='A' (65)
+        // Bytes: 0x1b 0x5b 0x39 0x37 0x3b 0x31 0x3b 0x36 0x35 0x75
+        for byte: UInt8 in [0x1b, 0x5b, 0x39, 0x37, 0x3b, 0x31, 0x3b, 0x36, 0x35] {
+            #expect(decoder.feed(byte) == .pending)
+        }
+        let event = try requireCompletedKeyboardEvent(decoder.feed(0x75))
+        #expect(event.keyCode == 97)
+        #expect(event.associatedText == "A")
+    }
+
+    @Test
+    func `empty CSI u produces keyCode zero with empty modifiers and associatedText`() throws {
+        var decoder = KeyboardDecoder()
+        // ESC [ u  →  keyCode=0, no modifiers, no text
+        #expect(decoder.feed(0x1b) == .pending)
+        #expect(decoder.feed(0x5b) == .pending)
+        let event = try requireCompletedKeyboardEvent(decoder.feed(0x75))
+        #expect(event.keyCode == 0)
+        #expect(event.modifiers == [])
+        #expect(event.associatedText == "")
+    }
+}
+
 // MARK: - Helpers
 
-private func feedKeyboard(_ sequence: String, into decoder: inout KeyboardDecoder) -> DecoderResult<KeyEvent> {
+private func feedKeyboard(_ sequence: String, into decoder: inout KeyboardDecoder) -> DecoderResult<
+    KeyEvent
+> {
     var result: DecoderResult<KeyEvent> = .pending
     for byte in sequence.utf8 {
         result = decoder.feed(byte)
@@ -451,7 +490,9 @@ private func feedKeyboard(_ sequence: String, into decoder: inout KeyboardDecode
     return result
 }
 
-private func feedMouse(_ sequence: String, into decoder: inout MouseDecoder) -> DecoderResult<MouseEvent> {
+private func feedMouse(_ sequence: String, into decoder: inout MouseDecoder) -> DecoderResult<
+    MouseEvent
+> {
     var result: DecoderResult<MouseEvent> = .pending
     for byte in sequence.utf8 {
         result = decoder.feed(byte)
@@ -471,14 +512,14 @@ private enum DecoderExpectationError: Error {
 }
 
 private func requireCompletedKeyboardEvent(_ result: DecoderResult<KeyEvent>) throws -> KeyEvent {
-    guard case let .complete(event) = result else {
+    guard case .complete(let event) = result else {
         throw DecoderExpectationError.expectedCompleteKeyboardEvent
     }
     return event
 }
 
 private func requireCompletedMouseEvent(_ result: DecoderResult<MouseEvent>) throws -> MouseEvent {
-    guard case let .complete(event) = result else {
+    guard case .complete(let event) = result else {
         throw DecoderExpectationError.expectedCompleteMouseEvent
     }
     return event

@@ -76,7 +76,7 @@ public indirect enum Rule: Sendable, Equatable {
     case token(Rule)
     case immediateToken(Rule)
     case field(String, Rule)
-    case alias(Rule, String, Bool) // rule, name, isNamed
+    case alias(Rule, String, Bool)  // rule, name, isNamed
     case blank
 }
 

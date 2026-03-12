@@ -6,11 +6,14 @@ public final class IncrementalParser: Sendable {
     private let parser: GLRParser
 
     public init(parseTable: ParseTable, lexTable: LexTable, productions: [ProductionRule]) {
-        self.parser = GLRParser(parseTable: parseTable, lexTable: lexTable, productions: productions)
+        self.parser = GLRParser(
+            parseTable: parseTable, lexTable: lexTable, productions: productions)
     }
 
     /// Parse source text, optionally reusing parts of the old tree.
-    public func parse(_ source: String, oldTree: SyntaxTree? = nil, edit: TextEdit? = nil) throws(ParseError) -> SyntaxTree {
+    public func parse(_ source: String, oldTree: SyntaxTree? = nil, edit: TextEdit? = nil)
+        throws(ParseError) -> SyntaxTree
+    {
         // For now, delegate to full parse. Incremental optimization can be added later
         // when the basic parser is proven correct.
         //
@@ -80,10 +83,13 @@ extension SyntaxTree {
         return n
     }
 
-    private func applyEdit(to fields: [String: [SyntaxNode]], edit: TextEdit) -> [String: [SyntaxNode]] {
-        Dictionary(uniqueKeysWithValues: fields.map { key, nodes in
-            (key, nodes.map { applyEdit(to: $0, edit: edit) })
-        })
+    private func applyEdit(to fields: [String: [SyntaxNode]], edit: TextEdit) -> [String:
+        [SyntaxNode]]
+    {
+        Dictionary(
+            uniqueKeysWithValues: fields.map { key, nodes in
+                (key, nodes.map { applyEdit(to: $0, edit: edit) })
+            })
     }
 
     private func shift(_ range: Range<Point>, by edit: TextEdit) -> Range<Point> {

@@ -11,16 +11,24 @@ public enum QueryMatcher: Sendable {
     }
 
     /// Execute a query within a byte range.
-    public static func execute(query: Query, tree: SyntaxTree, byteRange range: Range<Int>) -> [QueryMatch] {
+    public static func execute(query: Query, tree: SyntaxTree, byteRange range: Range<Int>)
+        -> [QueryMatch]
+    {
         var matches: [QueryMatch] = []
-        matchInNode(tree.root, query: query, source: tree.source, byteRange: range, pointRange: nil, matches: &matches)
+        matchInNode(
+            tree.root, query: query, source: tree.source, byteRange: range, pointRange: nil,
+            matches: &matches)
         return matches
     }
 
     /// Execute a query within a point range (row/column).
-    public static func execute(query: Query, tree: SyntaxTree, pointRange range: Range<Point>) -> [QueryMatch] {
+    public static func execute(query: Query, tree: SyntaxTree, pointRange range: Range<Point>)
+        -> [QueryMatch]
+    {
         var matches: [QueryMatch] = []
-        matchInNode(tree.root, query: query, source: tree.source, byteRange: nil, pointRange: range, matches: &matches)
+        matchInNode(
+            tree.root, query: query, source: tree.source, byteRange: nil, pointRange: range,
+            matches: &matches)
         return matches
     }
 
@@ -52,7 +60,9 @@ public enum QueryMatcher: Sendable {
 
         // Recurse into children
         for child in node.children {
-            matchInNode(child, query: query, source: source, byteRange: byteRange, pointRange: pointRange, matches: &matches)
+            matchInNode(
+                child, query: query, source: source, byteRange: byteRange, pointRange: pointRange,
+                matches: &matches)
         }
     }
 
@@ -72,7 +82,9 @@ public enum QueryMatcher: Sendable {
                 case .fieldMatch(let name, let fieldPattern):
                     guard let fieldNode = node.child(forField: name) else { return false }
                     var fieldCaptures = localCaptures
-                    if !matchPattern(fieldPattern, against: fieldNode, source: source, captures: &fieldCaptures) {
+                    if !matchPattern(
+                        fieldPattern, against: fieldNode, source: source, captures: &fieldCaptures)
+                    {
                         return false
                     }
                     localCaptures = fieldCaptures
@@ -134,7 +146,8 @@ public enum QueryMatcher: Sendable {
 
         case .fieldMatch(let name, let fieldPattern):
             guard let fieldNode = node.child(forField: name) else { return false }
-            return matchPattern(fieldPattern, against: fieldNode, source: source, captures: &captures)
+            return matchPattern(
+                fieldPattern, against: fieldNode, source: source, captures: &captures)
 
         case .negatedField(let name):
             return node.fields[name] == nil

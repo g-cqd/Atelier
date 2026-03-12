@@ -36,7 +36,8 @@ public final class GLRParser: Sendable {
         let nonExtraTokens = tokens.filter { !$0.isExtra }
 
         guard nonExtraTokens.count <= Self.maxTokens else {
-            throw .parsingFailed("Token count \(nonExtraTokens.count) exceeds limit \(Self.maxTokens)")
+            throw .parsingFailed(
+                "Token count \(nonExtraTokens.count) exceeds limit \(Self.maxTokens)")
         }
 
         guard !nonExtraTokens.isEmpty else {
@@ -55,13 +56,14 @@ public final class GLRParser: Sendable {
                 // Unknown token — wrap in error node and continue
                 stacks = stacks.map { stack in
                     var s = stack
-                    s.pushNode(SyntaxNode(
-                        type: token.type,
-                        byteRange: token.byteRange,
-                        pointRange: token.pointRange,
-                        isError: true,
-                        isNamed: false
-                    ))
+                    s.pushNode(
+                        SyntaxNode(
+                            type: token.type,
+                            byteRange: token.byteRange,
+                            pointRange: token.pointRange,
+                            isError: true,
+                            isNamed: false
+                        ))
                     return s
                 }
                 continue
@@ -76,12 +78,13 @@ public final class GLRParser: Sendable {
                 let action = parseTable.actions[stack.state][termIdx]
                 switch action {
                 case .shift(let nextState):
-                    stack.pushNode(SyntaxNode(
-                        type: token.type,
-                        byteRange: token.byteRange,
-                        pointRange: token.pointRange,
-                        isNamed: false
-                    ))
+                    stack.pushNode(
+                        SyntaxNode(
+                            type: token.type,
+                            byteRange: token.byteRange,
+                            pointRange: token.pointRange,
+                            isNamed: false
+                        ))
                     stack.state = nextState
                     newStacks.append(stack)
 
@@ -89,12 +92,13 @@ public final class GLRParser: Sendable {
                     for act in actions {
                         if case .shift(let nextState) = act {
                             var forked = stack
-                            forked.pushNode(SyntaxNode(
-                                type: token.type,
-                                byteRange: token.byteRange,
-                                pointRange: token.pointRange,
-                                isNamed: false
-                            ))
+                            forked.pushNode(
+                                SyntaxNode(
+                                    type: token.type,
+                                    byteRange: token.byteRange,
+                                    pointRange: token.pointRange,
+                                    isNamed: false
+                                ))
                             forked.state = nextState
                             newStacks.append(forked)
                         }
@@ -106,12 +110,13 @@ public final class GLRParser: Sendable {
                 case .reduce, .error:
                     // Error recovery: skip token
                     var errStack = stack
-                    errStack.pushNode(SyntaxNode(
-                        type: "ERROR",
-                        byteRange: token.byteRange,
-                        pointRange: token.pointRange,
-                        isError: true
-                    ))
+                    errStack.pushNode(
+                        SyntaxNode(
+                            type: "ERROR",
+                            byteRange: token.byteRange,
+                            pointRange: token.pointRange,
+                            isError: true
+                        ))
                     newStacks.append(errStack)
                 }
             }
@@ -141,13 +146,14 @@ public final class GLRParser: Sendable {
         let extraComments = tokens.filter { $0.isExtra && $0.type == "comment" }
         if !extraComments.isEmpty {
             for token in extraComments {
-                root.children.append(SyntaxNode(
-                    type: "comment",
-                    byteRange: token.byteRange,
-                    pointRange: token.pointRange,
-                    isExtra: true,
-                    isNamed: true
-                ))
+                root.children.append(
+                    SyntaxNode(
+                        type: "comment",
+                        byteRange: token.byteRange,
+                        pointRange: token.pointRange,
+                        isExtra: true,
+                        isNamed: true
+                    ))
             }
             root.children.sort { $0.byteRange.lowerBound < $1.byteRange.lowerBound }
         }
@@ -168,18 +174,23 @@ public final class GLRParser: Sendable {
 
                 switch action {
                 case .reduce(let ruleIndex, let count, let nonTerminal):
-                    stack = performReduce(stack: stack, ruleIndex: ruleIndex, count: count, nonTerminal: nonTerminal)
+                    stack = performReduce(
+                        stack: stack, ruleIndex: ruleIndex, count: count, nonTerminal: nonTerminal)
                     continue reduceLoop
 
                 case .conflict(let actions):
                     // Fork: one stack per reduce action
                     for act in actions {
                         if case .reduce(let ri, let c, let nt) = act {
-                            let forked = performReduce(stack: stack, ruleIndex: ri, count: c, nonTerminal: nt)
+                            let forked = performReduce(
+                                stack: stack, ruleIndex: ri, count: c, nonTerminal: nt)
                             result.append(forked)
                         }
                     }
-                    if actions.contains(where: { if case .shift = $0 { return true }; return false }) {
+                    if actions.contains(where: {
+                        if case .shift = $0 { return true }
+                        return false
+                    }) {
                         result.append(stack)
                     }
                     shouldAppendStack = false
@@ -198,7 +209,9 @@ public final class GLRParser: Sendable {
         return result
     }
 
-    private func performReduce(stack: ParseStack, ruleIndex: Int, count: Int, nonTerminal: String) -> ParseStack {
+    private func performReduce(stack: ParseStack, ruleIndex: Int, count: Int, nonTerminal: String)
+        -> ParseStack
+    {
         var s = stack
         let children = s.popNodes(count)
 
@@ -225,7 +238,8 @@ public final class GLRParser: Sendable {
 
         // Apply GOTO using dictionary lookup
         if let ntIdx = nonTerminalIndex[nonTerminal],
-           let gotoState = parseTable.gotos[s.stateBeforeTop][ntIdx] {
+            let gotoState = parseTable.gotos[s.stateBeforeTop][ntIdx]
+        {
             s.state = gotoState
         }
 

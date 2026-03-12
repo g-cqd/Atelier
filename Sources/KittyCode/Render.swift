@@ -63,7 +63,8 @@ func render(pipeline: RenderPipeline, state: EditorState) {
 
     // Sidebar panel (tree or open files)
     if sidebarWidth > 0 {
-        let sidebarRect = Rect(x: activityBarWidth, y: contentStartRow, width: sidebarWidth, height: contentRows)
+        let sidebarRect = Rect(
+            x: activityBarWidth, y: contentStartRow, width: sidebarWidth, height: contentRows)
 
         switch state.activeSidebarPanel {
         case .explorer:
@@ -85,7 +86,9 @@ func render(pipeline: RenderPipeline, state: EditorState) {
         // Separator
         let separatorCol = activityBarWidth + sidebarWidth
         for row in 0..<contentRows {
-            pipeline.buffer.write("\u{2502}", row: contentStartRow + row, col: separatorCol, style: colorScheme.separator)
+            pipeline.buffer.write(
+                "\u{2502}", row: contentStartRow + row, col: separatorCol,
+                style: colorScheme.separator)
         }
     }
 
@@ -101,7 +104,8 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     )
 
     // Status bar
-    let statusSegments = state.config.statusBar.show
+    let statusSegments =
+        state.config.statusBar.show
         ? state.statusBarSegments(columns: cols, rows: rows)
         : ("", state.contextHintText ?? "")
     StatusBar(

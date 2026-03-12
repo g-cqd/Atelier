@@ -64,7 +64,8 @@ func isWithinContextMenu(
     let layout = contextMenuOverlayLayout(for: contextMenu, columns: columns, rows: rows)
     let row = mouse.row - 1
     let col = mouse.col - 1
-    return row >= layout.boxRect.y && row < layout.boxRect.maxY && col >= layout.boxRect.x && col < layout.boxRect.maxX
+    return row >= layout.boxRect.y && row < layout.boxRect.maxY && col >= layout.boxRect.x
+        && col < layout.boxRect.maxX
 }
 
 private func overlayBoxStyle(from colorScheme: EditorState.ColorScheme) -> OverlayBoxStyle {
@@ -116,7 +117,8 @@ private func renderPromptOverlay(
     let renderedPrompt = String(promptLine.prefix(layout.contentRect.width))
     buffer.write(renderedPrompt, row: inputRow, col: inputCol, style: inputStyle)
 
-    let cursorCol = min(layout.contentRect.maxX - 1, inputCol + min(promptLine.count, layout.contentRect.width - 1))
+    let cursorCol = min(
+        layout.contentRect.maxX - 1, inputCol + min(promptLine.count, layout.contentRect.width - 1))
     return (row: inputRow, col: cursorCol)
 }
 
@@ -173,7 +175,8 @@ private func contextMenuOverlayLayout(
     let widestItem = contextMenu.items.reduce(0) { partial, item in
         max(partial, item.title.count + (item.shortcut.isEmpty ? 0 : item.shortcut.count + 1))
     }
-    let preferredWidth = min(max(max(contextMenu.title.count, widestItem) + 8, 28), max(20, columns - 4))
+    let preferredWidth = min(
+        max(max(contextMenu.title.count, widestItem) + 8, 28), max(20, columns - 4))
     let subtitleRows = contextMenu.subtitle == nil ? 0 : 1
     let preferredHeight = min(max(contextMenu.items.count + subtitleRows + 4, 6), max(6, rows - 4))
     return OverlayBox.layout(

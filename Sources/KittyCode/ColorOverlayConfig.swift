@@ -12,15 +12,17 @@ struct ColorOverlayConfig: Codable, Sendable, Equatable {
 
     init(from decoder: Decoder) throws {
         if let singleValue = try? decoder.singleValueContainer(),
-           let hex = try? singleValue.decode(String.self),
-           let parsed = ColorRGB(hex: hex) {
+            let hex = try? singleValue.decode(String.self),
+            let parsed = ColorRGB(hex: hex)
+        {
             self.color = ColorRGB(r: parsed.r, g: parsed.g, b: parsed.b)
             self.alpha = parsed.alpha
             return
         }
 
         if let singleValue = try? decoder.singleValueContainer(),
-           let color = try? singleValue.decode(ColorRGB.self) {
+            let color = try? singleValue.decode(ColorRGB.self)
+        {
             self = ColorOverlayConfig(color: color)
             return
         }

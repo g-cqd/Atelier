@@ -266,11 +266,12 @@ public enum ParseTableCompiler: Sendable {
 
             try context.appendAuxiliary(FlatProduction(name: helperName, symbols: [], fields: [:]))
             for alternative in recursiveAlternatives {
-                try context.appendAuxiliary(FlatProduction(
-                    name: helperName,
-                    symbols: [helperName] + alternative.symbols,
-                    fields: shiftFields(alternative.fields, by: 1)
-                ))
+                try context.appendAuxiliary(
+                    FlatProduction(
+                        name: helperName,
+                        symbols: [helperName] + alternative.symbols,
+                        fields: shiftFields(alternative.fields, by: 1)
+                    ))
             }
 
             return [FlatSequence(symbols: [helperName], fields: [:])]
@@ -280,18 +281,20 @@ public enum ParseTableCompiler: Sendable {
             let recursiveAlternatives = inner.filter { !$0.symbols.isEmpty }
 
             for alternative in inner {
-                try context.appendAuxiliary(FlatProduction(
-                    name: helperName,
-                    symbols: alternative.symbols,
-                    fields: alternative.fields
-                ))
+                try context.appendAuxiliary(
+                    FlatProduction(
+                        name: helperName,
+                        symbols: alternative.symbols,
+                        fields: alternative.fields
+                    ))
             }
             for alternative in recursiveAlternatives {
-                try context.appendAuxiliary(FlatProduction(
-                    name: helperName,
-                    symbols: [helperName] + alternative.symbols,
-                    fields: shiftFields(alternative.fields, by: 1)
-                ))
+                try context.appendAuxiliary(
+                    FlatProduction(
+                        name: helperName,
+                        symbols: [helperName] + alternative.symbols,
+                        fields: shiftFields(alternative.fields, by: 1)
+                    ))
             }
 
             return [FlatSequence(symbols: [helperName], fields: [:])]
@@ -312,12 +315,13 @@ public enum ParseTableCompiler: Sendable {
             )
             return [FlatSequence.empty] + expanded
         case .prec(_, let content), .precLeft(_, let content), .precRight(_, let content),
-             .precDynamic(_, let content):
+            .precDynamic(_, let content):
             return try expandRule(content, ruleName: ruleName, context: &context)
         case .token(let content), .immediateToken(let content):
             return try expandRule(content, ruleName: ruleName, context: &context)
         case .field(let name, let content):
-            return try expandRule(content, ruleName: ruleName, context: &context).map { production in
+            return try expandRule(content, ruleName: ruleName, context: &context).map {
+                production in
                 guard !production.symbols.isEmpty else {
                     return production
                 }
@@ -366,9 +370,10 @@ public enum ParseTableCompiler: Sendable {
     }
 
     private static func shiftFields(_ fields: [Int: String], by offset: Int) -> [Int: String] {
-        Dictionary(uniqueKeysWithValues: fields.map { (index, name) in
-            (index + offset, name)
-        })
+        Dictionary(
+            uniqueKeysWithValues: fields.map { (index, name) in
+                (index + offset, name)
+            })
     }
 
     private static func collectTerminals(
@@ -520,11 +525,14 @@ public enum ParseTableCompiler: Sendable {
         terminals: [String],
         nonTerminals: [String]
     ) -> ParseTable {
-        let terminalIndex = Dictionary(uniqueKeysWithValues: terminals.enumerated().map { ($1, $0) })
+        let terminalIndex = Dictionary(
+            uniqueKeysWithValues: terminals.enumerated().map { ($1, $0) })
         let ntIndex = Dictionary(uniqueKeysWithValues: nonTerminals.enumerated().map { ($1, $0) })
 
-        var actions = [[Action]](repeating: [Action](repeating: .error, count: terminals.count), count: itemSets.count)
-        var gotos = [[Int?]](repeating: [Int?](repeating: nil, count: nonTerminals.count), count: itemSets.count)
+        var actions = [[Action]](
+            repeating: [Action](repeating: .error, count: terminals.count), count: itemSets.count)
+        var gotos = [[Int?]](
+            repeating: [Int?](repeating: nil, count: nonTerminals.count), count: itemSets.count)
 
         for (stateIdx, itemSet) in itemSets.enumerated() {
             // Fill from transitions (shifts and gotos)
@@ -532,7 +540,8 @@ public enum ParseTableCompiler: Sendable {
                 for (symbol, target) in trans {
                     if let tIdx = terminalIndex[symbol] {
                         let newAction = Action.shift(target)
-                        actions[stateIdx][tIdx] = resolveConflict(existing: actions[stateIdx][tIdx], new: newAction)
+                        actions[stateIdx][tIdx] = resolveConflict(
+                            existing: actions[stateIdx][tIdx], new: newAction)
                     } else if let ntIdx = ntIndex[symbol] {
                         gotos[stateIdx][ntIdx] = target
                     }
@@ -556,7 +565,8 @@ public enum ParseTableCompiler: Sendable {
                             count: prod.symbols.count,
                             nonTerminal: prod.name
                         )
-                        actions[stateIdx][tIdx] = resolveConflict(existing: actions[stateIdx][tIdx], new: newAction)
+                        actions[stateIdx][tIdx] = resolveConflict(
+                            existing: actions[stateIdx][tIdx], new: newAction)
                     }
                 }
             }

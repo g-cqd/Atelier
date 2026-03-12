@@ -72,14 +72,22 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
                 state.saveStateToActiveBuffer()
                 state.bufferManager.nextTab()
                 state.restoreStateFromActiveBuffer()
-                state.ensureActiveTabVisible(ribbonWidth: max(0, pipeline.columns - LayoutMetrics.editorStart(state: state, columns: pipeline.columns)))
+                state.ensureActiveTabVisible(
+                    ribbonWidth: max(
+                        0,
+                        pipeline.columns
+                            - LayoutMetrics.editorStart(state: state, columns: pipeline.columns)))
                 return true
             }
             if key.keyCode == Key.pageUp.rawValue {
                 state.saveStateToActiveBuffer()
                 state.bufferManager.prevTab()
                 state.restoreStateFromActiveBuffer()
-                state.ensureActiveTabVisible(ribbonWidth: max(0, pipeline.columns - LayoutMetrics.editorStart(state: state, columns: pipeline.columns)))
+                state.ensureActiveTabVisible(
+                    ribbonWidth: max(
+                        0,
+                        pipeline.columns
+                            - LayoutMetrics.editorStart(state: state, columns: pipeline.columns)))
                 return true
             }
         }
@@ -112,7 +120,9 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
                 return true
             }
             // Ctrl+W closes current tab (nano mode)
-            if key.keyCode == AsciiKey.w, state.config.keybindingMode == .nano, state.bufferManager.count > 0 {
+            if key.keyCode == AsciiKey.w, state.config.keybindingMode == .nano,
+                state.bufferManager.count > 0
+            {
                 state.closeCurrentTab()
                 return true
             }
@@ -170,7 +180,8 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
 @MainActor
 private func handleCopy(state: EditorState) {
     guard let selection = state.selection else { return }
-    let text = selection.extractText(from: { state.fileLine(at: $0) }, lineCount: state.fileLineCount)
+    let text = selection.extractText(
+        from: { state.fileLine(at: $0) }, lineCount: state.fileLineCount)
     let base64 = Data(text.utf8).base64EncodedString()
     state.terminalWriter?(KittySequences.setClipboard(base64))
     state.statusMessage = "Copied \(text.count) chars"
@@ -179,11 +190,13 @@ private func handleCopy(state: EditorState) {
 @MainActor
 private func handleCut(state: EditorState) {
     guard let selection = state.selection else { return }
-    let text = selection.extractText(from: { state.fileLine(at: $0) }, lineCount: state.fileLineCount)
+    let text = selection.extractText(
+        from: { state.fileLine(at: $0) }, lineCount: state.fileLineCount)
     let base64 = Data(text.utf8).base64EncodedString()
     state.terminalWriter?(KittySequences.setClipboard(base64))
     let previousSnapshot = state.activeBufferSnapshot()
-    let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: selection)
+    let mutation = TextOperations.deleteRange(
+        in: &state.textBuffer, at: &state.textCursor, selection: selection)
     state.textDidChange(mutation, previousSnapshot: previousSnapshot)
     state.clearSelection()
     state.statusMessage = "Cut \(text.count) chars"
@@ -201,17 +214,20 @@ private func handlePaste(_ text: String, state: EditorState) {
 
     if state.hasActiveSelection {
         let previousSnapshot = state.activeBufferSnapshot()
-        let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
+        let mutation = TextOperations.deleteRange(
+            in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
         state.textDidChange(mutation, previousSnapshot: previousSnapshot)
         state.clearSelection()
     }
 
     let previousSnapshot = state.activeBufferSnapshot()
-    let mutation = TextOperations.insert(sanitized.text, into: &state.textBuffer, at: &state.textCursor)
+    let mutation = TextOperations.insert(
+        sanitized.text, into: &state.textBuffer, at: &state.textCursor)
     state.textDidChange(mutation, previousSnapshot: previousSnapshot)
 
     if sanitized.replacedCount > 0 {
-        state.statusMessage = "Pasted \(sanitized.text.count) chars (\(sanitized.replacedCount) non-printable replaced)"
+        state.statusMessage =
+            "Pasted \(sanitized.text.count) chars (\(sanitized.replacedCount) non-printable replaced)"
     } else {
         state.statusMessage = "Pasted \(sanitized.text.count) chars"
     }
