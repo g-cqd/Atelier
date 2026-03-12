@@ -21,7 +21,9 @@ public enum DiffRenderer: Sendable {
     }
 
     /// Renders diff into a caller-provided buffer (avoids allocation when reused).
-    public static func render(front: ScreenBuffer, back: ScreenBuffer, into bytes: inout ContiguousArray<UInt8>) {
+    public static func render(
+        front: ScreenBuffer, back: ScreenBuffer, into bytes: inout ContiguousArray<UInt8>
+    ) {
         let columns = back.columns
         let ranges = back.dirty.dirtyRanges(columns: columns)
         guard !ranges.isEmpty else { return }
@@ -93,7 +95,8 @@ public enum DiffRenderer: Sendable {
     }
 
     /// Renders the entire buffer into a caller-provided buffer.
-    public static func renderFull(_ buffer: ScreenBuffer, into bytes: inout ContiguousArray<UInt8>) {
+    public static func renderFull(_ buffer: ScreenBuffer, into bytes: inout ContiguousArray<UInt8>)
+    {
         var lastStyle = Style.default
 
         for row in 0..<buffer.rows {

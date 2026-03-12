@@ -9,15 +9,21 @@ struct SymbolMetadataLoader {
 
     func loadFrameworkMetadata(from bundleURL: URL) throws -> Metadata {
         return Metadata(
-            searchTermsByName: (try? loadStringArrayDictionary(at: bundleURL.appending(path: "symbol_search.plist"))) ?? [:],
-            categoriesByName: (try? loadStringArrayDictionary(at: bundleURL.appending(path: "symbol_categories.plist"))) ?? [:],
-            availabilityByName: (try? loadAvailability(at: bundleURL.appending(path: "name_availability.plist"))) ?? [:]
+            searchTermsByName: (try? loadStringArrayDictionary(
+                at: bundleURL.appending(path: "symbol_search.plist"))) ?? [:],
+            categoriesByName: (try? loadStringArrayDictionary(
+                at: bundleURL.appending(path: "symbol_categories.plist"))) ?? [:],
+            availabilityByName: (try? loadAvailability(
+                at: bundleURL.appending(path: "name_availability.plist"))) ?? [:]
         )
     }
 
     private func loadStringArrayDictionary(at url: URL) throws -> [String: [String]] {
         let data = try Data(contentsOf: url)
-        guard let dictionary = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: [String]] else {
+        guard
+            let dictionary = try PropertyListSerialization.propertyList(from: data, format: nil)
+                as? [String: [String]]
+        else {
             throw SymbolDiscoveryError.invalidPropertyList(url.path)
         }
         return dictionary
@@ -25,8 +31,10 @@ struct SymbolMetadataLoader {
 
     private func loadAvailability(at url: URL) throws -> [String: String] {
         let data = try Data(contentsOf: url)
-        guard let dictionary = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-              let symbols = dictionary["symbols"] as? [String: String]
+        guard
+            let dictionary = try PropertyListSerialization.propertyList(from: data, format: nil)
+                as? [String: Any],
+            let symbols = dictionary["symbols"] as? [String: String]
         else {
             throw SymbolDiscoveryError.invalidPropertyList(url.path)
         }

@@ -1,7 +1,9 @@
 /// Shared text-display measurements used by widgets and editor logic.
 public enum TextDisplayMetrics {
     /// Converts a character offset within a line to a terminal display column.
-    public static func displayColumn(forCharacterOffset targetOffset: Int, in line: String, tabSize: Int = 4) -> Int {
+    public static func displayColumn(
+        forCharacterOffset targetOffset: Int, in line: String, tabSize: Int = 4
+    ) -> Int {
         guard targetOffset > 0 else { return 0 }
 
         var column = 0
@@ -18,7 +20,9 @@ public enum TextDisplayMetrics {
     }
 
     /// Converts a terminal display column to the nearest character offset within a line.
-    public static func characterOffset(forDisplayColumn targetColumn: Int, in line: String, tabSize: Int = 4) -> Int {
+    public static func characterOffset(
+        forDisplayColumn targetColumn: Int, in line: String, tabSize: Int = 4
+    ) -> Int {
         guard targetColumn > 0 else { return 0 }
 
         var column = 0
@@ -60,8 +64,8 @@ public enum TextDisplayMetrics {
     }
 }
 
-public extension Character {
-    var isPrintable: Bool {
+extension Character {
+    public var isPrintable: Bool {
         guard let scalar = unicodeScalars.first else { return false }
         return !scalar.isASCII || (scalar.value >= 32 && scalar.value < 127)
     }

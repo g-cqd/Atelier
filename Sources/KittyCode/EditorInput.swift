@@ -4,7 +4,9 @@ import KittyText
 import KittyWidgets
 
 @MainActor
-func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipeline: RenderPipeline) -> Bool {
+func handleEditorKey(
+    _ key: KeyEvent, state: EditorState, contentRows: Int, pipeline: RenderPipeline
+) -> Bool {
     let layout = LayoutMetrics(state: state, columns: pipeline.columns, rows: pipeline.rows)
     let editorRect = Rect(
         x: layout.editorStart,
@@ -12,7 +14,8 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         width: layout.editorWidth,
         height: layout.contentRows
     )
-    let availWidth = max(1, TextEditorLayout.contentWidth(for: makeEditorView(state: state), in: editorRect))
+    let availWidth = max(
+        1, TextEditorLayout.contentWidth(for: makeEditorView(state: state), in: editorRect))
     var shouldEnsureVisible = false
     var didDeleteSelection = false
     let isShiftHeld = key.modifiers.contains(.shift)
@@ -39,7 +42,8 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
             // shift+navigation: fall through to extend selection below
         } else if shouldReplaceSelectionBeforeHandling(key) {
             let previousSnapshot = state.activeBufferSnapshot()
-            let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
+            let mutation = TextOperations.deleteRange(
+                in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
             state.textDidChange(mutation, previousSnapshot: previousSnapshot)
             state.clearSelection()
             didDeleteSelection = true
@@ -47,15 +51,16 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
     }
 
     // Capture selection anchor before cursor movement for shift+navigation
-    let anchorBeforeMove: TextPosition? = if isShiftHeld && isNavigationKey(key) {
-        if let sel = state.selection {
-            sel.anchor
+    let anchorBeforeMove: TextPosition? =
+        if isShiftHeld && isNavigationKey(key) {
+            if let sel = state.selection {
+                sel.anchor
+            } else {
+                TextPosition(row: state.cursorRow, col: state.cursorCol)
+            }
         } else {
-            TextPosition(row: state.cursorRow, col: state.cursorCol)
+            nil
         }
-    } else {
-        nil
-    }
 
     if state.config.keybindingMode == .vim && state.vimMode == .normal {
         switch key.keyCode {
@@ -157,7 +162,9 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
             shouldEnsureVisible = true
         } else {
             let previousSnapshot = state.activeBufferSnapshot()
-            if let mutation = TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor) {
+            if let mutation = TextOperations.deleteBackward(
+                in: &state.textBuffer, at: &state.textCursor)
+            {
                 state.textDidChange(mutation, previousSnapshot: previousSnapshot)
                 shouldEnsureVisible = true
             }
@@ -178,8 +185,9 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
             insertText("\t", into: state)
             shouldEnsureVisible = true
         } else if key.keyCode < 256,
-                  key.modifiers.intersection([.ctrl, .super, .hyper, .meta]).isEmpty,
-                  let scalar = UnicodeScalar(key.keyCode) {
+            key.modifiers.intersection([.ctrl, .super, .hyper, .meta]).isEmpty,
+            let scalar = UnicodeScalar(key.keyCode)
+        {
             let char = Character(scalar)
             if char.isPrintable {
                 insertText(String(char), into: state)
@@ -204,7 +212,7 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
 private func isNavigationKey(_ key: KeyEvent) -> Bool {
     switch key.keyCode {
     case Key.up.rawValue, Key.down.rawValue, Key.left.rawValue, Key.right.rawValue,
-         Key.home.rawValue, Key.end.rawValue, Key.pageUp.rawValue, Key.pageDown.rawValue:
+        Key.home.rawValue, Key.end.rawValue, Key.pageUp.rawValue, Key.pageDown.rawValue:
         return true
     default:
         return false
@@ -214,7 +222,8 @@ private func isNavigationKey(_ key: KeyEvent) -> Bool {
 @MainActor
 private func shouldReplaceSelectionBeforeHandling(_ key: KeyEvent) -> Bool {
     switch key.keyCode {
-    case Key.enter.rawValue, Key.enterAlt.rawValue, Key.backspace.rawValue, Key.backspaceAlt.rawValue, 9:
+    case Key.enter.rawValue, Key.enterAlt.rawValue, Key.backspace.rawValue,
+        Key.backspaceAlt.rawValue, 9:
         return true
     default:
         break

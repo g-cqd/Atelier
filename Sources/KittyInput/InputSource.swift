@@ -1,6 +1,6 @@
 import Darwin
-import KittyTerminal
 import KittyCodecs
+import KittyTerminal
 
 /// Async stream of input events from a terminal connection.
 public final class InputSource: Sendable {
@@ -12,7 +12,8 @@ public final class InputSource: Sendable {
 
     public init(connection: any TerminalConnection) {
         self.connection = connection
-        let (stream, cont) = AsyncStream<InputEvent>.makeStream(bufferingPolicy: .bufferingNewest(256))
+        let (stream, cont) = AsyncStream<InputEvent>.makeStream(
+            bufferingPolicy: .bufferingNewest(256))
         self._events = stream
         self.continuation = cont
     }

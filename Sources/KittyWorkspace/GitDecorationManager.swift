@@ -44,10 +44,10 @@ public final class GitDecorationManager {
         task?.cancel()
 
         guard gitConfig.showGitStatus,
-              gitConfig.showLineChanges,
-              let provider = gitLineDecorationProvider,
-              let buffer = workspace.bufferManager.activeBuffer,
-              !buffer.filePath.isEmpty
+            gitConfig.showLineChanges,
+            let provider = gitLineDecorationProvider,
+            let buffer = workspace.bufferManager.activeBuffer,
+            !buffer.filePath.isEmpty
         else {
             clearActiveDecorations()
             return
@@ -86,8 +86,8 @@ public final class GitDecorationManager {
 
     private func apply(_ decorations: GitLineDecorations, for path: String, version: Int) {
         guard let buffer = workspace.bufferManager.activeBuffer,
-              buffer.filePath == path,
-              buffer.documentVersion == version
+            buffer.filePath == path,
+            buffer.documentVersion == version
         else {
             return
         }
@@ -101,7 +101,7 @@ public final class GitDecorationManager {
         task = nil
 
         guard let buffer = workspace.bufferManager.activeBuffer,
-              !buffer.gitLineDecorations.isEmpty
+            !buffer.gitLineDecorations.isEmpty
         else {
             return
         }
@@ -112,9 +112,9 @@ public final class GitDecorationManager {
 
     private func clearActiveDecorations(for path: String, version: Int) {
         guard let buffer = workspace.bufferManager.activeBuffer,
-              buffer.filePath == path,
-              buffer.documentVersion == version,
-              !buffer.gitLineDecorations.isEmpty
+            buffer.filePath == path,
+            buffer.documentVersion == version,
+            !buffer.gitLineDecorations.isEmpty
         else {
             return
         }
@@ -123,7 +123,7 @@ public final class GitDecorationManager {
         invalidateRender()
     }
 
-    private nonisolated static func approximateDocumentByteCount(lines: [String]) -> Int {
+    nonisolated private static func approximateDocumentByteCount(lines: [String]) -> Int {
         lines.reduce(into: max(0, lines.count - 1)) { count, line in
             count += line.utf8.count
         }

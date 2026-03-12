@@ -50,7 +50,9 @@ extension View {
     }
 
     /// Render this view into a buffer. Default dispatches to ViewRenderer.
-    public func render(to buffer: inout ScreenBuffer, in rect: Rect, context: RenderContext = RenderContext()) {
+    public func render(
+        to buffer: inout ScreenBuffer, in rect: Rect, context: RenderContext = RenderContext()
+    ) {
         ViewRenderer.render(self, into: &buffer, in: rect, context: context)
     }
 

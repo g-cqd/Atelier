@@ -33,11 +33,10 @@ final class EditorState {
             visualOffsets.removeAll(keepingCapacity: true)
         }
 
-        func isValid(contentWidth: Int, tabSize: Int, documentVersion: Int, lineCount: Int) -> Bool {
-            self.contentWidth == contentWidth &&
-            self.tabSize == tabSize &&
-            self.documentVersion == documentVersion &&
-            lineWrapCounts.count == lineCount
+        func isValid(contentWidth: Int, tabSize: Int, documentVersion: Int, lineCount: Int) -> Bool
+        {
+            self.contentWidth == contentWidth && self.tabSize == tabSize
+                && self.documentVersion == documentVersion && lineWrapCounts.count == lineCount
         }
     }
 
@@ -390,9 +389,9 @@ final class EditorState {
 
         let lines = fileContent
         guard mutation.originalLineRange.lowerBound >= 0,
-              mutation.originalLineRange.upperBound <= highlightedLines.count,
-              mutation.updatedLineRange.lowerBound >= 0,
-              mutation.updatedLineRange.upperBound <= lines.count
+            mutation.originalLineRange.upperBound <= highlightedLines.count,
+            mutation.updatedLineRange.lowerBound >= 0,
+            mutation.updatedLineRange.upperBound <= lines.count
         else {
             refreshHighlights()
             return
@@ -419,7 +418,8 @@ final class EditorState {
             textBuffer = TextBuffer(lines: normalizedLines)
             cachedFileLines = normalizedLines
             cachedDocumentText = normalizedLines.joined(separator: "\n")
-            cachedMaxLineWidth = TextDocument.computeMaxLineWidth(for: normalizedLines, tabSize: config.editor.tabSize)
+            cachedMaxLineWidth = TextDocument.computeMaxLineWidth(
+                for: normalizedLines, tabSize: config.editor.tabSize)
             cachedSerializedByteCount = TextDocument.computeSerializedByteCount(
                 for: normalizedLines,
                 lineEnding: currentLineEnding
@@ -473,6 +473,10 @@ final class EditorState {
     }
 
     func textDidChange(previousSnapshot: BufferEditSnapshot? = nil) {
+        guard !readOnly else {
+            statusMessage = "Read-only mode"
+            return
+        }
         invalidateTextSnapshotCache()
         if let buf = bufferManager.activeBuffer {
             buf.postOpenProcessingTask?.cancel()
@@ -481,7 +485,7 @@ final class EditorState {
             buf.documentVersion += 1
             isLoadingGrammar = false
             if let previousSnapshot,
-               let currentSnapshot = activeBufferSnapshot()
+                let currentSnapshot = activeBufferSnapshot()
             {
                 buf.editHistory.recordChange(
                     from: previousSnapshot,
@@ -500,6 +504,10 @@ final class EditorState {
     }
 
     func textDidChange(_ mutation: TextMutation, previousSnapshot: BufferEditSnapshot? = nil) {
+        guard !readOnly else {
+            statusMessage = "Read-only mode"
+            return
+        }
         invalidateTextSnapshotCache()
         if let buf = bufferManager.activeBuffer {
             buf.postOpenProcessingTask?.cancel()
@@ -508,7 +516,7 @@ final class EditorState {
             buf.documentVersion += 1
             isLoadingGrammar = false
             if let previousSnapshot,
-               let currentSnapshot = activeBufferSnapshot()
+                let currentSnapshot = activeBufferSnapshot()
             {
                 buf.editHistory.recordChange(
                     from: previousSnapshot,
@@ -527,7 +535,8 @@ final class EditorState {
     }
 
     func replaceDocumentText(with content: String) {
-        workspace.replaceDocumentText(with: content, tabSize: config.editor.tabSize, lineEnding: currentLineEnding)
+        workspace.replaceDocumentText(
+            with: content, tabSize: config.editor.tabSize, lineEnding: currentLineEnding)
     }
 
     var serializedByteCount: Int {
@@ -575,8 +584,10 @@ final class EditorState {
 
     func ensureActiveTabVisible(ribbonWidth: Int) {
         let tabs = tabRibbonTabs()
-        let ribbon = TabRibbon(tabs: tabs, activeIndex: bufferManager.activeIndex, scrollOffset: tabScrollOffset)
-        tabScrollOffset = ribbon.clampedScrollOffset(activeIndex: bufferManager.activeIndex, ribbonWidth: ribbonWidth)
+        let ribbon = TabRibbon(
+            tabs: tabs, activeIndex: bufferManager.activeIndex, scrollOffset: tabScrollOffset)
+        tabScrollOffset = ribbon.clampedScrollOffset(
+            activeIndex: bufferManager.activeIndex, ribbonWidth: ribbonWidth)
     }
 
     func buildWrapCache(contentWidth: Int) {
@@ -586,7 +597,11 @@ final class EditorState {
         let lineCount = fileLineCount
         let tabSize = config.editor.tabSize
 
-        guard !wrapCache.isValid(contentWidth: contentWidth, tabSize: tabSize, documentVersion: docVersion, lineCount: lineCount) else {
+        guard
+            !wrapCache.isValid(
+                contentWidth: contentWidth, tabSize: tabSize, documentVersion: docVersion,
+                lineCount: lineCount)
+        else {
             return
         }
 
@@ -598,7 +613,9 @@ final class EditorState {
             var rowCount = 1
             var currentRowWidth = 0
             for char in line {
-                let width = char == "\t" ? tabSize - (currentRowWidth % tabSize) : UnicodeWidth.displayWidth(of: char)
+                let width =
+                    char == "\t"
+                    ? tabSize - (currentRowWidth % tabSize) : UnicodeWidth.displayWidth(of: char)
                 guard width > 0 else { continue }
                 if currentRowWidth > 0, currentRowWidth + width > contentWidth {
                     rowCount += 1
@@ -630,7 +647,8 @@ final class EditorState {
 
     func tabRibbonTabs() -> [TabRibbon.Tab] {
         bufferManager.buffers.map { buf in
-            let status = config.git.enabled && config.git.decorations.showTabRibbonStatus
+            let status =
+                config.git.enabled && config.git.decorations.showTabRibbonStatus
                 ? fileStatusProvider?.status(for: buf.filePath)
                 : nil
             return TabRibbon.Tab(
@@ -676,6 +694,7 @@ final class EditorState {
         set { bufferManager.activeBuffer?.selection = newValue }
     }
     var terminalWriter: (([UInt8]) -> Void)?
+    var readOnly: Bool = false
     var fileTreeHistory = FileTreeOperationHistory()
 
     var maxLineWidth: Int {
@@ -683,7 +702,8 @@ final class EditorState {
             return cachedMaxLineWidth
         }
 
-        let computed = TextDocument.computeMaxLineWidth(in: textBuffer, tabSize: config.editor.tabSize)
+        let computed = TextDocument.computeMaxLineWidth(
+            in: textBuffer, tabSize: config.editor.tabSize)
         cachedMaxLineWidth = computed
         return computed
     }
@@ -704,7 +724,8 @@ final class EditorState {
         self.treePanelWidth = config.treeWidth
         self.colorScheme = Self.makeColorScheme(config: config)
         let catalog = config.useSFSymbolsInTerminal ? SymbolCatalogLoader.loadOrDiscover() : nil
-        self.symbolTheme = TerminalSymbolTheme.make(symbolsEnabled: config.useSFSymbolsInTerminal, catalog: catalog)
+        self.symbolTheme = TerminalSymbolTheme.make(
+            symbolsEnabled: config.useSFSymbolsInTerminal, catalog: catalog)
         self.statusMessage = "Opened \(rootPath) | ^O Save | ^X Quit"
 
         // Wire up workspace callbacks
@@ -733,7 +754,8 @@ final class EditorState {
 
     private func widenCachedMaxLineWidth(for range: Range<Int>) {
         guard let cachedWidth = cachedMaxLineWidth else {
-            cachedMaxLineWidth = TextDocument.computeMaxLineWidth(in: textBuffer, tabSize: config.editor.tabSize)
+            cachedMaxLineWidth = TextDocument.computeMaxLineWidth(
+                in: textBuffer, tabSize: config.editor.tabSize)
             return
         }
 
@@ -757,7 +779,8 @@ final class EditorState {
         textCursor = snapshot.textCursor
         currentLineEnding = snapshot.lineEnding
         invalidateTextSnapshotCache()
-        cachedMaxLineWidth = TextDocument.computeMaxLineWidth(in: snapshot.textBuffer, tabSize: config.editor.tabSize)
+        cachedMaxLineWidth = TextDocument.computeMaxLineWidth(
+            in: snapshot.textBuffer, tabSize: config.editor.tabSize)
         highlightSession = nil
         highlightedLines = []
         selection = nil
@@ -786,7 +809,7 @@ final class EditorState {
 
     func undoActiveBuffer() {
         guard let buffer = bufferManager.activeBuffer,
-              let currentSnapshot = activeBufferSnapshot()
+            let currentSnapshot = activeBufferSnapshot()
         else {
             statusMessage = "No active buffer"
             return
@@ -805,7 +828,7 @@ final class EditorState {
 
     func redoActiveBuffer() {
         guard let buffer = bufferManager.activeBuffer,
-              let currentSnapshot = activeBufferSnapshot()
+            let currentSnapshot = activeBufferSnapshot()
         else {
             statusMessage = "No active buffer"
             return
@@ -824,7 +847,8 @@ final class EditorState {
 
     var isGitFilterAvailable: Bool {
         guard config.git.enabled, fileStatusProvider != nil else { return false }
-        return FileManager.default.fileExists(atPath: (rootPath as NSString).appendingPathComponent(".gitignore"))
+        return FileManager.default.fileExists(
+            atPath: (rootPath as NSString).appendingPathComponent(".gitignore"))
     }
 
     func cycleFileVisibility() async {
@@ -850,7 +874,8 @@ final class EditorState {
         colorScheme = Self.makeColorScheme(config: newConfig)
         treePanelWidth = newConfig.treeWidth
         let catalog = newConfig.useSFSymbolsInTerminal ? SymbolCatalogLoader.loadOrDiscover() : nil
-        symbolTheme = TerminalSymbolTheme.make(symbolsEnabled: newConfig.useSFSymbolsInTerminal, catalog: catalog)
+        symbolTheme = TerminalSymbolTheme.make(
+            symbolsEnabled: newConfig.useSFSymbolsInTerminal, catalog: catalog)
         refreshHighlights()
     }
 }

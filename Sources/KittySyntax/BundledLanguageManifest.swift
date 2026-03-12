@@ -57,12 +57,13 @@ enum BundledLanguageManifest {
     }
 
     private static func loadManifest() -> Manifest? {
-        guard let manifestURL = KittySyntaxResources.bundle.url(
-            forResource: "languages",
-            withExtension: "json",
-            subdirectory: "Grammars"
-        ), let data = try? Data(contentsOf: manifestURL),
-           let decodedEntries = try? JSONDecoder().decode([BundledLanguageEntry].self, from: data)
+        guard
+            let manifestURL = KittySyntaxResources.bundle.url(
+                forResource: "languages",
+                withExtension: "json",
+                subdirectory: "Grammars"
+            ), let data = try? Data(contentsOf: manifestURL),
+            let decodedEntries = try? JSONDecoder().decode([BundledLanguageEntry].self, from: data)
         else {
             return nil
         }
@@ -75,8 +76,10 @@ enum BundledLanguageManifest {
             )
         }
 
-        let entriesByLanguage = Dictionary(uniqueKeysWithValues: normalizedEntries.map { ($0.name, $0) })
-        let entriesByExtension = normalizedEntries.reduce(into: [String: BundledLanguageEntry]()) { result, entry in
+        let entriesByLanguage = Dictionary(
+            uniqueKeysWithValues: normalizedEntries.map { ($0.name, $0) })
+        let entriesByExtension = normalizedEntries.reduce(into: [String: BundledLanguageEntry]()) {
+            result, entry in
             for fileExtension in entry.extensions {
                 result[fileExtension] = entry
             }

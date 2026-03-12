@@ -15,7 +15,7 @@ public actor FileWatcher {
     private static let debounceInterval: TimeInterval = 0.1
     private static let suppressWindow: TimeInterval = 1.0
 
-    public nonisolated let events: AsyncStream<FileWatchEvent>
+    nonisolated public let events: AsyncStream<FileWatchEvent>
 
     public init() {
         var captured: AsyncStream<FileWatchEvent>.Continuation?
@@ -32,14 +32,16 @@ public actor FileWatcher {
         streamQueue = queue
 
         var context = FSEventStreamContext()
-        let boxed = Unmanaged.passRetained(SendableContinuationBox(continuation: continuation)).toOpaque()
+        let boxed = Unmanaged.passRetained(SendableContinuationBox(continuation: continuation))
+            .toOpaque()
         context.info = boxed
 
         let paths = [path] as CFArray
         let stream = FSEventStreamCreate(
             nil,
             { _, info, numEvents, eventPaths, _, _ in
-                guard let info, let paths = unsafeBitCast(eventPaths, to: NSArray.self) as? [String] else { return }
+                guard let info, let paths = unsafeBitCast(eventPaths, to: NSArray.self) as? [String]
+                else { return }
                 let box = Unmanaged<SendableContinuationBox>.fromOpaque(info).takeUnretainedValue()
                 for i in 0..<numEvents {
                     box.continuation?.yield(.directoryChanged(paths[i]))

@@ -89,7 +89,8 @@ public final class TextDocument {
             cachedFileLines = normalizedLines
             cachedDocumentText = normalizedLines.joined(separator: "\n")
             cachedMaxLineWidth = Self.computeMaxLineWidth(for: normalizedLines)
-            cachedSerializedByteCount = Self.computeSerializedByteCount(for: normalizedLines, lineEnding: lineEnding)
+            cachedSerializedByteCount = Self.computeSerializedByteCount(
+                for: normalizedLines, lineEnding: lineEnding)
         }
     }
 
@@ -121,7 +122,8 @@ public final class TextDocument {
         cachedFileLines = lines
         cachedDocumentText = content
         cachedMaxLineWidth = Self.computeMaxLineWidth(for: lines)
-        cachedSerializedByteCount = Self.computeSerializedByteCount(for: lines, lineEnding: lineEnding)
+        cachedSerializedByteCount = Self.computeSerializedByteCount(
+            for: lines, lineEnding: lineEnding)
     }
 
     public func invalidateTextSnapshotCache() {
@@ -145,15 +147,19 @@ public final class TextDocument {
         Self.serializedText(from: documentText, lineEnding: lineEnding)
     }
 
-    public nonisolated static func computeMaxLineWidth<C: Collection>(for lines: C, tabSize: Int = 4) -> Int where C.Element == String {
+    nonisolated public static func computeMaxLineWidth<C: Collection>(
+        for lines: C, tabSize: Int = 4
+    ) -> Int where C.Element == String {
         lines.reduce(0) { max($0, TextDisplayMetrics.displayWidth(of: $1, tabSize: tabSize)) }
     }
 
-    public nonisolated static func computeMaxLineWidth(in buffer: TextBuffer, tabSize: Int = 4) -> Int {
+    nonisolated public static func computeMaxLineWidth(in buffer: TextBuffer, tabSize: Int = 4)
+        -> Int
+    {
         computeMaxLineWidth(for: buffer.lines, tabSize: tabSize)
     }
 
-    public nonisolated static func computeSerializedByteCount<C: Collection>(
+    nonisolated public static func computeSerializedByteCount<C: Collection>(
         for lines: C,
         lineEnding: LineEnding
     ) -> Int where C.Element == String {
@@ -164,7 +170,7 @@ public final class TextDocument {
         return lineBytes + max(0, lines.count - 1) * separatorBytes
     }
 
-    public nonisolated static func computeSerializedByteCount(
+    nonisolated public static func computeSerializedByteCount(
         in buffer: TextBuffer,
         lineEnding: LineEnding
     ) -> Int {
@@ -178,12 +184,14 @@ public final class TextDocument {
         return total + max(0, buffer.lineCount - 1) * separatorBytes
     }
 
-    public nonisolated static func serializedText(from text: String, lineEnding: LineEnding) -> String {
+    nonisolated public static func serializedText(from text: String, lineEnding: LineEnding)
+        -> String
+    {
         guard lineEnding != .lf else { return text }
         return text.replacingOccurrences(of: "\n", with: lineEnding.sequence)
     }
 
-    public nonisolated static func detectLineEnding(in data: Data) -> LineEnding {
+    nonisolated public static func detectLineEnding(in data: Data) -> LineEnding {
         var lfCount = 0
         var crlfCount = 0
         var crCount = 0

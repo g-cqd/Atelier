@@ -44,7 +44,10 @@ public enum GitIgnoreChecker {
     private static func computeIgnoredPaths(in rootPath: String) -> Set<String> {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = ["-C", rootPath, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory"]
+        process.arguments = [
+            "-C", rootPath, "ls-files", "--others", "--ignored", "--exclude-standard",
+            "--directory",
+        ]
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice

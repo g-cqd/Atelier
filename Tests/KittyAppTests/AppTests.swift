@@ -1,9 +1,10 @@
 import Testing
+
 @testable import KittyApp
-@testable import KittyInput
-@testable import KittyWidgets
-@testable import KittyTerminal
 @testable import KittyCodecs
+@testable import KittyInput
+@testable import KittyTerminal
+@testable import KittyWidgets
 
 @Suite
 struct AppProtocolTests {
@@ -26,7 +27,7 @@ struct ApplicationRuntimeTests {
     @MainActor
     func `Setup writes expected escape sequences`() async throws {
         let mock = MockTerminalConnection()
-        mock.feedInput([0x03]) // Ctrl+C (keyCode 3) to quit immediately
+        mock.feedInput([0x03])  // Ctrl+C (keyCode 3) to quit immediately
 
         let runtime = ApplicationRuntime(connection: mock)
 
@@ -99,7 +100,8 @@ struct ApplicationRuntimeTests {
         #expect(refreshEventCount == 1)
         #expect(events.count == 2)
         let refreshEvent = try #require(events.first)
-        if case .refresh = refreshEvent { } else {
+        if case .refresh = refreshEvent {
+        } else {
             Issue.record("Expected .refresh, got \(refreshEvent)")
         }
         let lastEvent = try #require(events.last)

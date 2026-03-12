@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import KittySymbols
 
 @Suite
@@ -83,7 +84,7 @@ struct KittySymbolsTests {
                 availability: nil,
                 categories: [],
                 searchTerms: []
-            ),
+            )
         ])
 
         let catalog = SymbolCatalogLoader.loadOrDiscover(

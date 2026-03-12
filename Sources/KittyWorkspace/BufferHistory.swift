@@ -72,10 +72,10 @@ public final class BufferEditHistory {
 
         let recordedAt = Date()
         if let coalescingWindow,
-           coalescingWindow > 0,
-           redoStack.isEmpty,
-           let lastIndex = undoStack.indices.last,
-           recordedAt.timeIntervalSince(undoStack[lastIndex].recordedAt) <= coalescingWindow
+            coalescingWindow > 0,
+            redoStack.isEmpty,
+            let lastIndex = undoStack.indices.last,
+            recordedAt.timeIntervalSince(undoStack[lastIndex].recordedAt) <= coalescingWindow
         {
             undoStack[lastIndex].after = after
             undoStack[lastIndex].recordedAt = recordedAt
@@ -127,7 +127,8 @@ public final class BufferEditHistory {
     @discardableResult
     public func reconcileWithRefresh(_ snapshot: BufferEditSnapshot) -> Bool {
         let fingerprint = snapshot.contentFingerprint
-        let invalidated = fingerprint != currentFingerprint && (!undoStack.isEmpty || !redoStack.isEmpty)
+        let invalidated =
+            fingerprint != currentFingerprint && (!undoStack.isEmpty || !redoStack.isEmpty)
         currentFingerprint = fingerprint
         savedFingerprint = fingerprint
         if invalidated {

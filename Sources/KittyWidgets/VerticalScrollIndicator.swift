@@ -132,7 +132,8 @@ public enum VerticalScrollIndicatorLayout {
         guard metrics.isScrollable else { return trackHeight }
 
         let totalLength = max(1, max(metrics.contentLength, metrics.viewportLength))
-        let proportionalLength = (trackHeight * max(1, metrics.viewportLength) + totalLength - 1) / totalLength
+        let proportionalLength =
+            (trackHeight * max(1, metrics.viewportLength) + totalLength - 1) / totalLength
         return min(trackHeight, max(1, proportionalLength))
     }
 }

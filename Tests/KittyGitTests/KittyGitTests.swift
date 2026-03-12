@@ -1,7 +1,8 @@
-import Testing
-@testable import KittyGit
-@testable import KittyFileTree
 import Foundation
+import Testing
+
+@testable import KittyFileTree
+@testable import KittyGit
 
 @Suite
 struct KittyGitTests {
@@ -9,13 +10,13 @@ struct KittyGitTests {
     func `Parse porcelain output produces correct statuses`() {
         let provider = GitStatusProvider(rootPath: "/project")
         let output = """
-         M src/main.swift
-        A  src/new.swift
-        ?? src/untracked.txt
-        D  src/deleted.swift
-        R  src/old.swift -> src/renamed.swift
-        UU src/conflict.swift
-        """
+             M src/main.swift
+            A  src/new.swift
+            ?? src/untracked.txt
+            D  src/deleted.swift
+            R  src/old.swift -> src/renamed.swift
+            UU src/conflict.swift
+            """
         let (statuses, summary) = provider.parseGitStatus(output, rootPath: "/project")
 
         #expect(statuses["/project/src/main.swift"] == .modified)

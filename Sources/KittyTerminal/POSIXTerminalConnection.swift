@@ -26,7 +26,8 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
         self.fd = fileDescriptor
         // For ptys, the same fd is used for read/write.
         // For the default stdin case, write to stdout.
-        self.writeFd = writeFileDescriptor ?? (fileDescriptor == STDIN_FILENO ? STDOUT_FILENO : fileDescriptor)
+        self.writeFd =
+            writeFileDescriptor ?? (fileDescriptor == STDIN_FILENO ? STDOUT_FILENO : fileDescriptor)
     }
 
     /// Reads bytes from the file descriptor into `buffer`.
@@ -57,8 +58,8 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
         while offset < bytes.count {
             let n = retryOnInterrupt {
                 bytes.withUnsafeBufferPointer { buf in
-                Darwin.write(self.writeFd, buf.baseAddress! + offset, buf.count - offset)
-            }
+                    Darwin.write(self.writeFd, buf.baseAddress! + offset, buf.count - offset)
+                }
             }
             guard n >= 0 else {
                 throw .writeFailed(errno)
@@ -77,8 +78,8 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
         while offset < count {
             let n = retryOnInterrupt {
                 bytes.withUnsafeBufferPointer { buf in
-                Darwin.write(self.writeFd, buf.baseAddress! + offset, count - offset)
-            }
+                    Darwin.write(self.writeFd, buf.baseAddress! + offset, count - offset)
+                }
             }
             guard n >= 0 else {
                 throw .writeFailed(errno)
@@ -147,8 +148,9 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
 
         for tryFd in candidateFds {
             if retryOnInterrupt({ Int(ioctl(tryFd, tiocgwinsz, &ws)) }) == 0,
-               ws.ws_col > 0,
-               ws.ws_row > 0 {
+                ws.ws_col > 0,
+                ws.ws_row > 0
+            {
                 return TerminalSize(
                     columns: Int(ws.ws_col),
                     rows: Int(ws.ws_row),
@@ -173,7 +175,8 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
 
     private func setRawModeControlCharacters(on raw: inout termios) {
         withUnsafeMutablePointer(to: &raw.c_cc) { pointer in
-            let controlCharacters = UnsafeMutableRawPointer(pointer).assumingMemoryBound(to: cc_t.self)
+            let controlCharacters = UnsafeMutableRawPointer(pointer).assumingMemoryBound(
+                to: cc_t.self)
             controlCharacters[Int(VMIN)] = 1
             controlCharacters[Int(VTIME)] = 0
         }

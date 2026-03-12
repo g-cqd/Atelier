@@ -48,17 +48,18 @@ public struct TerminalSymbolTheme: Sendable {
 
     public static func make(symbolsEnabled: Bool, catalog: SymbolCatalog?) -> TerminalSymbolTheme {
         let useSymbols = symbolsEnabled && TerminalSymbolSupport.prefersSFSymbolGlyphs()
-        return TerminalSymbolTheme(glyphs: Role.allCases.reduce(into: [:]) { result, role in
-            let fallback = fallbackText(for: role)
-            if useSymbols,
-               let name = symbolName(for: role),
-               let glyph = resolveGlyph(name: name, catalog: catalog)
-            {
-                result[role] = Glyph(text: glyph, prefersSymbol: true)
-            } else {
-                result[role] = Glyph(text: fallback, prefersSymbol: false)
-            }
-        })
+        return TerminalSymbolTheme(
+            glyphs: Role.allCases.reduce(into: [:]) { result, role in
+                let fallback = fallbackText(for: role)
+                if useSymbols,
+                    let name = symbolName(for: role),
+                    let glyph = resolveGlyph(name: name, catalog: catalog)
+                {
+                    result[role] = Glyph(text: glyph, prefersSymbol: true)
+                } else {
+                    result[role] = Glyph(text: fallback, prefersSymbol: false)
+                }
+            })
     }
 
     private static func resolveGlyph(name: String, catalog: SymbolCatalog?) -> String? {

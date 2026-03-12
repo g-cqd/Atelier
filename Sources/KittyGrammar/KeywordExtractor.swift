@@ -10,7 +10,7 @@ public enum KeywordExtractor: Sendable {
         guard grammar.word != nil else { return [:] }
 
         // Find all string literals used in the grammar
-        var keywords: [String: String] = [:] // keyword string → rule name that uses it
+        var keywords: [String: String] = [:]  // keyword string → rule name that uses it
 
         for (name, rule) in grammar.rules {
             extractKeywords(from: rule, ruleName: name, into: &keywords)
@@ -24,7 +24,9 @@ public enum KeywordExtractor: Sendable {
         }
     }
 
-    private static func extractKeywords(from rule: Rule, ruleName: String, into keywords: inout [String: String]) {
+    private static func extractKeywords(
+        from rule: Rule, ruleName: String, into keywords: inout [String: String]
+    ) {
         switch rule {
         case .string(let value):
             keywords[value] = ruleName
@@ -35,7 +37,7 @@ public enum KeywordExtractor: Sendable {
         case .repeat(let content), .repeat1(let content), .optional(let content):
             extractKeywords(from: content, ruleName: ruleName, into: &keywords)
         case .prec(_, let content), .precLeft(_, let content), .precRight(_, let content),
-             .precDynamic(_, let content):
+            .precDynamic(_, let content):
             extractKeywords(from: content, ruleName: ruleName, into: &keywords)
         case .token(let content), .immediateToken(let content):
             extractKeywords(from: content, ruleName: ruleName, into: &keywords)

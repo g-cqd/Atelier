@@ -91,10 +91,13 @@ public struct TabRibbon: Sendable {
             let isActive = (i == activeIndex)
             var tabStyle = isActive ? style.activeStyle : style.inactiveStyle
             if tab.isPreview {
-                tabStyle = Style(fg: tabStyle.fg, bg: tabStyle.bg, bold: tabStyle.bold, italic: true)
+                tabStyle = Style(
+                    fg: tabStyle.fg, bg: tabStyle.bg, bold: tabStyle.bold, italic: true)
             }
 
-            col = renderLabelPrefix(for: tab, into: &buffer, row: rect.y, col: col, maxCol: rightBound, tabStyle: tabStyle)
+            col = renderLabelPrefix(
+                for: tab, into: &buffer, row: rect.y, col: col, maxCol: rightBound,
+                tabStyle: tabStyle)
 
             // Write separator
             if col < rightBound {
@@ -117,11 +120,12 @@ public struct TabRibbon: Sendable {
         guard !tabs.isEmpty else { return nil }
         guard ribbonWidth > 0 else { return nil }
 
-        let rightBound = ribbonX + ribbonWidth - (tabsExtendBeyond(ribbonWidth: ribbonWidth) ? 1 : 0)
+        let rightBound =
+            ribbonX + ribbonWidth - (tabsExtendBeyond(ribbonWidth: ribbonWidth) ? 1 : 0)
         guard clickCol < rightBound else { return nil }
 
         var col = ribbonX
-        if scrollOffset > 0 { col += 1 } // skip left overflow indicator
+        if scrollOffset > 0 { col += 1 }  // skip left overflow indicator
         for i in scrollOffset..<tabs.count {
             let tabWidth = tabLabelWidth(at: i)
 
@@ -146,7 +150,7 @@ public struct TabRibbon: Sendable {
             label += style.dirtyIndicator
         }
         label += " "
-        return UnicodeWidth.displayWidth(of: label) + 1 // +1 for separator
+        return UnicodeWidth.displayWidth(of: label) + 1  // +1 for separator
     }
 
     /// Returns a clamped scrollOffset that ensures the given tab index is visible.
@@ -199,10 +203,13 @@ public struct TabRibbon: Sendable {
     ) -> Int {
         var currentCol = col
 
-        currentCol = render(" \(tab.name)", style: tabStyle, into: &buffer, row: row, col: currentCol, maxCol: maxCol)
+        currentCol = render(
+            " \(tab.name)", style: tabStyle, into: &buffer, row: row, col: currentCol,
+            maxCol: maxCol)
 
         if let statusIndicator = tab.statusIndicator {
-            currentCol = render(" ", style: tabStyle, into: &buffer, row: row, col: currentCol, maxCol: maxCol)
+            currentCol = render(
+                " ", style: tabStyle, into: &buffer, row: row, col: currentCol, maxCol: maxCol)
             currentCol = render(
                 statusIndicator,
                 style: tab.statusStyle ?? tabStyle,
@@ -224,7 +231,8 @@ public struct TabRibbon: Sendable {
             )
         }
 
-        return render(" ", style: tabStyle, into: &buffer, row: row, col: currentCol, maxCol: maxCol)
+        return render(
+            " ", style: tabStyle, into: &buffer, row: row, col: currentCol, maxCol: maxCol)
     }
 
     private func render(

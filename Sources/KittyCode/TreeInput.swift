@@ -5,7 +5,8 @@ import KittyFileTree
 func handleTreeKey(_ key: KeyEvent, state: EditorState, contentRows: Int) -> Bool {
     switch key.keyCode {
     case Key.down.rawValue:
-        state.selectedTreeIndex = min(state.selectedTreeIndex + 1, max(0, state.cachedFlatTree.count - 1))
+        state.selectedTreeIndex = min(
+            state.selectedTreeIndex + 1, max(0, state.cachedFlatTree.count - 1))
         updateSelectedTreePath(state)
         ensureTreeVisible(state, contentRows: contentRows)
     case Key.up.rawValue:
@@ -13,7 +14,8 @@ func handleTreeKey(_ key: KeyEvent, state: EditorState, contentRows: Int) -> Boo
         updateSelectedTreePath(state)
         ensureTreeVisible(state, contentRows: contentRows)
     case Key.enter.rawValue, Key.enterAlt.rawValue:
-        guard state.selectedTreeIndex >= 0 && state.selectedTreeIndex < state.cachedFlatTree.count else { return true }
+        guard state.selectedTreeIndex >= 0 && state.selectedTreeIndex < state.cachedFlatTree.count
+        else { return true }
         let entry = state.cachedFlatTree[state.selectedTreeIndex].node
         state.noteSelectedPath(entry.path, isDirectory: entry.isDirectory)
         if entry.isDirectory {
@@ -23,7 +25,8 @@ func handleTreeKey(_ key: KeyEvent, state: EditorState, contentRows: Int) -> Boo
             state.cursorCol = 0
         }
     case Key.right.rawValue:
-        guard state.selectedTreeIndex >= 0 && state.selectedTreeIndex < state.cachedFlatTree.count else { return true }
+        guard state.selectedTreeIndex >= 0 && state.selectedTreeIndex < state.cachedFlatTree.count
+        else { return true }
         let entry = state.cachedFlatTree[state.selectedTreeIndex].node
         state.noteSelectedPath(entry.path, isDirectory: entry.isDirectory)
         if entry.isDirectory && !entry.isExpanded {
@@ -33,7 +36,8 @@ func handleTreeKey(_ key: KeyEvent, state: EditorState, contentRows: Int) -> Boo
             state.cursorCol = 0
         }
     case Key.left.rawValue:
-        guard state.selectedTreeIndex >= 0 && state.selectedTreeIndex < state.cachedFlatTree.count else { return true }
+        guard state.selectedTreeIndex >= 0 && state.selectedTreeIndex < state.cachedFlatTree.count
+        else { return true }
         let entry = state.cachedFlatTree[state.selectedTreeIndex].node
         state.noteSelectedPath(entry.path, isDirectory: entry.isDirectory)
         if entry.isDirectory && entry.isExpanded {
@@ -47,7 +51,8 @@ func handleTreeKey(_ key: KeyEvent, state: EditorState, contentRows: Int) -> Boo
 
 @MainActor
 private func updateSelectedTreePath(_ state: EditorState) {
-    guard state.selectedTreeIndex >= 0 && state.selectedTreeIndex < state.cachedFlatTree.count else { return }
+    guard state.selectedTreeIndex >= 0 && state.selectedTreeIndex < state.cachedFlatTree.count
+    else { return }
     let entry = state.cachedFlatTree[state.selectedTreeIndex].node
     state.noteSelectedPath(entry.path, isDirectory: entry.isDirectory)
 }

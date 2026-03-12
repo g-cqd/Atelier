@@ -105,7 +105,8 @@ public enum HorizontalScrollIndicatorLayout {
         guard metrics.isScrollable else { return trackWidth }
 
         let totalLength = max(1, max(metrics.contentLength, metrics.viewportLength))
-        let proportionalLength = (trackWidth * max(1, metrics.viewportLength) + totalLength - 1) / totalLength
+        let proportionalLength =
+            (trackWidth * max(1, metrics.viewportLength) + totalLength - 1) / totalLength
         return min(trackWidth, max(1, proportionalLength))
     }
 }

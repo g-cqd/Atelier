@@ -111,7 +111,7 @@ public struct SequenceRouter: Sendable {
             case 0x75:
                 events.append(contentsOf: decodeKeyboardSequence(buffer))
                 resetRouting()
-            case 0x30 ... 0x39:
+            case 0x30...0x39:
                 routeState = .csiParam
             default:
                 if let keyCode = Self.csiKeyCode(for: byte) {
@@ -165,7 +165,8 @@ public struct SequenceRouter: Sendable {
                     routeState = .paste
                     buffer.removeAll(keepingCapacity: true)
                 } else if let keyCode = Self.csiTildeKeyCode(for: firstParam) {
-                    events.append(.key(KeyEvent(keyCode: keyCode, modifiers: mods, eventType: eventType)))
+                    events.append(
+                        .key(KeyEvent(keyCode: keyCode, modifiers: mods, eventType: eventType)))
                     resetRouting()
                 } else {
                     events.append(.unknown(buffer))
@@ -173,7 +174,8 @@ public struct SequenceRouter: Sendable {
                 }
             default:
                 if let keyCode = Self.csiKeyCode(for: byte) {
-                    events.append(.key(KeyEvent(keyCode: keyCode, modifiers: mods, eventType: eventType)))
+                    events.append(
+                        .key(KeyEvent(keyCode: keyCode, modifiers: mods, eventType: eventType)))
                 } else {
                     events.append(.unknown(buffer))
                 }
@@ -227,8 +229,10 @@ public struct SequenceRouter: Sendable {
                 events.append(.unknown(Self.pasteOverflowBytes))
                 resetRouting()
             } else if buffer.count >= Self.pasteEndMarker.count,
-               buffer.suffix(Self.pasteEndMarker.count).elementsEqual(Self.pasteEndMarker) {
-                let text = String(decoding: buffer.dropLast(Self.pasteEndMarker.count), as: UTF8.self)
+                buffer.suffix(Self.pasteEndMarker.count).elementsEqual(Self.pasteEndMarker)
+            {
+                let text = String(
+                    decoding: buffer.dropLast(Self.pasteEndMarker.count), as: UTF8.self)
                 events.append(.paste(text))
                 resetRouting()
             }
@@ -276,7 +280,8 @@ public struct SequenceRouter: Sendable {
         feedAll(typedBytes, into: &events)
     }
 
-    private mutating func feedAll<S: Sequence>(_ bytes: S, into events: inout [InputEvent]) where S.Element == UInt8 {
+    private mutating func feedAll<S: Sequence>(_ bytes: S, into events: inout [InputEvent])
+    where S.Element == UInt8 {
         events.removeAll(keepingCapacity: true)
         events.reserveCapacity(max(1, bytes.underestimatedCount))
         for byte in bytes {
@@ -284,7 +289,8 @@ public struct SequenceRouter: Sendable {
         }
     }
 
-    private mutating func decodeKeyboardSequence<S: Sequence>(_ bytes: S) -> [InputEvent] where S.Element == UInt8 {
+    private mutating func decodeKeyboardSequence<S: Sequence>(_ bytes: S) -> [InputEvent]
+    where S.Element == UInt8 {
         var events: [InputEvent] = []
 
         for byte in bytes {
@@ -383,7 +389,7 @@ public struct SequenceRouter: Sendable {
 
         parseLoop: for byte in buffer.dropFirst(2) {
             switch byte {
-            case 0x30 ... 0x39:
+            case 0x30...0x39:
                 switch field {
                 case .firstParam:
                     guard Self.appendDigit(byte - 0x30, to: &firstParam, maximum: Int.max) else {
@@ -396,7 +402,8 @@ public struct SequenceRouter: Sendable {
                         continue
                     }
                 case .eventType:
-                    guard Self.appendDigit(byte - 0x30, to: &eventTypeValue, maximum: Int.max) else {
+                    guard Self.appendDigit(byte - 0x30, to: &eventTypeValue, maximum: Int.max)
+                    else {
                         eventTypeValue = Int.max
                         continue
                     }

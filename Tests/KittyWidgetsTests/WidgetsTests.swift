@@ -1,8 +1,9 @@
 import Testing
-@testable import KittyWidgets
+
 @testable import KittyCodecs
 @testable import KittyRenderer
 @testable import KittySyntax
+@testable import KittyWidgets
 
 @Suite
 struct ViewProtocolTests {
@@ -72,12 +73,16 @@ struct TreeViewTests {
         let rect = Rect(x: 1, y: 1, width: 10, height: 5)
 
         #expect(TreeViewLayout.contentWidth(for: tree, in: rect) == 9)
-        #expect(TreeViewLayout.verticalScrollIndicatorRect(for: tree, in: rect) == Rect(x: 10, y: 1, width: 1, height: 5))
+        #expect(
+            TreeViewLayout.verticalScrollIndicatorRect(for: tree, in: rect)
+                == Rect(x: 10, y: 1, width: 1, height: 5))
 
         let gripOffset = TreeViewLayout.scrollGripOffset(for: tree, in: rect, pointerRow: 2)
 
         #expect(gripOffset == 1)
-        #expect(TreeViewLayout.scrollOffset(for: tree, in: rect, pointerRow: 5, gripOffset: gripOffset ?? 0) == 19)
+        #expect(
+            TreeViewLayout.scrollOffset(
+                for: tree, in: rect, pointerRow: 5, gripOffset: gripOffset ?? 0) == 19)
     }
 
     @Test
@@ -261,7 +266,9 @@ struct TextEditorTests {
     }
 
     @Test
-    func `Wrapped text editor preserves selection aware whitespace visibility on later visual rows`() {
+    func
+        `Wrapped text editor preserves selection aware whitespace visibility on later visual rows`()
+    {
         var buffer = ScreenBuffer(columns: 4, rows: 2)
         let editor = TextEditor(
             lines: ["abcd  "],
@@ -341,7 +348,9 @@ struct TextEditorTests {
         let rect = Rect(x: 5, y: 3, width: 8, height: 1)
 
         #expect(TextEditorLayout.contentWidth(for: editor, in: rect) == 4)
-        #expect(TextEditorLayout.verticalScrollIndicatorRect(for: editor, in: rect) == Rect(x: 12, y: 3, width: 1, height: 1))
+        #expect(
+            TextEditorLayout.verticalScrollIndicatorRect(for: editor, in: rect)
+                == Rect(x: 12, y: 3, width: 1, height: 1))
         #expect(TextEditorLayout.textPosition(for: editor, in: rect, row: 3, col: 12) == nil)
     }
 
@@ -397,7 +406,9 @@ struct TextEditorTests {
         let gripOffset = TextEditorLayout.scrollGripOffset(for: editor, in: rect, pointerRow: 1)
 
         #expect(gripOffset == 0)
-        #expect(TextEditorLayout.scrollOffset(for: editor, in: rect, pointerRow: 3, gripOffset: gripOffset ?? 0) == 3)
+        #expect(
+            TextEditorLayout.scrollOffset(
+                for: editor, in: rect, pointerRow: 3, gripOffset: gripOffset ?? 0) == 3)
     }
 }
 
@@ -508,11 +519,12 @@ struct TextRenderingTests {
         context.background = .rgb(r: 90, g: 80, b: 70)
 
         StyledTextView([
-            StyledTextView.StyledTextSpan(text: "Longer", style: Style(fg: .rgb(r: 255, g: 0, b: 0))),
+            StyledTextView.StyledTextSpan(
+                text: "Longer", style: Style(fg: .rgb(r: 255, g: 0, b: 0)))
         ]).render(to: &buffer, in: rect, context: context)
 
         StyledTextView([
-            StyledTextView.StyledTextSpan(text: "Hi", style: Style(fg: .rgb(r: 0, g: 255, b: 0))),
+            StyledTextView.StyledTextSpan(text: "Hi", style: Style(fg: .rgb(r: 0, g: 255, b: 0)))
         ]).render(to: &buffer, in: rect, context: context)
 
         #expect(buffer[0, 0].character == "H")
@@ -602,7 +614,8 @@ struct TextRenderingTests {
         #expect(buffer[1, 11].style.bg == normalStyle.bg)
     }
 
-    @Test func `render text editor applies current-line background to content and trailing cells`() {
+    @Test func `render text editor applies current-line background to content and trailing cells`()
+    {
         var buffer = makeSUT(columns: 6, rows: 1)
         let rect = Rect(x: 0, y: 0, width: 6, height: 1)
         let editorStyle = Style(bg: .rgb(r: 10, g: 20, b: 30))
@@ -706,7 +719,8 @@ struct TextRenderingTests {
         #expect(buffer[2, 3].style.bg == editorStyle.bg)
     }
 
-    @Test func `render wrapped text editor moves tabs to the next visual row when they do not fit`() {
+    @Test func `render wrapped text editor moves tabs to the next visual row when they do not fit`()
+    {
         var buffer = makeSUT(columns: 5, rows: 2)
         let rect = Rect(x: 0, y: 0, width: 5, height: 2)
         let editor = TextEditor(
@@ -792,7 +806,9 @@ struct ScrollViewTests {
 
         #expect(ScrollViewLayout.scrollIndicatorWidth(for: scrollView, in: rect) == 1)
         #expect(ScrollViewLayout.contentWidth(for: scrollView, in: rect) == 9)
-        #expect(ScrollViewLayout.verticalScrollIndicatorRect(for: scrollView, in: rect) == Rect(x: 9, y: 0, width: 1, height: 5))
+        #expect(
+            ScrollViewLayout.verticalScrollIndicatorRect(for: scrollView, in: rect)
+                == Rect(x: 9, y: 0, width: 1, height: 5))
     }
 
     @Test
@@ -899,7 +915,7 @@ struct ScrollViewTests {
         let style = ScrollViewStyle()
         #expect(style.thumbStyle.dim == true)
         #expect(style.thumbStyle.fg == .rgb(r: 140, g: 140, b: 140))
-        #expect(style.thumbCharacter == "\u{2593}") // dark shade
+        #expect(style.thumbCharacter == "\u{2593}")  // dark shade
         #expect(style.trackCharacter == " ")
     }
 
@@ -1268,7 +1284,9 @@ struct ListViewTests {
 
     @Test func `empty list fills with normal style`() {
         var buffer = makeSUT()
-        let list = ListView(items: [], style: ListView.ListViewStyle(normalStyle: Style(fg: .rgb(r: 100, g: 100, b: 100))))
+        let list = ListView(
+            items: [],
+            style: ListView.ListViewStyle(normalStyle: Style(fg: .rgb(r: 100, g: 100, b: 100))))
         list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 5))
         #expect(buffer[0, 0].character == " ")
         #expect(buffer[0, 0].style.fg == .rgb(r: 100, g: 100, b: 100))
@@ -1304,7 +1322,10 @@ struct ListViewTests {
 
     @Test func `suffix renders with suffix style`() {
         var buffer = makeSUT(columns: 30)
-        let items = [ListView.Item(label: "file.txt", suffix: "M", suffixStyle: Style(fg: .rgb(r: 255, g: 0, b: 0)))]
+        let items = [
+            ListView.Item(
+                label: "file.txt", suffix: "M", suffixStyle: Style(fg: .rgb(r: 255, g: 0, b: 0)))
+        ]
         let list = ListView(items: items, style: ListView.ListViewStyle())
         list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 30, height: 5))
         // Find the M character and check its style
@@ -1318,7 +1339,8 @@ struct ListViewTests {
     @Test func `scroll offset shifts visible items`() {
         var buffer = makeSUT(rows: 2)
         let items = (0..<5).map { ListView.Item(label: "item\($0)") }
-        let list = ListView(items: items, selectedIndex: 3, scrollOffset: 2, style: ListView.ListViewStyle())
+        let list = ListView(
+            items: items, selectedIndex: 3, scrollOffset: 2, style: ListView.ListViewStyle())
         list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 2))
         let row0Chars = (0..<20).map { buffer[0, $0].character }
         let row0Text = String(row0Chars).trimmingCharacters(in: .whitespaces)
@@ -1527,8 +1549,8 @@ struct HorizontalScrollIndicatorTests {
         let rect = Rect(x: 0, y: 0, width: 40, height: 1)
         let thumb = HorizontalScrollIndicatorLayout.thumbRect(for: metrics, in: rect)
         #expect(thumb != nil)
-        #expect(thumb!.width == 10) // 40 * 25 / 100 = 10
-        #expect(thumb!.x == 0) // offset 0
+        #expect(thumb!.width == 10)  // 40 * 25 / 100 = 10
+        #expect(thumb!.x == 0)  // offset 0
     }
 
     @Test func `thumbRect moves with offset`() {
@@ -1536,7 +1558,7 @@ struct HorizontalScrollIndicatorTests {
         let rect = Rect(x: 0, y: 0, width: 40, height: 1)
         let thumb = HorizontalScrollIndicatorLayout.thumbRect(for: metrics, in: rect)
         #expect(thumb != nil)
-        #expect(thumb!.x == 30) // at max offset, thumb at right edge
+        #expect(thumb!.x == 30)  // at max offset, thumb at right edge
     }
 
     @Test func `gripOffset returns non-nil when pointer is within track`() {
@@ -1565,12 +1587,21 @@ struct HorizontalScrollIndicatorTests {
     @Test func `horizontal scroll indicator needs check respects wrapLines`() {
         let editor = TextEditor(
             lines: ["a very long line that should trigger horizontal scrolling when not wrapped"],
-            lineSpans: [[StyledSpan(text: "a very long line that should trigger horizontal scrolling when not wrapped", style: .default)]],
+            lineSpans: [
+                [
+                    StyledSpan(
+                        text:
+                            "a very long line that should trigger horizontal scrolling when not wrapped",
+                        style: .default)
+                ]
+            ],
             showLineNumbers: false,
             wrapLines: true,
             showsHorizontalScrollIndicator: true
         )
         let rect = Rect(x: 0, y: 0, width: 20, height: 5)
-        #expect(!TextEditorLayout.needsHorizontalScrollIndicator(for: editor, in: rect, maxLineWidth: 80))
+        #expect(
+            !TextEditorLayout.needsHorizontalScrollIndicator(
+                for: editor, in: rect, maxLineWidth: 80))
     }
 }

@@ -111,7 +111,7 @@ public struct TextBuffer: Sendable {
     public var text: String {
         let count = lineCount
         guard count > 0 else { return "" }
-        var totalBytes = count - 1 // newlines between lines
+        var totalBytes = count - 1  // newlines between lines
         for i in 0..<count {
             totalBytes += storage[physicalIndex(i)].utf8.count
         }
@@ -218,7 +218,8 @@ extension TextBuffer: DocumentSource {
         let clamped = range.clamped(to: 0..<lineCount)
         var maxWidth = 0
         for i in clamped {
-            maxWidth = max(maxWidth, TextDisplayMetrics.displayWidth(of: line(at: i), tabSize: tabSize))
+            maxWidth = max(
+                maxWidth, TextDisplayMetrics.displayWidth(of: line(at: i), tabSize: tabSize))
         }
         return maxWidth
     }

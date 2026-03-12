@@ -1,6 +1,7 @@
 import Testing
-@testable import KittyQuery
+
 @testable import KittyParser
+@testable import KittyQuery
 
 @Suite
 struct QueryParserTests {
@@ -32,9 +33,9 @@ struct QueryParserTests {
     @Test
     func `Parse multiple patterns`() throws {
         let source = """
-        (function_declaration) @function
-        (identifier) @variable
-        """
+            (function_declaration) @function
+            (identifier) @variable
+            """
         let query = try QueryParser.parse(source)
         #expect(query.patterns.count == 2)
     }
@@ -42,9 +43,9 @@ struct QueryParserTests {
     @Test
     func `Parse with comment`() throws {
         let source = """
-        ; This is a comment
-        (identifier) @var
-        """
+            ; This is a comment
+            (identifier) @var
+            """
         let query = try QueryParser.parse(source)
         #expect(query.patterns.count == 1)
     }
@@ -186,8 +187,10 @@ struct QueryMatcherTests {
     func `Positional child matching respects order`() {
         let identifier = SyntaxNode(type: "identifier", byteRange: 0..<1)
         let number = SyntaxNode(type: "number", byteRange: 1..<2)
-        let matchingCall = SyntaxNode(type: "call", children: [identifier, number], byteRange: 0..<2)
-        let reversedCall = SyntaxNode(type: "call", children: [number, identifier], byteRange: 0..<2)
+        let matchingCall = SyntaxNode(
+            type: "call", children: [identifier, number], byteRange: 0..<2)
+        let reversedCall = SyntaxNode(
+            type: "call", children: [number, identifier], byteRange: 0..<2)
 
         let query = Query(patterns: [
             .nodeMatch(
@@ -197,7 +200,7 @@ struct QueryMatcherTests {
                     .nodeMatch(type: "number", children: [], capture: "second"),
                 ],
                 capture: nil
-            ),
+            )
         ])
 
         let matchingTree = SyntaxTree(root: matchingCall, source: "ab")
@@ -225,7 +228,7 @@ struct QueryMatcherTests {
                     .nodeMatch(type: "identifier", children: [], capture: "second"),
                 ],
                 capture: nil
-            ),
+            )
         ])
 
         let matches = QueryMatcher.execute(query: query, tree: tree)
@@ -312,56 +315,62 @@ private enum QueryPatternExpectationError: Error {
 }
 
 private func requireAlternation(_ pattern: QueryPattern) throws -> [QueryPattern] {
-    guard case let .alternation(alternatives) = pattern else {
+    guard case .alternation(let alternatives) = pattern else {
         throw QueryPatternExpectationError.expectedAlternation
     }
     return alternatives
 }
 
-private func requireDirectivePredicate(_ pattern: QueryPattern) throws -> (name: String, arguments: [String]) {
-    guard case let .predicate(.directive(name: name, arguments: arguments)) = pattern else {
+private func requireDirectivePredicate(_ pattern: QueryPattern) throws -> (
+    name: String, arguments: [String]
+) {
+    guard case .predicate(.directive(name: let name, arguments: let arguments)) = pattern else {
         throw QueryPatternExpectationError.expectedDirectivePredicate
     }
     return (name, arguments)
 }
 
-private func requireEqPredicate(_ pattern: QueryPattern) throws -> (capture: String, value: String) {
-    guard case let .predicate(.eq(capture: capture, value: value)) = pattern else {
+private func requireEqPredicate(_ pattern: QueryPattern) throws -> (capture: String, value: String)
+{
+    guard case .predicate(.eq(capture: let capture, value: let value)) = pattern else {
         throw QueryPatternExpectationError.expectedEqPredicate
     }
     return (capture, value)
 }
 
 private func requireLiteral(_ pattern: QueryPattern) throws -> (value: String, capture: String?) {
-    guard case let .literal(value, capture) = pattern else {
+    guard case .literal(let value, let capture) = pattern else {
         throw QueryPatternExpectationError.expectedLiteral
     }
     return (value, capture)
 }
 
-private func requireMatchPredicate(_ pattern: QueryPattern) throws -> (capture: String, pattern: String) {
-    guard case let .predicate(.match(capture: capture, pattern: matchedPattern)) = pattern else {
+private func requireMatchPredicate(_ pattern: QueryPattern) throws -> (
+    capture: String, pattern: String
+) {
+    guard case .predicate(.match(capture: let capture, pattern: let matchedPattern)) = pattern
+    else {
         throw QueryPatternExpectationError.expectedMatchPredicate
     }
     return (capture, matchedPattern)
 }
 
 private func requireNodeMatch(_ pattern: QueryPattern) throws -> (type: String, capture: String?) {
-    guard case let .nodeMatch(type, _, capture) = pattern else {
+    guard case .nodeMatch(let type, _, let capture) = pattern else {
         throw QueryPatternExpectationError.expectedNodeMatch
     }
     return (type, capture)
 }
 
 private func requireSequence(_ pattern: QueryPattern) throws -> [QueryPattern] {
-    guard case let .sequence(patterns) = pattern else {
+    guard case .sequence(let patterns) = pattern else {
         throw QueryPatternExpectationError.expectedSequence
     }
     return patterns
 }
 
 private func requireWildcard(_ pattern: QueryPattern) throws -> String? {
-    guard case let .wildcard(capture) = pattern else {
+    guard case .wildcard(let capture) = pattern else {
         throw QueryPatternExpectationError.expectedWildcard
     }
     return capture

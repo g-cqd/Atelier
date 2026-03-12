@@ -1,6 +1,7 @@
 import Testing
-@testable import KittyRenderer
+
 @testable import KittyCodecs
+@testable import KittyRenderer
 @testable import KittyTerminal
 
 @Suite
@@ -49,9 +50,9 @@ struct DirtyTrackerTests {
     @Test
     func `Dirty ranges`() {
         var tracker = DirtyTracker(capacity: 30)  // 10 cols × 3 rows
-        tracker.mark(10) // row 1, col 0
-        tracker.mark(11) // row 1, col 1
-        tracker.mark(12) // row 1, col 2
+        tracker.mark(10)  // row 1, col 0
+        tracker.mark(11)  // row 1, col 1
+        tracker.mark(12)  // row 1, col 2
         let ranges = tracker.dirtyRanges(columns: 10)
         #expect(ranges.count == 1)
         #expect(ranges[0].row == 1)
@@ -101,7 +102,7 @@ struct ScreenBufferTests {
         var buffer = ScreenBuffer(columns: 10, rows: 3)
         buffer.dirty.clear()
         buffer[1, 5] = Cell(character: "A", style: .default)
-        #expect(buffer.dirty.isDirty(15)) // row 1 * 10 + col 5
+        #expect(buffer.dirty.isDirty(15))  // row 1 * 10 + col 5
     }
 
     @Test
@@ -132,9 +133,12 @@ struct ScreenBufferTests {
     func `Out of bounds fills are ignored`() {
         var buffer = ScreenBuffer(columns: 5, rows: 2)
 
-        buffer.fill(row: -1, col: 0, width: 2, height: 1, cell: Cell(character: "A", style: .default))
-        buffer.fill(row: 0, col: -1, width: 2, height: 1, cell: Cell(character: "B", style: .default))
-        buffer.fill(row: 2, col: 0, width: 2, height: 1, cell: Cell(character: "C", style: .default))
+        buffer.fill(
+            row: -1, col: 0, width: 2, height: 1, cell: Cell(character: "A", style: .default))
+        buffer.fill(
+            row: 0, col: -1, width: 2, height: 1, cell: Cell(character: "B", style: .default))
+        buffer.fill(
+            row: 2, col: 0, width: 2, height: 1, cell: Cell(character: "C", style: .default))
 
         #expect(buffer.cells.allSatisfy { $0 == .empty })
         #expect(buffer.dirty.isEmpty)
@@ -187,7 +191,8 @@ struct ShiftRowsTests {
     func `Shift only affects the specified region`() {
         var buffer = ScreenBuffer(columns: 10, rows: 5)
         // Fill entire buffer with dots
-        buffer.fill(row: 0, col: 0, width: 10, height: 5, cell: Cell(character: ".", style: .default))
+        buffer.fill(
+            row: 0, col: 0, width: 10, height: 5, cell: Cell(character: ".", style: .default))
         // Write distinct content in the region (cols 2..6, rows 1..3)
         buffer.write("AAAA", row: 1, col: 2, style: .default)
         buffer.write("BBBB", row: 2, col: 2, style: .default)
@@ -244,8 +249,9 @@ struct ShiftRowsTests {
     func `Shift up by 2 moves content correctly`() {
         var buffer = ScreenBuffer(columns: 3, rows: 5)
         for r in 0..<5 {
-            let ch = Character(UnicodeScalar(65 + r)!) // A, B, C, D, E
-            buffer.fill(row: r, col: 0, width: 3, height: 1, cell: Cell(character: ch, style: .default))
+            let ch = Character(UnicodeScalar(65 + r)!)  // A, B, C, D, E
+            buffer.fill(
+                row: r, col: 0, width: 3, height: 1, cell: Cell(character: ch, style: .default))
         }
 
         buffer.shiftRows(regionY: 0, regionHeight: 5, regionX: 0, regionWidth: 3, delta: 2)
@@ -354,9 +360,12 @@ struct BeginFrameTests {
 
         // Only row 3 should be dirty (rows 0-2 match the shifted content)
         for col in 0..<5 {
-            #expect(!pipeline.buffer.dirty.isDirty(0 * 5 + col), "Row 0 col \(col) should not be dirty")
-            #expect(!pipeline.buffer.dirty.isDirty(1 * 5 + col), "Row 1 col \(col) should not be dirty")
-            #expect(!pipeline.buffer.dirty.isDirty(2 * 5 + col), "Row 2 col \(col) should not be dirty")
+            #expect(
+                !pipeline.buffer.dirty.isDirty(0 * 5 + col), "Row 0 col \(col) should not be dirty")
+            #expect(
+                !pipeline.buffer.dirty.isDirty(1 * 5 + col), "Row 1 col \(col) should not be dirty")
+            #expect(
+                !pipeline.buffer.dirty.isDirty(2 * 5 + col), "Row 2 col \(col) should not be dirty")
             #expect(pipeline.buffer.dirty.isDirty(3 * 5 + col), "Row 3 col \(col) should be dirty")
         }
 
@@ -366,7 +375,10 @@ struct BeginFrameTests {
         let secondFlushSize = mock.writtenOutput.count
 
         // Second flush should be much smaller (only 1 row vs 4)
-        #expect(secondFlushSize < firstFlushSize, "Scrolled flush (\(secondFlushSize) bytes) should be smaller than full flush (\(firstFlushSize) bytes)")
+        #expect(
+            secondFlushSize < firstFlushSize,
+            "Scrolled flush (\(secondFlushSize) bytes) should be smaller than full flush (\(firstFlushSize) bytes)"
+        )
     }
 }
 
@@ -388,7 +400,7 @@ struct DiffRendererTests {
         let output = DiffRenderer.render(front: front, back: back)
         #expect(!output.isEmpty)
         // Should contain cursor move to 1;1 and the character A
-        #expect(output.contains(0x41)) // 'A'
+        #expect(output.contains(0x41))  // 'A'
     }
 
     @Test
@@ -458,10 +470,13 @@ struct BackBufferShiftRegressionTests {
         // the DiffRenderer won't emit updates for them — the terminal still shows old content.
         // This test documents the known limitation: back-buffer-only shift suppresses
         // rows 0-2 from the diff output.
-        let outputContainsB = output.contains(0x42) // 'B'
+        let outputContainsB = output.contains(0x42)  // 'B'
         // With back-buffer-only shift, the output will NOT contain 'B' (the bug).
         // This test asserts the bug exists so we know not to use this pattern.
-        #expect(!outputContainsB, "Back-buffer-only shift suppresses updates for scrolled rows — do NOT use this pattern without also shifting the front buffer or the terminal display")
+        #expect(
+            !outputContainsB,
+            "Back-buffer-only shift suppresses updates for scrolled rows — do NOT use this pattern without also shifting the front buffer or the terminal display"
+        )
     }
 
     /// Verifies that the correct rendering approach (no pre-shift) produces output
@@ -491,10 +506,10 @@ struct BackBufferShiftRegressionTests {
         let output = mock.writtenOutput
 
         // Without pre-shift, all 4 rows differ from the front buffer and get updated
-        #expect(output.contains(0x42), "Row 0 should be updated to 'B'") // B
-        #expect(output.contains(0x43), "Row 1 should be updated to 'C'") // C
-        #expect(output.contains(0x44), "Row 2 should be updated to 'D'") // D
-        #expect(output.contains(0x45), "Row 3 should be updated to 'E'") // E
+        #expect(output.contains(0x42), "Row 0 should be updated to 'B'")  // B
+        #expect(output.contains(0x43), "Row 1 should be updated to 'C'")  // C
+        #expect(output.contains(0x44), "Row 2 should be updated to 'D'")  // D
+        #expect(output.contains(0x45), "Row 3 should be updated to 'E'")  // E
     }
 
     /// Verifies that style changes are correctly emitted during scroll
@@ -516,11 +531,13 @@ struct BackBufferShiftRegressionTests {
         // Frame 2: same text at row 0 but different style (green)
         pipeline.beginFrame()
         pipeline.buffer.write("HELLO", row: 0, col: 0, style: styleB)
-        pipeline.buffer.write("WORLD", row: 1, col: 0, style: styleA) // unchanged
+        pipeline.buffer.write("WORLD", row: 1, col: 0, style: styleA)  // unchanged
 
         // Row 0 should be dirty (style changed), row 1 should not
         for col in 0..<5 {
-            #expect(pipeline.buffer.dirty.isDirty(col), "Row 0 col \(col) should be dirty (style change)")
+            #expect(
+                pipeline.buffer.dirty.isDirty(col),
+                "Row 0 col \(col) should be dirty (style change)")
         }
         for col in 0..<5 {
             #expect(!pipeline.buffer.dirty.isDirty(5 + col), "Row 1 col \(col) should not be dirty")
@@ -573,11 +590,11 @@ struct DiffRendererRegressionTests {
         back[0, 7] = Cell(character: "Z", style: .default)
 
         let output = DiffRenderer.render(front: front, back: back)
-        #expect(output.contains(0x58), "Changed cell 'X' should be emitted") // X
-        #expect(output.contains(0x59), "Changed cell 'Y' should be emitted") // Y
-        #expect(output.contains(0x5A), "Changed cell 'Z' should be emitted") // Z
-        #expect(!output.contains(0x41), "Unchanged cell 'A' should NOT be emitted") // A
-        #expect(!output.contains(0x45), "Unchanged cell 'E' should NOT be emitted") // E
+        #expect(output.contains(0x58), "Changed cell 'X' should be emitted")  // X
+        #expect(output.contains(0x59), "Changed cell 'Y' should be emitted")  // Y
+        #expect(output.contains(0x5A), "Changed cell 'Z' should be emitted")  // Z
+        #expect(!output.contains(0x41), "Unchanged cell 'A' should NOT be emitted")  // A
+        #expect(!output.contains(0x45), "Unchanged cell 'E' should NOT be emitted")  // E
     }
 
     /// Verifies that wide characters within dirty ranges are handled correctly
@@ -742,7 +759,7 @@ struct TerminalScrollRegionTests {
         // Frame 2: scroll content rows 1-4, leave row 0 alone
         pipeline.beginFrame()
         pipeline.scrollHint = ScrollHint(regionTop: 1, regionHeight: 4, delta: 1)
-        pipeline.buffer.write("TABS!", row: 0, col: 0, style: .default) // unchanged
+        pipeline.buffer.write("TABS!", row: 0, col: 0, style: .default)  // unchanged
         pipeline.buffer.write("BBBBB", row: 1, col: 0, style: .default)
         pipeline.buffer.write("CCCCC", row: 2, col: 0, style: .default)
         pipeline.buffer.write("DDDDD", row: 3, col: 0, style: .default)
@@ -786,12 +803,11 @@ struct TerminalScrollRegionTests {
         let output = mock.writtenOutput
 
         // No SU (CSI n S) or SD (CSI n T) scroll commands should be emitted
-        let hasSU = containsSubsequence(output, [0x1b, 0x5b, 0x34, 0x53]) // CSI 4 S
-        let hasSD = containsSubsequence(output, [0x1b, 0x5b, 0x34, 0x54]) // CSI 4 T
+        let hasSU = containsSubsequence(output, [0x1b, 0x5b, 0x34, 0x53])  // CSI 4 S
+        let hasSD = containsSubsequence(output, [0x1b, 0x5b, 0x34, 0x54])  // CSI 4 T
         #expect(!hasSU && !hasSD, "No scroll commands should be emitted for delta >= regionHeight")
         // All rows should be emitted via normal diff
         #expect(output.contains(0x45), "Row E should be emitted via diff")
         #expect(output.contains(0x48), "Row H should be emitted via diff")
     }
 }
-

@@ -8,7 +8,7 @@ enum SymbolDiscoveryError: Error, CustomStringConvertible, Sendable {
         switch self {
         case .missingSimulatorRuntime:
             return "An iOS simulator runtime with SFSymbols.framework could not be located."
-        case let .invalidPropertyList(path):
+        case .invalidPropertyList(let path):
             return "Invalid property list at \(path)."
         }
     }

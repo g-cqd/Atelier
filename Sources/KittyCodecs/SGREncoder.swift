@@ -45,25 +45,40 @@ public enum SGREncoder: Sendable {
     /// Encodes a style into a caller-provided buffer (zero-allocation path).
     public static func encode(_ style: Style, into params: inout ContiguousArray<UInt8>) {
         if style == .default { return }
-        params.append(0x1b) // ESC
-        params.append(0x5b) // [
+        params.append(0x1b)  // ESC
+        params.append(0x5b)  // [
 
         var first = true
 
-        if style.bold { appendSep(&params, &first); params.append(0x31) } // 1
-        if style.dim { appendSep(&params, &first); params.append(0x32) } // 2
-        if style.italic { appendSep(&params, &first); params.append(0x33) } // 3
+        if style.bold {
+            appendSep(&params, &first)
+            params.append(0x31)
+        }  // 1
+        if style.dim {
+            appendSep(&params, &first)
+            params.append(0x32)
+        }  // 2
+        if style.italic {
+            appendSep(&params, &first)
+            params.append(0x33)
+        }  // 3
 
         if style.underline != .none {
             appendSep(&params, &first)
             // Kitty styled underlines: 4:N
-            params.append(0x34) // 4
-            params.append(0x3a) // :
-            params.append(0x30 + style.underline.rawValue) // 0-5
+            params.append(0x34)  // 4
+            params.append(0x3a)  // :
+            params.append(0x30 + style.underline.rawValue)  // 0-5
         }
 
-        if style.inverse { appendSep(&params, &first); params.append(0x37) } // 7
-        if style.strikethrough { appendSep(&params, &first); params.append(0x39) } // 9
+        if style.inverse {
+            appendSep(&params, &first)
+            params.append(0x37)
+        }  // 7
+        if style.strikethrough {
+            appendSep(&params, &first)
+            params.append(0x39)
+        }  // 9
 
         if style.fg != .default {
             appendColor(&params, style.fg, foreground: true, first: &first)
@@ -75,7 +90,7 @@ public enum SGREncoder: Sendable {
             appendUnderlineColor(&params, style.underlineColor, first: &first)
         }
 
-        params.append(0x6d) // m
+        params.append(0x6d)  // m
     }
 
     // MARK: - Diff Encode
@@ -97,13 +112,21 @@ public enum SGREncoder: Sendable {
     }
 
     /// Encodes the minimal SGR diff into a caller-provided buffer (zero-allocation path).
-    public static func encodeDiff(from old: Style, to new: Style, into params: inout ContiguousArray<UInt8>) {
+    public static func encodeDiff(
+        from old: Style, to new: Style, into params: inout ContiguousArray<UInt8>
+    ) {
         if old == new { return }
-        if new == .default { params.append(contentsOf: [0x1b, 0x5b, 0x6d] as ContiguousArray<UInt8>); return } // ESC[m (reset)
-        if old == .default { encode(new, into: &params); return }
+        if new == .default {
+            params.append(contentsOf: [0x1b, 0x5b, 0x6d] as ContiguousArray<UInt8>)
+            return
+        }  // ESC[m (reset)
+        if old == .default {
+            encode(new, into: &params)
+            return
+        }
 
-        params.append(0x1b) // ESC
-        params.append(0x5b) // [
+        params.append(0x1b)  // ESC
+        params.append(0x5b)  // [
 
         var first = true
 
@@ -113,49 +136,67 @@ public enum SGREncoder: Sendable {
         if intensityChanged {
             if requiresIntensityReset {
                 appendSep(&params, &first)
-                params.append(0x32); params.append(0x32) // 22
+                params.append(0x32)
+                params.append(0x32)  // 22
                 if new.bold {
                     appendSep(&params, &first)
-                    params.append(0x31) // 1
+                    params.append(0x31)  // 1
                 }
                 if new.dim {
                     appendSep(&params, &first)
-                    params.append(0x32) // 2
+                    params.append(0x32)  // 2
                 }
             } else {
                 if new.bold {
                     appendSep(&params, &first)
-                    params.append(0x31) // 1
+                    params.append(0x31)  // 1
                 }
                 if new.dim {
                     appendSep(&params, &first)
-                    params.append(0x32) // 2
+                    params.append(0x32)  // 2
                 }
             }
         }
         if old.italic != new.italic {
             appendSep(&params, &first)
-            if new.italic { params.append(0x33) } // 3
-            else { params.append(0x32); params.append(0x33) } // 23
+            if new.italic {
+                params.append(0x33)
+            }  // 3
+            else {
+                params.append(0x32)
+                params.append(0x33)
+            }  // 23
         }
         if old.underline != new.underline {
             appendSep(&params, &first)
             if new.underline == .none {
-                params.append(0x32); params.append(0x34) // 24
+                params.append(0x32)
+                params.append(0x34)  // 24
             } else {
-                params.append(0x34); params.append(0x3a)
+                params.append(0x34)
+                params.append(0x3a)
                 params.append(0x30 + new.underline.rawValue)
             }
         }
         if old.inverse != new.inverse {
             appendSep(&params, &first)
-            if new.inverse { params.append(0x37) } // 7
-            else { params.append(0x32); params.append(0x37) } // 27
+            if new.inverse {
+                params.append(0x37)
+            }  // 7
+            else {
+                params.append(0x32)
+                params.append(0x37)
+            }  // 27
         }
         if old.strikethrough != new.strikethrough {
             appendSep(&params, &first)
-            if new.strikethrough { params.append(0x39) } // 9
-            else { params.append(0x32); params.append(0x39) } // 29
+            if new.strikethrough {
+                params.append(0x39)
+            }  // 9
+            else {
+                params.append(0x32)
+                params.append(0x39)
+            }  // 29
         }
         if old.fg != new.fg {
             appendColor(&params, new.fg, foreground: true, first: &first)
@@ -187,19 +228,23 @@ public enum SGREncoder: Sendable {
 
     @inline(__always)
     private static func appendSep(_ bytes: inout ContiguousArray<UInt8>, _ first: inout Bool) {
-        if !first { bytes.append(0x3b) } // ;
+        if !first { bytes.append(0x3b) }  // ;
         first = false
     }
 
-    private static func appendColor(_ bytes: inout ContiguousArray<UInt8>, _ color: Color, foreground: Bool, first: inout Bool) {
+    private static func appendColor(
+        _ bytes: inout ContiguousArray<UInt8>, _ color: Color, foreground: Bool, first: inout Bool
+    ) {
         switch color {
         case .default:
             appendSep(&bytes, &first)
             // 39 = default fg, 49 = default bg
             if foreground {
-                bytes.append(0x33); bytes.append(0x39)
+                bytes.append(0x33)
+                bytes.append(0x39)
             } else {
-                bytes.append(0x34); bytes.append(0x39)
+                bytes.append(0x34)
+                bytes.append(0x39)
             }
         case .indexed(let idx):
             appendSep(&bytes, &first)
@@ -216,7 +261,7 @@ public enum SGREncoder: Sendable {
                 let prefix: UInt8 = foreground ? 38 : 48
                 appendDecimal(&bytes, prefix)
                 bytes.append(0x3b)
-                bytes.append(0x35) // 5
+                bytes.append(0x35)  // 5
                 bytes.append(0x3b)
                 appendDecimal(&bytes, UInt16(idx))
             }
@@ -225,7 +270,7 @@ public enum SGREncoder: Sendable {
             let prefix: UInt8 = foreground ? 38 : 48
             appendDecimal(&bytes, prefix)
             bytes.append(0x3b)
-            bytes.append(0x32) // 2
+            bytes.append(0x32)  // 2
             bytes.append(0x3b)
             appendDecimal(&bytes, UInt16(r))
             bytes.append(0x3b)
@@ -235,21 +280,26 @@ public enum SGREncoder: Sendable {
         }
     }
 
-    private static func appendUnderlineColor(_ bytes: inout ContiguousArray<UInt8>, _ color: Color, first: inout Bool) {
+    private static func appendUnderlineColor(
+        _ bytes: inout ContiguousArray<UInt8>, _ color: Color, first: inout Bool
+    ) {
         appendSep(&bytes, &first)
         switch color {
         case .default:
-            bytes.append(0x35); bytes.append(0x39) // 59
+            bytes.append(0x35)
+            bytes.append(0x39)  // 59
         case .indexed(let idx):
-            bytes.append(0x35); bytes.append(0x38) // 58
+            bytes.append(0x35)
+            bytes.append(0x38)  // 58
             bytes.append(0x3b)
-            bytes.append(0x35) // 5
+            bytes.append(0x35)  // 5
             bytes.append(0x3b)
             appendDecimal(&bytes, UInt16(idx))
         case .rgb(let r, let g, let b):
-            bytes.append(0x35); bytes.append(0x38) // 58
+            bytes.append(0x35)
+            bytes.append(0x38)  // 58
             bytes.append(0x3b)
-            bytes.append(0x32) // 2
+            bytes.append(0x32)  // 2
             bytes.append(0x3b)
             appendDecimal(&bytes, UInt16(r))
             bytes.append(0x3b)

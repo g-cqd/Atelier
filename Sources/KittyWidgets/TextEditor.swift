@@ -62,13 +62,15 @@ public struct TextEditor: View, Sendable {
         lineNumberStyle: Style = .default,
         currentLineStyle: Style = .default,
         verticalScrollIndicatorStyle: VerticalScrollIndicatorStyle = VerticalScrollIndicatorStyle(),
-        horizontalScrollIndicatorStyle: HorizontalScrollIndicatorStyle = HorizontalScrollIndicatorStyle(),
+        horizontalScrollIndicatorStyle: HorizontalScrollIndicatorStyle =
+            HorizontalScrollIndicatorStyle(),
         modeShowsCursor: Bool = true,
         maxLineWidth: Int = 0,
         tabSize: Int = 4,
         whitespaceConfig: WhitespaceRenderer.Config = .disabled
     ) {
-        let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(
+            String.init)
         self.source = ArrayDocumentSource(lines)
         self.lineSpans = lines.map { _ in spans }
         self.scrollOffset = scrollOffset
@@ -117,7 +119,8 @@ public struct TextEditor: View, Sendable {
         lineNumberStyle: Style = .default,
         currentLineStyle: Style = .default,
         verticalScrollIndicatorStyle: VerticalScrollIndicatorStyle = VerticalScrollIndicatorStyle(),
-        horizontalScrollIndicatorStyle: HorizontalScrollIndicatorStyle = HorizontalScrollIndicatorStyle(),
+        horizontalScrollIndicatorStyle: HorizontalScrollIndicatorStyle =
+            HorizontalScrollIndicatorStyle(),
         modeShowsCursor: Bool = true,
         maxLineWidth: Int = 0,
         tabSize: Int = 4,
@@ -171,7 +174,8 @@ public struct TextEditor: View, Sendable {
         lineNumberStyle: Style = .default,
         currentLineStyle: Style = .default,
         verticalScrollIndicatorStyle: VerticalScrollIndicatorStyle = VerticalScrollIndicatorStyle(),
-        horizontalScrollIndicatorStyle: HorizontalScrollIndicatorStyle = HorizontalScrollIndicatorStyle(),
+        horizontalScrollIndicatorStyle: HorizontalScrollIndicatorStyle =
+            HorizontalScrollIndicatorStyle(),
         modeShowsCursor: Bool = true,
         maxLineWidth: Int = 0,
         tabSize: Int = 4,

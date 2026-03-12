@@ -71,7 +71,8 @@ public enum QueryParser: Sendable {
         return pattern
     }
 
-    private static func attachCapture(_ capture: String?, to pattern: QueryPattern) -> QueryPattern {
+    private static func attachCapture(_ capture: String?, to pattern: QueryPattern) -> QueryPattern
+    {
         guard let capture else { return pattern }
         switch pattern {
         case .nodeMatch(let type, let children, let existing):
@@ -92,8 +93,10 @@ public enum QueryParser: Sendable {
         }
     }
 
-    private static func parseNodePattern(_ scanner: inout Scanner) throws(QueryError) -> QueryPattern {
-        scanner.advance() // consume (
+    private static func parseNodePattern(_ scanner: inout Scanner) throws(QueryError)
+        -> QueryPattern
+    {
+        scanner.advance()  // consume (
         scanner.skipWhitespaceAndComments()
 
         if scanner.peek() == "#" {
@@ -176,7 +179,9 @@ public enum QueryParser: Sendable {
         return .nodeMatch(type: type, children: children, capture: nil)
     }
 
-    private static func parseLiteralPattern(_ scanner: inout Scanner) throws(QueryError) -> QueryPattern {
+    private static func parseLiteralPattern(_ scanner: inout Scanner) throws(QueryError)
+        -> QueryPattern
+    {
         let value = try scanner.readString()
         scanner.skipWhitespaceAndComments()
         let capture = try parseCapture(&scanner)
@@ -184,14 +189,16 @@ public enum QueryParser: Sendable {
     }
 
     private static func parseWildcard(_ scanner: inout Scanner) throws(QueryError) -> QueryPattern {
-        scanner.advance() // consume _
+        scanner.advance()  // consume _
         scanner.skipWhitespaceAndComments()
         let capture = try parseCapture(&scanner)
         return .wildcard(capture: capture)
     }
 
-    private static func parseAlternation(_ scanner: inout Scanner) throws(QueryError) -> QueryPattern {
-        scanner.advance() // consume [
+    private static func parseAlternation(_ scanner: inout Scanner) throws(QueryError)
+        -> QueryPattern
+    {
+        scanner.advance()  // consume [
         scanner.skipWhitespaceAndComments()
         var alternatives: [QueryPattern] = []
         while let ch = scanner.peek(), ch != "]" {
@@ -210,7 +217,9 @@ public enum QueryParser: Sendable {
         return .anchor
     }
 
-    private static func parsePredicatePattern(_ scanner: inout Scanner) throws(QueryError) -> QueryPattern {
+    private static func parsePredicatePattern(_ scanner: inout Scanner) throws(QueryError)
+        -> QueryPattern
+    {
         guard scanner.peek() == "#" else {
             throw .syntaxError("Expected #")
         }
@@ -237,7 +246,9 @@ public enum QueryParser: Sendable {
         return .predicate(predicate)
     }
 
-    private static func parsePredicates(_ scanner: inout Scanner) throws(QueryError) -> [QueryPattern] {
+    private static func parsePredicates(_ scanner: inout Scanner) throws(QueryError)
+        -> [QueryPattern]
+    {
         var predicates: [QueryPattern] = []
 
         while true {
@@ -267,7 +278,8 @@ public enum QueryParser: Sendable {
         return name
     }
 
-    private static func buildPredicate(name: String, args: [String]) throws(QueryError) -> Predicate {
+    private static func buildPredicate(name: String, args: [String]) throws(QueryError) -> Predicate
+    {
         switch name {
         case "#eq?":
             guard args.count >= 2 else { throw .syntaxError("eq? requires 2 arguments") }
@@ -282,7 +294,9 @@ public enum QueryParser: Sendable {
             guard args.count >= 2 else { throw .syntaxError("not-match? requires 2 arguments") }
             return .notMatch(capture: args[0], pattern: args[1])
         case "#any-of?":
-            guard args.count >= 2 else { throw .syntaxError("any-of? requires at least 2 arguments") }
+            guard args.count >= 2 else {
+                throw .syntaxError("any-of? requires at least 2 arguments")
+            }
             return .anyOf(capture: args[0], values: Array(args.dropFirst()))
         case "#contains?":
             guard args.count >= 2 else { throw .syntaxError("contains? requires 2 arguments") }
@@ -298,7 +312,9 @@ public enum QueryParser: Sendable {
         }
     }
 
-    private static func wrap(_ pattern: QueryPattern, with predicates: [QueryPattern]) -> QueryPattern {
+    private static func wrap(_ pattern: QueryPattern, with predicates: [QueryPattern])
+        -> QueryPattern
+    {
         guard !predicates.isEmpty else { return pattern }
         return .sequence([pattern] + predicates)
     }

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import KittyText
 
 // MARK: - TextBuffer
@@ -224,31 +225,36 @@ struct TextDocumentTests {
 
     @Test func `ensureVisible scrolls down when cursor is below viewport`() {
         var cursor = TextCursor(row: 15, col: 0, scrollRow: 0, scrollCol: 0)
-        TextNavigation.ensureVisible(cursor: &cursor, visibleRows: 10, visibleCols: 80, wrapLines: false)
+        TextNavigation.ensureVisible(
+            cursor: &cursor, visibleRows: 10, visibleCols: 80, wrapLines: false)
         #expect(cursor.scrollRow == 6)
     }
 
     @Test func `ensureVisible scrolls up when cursor is above viewport`() {
         var cursor = TextCursor(row: 2, col: 0, scrollRow: 10, scrollCol: 0)
-        TextNavigation.ensureVisible(cursor: &cursor, visibleRows: 10, visibleCols: 80, wrapLines: false)
+        TextNavigation.ensureVisible(
+            cursor: &cursor, visibleRows: 10, visibleCols: 80, wrapLines: false)
         #expect(cursor.scrollRow == 2)
     }
 
     @Test func `ensureVisible adjusts horizontal scroll when cursor is right of viewport`() {
         var cursor = TextCursor(row: 0, col: 25, scrollRow: 0, scrollCol: 0)
-        TextNavigation.ensureVisible(cursor: &cursor, visibleRows: 10, visibleCols: 8, wrapLines: false)
+        TextNavigation.ensureVisible(
+            cursor: &cursor, visibleRows: 10, visibleCols: 8, wrapLines: false)
         #expect(cursor.scrollCol == 18)
     }
 
     @Test func `ensureVisible resets horizontal scroll when wrapLines is true`() {
         var cursor = TextCursor(row: 0, col: 50, scrollRow: 0, scrollCol: 30)
-        TextNavigation.ensureVisible(cursor: &cursor, visibleRows: 10, visibleCols: 80, wrapLines: true)
+        TextNavigation.ensureVisible(
+            cursor: &cursor, visibleRows: 10, visibleCols: 80, wrapLines: true)
         #expect(cursor.scrollCol == 0)
     }
 
     @Test func `ensureVisible does not move scroll when cursor is already visible`() {
         var cursor = TextCursor(row: 5, col: 5, scrollRow: 0, scrollCol: 0)
-        TextNavigation.ensureVisible(cursor: &cursor, visibleRows: 10, visibleCols: 80, wrapLines: false)
+        TextNavigation.ensureVisible(
+            cursor: &cursor, visibleRows: 10, visibleCols: 80, wrapLines: false)
         #expect(cursor.scrollRow == 0)
         #expect(cursor.scrollCol == 0)
     }
@@ -439,6 +445,95 @@ struct TextDocumentTests {
 }
 
 // MARK: - UnicodeWidth
+
+// MARK: - TextOperations.deleteRange
+
+@Suite struct TextOperationsDeleteRangeTests {
+    @Test func `deleteRange same-line removes columns 6 to 11`() {
+        var buffer = TextBuffer("hello world")
+        var cursor = TextCursor(row: 0, col: 0)
+        let selection = TextSelection(
+            anchor: TextPosition(row: 0, col: 6),
+            head: TextPosition(row: 0, col: 11)
+        )
+        TextOperations.deleteRange(in: &buffer, at: &cursor, selection: selection)
+        #expect(buffer.lines == ["hello "])
+        #expect(cursor.row == 0)
+        #expect(cursor.col == 6)
+    }
+
+    @Test func `deleteRange multi-line merges prefix of first with suffix of last`() {
+        var buffer = TextBuffer("first line\nsecond line\nthird line")
+        var cursor = TextCursor(row: 0, col: 0)
+        let selection = TextSelection(
+            anchor: TextPosition(row: 0, col: 5),
+            head: TextPosition(row: 2, col: 5)
+        )
+        TextOperations.deleteRange(in: &buffer, at: &cursor, selection: selection)
+        #expect(buffer.lines == ["first line"])
+        #expect(cursor.row == 0)
+        #expect(cursor.col == 5)
+    }
+}
+
+// MARK: - TextSelection.extractText
+
+@Suite struct TextSelectionExtractionTests {
+    @Test func `extractText single-line selection`() {
+        let lines = ["hello world"]
+        let selection = TextSelection(
+            anchor: TextPosition(row: 0, col: 6),
+            head: TextPosition(row: 0, col: 11)
+        )
+        let result = selection.extractText(from: { lines[$0] }, lineCount: lines.count)
+        #expect(result == "world")
+    }
+
+    @Test func `extractText multi-line selection`() {
+        let lines = ["first", "middle", "last"]
+        let selection = TextSelection(
+            anchor: TextPosition(row: 0, col: 2),
+            head: TextPosition(row: 2, col: 3)
+        )
+        let result = selection.extractText(from: { lines[$0] }, lineCount: lines.count)
+        #expect(result == "rst\nmiddle\nlas")
+    }
+
+    @Test func `extractText reversed selection produces same result as forward`() {
+        let lines = ["first", "middle", "last"]
+        let forward = TextSelection(
+            anchor: TextPosition(row: 0, col: 2),
+            head: TextPosition(row: 2, col: 3)
+        )
+        let reversed = TextSelection(
+            anchor: TextPosition(row: 2, col: 3),
+            head: TextPosition(row: 0, col: 2)
+        )
+        let forwardResult = forward.extractText(from: { lines[$0] }, lineCount: lines.count)
+        let reversedResult = reversed.extractText(from: { lines[$0] }, lineCount: lines.count)
+        #expect(forwardResult == reversedResult)
+    }
+}
+
+// MARK: - TextSanitizer
+
+@Suite struct TextSanitizerTests {
+    @Test func `sanitize replaces BEL control character`() {
+        let result = TextSanitizer.sanitize("\u{07}")
+        #expect(result.replacedCount == 1)
+        #expect(!result.text.contains("\u{07}"))
+    }
+
+    @Test func `sanitize passes newline and tab, strips zero-width characters`() {
+        let input = "\t\n\u{200B}\u{FEFF}"
+        let result = TextSanitizer.sanitize(input)
+        #expect(result.text.contains("\t"))
+        #expect(result.text.contains("\n"))
+        #expect(!result.text.contains("\u{200B}"))
+        #expect(!result.text.contains("\u{FEFF}"))
+        #expect(result.replacedCount == 2)
+    }
+}
 
 @Suite struct UnicodeWidthTests {
     @Test func `ASCII letter has display width 1`() {

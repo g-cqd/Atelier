@@ -1,5 +1,6 @@
 import Darwin
 import Testing
+
 @testable import KittyCodecs
 @testable import KittyInput
 @testable import KittyTerminal
@@ -71,7 +72,8 @@ struct SequenceRouterTests {
     @Test
     func `Routes standard CSI keys to functional key codes`() throws {
         func feed(_ bytes: [UInt8]) -> [InputEvent] {
-            var r = makeSUT(); return r.feedAll(bytes)
+            var r = makeSUT()
+            return r.feedAll(bytes)
         }
         try assertSingleKeyEvent(in: feed([0x1b, 0x5b, 0x41]), expectedKeyCode: 57352)
         try assertSingleKeyEvent(in: feed([0x1b, 0x5b, 0x42]), expectedKeyCode: 57353)
@@ -88,7 +90,8 @@ struct SequenceRouterTests {
     @Test
     func `Routes SS3 function keys`() throws {
         func feed(_ bytes: [UInt8]) -> [InputEvent] {
-            var r = makeSUT(); return r.feedAll(bytes)
+            var r = makeSUT()
+            return r.feedAll(bytes)
         }
         try assertSingleKeyEvent(in: feed([0x1b, 0x4f, 0x50]), expectedKeyCode: 57364)
         try assertSingleKeyEvent(in: feed([0x1b, 0x4f, 0x51]), expectedKeyCode: 57365)
@@ -151,7 +154,9 @@ struct SequenceRouterTests {
         #expect(pressEvent.row == 5)
 
         // Drag: CSI < 32 ; 10 ; 8 M (left drag to col 10, row 8)
-        let drag = router.feedAll([0x1b, 0x5b, 0x3c, 0x33, 0x32, 0x3b, 0x31, 0x30, 0x3b, 0x38, 0x4d])
+        let drag = router.feedAll([
+            0x1b, 0x5b, 0x3c, 0x33, 0x32, 0x3b, 0x31, 0x30, 0x3b, 0x38, 0x4d,
+        ])
         let dragEvent = try requireMouseEvent(drag)
         #expect(dragEvent.button == .left)
         #expect(dragEvent.kind == .drag)
@@ -245,7 +250,7 @@ private func requireKeyEvent(_ events: [InputEvent]) throws -> KeyEvent {
 }
 
 private func requireKeyEvent(_ event: InputEvent?) throws -> KeyEvent {
-    guard case let .some(.key(key)) = event else {
+    guard case .some(.key(let key)) = event else {
         throw InputEventExpectationError.expectedKeyEvent
     }
     return key
@@ -254,7 +259,7 @@ private func requireKeyEvent(_ event: InputEvent?) throws -> KeyEvent {
 private func requireMouseEvent(_ events: [InputEvent]) throws -> MouseEvent {
     #expect(events.count == 1)
     let event = try #require(events.onlyElement)
-    guard case let .mouse(mouse) = event else {
+    guard case .mouse(let mouse) = event else {
         throw InputEventExpectationError.expectedMouseEvent
     }
     return mouse
@@ -263,7 +268,7 @@ private func requireMouseEvent(_ events: [InputEvent]) throws -> MouseEvent {
 private func requirePasteEvent(_ events: [InputEvent]) throws -> String {
     #expect(events.count == 1)
     let event = try #require(events.onlyElement)
-    guard case let .paste(text) = event else {
+    guard case .paste(let text) = event else {
         throw InputEventExpectationError.expectedPasteEvent
     }
     return text
@@ -272,14 +277,14 @@ private func requirePasteEvent(_ events: [InputEvent]) throws -> String {
 private func requireUnknownEvent(_ events: [InputEvent]) throws -> [UInt8] {
     #expect(events.count == 1)
     let event = try #require(events.onlyElement)
-    guard case let .unknown(bytes) = event else {
+    guard case .unknown(let bytes) = event else {
         throw InputEventExpectationError.expectedUnknownEvent
     }
     return bytes
 }
 
-private extension Collection {
-    var onlyElement: Element? {
+extension Collection {
+    fileprivate var onlyElement: Element? {
         guard count == 1 else { return nil }
         return first
     }

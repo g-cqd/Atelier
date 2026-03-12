@@ -40,25 +40,40 @@ extension EditorState {
         if entry.isDirectory {
             let toggleTitle = entry.isExpanded ? "Collapse Folder" : "Expand Folder"
             items = [
-                ContextMenuItem(title: toggleTitle, shortcut: "Enter", action: .toggleSelectedDirectory),
-                ContextMenuItem(title: "New File…", shortcut: "", action: .beginCreateFile(inDirectory: entry.path)),
-                ContextMenuItem(title: "New Folder…", shortcut: "", action: .beginCreateDirectory(inDirectory: entry.path)),
-                ContextMenuItem(title: "Rename…", shortcut: "", action: .beginRename(path: entry.path)),
-                ContextMenuItem(title: "Duplicate…", shortcut: "", action: .beginDuplicate(path: entry.path)),
+                ContextMenuItem(
+                    title: toggleTitle, shortcut: "Enter", action: .toggleSelectedDirectory),
+                ContextMenuItem(
+                    title: "New File…", shortcut: "",
+                    action: .beginCreateFile(inDirectory: entry.path)),
+                ContextMenuItem(
+                    title: "New Folder…", shortcut: "",
+                    action: .beginCreateDirectory(inDirectory: entry.path)),
+                ContextMenuItem(
+                    title: "Rename…", shortcut: "", action: .beginRename(path: entry.path)),
+                ContextMenuItem(
+                    title: "Duplicate…", shortcut: "", action: .beginDuplicate(path: entry.path)),
                 ContextMenuItem(title: "Move…", shortcut: "", action: .beginMove(path: entry.path)),
-                ContextMenuItem(title: "Delete…", shortcut: "", action: .beginDelete(path: entry.path)),
-                ContextMenuItem(title: "Save Here…", shortcut: "Ctrl+O", action: .beginSavePrompt(inDirectory: entry.path)),
+                ContextMenuItem(
+                    title: "Delete…", shortcut: "", action: .beginDelete(path: entry.path)),
+                ContextMenuItem(
+                    title: "Save Here…", shortcut: "Ctrl+O",
+                    action: .beginSavePrompt(inDirectory: entry.path)),
             ]
         } else {
             let directory = URL(fileURLWithPath: entry.path).deletingLastPathComponent().path
             items = [
                 ContextMenuItem(title: "Open", shortcut: "Enter", action: .openSelected),
                 ContextMenuItem(title: "Open and Pin", shortcut: "", action: .openSelectedPinned),
-                ContextMenuItem(title: "Rename…", shortcut: "", action: .beginRename(path: entry.path)),
-                ContextMenuItem(title: "Duplicate…", shortcut: "", action: .beginDuplicate(path: entry.path)),
+                ContextMenuItem(
+                    title: "Rename…", shortcut: "", action: .beginRename(path: entry.path)),
+                ContextMenuItem(
+                    title: "Duplicate…", shortcut: "", action: .beginDuplicate(path: entry.path)),
                 ContextMenuItem(title: "Move…", shortcut: "", action: .beginMove(path: entry.path)),
-                ContextMenuItem(title: "Delete…", shortcut: "", action: .beginDelete(path: entry.path)),
-                ContextMenuItem(title: "Save Here…", shortcut: "Ctrl+O", action: .beginSavePrompt(inDirectory: directory)),
+                ContextMenuItem(
+                    title: "Delete…", shortcut: "", action: .beginDelete(path: entry.path)),
+                ContextMenuItem(
+                    title: "Save Here…", shortcut: "Ctrl+O",
+                    action: .beginSavePrompt(inDirectory: directory)),
             ]
         }
 
@@ -78,7 +93,9 @@ extension EditorState {
             target: .editor,
             items: [
                 ContextMenuItem(title: "Save", shortcut: "Ctrl+O", action: .saveFile),
-                ContextMenuItem(title: "Save As…", shortcut: "", action: .beginSavePrompt(inDirectory: saveDirectory)),
+                ContextMenuItem(
+                    title: "Save As…", shortcut: "",
+                    action: .beginSavePrompt(inDirectory: saveDirectory)),
                 ContextMenuItem(title: "Focus Explorer", shortcut: "Esc", action: .focusTree),
                 ContextMenuItem(title: "Close Tab", shortcut: "Ctrl+W", action: .closeTab),
             ]
@@ -94,7 +111,8 @@ extension EditorState {
             self.contextMenu = contextMenu
             return true
         case Key.down.rawValue:
-            contextMenu.selectedIndex = min(contextMenu.items.count - 1, contextMenu.selectedIndex + 1)
+            contextMenu.selectedIndex = min(
+                contextMenu.items.count - 1, contextMenu.selectedIndex + 1)
             self.contextMenu = contextMenu
             return true
         case Key.enter.rawValue, Key.enterAlt.rawValue:
