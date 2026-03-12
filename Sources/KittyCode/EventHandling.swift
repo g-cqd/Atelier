@@ -23,7 +23,7 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
             return state.handlePromptKey(key)
         }
 
-        if key.eventType == .press, isUndoShortcut(key) {
+        if key.eventType == .press, isConfiguredUndoShortcut(key, config: state.config) {
             switch state.mode {
             case .editor:
                 state.undoActiveBuffer()
@@ -35,7 +35,7 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
             return true
         }
 
-        if key.eventType == .press, isRedoShortcut(key) {
+        if key.eventType == .press, isConfiguredRedoShortcut(key, config: state.config) {
             switch state.mode {
             case .editor:
                 state.redoActiveBuffer()
@@ -44,6 +44,23 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
                     await state.redoFileTreeOperation()
                 }
             }
+            return true
+        }
+
+        if key.eventType == .press, isConfiguredCopyShortcut(key, config: state.config) {
+            if state.hasActiveSelection {
+                handleCopy(state: state)
+            }
+            return true
+        }
+
+        if key.eventType == .press, isConfiguredCutShortcut(key, config: state.config), state.hasActiveSelection {
+            handleCut(state: state)
+            return true
+        }
+
+        if key.eventType == .press, isConfiguredPasteShortcut(key, config: state.config) {
+            handlePasteRequest(state: state)
             return true
         }
 
@@ -75,10 +92,6 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
                 state.beginNewFile()
                 return true
             }
-            if key.keyCode == AsciiKey.c, state.hasActiveSelection {
-                handleCopy(state: state)
-                return true
-            }
             if key.keyCode == AsciiKey.x {
                 if state.hasActiveSelection {
                     handleCut(state: state)
@@ -90,10 +103,6 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
                     return true
                 }
                 return false
-            }
-            if key.keyCode == 118 {
-                handlePasteRequest(state: state)
-                return true
             }
             // Ctrl+B toggles sidebar
             if key.keyCode == AsciiKey.b {
@@ -163,7 +172,6 @@ private func handleCopy(state: EditorState) {
     let base64 = Data(text.utf8).base64EncodedString()
     state.terminalWriter?(KittySequences.setClipboard(base64))
     state.statusMessage = "Copied \(text.count) chars"
-    state.clearSelection()
 }
 
 @MainActor
@@ -175,6 +183,7 @@ private func handleCut(state: EditorState) {
     let previousSnapshot = state.activeBufferSnapshot()
     let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: selection)
     state.textDidChange(mutation, previousSnapshot: previousSnapshot)
+    state.clearSelection()
     state.statusMessage = "Cut \(text.count) chars"
 }
 
@@ -192,6 +201,7 @@ private func handlePaste(_ text: String, state: EditorState) {
         let previousSnapshot = state.activeBufferSnapshot()
         let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
         state.textDidChange(mutation, previousSnapshot: previousSnapshot)
+        state.clearSelection()
     }
 
     let previousSnapshot = state.activeBufferSnapshot()
@@ -203,20 +213,4 @@ private func handlePaste(_ text: String, state: EditorState) {
     } else {
         state.statusMessage = "Pasted \(sanitized.text.count) chars"
     }
-}
-
-@MainActor
-private func isUndoShortcut(_ key: KeyEvent) -> Bool {
-    key.modifiers == .super && matchesShortcutKey(key, letter: AsciiKey.z)
-}
-
-@MainActor
-private func isRedoShortcut(_ key: KeyEvent) -> Bool {
-    (key.modifiers == .super && matchesShortcutKey(key, letter: AsciiKey.y)) ||
-    (key.modifiers == .super.union(.shift) && matchesShortcutKey(key, letter: AsciiKey.z))
-}
-
-@MainActor
-private func matchesShortcutKey(_ key: KeyEvent, letter: UInt32) -> Bool {
-    key.keyCode == letter || key.keyCode == letter - 32
 }
