@@ -177,7 +177,9 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         } else if key.keyCode == 9 {
             insertText("\t", into: state)
             shouldEnsureVisible = true
-        } else if key.keyCode < 256, let scalar = UnicodeScalar(key.keyCode) {
+        } else if key.keyCode < 256,
+                  key.modifiers.intersection([.ctrl, .super, .hyper, .meta]).isEmpty,
+                  let scalar = UnicodeScalar(key.keyCode) {
             let char = Character(scalar)
             if char.isPrintable {
                 insertText(String(char), into: state)
