@@ -25,19 +25,13 @@ struct KittySymbolsTests {
     }
 
     @Test
-    func `Terminal symbol theme uses mapped glyphs`() {
-        let catalog = SymbolCatalog(entries: [
-            "folder": SymbolMappingEntry(name: "folder", visibility: .publicSymbol, assetGlyphIndex: 70, codepoint: 0x100046),
-            "folder.badge.minus": SymbolMappingEntry(name: "folder.badge.minus", visibility: .publicSymbol, assetGlyphIndex: 76, codepoint: 0x10004C),
-            "document": SymbolMappingEntry(name: "document", visibility: .publicSymbol, assetGlyphIndex: 154, codepoint: 0x10009A),
-        ])
-
-        let theme = TerminalSymbolTheme.make(symbolsEnabled: true, catalog: catalog)
+    func `Terminal symbol theme uses hardcoded PUA codepoints`() {
+        let theme = TerminalSymbolTheme.make(symbolsEnabled: true, catalog: nil)
 
         #expect(theme[.folderClosed].prefersSymbol)
-        #expect(theme[.folderClosed].text == "\u{100046}")
-        #expect(theme[.folderOpen].text == "\u{10004C}")
-        #expect(theme[.file].text == "\u{10009A}")
+        #expect(theme[.folderClosed].text == "\u{1003ED}")
+        #expect(theme[.folderOpen].text == "\u{100A9B}")
+        #expect(theme[.file].text == "\u{1018F6}")
     }
 
     @Test
@@ -56,13 +50,10 @@ struct KittySymbolsTests {
     }
 
     @Test
-    func `Explorer role resolves to SF Symbol glyph when catalog available`() {
-        let catalog = SymbolCatalog(entries: [
-            "folder": SymbolMappingEntry(name: "folder", visibility: .publicSymbol, assetGlyphIndex: 78, codepoint: 0x100216),
-        ])
-        let theme = TerminalSymbolTheme.make(symbolsEnabled: true, catalog: catalog)
+    func `Explorer role resolves to hardcoded SF Symbol glyph`() {
+        let theme = TerminalSymbolTheme.make(symbolsEnabled: true, catalog: nil)
         #expect(theme[.explorer].prefersSymbol)
-        #expect(theme[.explorer].text == "􀈖")
+        #expect(theme[.explorer].text == "\u{1003ED}")
     }
 
     @Test

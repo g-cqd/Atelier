@@ -17,38 +17,33 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
     var didDeleteSelection = false
     let isShiftHeld = key.modifiers.contains(.shift)
 
-    if !isClipboardShortcut(key) {
-        if state.hasActiveSelection {
-            if isNavigationKey(key) {
-                if !isShiftHeld {
-                    // Plain navigation key: collapse selection to the appropriate edge
-                    let (start, end) = state.selection!.ordered
-                    switch key.keyCode {
-                    case Key.left.rawValue, Key.up.rawValue, Key.home.rawValue, Key.pageUp.rawValue:
-                        state.cursorRow = start.row
-                        state.cursorCol = start.col
-                    case Key.right.rawValue, Key.down.rawValue, Key.end.rawValue, Key.pageDown.rawValue:
-                        state.cursorRow = end.row
-                        state.cursorCol = end.col
-                    default:
-                        break
-                    }
-                    state.clearSelection()
-                    ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
-                    return true
+    if state.hasActiveSelection {
+        if isNavigationKey(key) {
+            if !isShiftHeld {
+                // Plain navigation key: collapse selection to the appropriate edge
+                let (start, end) = state.selection!.ordered
+                switch key.keyCode {
+                case Key.left.rawValue, Key.up.rawValue, Key.home.rawValue, Key.pageUp.rawValue:
+                    state.cursorRow = start.row
+                    state.cursorCol = start.col
+                case Key.right.rawValue, Key.down.rawValue, Key.end.rawValue, Key.pageDown.rawValue:
+                    state.cursorRow = end.row
+                    state.cursorCol = end.col
+                default:
+                    break
                 }
-                // shift+navigation: fall through to extend selection below
-            } else if !isShiftHeld {
-                // Editing key: delete the selection, then proceed with the key action
-                let previousSnapshot = state.activeBufferSnapshot()
-                let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
-                state.textDidChange(mutation, previousSnapshot: previousSnapshot)
                 state.clearSelection()
-                didDeleteSelection = true
+                ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
+                return true
             }
+            // shift+navigation: fall through to extend selection below
+        } else if shouldReplaceSelectionBeforeHandling(key) {
+            let previousSnapshot = state.activeBufferSnapshot()
+            let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
+            state.textDidChange(mutation, previousSnapshot: previousSnapshot)
+            state.clearSelection()
+            didDeleteSelection = true
         }
-    } else {
-        state.clearSelection()
     }
 
     // Capture selection anchor before cursor movement for shift+navigation
@@ -204,11 +199,6 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
 }
 
 @MainActor
-private func isClipboardShortcut(_ key: KeyEvent) -> Bool {
-    key.modifiers == .ctrl && (key.keyCode == AsciiKey.c || key.keyCode == AsciiKey.x || key.keyCode == 118)
-}
-
-@MainActor
 private func isNavigationKey(_ key: KeyEvent) -> Bool {
     switch key.keyCode {
     case Key.up.rawValue, Key.down.rawValue, Key.left.rawValue, Key.right.rawValue,
@@ -217,4 +207,29 @@ private func isNavigationKey(_ key: KeyEvent) -> Bool {
     default:
         return false
     }
+}
+
+@MainActor
+private func shouldReplaceSelectionBeforeHandling(_ key: KeyEvent) -> Bool {
+    switch key.keyCode {
+    case Key.enter.rawValue, Key.enterAlt.rawValue, Key.backspace.rawValue, Key.backspaceAlt.rawValue, 9:
+        return true
+    default:
+        break
+    }
+
+    if !key.associatedText.isEmpty {
+        return true
+    }
+
+    let shortcutModifiers: KeyModifiers = [.alt, .ctrl, .super, .hyper, .meta]
+    if !key.modifiers.intersection(shortcutModifiers).isEmpty {
+        return false
+    }
+
+    guard key.keyCode < 256, let scalar = UnicodeScalar(key.keyCode) else {
+        return false
+    }
+
+    return Character(scalar).isPrintable
 }

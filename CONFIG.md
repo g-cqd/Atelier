@@ -94,6 +94,8 @@ Available status bar items: `file`, `status`, `language`, `size`, `lineEnding`, 
 | `keybindings.tabPrev` | `string` | `"ctrl+pageup"` | Key combo to switch to the previous tab. |
 | `keybindings.tabClose` | `string?` | `null` | Optional key combo to close the current tab. |
 | `keybindings.toggleSidebar` | `string` | `"ctrl+b"` | Key combo to toggle the sidebar. |
+| `keybindings.clipboardModifier` | `"command"` \| `"control"` \| `"both"` | `"command"` | Modifier family for copy/cut/paste shortcuts (`C`, `X`, `V`). |
+| `keybindings.historyModifier` | `"command"` \| `"control"` \| `"both"` | `"command"` | Modifier family for undo/redo shortcuts (`Z`, `Y`, and `Shift+Z` for redo). |
 
 ## Whitespace Rendering (`whitespace`)
 
@@ -283,7 +285,9 @@ These are hardcoded and not configurable via JSON.
     "tabNext": "ctrl+pagedown",
     "tabPrev": "ctrl+pageup",
     "tabClose": null,
-    "toggleSidebar": "ctrl+b"
+    "toggleSidebar": "ctrl+b",
+    "clipboardModifier": "command",
+    "historyModifier": "command"
   },
   "whitespace": {
     "showIndentation": true,
