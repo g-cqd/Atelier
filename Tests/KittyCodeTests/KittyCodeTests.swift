@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 import KittyCodecs
 import KittyFileTree
@@ -69,6 +70,7 @@ struct KittyCodeConfigTests {
     func `ColorRGB encodes 8 digit hex when alpha below 1`() throws {
         let color = ColorRGB(r: 0xFF, g: 0x00, b: 0x00, alpha: 0.5)
         let data = try JSONEncoder().encode(color)
+        // swiftlint:disable:next force_unwrapping
         let hex = String(data: data, encoding: .utf8)!
         #expect(hex.contains("ff000080"))
     }
@@ -77,6 +79,7 @@ struct KittyCodeConfigTests {
     func `ColorRGB encodes 6 digit hex when alpha is 1`() throws {
         let color = ColorRGB(r: 0xAB, g: 0xCD, b: 0xEF)
         let data = try JSONEncoder().encode(color)
+        // swiftlint:disable:next force_unwrapping
         let hex = String(data: data, encoding: .utf8)!
         #expect(hex.contains("abcdef"))
         #expect(!hex.contains("abcdefff"))
@@ -1319,7 +1322,7 @@ struct StatusBarAndPromptTests {
         state.fileName = "note.swift"
         state.bufferManager.activeBuffer?.fileName = "note.swift"
         state.currentLanguage = "swift"
-        state.currentLineEnding = .crlf
+        state.currentLineEnding = .carriageReturnLineFeed
         state.fileContent = ["abc"]
         state.cursorRow = 0
         state.cursorCol = 2
@@ -1347,15 +1350,15 @@ struct StatusBarAndPromptTests {
         let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
         state.beginNewFile()
         state.fileContent = ["alpha", "beta", ""]
-        state.currentLineEnding = .crlf
+        state.currentLineEnding = .carriageReturnLineFeed
 
         let savedURL = rootURL.appendingPathComponent("notes/output.txt")
         let saveSucceeded = state.writeBufferToDisk(at: savedURL.path)
 
         #expect(saveSucceeded)
         #expect(try String(contentsOf: savedURL, encoding: .utf8) == "alpha\r\nbeta\r\n")
-        #expect(state.currentLineEnding == .crlf)
-        #expect(state.bufferManager.activeBuffer?.lineEnding == .crlf)
+        #expect(state.currentLineEnding == .carriageReturnLineFeed)
+        #expect(state.bufferManager.activeBuffer?.lineEnding == .carriageReturnLineFeed)
     }
 }
 
@@ -3413,6 +3416,7 @@ struct SelectionEditingTests {
         setSelection(sut.state, from: (0, 0), to: (0, 5))
 
         _ = handleEvent(
+            // swiftlint:disable:next force_unwrapping
             event: .key(KeyEvent(keyCode: UInt32(Character("a").asciiValue!), modifiers: [])),
             state: sut.state,
             pipeline: sut.pipeline
@@ -3462,6 +3466,7 @@ struct SelectionEditingTests {
         let contentBefore = sut.state.fileContent
 
         _ = handleEvent(
+            // swiftlint:disable:next force_unwrapping
             event: .key(KeyEvent(keyCode: UInt32(Character("z").asciiValue!), modifiers: [])),
             state: sut.state,
             pipeline: sut.pipeline

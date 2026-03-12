@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Testing
 
 @testable import KittyCodecs
@@ -249,6 +250,7 @@ struct ShiftRowsTests {
     func `Shift up by 2 moves content correctly`() {
         var buffer = ScreenBuffer(columns: 3, rows: 5)
         for r in 0..<5 {
+            // swiftlint:disable:next force_unwrapping
             let ch = Character(UnicodeScalar(65 + r)!)  // A, B, C, D, E
             buffer.fill(
                 row: r, col: 0, width: 3, height: 1, cell: Cell(character: ch, style: .default))

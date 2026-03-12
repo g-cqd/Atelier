@@ -320,8 +320,7 @@ public enum ParseTableCompiler: Sendable {
         case .token(let content), .immediateToken(let content):
             return try expandRule(content, ruleName: ruleName, context: &context)
         case .field(let name, let content):
-            return try expandRule(content, ruleName: ruleName, context: &context).map {
-                production in
+            return try expandRule(content, ruleName: ruleName, context: &context).map { production in
                 guard !production.symbols.isEmpty else {
                     return production
                 }
@@ -382,10 +381,8 @@ public enum ParseTableCompiler: Sendable {
     ) -> [String] {
         var terminals = Set<String>()
         for prod in productions {
-            for sym in prod.symbols {
-                if !nonTerminals.contains(sym) {
-                    terminals.insert(sym)
-                }
+            for sym in prod.symbols where !nonTerminals.contains(sym) {
+                terminals.insert(sym)
             }
         }
         terminals.insert("$end")
@@ -448,10 +445,8 @@ public enum ParseTableCompiler: Sendable {
         nonTerminals: Set<String>
     ) -> [String: [Int]] {
         var index: [String: [Int]] = [:]
-        for (i, prod) in productions.enumerated() {
-            if nonTerminals.contains(prod.name) {
-                index[prod.name, default: []].append(i)
-            }
+        for (i, prod) in productions.enumerated() where nonTerminals.contains(prod.name) {
+            index[prod.name, default: []].append(i)
         }
         return index
     }

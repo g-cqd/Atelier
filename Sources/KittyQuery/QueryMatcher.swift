@@ -66,6 +66,7 @@ public enum QueryMatcher: Sendable {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     private static func matchPattern(
         _ pattern: QueryPattern,
         against node: SyntaxNode,
@@ -157,10 +158,8 @@ public enum QueryMatcher: Sendable {
 
         case .sequence(let patterns):
             var localCaptures = captures
-            for p in patterns {
-                if !matchPattern(p, against: node, source: source, captures: &localCaptures) {
-                    return false
-                }
+            for p in patterns where !matchPattern(p, against: node, source: source, captures: &localCaptures) {
+                return false
             }
             captures = localCaptures
             return true

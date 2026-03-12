@@ -10,8 +10,8 @@ public enum TextDisplayMetrics {
         for (offset, char) in line.enumerated() {
             if offset >= targetOffset { break }
             if char == "\t" {
-                let ts = max(1, tabSize)
-                column += ts - (column % ts)
+                let tabSpan = max(1, tabSize)
+                column += tabSpan - (column % tabSpan)
             } else {
                 column += UnicodeWidth.displayWidth(of: char)
             }
@@ -29,8 +29,8 @@ public enum TextDisplayMetrics {
         for (offset, char) in line.enumerated() {
             if column >= targetColumn { return offset }
             if char == "\t" {
-                let ts = max(1, tabSize)
-                column += ts - (column % ts)
+                let tabSpan = max(1, tabSize)
+                column += tabSpan - (column % tabSpan)
             } else {
                 column += UnicodeWidth.displayWidth(of: char)
             }
@@ -43,8 +43,8 @@ public enum TextDisplayMetrics {
         var column = 0
         for char in line {
             if char == "\t" {
-                let ts = max(1, tabSize)
-                column += ts - (column % ts)
+                let tabSpan = max(1, tabSize)
+                column += tabSpan - (column % tabSpan)
             } else {
                 column += UnicodeWidth.displayWidth(of: char)
             }

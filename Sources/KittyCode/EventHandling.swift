@@ -212,10 +212,10 @@ private func handlePasteRequest(state: EditorState) {
 private func handlePaste(_ text: String, state: EditorState) {
     let sanitized = TextSanitizer.sanitize(text)
 
-    if state.hasActiveSelection {
+    if state.hasActiveSelection, let selection = state.selection {
         let previousSnapshot = state.activeBufferSnapshot()
         let mutation = TextOperations.deleteRange(
-            in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
+            in: &state.textBuffer, at: &state.textCursor, selection: selection)
         state.textDidChange(mutation, previousSnapshot: previousSnapshot)
         state.clearSelection()
     }

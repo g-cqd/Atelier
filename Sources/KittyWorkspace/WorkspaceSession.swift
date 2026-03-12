@@ -16,7 +16,7 @@ public final class WorkspaceSession: ActiveDocumentView, WorkspaceCommands {
     public var fileName: String = ""
     public var filePath: String = ""
     public var currentLanguage: String?
-    public var currentLineEnding: TextDocument.LineEnding = .lf
+    public var currentLineEnding: TextDocument.LineEnding = .lineFeed
     public var highlightSession: LanguageHighlighter.Session?
     public var highlightedLines: [[StyledSpan]] = [[StyledSpan(text: "", style: .default)]]
 

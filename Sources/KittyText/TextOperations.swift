@@ -51,8 +51,7 @@ public enum TextOperations {
     /// The cursor moves to column 0 of the new line.
     @discardableResult
     public static func insertNewline(into buffer: inout TextBuffer, at cursor: inout TextCursor)
-        -> TextMutation
-    {
+        -> TextMutation {
         insert("\n", into: &buffer, at: &cursor)
     }
 
@@ -62,8 +61,7 @@ public enum TextOperations {
     /// line is merged into the previous line.
     @discardableResult
     public static func deleteBackward(in buffer: inout TextBuffer, at cursor: inout TextCursor)
-        -> TextMutation?
-    {
+        -> TextMutation? {
         if cursor.col > 0 {
             var line = buffer.line(at: cursor.row)
             let index = line.index(line.startIndex, offsetBy: cursor.col - 1)

@@ -12,6 +12,7 @@ reporter: xcode
 
 disabled_rules:
   - trailing_comma
+  - nesting
 
 opt_in_rules:
   - empty_count
@@ -25,3 +26,25 @@ opt_in_rules:
 
 analyzer_rules:
   - unused_import
+
+identifier_name:
+  min_length:
+    error: 3
+  max_length: 60
+  excluded:
+    - id
+
+large_tuple:
+  error: 3
+
+cyclomatic_complexity:
+  error: 15
+
+function_body_length:
+  error: 120
+
+file_length:
+  error: 500
+
+type_body_length:
+  error: 400

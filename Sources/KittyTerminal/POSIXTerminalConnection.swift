@@ -58,6 +58,7 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
         while offset < bytes.count {
             let n = retryOnInterrupt {
                 bytes.withUnsafeBufferPointer { buf in
+                    // swiftlint:disable:next force_unwrapping
                     Darwin.write(self.writeFd, buf.baseAddress! + offset, buf.count - offset)
                 }
             }
@@ -78,6 +79,7 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
         while offset < count {
             let n = retryOnInterrupt {
                 bytes.withUnsafeBufferPointer { buf in
+                    // swiftlint:disable:next force_unwrapping
                     Darwin.write(self.writeFd, buf.baseAddress! + offset, count - offset)
                 }
             }

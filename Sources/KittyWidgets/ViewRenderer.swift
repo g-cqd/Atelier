@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import KittyCodecs
 import KittyRenderer
 import KittySyntax
@@ -260,6 +261,7 @@ public enum ViewRenderer {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     private static func renderTextEditor(
         _ editor: TextEditor,
         into buffer: inout ScreenBuffer,
@@ -833,6 +835,7 @@ public enum ViewRenderer {
         return style
     }
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     private static func renderStyledLine(
         spans: [StyledSpan],
         into buffer: inout ScreenBuffer,

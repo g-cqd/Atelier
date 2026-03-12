@@ -64,8 +64,7 @@ public enum LanguageHighlighter: Sendable {
 
             if preferGrammar,
                 let language,
-                let artifacts = SyntaxArtifactsCache.artifacts(for: language)
-            {
+                let artifacts = SyntaxArtifactsCache.artifacts(for: language) {
                 strategy = .grammar(GrammarSession(artifacts: artifacts, theme: theme))
             } else {
                 strategy = .fallback
@@ -393,16 +392,14 @@ private enum HighlightLexicon {
 }
 
 private func fallbackHighlightDocument(source: String, language: String?, theme: Theme)
-    -> [[StyledSpan]]
-{
+    -> [[StyledSpan]] {
     let lines =
         source.isEmpty
         ? [""] : source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
     return lines.map { fallbackHighlightLine($0, language: language, theme: theme) }
 }
 
-private func fallbackHighlightLine(_ line: String, language: String?, theme: Theme) -> [StyledSpan]
-{
+private func fallbackHighlightLine(_ line: String, language: String?, theme: Theme) -> [StyledSpan] {
     switch language {
     case "json":
         return fallbackHighlightJSON(line, theme: theme)
@@ -459,16 +456,14 @@ private func fallbackHighlightJSON(_ line: String, theme: Theme) -> [StyledSpan]
             index += 1
             while index < chars.count
                 && (chars[index].isNumber || chars[index] == "." || chars[index] == "e"
-                    || chars[index] == "E" || chars[index] == "+" || chars[index] == "-")
-            {
+                    || chars[index] == "E" || chars[index] == "+" || chars[index] == "-") {
                 token.append(chars[index])
                 index += 1
             }
             spans.append(StyledSpan(text: token, style: numberStyle))
         } else if chars[index...].starts(with: "true".unicodeScalars.map(Character.init))
             || chars[index...].starts(with: "false".unicodeScalars.map(Character.init))
-            || chars[index...].starts(with: "null".unicodeScalars.map(Character.init))
-        {
+            || chars[index...].starts(with: "null".unicodeScalars.map(Character.init)) {
             let keyword = chars[index...].prefix(while: { $0.isLetter })
             let token = String(keyword)
             spans.append(StyledSpan(text: token, style: constantStyle))
@@ -503,8 +498,7 @@ private func fallbackHighlightPython(_ line: String, theme: Theme) -> [StyledSpa
         } else if HighlightLexicon.pythonTypes.contains(current) {
             style = typeStyle
         } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
-            let first = current.first, first.isNumber
-        {
+            let first = current.first, first.isNumber {
             style = numberStyle
         } else {
             style = defaultStyle
@@ -547,8 +541,7 @@ private func fallbackHighlightPython(_ line: String, theme: Theme) -> [StyledSpa
             var token = String(char)
             index += 1
             while index < chars.count
-                && (chars[index].isNumber || chars[index] == "." || chars[index] == "_")
-            {
+                && (chars[index].isNumber || chars[index] == "." || chars[index] == "_") {
                 token.append(chars[index])
                 index += 1
             }
@@ -589,8 +582,7 @@ private func fallbackHighlightJavaScript(_ line: String, theme: Theme) -> [Style
         } else if HighlightLexicon.javaScriptTypes.contains(current) {
             style = typeStyle
         } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
-            let first = current.first, first.isNumber
-        {
+            let first = current.first, first.isNumber {
             style = numberStyle
         } else {
             style = defaultStyle
@@ -637,8 +629,7 @@ private func fallbackHighlightJavaScript(_ line: String, theme: Theme) -> [Style
             var token = String(char)
             index += 1
             while index < chars.count
-                && (chars[index].isNumber || chars[index] == "." || chars[index] == "_")
-            {
+                && (chars[index].isNumber || chars[index] == "." || chars[index] == "_") {
                 token.append(chars[index])
                 index += 1
             }
@@ -737,8 +728,7 @@ private func fallbackHighlightSwift(_ line: String, theme: Theme) -> [StyledSpan
         } else if HighlightLexicon.swiftTypes.contains(current) {
             style = typeStyle
         } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
-            let first = current.first, first.isNumber
-        {
+            let first = current.first, first.isNumber {
             style = numberStyle
         } else {
             style = defaultStyle
@@ -777,8 +767,7 @@ private func fallbackHighlightSwift(_ line: String, theme: Theme) -> [StyledSpan
             current = "@"
             index += 1
             while index < chars.count
-                && (chars[index].isLetter || chars[index].isNumber || chars[index] == "_")
-            {
+                && (chars[index].isLetter || chars[index].isNumber || chars[index] == "_") {
                 current.append(chars[index])
                 index += 1
             }
