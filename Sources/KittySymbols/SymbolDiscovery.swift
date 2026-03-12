@@ -24,12 +24,14 @@ public struct SymbolDiscovery {
         let publicRecords = makeRecords(
             orderedNames: publicNames,
             visibility: .publicSymbol,
-            metadata: publicMetadata
+            metadata: publicMetadata,
+            codepointBase: 0x100000
         )
         let privateRecords = makeRecords(
             orderedNames: privateNames,
             visibility: .privateSymbol,
-            metadata: privateMetadata
+            metadata: privateMetadata,
+            codepointBase: 0x100000 + UInt32(publicNames.count)
         )
 
         return SymbolCollection(records: publicRecords + privateRecords)
@@ -47,10 +49,11 @@ public struct SymbolDiscovery {
     private func makeRecords(
         orderedNames: [String],
         visibility: SymbolRecord.Visibility,
-        metadata: SymbolMetadataLoader.Metadata
+        metadata: SymbolMetadataLoader.Metadata,
+        codepointBase: UInt32
     ) -> [SymbolRecord] {
         orderedNames.enumerated().map { index, name in
-            let codepoint = 0x100000 + UInt32(index)
+            let codepoint = codepointBase + UInt32(index)
             let glyph = UnicodeScalar(codepoint).map { String(Character($0)) }
             return SymbolRecord(
                 name: name,

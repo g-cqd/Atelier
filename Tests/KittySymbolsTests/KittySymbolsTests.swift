@@ -27,17 +27,17 @@ struct KittySymbolsTests {
     @Test
     func `Terminal symbol theme uses mapped glyphs`() {
         let catalog = SymbolCatalog(entries: [
-            "folder": SymbolMappingEntry(name: "folder", visibility: .publicSymbol, assetGlyphIndex: 77, codepoint: 0x100215),
-            "folder.badge.minus": SymbolMappingEntry(name: "folder.badge.minus", visibility: .publicSymbol, assetGlyphIndex: 78, codepoint: 0x100216),
-            "doc": SymbolMappingEntry(name: "doc", visibility: .publicSymbol, assetGlyphIndex: 575, codepoint: 0x10023F),
+            "folder": SymbolMappingEntry(name: "folder", visibility: .publicSymbol, assetGlyphIndex: 70, codepoint: 0x100046),
+            "folder.badge.minus": SymbolMappingEntry(name: "folder.badge.minus", visibility: .publicSymbol, assetGlyphIndex: 76, codepoint: 0x10004C),
+            "document": SymbolMappingEntry(name: "document", visibility: .publicSymbol, assetGlyphIndex: 154, codepoint: 0x10009A),
         ])
 
         let theme = TerminalSymbolTheme.make(symbolsEnabled: true, catalog: catalog)
 
         #expect(theme[.folderClosed].prefersSymbol)
-        #expect(theme[.folderClosed].text == "􀈕")
-        #expect(theme[.folderOpen].text == "􀈖")
-        #expect(theme[.file].text == "􀈿")
+        #expect(theme[.folderClosed].text == "\u{100046}")
+        #expect(theme[.folderOpen].text == "\u{10004C}")
+        #expect(theme[.file].text == "\u{10009A}")
     }
 
     @Test

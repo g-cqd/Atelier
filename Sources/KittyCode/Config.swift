@@ -57,6 +57,8 @@ struct KittyConfig: Codable, Sendable {
         var arrowKeysWrapAcrossLines: Bool = true
         var wrapLines: Bool = false
         var tabSize: Int = 4
+        var undoCoalescingEnabled: Bool = true
+        var undoCoalescingMilliseconds: Int = 400
         var scrollLines: Int? = nil
         var scrollHorizontalStep: Int = 4
         var scrollMomentumBlockMilliseconds: Int = 5
@@ -74,6 +76,8 @@ struct KittyConfig: Codable, Sendable {
             arrowKeysWrapAcrossLines = try c.decodeIfPresent(Bool.self, forKey: .arrowKeysWrapAcrossLines) ?? d.arrowKeysWrapAcrossLines
             wrapLines = try c.decodeIfPresent(Bool.self, forKey: .wrapLines) ?? d.wrapLines
             tabSize = try c.decodeIfPresent(Int.self, forKey: .tabSize) ?? d.tabSize
+            undoCoalescingEnabled = try c.decodeIfPresent(Bool.self, forKey: .undoCoalescingEnabled) ?? d.undoCoalescingEnabled
+            undoCoalescingMilliseconds = try c.decodeIfPresent(Int.self, forKey: .undoCoalescingMilliseconds) ?? d.undoCoalescingMilliseconds
             scrollLines = try c.decodeIfPresent(Int.self, forKey: .scrollLines)
             scrollHorizontalStep = try c.decodeIfPresent(Int.self, forKey: .scrollHorizontalStep) ?? d.scrollHorizontalStep
             scrollMomentumBlockMilliseconds = try c.decodeIfPresent(Int.self, forKey: .scrollMomentumBlockMilliseconds) ?? d.scrollMomentumBlockMilliseconds

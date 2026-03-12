@@ -99,6 +99,13 @@ public final class FileWatcherIntegration {
             buffer.cachedMaxLineWidth = nil
             buffer.cachedSerializedByteCount = nil
             buffer.documentVersion += 1
+            buffer.didInvalidateHistoryOnLastRefresh = buffer.editHistory.reconcileWithRefresh(
+                BufferEditSnapshot(
+                    textBuffer: buffer.textBuffer,
+                    textCursor: buffer.textCursor,
+                    lineEnding: buffer.lineEnding
+                )
+            )
 
             let lineCount = buffer.textBuffer.lineCount
             buffer.textCursor.row = min(buffer.textCursor.row, max(0, lineCount - 1))

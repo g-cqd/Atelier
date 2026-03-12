@@ -5,12 +5,44 @@ import KittyText
 struct EditorPrompt: Sendable, Equatable {
     enum Kind: Sendable, Equatable {
         case savePath
+        case createFile(inDirectory: String)
+        case createDirectory(inDirectory: String)
+        case rename(path: String)
+        case duplicate(path: String)
+        case move(path: String)
+        case confirmDelete(path: String)
     }
 
     var kind: Kind
     var promptText: String
     var input: String
     var message: String?
+
+    var isEditable: Bool {
+        switch kind {
+        case .confirmDelete:
+            return false
+        case .savePath, .createFile, .createDirectory, .rename, .duplicate, .move:
+            return true
+        }
+    }
+
+    var submitLabel: String {
+        switch kind {
+        case .savePath:
+            return "Save"
+        case .createFile, .createDirectory:
+            return "Create"
+        case .rename:
+            return "Rename"
+        case .duplicate:
+            return "Duplicate"
+        case .move:
+            return "Move"
+        case .confirmDelete:
+            return "Delete"
+        }
+    }
 
     var displayText: String {
         if let message {
@@ -26,7 +58,8 @@ extension EditorState {
     }
 
     var promptCursorOffset: Int? {
-        prompt.map { $0.displayText.count }
+        guard let prompt else { return nil }
+        return prompt.isEditable ? prompt.displayText.count : nil
     }
 
     func beginNewFile() {
@@ -62,6 +95,60 @@ extension EditorState {
         )
     }
 
+    func beginCreateFilePrompt(in directory: String) {
+        contextMenu = nil
+        prompt = EditorPrompt(
+            kind: .createFile(inDirectory: directory),
+            promptText: "New file: ",
+            input: promptDirectorySuggestion(for: directory)
+        )
+    }
+
+    func beginCreateDirectoryPrompt(in directory: String) {
+        contextMenu = nil
+        prompt = EditorPrompt(
+            kind: .createDirectory(inDirectory: directory),
+            promptText: "New folder: ",
+            input: promptDirectorySuggestion(for: directory)
+        )
+    }
+
+    func beginRenamePrompt(for path: String) {
+        contextMenu = nil
+        prompt = EditorPrompt(
+            kind: .rename(path: path),
+            promptText: "Rename to: ",
+            input: relativePathForPrompt(path)
+        )
+    }
+
+    func beginDuplicatePrompt(for path: String) {
+        contextMenu = nil
+        prompt = EditorPrompt(
+            kind: .duplicate(path: path),
+            promptText: "Duplicate to: ",
+            input: duplicateSuggestion(for: path)
+        )
+    }
+
+    func beginMovePrompt(for path: String) {
+        contextMenu = nil
+        prompt = EditorPrompt(
+            kind: .move(path: path),
+            promptText: "Move to: ",
+            input: relativePathForPrompt(path)
+        )
+    }
+
+    func beginDeletePrompt(for path: String) {
+        contextMenu = nil
+        prompt = EditorPrompt(
+            kind: .confirmDelete(path: path),
+            promptText: "Delete \(relativePathForPrompt(path))? ",
+            input: ""
+        )
+    }
+
     func handlePromptKey(_ key: KeyEvent) -> Bool {
         guard var prompt else { return false }
 
@@ -76,6 +163,7 @@ extension EditorState {
             statusMessage = "Canceled"
             return true
         case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
+            guard prompt.isEditable else { return true }
             if !prompt.input.isEmpty {
                 prompt.input.removeLast()
             }
@@ -83,6 +171,7 @@ extension EditorState {
             self.prompt = prompt
             return true
         default:
+            guard prompt.isEditable else { return true }
             let insertedText = promptText(for: key)
             guard !insertedText.isEmpty else { return true }
             prompt.input += insertedText
@@ -115,7 +204,76 @@ extension EditorState {
                 )
             }
             return saveSucceeded
+        case .createFile(let directory):
+            let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
+            return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
+                await self.createTreeFile(at: self.resolvePromptPath(trimmedPath), suggestedDirectory: directory)
+            }
+        case .createDirectory(let directory):
+            let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
+            return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
+                await self.createTreeDirectory(at: self.resolvePromptPath(trimmedPath), suggestedDirectory: directory)
+            }
+        case .rename(let path):
+            let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
+            return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
+                await self.renameTreeItem(from: path, to: self.resolvePromptPath(trimmedPath))
+            }
+        case .duplicate(let path):
+            let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
+            return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
+                await self.duplicateTreeItem(at: path, to: self.resolvePromptPath(trimmedPath))
+            }
+        case .move(let path):
+            let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
+            return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
+                await self.moveTreeItem(from: path, to: self.resolvePromptPath(trimmedPath))
+            }
+        case .confirmDelete(let path):
+            Task { @MainActor in
+                if !(await deleteTreeItem(at: path)) {
+                    self.prompt = EditorPrompt(
+                        kind: prompt.kind,
+                        promptText: prompt.promptText,
+                        input: prompt.input,
+                        message: self.statusMessage
+                    )
+                } else {
+                    self.prompt = nil
+                }
+            }
+            return false
         }
+    }
+
+    private func commitTreePathPrompt(
+        _ prompt: EditorPrompt,
+        trimmedPath: String,
+        operation: @escaping @MainActor () async -> Bool
+    ) -> Bool {
+        guard !trimmedPath.isEmpty else {
+            self.prompt = EditorPrompt(
+                kind: prompt.kind,
+                promptText: prompt.promptText,
+                input: prompt.input,
+                message: "Path required"
+            )
+            return false
+        }
+
+        Task { @MainActor in
+            if !(await operation()) {
+                self.prompt = EditorPrompt(
+                    kind: prompt.kind,
+                    promptText: prompt.promptText,
+                    input: prompt.input,
+                    message: self.statusMessage
+                )
+            } else {
+                self.prompt = nil
+            }
+        }
+        return false
     }
 
     private func defaultSavePathSuggestion() -> String {
@@ -160,5 +318,26 @@ extension EditorState {
 
         let character = Character(scalar)
         return character.isPrintable ? String(character) : ""
+    }
+
+    private func duplicateSuggestion(for path: String) -> String {
+        let url = URL(fileURLWithPath: path)
+        let directory = url.deletingLastPathComponent()
+        let fileName = url.deletingPathExtension().lastPathComponent
+        let fileExtension = url.pathExtension
+        let duplicatedName = if fileExtension.isEmpty {
+            fileName + " copy"
+        } else {
+            fileName + " copy." + fileExtension
+        }
+        return relativePathForPrompt(directory.appendingPathComponent(duplicatedName).path)
+    }
+
+    private func promptDirectorySuggestion(for directory: String) -> String {
+        let relativePath = relativePathForPrompt(directory)
+        if relativePath.isEmpty || relativePath == "." {
+            return ""
+        }
+        return relativePath.hasSuffix("/") ? relativePath : relativePath + "/"
     }
 }
