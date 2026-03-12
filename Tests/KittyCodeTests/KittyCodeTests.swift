@@ -1215,6 +1215,47 @@ struct MultiBufferIntegrationTests {
     }
 
     @Test
+    func `switching tabs isolates selection state per buffer`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        let state = EditorState(rootPath: ".", config: config)
+
+        state.bufferManager.open(
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "alpha\nbeta\ngamma",
+            language: nil
+        )
+        state.restoreStateFromActiveBuffer()
+        let firstSelection = TextSelection(
+            anchor: TextPosition(row: 1, col: 1),
+            head: TextPosition(row: 2, col: 3)
+        )
+        state.selection = firstSelection
+
+        state.saveStateToActiveBuffer()
+        state.bufferManager.open(
+            filePath: "/b.txt",
+            fileName: "b.txt",
+            content: "short",
+            language: nil
+        )
+        state.restoreStateFromActiveBuffer()
+
+        #expect(state.fileName == "b.txt")
+        #expect(state.selection == nil)
+
+        state.switchToTab(0)
+        #expect(state.fileName == "a.txt")
+        #expect(state.selection == firstSelection)
+
+        state.switchToTab(1)
+        #expect(state.fileName == "b.txt")
+        #expect(state.selection == nil)
+    }
+
+    @Test
     func `textDidChange marks active buffer dirty`() {
         var config = KittyConfig()
         config.activityBar.show = false

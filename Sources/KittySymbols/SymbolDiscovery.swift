@@ -1,3 +1,4 @@
+import CoreText
 import Foundation
 
 public struct SymbolDiscovery {
@@ -21,17 +22,19 @@ public struct SymbolDiscovery {
         let privateNames = try loadSymbolOrder(from: privateBundle)
         let privateMetadata = try metadataLoader.loadFrameworkMetadata(from: privateBundle)
 
+        let fontCodepoints = extractFontPUACodepoints()
+
         let publicRecords = makeRecords(
             orderedNames: publicNames,
             visibility: .publicSymbol,
             metadata: publicMetadata,
-            codepointBase: 0x100000
+            fontCodepoints: fontCodepoints
         )
         let privateRecords = makeRecords(
             orderedNames: privateNames,
             visibility: .privateSymbol,
             metadata: privateMetadata,
-            codepointBase: 0x100000 + UInt32(publicNames.count)
+            fontCodepoints: nil
         )
 
         return SymbolCollection(records: publicRecords + privateRecords)
@@ -50,11 +53,16 @@ public struct SymbolDiscovery {
         orderedNames: [String],
         visibility: SymbolRecord.Visibility,
         metadata: SymbolMetadataLoader.Metadata,
-        codepointBase: UInt32
+        fontCodepoints: [UInt32]?
     ) -> [SymbolRecord] {
         orderedNames.enumerated().map { index, name in
-            let codepoint = codepointBase + UInt32(index)
-            let glyph = UnicodeScalar(codepoint).map { String(Character($0)) }
+            let codepoint: UInt32?
+            if let fontCodepoints, index < fontCodepoints.count {
+                codepoint = fontCodepoints[index]
+            } else {
+                codepoint = nil
+            }
+            let glyph = codepoint.flatMap { UnicodeScalar($0) }.map { String(Character($0)) }
             return SymbolRecord(
                 name: name,
                 visibility: visibility,
@@ -66,6 +74,32 @@ public struct SymbolDiscovery {
                 searchTerms: metadata.searchTermsByName[name] ?? []
             )
         }
+    }
+
+    private func extractFontPUACodepoints() -> [UInt32]? {
+        let fontNames = ["SF Pro Display", "SF Pro", ".AppleSystemUIFont"]
+        var resolvedFont: CTFont?
+
+        for name in fontNames {
+            let candidate = CTFontCreateWithName(name as CFString, 12, nil)
+            let family = CTFontCopyFamilyName(candidate) as String
+            if family.contains("SF Pro") {
+                resolvedFont = candidate
+                break
+            }
+        }
+
+        guard let font = resolvedFont else { return nil }
+        let charset = CTFontCopyCharacterSet(font)
+
+        var codepoints: [UInt32] = []
+        for cp: UInt32 in 0x100000...0x103FFF {
+            if CFCharacterSetIsLongCharacterMember(charset, cp) {
+                codepoints.append(cp)
+            }
+        }
+
+        return codepoints.isEmpty ? nil : codepoints
     }
 
     private func locateFramework() throws -> URL {
