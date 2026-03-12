@@ -871,15 +871,18 @@ public enum ViewRenderer {
             }
         }
 
-        if whitespaceConfig.showLineBreaks && currentCol < col + availWidth {
-            let lbStyle = resolvedLineStyle(
-                from: whitespaceConfig.lineBreakStyle,
-                lineOverlay: lineOverlay,
-                isCurrentLine: isCurrentLine,
-                currentLineStyle: currentLineStyle
-            )
-            buffer[row, currentCol] = Cell(character: WhitespaceRenderer.lineBreakGlyph, style: lbStyle)
-            currentCol += 1
+        if currentCol < col + availWidth {
+            let inSel = selectionRange.map { $0.contains(charIndex) || charIndex <= $0.upperBound } ?? false
+            if whitespaceConfig.shouldShowLineBreaks(inSelection: inSel) {
+                let lbStyle = resolvedLineStyle(
+                    from: whitespaceConfig.lineBreakStyle,
+                    lineOverlay: lineOverlay,
+                    isCurrentLine: isCurrentLine,
+                    currentLineStyle: currentLineStyle
+                )
+                buffer[row, currentCol] = Cell(character: WhitespaceRenderer.lineBreakGlyph, style: lbStyle)
+                currentCol += 1
+            }
         }
 
         let fillStyle = resolvedLineStyle(
