@@ -49,7 +49,8 @@ public enum ViewRenderer {
     ) {
         let style = context.applyTo(text.style)
         fillRow(into: &buffer, row: rect.y, col: rect.x, width: rect.width, style: style)
-        buffer.write(String(text.content.prefix(rect.width)), row: rect.y, col: rect.x, style: style)
+        buffer.write(
+            String(text.content.prefix(rect.width)), row: rect.y, col: rect.x, style: style)
     }
 
     private static func renderStyledText(
@@ -58,7 +59,9 @@ public enum ViewRenderer {
         in rect: Rect,
         context: RenderContext
     ) {
-        fillRow(into: &buffer, row: rect.y, col: rect.x, width: rect.width, style: context.applyTo(.default))
+        fillRow(
+            into: &buffer, row: rect.y, col: rect.x, width: rect.width,
+            style: context.applyTo(.default))
         var col = rect.x
         let maxCol = rect.x + rect.width
         for span in view.spans {
@@ -107,7 +110,8 @@ public enum ViewRenderer {
             cell: Cell(character: indicator.style.trackCharacter, style: trackStyle)
         )
 
-        if let thumbRect = VerticalScrollIndicatorLayout.thumbRect(for: indicator.metrics, in: rect) {
+        if let thumbRect = VerticalScrollIndicatorLayout.thumbRect(for: indicator.metrics, in: rect)
+        {
             buffer.fill(
                 row: thumbRect.y,
                 col: thumbRect.x,
@@ -136,10 +140,13 @@ public enum ViewRenderer {
             cell: Cell(character: indicator.style.trackCharacter, style: trackStyle)
         )
 
-        if let thumbRect = HorizontalScrollIndicatorLayout.thumbRect(for: indicator.metrics, in: rect) {
+        if let thumbRect = HorizontalScrollIndicatorLayout.thumbRect(
+            for: indicator.metrics, in: rect)
+        {
             for col in thumbRect.x..<thumbRect.maxX {
                 guard col >= rect.x, col < rect.maxX else { continue }
-                buffer[thumbRect.y, col] = Cell(character: indicator.style.thumbCharacter, style: thumbStyle)
+                buffer[thumbRect.y, col] = Cell(
+                    character: indicator.style.thumbCharacter, style: thumbStyle)
             }
         }
     }
@@ -196,7 +203,8 @@ public enum ViewRenderer {
             offset: tree.scrollOffset,
             maxOffset: max(0, rows.count - 1)
         )
-        let showIndicator = tree.showsVerticalScrollIndicator && rect.width > 0 && rows.count > rect.height
+        let showIndicator =
+            tree.showsVerticalScrollIndicator && rect.width > 0 && rows.count > rect.height
         let contentWidth = max(0, rect.width - (showIndicator ? 1 : 0))
 
         guard !rows.isEmpty else {
@@ -215,7 +223,8 @@ public enum ViewRenderer {
             let indent = String(repeating: " ", count: row.depth * indentWidth)
             let labelText = indent + row.icon + row.label
             let line = String(labelText.prefix(contentWidth))
-            fillRow(into: &buffer, row: rect.y + offset, col: rect.x, width: rect.width, style: style)
+            fillRow(
+                into: &buffer, row: rect.y + offset, col: rect.x, width: rect.width, style: style)
             buffer.write(line, row: rect.y + offset, col: rect.x, style: style)
 
             if !row.suffix.isEmpty {
@@ -224,14 +233,18 @@ public enum ViewRenderer {
                 let suffixCol = rect.x + contentWidth - suffixLen - 1
                 if suffixCol > rect.x + labelLen {
                     let resolvedSuffixStyle = context.applyTo(row.suffixStyle)
-                    buffer.write(" " + row.suffix, row: rect.y + offset, col: suffixCol, style: resolvedSuffixStyle)
+                    buffer.write(
+                        " " + row.suffix, row: rect.y + offset, col: suffixCol,
+                        style: resolvedSuffixStyle)
                 }
             }
         }
 
         if visibleCount < rect.height {
             for offset in visibleCount..<rect.height {
-                fillRow(into: &buffer, row: rect.y + offset, col: rect.x, width: rect.width, style: normalStyle)
+                fillRow(
+                    into: &buffer, row: rect.y + offset, col: rect.x, width: rect.width,
+                    style: normalStyle)
             }
         }
 
@@ -277,7 +290,8 @@ public enum ViewRenderer {
                     contentWidth: max(1, contentWidth),
                     tabSize: editor.tabSize
                 )
-                let totalWidth = max(1, TextDisplayMetrics.displayWidth(of: line, tabSize: editor.tabSize))
+                let totalWidth = max(
+                    1, TextDisplayMetrics.displayWidth(of: line, tabSize: editor.tabSize))
                 let wrappedRows = rowStarts.count
                 let lineOverlay = editor.lineStyleOverlays[lineIndex]
                 let isCurrentLine = lineIndex == editor.cursorRow
@@ -294,7 +308,9 @@ public enum ViewRenderer {
                     currentLineStyle: currentLineStyle
                 )
 
-                let firstWrapRow = lineIndex == max(0, min(editor.scrollOffset, editor.lineCount)) ? editor.wrapRowOffset : 0
+                let firstWrapRow =
+                    lineIndex == max(0, min(editor.scrollOffset, editor.lineCount))
+                    ? editor.wrapRowOffset : 0
                 for wrapRow in firstWrapRow..<wrappedRows where screenRow < rect.height {
                     let row = rect.y + screenRow
                     if isCurrentLine || lineOverlay != nil {
@@ -323,7 +339,8 @@ public enum ViewRenderer {
                             )
                             if lineNumberColumnWidth > 0 {
                                 buffer.write(
-                                    formattedLineNumber(lineIndex + 1, width: lineNumberColumnWidth - 1) + " ",
+                                    formattedLineNumber(
+                                        lineIndex + 1, width: lineNumberColumnWidth - 1) + " ",
                                     row: row,
                                     col: rect.x + gutterDecorationWidth,
                                     style: resolvedLineNumberStyle
@@ -353,27 +370,41 @@ public enum ViewRenderer {
                         for char in span.text {
                             var displayChar = char
                             var charStyle = span.style
-                            var width = char == "\t" ? (wrapTabSize - (widthPos % wrapTabSize)) : UnicodeWidth.displayWidth(of: char)
+                            var width =
+                                char == "\t"
+                                ? (wrapTabSize - (widthPos % wrapTabSize))
+                                : UnicodeWidth.displayWidth(of: char)
 
                             if wsConfig.isEnabledOrSelectionAware {
-                                let inSelection = selectionRange.map { $0.contains(charIndex) } ?? false
-                                let category = WhitespaceRenderer.classify(char, isLeading: wrapIsLeading)
+                                let inSelection =
+                                    selectionRange.map { $0.contains(charIndex) } ?? false
+                                let category = WhitespaceRenderer.classify(
+                                    char, isLeading: wrapIsLeading)
                                 switch category {
                                 case .normal:
                                     wrapIsLeading = false
                                 case .indentSpace, .indentTab:
-                                    if wsConfig.shouldShowIndentation(inSelection: inSelection), let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                                    if wsConfig.shouldShowIndentation(inSelection: inSelection),
+                                        let glyph = WhitespaceRenderer.replacementGlyph(
+                                            for: category)
+                                    {
                                         displayChar = glyph
                                         charStyle = wsConfig.indentationStyle
                                         if width == 0 { width = 1 }
                                     }
                                 case .space:
-                                    if wsConfig.shouldShowSpaces(inSelection: inSelection), let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                                    if wsConfig.shouldShowSpaces(inSelection: inSelection),
+                                        let glyph = WhitespaceRenderer.replacementGlyph(
+                                            for: category)
+                                    {
                                         displayChar = glyph
                                         charStyle = wsConfig.spaceStyle
                                     }
                                 case .unexpectedInvisible:
-                                    if wsConfig.showUnexpected, let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                                    if wsConfig.showUnexpected,
+                                        let glyph = WhitespaceRenderer.replacementGlyph(
+                                            for: category)
+                                    {
                                         displayChar = glyph
                                         charStyle = wsConfig.unexpectedStyle
                                         if width == 0 { width = 1 }
@@ -383,7 +414,8 @@ public enum ViewRenderer {
                                 if char != " " && char != "\t" { wrapIsLeading = false }
                             }
 
-                            let isControl = displayChar.asciiValue.map({ $0 < 0x20 && $0 != 0 }) == true
+                            let isControl =
+                                displayChar.asciiValue.map({ $0 < 0x20 && $0 != 0 }) == true
                             if isControl {
                                 displayChar = " "
                                 if width == 0 { width = 1 }
@@ -415,8 +447,10 @@ public enum ViewRenderer {
                                         col += 1
                                     }
                                 } else if width == 2 && col + 1 < contentMaxX {
-                                    buffer[row, col] = Cell(character: displayChar, style: style, width: 2)
-                                    buffer[row, col + 1] = Cell(character: "\0", style: style, width: 0)
+                                    buffer[row, col] = Cell(
+                                        character: displayChar, style: style, width: 2)
+                                    buffer[row, col + 1] = Cell(
+                                        character: "\0", style: style, width: 0)
                                     col += 2
                                 } else if width == 1 {
                                     buffer[row, col] = Cell(character: displayChar, style: style)
@@ -429,7 +463,10 @@ public enum ViewRenderer {
                     }
 
                     if wrapRow == wrappedRows - 1 && col < contentMaxX {
-                        let inSel = selectionRange.map { $0.contains(charIndex) || charIndex <= $0.upperBound } ?? false
+                        let inSel =
+                            selectionRange.map {
+                                $0.contains(charIndex) || charIndex <= $0.upperBound
+                            } ?? false
                         if wsConfig.shouldShowLineBreaks(inSelection: inSel) {
                             let lbStyle = resolvedLineStyle(
                                 from: wsConfig.lineBreakStyle,
@@ -437,7 +474,8 @@ public enum ViewRenderer {
                                 isCurrentLine: isCurrentLine,
                                 currentLineStyle: currentLineStyle
                             )
-                            buffer[row, col] = Cell(character: WhitespaceRenderer.lineBreakGlyph, style: lbStyle)
+                            buffer[row, col] = Cell(
+                                character: WhitespaceRenderer.lineBreakGlyph, style: lbStyle)
                             col += 1
                         }
                     }
@@ -463,7 +501,9 @@ public enum ViewRenderer {
                         fallbackStyle: lineNumberStyle
                     )
                     if lineNumberColumnWidth > 0 {
-                        buffer.write("~", row: row, col: rect.x + gutterDecorationWidth, style: lineNumberStyle)
+                        buffer.write(
+                            "~", row: row, col: rect.x + gutterDecorationWidth,
+                            style: lineNumberStyle)
                         if lineNumberColumnWidth > 1 {
                             buffer.fill(
                                 row: row,
@@ -476,12 +516,16 @@ public enum ViewRenderer {
                     }
                 }
                 if contentWidth > 0 {
-                    buffer.fill(row: row, col: rect.x + gutterWidth, width: contentWidth, height: 1, cell: Cell(character: " ", style: editorStyle))
+                    buffer.fill(
+                        row: row, col: rect.x + gutterWidth, width: contentWidth, height: 1,
+                        cell: Cell(character: " ", style: editorStyle))
                 }
                 screenRow += 1
             }
 
-            if let indicatorRect = TextEditorLayout.verticalScrollIndicatorRect(for: editor, in: rect) {
+            if let indicatorRect = TextEditorLayout.verticalScrollIndicatorRect(
+                for: editor, in: rect)
+            {
                 VerticalScrollIndicator(
                     metrics: TextEditorLayout.verticalScrollMetrics(for: editor, in: rect),
                     style: editor.verticalScrollIndicatorStyle
@@ -508,7 +552,9 @@ public enum ViewRenderer {
                         fallbackStyle: lineNumberStyle
                     )
                     if lineNumberColumnWidth > 0 {
-                        buffer.write("~", row: row, col: rect.x + gutterDecorationWidth, style: lineNumberStyle)
+                        buffer.write(
+                            "~", row: row, col: rect.x + gutterDecorationWidth,
+                            style: lineNumberStyle)
                         if lineNumberColumnWidth > 1 {
                             buffer.fill(
                                 row: row,
@@ -521,7 +567,9 @@ public enum ViewRenderer {
                     }
                 }
                 if contentWidth > 0 {
-                    buffer.fill(row: row, col: rect.x + gutterWidth, width: contentWidth, height: 1, cell: Cell(character: " ", style: editorStyle))
+                    buffer.fill(
+                        row: row, col: rect.x + gutterWidth, width: contentWidth, height: 1,
+                        cell: Cell(character: " ", style: editorStyle))
                 }
                 continue
             }
@@ -636,7 +684,9 @@ public enum ViewRenderer {
             let screenRow = rect.y + row
 
             guard itemIdx < list.items.count else {
-                fillRow(into: &buffer, row: screenRow, col: rect.x, width: rect.width, style: normalStyle)
+                fillRow(
+                    into: &buffer, row: screenRow, col: rect.x, width: rect.width,
+                    style: normalStyle)
                 continue
             }
 
@@ -655,14 +705,16 @@ public enum ViewRenderer {
             if item.isDirty {
                 label += " \(list.style.dirtyIndicator)"
             }
-            let padded = String(label.prefix(contentWidth)).padding(toLength: contentWidth, withPad: " ", startingAt: 0)
+            let padded = String(label.prefix(contentWidth)).padding(
+                toLength: contentWidth, withPad: " ", startingAt: 0)
 
             fillRow(into: &buffer, row: screenRow, col: rect.x, width: rect.width, style: rowStyle)
             buffer.write(padded, row: screenRow, col: rect.x, style: rowStyle)
 
             if !item.suffix.isEmpty && indicatorCol < contentWidth {
                 let suffixStyle = context.applyTo(item.suffixStyle)
-                buffer.write(item.suffix, row: screenRow, col: rect.x + indicatorCol, style: suffixStyle)
+                buffer.write(
+                    item.suffix, row: screenRow, col: rect.x + indicatorCol, style: suffixStyle)
             }
         }
 
@@ -700,9 +752,12 @@ public enum ViewRenderer {
             let screenRow = rect.y + row
             if row == messageRow {
                 let leftPadding = max(0, (rect.width - centered.text.count) / 2)
-                let line = String(repeating: " ", count: leftPadding)
+                let line =
+                    String(repeating: " ", count: leftPadding)
                     + centered.text
-                    + String(repeating: " ", count: max(0, rect.width - leftPadding - centered.text.count))
+                    + String(
+                        repeating: " ",
+                        count: max(0, rect.width - leftPadding - centered.text.count))
                 buffer.write(
                     String(line.prefix(rect.width)),
                     row: screenRow,
@@ -710,7 +765,8 @@ public enum ViewRenderer {
                     style: textStyle
                 )
             } else {
-                fillRow(into: &buffer, row: screenRow, col: rect.x, width: rect.width, style: bgStyle)
+                fillRow(
+                    into: &buffer, row: screenRow, col: rect.x, width: rect.width, style: bgStyle)
             }
         }
     }
@@ -749,7 +805,9 @@ public enum ViewRenderer {
         style: Style
     ) {
         guard rect.width > 0, rect.height > 0 else { return }
-        buffer.fill(row: rect.y, col: rect.x, width: rect.width, height: rect.height, cell: Cell(character: " ", style: style))
+        buffer.fill(
+            row: rect.y, col: rect.x, width: rect.width, height: rect.height,
+            cell: Cell(character: " ", style: style))
     }
 
     private static func fillRow(
@@ -760,7 +818,8 @@ public enum ViewRenderer {
         style: Style
     ) {
         guard width > 0 else { return }
-        buffer.fill(row: row, col: col, width: width, height: 1, cell: Cell(character: " ", style: style))
+        buffer.fill(
+            row: row, col: col, width: width, height: 1, cell: Cell(character: " ", style: style))
     }
 
     private static func applySelectionStyle(_ selectionStyle: Style, to base: Style) -> Style {
@@ -802,7 +861,8 @@ public enum ViewRenderer {
                 let category: WhitespaceRenderer.CharCategory
                 var displayChar = char
                 var charStyle = span.style
-                var width = char == "\t" ? (ts - (currentX % ts)) : UnicodeWidth.displayWidth(of: char)
+                var width =
+                    char == "\t" ? (ts - (currentX % ts)) : UnicodeWidth.displayWidth(of: char)
 
                 if whitespaceConfig.isEnabledOrSelectionAware {
                     let inSelection = selectionRange.map { $0.contains(charIndex) } ?? false
@@ -811,18 +871,24 @@ public enum ViewRenderer {
                     case .normal:
                         isLeading = false
                     case .indentSpace, .indentTab:
-                        if whitespaceConfig.shouldShowIndentation(inSelection: inSelection), let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                        if whitespaceConfig.shouldShowIndentation(inSelection: inSelection),
+                            let glyph = WhitespaceRenderer.replacementGlyph(for: category)
+                        {
                             displayChar = glyph
                             charStyle = whitespaceConfig.indentationStyle
                             if width == 0 { width = 1 }
                         }
                     case .space:
-                        if whitespaceConfig.shouldShowSpaces(inSelection: inSelection), let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                        if whitespaceConfig.shouldShowSpaces(inSelection: inSelection),
+                            let glyph = WhitespaceRenderer.replacementGlyph(for: category)
+                        {
                             displayChar = glyph
                             charStyle = whitespaceConfig.spaceStyle
                         }
                     case .unexpectedInvisible:
-                        if whitespaceConfig.showUnexpected, let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                        if whitespaceConfig.showUnexpected,
+                            let glyph = WhitespaceRenderer.replacementGlyph(for: category)
+                        {
                             displayChar = glyph
                             charStyle = whitespaceConfig.unexpectedStyle
                             if width == 0 { width = 1 }
@@ -859,7 +925,8 @@ public enum ViewRenderer {
                             currentCol += 1
                         }
                     } else if width == 2 && currentCol + 1 < col + availWidth {
-                        buffer[row, currentCol] = Cell(character: displayChar, style: style, width: 2)
+                        buffer[row, currentCol] = Cell(
+                            character: displayChar, style: style, width: 2)
                         buffer[row, currentCol + 1] = Cell(character: "\0", style: style, width: 0)
                         currentCol += 2
                     } else if width == 1 {
@@ -873,7 +940,8 @@ public enum ViewRenderer {
         }
 
         if currentCol < col + availWidth {
-            let inSel = selectionRange.map { $0.contains(charIndex) || charIndex <= $0.upperBound } ?? false
+            let inSel =
+                selectionRange.map { $0.contains(charIndex) || charIndex <= $0.upperBound } ?? false
             if whitespaceConfig.shouldShowLineBreaks(inSelection: inSel) {
                 let lbStyle = resolvedLineStyle(
                     from: whitespaceConfig.lineBreakStyle,
@@ -881,7 +949,8 @@ public enum ViewRenderer {
                     isCurrentLine: isCurrentLine,
                     currentLineStyle: currentLineStyle
                 )
-                buffer[row, currentCol] = Cell(character: WhitespaceRenderer.lineBreakGlyph, style: lbStyle)
+                buffer[row, currentCol] = Cell(
+                    character: WhitespaceRenderer.lineBreakGlyph, style: lbStyle)
                 currentCol += 1
             }
         }
@@ -970,13 +1039,13 @@ public enum ViewRenderer {
         guard alpha > 0 else { return base }
         guard alpha < 1 else { return overlay.color }
 
-        guard case let .rgb(r: overlayRed, g: overlayGreen, b: overlayBlue) = overlay.color
+        guard case .rgb(r: let overlayRed, g: let overlayGreen, b: let overlayBlue) = overlay.color
         else {
             return overlay.color
         }
 
         let (baseRed, baseGreen, baseBlue): (UInt8, UInt8, UInt8)
-        if case let .rgb(r: r, g: g, b: b) = base {
+        if case .rgb(r: let r, g: let g, b: let b) = base {
             (baseRed, baseGreen, baseBlue) = (r, g, b)
         } else {
             (baseRed, baseGreen, baseBlue) = (0, 0, 0)
@@ -1093,9 +1162,13 @@ public enum ViewRenderer {
             let childRect: Rect
             switch stack.axis {
             case .vertical:
-                childRect = Rect(x: rect.x, y: rect.y + segment.offset, width: rect.width, height: segment.length)
+                childRect = Rect(
+                    x: rect.x, y: rect.y + segment.offset, width: rect.width, height: segment.length
+                )
             case .horizontal:
-                childRect = Rect(x: rect.x + segment.offset, y: rect.y, width: segment.length, height: rect.height)
+                childRect = Rect(
+                    x: rect.x + segment.offset, y: rect.y, width: segment.length,
+                    height: rect.height)
             }
 
             guard !childRect.isEmpty else { continue }
@@ -1103,7 +1176,9 @@ public enum ViewRenderer {
         }
     }
 
-    private static func segments(totalLength: Int, count: Int, spacing: Int) -> [(offset: Int, length: Int)] {
+    private static func segments(totalLength: Int, count: Int, spacing: Int) -> [(
+        offset: Int, length: Int
+    )] {
         guard count > 0 else { return [] }
 
         let resolvedSpacing = max(0, spacing)
@@ -1209,9 +1284,9 @@ extension TupleView: _TupleViewProtocol {
 extension ConditionalView: _ConditionalViewProtocol {
     fileprivate var activeView: any View {
         switch self {
-        case let .first(view):
+        case .first(let view):
             view
-        case let .second(view):
+        case .second(let view):
             view
         }
     }
@@ -1270,7 +1345,9 @@ extension TreeView: _TreeViewProtocol {
     fileprivate var normalStyle: Style { style.normalStyle }
     fileprivate var selectedStyle: Style { style.selectedStyle }
     fileprivate var indentWidth: Int { style.indent }
-    fileprivate var scrollIndicatorStyle: VerticalScrollIndicatorStyle { style.scrollIndicatorStyle }
+    fileprivate var scrollIndicatorStyle: VerticalScrollIndicatorStyle {
+        style.scrollIndicatorStyle
+    }
 }
 
 extension ScrollView: _ScrollViewProtocol {

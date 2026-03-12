@@ -46,7 +46,8 @@ final class FileTreeOperationHistory {
         defer { currentFingerprint = fingerprint }
 
         guard let currentFingerprint else { return false }
-        let invalidated = fingerprint != currentFingerprint && (!undoStack.isEmpty || !redoStack.isEmpty)
+        let invalidated =
+            fingerprint != currentFingerprint && (!undoStack.isEmpty || !redoStack.isEmpty)
         if invalidated {
             undoStack.removeAll(keepingCapacity: true)
             redoStack.removeAll(keepingCapacity: true)

@@ -1,6 +1,6 @@
 import Foundation
-import KittySync
 import KittyParser
+import KittySync
 
 /// Evaluates query predicates against captured nodes.
 public enum Predicates: Sendable {
@@ -15,27 +15,39 @@ public enum Predicates: Sendable {
     ) -> Bool {
         switch predicate {
         case .eq(let capture, let value):
-            guard let text = captureText(capture, captures: captures, source: source) else { return false }
+            guard let text = captureText(capture, captures: captures, source: source) else {
+                return false
+            }
             return text == value
 
         case .notEq(let capture, let value):
-            guard let text = captureText(capture, captures: captures, source: source) else { return false }
+            guard let text = captureText(capture, captures: captures, source: source) else {
+                return false
+            }
             return text != value
 
         case .match(let capture, let pattern):
-            guard let text = captureText(capture, captures: captures, source: source) else { return false }
+            guard let text = captureText(capture, captures: captures, source: source) else {
+                return false
+            }
             return matchRegex(text: text, pattern: pattern)
 
         case .notMatch(let capture, let pattern):
-            guard let text = captureText(capture, captures: captures, source: source) else { return false }
+            guard let text = captureText(capture, captures: captures, source: source) else {
+                return false
+            }
             return !matchRegex(text: text, pattern: pattern)
 
         case .anyOf(let capture, let values):
-            guard let text = captureText(capture, captures: captures, source: source) else { return false }
+            guard let text = captureText(capture, captures: captures, source: source) else {
+                return false
+            }
             return values.contains(text)
 
         case .contains(let capture, let value):
-            guard let text = captureText(capture, captures: captures, source: source) else { return false }
+            guard let text = captureText(capture, captures: captures, source: source) else {
+                return false
+            }
             return text.contains(value)
 
         case .is(let capture, let property):

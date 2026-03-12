@@ -51,7 +51,9 @@ public struct FileStatusSummary: Sendable, Equatable {
     public var deleted: Int
     public var conflicted: Int
 
-    public init(modified: Int = 0, added: Int = 0, untracked: Int = 0, deleted: Int = 0, conflicted: Int = 0) {
+    public init(
+        modified: Int = 0, added: Int = 0, untracked: Int = 0, deleted: Int = 0, conflicted: Int = 0
+    ) {
         self.modified = modified
         self.added = added
         self.untracked = untracked

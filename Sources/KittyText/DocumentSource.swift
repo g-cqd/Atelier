@@ -45,7 +45,8 @@ public struct ArrayDocumentSource: DocumentSource, Sendable {
         let clamped = range.clamped(to: 0..<storage.count)
         var maxWidth = 0
         for i in clamped {
-            maxWidth = max(maxWidth, TextDisplayMetrics.displayWidth(of: storage[i], tabSize: tabSize))
+            maxWidth = max(
+                maxWidth, TextDisplayMetrics.displayWidth(of: storage[i], tabSize: tabSize))
         }
         return maxWidth
     }

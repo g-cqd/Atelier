@@ -32,7 +32,8 @@ func renderTreePanel(
         let rowIndex = start + offset
         let entry = rows[rowIndex]
         let node = entry.node
-        let rowStyle = rowIndex == state.selectedTreeIndex
+        let rowStyle =
+            rowIndex == state.selectedTreeIndex
             ? selectedStyle
             : (node.isDirectory ? colorScheme.treeDir : normalStyle)
         let screenRow = treeRect.y + offset
@@ -82,7 +83,9 @@ func renderTreePanel(
         }
     }
 
-    if let indicatorRect = TreePanelLayout.verticalScrollIndicatorRect(rowCount: rowCount, in: treeRect) {
+    if let indicatorRect = TreePanelLayout.verticalScrollIndicatorRect(
+        rowCount: rowCount, in: treeRect)
+    {
         VerticalScrollIndicator(
             metrics: metrics,
             style: colorScheme.verticalScrollIndicator
@@ -92,7 +95,8 @@ func renderTreePanel(
 
 private func treeRowIcon(for node: FileNode, symbolTheme: TerminalSymbolTheme) -> String {
     if node.isDirectory {
-        return node.isExpanded ? symbolTheme[.folderOpen].text + " " : symbolTheme[.folderClosed].text + " "
+        return node.isExpanded
+            ? symbolTheme[.folderOpen].text + " " : symbolTheme[.folderClosed].text + " "
     }
 
     return symbolTheme[.file].text + " "

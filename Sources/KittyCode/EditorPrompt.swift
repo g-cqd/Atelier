@@ -207,12 +207,14 @@ extension EditorState {
         case .createFile(let directory):
             let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
             return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
-                await self.createTreeFile(at: self.resolvePromptPath(trimmedPath), suggestedDirectory: directory)
+                await self.createTreeFile(
+                    at: self.resolvePromptPath(trimmedPath), suggestedDirectory: directory)
             }
         case .createDirectory(let directory):
             let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
             return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
-                await self.createTreeDirectory(at: self.resolvePromptPath(trimmedPath), suggestedDirectory: directory)
+                await self.createTreeDirectory(
+                    at: self.resolvePromptPath(trimmedPath), suggestedDirectory: directory)
             }
         case .rename(let path):
             let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -312,7 +314,8 @@ extension EditorState {
             return key.associatedText
         }
 
-        guard key.modifiers.isEmpty, key.keyCode < 256, let scalar = UnicodeScalar(key.keyCode) else {
+        guard key.modifiers.isEmpty, key.keyCode < 256, let scalar = UnicodeScalar(key.keyCode)
+        else {
             return ""
         }
 
@@ -325,11 +328,12 @@ extension EditorState {
         let directory = url.deletingLastPathComponent()
         let fileName = url.deletingPathExtension().lastPathComponent
         let fileExtension = url.pathExtension
-        let duplicatedName = if fileExtension.isEmpty {
-            fileName + " copy"
-        } else {
-            fileName + " copy." + fileExtension
-        }
+        let duplicatedName =
+            if fileExtension.isEmpty {
+                fileName + " copy"
+            } else {
+                fileName + " copy." + fileExtension
+            }
         return relativePathForPrompt(directory.appendingPathComponent(duplicatedName).path)
     }
 

@@ -37,14 +37,19 @@ public enum WhitespaceRenderer {
         /// considering both the global flag and selection state.
         @inline(__always)
         public func shouldShowIndentation(inSelection: Bool) -> Bool {
-            showIndentation || (inSelection && (selectionVisibility == .indentation || selectionVisibility == .all || selectionVisibility == .boundary))
+            showIndentation
+                || (inSelection
+                    && (selectionVisibility == .indentation || selectionVisibility == .all
+                        || selectionVisibility == .boundary))
         }
 
         /// Returns `true` if spaces should be shown for the given character,
         /// considering both the global flag and selection state.
         @inline(__always)
         public func shouldShowSpaces(inSelection: Bool) -> Bool {
-            showSpaces || (inSelection && (selectionVisibility == .all || selectionVisibility == .boundary))
+            showSpaces
+                || (inSelection
+                    && (selectionVisibility == .all || selectionVisibility == .boundary))
         }
 
         /// Returns `true` if line breaks should be shown,
@@ -122,15 +127,15 @@ public enum WhitespaceRenderer {
         case .normal:
             return nil
         case .indentSpace:
-            return "\u{00B7}" // ·
+            return "\u{00B7}"  // ·
         case .indentTab:
-            return "\u{2192}" // →
+            return "\u{2192}"  // →
         case .space:
-            return "\u{00B7}" // ·
+            return "\u{00B7}"  // ·
         case .unexpectedInvisible:
-            return "\u{2300}" // ⌀
+            return "\u{2300}"  // ⌀
         }
     }
 
-    public static let lineBreakGlyph: Character = "\u{00B6}" // ¶
+    public static let lineBreakGlyph: Character = "\u{00B6}"  // ¶
 }

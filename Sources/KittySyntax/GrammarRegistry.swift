@@ -4,9 +4,12 @@ import KittyGrammar
 /// Maps file extensions to grammar definitions.
 /// Loads `languages.json` and auto-discovers grammar bundles.
 public actor GrammarRegistry {
-    private var entries: [String: LanguageEntry] = [:]  // extension → entry
-    private var loadedGrammars: [String: GrammarDefinition] = [:]  // language name → grammar
-    private var compiledTables: [String: ParseTableCompiler.CompilationResult] = [:]  // language name → compiled result
+    // extension → entry
+    private var entries: [String: LanguageEntry] = [:]
+    // language name → grammar
+    private var loadedGrammars: [String: GrammarDefinition] = [:]
+    // language name → compiled result
+    private var compiledTables: [String: ParseTableCompiler.CompilationResult] = [:]
 
     public struct LanguageEntry: Sendable, Equatable {
         public var name: String
@@ -49,8 +52,9 @@ public actor GrammarRegistry {
         }
         for item in array {
             guard let name = item["name"] as? String,
-                  let extensions = item["extensions"] as? [String],
-                  let path = item["path"] as? String else { continue }
+                let extensions = item["extensions"] as? [String],
+                let path = item["path"] as? String
+            else { continue }
             register(LanguageEntry(name: name, extensions: extensions, path: path))
         }
     }
@@ -62,7 +66,9 @@ public actor GrammarRegistry {
     }
 
     /// Load and cache a grammar definition for a language.
-    public func grammar(for languageName: String, grammarsPath: String) throws(GrammarError) -> GrammarDefinition {
+    public func grammar(for languageName: String, grammarsPath: String) throws(GrammarError)
+        -> GrammarDefinition
+    {
         if let cached = loadedGrammars[languageName] { return cached }
 
         let entry = entries.values.first { $0.name == languageName }

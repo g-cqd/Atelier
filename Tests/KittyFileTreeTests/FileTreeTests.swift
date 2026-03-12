@@ -1,5 +1,6 @@
-import Testing
 import Foundation
+import Testing
+
 @testable import KittyFileTree
 
 // MARK: - Tags
@@ -51,12 +52,14 @@ struct FileNodeTests {
     }
 
     @Test func `icon for collapsed directory returns [+]`() {
-        let node = FileNode(name: "Sources", path: "/root/Sources", isDirectory: true, isExpanded: false)
+        let node = FileNode(
+            name: "Sources", path: "/root/Sources", isDirectory: true, isExpanded: false)
         #expect(node.icon == "[+]")
     }
 
     @Test func `icon for expanded directory returns [-]`() {
-        let node = FileNode(name: "Sources", path: "/root/Sources", isDirectory: true, isExpanded: true)
+        let node = FileNode(
+            name: "Sources", path: "/root/Sources", isDirectory: true, isExpanded: true)
         #expect(node.icon == "[-]")
     }
 
@@ -165,7 +168,7 @@ struct DirectoryScannerTests {
 
     @Test func `scan respects maxEntries limit`() throws {
         let tree = try TempTree()
-        for i in 1 ... 10 {
+        for i in 1...10 {
             try tree.createFile(named: "file\(i).txt")
         }
 
@@ -281,7 +284,9 @@ struct FileTreeNavigatorTests {
         children: [FileNode] = [],
         isExpanded: Bool = false
     ) -> FileNode {
-        FileNode(name: name, path: path + "/\(name)", isDirectory: true, children: children, isExpanded: isExpanded)
+        FileNode(
+            name: name, path: path + "/\(name)", isDirectory: true, children: children,
+            isExpanded: isExpanded)
     }
 
     // MARK: flatten
@@ -395,7 +400,8 @@ struct FileTreeNavigatorTests {
     }
 
     @Test func `toggleExpand recurses into nested directories`() {
-        let inner = FileNode(name: "inner", path: "/r/outer/inner", isDirectory: true, isExpanded: false)
+        let inner = FileNode(
+            name: "inner", path: "/r/outer/inner", isDirectory: true, isExpanded: false)
         var nodes: [FileNode] = [
             FileNode(
                 name: "outer",

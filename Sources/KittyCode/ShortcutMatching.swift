@@ -37,12 +37,13 @@ func isConfiguredRedoShortcut(_ key: KeyEvent, config: KittyConfig) -> Bool {
         key,
         letter: AsciiKey.y,
         modifier: config.keybindings.historyModifier
-    ) || matchesConfiguredShortcut(
-        key,
-        letter: AsciiKey.z,
-        modifier: config.keybindings.historyModifier,
-        requiresShift: true
     )
+        || matchesConfiguredShortcut(
+            key,
+            letter: AsciiKey.z,
+            modifier: config.keybindings.historyModifier,
+            requiresShift: true
+        )
 }
 
 private func matchesConfiguredShortcut(
@@ -56,7 +57,8 @@ private func matchesConfiguredShortcut(
     }
 
     let normalizedModifiers = normalizedShortcutModifiers(key.modifiers)
-    return expectedShortcutModifiers(for: modifier, requiresShift: requiresShift).contains(normalizedModifiers)
+    return expectedShortcutModifiers(for: modifier, requiresShift: requiresShift).contains(
+        normalizedModifiers)
 }
 
 private func matchesShortcutKey(_ key: KeyEvent, letter: UInt32) -> Bool {
@@ -71,14 +73,15 @@ private func expectedShortcutModifiers(
     for modifier: KittyConfig.KeybindingsConfig.ShortcutModifier,
     requiresShift: Bool
 ) -> [KeyModifiers] {
-    let baseModifiers: [KeyModifiers] = switch modifier {
-    case .command:
-        [.super, .meta]
-    case .control:
-        [.ctrl]
-    case .both:
-        [.super, .meta, .ctrl]
-    }
+    let baseModifiers: [KeyModifiers] =
+        switch modifier {
+        case .command:
+            [.super, .meta]
+        case .control:
+            [.ctrl]
+        case .both:
+            [.super, .meta, .ctrl]
+        }
 
     if requiresShift {
         return baseModifiers.map { $0.union(.shift) }

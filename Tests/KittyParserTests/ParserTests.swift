@@ -1,7 +1,8 @@
-import Testing
 import Foundation
-@testable import KittyParser
+import Testing
+
 @testable import KittyGrammar
+@testable import KittyParser
 
 @Suite
 struct SyntaxNodeTests {
@@ -106,9 +107,13 @@ struct TextEditTests {
         let edited = tree.applying(edit: edit)
 
         #expect(edited.root.children[1].byteRange == 4..<7)
-        #expect(edited.root.children[1].pointRange == Point(row: 1, column: 0)..<Point(row: 1, column: 3))
+        #expect(
+            edited.root.children[1].pointRange == Point(
+                row: 1, column: 0)..<Point(row: 1, column: 3))
         #expect(edited.root.fields["rhs"]?.first?.byteRange == 4..<7)
-        #expect(edited.root.fields["rhs"]?.first?.pointRange == Point(row: 1, column: 0)..<Point(row: 1, column: 3))
+        #expect(
+            edited.root.fields["rhs"]?.first?.pointRange == Point(
+                row: 1, column: 0)..<Point(row: 1, column: 3))
     }
 }
 
@@ -137,14 +142,15 @@ struct LexerTests {
     func `Tokenize skips whitespace`() {
         let lexer = Lexer(lexTable: LexTable())
         let tokens = lexer.tokenize("a b")
-        #expect(tokens.count == 3) // 'a', whitespace, 'b'
+        #expect(tokens.count == 3)  // 'a', whitespace, 'b'
         #expect(tokens[1].isExtra)
     }
 }
 
 @Suite
 struct LexerCommentTokenizationTests {
-    private func makeLexTable(comments: [CommentPattern], keywords: [String: Int] = [:]) -> LexTable {
+    private func makeLexTable(comments: [CommentPattern], keywords: [String: Int] = [:]) -> LexTable
+    {
         var states: [LexState] = []
         if !keywords.isEmpty {
             states = buildTrieStates(keywords: keywords)
@@ -248,7 +254,8 @@ struct LexerCommentTokenizationTests {
     func `Comment is matched before keyword when at same position`() {
         let lexTable = LexTable(
             states: LexTableCompiler.compile(
-                GrammarDefinition(name: "t", rules: [("s", .choice([.string("if"), .string("//")]))])
+                GrammarDefinition(
+                    name: "t", rules: [("s", .choice([.string("if"), .string("//")]))])
             ).states,
             keywords: ["if": 0, "//": 1],
             commentPatterns: [.line(prefix: "//")]
@@ -292,13 +299,13 @@ struct GLRParserTests {
     func `Parse produces syntax tree`() throws {
         // Build a minimal grammar and parse table
         let json = """
-        {
-            "name": "minimal",
-            "rules": {
-                "source": {"type": "STRING", "value": "hello"}
+            {
+                "name": "minimal",
+                "rules": {
+                    "source": {"type": "STRING", "value": "hello"}
+                }
             }
-        }
-        """
+            """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let result = try ParseTableCompiler.compile(grammar)
 
@@ -321,7 +328,8 @@ struct GLRParserTests {
                 ProductionRule(name: "_start", symbolCount: 1, symbols: ["Good"]),
                 ProductionRule(name: "Bad", symbolCount: 2, symbols: ["a", "ERROR"]),
                 ProductionRule(name: "BadSingle", symbolCount: 1, symbols: ["ERROR"]),
-                ProductionRule(name: "Good", symbolCount: 2, symbols: ["a", "b"], fields: [1: "rhs"]),
+                ProductionRule(
+                    name: "Good", symbolCount: 2, symbols: ["a", "b"], fields: [1: "rhs"]),
             ]
         )
 
@@ -338,24 +346,24 @@ struct GLRParserCommentNodesTests {
     @Test
     func `Comment tokens appear as extra nodes in the tree`() throws {
         let json = """
-        {
-            "name": "comment_tree_test",
-            "rules": {
-                "source": {"type": "STRING", "value": "x"},
-                "comment": {
-                    "type": "TOKEN",
-                    "content": {
-                        "type": "PATTERN",
-                        "value": "\\\\/\\\\/[^\\\\n]*"
+            {
+                "name": "comment_tree_test",
+                "rules": {
+                    "source": {"type": "STRING", "value": "x"},
+                    "comment": {
+                        "type": "TOKEN",
+                        "content": {
+                            "type": "PATTERN",
+                            "value": "\\\\/\\\\/[^\\\\n]*"
+                        }
                     }
-                }
-            },
-            "extras": [
-                {"type": "PATTERN", "value": "\\\\s+"},
-                {"type": "SYMBOL", "name": "comment"}
-            ]
-        }
-        """
+                },
+                "extras": [
+                    {"type": "PATTERN", "value": "\\\\s+"},
+                    {"type": "SYMBOL", "name": "comment"}
+                ]
+            }
+            """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let result = try ParseTableCompiler.compile(grammar)
 
@@ -376,30 +384,30 @@ struct GLRParserCommentNodesTests {
     @Test
     func `Multiple comments produce multiple extra nodes`() throws {
         let json = """
-        {
-            "name": "multi_comment_test",
-            "rules": {
-                "source": {
-                    "type": "SEQ",
-                    "members": [
-                        {"type": "STRING", "value": "x"},
-                        {"type": "STRING", "value": "x"}
-                    ]
-                },
-                "comment": {
-                    "type": "TOKEN",
-                    "content": {
-                        "type": "PATTERN",
-                        "value": "\\\\/\\\\/[^\\\\n]*"
+            {
+                "name": "multi_comment_test",
+                "rules": {
+                    "source": {
+                        "type": "SEQ",
+                        "members": [
+                            {"type": "STRING", "value": "x"},
+                            {"type": "STRING", "value": "x"}
+                        ]
+                    },
+                    "comment": {
+                        "type": "TOKEN",
+                        "content": {
+                            "type": "PATTERN",
+                            "value": "\\\\/\\\\/[^\\\\n]*"
+                        }
                     }
-                }
-            },
-            "extras": [
-                {"type": "PATTERN", "value": "\\\\s+"},
-                {"type": "SYMBOL", "name": "comment"}
-            ]
-        }
-        """
+                },
+                "extras": [
+                    {"type": "PATTERN", "value": "\\\\s+"},
+                    {"type": "SYMBOL", "name": "comment"}
+                ]
+            }
+            """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let result = try ParseTableCompiler.compile(grammar)
 
@@ -420,13 +428,13 @@ struct IncrementalParserTests {
     @Test
     func `Incremental parse produces tree`() throws {
         let json = """
-        {
-            "name": "inc_test",
-            "rules": {
-                "source": {"type": "STRING", "value": "x"}
+            {
+                "name": "inc_test",
+                "rules": {
+                    "source": {"type": "STRING", "value": "x"}
+                }
             }
-        }
-        """
+            """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let result = try ParseTableCompiler.compile(grammar)
 

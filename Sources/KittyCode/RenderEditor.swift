@@ -51,7 +51,9 @@ func renderEditorPanel(
         cursorRow: state.cursorRow,
         cursorCol: state.cursorCol,
         showLineNumbers: true,
-        showsGutterDecorations: state.config.git.enabled && state.config.git.decorations.showLineChanges && state.gitLineDecorationProvider != nil,
+        showsGutterDecorations: state.config.git.enabled
+            && state.config.git.decorations.showLineChanges
+            && state.gitLineDecorationProvider != nil,
         gutterDecorations: gutterDecorations,
         wrapLines: state.config.editor.wrapLines,
         showsVerticalScrollIndicator: true,
@@ -84,7 +86,7 @@ private func activeGutterDecorations(
     colorScheme: EditorState.ColorScheme
 ) -> [Int: TextEditor.GutterDecoration] {
     guard let decorations = state.bufferManager.activeBuffer?.gitLineDecorations.markers,
-          !decorations.isEmpty
+        !decorations.isEmpty
     else {
         return [:]
     }
