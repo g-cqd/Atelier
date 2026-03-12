@@ -40,8 +40,9 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
                 // shift+navigation: fall through to extend selection below
             } else if !isShiftHeld {
                 // Editing key: delete the selection, then proceed with the key action
+                let previousSnapshot = state.activeBufferSnapshot()
                 let mutation = TextOperations.deleteRange(in: &state.textBuffer, at: &state.textCursor, selection: state.selection!)
-                state.textDidChange(mutation)
+                state.textDidChange(mutation, previousSnapshot: previousSnapshot)
                 state.clearSelection()
                 didDeleteSelection = true
             }
@@ -151,16 +152,20 @@ func handleEditorKey(_ key: KeyEvent, state: EditorState, contentRows: Int, pipe
         state.cursorCol = min(state.cursorCol, rowLength)
         shouldEnsureVisible = true
     case Key.enter.rawValue, Key.enterAlt.rawValue:
+        let previousSnapshot = state.activeBufferSnapshot()
         let mutation = TextOperations.insertNewline(into: &state.textBuffer, at: &state.textCursor)
-        state.textDidChange(mutation)
+        state.textDidChange(mutation, previousSnapshot: previousSnapshot)
         shouldEnsureVisible = true
     case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
         if didDeleteSelection {
             // Selection was already deleted; don't also delete backward
             shouldEnsureVisible = true
-        } else if let mutation = TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor) {
-            state.textDidChange(mutation)
-            shouldEnsureVisible = true
+        } else {
+            let previousSnapshot = state.activeBufferSnapshot()
+            if let mutation = TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor) {
+                state.textDidChange(mutation, previousSnapshot: previousSnapshot)
+                shouldEnsureVisible = true
+            }
         }
     case AsciiKey.g where key.modifiers == .shift:
         state.cursorRow = max(0, state.fileLineCount - 1)

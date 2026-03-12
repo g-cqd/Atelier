@@ -29,6 +29,8 @@ public enum AsciiKey {
     public static let q: UInt32 = 0x71
     public static let w: UInt32 = 0x77
     public static let x: UInt32 = 0x78
+    public static let y: UInt32 = 0x79
+    public static let z: UInt32 = 0x7A
     public static let colon: UInt32 = 0x3A
     public static let escape: UInt32 = 27
 }
