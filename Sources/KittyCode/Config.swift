@@ -35,10 +35,18 @@ struct KittyConfig: Codable, Sendable {
     }
 
     struct KeybindingsConfig: Codable, Sendable {
+        enum ShortcutModifier: String, Codable, Sendable {
+            case command
+            case control
+            case both
+        }
+
         var tabNext: String = "ctrl+pagedown"
         var tabPrev: String = "ctrl+pageup"
         var tabClose: String? = nil
         var toggleSidebar: String = "ctrl+b"
+        var clipboardModifier: ShortcutModifier = .command
+        var historyModifier: ShortcutModifier = .command
 
         init() {}
 
@@ -49,6 +57,8 @@ struct KittyConfig: Codable, Sendable {
             tabPrev = try c.decodeIfPresent(String.self, forKey: .tabPrev) ?? d.tabPrev
             tabClose = try c.decodeIfPresent(String.self, forKey: .tabClose) ?? d.tabClose
             toggleSidebar = try c.decodeIfPresent(String.self, forKey: .toggleSidebar) ?? d.toggleSidebar
+            clipboardModifier = try c.decodeIfPresent(ShortcutModifier.self, forKey: .clipboardModifier) ?? d.clipboardModifier
+            historyModifier = try c.decodeIfPresent(ShortcutModifier.self, forKey: .historyModifier) ?? d.historyModifier
         }
     }
 

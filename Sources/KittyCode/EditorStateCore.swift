@@ -679,7 +679,13 @@ final class EditorState {
     var fileTreeHistory = FileTreeOperationHistory()
 
     var maxLineWidth: Int {
-        cachedMaxLineWidth ?? 0
+        if let cachedMaxLineWidth {
+            return cachedMaxLineWidth
+        }
+
+        let computed = TextDocument.computeMaxLineWidth(in: textBuffer, tabSize: config.editor.tabSize)
+        cachedMaxLineWidth = computed
+        return computed
     }
 
     var hasActiveSelection: Bool {
@@ -726,6 +732,11 @@ final class EditorState {
     }
 
     private func widenCachedMaxLineWidth(for range: Range<Int>) {
+        guard let cachedWidth = cachedMaxLineWidth else {
+            cachedMaxLineWidth = TextDocument.computeMaxLineWidth(in: textBuffer, tabSize: config.editor.tabSize)
+            return
+        }
+
         let lowerBound = max(0, range.lowerBound)
         let upperBound = min(fileLineCount, range.upperBound)
         guard lowerBound < upperBound else { return }
@@ -734,7 +745,7 @@ final class EditorState {
             max(partial, UnicodeWidth.displayWidth(of: textBuffer.line(at: lineIndex)))
         }
 
-        cachedMaxLineWidth = max(cachedMaxLineWidth ?? 0, widenedWidth)
+        cachedMaxLineWidth = max(cachedWidth, widenedWidth)
     }
 
     func noteSelectedPath(_ path: String, isDirectory: Bool) {
