@@ -92,6 +92,7 @@ public final class FileWatcherIntegration {
             buffer.textBuffer = TextBuffer(content)
             buffer.lineEnding = loadedFile.lineEnding
             buffer.lastModifiedDate = diskDate
+            buffer.selection = nil
             buffer.highlightedLines = []
             buffer.highlightSession = nil
             buffer.cachedFileLines = nil

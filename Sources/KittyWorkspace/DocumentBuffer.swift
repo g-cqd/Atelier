@@ -13,6 +13,7 @@ public final class DocumentBuffer {
     public var gitLineDecorations: GitLineDecorations = .empty
     public var postOpenProcessingTask: Task<Void, Never>?
     public var didInvalidateHistoryOnLastRefresh: Bool = false
+    public var selection: TextSelection?
 
     public var textBuffer: TextBuffer {
         get { document.textBuffer }
