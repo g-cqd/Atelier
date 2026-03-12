@@ -367,6 +367,7 @@ extension EditorState {
 
         let buffer = bufferManager.buffers[newIndex]
         buffer.lastModifiedDate = modificationDate
+        buffer.selection = nil
         buffer.highlightedLines = []
         buffer.highlightSession = nil
         buffer.cachedMaxLineWidth = nil

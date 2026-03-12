@@ -671,7 +671,10 @@ final class EditorState {
     var scrollAccelerationTask: Task<Void, Never>?
     var isLoadingGrammar = false
     var wrapCache = WrapCache()
-    var selection: TextSelection?
+    var selection: TextSelection? {
+        get { bufferManager.activeBuffer?.selection }
+        set { bufferManager.activeBuffer?.selection = newValue }
+    }
     var terminalWriter: (([UInt8]) -> Void)?
     var fileTreeHistory = FileTreeOperationHistory()
 
