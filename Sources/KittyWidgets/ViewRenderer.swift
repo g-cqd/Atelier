@@ -355,19 +355,20 @@ public enum ViewRenderer {
                             var charStyle = span.style
                             var width = char == "\t" ? (wrapTabSize - (widthPos % wrapTabSize)) : UnicodeWidth.displayWidth(of: char)
 
-                            if wsConfig.isEnabled {
+                            if wsConfig.isEnabledOrSelectionAware {
+                                let inSelection = selectionRange.map { $0.contains(charIndex) } ?? false
                                 let category = WhitespaceRenderer.classify(char, isLeading: wrapIsLeading)
                                 switch category {
                                 case .normal:
                                     wrapIsLeading = false
                                 case .indentSpace, .indentTab:
-                                    if wsConfig.showIndentation, let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                                    if wsConfig.shouldShowIndentation(inSelection: inSelection), let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
                                         displayChar = glyph
                                         charStyle = wsConfig.indentationStyle
                                         if width == 0 { width = 1 }
                                     }
                                 case .space:
-                                    if wsConfig.showSpaces, let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                                    if wsConfig.shouldShowSpaces(inSelection: inSelection), let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
                                         displayChar = glyph
                                         charStyle = wsConfig.spaceStyle
                                     }
@@ -426,15 +427,18 @@ public enum ViewRenderer {
                         }
                     }
 
-                    if wsConfig.showLineBreaks && wrapRow == wrappedRows - 1 && col < contentMaxX {
-                        let lbStyle = resolvedLineStyle(
-                            from: wsConfig.lineBreakStyle,
-                            lineOverlay: lineOverlay,
-                            isCurrentLine: isCurrentLine,
-                            currentLineStyle: currentLineStyle
-                        )
-                        buffer[row, col] = Cell(character: WhitespaceRenderer.lineBreakGlyph, style: lbStyle)
-                        col += 1
+                    if wrapRow == wrappedRows - 1 && col < contentMaxX {
+                        let inSel = selectionRange.map { $0.contains(charIndex) || charIndex <= $0.upperBound } ?? false
+                        if wsConfig.shouldShowLineBreaks(inSelection: inSel) {
+                            let lbStyle = resolvedLineStyle(
+                                from: wsConfig.lineBreakStyle,
+                                lineOverlay: lineOverlay,
+                                isCurrentLine: isCurrentLine,
+                                currentLineStyle: currentLineStyle
+                            )
+                            buffer[row, col] = Cell(character: WhitespaceRenderer.lineBreakGlyph, style: lbStyle)
+                            col += 1
+                        }
                     }
 
                     while col < contentMaxX {
@@ -799,19 +803,20 @@ public enum ViewRenderer {
                 var charStyle = span.style
                 var width = char == "\t" ? (ts - (currentX % ts)) : UnicodeWidth.displayWidth(of: char)
 
-                if whitespaceConfig.isEnabled {
+                if whitespaceConfig.isEnabledOrSelectionAware {
+                    let inSelection = selectionRange.map { $0.contains(charIndex) } ?? false
                     category = WhitespaceRenderer.classify(char, isLeading: isLeading)
                     switch category {
                     case .normal:
                         isLeading = false
                     case .indentSpace, .indentTab:
-                        if whitespaceConfig.showIndentation, let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                        if whitespaceConfig.shouldShowIndentation(inSelection: inSelection), let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
                             displayChar = glyph
                             charStyle = whitespaceConfig.indentationStyle
                             if width == 0 { width = 1 }
                         }
                     case .space:
-                        if whitespaceConfig.showSpaces, let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
+                        if whitespaceConfig.shouldShowSpaces(inSelection: inSelection), let glyph = WhitespaceRenderer.replacementGlyph(for: category) {
                             displayChar = glyph
                             charStyle = whitespaceConfig.spaceStyle
                         }

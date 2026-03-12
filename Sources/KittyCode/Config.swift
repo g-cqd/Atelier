@@ -200,11 +200,23 @@ struct KittyConfig: Codable, Sendable {
         }
     }
 
+    enum WhitespaceVisibility: String, Codable, Sendable {
+        /// Show no whitespace in the selection.
+        case none
+        /// Show only leading indentation (spaces and tabs).
+        case indentation
+        /// Show indentation + mid-line/trailing spaces.
+        case all
+        /// Show indentation + spaces + line-break markers.
+        case boundary
+    }
+
     struct WhitespaceConfig: Codable, Sendable {
         var showIndentation: Bool = false
         var showSpaces: Bool = false
         var showLineBreaks: Bool = false
         var showUnexpected: Bool = true
+        var selectionWhitespace: WhitespaceVisibility = .none
 
         init() {}
 
@@ -215,6 +227,7 @@ struct KittyConfig: Codable, Sendable {
             showSpaces = try c.decodeIfPresent(Bool.self, forKey: .showSpaces) ?? d.showSpaces
             showLineBreaks = try c.decodeIfPresent(Bool.self, forKey: .showLineBreaks) ?? d.showLineBreaks
             showUnexpected = try c.decodeIfPresent(Bool.self, forKey: .showUnexpected) ?? d.showUnexpected
+            selectionWhitespace = try c.decodeIfPresent(WhitespaceVisibility.self, forKey: .selectionWhitespace) ?? d.selectionWhitespace
         }
     }
 
