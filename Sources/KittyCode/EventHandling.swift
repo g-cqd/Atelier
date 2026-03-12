@@ -54,8 +54,10 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
             return true
         }
 
-        if key.eventType == .press, isConfiguredCutShortcut(key, config: state.config), state.hasActiveSelection {
-            handleCut(state: state)
+        if key.eventType == .press, isConfiguredCutShortcut(key, config: state.config) {
+            if state.hasActiveSelection {
+                handleCut(state: state)
+            }
             return true
         }
 
