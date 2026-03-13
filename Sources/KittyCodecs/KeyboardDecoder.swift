@@ -218,7 +218,7 @@ public struct KeyboardDecoder: Sendable {
         let text: String
         if hasText {
             let scalars = textCodepoints.compactMap { UnicodeScalar($0) }
-            text = String(scalars.map { Character($0) })
+            text = scalars.map(String.init).joined()
         } else {
             text = ""
         }

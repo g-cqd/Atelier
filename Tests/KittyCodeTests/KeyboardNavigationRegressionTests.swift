@@ -183,4 +183,49 @@ struct KeyboardNavigationRegressionTests {
         #expect(repeatedHandled)
         #expect(sut.state.mode == .tree)
     }
+
+    @Test
+    func `plain g inserts text in non-vim editor mode`() {
+        let sut = makeSUT(fileContent: ["hello"])
+
+        let handled = handleEvent(
+            event: .key(KeyEvent(keyCode: AsciiKey.g)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(handled)
+        #expect(sut.state.fileContent == ["ghello"])
+        #expect(sut.state.cursorRow == 0)
+        #expect(sut.state.cursorCol == 1)
+    }
+
+    @Test
+    func `shift g remains a vim normal navigation command only`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        config.keybindingMode = .vim
+
+        let state = EditorState(rootPath: ".", config: config)
+        state.mode = .editor
+        state.vimMode = .normal
+        state.fileContent = ["one", "two", "three"]
+        state.cursorRow = 0
+        let pipeline = RenderPipeline(
+            connection: MockTerminalConnection(size: TerminalSize(columns: 40, rows: 10)),
+            columns: 40,
+            rows: 10
+        )
+
+        let handled = handleEvent(
+            event: .key(KeyEvent(keyCode: AsciiKey.g, modifiers: .shift, associatedText: "G")),
+            state: state,
+            pipeline: pipeline
+        )
+
+        #expect(handled)
+        #expect(state.cursorRow == 2)
+        #expect(state.fileContent == ["one", "two", "three"])
+    }
 }

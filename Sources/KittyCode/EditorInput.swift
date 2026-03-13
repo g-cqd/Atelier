@@ -87,6 +87,9 @@ func handleEditorKey(
             if state.statusMessage == ":" {
                 state.saveFile()
             }
+        case AsciiKey.g where key.modifiers == .shift:
+            state.cursorRow = max(0, state.fileLineCount - 1)
+            shouldEnsureVisible = true
         default:
             break
         }
@@ -170,30 +173,10 @@ func handleEditorKey(
                 shouldEnsureVisible = true
             }
         }
-    case AsciiKey.g where key.modifiers == .shift:
-        state.cursorRow = max(0, state.fileLineCount - 1)
-        shouldEnsureVisible = true
-    case AsciiKey.g where key.modifiers == []:
-        state.cursorRow = 0
-        state.cursorCol = 0
-        state.scrollOffset = 0
-        shouldEnsureVisible = true
     default:
-        if !key.associatedText.isEmpty {
-            insertText(key.associatedText, into: state)
+        if let insertedText = textInsertion(for: key, allowTab: true) {
+            insertText(insertedText, into: state)
             shouldEnsureVisible = true
-        } else if key.keyCode == 9 {
-            insertText("\t", into: state)
-            shouldEnsureVisible = true
-        } else if key.keyCode < 256,
-            key.modifiers.intersection([.ctrl, .super, .hyper, .meta]).isEmpty,
-            let scalar = UnicodeScalar(key.keyCode)
-        {
-            let char = Character(scalar)
-            if char.isPrintable {
-                insertText(String(char), into: state)
-                shouldEnsureVisible = true
-            }
         }
     }
 
@@ -227,21 +210,6 @@ private func shouldReplaceSelectionBeforeHandling(_ key: KeyEvent) -> Bool {
         Key.backspaceAlt.rawValue, 9:
         return true
     default:
-        break
+        return textInsertion(for: key, allowTab: true) != nil
     }
-
-    if !key.associatedText.isEmpty {
-        return true
-    }
-
-    let shortcutModifiers: KeyModifiers = [.alt, .ctrl, .super, .hyper, .meta]
-    if !key.modifiers.intersection(shortcutModifiers).isEmpty {
-        return false
-    }
-
-    guard key.keyCode < 256, let scalar = UnicodeScalar(key.keyCode) else {
-        return false
-    }
-
-    return Character(scalar).isPrintable
 }
