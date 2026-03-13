@@ -20,6 +20,28 @@ struct SequenceRouterTests {
     }
 
     @Test
+    func `Routes 4-byte UTF-8 text without truncating the scalar`() throws {
+        var router = makeSUT()
+        let events = router.feedAll(Array("😀".utf8))
+
+        let key = try requireKeyEvent(events)
+        #expect(key.keyCode == 0x1F600)
+        #expect(key.modifiers == [])
+        #expect(key.associatedText == "😀")
+    }
+
+    @Test
+    func `Routes ESC-prefixed UTF-8 text as alt modified text`() throws {
+        var router = makeSUT()
+        let events = router.feedAll([0x1b] + Array("é".utf8))
+
+        let key = try requireKeyEvent(events)
+        #expect(key.keyCode == 0x00E9)
+        #expect(key.modifiers == .alt)
+        #expect(key.associatedText == "é")
+    }
+
+    @Test
     func `Routes mouse sequence`() throws {
         var router = makeSUT()
         let bytes: [UInt8] = [0x1b, 0x5b, 0x3c, 0x30, 0x3b, 0x31, 0x30, 0x3b, 0x35, 0x4d]

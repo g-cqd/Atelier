@@ -46,6 +46,7 @@ public struct SequenceRouter: Sendable {
     private var routeState: RouteState = .ground
     private var utf8Buffer: [UInt8] = []
     private var utf8ExpectedBytes: Int = 0
+    private var utf8Modifiers: KeyModifiers = []
 
     public init() {}
 
@@ -65,18 +66,8 @@ public struct SequenceRouter: Sendable {
                 if case .complete(let key) = keyboardDecoder.feed(byte) {
                     events.append(.key(key))
                 }
-            } else if (byte & 0b1110_0000) == 0b1100_0000 {
-                utf8Buffer = [byte]
-                utf8ExpectedBytes = 2
-                routeState = .utf8Sequence
-            } else if (byte & 0b1110_0000) == 0b1110_0000 {
-                utf8Buffer = [byte]
-                utf8ExpectedBytes = 3
-                routeState = .utf8Sequence
-            } else if (byte & 0b1111_0000) == 0b1111_0000 {
-                utf8Buffer = [byte]
-                utf8ExpectedBytes = 4
-                routeState = .utf8Sequence
+            } else if let expectedBytes = Self.utf8ExpectedBytes(for: byte) {
+                beginUTF8Sequence(with: byte, expectedBytes: expectedBytes, modifiers: [])
             }
 
         case .escape:
@@ -90,8 +81,12 @@ public struct SequenceRouter: Sendable {
             case 0x4f:
                 routeState = .ss3
             default:
-                events.append(contentsOf: decodeKeyboardSequence(buffer))
-                resetRouting()
+                if let expectedBytes = Self.utf8ExpectedBytes(for: byte) {
+                    beginUTF8Sequence(with: byte, expectedBytes: expectedBytes, modifiers: .alt)
+                } else {
+                    events.append(contentsOf: decodeKeyboardSequence(buffer))
+                    resetRouting()
+                }
             }
 
         case .csi:
@@ -254,6 +249,7 @@ public struct SequenceRouter: Sendable {
                 if let scalar = text.unicodeScalars.first {
                     let event = KeyEvent(
                         keyCode: UInt32(scalar.value),
+                        modifiers: utf8Modifiers,
                         associatedText: text
                     )
                     events.append(.key(event))
@@ -315,6 +311,31 @@ public struct SequenceRouter: Sendable {
         buffer.removeAll(keepingCapacity: true)
         utf8Buffer.removeAll(keepingCapacity: true)
         utf8ExpectedBytes = 0
+        utf8Modifiers = []
+    }
+
+    private mutating func beginUTF8Sequence(
+        with firstByte: UInt8,
+        expectedBytes: Int,
+        modifiers: KeyModifiers
+    ) {
+        utf8Buffer = [firstByte]
+        utf8ExpectedBytes = expectedBytes
+        utf8Modifiers = modifiers
+        routeState = .utf8Sequence
+    }
+
+    private static func utf8ExpectedBytes(for byte: UInt8) -> Int? {
+        switch byte {
+        case 0b1100_0000...0b1101_1111:
+            2
+        case 0b1110_0000...0b1110_1111:
+            3
+        case 0b1111_0000...0b1111_0111:
+            4
+        default:
+            nil
+        }
     }
 
     private static func csiKeyCode(for terminator: UInt8) -> UInt32? {
