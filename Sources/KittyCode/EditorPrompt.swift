@@ -310,17 +310,7 @@ extension EditorState {
     }
 
     private func promptText(for key: KeyEvent) -> String {
-        if !key.associatedText.isEmpty {
-            return key.associatedText
-        }
-
-        guard key.modifiers.isEmpty, key.keyCode < 256, let scalar = UnicodeScalar(key.keyCode)
-        else {
-            return ""
-        }
-
-        let character = Character(scalar)
-        return character.isPrintable ? String(character) : ""
+        textInsertion(for: key) ?? ""
     }
 
     private func duplicateSuggestion(for path: String) -> String {

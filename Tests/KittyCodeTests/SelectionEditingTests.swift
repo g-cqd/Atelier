@@ -144,6 +144,21 @@ struct SelectionEditingTests {
         #expect(!sut.state.hasActiveSelection)
     }
 
+    @Test
+    func `unicode scalar fallback replaces active selection`() {
+        let sut = makeSUT(fileContent: ["hello world"])
+        setSelection(sut.state, from: (0, 0), to: (0, 5))
+
+        _ = handleEvent(
+            event: .key(KeyEvent(keyCode: 0x1F600)),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(sut.state.fileContent == ["😀 world"])
+        #expect(!sut.state.hasActiveSelection)
+    }
+
     // MARK: Read-only mode
 
     @Test

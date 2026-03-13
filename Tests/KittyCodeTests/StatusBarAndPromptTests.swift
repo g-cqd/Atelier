@@ -30,6 +30,28 @@ struct StatusBarAndPromptTests {
     }
 
     @Test
+    func `prompt accepts alt modified unicode fallback text`() {
+        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let pipeline = RenderPipeline(
+            connection: MockTerminalConnection(size: TerminalSize(columns: 40, rows: 10)),
+            columns: 40,
+            rows: 10
+        )
+
+        state.beginNewFile()
+        state.beginSavePrompt()
+
+        let handled = handleEvent(
+            event: .key(KeyEvent(keyCode: 0x00E9, modifiers: .alt)),
+            state: state,
+            pipeline: pipeline
+        )
+
+        #expect(handled)
+        #expect(state.prompt?.input.hasSuffix("é") == true)
+    }
+
+    @Test
     func `statusBarSegments render configured file metadata`() {
         var config = KittyConfig()
         config.statusBar.leftItems = [.file]

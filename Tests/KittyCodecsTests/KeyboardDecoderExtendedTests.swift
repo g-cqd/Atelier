@@ -28,4 +28,18 @@ struct KeyboardDecoderExtendedTests {
         #expect(event.modifiers == [])
         #expect(event.associatedText == "")
     }
+
+    @Test
+    func `CSI u text codepoints preserve combining scalar sequences`() throws {
+        var decoder = KeyboardDecoder()
+        let bytes = Array("\u{1B}[101;1;101:769u".utf8)
+
+        for byte in bytes.dropLast() {
+            #expect(decoder.feed(byte) == .pending)
+        }
+
+        let event = try requireCompletedKeyboardEvent(decoder.feed(bytes.last!))
+        #expect(event.keyCode == 101)
+        #expect(event.associatedText == "e\u{301}")
+    }
 }
