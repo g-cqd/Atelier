@@ -160,25 +160,49 @@ private func renderInFileResults(
         let isSelected = state.searchPanelFocus == .resultsList
             && matchIdx == state.searchPanelSelectedIndex
         let isActive = matchIdx == search.activeMatchIndex
-        let style: Style
+        let rowStyle: Style
         if isSelected {
-            style = colorScheme.treeSelected
+            rowStyle = colorScheme.treeSelected
         } else if isActive {
-            style = colorScheme.activeSearchMatch
+            rowStyle = colorScheme.activeSearchMatch
         } else {
-            style = colorScheme.treeBg
+            rowStyle = colorScheme.treeBg
         }
 
         if isSelected || isActive {
-            let rowBgCell = Cell(character: " ", style: style)
+            let rowBgCell = Cell(character: " ", style: rowStyle)
             pipeline.buffer.fill(
                 row: displayRow, col: rect.x, width: rect.width, height: 1, cell: rowBgCell)
         }
 
         pipeline.buffer.write(
             lineNum, row: displayRow, col: rect.x + 1, style: colorScheme.lineNumber)
-        pipeline.buffer.write(
-            snippet, row: displayRow, col: rect.x + 1 + lineNum.count, style: style)
+
+        let snippetCol = rect.x + 1 + lineNum.count
+        pipeline.buffer.write(snippet, row: displayRow, col: snippetCol, style: rowStyle)
+
+        // Highlight the matched text span within the snippet
+        if match.row >= 0, match.row < lines.count {
+            let line = lines[match.row]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let leadingWhitespace = line.count - trimmed.count
+            let matchStartInSnippet = max(0, match.colStart - leadingWhitespace)
+            let matchEndInSnippet = max(0, match.colEnd - leadingWhitespace)
+            let snippetWidth = max(0, rect.width - lineNum.count - 2)
+            if matchStartInSnippet < snippetWidth, matchEndInSnippet > 0 {
+                let highlightStart = max(0, matchStartInSnippet)
+                let highlightEnd = min(snippetWidth, matchEndInSnippet)
+                if highlightStart < highlightEnd {
+                    let matchStyle = isActive ? colorScheme.activeSearchMatch : colorScheme.searchMatch
+                    let chars = Array(trimmed)
+                    let startIdx = min(highlightStart, chars.count)
+                    let endIdx = min(highlightEnd, chars.count)
+                    let matchText = String(chars[startIdx..<endIdx])
+                    pipeline.buffer.write(
+                        matchText, row: displayRow, col: snippetCol + highlightStart, style: matchStyle)
+                }
+            }
+        }
     }
 }
 
@@ -241,18 +265,43 @@ private func renderWorkspaceResults(
 
                 let isSelected = state.searchPanelFocus == .resultsList
                     && flatIndex == state.searchPanelSelectedIndex
-                let style = isSelected ? colorScheme.treeSelected : colorScheme.treeBg
+                let rowStyle = isSelected ? colorScheme.treeSelected : colorScheme.treeBg
 
                 if isSelected {
-                    let rowBgCell = Cell(character: " ", style: style)
+                    let rowBgCell = Cell(character: " ", style: rowStyle)
                     pipeline.buffer.fill(
                         row: displayRow, col: rect.x, width: rect.width, height: 1, cell: rowBgCell)
                 }
 
+                let snippetCol = rect.x + 1 + lineNum.count
                 pipeline.buffer.write(
                     lineNum, row: displayRow, col: rect.x + 1, style: colorScheme.lineNumber)
-                pipeline.buffer.write(
-                    snippet, row: displayRow, col: rect.x + 1 + lineNum.count, style: style)
+                pipeline.buffer.write(snippet, row: displayRow, col: snippetCol, style: rowStyle)
+
+                // Highlight matched span within snippet
+                if snippetIdx >= 0, snippetIdx < fileResult.contextSnippets.count {
+                    let snippetText = fileResult.contextSnippets[snippetIdx]
+                    let trimmed = snippetText.trimmingCharacters(in: .whitespaces)
+                    let leadingWS = snippetText.count - trimmed.count
+                    let snippetWidth = max(0, rect.width - lineNum.count - 2)
+                    let mStart = max(0, match.colStart - leadingWS)
+                    let mEnd = max(0, match.colEnd - leadingWS)
+                    if mStart < snippetWidth, mEnd > 0 {
+                        let hStart = max(0, mStart)
+                        let hEnd = min(snippetWidth, mEnd)
+                        if hStart < hEnd {
+                            let matchStyle = isSelected
+                                ? colorScheme.activeSearchMatch : colorScheme.searchMatch
+                            let chars = Array(trimmed)
+                            let sIdx = min(hStart, chars.count)
+                            let eIdx = min(hEnd, chars.count)
+                            let matchText = String(chars[sIdx..<eIdx])
+                            pipeline.buffer.write(
+                                matchText, row: displayRow, col: snippetCol + hStart,
+                                style: matchStyle)
+                        }
+                    }
+                }
                 displayedRows += 1
             }
             flatIndex += 1

@@ -66,6 +66,15 @@ enum CommandID: String, CaseIterable, Sendable {
     case vimMoveRight
     case vimGotoLastLine
 
+    var isTreeNavigation: Bool {
+        switch self {
+        case .treeDown, .treeUp:
+            return true
+        default:
+            return false
+        }
+    }
+
     var isEditorNavigation: Bool {
         switch self {
         case .editorMoveDown, .editorMoveUp, .editorMoveLeft, .editorMoveRight,

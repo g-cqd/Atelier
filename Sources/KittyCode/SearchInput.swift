@@ -185,11 +185,13 @@ func handleSearchPanelKey(
                 } else if let search = state.inFileSearch, !search.matches.isEmpty {
                     state.searchPanelFocus = .resultsList
                     state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
+                    ensureSearchResultVisible(state: state)
                 }
             case .replaceField:
                 if let search = state.inFileSearch, !search.matches.isEmpty {
                     state.searchPanelFocus = .resultsList
                     state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
+                    ensureSearchResultVisible(state: state)
                 } else {
                     state.searchPanelFocus = .findField
                     state.searchPanelSelectedIndex = -1
@@ -231,11 +233,14 @@ private func handleSearchPanelFindFieldKey(
             if let search = state.inFileSearch, !search.matches.isEmpty {
                 state.searchPanelFocus = .resultsList
                 state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
+                state.searchPanelScrollOffset = 0
+                ensureSearchResultVisible(state: state)
             }
         } else {
             if !state.workspaceSearchResults.isEmpty {
                 state.searchPanelFocus = .resultsList
                 state.searchPanelSelectedIndex = 0
+                state.searchPanelScrollOffset = 0
             }
         }
         return true
@@ -245,11 +250,14 @@ private func handleSearchPanelFindFieldKey(
             if let search = state.inFileSearch, !search.matches.isEmpty {
                 state.searchPanelFocus = .resultsList
                 state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
+                state.searchPanelScrollOffset = 0
+                ensureSearchResultVisible(state: state)
             }
         } else {
             if !state.workspaceSearchResults.isEmpty {
                 state.searchPanelFocus = .resultsList
                 state.searchPanelSelectedIndex = 0
+                state.searchPanelScrollOffset = 0
             }
         }
         return true
@@ -318,6 +326,7 @@ private func handleSearchPanelReplaceFieldKey(
         if let search = state.inFileSearch, !search.matches.isEmpty {
             state.searchPanelFocus = .resultsList
             state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
+            ensureSearchResultVisible(state: state)
         }
         return true
 
@@ -355,6 +364,7 @@ private func handleSearchPanelResultsListKey(
         } else {
             state.searchPanelSelectedIndex -= 1
             state.inFileSearch?.activeMatchIndex = state.searchPanelSelectedIndex
+            ensureSearchResultVisible(state: state)
             if let match = state.inFileSearch?.activeMatch {
                 jumpToMatch(match, state: state, pipeline: pipeline)
             }
@@ -366,6 +376,7 @@ private func handleSearchPanelResultsListKey(
         if state.searchPanelSelectedIndex < maxIdx {
             state.searchPanelSelectedIndex += 1
             state.inFileSearch?.activeMatchIndex = state.searchPanelSelectedIndex
+            ensureSearchResultVisible(state: state)
             if let match = state.inFileSearch?.activeMatch {
                 jumpToMatch(match, state: state, pipeline: pipeline)
             }
@@ -425,12 +436,14 @@ private func handleWorkspaceResultsListKey(
             state.searchPanelSelectedIndex = -1
         } else {
             state.searchPanelSelectedIndex -= 1
+            ensureSearchResultVisible(state: state)
         }
         return true
 
     case Key.down.rawValue:
         if state.searchPanelSelectedIndex < flatCount - 1 {
             state.searchPanelSelectedIndex += 1
+            ensureSearchResultVisible(state: state)
         }
         return true
 
@@ -454,6 +467,28 @@ private func handleWorkspaceResultsListKey(
         state.searchPanelScrollOffset = 0
         triggerWorkspaceSearchDebounced(state: state)
         return true
+    }
+}
+
+// MARK: - Search scroll visibility
+
+@MainActor
+func ensureSearchResultVisible(state: EditorState) {
+    let idx = state.searchPanelSelectedIndex
+    guard idx >= 0 else { return }
+
+    // The search panel uses approximately 5 header rows (header, query, toggles, summary, blank).
+    // The visible results area height depends on the panel rect, but we estimate a reasonable
+    // viewport height here. The actual viewport is `availRows` in renderSearchPanel.
+    // We use the last known render dimensions to approximate.
+    let headerRows = 5
+    let panelHeight = state.lastRenderRows - 2  // minus status bar and title bar
+    let availRows = max(1, panelHeight - headerRows)
+
+    if idx < state.searchPanelScrollOffset {
+        state.searchPanelScrollOffset = idx
+    } else if idx >= state.searchPanelScrollOffset + availRows {
+        state.searchPanelScrollOffset = idx - availRows + 1
     }
 }
 

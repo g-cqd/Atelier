@@ -37,6 +37,26 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
             let isRepeat = key.eventType == .repeat
             let resolver = KeymapResolver(config: state.config)
             if let command = resolver.resolve(stroke, context: context, isRepeat: isRepeat) {
+                // Throttle repeat events for navigation commands
+                if isRepeat, command.isEditorNavigation || command.isTreeNavigation {
+                    let interval = state.config.editor.keyRepeatIntervalMilliseconds
+                    if interval > 0 {
+                        let now = Date()
+                        if let last = state.lastKeyRepeatProcessedAt,
+                            now.timeIntervalSince(last) < Double(interval) / 1000.0
+                        {
+                            return true  // Skip this repeat, too soon
+                        }
+                        state.lastKeyRepeatProcessedAt = now
+                    }
+                }
+                if key.eventType == .press {
+                    state.lastKeyRepeatProcessedAt = nil
+                }
+                // Set command feedback
+                let feedbackLabel = KeyStrokeFormatter.label(for: stroke)
+                state.commandFeedback = "\(feedbackLabel) → \(command.rawValue)"
+                state.commandFeedbackExpiry = Date().addingTimeInterval(1.5)
                 return dispatchEditorAwareCommand(
                     command, key: key, state: state, pipeline: pipeline)
             }

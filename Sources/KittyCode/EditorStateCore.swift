@@ -78,6 +78,7 @@ final class EditorState {
         var selection: Style
         var searchMatch: Style
         var activeSearchMatch: Style
+        var commandFeedback: Style
 
         func gitStatusStyle(for color: FileStatusColor) -> Style {
             switch color {
@@ -734,6 +735,9 @@ final class EditorState {
     var pendingAcceleratedScrollTarget: AcceleratedScrollTarget?
     var scrollAccelerationTask: Task<Void, Never>?
     var isLoadingGrammar = false
+    var marqueeTickOffset: Int = 0
+    var marqueeTimer: Task<Void, Never>?
+    var marqueeTargetLabel: String?
     var wrapCache = WrapCache()
     var selection: TextSelection? {
         get { bufferManager.activeBuffer?.selection }
@@ -741,6 +745,9 @@ final class EditorState {
     }
     var terminalWriter: (([UInt8]) -> Void)?
     var readOnly: Bool = false
+    var commandFeedback: String?
+    var commandFeedbackExpiry: Date?
+    var lastKeyRepeatProcessedAt: Date?
     var fileTreeHistory = FileTreeOperationHistory()
 
     var maxLineWidth: Int {
