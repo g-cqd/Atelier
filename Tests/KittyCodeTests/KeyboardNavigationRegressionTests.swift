@@ -165,6 +165,47 @@ struct KeyboardNavigationRegressionTests {
     }
 
     @Test
+    func `handleEvent down arrow keeps wrapped cursor target visible`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        config.statusBar.show = false
+        config.editor.wrapLines = true
+
+        let state = EditorState(rootPath: ".", config: config)
+        state.mode = .editor
+        state.sidebarCollapsed = true
+        state.fileContent = [
+            "AAAABBBBCCCCDDDDEEEEFFFFGGGG",
+            "target",
+        ]
+
+        let pipeline = RenderPipeline(
+            connection: MockTerminalConnection(size: TerminalSize(columns: 8, rows: 6)),
+            columns: 8,
+            rows: 6
+        )
+
+        let handled = handleEvent(
+            event: .key(KeyEvent(keyCode: Key.down.rawValue)),
+            state: state,
+            pipeline: pipeline
+        )
+
+        renderFrame(pipeline: pipeline, state: state)
+        let renderedRows = (0..<5).map { row in
+            String((0..<8).map { pipeline.buffer[row, $0].character })
+        }
+
+        #expect(handled)
+        #expect(state.cursorRow == 1)
+        #expect(
+            renderedRows.contains(where: { $0.contains("targ") }),
+            "Expected wrapped viewport to reveal the focused line, got rows: \(renderedRows)"
+        )
+    }
+
+    @Test
     func `handleEvent ignores repeated escape after leaving the editor`() {
         let sut = makeSUT(fileContent: ["one"])
 

@@ -9,13 +9,23 @@ public enum UnicodeWidth {
     ///   `2` for wide/CJK characters, `1` for everything else.
     @inline(__always)
     public static func displayWidth(of char: Character) -> Int {
-        guard let scalar = char.unicodeScalars.first else { return 0 }
-        let scalarValue = scalar.value
-        if scalarValue == 0 { return 0 }
-        // ASCII fast path: covers ~99% of typical source code
-        if scalarValue < 0x1100 { return 1 }
-        if scalar.properties.isDefaultIgnorableCodePoint { return 0 }
-        if isCJKOrWide(scalarValue) { return 2 }
+        let scalars = char.unicodeScalars
+        guard let firstScalar = scalars.first else { return 0 }
+        if firstScalar.value == 0 { return 0 }
+        if isEmojiCluster(scalars) { return 2 }
+        if scalars.count == 1 {
+            if firstScalar.value < 0x1100 { return 1 }
+            if firstScalar.properties.isDefaultIgnorableCodePoint { return 0 }
+            if isCJKOrWide(firstScalar.value) { return 2 }
+            return 1
+        }
+
+        for scalar in scalars where !scalar.properties.isDefaultIgnorableCodePoint {
+            if isCJKOrWide(scalar.value) { return 2 }
+            return 1
+        }
+
+        if firstScalar.properties.isDefaultIgnorableCodePoint { return 0 }
         return 1
     }
 
@@ -61,5 +71,12 @@ public enum UnicodeWidth {
             }
         }
         return false
+    }
+
+    private static func isEmojiCluster(_ scalars: String.UnicodeScalarView) -> Bool {
+        if scalars.contains(where: { $0.properties.isEmojiPresentation }) {
+            return true
+        }
+        return scalars.count > 1 && scalars.contains(where: { $0.properties.isEmoji })
     }
 }

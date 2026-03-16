@@ -118,3 +118,21 @@ public struct ItalicModifier: ViewModifier, Sendable {
         return ctx
     }
 }
+
+public struct FocusedModifier: ViewModifier, Sendable {
+    let isFocused: Bool
+
+    public func body(content: Content) -> some View { content }
+
+    public func modifyContext(_ context: RenderContext) -> RenderContext {
+        var ctx = context
+        ctx.isFocused = isFocused
+        return ctx
+    }
+}
+
+extension View {
+    public func focused(_ isFocused: Bool) -> some View {
+        ModifiedView(content: self, modifier: FocusedModifier(isFocused: isFocused))
+    }
+}

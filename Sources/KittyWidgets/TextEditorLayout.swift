@@ -139,21 +139,24 @@ public enum TextEditorLayout {
             forCharacterOffset: editor.cursorCol, in: line, tabSize: editor.tabSize)
 
         if editor.wrapLines {
-            var screenRow = -editor.wrapRowOffset
-            for lineIndex in startLine..<editor.cursorRow {
-                screenRow += wrappedRowCount(
-                    for: editor.line(at: lineIndex), contentWidth: contentWidth,
-                    tabSize: editor.tabSize)
-                if screenRow >= rect.height { return nil }
-            }
-
+            let startVisualRow = visualRowOffset(
+                forLineOffset: startLine,
+                editor: editor,
+                contentWidth: contentWidth
+            ) + editor.wrapRowOffset
             let (wrapRow, wrapColumn) = wrappedRowPosition(
                 forDisplayColumn: displayColumn,
                 in: line,
                 contentWidth: contentWidth,
                 tabSize: editor.tabSize
             )
-            let row = screenRow + wrapRow
+            let cursorVisualRow = visualRowOffset(
+                forLineOffset: editor.cursorRow,
+                editor: editor,
+                contentWidth: contentWidth
+            ) + wrapRow
+            let row = cursorVisualRow - startVisualRow
+            guard row >= 0 else { return nil }
             guard row < rect.height else { return nil }
             return CursorPosition(
                 row: rect.y + row,
@@ -193,32 +196,34 @@ public enum TextEditorLayout {
         let startLine = max(0, min(editor.scrollOffset, editor.lineCount))
 
         if editor.wrapLines {
-            var screenRow = -editor.wrapRowOffset
-            for lineIndex in startLine..<editor.lineCount {
-                let wrappedRows = wrappedRowCount(
-                    for: editor.line(at: lineIndex), contentWidth: contentWidth,
-                    tabSize: editor.tabSize)
-                let nextScreenRow = screenRow + wrappedRows
-                if relativeRow < nextScreenRow {
-                    let wrapRow = relativeRow - screenRow
-                    let line = editor.line(at: lineIndex)
-                    let rowStarts = wrappedRowStartColumns(
-                        for: line, contentWidth: contentWidth, tabSize: editor.tabSize)
-                    let rowStart = rowStarts[min(max(0, wrapRow), max(0, rowStarts.count - 1))]
-                    let wrappedDisplayColumn = rowStart + displayColumn
-                    return TextPosition(
-                        row: lineIndex,
-                        col: TextDisplayMetrics.characterOffset(
-                            forDisplayColumn: wrappedDisplayColumn,
-                            in: line,
-                            tabSize: editor.tabSize
-                        )
-                    )
-                }
-                screenRow = nextScreenRow
-                if screenRow >= rect.height { break }
-            }
-            return nil
+            let startVisualRow = visualRowOffset(
+                forLineOffset: startLine,
+                editor: editor,
+                contentWidth: contentWidth
+            ) + editor.wrapRowOffset
+            let targetVisualRow = startVisualRow + relativeRow
+            guard targetVisualRow >= 0 else { return nil }
+            guard targetVisualRow < totalWrappedRowCount(for: editor, contentWidth: contentWidth)
+            else { return nil }
+
+            let (lineIndex, wrapRow) = lineAndWrapRowOffset(
+                forVisualRowOffset: targetVisualRow,
+                editor: editor,
+                contentWidth: contentWidth
+            )
+            let line = editor.line(at: lineIndex)
+            let rowStarts = wrappedRowStartColumns(
+                for: line, contentWidth: contentWidth, tabSize: editor.tabSize)
+            let rowStart = rowStarts[min(max(0, wrapRow), max(0, rowStarts.count - 1))]
+            let wrappedDisplayColumn = rowStart + displayColumn
+            return TextPosition(
+                row: lineIndex,
+                col: TextDisplayMetrics.characterOffset(
+                    forDisplayColumn: wrappedDisplayColumn,
+                    in: line,
+                    tabSize: editor.tabSize
+                )
+            )
         }
 
         let lineIndex = startLine + relativeRow
@@ -315,7 +320,11 @@ public enum TextEditorLayout {
     }
 
     private static func totalWrappedRowCount(for editor: TextEditor, contentWidth: Int) -> Int {
-        (0..<editor.lineCount).reduce(into: 0) { total, lineIndex in
+        if let cache = wrapLayoutCache(for: editor, contentWidth: contentWidth) {
+            return cache.totalRowCount
+        }
+
+        return (0..<editor.lineCount).reduce(into: 0) { total, lineIndex in
             total += wrappedRowCount(
                 for: editor.line(at: lineIndex), contentWidth: contentWidth, tabSize: editor.tabSize
             )
@@ -330,6 +339,12 @@ public enum TextEditorLayout {
         guard editor.lineCount > 0 else { return 0 }
 
         let clampedLineOffset = min(max(0, lineOffset), max(0, editor.lineCount - 1))
+        if let cache = wrapLayoutCache(for: editor, contentWidth: contentWidth),
+            cache.visualOffsets.indices.contains(clampedLineOffset)
+        {
+            return cache.visualOffsets[clampedLineOffset]
+        }
+
         var visualOffset = 0
 
         for lineIndex in 0..<clampedLineOffset {
@@ -359,6 +374,30 @@ public enum TextEditorLayout {
         guard editor.lineCount > 0 else { return (0, 0) }
 
         let resolvedVisualRowOffset = max(0, visualRowOffset)
+        if let cache = wrapLayoutCache(for: editor, contentWidth: contentWidth) {
+            var low = 0
+            var high = cache.visualOffsets.count - 1
+
+            while low <= high {
+                let mid = (low + high) / 2
+                if cache.visualOffsets[mid] <= resolvedVisualRowOffset {
+                    low = mid + 1
+                } else {
+                    high = mid - 1
+                }
+            }
+
+            let lineIndex = max(0, min(high, cache.visualOffsets.count - 1))
+            let lineStart = cache.visualOffsets[lineIndex]
+            let rowCount =
+                cache.lineWrapCounts.indices.contains(lineIndex)
+                ? cache.lineWrapCounts[lineIndex] : 1
+            return (
+                lineIndex,
+                min(max(0, resolvedVisualRowOffset - lineStart), max(0, rowCount - 1))
+            )
+        }
+
         var currentVisualRow = 0
 
         for lineIndex in 0..<editor.lineCount {
@@ -381,14 +420,17 @@ public enum TextEditorLayout {
         guard contentWidth > 0 else { return [0] }
 
         var starts = [0]
+        var rowStartColumn = 0
         var currentRowWidth = 0
 
         for char in line {
-            let width = displayWidth(of: char, atColumn: currentRowWidth, tabSize: tabSize)
+            let absoluteColumn = rowStartColumn + currentRowWidth
+            let width = displayWidth(of: char, atColumn: absoluteColumn, tabSize: tabSize)
             guard width > 0 else { continue }
 
             if currentRowWidth > 0, currentRowWidth + width > contentWidth {
-                starts.append(starts[starts.count - 1] + currentRowWidth)
+                rowStartColumn += currentRowWidth
+                starts.append(rowStartColumn)
                 currentRowWidth = 0
             }
 
@@ -427,5 +469,17 @@ public enum TextEditorLayout {
             return ts - (column % ts)
         }
         return UnicodeWidth.displayWidth(of: char)
+    }
+
+    private static func wrapLayoutCache(for editor: TextEditor, contentWidth: Int)
+        -> TextEditor.WrapLayoutCache?
+    {
+        guard let cache = editor.wrapLayoutCache else { return nil }
+        guard cache.contentWidth == contentWidth else { return nil }
+        guard cache.tabSize == editor.tabSize else { return nil }
+        guard cache.lineCount == editor.lineCount else { return nil }
+        guard cache.lineWrapCounts.count == editor.lineCount else { return nil }
+        guard cache.visualOffsets.count == editor.lineCount else { return nil }
+        return cache
     }
 }

@@ -13,7 +13,9 @@ public struct ViewBuilder {
     public static func buildBlock<each C: View>(_ content: repeat each C) -> TupleView<
         (repeat each C)
     > {
-        TupleView(value: (repeat each content))
+        var children: [any View & Sendable] = []
+        repeat children.append(each content)
+        return TupleView(value: (repeat each content), _children: children)
     }
 
     public static func buildOptional<C: View>(_ component: C?) -> ConditionalView<C, EmptyView> {
@@ -40,6 +42,7 @@ public struct ViewBuilder {
 
 public struct TupleView<T: Sendable>: View, Sendable {
     public let value: T
+    internal let _children: [any View & Sendable]
     public var body: Never { fatalError() }
 }
 

@@ -2,8 +2,72 @@ import KittyCodecs
 import KittyRenderer
 import KittyWidgets
 
+struct ShellLayoutRects {
+    var tabRibbon: Rect?
+    var activityBar: Rect?
+    var sidebar: Rect?
+    var separator: Rect?
+    var editor: Rect
+    var statusBar: Rect
+}
+
 @MainActor
-func render(pipeline: RenderPipeline, state: EditorState) {
+func computeShellLayout(state: EditorState, columns: Int, rows: Int) -> (rects: ShellLayoutRects, focusMap: FocusMap) {
+    let layout = LayoutMetrics(state: state, columns: columns, rows: rows)
+    let collector = FocusMapCollector()
+
+    let tabRect: Rect? = layout.showTabRibbon
+        ? Rect(x: 0, y: 0, width: columns, height: 1)
+        : nil
+
+    let activityBarRect: Rect? = layout.activityBarWidth > 0
+        ? Rect(x: 0, y: layout.contentStartRow, width: layout.activityBarWidth, height: layout.contentRows)
+        : nil
+
+    let sidebarRect: Rect? = layout.sidebarWidth > 0
+        ? Rect(x: layout.activityBarWidth, y: layout.contentStartRow, width: layout.sidebarWidth, height: layout.contentRows)
+        : nil
+
+    let separatorRect: Rect? = layout.sidebarWidth > 0
+        ? Rect(x: layout.activityBarWidth + layout.sidebarWidth, y: layout.contentStartRow, width: 1, height: layout.contentRows)
+        : nil
+
+    let editorRect = Rect(
+        x: layout.editorStart,
+        y: layout.contentStartRow,
+        width: layout.editorWidth,
+        height: layout.contentRows
+    )
+
+    let statusBarRect = Rect(x: 0, y: rows - 1, width: columns, height: 1)
+
+    // Build focus map
+    if let r = tabRect { collector.register(.tabRibbon, rect: Rect(x: layout.editorStart, y: r.y, width: layout.editorWidth, height: 1)) }
+    if let r = activityBarRect { collector.register(.activityBar, rect: r) }
+    if let r = sidebarRect {
+        if state.activeSidebarPanel == .search {
+            collector.register(.searchPanel, rect: r)
+        } else {
+            collector.register(.sidebar, rect: r)
+        }
+    }
+    collector.register(.editor, rect: editorRect)
+    collector.register(.statusBar, rect: statusBarRect)
+
+    let rects = ShellLayoutRects(
+        tabRibbon: tabRect,
+        activityBar: activityBarRect,
+        sidebar: sidebarRect,
+        separator: separatorRect,
+        editor: editorRect,
+        statusBar: statusBarRect
+    )
+
+    return (rects: rects, focusMap: collector.build())
+}
+
+@MainActor
+func renderShellLayout(pipeline: RenderPipeline, state: EditorState) {
     let cols = pipeline.columns
     let rows = pipeline.rows
     state.lastRenderColumns = cols
@@ -11,20 +75,14 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     let colorScheme = state.colorScheme
     guard cols > 0 && rows > 1 else { return }
 
-    // Layout calculations
-    let layout = LayoutMetrics(state: state, columns: cols, rows: rows)
-    let showTabRibbon = layout.showTabRibbon
-    let contentStartRow = layout.contentStartRow
-    let contentRows = layout.contentRows
-    let activityBarWidth = layout.activityBarWidth
-    let sidebarWidth = layout.sidebarWidth
-    let editorStart = layout.editorStart
-    let editorWidth = layout.editorWidth
+    let (shellRects, focusMap) = computeShellLayout(state: state, columns: cols, rows: rows)
+    state.focusMap = focusMap
 
-    guard contentRows > 0 else { return }
+    let layout = LayoutMetrics(state: state, columns: cols, rows: rows)
+    guard layout.contentRows > 0 else { return }
 
     // Tab ribbon
-    if showTabRibbon {
+    if layout.showTabRibbon, let tabRect = shellRects.tabRibbon {
         let tabs = state.tabRibbonTabs()
         let theme = state.config.theme
         var tabStyle = TabRibbon.TabRibbonStyle()
@@ -44,29 +102,26 @@ func render(pipeline: RenderPipeline, state: EditorState) {
             style: tabStyle
         )
         let tabBg = Cell(character: " ", style: tabStyle.inactiveStyle)
-        pipeline.buffer.fill(row: 0, col: 0, width: cols, height: 1, cell: tabBg)
+        pipeline.buffer.fill(row: tabRect.y, col: tabRect.x, width: cols, height: 1, cell: tabBg)
         ribbon.render(
             to: &pipeline.buffer,
-            in: Rect(x: editorStart, y: 0, width: editorWidth, height: 1)
+            in: Rect(x: layout.editorStart, y: tabRect.y, width: layout.editorWidth, height: 1)
         )
     }
 
     // Activity bar
-    if activityBarWidth > 0 {
+    if let abRect = shellRects.activityBar {
         renderActivityBar(
             pipeline: pipeline,
             state: state,
-            rect: Rect(x: 0, y: contentStartRow, width: activityBarWidth, height: contentRows),
+            rect: abRect,
             colorScheme: colorScheme
         )
     }
 
-    // Sidebar panel (tree, open files, or search)
+    // Sidebar panel
     var sidebarCursorPos: (row: Int, col: Int)?
-    if sidebarWidth > 0 {
-        let sidebarRect = Rect(
-            x: activityBarWidth, y: contentStartRow, width: sidebarWidth, height: contentRows)
-
+    if let sidebarRect = shellRects.sidebar {
         switch state.activeSidebarPanel {
         case .explorer:
             renderTreePanel(
@@ -90,12 +145,13 @@ func render(pipeline: RenderPipeline, state: EditorState) {
                 colorScheme: colorScheme
             )
         }
+    }
 
-        // Separator
-        let separatorCol = activityBarWidth + sidebarWidth
-        for row in 0..<contentRows {
+    // Separator
+    if let sepRect = shellRects.separator {
+        for row in sepRect.y..<sepRect.maxY {
             pipeline.buffer.write(
-                "\u{2502}", row: contentStartRow + row, col: separatorCol,
+                "\u{2502}", row: row, col: sepRect.x,
                 style: colorScheme.separator)
         }
     }
@@ -104,10 +160,10 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     let terminalCursorPos = renderEditorPanel(
         pipeline: pipeline,
         state: state,
-        editorStart: editorStart,
-        editorWidth: editorWidth,
-        contentStartRow: contentStartRow,
-        contentRows: contentRows,
+        editorStart: shellRects.editor.x,
+        editorWidth: shellRects.editor.width,
+        contentStartRow: shellRects.editor.y,
+        contentRows: shellRects.editor.height,
         colorScheme: colorScheme
     )
 
@@ -120,7 +176,7 @@ func render(pipeline: RenderPipeline, state: EditorState) {
         left: statusSegments.0,
         right: statusSegments.1,
         style: colorScheme.statusBar
-    ).render(to: &pipeline.buffer, in: Rect(x: 0, y: rows - 1, width: cols, height: 1))
+    ).render(to: &pipeline.buffer, in: shellRects.statusBar)
 
     let overlayCursorPos = renderOverlay(
         pipeline: pipeline,
