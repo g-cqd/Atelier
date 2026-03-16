@@ -7,6 +7,7 @@ extension EditorState {
         guard validateCreatablePath(destinationPath) else { return false }
 
         let destinationURL = URL(fileURLWithPath: destinationPath)
+        let parentPath = destinationURL.deletingLastPathComponent().path
         do {
             try FileManager.default.createDirectory(
                 at: destinationURL.deletingLastPathComponent(),
@@ -22,6 +23,8 @@ extension EditorState {
             selectTreePath(destinationPath)
             fileTreeHistory.record(
                 .create(snapshot: .file(path: destinationPath, data: Data())),
+                undoSelectionPath: parentPath,
+                redoSelectionPath: destinationPath,
                 currentNodes: treeNodes)
             statusMessage = "Created \(destinationURL.lastPathComponent)"
             renderRefreshSource?.invalidate()
@@ -37,6 +40,7 @@ extension EditorState {
     {
         guard validateCreatablePath(destinationPath) else { return false }
 
+        let parentPath = URL(fileURLWithPath: destinationPath).deletingLastPathComponent().path
         do {
             try FileManager.default.createDirectory(
                 at: URL(fileURLWithPath: destinationPath),
@@ -48,6 +52,8 @@ extension EditorState {
             selectTreePath(destinationPath)
             fileTreeHistory.record(
                 .create(snapshot: .directory(path: destinationPath, children: [])),
+                undoSelectionPath: parentPath,
+                redoSelectionPath: destinationPath,
                 currentNodes: treeNodes)
             statusMessage = "Created \(URL(fileURLWithPath: destinationPath).lastPathComponent)"
             renderRefreshSource?.invalidate()
@@ -82,6 +88,8 @@ extension EditorState {
             selectTreePath(destinationPath)
             fileTreeHistory.record(
                 .move(sourcePath: sourcePath, destinationPath: destinationPath),
+                undoSelectionPath: sourcePath,
+                redoSelectionPath: destinationPath,
                 currentNodes: treeNodes
             )
             statusMessage = "Moved \(destinationURL.lastPathComponent)"
@@ -102,6 +110,8 @@ extension EditorState {
         }
 
         let destinationURL = URL(fileURLWithPath: destinationPath)
+        let parentPath = destinationURL.deletingLastPathComponent().path
+        let displayName = destinationURL.lastPathComponent
         do {
             try FileManager.default.createDirectory(
                 at: destinationURL.deletingLastPathComponent(),
@@ -109,12 +119,21 @@ extension EditorState {
                 attributes: nil
             )
             try FileManager.default.copyItem(atPath: sourcePath, toPath: destinationPath)
-            let snapshot = try captureFileSystemSnapshot(at: destinationPath)
+            let snapshot = captureFileSystemSnapshotIfReasonable(at: destinationPath)
 
             await loadInitialTree(validateHistory: false)
             selectTreePath(destinationPath)
-            fileTreeHistory.record(.duplicate(snapshot: snapshot), currentNodes: treeNodes)
-            statusMessage = "Duplicated \(destinationURL.lastPathComponent)"
+            if let snapshot {
+                fileTreeHistory.record(
+                    .duplicate(snapshot: snapshot),
+                    undoSelectionPath: parentPath,
+                    redoSelectionPath: destinationPath,
+                    currentNodes: treeNodes)
+                statusMessage = "Duplicated \(displayName)"
+            } else {
+                fileTreeHistory.updateCurrent(nodes: treeNodes)
+                statusMessage = "Duplicated \(displayName) (too large for undo)"
+            }
             renderRefreshSource?.invalidate()
             return true
         } catch {
@@ -127,14 +146,25 @@ extension EditorState {
     func deleteTreeItem(at path: String) async -> Bool {
         guard validateDeletablePath(path) else { return false }
 
+        let parentPath = URL(fileURLWithPath: path).deletingLastPathComponent().path
+        let displayName = URL(fileURLWithPath: path).lastPathComponent
         do {
-            let snapshot = try captureFileSystemSnapshot(at: path)
+            let snapshot = captureFileSystemSnapshotIfReasonable(at: path)
             try FileManager.default.removeItem(atPath: path)
 
             await loadInitialTree(validateHistory: false)
-            selectTreePath(URL(fileURLWithPath: path).deletingLastPathComponent().path)
-            fileTreeHistory.record(.delete(snapshot: snapshot), currentNodes: treeNodes)
-            statusMessage = "Deleted \(URL(fileURLWithPath: path).lastPathComponent)"
+            selectTreePath(parentPath)
+            if let snapshot {
+                fileTreeHistory.record(
+                    .delete(snapshot: snapshot),
+                    undoSelectionPath: snapshot.path,
+                    redoSelectionPath: parentPath,
+                    currentNodes: treeNodes)
+                statusMessage = "Deleted \(displayName)"
+            } else {
+                fileTreeHistory.updateCurrent(nodes: treeNodes)
+                statusMessage = "Deleted \(displayName) (too large for undo)"
+            }
             renderRefreshSource?.invalidate()
             return true
         } catch {
@@ -145,10 +175,10 @@ extension EditorState {
 
     func undoFileTreeOperation() async {
         switch fileTreeHistory.undo(currentNodes: treeNodes) {
-        case .applied(let operation):
-            let success = await applyUndo(operation)
+        case .applied(let record):
+            let success = await applyUndo(record)
             if success {
-                statusMessage = "Undo file operation"
+                statusMessage = "Undo: \(record.description)"
             } else {
                 fileTreeHistory.clear(currentNodes: treeNodes)
             }
@@ -161,10 +191,10 @@ extension EditorState {
 
     func redoFileTreeOperation() async {
         switch fileTreeHistory.redo(currentNodes: treeNodes) {
-        case .applied(let operation):
-            let success = await applyRedo(operation)
+        case .applied(let record):
+            let success = await applyRedo(record)
             if success {
-                statusMessage = "Redo file operation"
+                statusMessage = "Redo: \(record.description)"
             } else {
                 fileTreeHistory.clear(currentNodes: treeNodes)
             }
@@ -175,27 +205,21 @@ extension EditorState {
         }
     }
 
-    private func applyUndo(_ operation: FileTreeOperation) async -> Bool {
+    private func applyUndo(_ record: FileTreeOperationRecord) async -> Bool {
         do {
-            switch operation {
+            switch record.operation {
             case .create(let snapshot):
                 try removeItemIfExists(at: snapshot.path)
-                await loadInitialTree(validateHistory: false)
-                selectTreePath(URL(fileURLWithPath: snapshot.path).deletingLastPathComponent().path)
             case .delete(let snapshot):
                 try restore(snapshot: snapshot)
-                await loadInitialTree(validateHistory: false)
-                selectTreePath(snapshot.path)
             case .move(let sourcePath, let destinationPath):
                 try FileManager.default.moveItem(atPath: destinationPath, toPath: sourcePath)
-                await loadInitialTree(validateHistory: false)
-                selectTreePath(sourcePath)
             case .duplicate(let snapshot):
                 try removeItemIfExists(at: snapshot.path)
-                await loadInitialTree(validateHistory: false)
-                selectTreePath(URL(fileURLWithPath: snapshot.path).deletingLastPathComponent().path)
             }
 
+            await loadInitialTree(validateHistory: false)
+            selectTreePath(record.undoSelectionPath)
             fileTreeHistory.updateCurrent(nodes: treeNodes)
             renderRefreshSource?.invalidate()
             return true
@@ -205,23 +229,19 @@ extension EditorState {
         }
     }
 
-    private func applyRedo(_ operation: FileTreeOperation) async -> Bool {
+    private func applyRedo(_ record: FileTreeOperationRecord) async -> Bool {
         do {
-            switch operation {
+            switch record.operation {
             case .create(let snapshot), .duplicate(let snapshot):
                 try restore(snapshot: snapshot)
-                await loadInitialTree(validateHistory: false)
-                selectTreePath(snapshot.path)
             case .delete(let snapshot):
                 try removeItemIfExists(at: snapshot.path)
-                await loadInitialTree(validateHistory: false)
-                selectTreePath(URL(fileURLWithPath: snapshot.path).deletingLastPathComponent().path)
             case .move(let sourcePath, let destinationPath):
                 try FileManager.default.moveItem(atPath: sourcePath, toPath: destinationPath)
-                await loadInitialTree(validateHistory: false)
-                selectTreePath(destinationPath)
             }
 
+            await loadInitialTree(validateHistory: false)
+            selectTreePath(record.redoSelectionPath)
             fileTreeHistory.updateCurrent(nodes: treeNodes)
             renderRefreshSource?.invalidate()
             return true
@@ -301,6 +321,58 @@ extension EditorState {
             let node = cachedFlatTree[index].node
             noteSelectedPath(node.path, isDirectory: node.isDirectory)
         }
+    }
+
+    private func estimateSnapshotCost(at path: String) -> (fileCount: Int, totalBytes: Int64) {
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory) else {
+            return (0, 0)
+        }
+
+        guard isDirectory.boolValue else {
+            let size = (try? fileManager.attributesOfItem(atPath: path)[.size] as? Int64) ?? 0
+            return (1, size)
+        }
+
+        var fileCount = 0
+        var totalBytes: Int64 = 0
+        let maxFiles = config.editor.snapshotMaxFiles
+        let maxBytes = Int64(config.editor.snapshotMaxBytes)
+
+        guard let enumerator = fileManager.enumerator(atPath: path) else {
+            return (0, 0)
+        }
+
+        while let relative = enumerator.nextObject() as? String {
+            let fullPath = (path as NSString).appendingPathComponent(relative)
+            var childIsDir: ObjCBool = false
+            guard fileManager.fileExists(atPath: fullPath, isDirectory: &childIsDir) else {
+                continue
+            }
+            guard !childIsDir.boolValue else { continue }
+
+            fileCount += 1
+            if let size = (try? fileManager.attributesOfItem(atPath: fullPath)[.size] as? Int64) {
+                totalBytes += size
+            }
+
+            if fileCount > maxFiles || totalBytes > maxBytes {
+                return (fileCount, totalBytes)
+            }
+        }
+
+        return (fileCount, totalBytes)
+    }
+
+    private func captureFileSystemSnapshotIfReasonable(at path: String) -> FileSystemSnapshot? {
+        let cost = estimateSnapshotCost(at: path)
+        if cost.fileCount > config.editor.snapshotMaxFiles
+            || cost.totalBytes > Int64(config.editor.snapshotMaxBytes)
+        {
+            return nil
+        }
+        return try? captureFileSystemSnapshot(at: path)
     }
 
     private func captureFileSystemSnapshot(at path: String) throws -> FileSystemSnapshot {

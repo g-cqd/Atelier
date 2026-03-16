@@ -99,7 +99,8 @@ public final class DocumentBuffer {
         fileName: String,
         content: String,
         language: String?,
-        lineEnding: TextDocument.LineEnding = .lineFeed
+        lineEnding: TextDocument.LineEnding = .lineFeed,
+        maxUndoSteps: Int = 200
     ) {
         self.document = TextDocument(
             filePath: filePath,
@@ -115,6 +116,7 @@ public final class DocumentBuffer {
                 lineEnding: document.lineEnding
             )
         )
+        self.editHistory.maxUndoSteps = maxUndoSteps
         self.highlightedLines = [[StyledSpan(text: "", style: .default)]]
     }
 

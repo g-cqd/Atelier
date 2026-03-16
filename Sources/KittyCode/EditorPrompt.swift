@@ -1,5 +1,6 @@
 import Foundation
 import KittyCodecs
+import KittySearch
 import KittyText
 
 struct EditorPrompt: Sendable, Equatable {
@@ -11,6 +12,7 @@ struct EditorPrompt: Sendable, Equatable {
         case duplicate(path: String)
         case move(path: String)
         case confirmDelete(path: String)
+        case confirmReplaceAll(matchCount: Int, fileCount: Int)
     }
 
     var kind: Kind
@@ -20,7 +22,7 @@ struct EditorPrompt: Sendable, Equatable {
 
     var isEditable: Bool {
         switch kind {
-        case .confirmDelete:
+        case .confirmDelete, .confirmReplaceAll:
             return false
         case .savePath, .createFile, .createDirectory, .rename, .duplicate, .move:
             return true
@@ -41,6 +43,8 @@ struct EditorPrompt: Sendable, Equatable {
             return "Move"
         case .confirmDelete:
             return "Delete"
+        case .confirmReplaceAll:
+            return "Replace"
         }
     }
 
@@ -54,12 +58,23 @@ struct EditorPrompt: Sendable, Equatable {
 
 extension EditorState {
     var displayedStatusMessage: String {
-        prompt?.displayText ?? statusMessage
+        if let prompt {
+            return prompt.displayText
+        }
+        if let search = inFileSearch {
+            return "Search: " + search.query
+        }
+        return statusMessage
     }
 
     var promptCursorOffset: Int? {
-        guard let prompt else { return nil }
-        return prompt.isEditable ? prompt.displayText.count : nil
+        if let prompt {
+            return prompt.isEditable ? prompt.displayText.count : nil
+        }
+        if inFileSearch != nil {
+            return displayedStatusMessage.count
+        }
+        return nil
     }
 
     func beginNewFile() {
@@ -71,7 +86,8 @@ extension EditorState {
             filePath: "",
             fileName: "Untitled",
             content: "",
-            language: nil
+            language: nil,
+            maxUndoSteps: config.editor.maxUndoSteps
         )
         bufferManager.buffers[untitledIndex].isPreview = false
 
@@ -79,7 +95,8 @@ extension EditorState {
         refreshHighlights()
         textCursor = TextCursor()
         mode = .editor
-        statusMessage = "New file | ^O: Save, ^X: Tree/Quit"
+        let resolver = KeymapResolver(config: config)
+        statusMessage = "New file | \(resolver.openedStatusHints())"
     }
 
     func beginSavePrompt(suggestedPath: String? = nil) {
@@ -245,6 +262,11 @@ extension EditorState {
                 }
             }
             return false
+
+        case .confirmReplaceAll:
+            // Perform workspace-wide replace
+            performWorkspaceReplaceAll()
+            return true
         }
     }
 
@@ -333,5 +355,68 @@ extension EditorState {
             return ""
         }
         return relativePath.hasSuffix("/") ? relativePath : relativePath + "/"
+    }
+
+    func performWorkspaceReplaceAll() {
+        guard let search = inFileSearch,
+            let pattern = search.pattern,
+            !workspaceSearchResults.isEmpty
+        else { return }
+
+        var totalReplaced = 0
+        var filesChanged = 0
+        let replacement = search.replaceText
+
+        for fileResult in workspaceSearchResults {
+            guard !fileResult.matches.isEmpty else { continue }
+
+            // Check if file is in an open buffer
+            if let bufferIdx = bufferManager.bufferIndex(forPath: fileResult.filePath) {
+                let buffer = bufferManager.buffers[bufferIdx]
+                let lines = buffer.textBuffer.lines
+                let (newLines, count) = applyReplacements(
+                    to: lines, matches: fileResult.matches,
+                    pattern: pattern, replacement: replacement)
+                if count > 0 {
+                    buffer.textBuffer = KittyText.TextBuffer(lines: newLines)
+                    buffer.isDirty = true
+                    buffer.cachedFileLines = nil
+                    buffer.cachedDocumentText = nil
+                    buffer.cachedMaxLineWidth = nil
+                    buffer.cachedSerializedByteCount = nil
+                    buffer.documentVersion += 1
+                    totalReplaced += count
+                    filesChanged += 1
+                }
+            } else {
+                // Read from disk, replace, write back
+                guard let data = FileManager.default.contents(atPath: fileResult.filePath),
+                    let content = String(data: data, encoding: .utf8)
+                else { continue }
+
+                let lines = content.split(
+                    separator: "\n", omittingEmptySubsequences: false
+                ).map(String.init)
+                let (newLines, count) = applyReplacements(
+                    to: lines, matches: fileResult.matches,
+                    pattern: pattern, replacement: replacement)
+                if count > 0 {
+                    let newContent = newLines.joined(separator: "\n")
+                    try? newContent.write(
+                        toFile: fileResult.filePath, atomically: true,
+                        encoding: String.Encoding.utf8)
+                    totalReplaced += count
+                    filesChanged += 1
+                }
+            }
+        }
+
+        // Refresh state
+        invalidateTextSnapshotCache()
+        refreshHighlights()
+        statusMessage = "Replaced \(totalReplaced) matches in \(filesChanged) files"
+
+        // Re-trigger workspace search to refresh results
+        triggerWorkspaceSearch(state: self)
     }
 }

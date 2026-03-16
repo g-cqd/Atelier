@@ -22,6 +22,18 @@ extension EditorState {
             return "Enter \(label)  Esc Cancel"
         }
 
+        if vimCommandLine != nil {
+            return "Enter Execute  Esc Cancel"
+        }
+
+        if mode == .searchPanel {
+            return "Enter Select  \u{2191}\u{2193} Navigate  Esc Close"
+        }
+
+        if inFileSearch != nil {
+            return "Enter Next  \u{2191}\u{2193} Navigate  Esc Close"
+        }
+
         return nil
     }
 
@@ -35,6 +47,9 @@ extension EditorState {
         selectedTreeIndex = index
         let entry = cachedFlatTree[index].node
         noteSelectedPath(entry.path, isDirectory: entry.isDirectory)
+
+        let resolver = KeymapResolver(config: config)
+        let saveLabel = resolver.shortcutLabel(for: .saveFile) ?? ""
 
         let items: [ContextMenuItem]
         if entry.isDirectory {
@@ -56,7 +71,7 @@ extension EditorState {
                 ContextMenuItem(
                     title: "Delete…", shortcut: "", action: .beginDelete(path: entry.path)),
                 ContextMenuItem(
-                    title: "Save Here…", shortcut: "Ctrl+O",
+                    title: "Save Here…", shortcut: saveLabel,
                     action: .beginSavePrompt(inDirectory: entry.path)),
             ]
         } else {
@@ -72,7 +87,7 @@ extension EditorState {
                 ContextMenuItem(
                     title: "Delete…", shortcut: "", action: .beginDelete(path: entry.path)),
                 ContextMenuItem(
-                    title: "Save Here…", shortcut: "Ctrl+O",
+                    title: "Save Here…", shortcut: saveLabel,
                     action: .beginSavePrompt(inDirectory: directory)),
             ]
         }
@@ -87,18 +102,39 @@ extension EditorState {
 
     func showEditorContextMenu() {
         let saveDirectory = lastSelectedDirectoryPath ?? rootPath
+        let resolver = KeymapResolver(config: config)
+        var items: [ContextMenuItem] = []
+        if bufferManager.activeBuffer?.editHistory.hasUndo == true {
+            items.append(
+                ContextMenuItem(
+                    title: "Undo", shortcut: resolver.shortcutLabel(for: .undo) ?? "",
+                    action: .undo))
+        }
+        if bufferManager.activeBuffer?.editHistory.hasRedo == true {
+            items.append(
+                ContextMenuItem(
+                    title: "Redo", shortcut: resolver.shortcutLabel(for: .redo) ?? "",
+                    action: .redo))
+        }
+        items += [
+            ContextMenuItem(
+                title: "Save", shortcut: resolver.shortcutLabel(for: .saveFile) ?? "",
+                action: .saveFile),
+            ContextMenuItem(
+                title: "Save As…", shortcut: "",
+                action: .beginSavePrompt(inDirectory: saveDirectory)),
+            ContextMenuItem(
+                title: "Focus Explorer",
+                shortcut: resolver.shortcutLabel(for: .escapeEditor) ?? "", action: .focusTree),
+            ContextMenuItem(
+                title: "Close Tab", shortcut: resolver.shortcutLabel(for: .closeTab) ?? "",
+                action: .closeTab),
+        ]
         contextMenu = ContextMenuState(
             title: activeFileDisplayName,
             subtitle: currentLanguage ?? "plain text",
             target: .editor,
-            items: [
-                ContextMenuItem(title: "Save", shortcut: "Ctrl+O", action: .saveFile),
-                ContextMenuItem(
-                    title: "Save As…", shortcut: "",
-                    action: .beginSavePrompt(inDirectory: saveDirectory)),
-                ContextMenuItem(title: "Focus Explorer", shortcut: "Esc", action: .focusTree),
-                ContextMenuItem(title: "Close Tab", shortcut: "Ctrl+W", action: .closeTab),
-            ]
+            items: items
         )
     }
 
@@ -138,6 +174,10 @@ extension EditorState {
         dismissContextMenu()
 
         switch action {
+        case .undo:
+            performUndo()
+        case .redo:
+            performRedo()
         case .openSelected:
             guard selectedTreeIndex >= 0, selectedTreeIndex < cachedFlatTree.count else { return }
             openFile(at: selectedTreeIndex)

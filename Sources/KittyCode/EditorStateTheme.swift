@@ -93,6 +93,12 @@ extension EditorState {
             selection: Style(
                 fg: theme.selectionForeground?.color ?? .default,
                 bg: (theme.selectionBackground ?? ColorRGB(r: 0x26, g: 0x4f, b: 0x78)).color
+            ),
+            searchMatch: Style(
+                bg: .rgb(r: 0x3a, g: 0x3d, b: 0x41)
+            ),
+            activeSearchMatch: Style(
+                bg: .rgb(r: 0x51, g: 0x5c, b: 0x6a)
             )
         )
     }

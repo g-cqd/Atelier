@@ -2,6 +2,29 @@ import KittyCodecs
 import KittySyntax
 import KittyText
 
+/// A highlighted range within a single line, carrying its own style.
+public struct TextHighlight: Sendable, Equatable {
+    public enum Role: Int, Sendable, Equatable, Comparable {
+        case searchMatch = 0
+        case userSelection = 1
+        case activeSearchMatch = 2
+
+        public static func < (lhs: Role, rhs: Role) -> Bool {
+            lhs.rawValue < rhs.rawValue
+        }
+    }
+
+    public var range: ClosedRange<Int>
+    public var role: Role
+    public var style: Style
+
+    public init(range: ClosedRange<Int>, role: Role, style: Style) {
+        self.range = range
+        self.role = role
+        self.style = style
+    }
+}
+
 /// Scrollable syntax-highlighted text display widget.
 public struct TextEditor: View, Sendable {
     private var source: any DocumentSource
@@ -29,8 +52,7 @@ public struct TextEditor: View, Sendable {
     public var showsVerticalScrollIndicator: Bool
     public var showsHorizontalScrollIndicator: Bool
     public var lineStyleOverlays: [Int: TextStyleOverlay]
-    public var selectionRanges: [Int: ClosedRange<Int>]
-    public var selectionStyle: Style
+    public var highlights: [Int: [TextHighlight]]
     public var editorStyle: Style
     public var lineNumberStyle: Style
     public var currentLineStyle: Style
@@ -56,8 +78,7 @@ public struct TextEditor: View, Sendable {
         showsVerticalScrollIndicator: Bool = false,
         showsHorizontalScrollIndicator: Bool = false,
         lineStyleOverlays: [Int: TextStyleOverlay] = [:],
-        selectionRanges: [Int: ClosedRange<Int>] = [:],
-        selectionStyle: Style = .default,
+        highlights: [Int: [TextHighlight]] = [:],
         editorStyle: Style = .default,
         lineNumberStyle: Style = .default,
         currentLineStyle: Style = .default,
@@ -85,8 +106,7 @@ public struct TextEditor: View, Sendable {
         self.showsVerticalScrollIndicator = showsVerticalScrollIndicator
         self.showsHorizontalScrollIndicator = showsHorizontalScrollIndicator
         self.lineStyleOverlays = lineStyleOverlays
-        self.selectionRanges = selectionRanges
-        self.selectionStyle = selectionStyle
+        self.highlights = highlights
         self.editorStyle = editorStyle
         self.lineNumberStyle = lineNumberStyle
         self.currentLineStyle = currentLineStyle
@@ -113,8 +133,7 @@ public struct TextEditor: View, Sendable {
         showsVerticalScrollIndicator: Bool = false,
         showsHorizontalScrollIndicator: Bool = false,
         lineStyleOverlays: [Int: TextStyleOverlay] = [:],
-        selectionRanges: [Int: ClosedRange<Int>] = [:],
-        selectionStyle: Style = .default,
+        highlights: [Int: [TextHighlight]] = [:],
         editorStyle: Style = .default,
         lineNumberStyle: Style = .default,
         currentLineStyle: Style = .default,
@@ -140,8 +159,7 @@ public struct TextEditor: View, Sendable {
         self.showsVerticalScrollIndicator = showsVerticalScrollIndicator
         self.showsHorizontalScrollIndicator = showsHorizontalScrollIndicator
         self.lineStyleOverlays = lineStyleOverlays
-        self.selectionRanges = selectionRanges
-        self.selectionStyle = selectionStyle
+        self.highlights = highlights
         self.editorStyle = editorStyle
         self.lineNumberStyle = lineNumberStyle
         self.currentLineStyle = currentLineStyle
@@ -168,8 +186,7 @@ public struct TextEditor: View, Sendable {
         showsVerticalScrollIndicator: Bool = false,
         showsHorizontalScrollIndicator: Bool = false,
         lineStyleOverlays: [Int: TextStyleOverlay] = [:],
-        selectionRanges: [Int: ClosedRange<Int>] = [:],
-        selectionStyle: Style = .default,
+        highlights: [Int: [TextHighlight]] = [:],
         editorStyle: Style = .default,
         lineNumberStyle: Style = .default,
         currentLineStyle: Style = .default,
@@ -195,8 +212,7 @@ public struct TextEditor: View, Sendable {
         self.showsVerticalScrollIndicator = showsVerticalScrollIndicator
         self.showsHorizontalScrollIndicator = showsHorizontalScrollIndicator
         self.lineStyleOverlays = lineStyleOverlays
-        self.selectionRanges = selectionRanges
-        self.selectionStyle = selectionStyle
+        self.highlights = highlights
         self.editorStyle = editorStyle
         self.lineNumberStyle = lineNumberStyle
         self.currentLineStyle = currentLineStyle
