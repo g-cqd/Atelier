@@ -1,17 +1,21 @@
 ; Functions
 
 (call_expression
+  function: (identifier) @function.call)
+
+(call_expression
   function: (qualified_identifier
-    name: (identifier) @function))
+    name: (identifier) @function.call))
+
+(call_expression
+  function: (field_expression
+    field: (field_identifier) @function.call))
 
 (template_function
   name: (identifier) @function)
 
 (template_method
   name: (field_identifier) @function)
-
-(template_function
-  name: (identifier) @function)
 
 (function_declarator
   declarator: (qualified_identifier
@@ -20,7 +24,14 @@
 (function_declarator
   declarator: (field_identifier) @function)
 
+(function_declarator
+  declarator: (identifier) @function)
+
 ; Types
+
+(type_identifier) @type
+(primitive_type) @type.builtin
+(sized_type_specifier) @type
 
 ((namespace_identifier) @type
  (#match? @type "^[A-Z]"))
@@ -30,48 +41,71 @@
 ; Constants
 
 (this) @variable.builtin
-(null "nullptr" @constant)
+(null "nullptr" @constant.builtin)
+
+((identifier) @constant
+ (#match? @constant "^[A-Z][A-Z\\d_]*$"))
+
+; Identifiers
+
+(identifier) @variable
+(field_identifier) @property
 
 ; Modules
 (module_name
-  (identifier) @module)
+  (identifier) @namespace)
 
 ; Keywords
 
 [
- "catch"
- "class"
- "co_await"
- "co_return"
- "co_yield"
- "constexpr"
- "constinit"
- "consteval"
- "delete"
- "explicit"
- "final"
- "friend"
- "mutable"
- "namespace"
- "noexcept"
- "new"
- "override"
- "private"
- "protected"
- "public"
- "template"
- "throw"
- "try"
- "typename"
- "using"
- "concept"
- "requires"
- "virtual"
- "import"
- "export"
- "module"
+ "break" "case" "catch" "class" "co_await" "co_return" "co_yield"
+ "const" "constexpr" "constinit" "consteval" "continue" "default"
+ "delete" "do" "else" "enum" "explicit" "extern" "final" "for"
+ "friend" "goto" "if" "inline" "mutable" "namespace" "new"
+ "noexcept" "override" "private" "protected" "public" "return"
+ "sizeof" "static" "struct" "switch" "template" "throw" "try"
+ "typedef" "typename" "union" "using" "concept" "requires"
+ "virtual" "volatile" "while" "import" "export" "module"
 ] @keyword
+
+; Operators
+
+[
+  "--" "-" "-=" "->" "=" "!=" "*" "&" "&&" "+" "++" "+="
+  "<" "==" ">" "||" "|" "^" "~" "%" "%=" "*=" "/=" "/"
+  "<<" "<<=" ">>" ">>=" "&=" "|=" "^=" "<=" ">=" "!"
+  "?" "::" "<=>"
+] @operator
+
+; Punctuation
+
+[
+  "(" ")" "[" "]" "{" "}"
+  "<" ">"
+] @punctuation.bracket
+
+[
+  "." ";" "," ":"
+] @punctuation.delimiter
 
 ; Strings
 
+(string_literal) @string
 (raw_string_literal) @string
+(char_literal) @string
+(escape_sequence) @string.escape
+
+; Numbers
+
+(number_literal) @number
+
+[
+  (true)
+  (false)
+] @boolean
+
+(null "nullptr" @constant.builtin)
+
+; Comments
+
+(comment) @comment

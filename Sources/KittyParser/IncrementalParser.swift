@@ -11,9 +11,12 @@ public final class IncrementalParser: Sendable {
     }
 
     /// Parse source text, optionally reusing parts of the old tree.
-    public func parse(_ source: String, oldTree: SyntaxTree? = nil, edit: TextEdit? = nil)
-        throws(ParseError) -> SyntaxTree
-    {
+    public func parse(
+        _ source: String,
+        oldTree: SyntaxTree? = nil,
+        edit: TextEdit? = nil,
+        externalScanner: (any ExternalScanner)? = nil
+    ) throws(ParseError) -> SyntaxTree {
         // For now, delegate to full parse. Incremental optimization can be added later
         // when the basic parser is proven correct.
         //
@@ -22,7 +25,7 @@ public final class IncrementalParser: Sendable {
         // 2. Walk old tree, identify reusable subtrees (outside edit region)
         // 3. Parse only changed region + minimal context
         // 4. Return new tree sharing unchanged nodes with old tree
-        return try parser.parse(source)
+        return try parser.parse(source, externalScanner: externalScanner)
     }
 }
 
