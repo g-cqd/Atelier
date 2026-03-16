@@ -78,4 +78,16 @@ struct TabRibbonScrollTests {
         // First content cell (after space) should be italic
         #expect(buffer[0, 1].style.italic == true)
     }
+
+    @Test func `wide tab names keep separator aligned with measured width`() {
+        var buffer = ScreenBuffer(columns: 12, rows: 1)
+        let tabs = [
+            TabRibbon.Tab(name: "你", isDirty: false),
+            TabRibbon.Tab(name: "b", isDirty: false),
+        ]
+        let ribbon = TabRibbon(tabs: tabs, activeIndex: 0, scrollOffset: 0)
+        ribbon.render(to: &buffer, in: Rect(x: 0, y: 0, width: 12, height: 1))
+
+        #expect(buffer[0, ribbon.tabLabelWidth(at: 0) - 1].character == "│")
+    }
 }

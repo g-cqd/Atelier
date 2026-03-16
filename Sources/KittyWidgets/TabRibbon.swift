@@ -102,7 +102,7 @@ public struct TabRibbon: Sendable {
             // Write separator
             if col < rightBound {
                 buffer[rect.y, col] = Cell(
-                    character: Character(style.separator),
+                    character: style.separator.first ?? "│",
                     style: style.inactiveStyle
                 )
                 col += 1
@@ -245,9 +245,18 @@ public struct TabRibbon: Sendable {
     ) -> Int {
         var currentCol = col
         for ch in text {
-            guard currentCol < maxCol else { break }
-            buffer[row, currentCol] = Cell(character: ch, style: style)
-            currentCol += 1
+            let width = UnicodeWidth.displayWidth(of: ch)
+            guard width > 0 else { continue }
+            guard currentCol + width <= maxCol else { break }
+
+            if width == 2 {
+                buffer[row, currentCol] = Cell(character: ch, style: style, width: 2)
+                buffer[row, currentCol + 1] = Cell(character: "\0", style: style, width: 0)
+                currentCol += 2
+            } else {
+                buffer[row, currentCol] = Cell(character: ch, style: style)
+                currentCol += 1
+            }
         }
         return currentCol
     }

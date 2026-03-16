@@ -33,6 +33,10 @@ public enum ViewRenderer {
             renderListView(list, into: &buffer, in: rect, context: context)
         case let centered as CenteredText:
             renderCenteredText(centered, into: &buffer, in: rect, context: context)
+        case let spacer as Spacer:
+            _ = spacer  // no-op: spacer just occupies space
+        case let separator as Separator:
+            renderSeparator(separator, into: &buffer, in: rect, context: context)
         case is EmptyView:
             break
         default:
@@ -91,6 +95,26 @@ public enum ViewRenderer {
         let style = context.applyTo(bar.style)
         let rendered = bar.render(width: rect.width)
         buffer.write(rendered, row: rect.y, col: rect.x, style: style)
+    }
+
+    private static func renderSeparator(
+        _ separator: Separator,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        let style = context.applyTo(separator.style)
+        let cell = Cell(character: separator.character, style: style)
+        switch separator.axis {
+        case .vertical:
+            for row in rect.y..<rect.maxY {
+                buffer[row, rect.x] = cell
+            }
+        case .horizontal:
+            for col in rect.x..<rect.maxX {
+                buffer[rect.y, col] = cell
+            }
+        }
     }
 
     private static func renderVerticalScrollIndicator(
@@ -441,21 +465,16 @@ public enum ViewRenderer {
                                 )
                                 style = resolveHighlightStyle(
                                     for: charIndex, highlights: lineHighlights, base: style)
-                                if isControl && width > 1 {
-                                    for _ in 0..<width where col < contentMaxX {
-                                        buffer[row, col] = Cell(character: " ", style: style)
-                                        col += 1
-                                    }
-                                } else if width == 2 && col + 1 < contentMaxX {
-                                    buffer[row, col] = Cell(
-                                        character: displayChar, style: style, width: 2)
-                                    buffer[row, col + 1] = Cell(
-                                        character: "\0", style: style, width: 0)
-                                    col += 2
-                                } else if width == 1 {
-                                    buffer[row, col] = Cell(character: displayChar, style: style)
-                                    col += 1
-                                }
+                                renderCharacter(
+                                    displayChar,
+                                    width: width,
+                                    isControl: isControl,
+                                    into: &buffer,
+                                    row: row,
+                                    col: &col,
+                                    maxCol: contentMaxX,
+                                    style: style
+                                )
                             }
                             widthPos += width
                             charIndex += 1
@@ -930,21 +949,16 @@ public enum ViewRenderer {
                     )
                     style = resolveHighlightStyle(
                         for: charIndex, highlights: highlights, base: style)
-                    if isControl && width > 1 {
-                        // Tab: render as multiple spaces
-                        for _ in 0..<width where currentCol < col + availWidth {
-                            buffer[row, currentCol] = Cell(character: " ", style: style)
-                            currentCol += 1
-                        }
-                    } else if width == 2 && currentCol + 1 < col + availWidth {
-                        buffer[row, currentCol] = Cell(
-                            character: displayChar, style: style, width: 2)
-                        buffer[row, currentCol + 1] = Cell(character: "\0", style: style, width: 0)
-                        currentCol += 2
-                    } else if width == 1 {
-                        buffer[row, currentCol] = Cell(character: displayChar, style: style)
-                        currentCol += 1
-                    }
+                    renderCharacter(
+                        displayChar,
+                        width: width,
+                        isControl: isControl,
+                        into: &buffer,
+                        row: row,
+                        col: &currentCol,
+                        maxCol: col + availWidth,
+                        style: style
+                    )
                 }
                 currentX += width
                 charIndex += 1
@@ -975,6 +989,46 @@ public enum ViewRenderer {
         while currentCol < col + availWidth {
             buffer[row, currentCol] = Cell(character: " ", style: fillStyle)
             currentCol += 1
+        }
+    }
+
+    private static func renderCharacter(
+        _ char: Character,
+        width: Int,
+        isControl: Bool,
+        into buffer: inout ScreenBuffer,
+        row: Int,
+        col: inout Int,
+        maxCol: Int,
+        style: Style
+    ) {
+        guard col < maxCol else { return }
+
+        if isControl && width > 1 {
+            for _ in 0..<width where col < maxCol {
+                buffer[row, col] = Cell(character: " ", style: style)
+                col += 1
+            }
+            return
+        }
+
+        if width > 1 && UnicodeWidth.displayWidth(of: char) == 1 {
+            buffer[row, col] = Cell(character: char, style: style)
+            col += 1
+            for _ in 1..<width where col < maxCol {
+                buffer[row, col] = Cell(character: " ", style: style)
+                col += 1
+            }
+            return
+        }
+
+        if width == 2 && col + 1 < maxCol {
+            buffer[row, col] = Cell(character: char, style: style, width: 2)
+            buffer[row, col + 1] = Cell(character: "\0", style: style, width: 0)
+            col += 2
+        } else if width == 1 {
+            buffer[row, col] = Cell(character: char, style: style)
+            col += 1
         }
     }
 
@@ -1101,6 +1155,9 @@ public enum ViewRenderer {
         }
 
         if let modified = view as? any _ModifiedViewProtocol {
+            if let region = _extractFocusRegion(from: view) {
+                context.focusMap?.register(region, rect: rect)
+            }
             let mergedContext = modified.modifiedContext(from: context)
             modified.contentView.render(to: &buffer, in: rect, context: mergedContext)
             return
@@ -1134,6 +1191,9 @@ public enum ViewRenderer {
         context: RenderContext
     ) {
         for child in tuple.childViews {
+            if let region = _extractFocusRegion(from: child) {
+                context.focusMap?.register(region, rect: rect)
+            }
             child.render(to: &buffer, in: rect, context: context)
         }
     }
@@ -1163,9 +1223,14 @@ public enum ViewRenderer {
             return
         }
 
-        let segments = segments(
-            totalLength: stack.axis == .vertical ? rect.height : rect.width,
-            count: children.count,
+        let isVertical = stack.axis == .vertical
+        let dimensions = children.map { child -> LayoutDimension in
+            _extractLayoutDimension(from: child, axis: isVertical ? .vertical : .horizontal)
+        }
+
+        let segments = StackLayout.distribute(
+            dimensions: dimensions,
+            available: isVertical ? rect.height : rect.width,
             spacing: stack.spacing
         )
 
@@ -1183,33 +1248,14 @@ public enum ViewRenderer {
             }
 
             guard !childRect.isEmpty else { continue }
+
+            // Register focus region if present (walks nested modifiers)
+            if let region = _extractFocusRegion(from: child) {
+                context.focusMap?.register(region, rect: childRect)
+            }
+
             child.render(to: &buffer, in: childRect, context: context)
         }
-    }
-
-    private static func segments(totalLength: Int, count: Int, spacing: Int) -> [(
-        offset: Int, length: Int
-    )] {
-        guard count > 0 else { return [] }
-
-        let resolvedSpacing = max(0, spacing)
-        let totalSpacing = resolvedSpacing * max(0, count - 1)
-        let availableLength = max(0, totalLength - totalSpacing)
-        let baseLength = availableLength / count
-        let remainder = availableLength % count
-
-        var result: [(offset: Int, length: Int)] = []
-        result.reserveCapacity(count)
-
-        var offset = 0
-        for index in 0..<count {
-            let extra = index < remainder ? 1 : 0
-            let length = baseLength + extra
-            result.append((offset: offset, length: length))
-            offset += length + resolvedSpacing
-        }
-
-        return result
     }
 }
 
@@ -1270,6 +1316,63 @@ private protocol _TreeViewProtocol {
     var scrollIndicatorStyle: VerticalScrollIndicatorStyle { get }
 }
 
+private protocol _LayoutDimensionProvider {
+    var layoutDimension: (width: LayoutDimension?, height: LayoutDimension?) { get }
+}
+
+private protocol _FocusRegionProvider {
+    var focusRegion: FocusRegion { get }
+}
+
+private func _extractFocusRegion(from view: any View) -> FocusRegion? {
+    if let provider = view as? any _FocusRegionProvider {
+        return provider.focusRegion
+    }
+    if let modified = view as? any _ModifiedViewProtocol {
+        return _extractFocusRegion(from: modified.contentView)
+    }
+    return nil
+}
+
+private func _extractLayoutDimension(from view: any View, axis: Axis) -> LayoutDimension {
+    if let provider = view as? any _LayoutDimensionProvider {
+        let dims = provider.layoutDimension
+        switch axis {
+        case .horizontal:
+            if let w = dims.width { return w }
+        case .vertical:
+            if let h = dims.height { return h }
+        }
+    }
+    if view is Spacer {
+        return .flexible(min: (view as! Spacer).minLength)
+    }
+    if view is Separator {
+        let sep = view as! Separator
+        switch axis {
+        case .horizontal:
+            return sep.axis == .vertical ? .fixed(1) : .flexible(min: 0)
+        case .vertical:
+            return sep.axis == .horizontal ? .fixed(1) : .flexible(min: 0)
+        }
+    }
+    // Walk through non-frame modifiers to find inner frame/spacer/separator
+    if let modified = view as? any _ModifiedViewProtocol {
+        return _extractLayoutDimension(from: modified.contentView, axis: axis)
+    }
+    return .flexible(min: 0)
+}
+
+extension ModifiedView: _LayoutDimensionProvider where Modifier == FrameModifier {
+    fileprivate var layoutDimension: (width: LayoutDimension?, height: LayoutDimension?) {
+        (width: modifier.width, height: modifier.height)
+    }
+}
+
+extension ModifiedView: _FocusRegionProvider where Modifier == FocusRegionModifier {
+    fileprivate var focusRegion: FocusRegion { modifier.region }
+}
+
 private func _childViews<Content: View>(from content: Content) -> [any View] {
     if let tuple = content as? any _TupleViewProtocol {
         return tuple.childViews
@@ -1278,18 +1381,7 @@ private func _childViews<Content: View>(from content: Content) -> [any View] {
 }
 
 extension TupleView: _TupleViewProtocol {
-    fileprivate var childViews: [any View] {
-        let mirror = Mirror(reflecting: value)
-        if mirror.displayStyle == .tuple {
-            return mirror.children.compactMap { $0.value as? any View }
-        }
-
-        if let view = value as? any View {
-            return [view]
-        }
-
-        return []
-    }
+    fileprivate var childViews: [any View] { _children }
 }
 
 extension ConditionalView: _ConditionalViewProtocol {

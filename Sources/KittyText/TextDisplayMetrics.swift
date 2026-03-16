@@ -27,13 +27,15 @@ public enum TextDisplayMetrics {
 
         var column = 0
         for (offset, char) in line.enumerated() {
-            if column >= targetColumn { return offset }
+            let nextColumn: Int
             if char == "\t" {
                 let tabSpan = max(1, tabSize)
-                column += tabSpan - (column % tabSpan)
+                nextColumn = column + tabSpan - (column % tabSpan)
             } else {
-                column += UnicodeWidth.displayWidth(of: char)
+                nextColumn = column + UnicodeWidth.displayWidth(of: char)
             }
+            if targetColumn < nextColumn { return offset }
+            column = nextColumn
         }
         return line.count
     }

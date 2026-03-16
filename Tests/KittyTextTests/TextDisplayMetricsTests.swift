@@ -12,7 +12,14 @@ import Testing
     @Test func `characterOffset maps display columns back to character offsets`() {
         #expect(TextDisplayMetrics.characterOffset(forDisplayColumn: 0, in: "a界b") == 0)
         #expect(TextDisplayMetrics.characterOffset(forDisplayColumn: 1, in: "a界b") == 1)
+        #expect(TextDisplayMetrics.characterOffset(forDisplayColumn: 2, in: "a界b") == 1)
         #expect(TextDisplayMetrics.characterOffset(forDisplayColumn: 3, in: "a界b") == 2)
+    }
+
+    @Test func `characterOffset stays on the owning tab while inside its span`() {
+        #expect(TextDisplayMetrics.characterOffset(forDisplayColumn: 1, in: "\tab", tabSize: 4) == 0)
+        #expect(TextDisplayMetrics.characterOffset(forDisplayColumn: 3, in: "\tab", tabSize: 4) == 0)
+        #expect(TextDisplayMetrics.characterOffset(forDisplayColumn: 4, in: "\tab", tabSize: 4) == 1)
     }
 
     @Test func `lineNumberDigits grows past five digits`() {

@@ -132,6 +132,17 @@ struct TextEditorTests {
     }
 
     @Test
+    func `wrapped row starts keep tab stops anchored to the logical line`() {
+        #expect(
+            TextEditorLayout.wrappedRowStartColumns(
+                for: "aaaaa\txx",
+                contentWidth: 5,
+                tabSize: 4
+            ) == [0, 5]
+        )
+    }
+
+    @Test
     func `Hit testing maps clicks into scrolled unwrapped content`() {
         let editor = TextEditor(
             lines: ["abcdef"],
@@ -168,6 +179,26 @@ struct TextEditorTests {
         )
 
         #expect(position == .init(row: 0, col: 4))
+    }
+
+    @Test
+    func `hit testing inside a wrapped tab span stays on the tab character`() {
+        let editor = TextEditor(
+            lines: ["aaaaa\txx"],
+            lineSpans: [[StyledSpan(text: "aaaaa\txx", style: .default)]],
+            showLineNumbers: false,
+            wrapLines: true,
+            tabSize: 4
+        )
+
+        let position = TextEditorLayout.textPosition(
+            for: editor,
+            in: Rect(x: 0, y: 0, width: 5, height: 2),
+            row: 1,
+            col: 1
+        )
+
+        #expect(position == .init(row: 0, col: 5))
     }
 
     @Test

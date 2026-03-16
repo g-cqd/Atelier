@@ -28,6 +28,14 @@ import Testing
         #expect(UnicodeWidth.displayWidth(of: "Ａ") == 2)
     }
 
+    @Test func `emoji presentation characters have display width 2`() {
+        #expect(UnicodeWidth.displayWidth(of: "❌") == 2)
+    }
+
+    @Test func `emoji grapheme clusters have display width 2`() {
+        #expect(UnicodeWidth.displayWidth(of: "1️⃣") == 2)
+    }
+
     @Test func `null character has display width 0`() {
         #expect(UnicodeWidth.displayWidth(of: "\0") == 0)
     }

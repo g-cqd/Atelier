@@ -42,6 +42,35 @@ struct MouseHitTestingAndScrollDragTests {
     }
 
     @Test
+    func `double click on wrapped content selects the clicked word`() {
+        let sut = makeSUT(fileContent: ["alpha beta gamma"], columns: 11, rows: 6)
+        sut.state.config.editor.wrapLines = true
+        sut.state.treePanelWidth = 3
+        sut.state.mode = .editor
+        sut.state.bufferManager.open(
+            filePath: "/a.txt",
+            fileName: "a.txt",
+            content: "alpha beta gamma",
+            language: nil
+        )
+        sut.state.restoreStateFromActiveBuffer()
+        sut.state.lastClickTime = Date()
+
+        handleMouse(
+            MouseEvent(button: .left, row: 3, col: 9, kind: .press),
+            state: sut.state,
+            pipeline: sut.pipeline
+        )
+
+        #expect(
+            sut.state.selection
+                == TextSelection(
+                    anchor: TextPosition(row: 0, col: 6),
+                    head: TextPosition(row: 0, col: 10)
+                ))
+    }
+
+    @Test
     func `dragging the editor scroll indicator updates the shared scroll offset`() {
         let sut = makeSUT(fileContent: (0..<20).map(String.init), columns: 18, rows: 8)
         sut.state.treePanelWidth = 3

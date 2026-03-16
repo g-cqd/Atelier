@@ -36,7 +36,7 @@ struct ActivityBarAndFileLifecycleRegressionTests {
     func `activity bar renders in the first 3 columns`() {
         let sut = makeSUT(fileContent: ["test"], columns: 40, rows: 10, activityBar: true)
         sut.state.mode = .editor
-        render(pipeline: sut.pipeline, state: sut.state)
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         // Activity bar renders at columns 0-2, contentStartRow=1
         // Column 1 (centered) should have an icon character for the first activity bar item
@@ -68,7 +68,7 @@ struct ActivityBarAndFileLifecycleRegressionTests {
         #expect(sut.state.fileName == "Untitled")
         #expect(sut.state.mode == .editor)
 
-        render(pipeline: sut.pipeline, state: sut.state)
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         #expect(sut.pipeline.cursorRow != nil)
         #expect(sut.pipeline.cursorCol != nil)
