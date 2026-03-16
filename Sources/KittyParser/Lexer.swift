@@ -4,10 +4,16 @@ import KittyGrammar
 public struct Lexer: Sendable {
     private let lexTable: LexTable
     private let extras: Set<String>
+    private let externalScanner: (any ExternalScanner)?
 
-    public init(lexTable: LexTable, extras: Set<String> = []) {
+    public init(
+        lexTable: LexTable,
+        extras: Set<String> = [],
+        externalScanner: (any ExternalScanner)? = nil
+    ) {
         self.lexTable = lexTable
         self.extras = extras
+        self.externalScanner = externalScanner
     }
 
     /// A token produced by the lexer.
@@ -90,6 +96,29 @@ public struct Lexer: Sendable {
                         isExtra: true
                     ))
                 continue
+            }
+
+            // Try external scanner before falling back to single character
+            if let scanner = externalScanner {
+                let validSymbols = Set(scanner.validSymbols)
+                if !validSymbols.isEmpty,
+                   let result = scanner.scan(source: utf8, position: pos, validSymbols: validSymbols)
+                {
+                    let endPos = pos + result.length
+                    let endPoint = advancePoint(point, over: utf8, from: pos, to: endPos)
+                    let textBuf = UnsafeBufferPointer(rebasing: utf8[pos..<endPos])
+                    let text = String(bytes: textBuf, encoding: .utf8) ?? ""
+                    tokens.append(
+                        Token(
+                            type: result.type,
+                            byteRange: pos..<endPos,
+                            pointRange: point..<endPoint,
+                            text: text
+                        ))
+                    point = endPoint
+                    pos = endPos
+                    continue
+                }
             }
 
             // Single character token (fallback)
