@@ -48,7 +48,11 @@ func renderTreePanel(
 
         let icon = treeRowIcon(for: node, symbolTheme: state.symbolTheme)
         let label = String(repeating: " ", count: entry.depth * 2) + icon + node.name
-        let visibleLabel = String(label.prefix(contentWidth))
+        let isSelected = rowIndex == state.selectedTreeIndex
+        let visibleLabel = truncateSidebarLabel(
+            label, contentWidth: contentWidth, isSelected: isSelected,
+            overflowMode: state.config.sidebarOverflowMode,
+            marqueeOffset: state.marqueeTickOffset)
         pipeline.buffer.write(visibleLabel, row: screenRow, col: treeRect.x, style: rowStyle)
 
         guard let status = provider?.status(for: node.path), !status.indicator.isEmpty else {
@@ -90,6 +94,38 @@ func renderTreePanel(
             metrics: metrics,
             style: colorScheme.verticalScrollIndicator
         ).render(to: &pipeline.buffer, in: indicatorRect)
+    }
+}
+
+func truncateSidebarLabel(
+    _ label: String, contentWidth: Int, isSelected: Bool,
+    overflowMode: KittyConfig.SidebarOverflowMode,
+    marqueeOffset: Int
+) -> String {
+    guard label.count > contentWidth else { return label }
+
+    switch overflowMode {
+    case .truncateEnd:
+        if isSelected, contentWidth > 3 {
+            return "..." + String(label.suffix(contentWidth - 3))
+        } else if contentWidth > 3 {
+            return String(label.prefix(contentWidth - 3)) + "..."
+        } else {
+            return String(label.prefix(contentWidth))
+        }
+    case .marquee:
+        if isSelected {
+            let gap = "   "
+            let scrollText = label + gap
+            let totalLen = scrollText.count
+            let offset = marqueeOffset % totalLen
+            let rotated = String(scrollText.dropFirst(offset)) + String(scrollText.prefix(offset))
+            return String(rotated.prefix(contentWidth))
+        } else if contentWidth > 3 {
+            return String(label.prefix(contentWidth - 3)) + "..."
+        } else {
+            return String(label.prefix(contentWidth))
+        }
     }
 }
 

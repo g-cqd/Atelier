@@ -95,10 +95,18 @@ extension EditorState {
                 bg: (theme.selectionBackground ?? ColorRGB(r: 0x26, g: 0x4f, b: 0x78)).color
             ),
             searchMatch: Style(
-                bg: .rgb(r: 0x3a, g: 0x3d, b: 0x41)
+                fg: theme.searchMatchForeground?.color ?? .default,
+                bg: (theme.searchMatchBackground ?? ColorRGB(r: 0x3a, g: 0x3d, b: 0x41)).color
             ),
             activeSearchMatch: Style(
-                bg: .rgb(r: 0x51, g: 0x5c, b: 0x6a)
+                fg: theme.activeSearchMatchForeground?.color ?? .rgb(r: 0xff, g: 0xff, b: 0xff),
+                bg: (theme.activeSearchMatchBackground ?? ColorRGB(r: 0x61, g: 0x4f, b: 0x0e)).color,
+                bold: true
+            ),
+            commandFeedback: Style(
+                fg: theme.commandFeedbackForeground?.color ?? .rgb(r: 0x8b, g: 0x94, b: 0x9e),
+                bg: theme.commandFeedbackBackground?.color ?? .default,
+                dim: true
             )
         )
     }
