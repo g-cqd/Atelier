@@ -94,6 +94,117 @@ struct UndoRedoTests {
     }
 
     @Test
+    func `undo restores selection state`() {
+        var config = KittyConfig()
+        config.editor.undoCoalescingEnabled = false
+        let state = EditorState(rootPath: ".", config: config)
+        state.beginNewFile()
+        state.mode = .editor
+
+        // Type some text (first edit)
+        insertText("hello world", into: state)
+
+        // Create a selection on the buffer
+        let sel = TextSelection(
+            anchor: TextPosition(row: 0, col: 0),
+            head: TextPosition(row: 0, col: 5)
+        )
+        state.selection = sel
+
+        // Second edit — snapshot captures the selection in `before`
+        insertText("!", into: state)
+
+        // Undo the "!" edit — should restore the `before` snapshot which had the selection
+        state.undoActiveBuffer()
+        #expect(state.selection == sel)
+    }
+
+    @Test
+    func `performUndo dispatches to buffer in editor mode`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        config.editor.undoCoalescingEnabled = false
+        let state = EditorState(rootPath: ".", config: config)
+
+        state.beginNewFile()
+        state.mode = .editor
+        insertText("a", into: state)
+
+        state.performUndo()
+        #expect(state.documentText.isEmpty)
+    }
+
+    @Test
+    func `performUndo dispatches to tree in tree mode`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        config.editor.undoCoalescingEnabled = false
+        let state = EditorState(rootPath: ".", config: config)
+
+        state.beginNewFile()
+        state.mode = .editor
+        insertText("a", into: state)
+
+        // Switch to tree mode — performUndo should NOT touch the buffer
+        state.mode = .tree
+        state.performUndo()
+        #expect(state.documentText == "a")
+    }
+
+    @Test
+    func `performRedo dispatches to buffer in editor mode`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        config.editor.undoCoalescingEnabled = false
+        let state = EditorState(rootPath: ".", config: config)
+
+        state.beginNewFile()
+        state.mode = .editor
+        insertText("a", into: state)
+
+        state.undoActiveBuffer()
+        #expect(state.documentText.isEmpty)
+
+        state.performRedo()
+        #expect(state.documentText == "a")
+    }
+
+    @Test
+    func `editor context menu includes undo when available`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        let state = EditorState(rootPath: ".", config: config)
+
+        state.beginNewFile()
+        state.mode = .editor
+        insertText("x", into: state)
+
+        state.showEditorContextMenu()
+        let titles = state.contextMenu?.items.map(\.title) ?? []
+        #expect(titles.contains("Undo"))
+    }
+
+    @Test
+    func `editor context menu excludes undo when unavailable`() {
+        var config = KittyConfig()
+        config.activityBar.show = false
+        config.tabRibbon.position = .hidden
+        let state = EditorState(rootPath: ".", config: config)
+
+        state.beginNewFile()
+        state.mode = .editor
+
+        state.showEditorContextMenu()
+        let titles = state.contextMenu?.items.map(\.title) ?? []
+        #expect(!titles.contains("Undo"))
+        #expect(!titles.contains("Redo"))
+    }
+
+    @Test
     func `buffer undo invalidates after external refresh divergence`() throws {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         state.beginNewFile()

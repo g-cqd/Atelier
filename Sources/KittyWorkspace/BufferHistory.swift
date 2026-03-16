@@ -5,15 +5,18 @@ public struct BufferEditSnapshot: Sendable {
     public var textBuffer: TextBuffer
     public var textCursor: TextCursor
     public var lineEnding: TextDocument.LineEnding
+    public var selection: TextSelection?
 
     public init(
         textBuffer: TextBuffer,
         textCursor: TextCursor,
-        lineEnding: TextDocument.LineEnding
+        lineEnding: TextDocument.LineEnding,
+        selection: TextSelection? = nil
     ) {
         self.textBuffer = textBuffer
         self.textCursor = textCursor
         self.lineEnding = lineEnding
+        self.selection = selection
     }
 
     public var contentFingerprint: Int {
@@ -34,6 +37,11 @@ public final class BufferEditHistory {
         case invalidated
     }
 
+    public enum InvalidationReason: Sendable {
+        case externalFileChange
+        case fingerprintMismatch
+    }
+
     private struct Transition {
         var before: BufferEditSnapshot
         var after: BufferEditSnapshot
@@ -44,6 +52,8 @@ public final class BufferEditHistory {
     private var redoStack: [Transition] = []
     private var currentFingerprint: Int
     private var savedFingerprint: Int
+    public var maxUndoSteps: Int = 200
+    public private(set) var lastInvalidationReason: InvalidationReason?
 
     public init(initial snapshot: BufferEditSnapshot) {
         let fingerprint = snapshot.contentFingerprint
@@ -59,6 +69,11 @@ public final class BufferEditHistory {
         !redoStack.isEmpty
     }
 
+    public var isNextUndoAtSaveBoundary: Bool {
+        guard let transition = undoStack.last else { return false }
+        return transition.before.contentFingerprint == savedFingerprint
+    }
+
     public func recordChange(
         from before: BufferEditSnapshot,
         to after: BufferEditSnapshot,
@@ -67,6 +82,7 @@ public final class BufferEditHistory {
         let beforeFingerprint = before.contentFingerprint
         let afterFingerprint = after.contentFingerprint
         currentFingerprint = afterFingerprint
+        lastInvalidationReason = nil
 
         guard beforeFingerprint != afterFingerprint else { return }
 
@@ -75,7 +91,9 @@ public final class BufferEditHistory {
             coalescingWindow > 0,
             redoStack.isEmpty,
             let lastIndex = undoStack.indices.last,
-            recordedAt.timeIntervalSince(undoStack[lastIndex].recordedAt) <= coalescingWindow
+            recordedAt.timeIntervalSince(undoStack[lastIndex].recordedAt) <= coalescingWindow,
+            before.textCursor.row == undoStack[lastIndex].after.textCursor.row,
+            before.textCursor.col == undoStack[lastIndex].after.textCursor.col
         {
             undoStack[lastIndex].after = after
             undoStack[lastIndex].recordedAt = recordedAt
@@ -84,10 +102,15 @@ public final class BufferEditHistory {
 
         undoStack.append(Transition(before: before, after: after, recordedAt: recordedAt))
         redoStack.removeAll(keepingCapacity: true)
+
+        if undoStack.count > maxUndoSteps {
+            undoStack.removeFirst(undoStack.count - maxUndoSteps)
+        }
     }
 
     public func undo(current snapshot: BufferEditSnapshot) -> StepResult {
         guard snapshot.contentFingerprint == currentFingerprint else {
+            lastInvalidationReason = .fingerprintMismatch
             reset(to: snapshot, marksSaved: false)
             return .invalidated
         }
@@ -96,12 +119,16 @@ public final class BufferEditHistory {
         }
 
         redoStack.append(transition)
+        if redoStack.count > maxUndoSteps {
+            redoStack.removeFirst(redoStack.count - maxUndoSteps)
+        }
         currentFingerprint = transition.before.contentFingerprint
         return .applied(transition.before)
     }
 
     public func redo(current snapshot: BufferEditSnapshot) -> StepResult {
         guard snapshot.contentFingerprint == currentFingerprint else {
+            lastInvalidationReason = .fingerprintMismatch
             reset(to: snapshot, marksSaved: false)
             return .invalidated
         }
@@ -110,6 +137,9 @@ public final class BufferEditHistory {
         }
 
         undoStack.append(transition)
+        if undoStack.count > maxUndoSteps {
+            undoStack.removeFirst(undoStack.count - maxUndoSteps)
+        }
         currentFingerprint = transition.after.contentFingerprint
         return .applied(transition.after)
     }
@@ -132,6 +162,7 @@ public final class BufferEditHistory {
         currentFingerprint = fingerprint
         savedFingerprint = fingerprint
         if invalidated {
+            lastInvalidationReason = .externalFileChange
             undoStack.removeAll(keepingCapacity: true)
             redoStack.removeAll(keepingCapacity: true)
         }

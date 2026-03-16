@@ -27,7 +27,8 @@ public final class BufferManager {
         fileName: String,
         content: String,
         language: String?,
-        lineEnding: TextDocument.LineEnding = .lineFeed
+        lineEnding: TextDocument.LineEnding = .lineFeed,
+        maxUndoSteps: Int = 200
     ) -> Int {
         if let existing = bufferIndex(forPath: filePath) {
             activeIndex = existing
@@ -39,7 +40,8 @@ public final class BufferManager {
             fileName: fileName,
             content: content,
             language: language,
-            lineEnding: lineEnding
+            lineEnding: lineEnding,
+            maxUndoSteps: maxUndoSteps
         )
         buffers.append(buffer)
         activeIndex = buffers.count - 1
@@ -103,7 +105,8 @@ public final class BufferManager {
         fileName: String,
         content: String,
         language: String?,
-        lineEnding: TextDocument.LineEnding = .lineFeed
+        lineEnding: TextDocument.LineEnding = .lineFeed,
+        maxUndoSteps: Int = 200
     ) -> Int {
         if let existing = bufferIndex(forPath: filePath) {
             activeIndex = existing
@@ -125,7 +128,8 @@ public final class BufferManager {
             fileName: fileName,
             content: content,
             language: language,
-            lineEnding: lineEnding
+            lineEnding: lineEnding,
+            maxUndoSteps: maxUndoSteps
         )
         buffer.isPreview = true
         buffers.append(buffer)

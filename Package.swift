@@ -26,6 +26,7 @@ let package = Package(
         .library(name: "KittyFileTree", targets: ["KittyFileTree"]),
         .library(name: "KittySymbols", targets: ["KittySymbols"]),
         .library(name: "KittyGit", targets: ["KittyGit"]),
+        .library(name: "KittySearch", targets: ["KittySearch"]),
         .library(name: "KittyWorkspace", targets: ["KittyWorkspace"]),
         .executable(name: "KittyCode", targets: ["KittyCode"]),
         .executable(name: "KittySymbolsCLI", targets: ["KittySymbolsCLI"]),
@@ -65,6 +66,9 @@ let package = Package(
         .target(
             name: "KittyGit", dependencies: ["KittyFileTree", "KittySync"],
             swiftSettings: defaultSwiftSettings),
+
+        // Layer 2g — Search engine primitives
+        .target(name: "KittySearch", swiftSettings: defaultSwiftSettings),
 
         // Layer 3a — grammar.json loader + LR table compiler
         .target(name: "KittyGrammar", swiftSettings: defaultSwiftSettings),
@@ -110,7 +114,7 @@ let package = Package(
             name: "KittyCode",
             dependencies: [
                 "KittyApp", "KittyWorkspace", "KittyInput", "KittyText", "KittyFileTree",
-                "KittySyntax", "KittySymbols", "KittyGit",
+                "KittySyntax", "KittySymbols", "KittyGit", "KittySearch",
             ], swiftSettings: defaultSwiftSettings),
 
         // KittySymbols CLI
@@ -165,5 +169,8 @@ let package = Package(
             swiftSettings: defaultSwiftSettings),
         .testTarget(
             name: "KittyGitTests", dependencies: ["KittyGit"], swiftSettings: defaultSwiftSettings),
+        .testTarget(
+            name: "KittySearchTests", dependencies: ["KittySearch"],
+            swiftSettings: defaultSwiftSettings),
     ]
 )

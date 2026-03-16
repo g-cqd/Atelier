@@ -3,6 +3,7 @@ public enum Key: UInt32 {
     case down = 57353
     case right = 57354
     case left = 57355
+    case tab = 9
     case enter = 13
     case enterAlt = 10
     case backspace = 127
@@ -26,12 +27,15 @@ public enum AsciiKey {
     public static let l: UInt32 = 0x6C
     public static let n: UInt32 = 0x6E
     public static let o: UInt32 = 0x6F
+    public static let p: UInt32 = 0x70
     public static let q: UInt32 = 0x71
+    public static let s: UInt32 = 0x73
     public static let v: UInt32 = 0x76
     public static let w: UInt32 = 0x77
     public static let x: UInt32 = 0x78
     public static let y: UInt32 = 0x79
     public static let z: UInt32 = 0x7A
     public static let colon: UInt32 = 0x3A
+    public static let tab: UInt32 = 9
     public static let escape: UInt32 = 27
 }

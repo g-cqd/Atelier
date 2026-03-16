@@ -271,7 +271,6 @@ public enum ViewRenderer {
         let editorStyle = context.applyTo(editor.editorStyle)
         let lineNumberStyle = context.applyTo(editor.lineNumberStyle)
         let currentLineStyle = context.applyTo(editor.currentLineStyle)
-        let selectionStyle = context.applyTo(editor.selectionStyle)
         let gutterWidth = TextEditorLayout.gutterWidth(for: editor)
         let gutterDecorationWidth = TextEditorLayout.gutterDecorationWidth(for: editor)
         let lineNumberColumnWidth = TextEditorLayout.lineNumberColumnWidth(for: editor)
@@ -366,7 +365,7 @@ public enum ViewRenderer {
                     var charIndex = 0
                     var wrapIsLeading = true
                     let wsConfig = editor.whitespaceConfig
-                    let selectionRange = editor.selectionRanges[lineIndex]
+                    let lineHighlights = editor.highlights[lineIndex]
 
                     spanLoop: for span in spans {
                         for char in span.text {
@@ -379,7 +378,7 @@ public enum ViewRenderer {
 
                             if wsConfig.isEnabledOrSelectionAware {
                                 let inSelection =
-                                    selectionRange.map { $0.contains(charIndex) } ?? false
+                                    isInSelection(charIndex: charIndex, highlights: lineHighlights)
                                 let category = WhitespaceRenderer.classify(
                                     char, isLeading: wrapIsLeading)
                                 switch category {
@@ -440,9 +439,8 @@ public enum ViewRenderer {
                                     isCurrentLine: isCurrentLine,
                                     currentLineStyle: currentLineStyle
                                 )
-                                if let range = selectionRange, range.contains(charIndex) {
-                                    style = applySelectionStyle(selectionStyle, to: style)
-                                }
+                                style = resolveHighlightStyle(
+                                    for: charIndex, highlights: lineHighlights, base: style)
                                 if isControl && width > 1 {
                                     for _ in 0..<width where col < contentMaxX {
                                         buffer[row, col] = Cell(character: " ", style: style)
@@ -466,9 +464,7 @@ public enum ViewRenderer {
 
                     if wrapRow == wrappedRows - 1 && col < contentMaxX {
                         let inSel =
-                            selectionRange.map {
-                                $0.contains(charIndex) || charIndex <= $0.upperBound
-                            } ?? false
+                            isInSelection(charIndex: charIndex, highlights: lineHighlights)
                         if wsConfig.shouldShowLineBreaks(inSelection: inSel) {
                             let lbStyle = resolvedLineStyle(
                                 from: wsConfig.lineBreakStyle,
@@ -626,7 +622,7 @@ public enum ViewRenderer {
             }
 
             let spans = editor.spans(at: lineIndex)
-            let selectionRange = editor.selectionRanges[lineIndex]
+            let lineHighlights = editor.highlights[lineIndex]
             renderStyledLine(
                 spans: spans,
                 into: &buffer,
@@ -640,8 +636,7 @@ public enum ViewRenderer {
                 currentLineStyle: currentLineStyle,
                 whitespaceConfig: editor.whitespaceConfig,
                 tabSize: editor.tabSize,
-                selectionRange: selectionRange,
-                selectionStyle: selectionStyle
+                highlights: lineHighlights
             )
         }
 
@@ -824,15 +819,31 @@ public enum ViewRenderer {
             row: row, col: col, width: width, height: 1, cell: Cell(character: " ", style: style))
     }
 
-    private static func applySelectionStyle(_ selectionStyle: Style, to base: Style) -> Style {
+    private static func resolveHighlightStyle(
+        for charIndex: Int,
+        highlights: [TextHighlight]?,
+        base: Style
+    ) -> Style {
+        guard let highlights, !highlights.isEmpty else { return base }
+        var best: TextHighlight?
+        for highlight in highlights {
+            guard highlight.range.contains(charIndex) else { continue }
+            if let current = best {
+                if highlight.role > current.role { best = highlight }
+            } else {
+                best = highlight
+            }
+        }
+        guard let winner = best else { return base }
         var style = base
-        if selectionStyle.bg != .default {
-            style.bg = selectionStyle.bg
-        }
-        if selectionStyle.fg != .default {
-            style.fg = selectionStyle.fg
-        }
+        if winner.style.bg != .default { style.bg = winner.style.bg }
+        if winner.style.fg != .default { style.fg = winner.style.fg }
         return style
+    }
+
+    private static func isInSelection(charIndex: Int, highlights: [TextHighlight]?) -> Bool {
+        guard let highlights else { return false }
+        return highlights.contains { $0.role == .userSelection && $0.range.contains(charIndex) }
     }
 
     // swiftlint:disable:next cyclomatic_complexity function_body_length
@@ -849,8 +860,7 @@ public enum ViewRenderer {
         currentLineStyle: Style,
         whitespaceConfig: WhitespaceRenderer.Config = .disabled,
         tabSize: Int = 4,
-        selectionRange: ClosedRange<Int>? = nil,
-        selectionStyle: Style = .default
+        highlights: [TextHighlight]? = nil
     ) {
         guard availWidth > 0 else { return }
         var currentCol = col
@@ -868,7 +878,7 @@ public enum ViewRenderer {
                     char == "\t" ? (ts - (currentX % ts)) : UnicodeWidth.displayWidth(of: char)
 
                 if whitespaceConfig.isEnabledOrSelectionAware {
-                    let inSelection = selectionRange.map { $0.contains(charIndex) } ?? false
+                    let inSelection = isInSelection(charIndex: charIndex, highlights: highlights)
                     category = WhitespaceRenderer.classify(char, isLeading: isLeading)
                     switch category {
                     case .normal:
@@ -918,9 +928,8 @@ public enum ViewRenderer {
                         isCurrentLine: isCurrentLine,
                         currentLineStyle: currentLineStyle
                     )
-                    if let range = selectionRange, range.contains(charIndex) {
-                        style = applySelectionStyle(selectionStyle, to: style)
-                    }
+                    style = resolveHighlightStyle(
+                        for: charIndex, highlights: highlights, base: style)
                     if isControl && width > 1 {
                         // Tab: render as multiple spaces
                         for _ in 0..<width where currentCol < col + availWidth {
@@ -943,8 +952,7 @@ public enum ViewRenderer {
         }
 
         if currentCol < col + availWidth {
-            let inSel =
-                selectionRange.map { $0.contains(charIndex) || charIndex <= $0.upperBound } ?? false
+            let inSel = isInSelection(charIndex: charIndex, highlights: highlights)
             if whitespaceConfig.shouldShowLineBreaks(inSelection: inSel) {
                 let lbStyle = resolvedLineStyle(
                     from: whitespaceConfig.lineBreakStyle,
