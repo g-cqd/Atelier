@@ -167,6 +167,52 @@ public final class Highlighter: Sendable {
         }
         return scratch.spans
     }
+
+    // MARK: - Token-based highlighting
+
+    /// Build intermediate `HighlightToken`s from query matches.
+    /// These tokens preserve semantic roles and can be merged across layers.
+    ///
+    /// Priority is inverted from patternIndex: earlier patterns in the query file
+    /// get *higher* priority, matching the existing span-path convention where
+    /// earlier patterns win on identical byte ranges.
+    public func buildTokens(
+        matches: [QueryMatch],
+        layer: HighlightLayer = .structural
+    ) -> [HighlightToken] {
+        let maxPatternIndex = matches.map(\.patternIndex).max() ?? 0
+        var tokens: [HighlightToken] = []
+        tokens.reserveCapacity(matches.reduce(into: 0) { $0 += $1.captures.count })
+
+        for match in matches {
+            for capture in match.captures {
+                let (role, modifiers) = CaptureRoleMapper.map(capture.name)
+                tokens.append(HighlightToken(
+                    byteRange: capture.node.byteRange,
+                    role: role,
+                    modifiers: modifiers,
+                    layer: layer,
+                    priority: maxPatternIndex - match.patternIndex
+                ))
+            }
+        }
+
+        return tokens
+    }
+
+    /// Convert merged tokens to styled spans using a role-based theme resolver.
+    public func tokensToSpans(
+        tokens: [HighlightToken],
+        source: String,
+        resolver: RoleBasedThemeResolver
+    ) -> [StyledSpan] {
+        HighlightMerger.resolveToSpans(
+            tokens: tokens,
+            source: source,
+            resolver: resolver,
+            defaultStyle: theme.defaultStyle
+        )
+    }
 }
 
 // MARK: - Styled Span
