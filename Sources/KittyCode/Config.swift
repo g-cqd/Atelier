@@ -82,6 +82,7 @@ struct KittyConfig: Codable, Sendable {
         var scrollAccelerationWindowMilliseconds: Int = 120
         var scrollAccelerationStepIntervalMilliseconds: Int = 1
         var scrollAccelerationMaxExtraLines: Int = 8
+        var keyRepeatIntervalMilliseconds: Int = 40
         var maxUndoSteps: Int = 200
         var maxTreeUndoSteps: Int = 50
         var snapshotMaxFiles: Int = 500
@@ -125,6 +126,9 @@ struct KittyConfig: Codable, Sendable {
             scrollAccelerationMaxExtraLines =
                 try c.decodeIfPresent(Int.self, forKey: .scrollAccelerationMaxExtraLines)
                 ?? d.scrollAccelerationMaxExtraLines
+            keyRepeatIntervalMilliseconds =
+                try c.decodeIfPresent(Int.self, forKey: .keyRepeatIntervalMilliseconds)
+                ?? d.keyRepeatIntervalMilliseconds
             maxUndoSteps =
                 try c.decodeIfPresent(Int.self, forKey: .maxUndoSteps) ?? d.maxUndoSteps
             maxTreeUndoSteps =
@@ -399,6 +403,16 @@ struct KittyConfig: Codable, Sendable {
         var whitespaceLineBreakForeground: ColorRGB?
         var whitespaceUnexpectedForeground: ColorRGB?
 
+        // Search highlighting
+        var searchMatchForeground: ColorRGB?
+        var searchMatchBackground: ColorRGB?
+        var activeSearchMatchForeground: ColorRGB?
+        var activeSearchMatchBackground: ColorRGB?
+
+        // Command feedback
+        var commandFeedbackForeground: ColorRGB?
+        var commandFeedbackBackground: ColorRGB?
+
         // Git line highlighting
         var gitModifiedLineBackground: ColorOverlayConfig?
         var gitModifiedLineForeground: ColorOverlayConfig?
@@ -502,6 +516,18 @@ struct KittyConfig: Codable, Sendable {
                 ColorRGB.self, forKey: .whitespaceLineBreakForeground)
             whitespaceUnexpectedForeground = try c.decodeIfPresent(
                 ColorRGB.self, forKey: .whitespaceUnexpectedForeground)
+            searchMatchForeground = try c.decodeIfPresent(
+                ColorRGB.self, forKey: .searchMatchForeground)
+            searchMatchBackground = try c.decodeIfPresent(
+                ColorRGB.self, forKey: .searchMatchBackground)
+            activeSearchMatchForeground = try c.decodeIfPresent(
+                ColorRGB.self, forKey: .activeSearchMatchForeground)
+            activeSearchMatchBackground = try c.decodeIfPresent(
+                ColorRGB.self, forKey: .activeSearchMatchBackground)
+            commandFeedbackForeground = try c.decodeIfPresent(
+                ColorRGB.self, forKey: .commandFeedbackForeground)
+            commandFeedbackBackground = try c.decodeIfPresent(
+                ColorRGB.self, forKey: .commandFeedbackBackground)
             gitModifiedLineBackground = try c.decodeIfPresent(
                 ColorOverlayConfig.self, forKey: .gitModifiedLineBackground)
             gitModifiedLineForeground = try c.decodeIfPresent(
@@ -525,6 +551,12 @@ struct KittyConfig: Codable, Sendable {
         }
     }
 
+    enum SidebarOverflowMode: String, Codable, Sendable {
+        case truncateEnd
+        case marquee
+    }
+
+    var sidebarOverflowMode: SidebarOverflowMode = .truncateEnd
     var keybindingMode: KeybindingMode = .nano
     var treeWidth: Int = 30
     var useSFSymbolsInTerminal: Bool = true
@@ -546,6 +578,9 @@ struct KittyConfig: Codable, Sendable {
     init(from decoder: Decoder) throws {
         let d = KittyConfig()
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        sidebarOverflowMode =
+            try c.decodeIfPresent(SidebarOverflowMode.self, forKey: .sidebarOverflowMode)
+            ?? d.sidebarOverflowMode
         keybindingMode =
             try c.decodeIfPresent(KeybindingMode.self, forKey: .keybindingMode) ?? d.keybindingMode
         treeWidth = try c.decodeIfPresent(Int.self, forKey: .treeWidth) ?? d.treeWidth

@@ -53,6 +53,15 @@ extension EditorState {
             return nil
         }
 
+        // Command feedback takes priority when not expired
+        if let feedback = commandFeedback, let expiry = commandFeedbackExpiry {
+            if Date() < expiry {
+                return feedback
+            } else {
+                // Will be cleared on next render cycle
+            }
+        }
+
         if let search = inFileSearch, search.pattern != nil {
             return search.totalCount == 0
                 ? "No matches"
@@ -68,11 +77,21 @@ extension EditorState {
             "Opened ",
             "Ready |",
             "New file |",
-            "-- NORMAL --",
-            "-- INSERT --",
         ]
 
+        // Show vim mode indicators when in vim keybinding mode
+        if config.keybindingMode == .vim {
+            if statusMessage == "-- NORMAL --" || statusMessage == "-- INSERT --" {
+                return statusMessage
+            }
+        }
+
         if hiddenPrefixes.contains(where: statusMessage.hasPrefix) {
+            return nil
+        }
+
+        // Still hide vim mode indicators for non-vim modes
+        if statusMessage == "-- NORMAL --" || statusMessage == "-- INSERT --" {
             return nil
         }
 
