@@ -242,6 +242,13 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
                 state.activeSidebarPanel = .explorer
             case "openDocuments":
                 state.activeSidebarPanel = .openDocuments
+            case "search":
+                state.activeSidebarPanel = .search
+                if state.inFileSearch == nil {
+                    openInFileSearch(state: state)
+                }
+                state.mode = .searchPanel
+                state.searchPanelSelectedIndex = -1
             default:
                 break
             }
@@ -262,6 +269,90 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
             state.switchToTab(bufferIdx)
             state.openFilesSelectedIndex = bufferIdx
             state.mode = .editor
+        }
+        return
+    }
+
+    // Search panel click
+    if state.activeSidebarPanel == .search && !state.sidebarCollapsed
+        && mouse.col - 1 >= layout.activityBarWidth && mouse.col - 1 < layout.editorStart - 1
+        && mouse.row - 1 >= layout.contentStartRow
+    {
+        guard !isRightClick else { return }
+        let relativeRow = mouse.row - 1 - layout.contentStartRow
+        let relativeCol = mouse.col - 1 - layout.activityBarWidth
+
+        if relativeRow <= 1 {
+            // Click on header or query field → focus query field
+            state.mode = .searchPanel
+            state.searchPanelFocus = .findField
+            state.searchPanelSelectedIndex = -1
+        } else {
+            // Calculate the toggle row offset (depends on whether replace field is showing)
+            let replaceOffset = state.inFileSearch?.showReplace == true ? 1 : 0
+            let toggleRow = 2 + replaceOffset
+            let resultsStartRow = 4 + replaceOffset
+
+            if relativeRow == 1 + replaceOffset
+                && state.inFileSearch?.showReplace == true
+            {
+                // Click on replace field
+                state.mode = .searchPanel
+                state.searchPanelFocus = .replaceField
+            } else if relativeRow == toggleRow {
+                // Click on toggle indicators
+                if relativeCol >= 1 && relativeCol < 5 {
+                    // [Aa] toggle
+                    state.inFileSearch?.isCaseSensitive.toggle()
+                    if var search = state.inFileSearch {
+                        executeSearch(&search, lines: state.fileContent)
+                        state.inFileSearch = search
+                    }
+                    if state.searchTarget == .workspace {
+                        triggerWorkspaceSearchDebounced(state: state)
+                    }
+                } else if relativeCol >= 6 && relativeCol < 10 {
+                    // [.*] toggle
+                    state.inFileSearch?.isRegex.toggle()
+                    if var search = state.inFileSearch {
+                        executeSearch(&search, lines: state.fileContent)
+                        state.inFileSearch = search
+                    }
+                    if state.searchTarget == .workspace {
+                        triggerWorkspaceSearchDebounced(state: state)
+                    }
+                } else if relativeCol >= 11 && relativeCol < 15 {
+                    // [WS]/[F] scope toggle
+                    state.searchTarget =
+                        state.searchTarget == .currentFile ? .workspace : .currentFile
+                    if state.searchTarget == .workspace {
+                        triggerWorkspaceSearch(state: state)
+                    }
+                }
+                state.mode = .searchPanel
+            } else if relativeRow >= resultsStartRow {
+                if state.searchTarget == .currentFile {
+                    if let search = state.inFileSearch {
+                        let resultIndex = state.searchPanelScrollOffset
+                            + (relativeRow - resultsStartRow)
+                        if resultIndex >= 0, resultIndex < search.matches.count {
+                            state.searchPanelSelectedIndex = resultIndex
+                            state.inFileSearch?.activeMatchIndex = resultIndex
+                            let match = search.matches[resultIndex]
+                            state.cursorRow = match.row
+                            state.cursorCol = match.colStart
+                            state.mode = .editor
+                        }
+                    }
+                } else {
+                    let flatIdx = state.searchPanelScrollOffset
+                        + (relativeRow - resultsStartRow)
+                    if let (filePath, match) = workspaceFlatResult(at: flatIdx, state: state) {
+                        openWorkspaceSearchResult(
+                            filePath: filePath, match: match, state: state, pipeline: pipeline)
+                    }
+                }
+            }
         }
         return
     }

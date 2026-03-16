@@ -81,12 +81,13 @@ struct CLIArguments: Sendable {
 
             case "--mode":
                 guard !tokens.isEmpty else {
-                    writeStderr("error: '--mode' requires a MODE argument (nano, vim)")
+                    writeStderr("error: '--mode' requires a MODE argument (nano, vim, kittycode)")
                     exit(1)
                 }
                 let value = tokens.removeFirst()
-                guard value == "nano" || value == "vim" else {
-                    writeStderr("error: unknown mode '\(value)' — expected 'nano' or 'vim'")
+                guard value == "nano" || value == "vim" || value == "kittycode" else {
+                    writeStderr(
+                        "error: unknown mode '\(value)' — expected 'nano', 'vim', or 'kittycode'")
                     exit(1)
                 }
                 keybindingMode = value
@@ -161,7 +162,7 @@ struct CLIArguments: Sendable {
             -v, --version       Show version
             -R, --read-only     Open in read-only mode
             -c, --config PATH   Config file path (default: ~/.kittycode.json)
-            --mode MODE         Keybinding mode: nano, vim
+            --mode MODE         Keybinding mode: nano, vim, kittycode
             --tab-size N        Tab display width
             --wrap              Enable line wrapping
             --no-wrap           Disable line wrapping

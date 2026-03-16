@@ -1,6 +1,7 @@
 import KittyCodecs
 import KittyFileTree
 import KittyRenderer
+import KittySearch
 import KittyText
 import KittyWidgets
 
@@ -28,7 +29,7 @@ func renderEditorPanel(
 
     let gutterDecorations = activeGutterDecorations(state: state, colorScheme: colorScheme)
     let lineStyleOverlays = activeLineStyleOverlays(state: state, colorScheme: colorScheme)
-    let selectionRanges = activeSelectionRanges(state: state)
+    let highlights = activeHighlights(state: state, colorScheme: colorScheme)
 
     let wsConfig = WhitespaceRenderer.Config(
         showIndentation: state.config.whitespace.showIndentation,
@@ -59,8 +60,7 @@ func renderEditorPanel(
         showsVerticalScrollIndicator: true,
         showsHorizontalScrollIndicator: !state.config.editor.wrapLines,
         lineStyleOverlays: lineStyleOverlays,
-        selectionRanges: selectionRanges,
-        selectionStyle: colorScheme.selection,
+        highlights: highlights,
         editorStyle: colorScheme.editorText,
         lineNumberStyle: colorScheme.lineNumber,
         currentLineStyle: colorScheme.editorCursorLine,
@@ -111,30 +111,60 @@ private func gutterSymbol(for color: FileStatusColor) -> Character {
 }
 
 @MainActor
-private func activeSelectionRanges(state: EditorState) -> [Int: ClosedRange<Int>] {
-    guard let selection = state.selection, !selection.isCollapsed else { return [:] }
-    let (start, end) = selection.ordered
-    var ranges: [Int: ClosedRange<Int>] = [:]
+private func activeHighlights(
+    state: EditorState,
+    colorScheme: EditorState.ColorScheme
+) -> [Int: [TextHighlight]] {
+    var highlights: [Int: [TextHighlight]] = [:]
 
-    if start.row == end.row {
-        if end.col > start.col {
-            ranges[start.row] = start.col...end.col - 1
-        }
-    } else {
-        let firstLineLength = state.fileLine(at: start.row).count
-        ranges[start.row] = start.col...firstLineLength
+    if let selection = state.selection, !selection.isCollapsed {
+        let (start, end) = selection.ordered
+        let style = colorScheme.selection
 
-        for row in (start.row + 1)..<end.row {
-            let lineLength = state.fileLine(at: row).count
-            ranges[row] = 0...lineLength
-        }
+        if start.row == end.row {
+            if end.col > start.col {
+                highlights[start.row] = [
+                    TextHighlight(
+                        range: start.col...end.col - 1, role: .userSelection, style: style)
+                ]
+            }
+        } else {
+            let firstLineLength = state.fileLine(at: start.row).count
+            highlights[start.row] = [
+                TextHighlight(
+                    range: start.col...firstLineLength, role: .userSelection, style: style)
+            ]
 
-        if end.row > start.row && end.col > 0 {
-            ranges[end.row] = 0...end.col - 1
+            for row in (start.row + 1)..<end.row {
+                let lineLength = state.fileLine(at: row).count
+                highlights[row] = [
+                    TextHighlight(range: 0...lineLength, role: .userSelection, style: style)
+                ]
+            }
+
+            if end.row > start.row && end.col > 0 {
+                highlights[end.row] = [
+                    TextHighlight(range: 0...end.col - 1, role: .userSelection, style: style)
+                ]
+            }
         }
     }
 
-    return ranges
+    if let search = state.inFileSearch {
+        for (index, match) in search.matches.enumerated() {
+            guard match.colEnd > match.colStart else { continue }
+            let role: TextHighlight.Role =
+                index == search.activeMatchIndex ? .activeSearchMatch : .searchMatch
+            let style =
+                index == search.activeMatchIndex
+                ? colorScheme.activeSearchMatch : colorScheme.searchMatch
+            let highlight = TextHighlight(
+                range: match.colStart...(match.colEnd - 1), role: role, style: style)
+            highlights[match.row, default: []].append(highlight)
+        }
+    }
+
+    return highlights
 }
 
 private func selectionVisibility(

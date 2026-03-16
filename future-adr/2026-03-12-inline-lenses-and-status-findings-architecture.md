@@ -784,3 +784,225 @@ Interoperability should be designed in from the start:
   - https://developer.apple.com/documentation/Xcode/Environment-Variable-Reference
 - Xcode `xcresulttool` for extracting build and test failures:
   - https://developer.apple.com/videos/play/wwdc2019/413/
+
+## Deep Technical Analysis
+
+### Codebase Impact Assessment
+
+#### Virtual Text Layer Engineering
+
+The core technical challenge for inline lenses is that `TextEditorLayout.swift` computes all layout metrics — cursor position, hit testing, scroll metrics, wrapped rows — exclusively from real buffer text. The `wrappedRowStartColumns()` function (TextEditorLayout.swift:378-399) tracks display width of each character and breaks on content boundary. The `cursorPosition()` function (lines 127-172) computes screen coordinates from buffer row/col through wrap-aware arithmetic. The reverse mapping `textPosition()` (lines 174-235) does screen-to-text coordinate translation.
+
+Adding virtual text (inline lenses) breaks these invariants because:
+
+1. **Extra visual rows**: An inline lens displayed below a source line (like VS Code's "Problems" decorations) adds visual rows that don't correspond to buffer lines. `totalWrappedRowCount()` (lines 317-323) must account for adornment rows, but cursor navigation must skip them.
+2. **Extra visual columns**: Trailing text (like Rust's inlay type hints or error messages at end of line) extends the visual width of a line without changing the buffer content. Hit testing must distinguish clicks on real text from clicks on virtual text.
+3. **Cursor coordinate space**: The cursor must remain in buffer coordinates. Virtual text should be visually present but not selectable or editable. The `CursorPosition` returned by `cursorPosition()` must still map to real buffer positions.
+
+Recommended approach — **adornment layers separate from text layout**:
+
+1. Define `InlineAdornment` as: `(anchorLine: Int, position: AdornmentPosition, content: StyledTextSpan)` where `AdornmentPosition` is `.trailingOnLine` or `.belowLine`.
+2. For `.trailingOnLine`: Render after the last real character on the line, with a gap. Don't alter wrap calculations. The adornment truncates if the line is already at display width.
+3. For `.belowLine`: Insert a virtual row after the anchor line's wrapped rows. Increment `totalWrappedRowCount()` by the adornment row count. Adjust `cursorPosition()` to offset screen rows for all lines below the adornment. Adjust `textPosition()` to return `nil` for clicks on adornment rows.
+4. Keep cursor navigation ignorant of adornments — pressing Down skips virtual rows automatically because the cursor advances by buffer line, and the screen offset calculation handles the visual gap.
+
+#### Comment Finding Extraction Pipeline
+
+The existing parser infrastructure provides two extraction paths:
+
+**Path 1 — Parser-backed comment nodes** (GLRParser.swift:145-159): After parsing, comment tokens marked `.isExtra` are appended to the root syntax tree as named `"comment"` nodes with `byteRange` and `pointRange`. `SyntaxNode.text(from:)` can extract the comment text. This is the most accurate path because it uses the language grammar to correctly identify comments, avoiding false positives in strings or heredocs.
+
+**Path 2 — Grammar-derived comment patterns** (ParseTable.swift:98-140): The `CommentPattern` type encodes `.line(prefix:)` (e.g., `"//"`) and `.block(open:close:)` (e.g., `"/*"..."*/"`). These are stored in `LexTable.commentPatterns` and extracted from grammar extras by `LexTableCompiler`. A text scanner can use these patterns to find comment regions without full parsing.
+
+**Path 3 — Plain text fallback**: For files with no grammar support, scan for common comment prefixes (`//`, `#`, `--`, `%`) using a heuristic that checks for the prefix at the start of a line (after whitespace). This has false positives but provides basic coverage for unsupported languages.
+
+The recommended extraction flow:
+
+```
+if hasParserArtifacts(language) && source.utf8.count <= maxGrammarSourceBytes {
+    // Path 1: Parse → walk comment nodes → extract markers
+} else if hasCommentPatterns(language) {
+    // Path 2: Scan using grammar-derived comment patterns
+} else {
+    // Path 3: Heuristic plain-text scan
+}
+```
+
+For each extracted comment, scan for configured marker patterns (default: `TODO`, `FIXME`, `WARNING`) using case-insensitive prefix matching after the comment delimiter. Extract the message text following the marker.
+
+#### Status Bar Segment Model Evolution
+
+The current `StatusBar` widget (StatusBar.swift:5-21) renders three plain strings (`left`, `center`, `right`) with a single shared `Style`. The `StatusBarContent.statusBarSegments()` function (StatusBarContent.swift:6-18) joins items with `" │ "` separators into these strings.
+
+For diagnostics reporting, the status bar needs:
+
+1. **Per-segment styling**: Replace `left: String` with `left: [StatusBarSegment]` where each segment carries its own `Style`. A diagnostic segment showing "2 warnings" should render in the theme's warning color, not the default status bar color.
+
+2. **Segment measurement**: The current `prefixFitting()` and `suffixFitting()` functions (StatusBar.swift:75-103) truncate strings to fit display width. With segments, truncation must be segment-aware — drop low-priority segments entirely rather than clipping mid-segment.
+
+3. **Diagnostic segment format**: Show severity-bucketed counts with icons: `"⚠ 3  ℹ 1"` or compact `"W3 I1"`. Use theme colors: error foreground for error counts, warning foreground for warning counts.
+
+4. **New status bar items**: Add `StatusBarConfig.Item` cases for `.diagnosticSummary`, `.taskCount`, `.warningCount`. These are resolved in `statusBarText(for:)` (StatusBarContent.swift:20-47) by querying the `DiagnosticsManager` for current document findings.
+
+#### Theme Color Additions
+
+`Config.swift` has no diagnostic color slots. The minimum additions:
+
+- `theme.diagnosticError`: foreground for error indicators (default: red)
+- `theme.diagnosticWarning`: foreground for warning indicators (default: yellow/orange)
+- `theme.diagnosticInfo`: foreground for info indicators (default: blue)
+- `theme.diagnosticTask`: foreground for TODO/FIXME markers (default: cyan)
+- `theme.diagnosticErrorBackground`: optional background tint for error lines
+- `theme.diagnosticWarningBackground`: optional background tint for warning lines
+
+These feed into `GutterDecoration` styles, `TextStyleOverlay` for line backgrounds, `StatusBarSegment` styles, and future `InlineAdornment` styles.
+
+#### Async Manager Pattern
+
+The existing patterns in `EditorStateFileSystem.schedulePostLoadProcessing()` and `GitDecorationManager` establish the async manager contract:
+
+1. Cancel prior task on document change
+2. Debounce rapid edits
+3. Capture `documentVersion` before background work
+4. Compute results off the main actor
+5. Guard version match before applying results
+6. Invalidate render source on successful apply
+
+The `DiagnosticsManager` should follow this exactly:
+
+```swift
+@MainActor
+final class DiagnosticsManager {
+    private var activeTask: Task<Void, Never>?
+    private var lastProcessedVersion: Int = -1
+
+    func scheduleUpdate(for buffer: DocumentBuffer, config: DiagnosticsConfig) {
+        activeTask?.cancel()
+        let version = buffer.documentVersion
+        let source = buffer.textBuffer.lines
+        let language = buffer.language
+
+        activeTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(config.debounceMilliseconds))
+            guard !Task.isCancelled else { return }
+
+            let findings = await Self.extractFindings(
+                from: source, language: language, config: config)
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard self?.lastProcessedVersion != version else { return }
+                self?.lastProcessedVersion = version
+                self?.applyFindings(findings, for: buffer)
+            }
+        }
+    }
+}
+```
+
+### State of the Art: Editor Diagnostics and Inline Lens Systems
+
+#### VS Code: Diagnostic API and Inlay Hints
+
+VS Code separates diagnostics from inlay hints:
+- **Diagnostics**: Published by language servers via `textDocument/publishDiagnostics`. Stored in `DiagnosticCollection` per extension. Each diagnostic has severity, range, message, source, code, and related information. Rendered as: squiggly underlines, gutter icons, minimap markers, Problems panel entries, and status bar counts.
+- **Inlay Hints**: A separate API (`textDocument/inlayHint`) for non-diagnostic virtual text — type annotations, parameter names, etc. Positioned at specific buffer offsets. Rendered as dimmed inline text that the cursor skips.
+- **CodeLens**: Another separate API for actionable annotations above lines. Used for "Run Test", "N references", etc. Rendered as clickable virtual lines above the source line.
+- **Diagnostic severity**: `Error`, `Warning`, `Information`, `Hint`. Each has distinct rendering (red/yellow/blue/dimmed squiggles, gutter icons, status bar counts).
+
+#### Neovim: Built-in Diagnostics and Virtual Text
+
+Neovim (0.5+) has a built-in diagnostic framework:
+- **`vim.diagnostic`**: Module that manages diagnostics per buffer per namespace. Multiple sources can publish diagnostics to the same buffer.
+- **Virtual text**: Neovim's `nvim_buf_set_extmark()` API supports `virt_text` — arbitrary styled text appended after a line's content. Also supports `virt_lines` — virtual lines inserted between real lines. This is the terminal editor SOTA for inline lens rendering.
+- **Signs**: Gutter icons for diagnostic severity, displayed in the sign column.
+- **Diagnostic handlers**: Configurable display handlers for virtual text, signs, underlines, and floating windows. Each can be independently enabled/disabled and styled.
+- **Severity filtering**: `vim.diagnostic.config({ severity_sort = true })` sorts diagnostics by severity. `vim.diagnostic.get(0, { severity = vim.diagnostic.severity.ERROR })` filters by severity.
+
+#### Helix: Inline Diagnostics
+
+Helix renders diagnostics inline using its built-in virtual text support:
+- Diagnostic messages displayed at the end of the affected line in dimmed text
+- Gutter severity indicators (colored dots)
+- Jump-to-diagnostic commands (`]d`, `[d`) for keyboard navigation
+- No separate problems panel — all diagnostics are inline-only
+- Severity-based sorting for overlapping diagnostics
+
+#### JetBrains IDEs: Inspection Infrastructure
+
+JetBrains IDEs have the most comprehensive inspection architecture:
+- **Inspection profiles**: XML-based configuration files defining which inspections are enabled, their severity, and scope.
+- **Inspection scopes**: Can be per-project, per-module, or per-directory.
+- **Severity mapping**: Inspections have a default severity that can be remapped per profile (e.g., treating a warning as an error in production code).
+- **Quick fixes**: Each inspection can provide one or more quick-fix actions. Fixes can be applied individually or in batch across the project.
+- **Suppression**: Inspections can be suppressed with inline annotations (`@SuppressWarnings`, `// noinspection`) or profile exclusions.
+- **SARIF export**: `InspectCode` command-line tool exports findings in SARIF format for CI integration.
+
+#### SARIF Standard Details
+
+SARIF (Static Analysis Results Interchange Format) is an OASIS standard (v2.1.0):
+- **Structure**: `sarifLog` → `runs[]` → `results[]`. Each run has a `tool` descriptor and an array of results.
+- **Result fields**: `ruleId`, `level` (error/warning/note/none), `message`, `locations[]`, `relatedLocations[]`, `codeFlows[]`, `fixes[]`, `fingerprints`.
+- **Location model**: `physicalLocation` with `artifactLocation` (URI + index) and `region` (startLine, startColumn, endLine, endColumn). Also supports `logicalLocation` (fully qualified name).
+- **Code flows**: Ordered sequences of locations representing execution paths. Used by dataflow analyzers to show how tainted data flows through code.
+- **Fingerprints**: Stable identifiers for result deduplication across runs. Used by GitHub Code Scanning to track issues across commits.
+- **Fixes**: Each fix has a description and an array of `artifactChanges`, each with `replacements` specifying exact text edits.
+
+### Recommended Technical Approach for KittyCode
+
+#### Diagnostics and Virtual Text Pipeline: SOTA Architecture
+
+1. **Extmark model (Neovim-inspired) with interval tree storage**: Virtual text and decorations are stored as "extmarks" — metadata attached to buffer positions that survive edits automatically. Each extmark has: anchor position `(line, col)`, gravity (left or right — determines whether the mark moves with insertions at its exact position), type enum (virtual text, highlight range, sign/gutter icon, line highlight), priority (for stacking order when multiple marks overlap), and a payload (styled text segments, highlight style, sign character, etc.). All extmarks for a buffer are stored in an augmented interval tree (augmented red-black tree where each node stores the maximum endpoint in its subtree), enabling O(log n) insertion/deletion and O(log n + k) range queries (find all marks intersecting visible lines). On every buffer edit, the interval tree is updated: marks with right-gravity shift right on inserts at their position, marks with left-gravity stay. Deletions that encompass a mark either delete it (ephemeral marks) or collapse it to zero-width (persistent marks). This is the core data structure that underpins all virtual text, diagnostics, git blame, code lenses, and inline hints.
+
+2. **LSP as the primary diagnostic provider, integrated from day one**: Design the entire diagnostic pipeline around the Language Server Protocol. The `LSPClient` actor spawns language servers per workspace root based on configuration, manages the lifecycle (initialize, initialized, shutdown), and routes notifications. `textDocument/publishDiagnostics` notifications are normalized into KittyCode's extmark model: each LSP diagnostic becomes one or more extmarks (underline highlight + gutter sign + optional virtual text). Support all LSP diagnostic fields: `severity`, `code`, `codeDescription` (URL to documentation), `source`, `message`, `tags` (unnecessary code = dim style, deprecated = strikethrough), `relatedInformation` (secondary locations rendered as linked extmarks), and `data` (opaque payload for code action resolution). Support `textDocument/inlayHint` for type annotations rendered as dim virtual text inline. This single integration unlocks diagnostics for every language with an LSP server.
+
+3. **Diagnostic quick-fix actions with lightbulb UI**: Each diagnostic can carry associated code actions via `textDocument/codeAction`. When the cursor enters a line with available code actions, render a lightbulb icon (`*`) in the gutter with a distinct style. The `editor.action.quickFix` command opens a picker listing all available actions for the current cursor position, grouped by kind: quickfix, refactor, refactor.extract, refactor.inline, source, source.organizeImports. Each action can be either a direct `WorkspaceEdit` (applied immediately as an undo transaction) or a `Command` (executed by the language server). Support "preferred" actions that can be auto-applied. Support "fix all in file" (batch-apply all preferred fixes for a diagnostic source). Integrate with the undo system: every code action application is wrapped in a transaction for single-step undo.
+
+4. **SARIF import/export for CI and external tool integration**: Implement `SARIFImporter` that parses SARIF v2.1.0 JSON and normalizes results into the extmark diagnostic model. Map SARIF `level` (error, warning, note, none) to KittyCode severity. Map SARIF `physicalLocation.region` to buffer positions. Preserve SARIF `fingerprints` for deduplication across runs. Preserve `codeFlows` as navigable step-through sequences (jump from location to location). Implement `SARIFExporter` that serializes the current diagnostic snapshot to SARIF, including `tool` metadata, `results` with full location information, and `fixes` as `artifactChanges`. This enables: importing SwiftLint, SonarQube, or CodeQL results as editor overlays; exporting KittyCode diagnostics for CI pipelines; and compatibility with GitHub Code Scanning's SARIF upload API.
+
+5. **Virtual text rendering engine with three placement modes**: The renderer supports three virtual text placement modes, all backed by extmarks: (a) `after_line_end` — styled text appended after the real line content, separated by configurable padding (used for inline diagnostics, type hints, git blame). (b) `below_line` — virtual rows inserted between real lines that occupy screen space but do not exist in the text buffer (used for multi-line diagnostic messages, code lens actions, expanded documentation). (c) `inline` — styled text inserted at a specific column within the line, pushing real text to the right visually but not in the buffer (used for inlay type hints, parameter names). Virtual text participates fully in the layout engine (affects line height calculations, scroll position, viewport line count) but is excluded from the text buffer: cursor movement skips over virtual text, selection excludes it, copy does not include it, and search does not match it.
+
+6. **Diagnostic severity theming with full style mapping**: Define 5 severity levels: error, warning, info, hint, and task (for TODO/FIXME comments). Each severity maps to a complete style specification in the theme: `underlineColor`, `underlineStyle` (single, double, wavy, dotted), `gutterIcon` (character + foreground color), `gutterBackground`, `lineHighlightBackground` (subtle tint), `statusBarForeground`, `statusBarBadge`. Default mapping: error = red wavy underline + `E` gutter icon, warning = yellow wavy underline + `W` gutter icon, info = blue single underline + `I` gutter icon, hint = dim dotted underline + no gutter icon, task = green single underline + checkmark gutter icon. Severity stacking priority: when multiple diagnostics overlap, the highest severity wins for underline rendering, and gutter icons stack with the highest severity on top. All severity styles are fully configurable via theme JSON.
+
+7. **Inline git blame annotations**: Render git blame information as `after_line_end` virtual text on each line, loaded lazily and cached per commit. On scroll, request blame data for newly visible lines via `git blame -L <start>,<end> --porcelain`. Cache blame data keyed by `(file_path, commit_hash, line_range)` — cache entries are invalidated when the buffer is modified. Format: `author_name, relative_time — first_line_of_commit_message`, rendered in a dim/muted style to avoid visual competition with actual code. Toggle blame visibility with a command (`editor.toggleBlame`). On hover or keypress on a blame annotation, show a popup with full commit details. This matches GitLens functionality in VS Code.
+
+8. **Code lens support with actionable annotations**: Code lenses are virtual text lines rendered above functions, classes, test methods, and other structural code elements. Each lens displays actionable annotations: "3 references | 1 implementation | Run Test | Debug". Lenses are contributed by `CodeLensProvider` protocol implementations (LSP `textDocument/codeLens`, test runner, reference counter). Each lens item has a title (display text), a command (executed on selection), and optional tooltip. Lenses are rendered as `below_line` extmarks positioned above their target line, using a distinct dim style. They are lazily resolved: the provider first returns positions, then resolves titles/commands on demand as lenses scroll into view. Lenses update on document change with debouncing (500ms) to avoid excessive LSP requests.
+
+## SOTA Review and Accuracy Assessment
+
+This section evaluates the ADR's technical claims and recommendations against verified state-of-the-art knowledge as of March 2026.
+
+### Verified Accurate
+
+1. **VS Code's separation of diagnostics, inlay hints, and code lenses** — verified. These are three distinct APIs (`publishDiagnostics`, `textDocument/inlayHint`, `textDocument/codeLens`) with different rendering treatments. The ADR correctly identifies these as related but separate concerns.
+
+2. **Neovim's extmark API for virtual text** — verified. `nvim_buf_set_extmark()` supports `virt_text` (trailing text), `virt_lines` (virtual rows), inline virtual text, signs, and line highlights. Extmarks are stored in a B-tree variant ("marktree") for O(log n) lookups and efficient bulk updates.
+
+3. **Neovim extmark gravity** — verified. Each mark endpoint has left or right gravity controlling behavior when text is inserted at the mark's exact position. This is critical for diagnostic marks staying attached to original code through edits.
+
+4. **SARIF v2.1.0 as the interchange standard** — verified. Approved as an OASIS Standard on June 4, 2020, with Errata 01 published August 28, 2023. No v2.2 or v3.0 has been published. Strong adoption in security/SAST tools (CodeQL, Semgrep, GitHub Code Scanning).
+
+5. **LSP `publishDiagnostics` architecture** — verified. Server-to-client notification with severity, range, message, code, source, relatedInformation, tags (Unnecessary, Deprecated), and data fields. LSP 3.17 added pull diagnostics (`textDocument/diagnostic`) as a complement.
+
+6. **The phased approach** (async pipeline + status first → gutter/line cues → true inline lenses) is well-sequenced. Phase 1 delivers most value within current render constraints.
+
+7. **The decision to normalize around a KittyCode-native model** with adapters for external formats follows industry best practice. Every major editor maintains its own internal diagnostic representation.
+
+### Requires Qualification
+
+1. **SARIF scope** — SARIF is well-established for static analysis interchange but heavyweight for simple use cases. The JSON schema is large and complex. For a terminal editor, consuming SARIF is useful for CI/CD interoperability, but LSP diagnostics remain the primary real-time channel. The ADR correctly prioritizes LSP and SARIF as the first two targets, but should note that the SARIF adapter will primarily serve batch/import workflows rather than live editing.
+
+2. **Extmark storage as "augmented interval tree"** (recommended approach point 1) — Neovim's actual implementation uses a B-tree variant called "marktree" (implemented in `src/nvim/marktree.c`), not a classical augmented red-black interval tree. The B-tree structure provides better cache performance for bulk operations. The ADR's recommendation to use "an augmented red-black tree where each node stores the maximum endpoint in its subtree" is a valid alternative but differs from Neovim's proven implementation. Either data structure works; the ADR should note that a B-tree variant may be more cache-friendly.
+
+3. **LSP pull diagnostics** — The ADR does not mention pull-based diagnostics (`textDocument/diagnostic`, added in LSP 3.17). IntelliJ 2025.2 enabled pull diagnostics by default. The architecture should accommodate both push (`publishDiagnostics`) and pull models, as the pull model gives the client more control over when to request diagnostics for visible documents.
+
+4. **Git blame as inline virtual text** (point 7) — While technically accurate, this is a significant scope expansion beyond the diagnostics/findings ADR's stated goal. Git blame annotations are a decoration feature, not a diagnostic. This recommendation should either be moved to a separate ADR or explicitly marked as a future extension that demonstrates the virtual text infrastructure's reusability.
+
+### References
+
+- Neovim extmarks API: https://neovim.io/doc/user/api.html
+- Neovim marktree implementation: https://github.com/neovim/neovim/blob/master/src/nvim/marktree.c
+- SARIF 2.1.0 specification: https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html
+- LSP 3.17 specification: https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
+- VS Code Diagnostic API: https://code.visualstudio.com/api/language-extensions/programmatic-language-features
+- GitHub SARIF support: https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/sarif-support-for-code-scanning

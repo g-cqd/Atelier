@@ -43,12 +43,20 @@ extension EditorState {
             return "Ln \(cursorRow + 1), Col \(cursorCol + 1)"
         case .visibility:
             return fileVisibility.label
+        case .undo:
+            return undoRedoIndicator
         }
     }
 
     private var condensedStatusMessage: String? {
         if prompt != nil || contextMenu != nil {
             return nil
+        }
+
+        if let search = inFileSearch, search.pattern != nil {
+            return search.totalCount == 0
+                ? "No matches"
+                : "Match \(search.activeMatchIndex + 1)/\(search.totalCount)"
         }
 
         if isLoadingGrammar {
@@ -69,6 +77,24 @@ extension EditorState {
         }
 
         return statusMessage
+    }
+
+    private var undoRedoIndicator: String? {
+        if mode == .editor {
+            let hasUndo = bufferManager.activeBuffer?.editHistory.hasUndo ?? false
+            let hasRedo = bufferManager.activeBuffer?.editHistory.hasRedo ?? false
+            guard hasUndo || hasRedo else { return nil }
+            return "U:\(hasUndo ? "yes" : "no") R:\(hasRedo ? "yes" : "no")"
+        } else {
+            let hasUndo = fileTreeHistory.hasUndo
+            let hasRedo = fileTreeHistory.hasRedo
+            guard hasUndo || hasRedo else { return nil }
+            var indicator = "U:\(hasUndo ? "yes" : "no") R:\(hasRedo ? "yes" : "no")"
+            if let nextUndo = fileTreeHistory.peekUndo {
+                indicator += " (\(nextUndo.description))"
+            }
+            return indicator
+        }
     }
 
     private var statusBarPath: String {

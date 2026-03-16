@@ -19,6 +19,8 @@ func renderActivityBar(
             icon = state.symbolTheme[.explorer].text
         case "openDocuments":
             icon = state.symbolTheme[.openDocuments].text
+        case "search":
+            icon = state.symbolTheme[.search].text
         default:
             icon = "?"
         }
@@ -31,6 +33,8 @@ func renderActivityBar(
         activeIdx = state.config.activityBar.items.firstIndex(of: "explorer") ?? 0
     case .openDocuments:
         activeIdx = state.config.activityBar.items.firstIndex(of: "openDocuments") ?? 0
+    case .search:
+        activeIdx = state.config.activityBar.items.firstIndex(of: "search") ?? 0
     }
 
     let theme = state.config.theme

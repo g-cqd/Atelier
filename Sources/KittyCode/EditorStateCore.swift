@@ -3,6 +3,7 @@ import KittyApp
 import KittyCodecs
 import KittyFileTree
 import KittyGit
+import KittySearch
 import KittySymbols
 import KittySyntax
 import KittyText
@@ -75,6 +76,8 @@ final class EditorState {
         var horizontalScrollIndicator: HorizontalScrollIndicatorStyle
         var emptyEditorMessage: Style
         var selection: Style
+        var searchMatch: Style
+        var activeSearchMatch: Style
 
         func gitStatusStyle(for color: FileStatusColor) -> Style {
             switch color {
@@ -114,6 +117,7 @@ final class EditorState {
     enum Mode {
         case tree
         case editor
+        case searchPanel
     }
 
     enum VimMode {
@@ -137,6 +141,8 @@ final class EditorState {
         case beginDuplicate(path: String)
         case beginMove(path: String)
         case beginDelete(path: String)
+        case undo
+        case redo
         case saveFile
         case focusTree
         case closeTab
@@ -165,6 +171,34 @@ final class EditorState {
     struct ScrollDragState: Equatable {
         var target: ScrollDragTarget
         var gripOffset: Int
+    }
+
+    enum SearchTarget: Sendable {
+        case currentFile
+        case workspace
+    }
+
+    enum SearchPanelFocus: Sendable {
+        case findField
+        case replaceField
+        case resultsList
+    }
+
+    struct InFileSearch {
+        var query: String
+        var pattern: SearchPattern?
+        var matches: [SearchMatch]
+        var activeMatchIndex: Int
+        var isCaseSensitive: Bool
+        var isRegex: Bool
+        var replaceText: String = ""
+        var showReplace: Bool = false
+
+        var totalCount: Int { matches.count }
+        var activeMatch: SearchMatch? {
+            guard activeMatchIndex >= 0, activeMatchIndex < matches.count else { return nil }
+            return matches[activeMatchIndex]
+        }
     }
 
     // MARK: - Workspace (domain state)
@@ -293,12 +327,21 @@ final class EditorState {
     enum SidebarPanel {
         case explorer
         case openDocuments
+        case search
     }
 
     var activeSidebarPanel: SidebarPanel = .explorer
     var sidebarCollapsed: Bool = false
     var openFilesScrollOffset: Int = 0
     var openFilesSelectedIndex: Int = 0
+    var searchPanelScrollOffset: Int = 0
+    var searchPanelSelectedIndex: Int = -1  // -1 = query field focused
+    var searchPanelFocus: SearchPanelFocus = .findField
+    var searchTarget: SearchTarget = .currentFile
+    var workspaceSearchResults: [SearchFileResult] = []
+    var workspaceSearchTask: Task<Void, Never>?
+    var workspaceSearchSummary: String = ""
+    var isSearchingWorkspace: Bool = false
 
     // MARK: - Highlighted document
 
@@ -463,7 +506,8 @@ final class EditorState {
         return BufferEditSnapshot(
             textBuffer: textBuffer,
             textCursor: textCursor,
-            lineEnding: currentLineEnding
+            lineEnding: currentLineEnding,
+            selection: selection
         )
     }
 
@@ -667,6 +711,8 @@ final class EditorState {
     var fileVisibility: FileVisibility = .defaultHidden
     var statusMessage = ""
     var prompt: EditorPrompt?
+    var vimCommandLine: VimCommandLine?
+    var inFileSearch: InFileSearch?
     var contextMenu: ContextMenuState?
     var mode: Mode = .tree
     var vimMode: VimMode = .normal
@@ -726,7 +772,9 @@ final class EditorState {
         let catalog = config.useSFSymbolsInTerminal ? SymbolCatalogLoader.loadOrDiscover() : nil
         self.symbolTheme = TerminalSymbolTheme.make(
             symbolsEnabled: config.useSFSymbolsInTerminal, catalog: catalog)
-        self.statusMessage = "Opened \(rootPath) | ^O Save | ^X Quit"
+        self.fileTreeHistory.maxOperationSteps = config.editor.maxTreeUndoSteps
+        let resolver = KeymapResolver(config: config)
+        self.statusMessage = "Opened \(rootPath) | \(resolver.openedStatusHints())"
 
         // Wire up workspace callbacks
         workspace.onTabSwitched = { [weak self] in
@@ -783,7 +831,7 @@ final class EditorState {
             in: snapshot.textBuffer, tabSize: config.editor.tabSize)
         highlightSession = nil
         highlightedLines = []
-        selection = nil
+        selection = snapshot.selection
         wrapCache.invalidate()
 
         if let buffer = bufferManager.activeBuffer {
@@ -822,7 +870,14 @@ final class EditorState {
         case .unavailable:
             statusMessage = "Nothing to undo"
         case .invalidated:
-            statusMessage = "Undo history cleared after external refresh"
+            switch buffer.editHistory.lastInvalidationReason {
+            case .externalFileChange:
+                statusMessage = "Undo history cleared after external file change"
+            case .fingerprintMismatch:
+                statusMessage = "Undo history cleared (buffer content diverged)"
+            case nil:
+                statusMessage = "Undo history cleared"
+            }
         }
     }
 
@@ -841,7 +896,14 @@ final class EditorState {
         case .unavailable:
             statusMessage = "Nothing to redo"
         case .invalidated:
-            statusMessage = "Redo history cleared after external refresh"
+            switch buffer.editHistory.lastInvalidationReason {
+            case .externalFileChange:
+                statusMessage = "Redo history cleared after external file change"
+            case .fingerprintMismatch:
+                statusMessage = "Redo history cleared (buffer content diverged)"
+            case nil:
+                statusMessage = "Redo history cleared"
+            }
         }
     }
 
