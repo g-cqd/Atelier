@@ -5,6 +5,7 @@ struct KittyConfig: Codable, Sendable {
     enum KeybindingMode: String, Codable, Sendable {
         case nano
         case vim
+        case kittycode
     }
 
     enum TabRibbonPosition: String, Codable, Sendable {
@@ -20,7 +21,7 @@ struct KittyConfig: Codable, Sendable {
     struct ActivityBarConfig: Codable, Sendable {
         var show: Bool = true
         var position: Position = .left
-        var items: [String] = ["explorer", "openDocuments"]
+        var items: [String] = ["explorer", "openDocuments", "search"]
         enum Position: String, Codable, Sendable { case left, right }
 
         init() {}
@@ -81,6 +82,10 @@ struct KittyConfig: Codable, Sendable {
         var scrollAccelerationWindowMilliseconds: Int = 120
         var scrollAccelerationStepIntervalMilliseconds: Int = 1
         var scrollAccelerationMaxExtraLines: Int = 8
+        var maxUndoSteps: Int = 200
+        var maxTreeUndoSteps: Int = 50
+        var snapshotMaxFiles: Int = 500
+        var snapshotMaxBytes: Int = 10_000_000
 
         init() {}
 
@@ -120,6 +125,14 @@ struct KittyConfig: Codable, Sendable {
             scrollAccelerationMaxExtraLines =
                 try c.decodeIfPresent(Int.self, forKey: .scrollAccelerationMaxExtraLines)
                 ?? d.scrollAccelerationMaxExtraLines
+            maxUndoSteps =
+                try c.decodeIfPresent(Int.self, forKey: .maxUndoSteps) ?? d.maxUndoSteps
+            maxTreeUndoSteps =
+                try c.decodeIfPresent(Int.self, forKey: .maxTreeUndoSteps) ?? d.maxTreeUndoSteps
+            snapshotMaxFiles =
+                try c.decodeIfPresent(Int.self, forKey: .snapshotMaxFiles) ?? d.snapshotMaxFiles
+            snapshotMaxBytes =
+                try c.decodeIfPresent(Int.self, forKey: .snapshotMaxBytes) ?? d.snapshotMaxBytes
         }
     }
 
@@ -134,6 +147,7 @@ struct KittyConfig: Codable, Sendable {
             case git
             case position
             case visibility
+            case undo
         }
 
         var show: Bool = true
@@ -265,6 +279,44 @@ struct KittyConfig: Codable, Sendable {
         case all
         /// Show indentation + spaces + line-break markers.
         case boundary
+    }
+
+    struct SearchConfig: Codable, Sendable {
+        var defaultTarget: String = "currentFile"
+        var includeHiddenByDefault: Bool = false
+        var includeGitIgnoredByDefault: Bool = false
+        var caseSensitiveByDefault: Bool = false
+        var regexByDefault: Bool = false
+        var excludeGlobs: [String] = ["**/.git/**", "**/build/**", "**/.build/**"]
+        var maxResults: Int = 5000
+        var debounceMilliseconds: Int = 150
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let d = SearchConfig()
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            defaultTarget =
+                try c.decodeIfPresent(String.self, forKey: .defaultTarget) ?? d.defaultTarget
+            includeHiddenByDefault =
+                try c.decodeIfPresent(Bool.self, forKey: .includeHiddenByDefault)
+                ?? d.includeHiddenByDefault
+            includeGitIgnoredByDefault =
+                try c.decodeIfPresent(Bool.self, forKey: .includeGitIgnoredByDefault)
+                ?? d.includeGitIgnoredByDefault
+            caseSensitiveByDefault =
+                try c.decodeIfPresent(Bool.self, forKey: .caseSensitiveByDefault)
+                ?? d.caseSensitiveByDefault
+            regexByDefault =
+                try c.decodeIfPresent(Bool.self, forKey: .regexByDefault) ?? d.regexByDefault
+            excludeGlobs =
+                try c.decodeIfPresent([String].self, forKey: .excludeGlobs) ?? d.excludeGlobs
+            maxResults =
+                try c.decodeIfPresent(Int.self, forKey: .maxResults) ?? d.maxResults
+            debounceMilliseconds =
+                try c.decodeIfPresent(Int.self, forKey: .debounceMilliseconds)
+                ?? d.debounceMilliseconds
+        }
     }
 
     struct WhitespaceConfig: Codable, Sendable {
@@ -487,6 +539,7 @@ struct KittyConfig: Codable, Sendable {
     var activityBar: ActivityBarConfig = .init()
     var keybindings: KeybindingsConfig = .init()
     var whitespace: WhitespaceConfig = .init()
+    var search: SearchConfig = .init()
 
     init() {}
 
@@ -514,6 +567,8 @@ struct KittyConfig: Codable, Sendable {
             try c.decodeIfPresent(KeybindingsConfig.self, forKey: .keybindings) ?? d.keybindings
         whitespace =
             try c.decodeIfPresent(WhitespaceConfig.self, forKey: .whitespace) ?? d.whitespace
+        search =
+            try c.decodeIfPresent(SearchConfig.self, forKey: .search) ?? d.search
     }
 
     static let configURL: URL = FileManager.default.homeDirectoryForCurrentUser

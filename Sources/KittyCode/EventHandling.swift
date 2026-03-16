@@ -23,135 +23,35 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
             return state.handlePromptKey(key)
         }
 
-        if key.eventType == .press, isConfiguredUndoShortcut(key, config: state.config) {
-            switch state.mode {
-            case .editor:
-                state.undoActiveBuffer()
-            case .tree:
-                Task { @MainActor in
-                    await state.undoFileTreeOperation()
+        if state.vimCommandLine != nil {
+            return state.handleVimCommandLineKey(key)
+        }
+
+        if state.inFileSearch != nil && state.mode != .searchPanel {
+            return handleSearchKey(key, state: state, pipeline: pipeline)
+        }
+
+        if key.eventType == .press || key.eventType == .repeat {
+            let stroke = KeyStroke(from: key)
+            let context = KeyContext.from(state: state)
+            let isRepeat = key.eventType == .repeat
+            let resolver = KeymapResolver(config: state.config)
+            if let command = resolver.resolve(stroke, context: context, isRepeat: isRepeat) {
+                return dispatchEditorAwareCommand(
+                    command, key: key, state: state, pipeline: pipeline)
+            }
+            // Shift+navigation: try resolving without shift so selection tracking can wrap it
+            if key.modifiers.contains(.shift) {
+                let strippedStroke = KeyStroke(
+                    keyCode: stroke.keyCode, modifiers: stroke.modifiers.subtracting(.shift))
+                if let command = resolver.resolve(
+                    strippedStroke, context: context, isRepeat: isRepeat),
+                    command.isEditorNavigation
+                {
+                    return dispatchEditorAwareCommand(
+                        command, key: key, state: state, pipeline: pipeline)
                 }
             }
-            return true
-        }
-
-        if key.eventType == .press, isConfiguredRedoShortcut(key, config: state.config) {
-            switch state.mode {
-            case .editor:
-                state.redoActiveBuffer()
-            case .tree:
-                Task { @MainActor in
-                    await state.redoFileTreeOperation()
-                }
-            }
-            return true
-        }
-
-        if key.eventType == .press, isConfiguredCopyShortcut(key, config: state.config) {
-            if state.hasActiveSelection {
-                handleCopy(state: state)
-            }
-            return true
-        }
-
-        if key.eventType == .press, isConfiguredCutShortcut(key, config: state.config) {
-            if state.hasActiveSelection {
-                handleCut(state: state)
-            }
-            return true
-        }
-
-        if key.eventType == .press, isConfiguredPasteShortcut(key, config: state.config) {
-            handlePasteRequest(state: state)
-            return true
-        }
-
-        // Tab navigation (checked before mode dispatch)
-        if key.eventType == .press, key.modifiers == .ctrl {
-            if key.keyCode == Key.pageDown.rawValue {
-                state.saveStateToActiveBuffer()
-                state.bufferManager.nextTab()
-                state.restoreStateFromActiveBuffer()
-                state.ensureActiveTabVisible(
-                    ribbonWidth: max(
-                        0,
-                        pipeline.columns
-                            - LayoutMetrics.editorStart(state: state, columns: pipeline.columns)))
-                return true
-            }
-            if key.keyCode == Key.pageUp.rawValue {
-                state.saveStateToActiveBuffer()
-                state.bufferManager.prevTab()
-                state.restoreStateFromActiveBuffer()
-                state.ensureActiveTabVisible(
-                    ribbonWidth: max(
-                        0,
-                        pipeline.columns
-                            - LayoutMetrics.editorStart(state: state, columns: pipeline.columns)))
-                return true
-            }
-        }
-
-        // Global hotkeys
-        if key.eventType == .press, key.modifiers == .ctrl {
-            if key.keyCode == AsciiKey.o {
-                state.saveFile()
-                return true
-            }
-            if key.keyCode == AsciiKey.n {
-                state.beginNewFile()
-                return true
-            }
-            if key.keyCode == AsciiKey.x {
-                if state.hasActiveSelection {
-                    handleCut(state: state)
-                    return true
-                }
-                if state.mode == .editor {
-                    state.mode = .tree
-                    state.statusMessage = "Ready | ^O: Save, ^X: Quit"
-                    return true
-                }
-                return false
-            }
-            // Ctrl+B toggles sidebar
-            if key.keyCode == AsciiKey.b {
-                state.sidebarCollapsed.toggle()
-                return true
-            }
-            // Ctrl+W closes current tab (nano mode)
-            if key.keyCode == AsciiKey.w, state.config.keybindingMode == .nano,
-                state.bufferManager.count > 0
-            {
-                state.closeCurrentTab()
-                return true
-            }
-            // Ctrl+H cycles file visibility (default → git-filtered → all)
-            if key.keyCode == AsciiKey.h {
-                Task { @MainActor in
-                    await state.cycleFileVisibility()
-                    state.renderRefreshSource?.invalidate()
-                }
-                return true
-            }
-        }
-
-        if key.eventType == .press, key.keyCode == AsciiKey.escape {
-            if state.mode == .editor {
-                if state.config.keybindingMode == .vim {
-                    state.vimMode = .normal
-                    state.statusMessage = "-- NORMAL -- [\(state.fileName)] :w=Save, :q=Quit"
-                } else {
-                    state.mode = .tree
-                    state.statusMessage = "Ready | ^O: Save, ^X: Quit"
-                }
-                return true
-            }
-            return false
-        }
-
-        if key.eventType == .press, key.keyCode == 3 {
-            return false
         }
 
         switch state.mode {
@@ -159,6 +59,8 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
             return handleTreeKey(key, state: state, contentRows: contentRows)
         case .editor:
             return handleEditorKey(key, state: state, contentRows: contentRows, pipeline: pipeline)
+        case .searchPanel:
+            return handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
     case .paste(let text):
@@ -178,7 +80,76 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
 }
 
 @MainActor
-private func handleCopy(state: EditorState) {
+private func dispatchEditorAwareCommand(
+    _ command: CommandID, key: KeyEvent, state: EditorState, pipeline: RenderPipeline
+) -> Bool {
+    let isShiftHeld = key.modifiers.contains(.shift)
+
+    // Selection handling for navigation commands
+    if command.isEditorNavigation {
+        if state.hasActiveSelection && !isShiftHeld {
+            // Plain navigation: collapse selection to appropriate edge
+            guard let selection = state.selection else {
+                return dispatchCommand(command, state: state, pipeline: pipeline)
+            }
+            let (start, end) = selection.ordered
+            switch command {
+            case .editorMoveLeft, .editorMoveUp, .editorMoveUpPage, .editorHome,
+                .editorWordBackward:
+                state.cursorRow = start.row
+                state.cursorCol = start.col
+            default:
+                state.cursorRow = end.row
+                state.cursorCol = end.col
+            }
+            state.clearSelection()
+            ensureEditorVisibleFull(state: state, pipeline: pipeline)
+            return true
+        }
+
+        // Capture anchor for shift+navigation
+        let anchor: TextPosition? =
+            if isShiftHeld {
+                if let sel = state.selection {
+                    sel.anchor
+                } else {
+                    TextPosition(row: state.cursorRow, col: state.cursorCol)
+                }
+            } else {
+                nil
+            }
+
+        let result = dispatchCommand(command, state: state, pipeline: pipeline)
+
+        if let anchor = anchor {
+            let head = TextPosition(row: state.cursorRow, col: state.cursorCol)
+            state.selection = TextSelection(anchor: anchor, head: head)
+        }
+
+        return result
+    }
+
+    // Selection replacement for editing commands (insert/delete)
+    if command == .editorInsertNewline || command == .editorDeleteBackward {
+        if state.hasActiveSelection, let selection = state.selection {
+            let previousSnapshot = state.activeBufferSnapshot()
+            let mutation = TextOperations.deleteRange(
+                in: &state.textBuffer, at: &state.textCursor, selection: selection)
+            state.textDidChange(mutation, previousSnapshot: previousSnapshot)
+            state.clearSelection()
+            // For backspace, selection delete is sufficient — don't also delete backward
+            if command == .editorDeleteBackward {
+                ensureEditorVisibleFull(state: state, pipeline: pipeline)
+                return true
+            }
+        }
+    }
+
+    return dispatchCommand(command, state: state, pipeline: pipeline)
+}
+
+@MainActor
+func handleCopy(state: EditorState) {
     guard let selection = state.selection else { return }
     let text = selection.extractText(
         from: { state.fileLine(at: $0) }, lineCount: state.fileLineCount)
@@ -188,7 +159,7 @@ private func handleCopy(state: EditorState) {
 }
 
 @MainActor
-private func handleCut(state: EditorState) {
+func handleCut(state: EditorState) {
     guard let selection = state.selection else { return }
     let text = selection.extractText(
         from: { state.fileLine(at: $0) }, lineCount: state.fileLineCount)
@@ -203,7 +174,7 @@ private func handleCut(state: EditorState) {
 }
 
 @MainActor
-private func handlePasteRequest(state: EditorState) {
+func handlePasteRequest(state: EditorState) {
     state.terminalWriter?(KittySequences.requestClipboard)
     state.statusMessage = "Paste request sent"
 }

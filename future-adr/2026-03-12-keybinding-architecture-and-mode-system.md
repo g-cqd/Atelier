@@ -268,7 +268,7 @@ Examples:
 - workspace search: `Cmd+Shift+F`
 - replace: `Cmd+Shift+H`
 - undo: `Cmd+Z`
-- redo: `Cmd+Shift+Z`
+- redo: `Shift+Cmd+Z`
 - copy/cut/paste: `Cmd+C`, `Cmd+X`, `Cmd+V`
 
 Do not depend on OS-reserved shortcuts as the only path to a command.
@@ -375,3 +375,160 @@ Instead:
 5. rebuild vim on top of the same foundation
 
 The search feature ADR should depend on this architecture for mode-aware shortcuts and focus behavior.
+
+## Deep Technical Analysis
+
+### Codebase Impact Assessment
+
+#### EventHandling.swift Refactoring Scope
+
+The current input dispatch at EventHandling.swift:8-178 is a monolithic function with a fixed priority chain: release guard → context menu → prompt → global Ctrl+key hotkeys → mode-specific dispatch. Every shortcut is a hardcoded `if` or `switch` check against `key.keyCode` and `key.modifiers`.
+
+Concrete changes required:
+
+1. **Extract command resolution from event handling**: The function currently mixes "what key was pressed" with "what action to take." These must separate into: (a) `KeyStroke` normalization from `KeyEvent`, (b) `KeyContext` determination from current focus state, (c) `KeymapResolver.resolve(stroke:context:preset:overrides:)` returning `CommandID?`, (d) `CommandDispatcher.execute(command:state:pipeline:)`.
+
+2. **Preserve the priority chain as resolver layers**: The current priority (overlay → prompt → context menu → global → mode-specific) is correct behavior. The resolver should encode this as an ordered list of keymap scopes, not flatten everything into one map. Each scope can short-circuit resolution.
+
+3. **Migrate incrementally**: The 24 hardcoded shortcut checks (Ctrl+O, Ctrl+N, Ctrl+X, Ctrl+B, Ctrl+W, Ctrl+H, clipboard shortcuts, undo/redo, tab navigation, Escape) should be migrated one command at a time. Each migration replaces one `if` block with a `CommandID` case, preserving existing behavior.
+
+#### ShortcutMatching.swift Evolution
+
+The current configurable matching system (ShortcutMatching.swift:3-91) supports only `ShortcutModifier` selection (`.command`, `.control`, `.both`) for clipboard and history shortcuts. It uses `matchesConfiguredShortcut()` which checks keyCode and modifier flags.
+
+This system should evolve into the general `KeymapResolver`:
+
+1. **Shortcut string parser**: The config already defines strings like `"ctrl+pagedown"` for tab navigation (Config.swift:44-47) but never parses them. A `KeyStroke.parse("ctrl+shift+f")` function is needed that produces a `KeyStroke(keyCode:modifiers:)` from human-readable strings. This parser must handle: modifier names (`ctrl`, `cmd`/`super`, `alt`, `shift`, `meta`), key names (`pagedown`, `home`, `escape`, `enter`, `tab`, `space`), single characters (`f`, `s`, `z`), and key codes (`f1`-`f12`).
+
+2. **Sequence support**: Vim needs multi-key sequences (`g g`, `d d`, `: w`). The resolver must maintain an `InputDispatchState` that accumulates keystrokes with a configurable timeout (default 500ms from the ADR config). On timeout or non-matching keystroke, the pending sequence is discarded and the latest key is re-evaluated as a fresh start.
+
+3. **Backward compatibility**: The existing `clipboardModifier` and `historyModifier` config fields must map into the new command system. During config loading, if legacy fields are present, they should generate equivalent `overrides` entries for `global.copy`, `global.cut`, `global.paste`, `global.undo`, `global.redo`.
+
+#### EditorInput.swift Vim State Machine
+
+The current vim implementation (EditorInput.swift:66-100) is a flat `switch key.keyCode` inside an `if state.config.keybindingMode == .vim && state.vimMode == .normal` guard. It supports only: `i` (insert), `h/j/k/l` (movement), `:` (status message only), `w` after `:` (save), and `Shift+G` (jump to end).
+
+A real vim state machine requires:
+
+1. **VimState struct**: Track `mode` (normal/insert/visual/visualLine/operatorPending/commandLine), `pendingOperator` (d/c/y/none), `pendingCount` (numeric prefix), `commandLineBuffer` (for `:` and `/`), `lastSearch` (for `n`/`N` repeat), `registers` (at minimum the default and clipboard registers).
+
+2. **Motion resolution**: Motions like `w`, `b`, `e`, `0`, `$`, `gg`, `G` must be modeled as `VimMotion` values that compute a target `TextPosition` from the current cursor. Operators combine with motions: `dw` = delete + word-forward, `c$` = change + end-of-line.
+
+3. **Operator-pending mode**: When `d`, `c`, or `y` is pressed in normal mode, the state enters operator-pending. The next keystroke is interpreted as a motion. If a valid motion resolves, the operator acts on the range from cursor to motion target. If the same operator key repeats (`dd`, `cc`, `yy`), it acts on the entire current line.
+
+4. **Visual mode**: `v` enters character-wise visual, `V` enters line-wise visual. Movement extends the selection. Operators act on the visual selection. Escape returns to normal mode.
+
+5. **Command-line mode**: `:` enters command-line mode with a buffer rendered in the status bar. Enter executes. Supported commands in Phase 1: `:w` (save), `:q` (close tab or quit), `:wq` (save and close), `:e <path>` (open file). `/` enters search mode with the same buffer — this integrates with the search ADR.
+
+#### Context Menu and Hint Label Migration
+
+EditorContextMenu.swift currently constructs menu items with hardcoded shortcut strings like `"Ctrl+O"` and `"Ctrl+W"` (lines 42-102). The `contextHintText` property (lines 9-26) builds hint text from these hardcoded labels.
+
+After migration:
+1. Menu items should be constructed from `CommandID` values: `ContextMenuItem(command: .global.save)`.
+2. The display shortcut label should be resolved at render time by querying the keybinding resolver for the active preset: `resolver.shortcutLabel(for: .global.save, preset: config.keybindingMode)`.
+3. The hint text builder should compose from resolved labels, not static strings.
+
+#### KeyEvent and KeyModifiers Compatibility
+
+The `KeyEvent` type (KittyCodecs/Types.swift:87-107) uses `keyCode: UInt32` for key identity and `KeyModifiers` as an `OptionSet` with `.shift`, `.alt`, `.ctrl`, `.super`, `.meta`, `.hyper`, `.capsLock`, `.numLock`. The `KeyStroke` normalization step must:
+
+- Strip `.capsLock` and `.numLock` (already done in ShortcutMatching.swift:63-67)
+- Map `.super` and `.meta` to a unified `command` concept for cross-terminal compatibility
+- Normalize letter keyCodes to lowercase for case-insensitive matching (Shift is tracked separately)
+- Handle `associatedText` for text insertion fallback when no command matches
+
+### State of the Art: Terminal Editor Keybinding Systems
+
+#### Neovim Architecture
+
+Neovim's keybinding system is the gold standard for modal editing in terminals:
+- **Keymap layers**: Global keymaps, buffer-local keymaps, and mode-specific keymaps are stored in separate tables. Resolution checks buffer-local first, then global, within the active mode.
+- **Operator-pending**: A first-class mode that tracks the pending operator and awaits a motion or text object. Count prefixes accumulate and multiply (e.g., `3d2w` = delete 6 words).
+- **`<Leader>` key**: A configurable prefix key (default `\`) that namespaces user mappings. The leader concept prevents collisions with built-in bindings.
+- **`:map` command**: Runtime remapping with mode-specific variants (`:nmap`, `:imap`, `:vmap`). Maps can point to other key sequences or to Lua functions.
+- **Timeoutlen**: Configurable delay (default 1000ms) for multi-key sequences. If the timeout elapses, the longest matching prefix is executed.
+
+#### Helix Architecture
+
+Helix uses a statically typed keymap tree:
+- **Trie-based resolution**: Keymaps are a trie of `KeyEvent → Action | KeyTrie`. Each node is either a terminal action or a subtree for multi-key sequences.
+- **Mode-specific keymaps**: Normal, insert, select modes each have their own trie.
+- **No arbitrary remapping in v1**: Keymaps are defined in TOML config but the action set is fixed. Users can rebind keys to existing actions but cannot define new ones.
+- **Sticky keys**: Some modes (like select) are "sticky" — they persist across multiple actions until explicitly exited.
+
+#### Zed Architecture
+
+Zed implements a VS Code-like keybinding model:
+- **Context predicates**: Each binding can specify a context predicate (e.g., `Editor && mode == normal`). The resolver evaluates predicates against the current focus context to find matching bindings.
+- **Multi-stroke sequences**: Supported with `"ctrl+k ctrl+c"` syntax. A pending keystroke buffer tracks partial matches.
+- **Keymap JSON**: User keybindings are JSON files with the same schema as built-in defaults. User bindings override by full key match.
+- **Action dispatch**: Actions are strongly typed Rust structs. The dispatcher routes by action type to the focused view or its ancestors in the view tree.
+
+#### VS Code Architecture
+
+VS Code's keybinding system handles massive scale:
+- **`when` clauses**: Every keybinding has an optional `when` expression evaluated against the current context (e.g., `editorTextFocus && !editorReadonly`). This is the most flexible context model in any editor.
+- **Chord sequences**: Supports two-part chords like `Ctrl+K Ctrl+C`. The first key puts the system into a "chord pending" state shown in the status bar.
+- **Default → User → Extension layering**: Three layers of keybinding definitions. Later layers can override or remove bindings.
+- **Command palette integration**: Every keybinding maps to a command ID. The command palette shows the resolved keybinding next to each command.
+
+### Recommended Technical Approach for KittyCode
+
+#### Command and Keybinding System: SOTA Architecture
+
+1. **When-clause predicate engine with AST evaluation**: Implement a rich contextual predicate system modeled after VS Code's `when` clauses. Every keybinding specifies a boolean expression evaluated against the current editor context: `editorHasFocus && !suggestWidgetVisible && vim.mode == 'normal'`, `treeViewFocus && !readOnly`, `searchInputFocus && hasResults`. Parse when-clause strings into an AST of `AndExpr`, `OrExpr`, `NotExpr`, `EqualsExpr`, and `ContextKeyExpr` nodes at configuration load time. At evaluation time, resolve each `ContextKeyExpr` against a `ContextKeyService` that maintains a stack of context key-value maps (global context, editor context, widget context). This completely eliminates the 24 hardcoded shortcut priority chains in EventHandling.swift and makes the entire binding system fully declarative and extensible.
+
+2. **Full Neovim-compatible vim emulation**: Target compatibility with the complete Neovim editing model, not a "useful subset." Implement all 8 modes: normal, insert, visual (character), visual-line, visual-block, command-line, operator-pending, replace, and select. Implement the full verb-object grammar: operators (`d`, `c`, `y`, `>`, `<`, `=`, `gq`, `gU`, `gu`, `g~`, `!`) compose with motions (`w`, `W`, `b`, `B`, `e`, `E`, `0`, `^`, `$`, `f`, `F`, `t`, `T`, `;`, `,`, `gg`, `G`, `{`, `}`, `(`, `)`, `%`, `/`, `?`, `n`, `N`) and text objects (`iw`, `aw`, `iW`, `aW`, `is`, `as`, `ip`, `ap`, `i"`, `a"`, `i'`, `a'`, `i(`, `a(`, `i{`, `a{`, `i[`, `a[`, `it`, `at`). Count prefixes apply to all composable commands: `d2w`, `3ci"`, `5>>`, `gUiw`. Support registers: unnamed (`"`), numbered (`0`-`9`), named (`a`-`z`, `A`-`Z` for append), clipboard (`+`, `*`), small-delete (`-`), last-inserted (`.`), command (`:`), search (`/`), expression (`=`), black hole (`_`). Support marks: local (`a`-`z`), global (`A`-`Z`), special (`` ` ``, `'`, `[`, `]`, `<`, `>`, `.`, `^`). Implement the jump list (`Ctrl-O`, `Ctrl-I`) and change list (`g;`, `g,`). Implement the `.` (dot) repeat command, which replays the last change — this requires recording the full keystroke sequence of each change operation, including the operator, count, motion/text-object, and inserted text.
+
+3. **Macro recording and playback**: `q{register}` begins recording all keystrokes into the named register. `q` again stops recording. `@{register}` replays the macro. `@@` repeats the last played macro. Count prefixes work: `100@a` replays macro `a` 100 times. Macros store raw keystroke sequences (not resolved commands) so they interact correctly with mode switches, counts, and operators. Recursive macros are supported — `@a` can contain `@b` which can contain `@a` (with a recursion depth limit of 1000 to prevent infinite loops). Macros are stored in the same register namespace as yank/delete, enabling `"ayy` followed by `@a` to execute the current line as a sequence of editor commands.
+
+4. **Leader key sequences with which-key popup**: Support a configurable `<Leader>` key (default: `Space` in normal mode). Leader sequences like `<Leader>ff` for find-files, `<Leader>ca` for code-action, `<Leader>gs` for git-status open a namespace for user-defined multi-key bindings. After pressing `<Leader>`, if no further key arrives within a configurable timeout (default: 500ms), display a Helix/which-key-style popup panel showing all available continuations grouped by category: `f` file..., `c` code..., `g` git..., `b` buffer..., `w` window.... Each subsequent key narrows the popup until a leaf command is reached and executed. The popup renders as an overlay panel using the existing terminal UI framework.
+
+5. **Trie-based keymap resolution with timeout and conflict detection**: Build a `KeyTrie` per mode. Each node is either a leaf (resolved `CommandID`), a branch (more keys expected), or a timeout-leaf (execute if no further key within timeout, otherwise continue). On each keystroke, walk the trie. If at a leaf, execute immediately. If at a branch, enter "pending chord" state with a visible indicator in the status bar (e.g., "Ctrl+K ..."). If the timeout expires at a timeout-leaf, execute that command. If no match exists at any point, fall through to text insertion (insert mode) or bell (normal mode). At configuration load time, detect and warn about conflicts: if binding A is a prefix of binding B, flag it unless A has `"allowPrefix": true`.
+
+6. **Chord support for VS Code-style multi-key sequences**: Support `Ctrl+K Ctrl+C` style two-part chord sequences alongside vim-style sequences. The trie naturally handles this: `Ctrl+K` reaches a branch node, the resolver enters "chord pending" state, and the next key (`Ctrl+C`) resolves to the leaf. Chords and vim sequences coexist in the same trie, differentiated by mode context. The status bar shows the pending chord in real-time.
+
+7. **User keymap overlay with per-mode, per-context bindings**: User keybindings are loaded from `~/.config/kittycode/keybindings.json` and overlaid on top of defaults with identical resolution semantics. Support three override operations: `"command"` to bind, `"command": "-"` to remove/unbind a default, and `"command": "noop"` to suppress without replacement. Each user binding can specify `"mode"` (vim mode), `"when"` (context predicate), and `"args"` (command arguments). Multiple user keymap files are supported and merged in order, enabling per-language or per-project keybinding overrides.
+
+8. **Keymap introspection and debugging**: Provide a `:keybindings` command (and command palette entry) that renders a searchable, filterable table of all active bindings for the current context. Columns: key sequence, command, when-clause, source (default / user / extension), mode. Add a "keyboard logging" mode (`:keylog on`) that prints each keypress, the trie walk path, the resolved command (or "unmatched"), and the active context keys to a dedicated log panel. This is invaluable for debugging custom bindings and understanding why a binding does or does not trigger.
+
+## SOTA Review and Accuracy Assessment
+
+This section evaluates the ADR's technical claims and recommendations against verified state-of-the-art knowledge as of March 2026.
+
+### Verified Accurate
+
+1. **Neovim's keymap architecture** — verified. Keymap layers (global, buffer-local, mode-specific), operator-pending as a first-class mode, `timeoutlen` for multi-key sequences, and `<Leader>` key namespacing all accurately described.
+
+2. **Helix's trie-based keymaps** — verified. Helix stores keymaps in a `KeyTrieNode` containing `HashMap<KeyEvent, KeyTrie>`. Resolution returns Execute/Pending/NotFound/Cancelled. "Sticky" keys (`Z` vs `z`) keep the trie position at a sub-trie root for repeated commands.
+
+3. **VS Code's when-clause system** — verified. Boolean expressions over context keys evaluated by `KeybindingResolver`. Supports `&&`, `||`, `!`, `==`, `!=`, `<`, `>`, `=~`, `in`. Rules filtered by key chord first, then when-clauses evaluated. The first matching rule wins.
+
+4. **Zed's context predicates** — verified. Structurally similar to VS Code but resolved via the focus tree hierarchy. Actions are strongly-typed Rust structs. Context is pushed by views during rendering.
+
+5. **The proposed resolution pipeline** (normalize keystroke → determine context → consult preset + overrides → dispatch command) is standard across all reviewed editors.
+
+6. **The EventHandling.swift refactoring scope analysis** correctly identifies the 24 hardcoded shortcut checks that need migration.
+
+### Requires Qualification
+
+1. **"Full Neovim-compatible vim emulation"** (point 2) — **Extremely ambitious scope**. The ADR proposes implementing all 8 modes, the full verb-object grammar, 20+ operators, 30+ motions, 20+ text objects, 30+ registers, marks, jump list, change list, and dot-repeat. This is the scope of a project like vim-mode-plus (Atom), evil-mode (Emacs), or VSCodeVim — each representing person-years of development. The ADR correctly notes "Vim support can expand indefinitely" in the risks section, but the recommended approach lists this as a target rather than a stretch goal. Consider: Helix deliberately chose a Kakoune-inspired selection-first model to avoid the full Vim complexity. The Phase 1/Phase 2 split in the preset strategy section is more realistic.
+
+2. **Macro recording** (point 3) — **Also very ambitious for initial implementation**. Macros store raw keystroke sequences and support recursion with depth limits. While architecturally sound, this is a significant feature that should be explicitly deferred to a later phase.
+
+3. **When-clause predicate engine** (point 1) — **Performance consideration**. VS Code mitigates evaluation cost by first filtering by key chord before evaluating when-clauses. The ADR should mention this optimization: evaluate predicates only for rules whose key pattern matches the pressed key, not for all rules.
+
+4. **Kakoune's selection-first model** — The ADR focuses on Vim emulation but does not discuss the Kakoune/Helix selection-first paradigm as an alternative. In Kakoune, you select first (seeing visual feedback), then act — lower cognitive load for complex operations but more keystrokes for simple ones. The `kittycode` preset could benefit from selection-first principles for non-modal editing contexts.
+
+5. **ARM NEON and keyboard protocol** — The KeyEvent normalization step should explicitly address the kitty keyboard protocol's enhanced key reporting (CSI u encoding), which provides unambiguous key identification that traditional terminals cannot. The `kittycode` preset can rely on this for reliable Cmd+key chords, while nano/vim presets should not assume it.
+
+### References
+
+- Neovim map documentation: https://neovim.io/doc/user/map.html
+- VS Code when-clause contexts: https://code.visualstudio.com/api/references/when-clause-contexts
+- Helix keymap system: https://docs.helix-editor.com/keymap.html
+- Zed key bindings: https://zed.dev/docs/key-bindings
+- Kakoune design philosophy: https://kakoune.org/why-kakoune/why-kakoune.html
+- which-key.nvim: https://github.com/folke/which-key.nvim
+- Cassowary algorithm paper: https://constraints.cs.washington.edu/solvers/cassowary-tochi.pdf

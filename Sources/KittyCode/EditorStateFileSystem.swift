@@ -77,6 +77,11 @@ extension EditorState {
         openFilePath(node.path, name: node.name)
     }
 
+    func openFileByPath(_ path: String) {
+        let name = (path as NSString).lastPathComponent
+        openFilePath(path, name: name)
+    }
+
     func openFilePath(_ path: String, name: String) {
         // Path traversal protection
         guard SecurePath.isValid(path, root: rootPath) else {
@@ -94,7 +99,8 @@ extension EditorState {
             }
             gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
             mode = .editor
-            statusMessage = "Opened \(name) | ^O: Save, ^X: Tree/Quit"
+            let resolver = KeymapResolver(config: config)
+            statusMessage = "Opened \(name) | \(resolver.openedStatusHints())"
             if config.keybindingMode == .vim {
                 vimMode = .normal
                 statusMessage = "-- NORMAL -- [\(name)] :w=Save, :q=Quit"
@@ -363,7 +369,8 @@ extension EditorState {
                 fileName: name,
                 content: content,
                 language: language,
-                lineEnding: lineEnding
+                lineEnding: lineEnding,
+                maxUndoSteps: config.editor.maxUndoSteps
             )
         } else {
             newIndex = bufferManager.open(
@@ -371,7 +378,8 @@ extension EditorState {
                 fileName: name,
                 content: content,
                 language: language,
-                lineEnding: lineEnding
+                lineEnding: lineEnding,
+                maxUndoSteps: config.editor.maxUndoSteps
             )
         }
 
@@ -401,7 +409,8 @@ extension EditorState {
 
         gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
         mode = .editor
-        statusMessage = "Opened \(name) | ^O: Save, ^X: Tree/Quit"
+        let resolver = KeymapResolver(config: config)
+        statusMessage = "Opened \(name) | \(resolver.openedStatusHints())"
         if config.keybindingMode == .vim {
             vimMode = .normal
             statusMessage = "-- NORMAL -- [\(name)] :w=Save, :q=Quit"

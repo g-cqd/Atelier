@@ -418,3 +418,171 @@ After that, the main deeper investments are:
 - budgeted buffer history
 - richer workspace operation records
 - command-based undo routing
+
+## Deep Technical Analysis
+
+### Codebase Impact Assessment
+
+#### BufferEditHistory Snapshot Cost Analysis
+
+The current `BufferEditSnapshot` (BufferHistory.swift:4-28) stores a full copy of `TextBuffer`, `TextCursor`, and `TextDocument.LineEnding` per transition. The `Transition` struct (lines 37-41) stores both `before` and `after` snapshots, meaning each undo step stores two complete document copies.
+
+Concrete cost model:
+- A 10,000-line file with an average of 40 characters per line = ~400KB per snapshot
+- Two snapshots per transition = ~800KB per undo step
+- 100 undo steps = ~80MB for a single buffer
+- With coalescing (default window), rapid typing merges into fewer transitions, but each merged transition still stores full before/after snapshots
+
+The `contentFingerprint` (lines 19-27) iterates all lines through `Hasher`, combining line ending, line count, and every line string. This is O(document_size) per fingerprint computation, called on every `recordChange()`, `undo()`, and `redo()`.
+
+Mitigation strategies (ordered by implementation complexity):
+
+1. **Bounded depth** (simplest): Add `maxUndoSteps: Int` to `BufferEditHistory`. On `recordChange()`, if `undoStack.count > maxUndoSteps`, drop the oldest transition. A default of 200 steps covers typical editing sessions while capping memory at ~160MB worst case for large files.
+
+2. **Bounded memory**: Track cumulative snapshot byte count. Estimate per-snapshot bytes as `textBuffer.lines.reduce(0) { $0 + $1.utf8.count }`. Evict oldest transitions when the total exceeds a configurable budget (e.g., 50MB per buffer).
+
+3. **Structural sharing**: Instead of copying `TextBuffer` entirely, use a persistent data structure (e.g., a rope or piece table with structural sharing). Transitions that modify a few lines share most of the backing storage. This is a major refactor of `KittyText` and should wait for the large-file architecture work.
+
+4. **Delta encoding** (medium-term): Store the first snapshot as a full checkpoint, then subsequent transitions as edit operations (insert/delete ranges with content). Reconstruct snapshots by replaying deltas from the nearest checkpoint. Checkpoint every N steps (e.g., every 50 operations) to bound replay cost.
+
+#### Fingerprint-Based Invalidation Brittleness
+
+Both `BufferEditHistory.reconcileWithRefresh()` (lines 128-139) and `FileTreeOperationHistory.validateRefresh()` (FileTreeOperationHistory.swift:44-56) use content fingerprinting to detect external changes. When the fingerprint differs from the stored value, the entire undo/redo stack is discarded.
+
+Problems with the current approach:
+
+1. **Hash collisions**: `Hasher` uses random seeding per process. While collisions are rare, a collision between the refreshed content and the stored fingerprint would silently accept divergent state — the system would believe nothing changed when the file was actually modified externally.
+
+2. **All-or-nothing invalidation**: Any single-character external change to a file invalidates the entire history. The system cannot distinguish "a formatter added a trailing newline" from "the file was completely rewritten."
+
+3. **Tree history is even more aggressive**: `FileTreeOperationHistory` fingerprints the entire tree structure (FileTreeOperationHistory.swift:113-127) by hashing every node's path, `isDirectory` flag, and child count recursively. Creating an unrelated file anywhere in the workspace clears the tree undo stack.
+
+Improvements:
+
+1. **Per-operation path tracking for tree history**: Store the set of paths affected by each tree operation. On refresh, only invalidate operations whose affected paths intersect with the changed paths. Operations affecting untouched subtrees can survive.
+
+2. **Content-aware buffer invalidation**: Instead of fingerprinting the entire buffer, compare the refreshed content against `undoStack.last?.after.textBuffer`. If the refresh matches the expected post-edit state, the history is still valid. Only invalidate if the refresh produces content that doesn't match any known state in the stack.
+
+3. **Partial invalidation**: Allow truncating the stack from the point where the external change occurred rather than clearing everything. If the bottom 5 transitions are still valid (their expected states match), keep them and only discard the top of the stack.
+
+#### FileTreeOperationHistory Recursive Snapshot Cost
+
+`captureFileSystemSnapshot(at:)` (EditorTreeFileOperations.swift:306-322) recursively reads all file data into memory for delete and duplicate operations. For a directory with 1000 files totaling 50MB, this captures 50MB of `Data` into the undo stack.
+
+Current safety valve: `hasOpenBufferConflict(at:)` (lines 260-263) prevents operations on paths with open buffers, avoiding the hardest coordination cases. But it doesn't prevent expensive snapshots of large directories.
+
+Improvements:
+
+1. **Size threshold**: Before capturing, estimate the total size with a quick `FileManager` enumeration. If the total exceeds a threshold (e.g., 10MB), warn the user and offer to proceed without undo support for that operation.
+
+2. **Lazy snapshot restoration**: Instead of holding all file data in memory permanently, write snapshot data to a temporary directory on disk. The undo stack holds paths to the temporary copies rather than raw `Data`. This trades I/O on undo for reduced memory pressure during normal editing.
+
+3. **Async capture with progress**: For large directories, run `captureFileSystemSnapshot()` on a background task with cancellation support. Show a progress indicator. The current synchronous inline capture blocks the main actor during the filesystem traversal.
+
+#### Undo/Redo Command Routing
+
+The current routing in EventHandling.swift dispatches undo/redo based on `EditorState.Mode` — `.editor` routes to buffer history, `.tree` routes to tree history. This is a direct mode check, not a command resolution.
+
+Migration to command-based routing:
+
+1. Define `CommandID.global.undo` and `CommandID.global.redo`.
+2. The `CommandDispatcher` determines the active history domain from the current `KeyContext` (editor focus → buffer history, tree focus → tree history, search panel focus → no-op or search-specific undo if supported).
+3. The dispatcher calls the `HistoryCoordinator` which asks the appropriate domain engine for its `StepResult` and surfaces the outcome to the status bar.
+4. This naturally extends to future domains: search/replace undo could become a third domain that reverses bulk replacements.
+
+### State of the Art: Editor Undo/Redo Architectures
+
+#### VS Code: Operation-Based Undo
+
+VS Code uses an operation-based undo model:
+- **UndoRedoService**: A central service that manages undo stacks per resource URI. Each stack entry is an `IUndoRedoElement` with `undo()` and `redo()` methods.
+- **Compound edits**: Multiple operations can be grouped into a single undo unit using `pushEditOperations()`. This handles cases like format-on-save where the formatter's changes should undo as one step.
+- **Workspace undo**: File create/delete/rename operations are tracked in a separate workspace undo stack. Each entry records the forward and inverse filesystem operation.
+- **Memory management**: VS Code uses a piece table (derived from the Monaco editor) for text storage, giving O(1) structural sharing between undo states. Only the edit descriptors are stored, not full snapshots.
+
+#### Neovim: Undo Tree
+
+Neovim's undo model is the most sophisticated among terminal editors:
+- **Undo tree, not stack**: Neovim stores a full tree of edit states. After undoing and making new edits, the old redo branch is preserved as a sibling rather than discarded. Users can navigate the full history tree.
+- **Persistent undo**: The undo tree can be serialized to disk (`:set undofile`), surviving across editor sessions. The file format includes checksums to detect external file modifications.
+- **Change granularity**: Each undo entry records the changed region (start line, end line, replaced text) rather than a full snapshot. This makes undo storage proportional to edit size, not document size.
+- **Time-based navigation**: `:earlier 5m` and `:later 5m` navigate the undo tree by wall-clock time, not by step count.
+
+#### Zed: Transaction-Based History
+
+Zed uses a transaction model:
+- **Edit transactions**: Each logical user action opens a transaction. All buffer modifications within the transaction are grouped. Undo reverts the entire transaction.
+- **Concurrent collaboration**: The undo model is CRDT-aware, designed to work with real-time collaboration. Each operation has a Lamport timestamp for causal ordering.
+- **Selective undo**: The architecture supports undoing specific operations out of order (needed for collaborative editing where user A undoes their change without affecting user B's subsequent edits).
+
+#### Xi Editor: CRDT Rope
+
+Xi (now archived but architecturally influential):
+- **CRDT-based rope**: Text is stored as a CRDT, making every edit inherently mergeable and undoable without snapshots.
+- **Engine separation**: The undo engine operates on abstract edit operations, completely decoupled from the text storage representation.
+- **Revision graph**: Similar to Neovim's undo tree, Xi maintains a full revision graph with branch support.
+
+### Recommended Technical Approach for KittyCode
+
+#### History System: SOTA Architecture
+
+1. **Piece table text storage**: Replace the current `TextBuffer` (array of line strings, causing ~800KB full-snapshot copies per undo step for 10K-line files) with a piece table. The piece table maintains two backing buffers: the original file content (immutable, read-only) and an append-only add buffer that accumulates all inserted text. The document is described by an ordered sequence of piece descriptors `(buffer: .original | .add, offset: Int, length: Int)` stored in a balanced binary tree (red-black tree or B-tree) for O(log n) insert, delete, and positional lookup. Edits become piece splits and inserts — no text is ever copied or moved. Undo is O(1) piece descriptor manipulation: restore the previous descriptor sequence. Memory usage drops from O(file_size x undo_depth) to O(edit_size x undo_depth). This is the model used by VS Code's Monaco editor, which achieves sub-microsecond undo on files of any size. Line index metadata (byte offsets of newlines) is maintained incrementally alongside the piece table for O(log n) line-to-offset conversion.
+
+2. **Undo tree with full branch preservation**: Implement a true undo tree, not an undo stack. The history is a rooted tree of edit nodes. When the user undoes and then makes a new edit, the old redo branch is preserved as an alternate timeline (sibling branch), never discarded. Navigation: `u` for undo (move to parent), `Ctrl+R` for redo (move to newest child on the current branch), `g-` for "earlier in time" (move to the globally previous edit regardless of branch, ordered by timestamp), `g+` for "later in time" (the inverse). These are Neovim's exact semantics. Provide an `:undotree` command that renders a tree visualization in a sidebar panel: the current node is highlighted, branches are shown with their timestamps, and the user can jump to any node by selecting it. The tree structure uses a `UndoNode` type with `parent: UndoNode?`, `children: [UndoNode]`, `timestamp: Date`, `editDelta: EditDelta`, and `cursorPosition: BufferPosition`.
+
+3. **Persistent undo across editor restarts**: Serialize the full undo tree to a sidecar file at `.kittycode/undo/<sha256-of-file-content>.undo` on file save and editor exit. On file open, if a sidecar file exists and the file's current SHA-256 content hash matches the hash recorded in the sidecar header, restore the complete undo tree including all branches. The binary format: 16-byte header (magic, version, content hash, node count), followed by depth-first serialized tree nodes with delta-encoded edit operations (using varint encoding for offsets and lengths, and raw bytes for inserted text). If the file has been externally modified (hash mismatch), discard the sidecar and start fresh. Undo surviving editor restarts is one of Neovim's most beloved features — KittyCode should match it from day one.
+
+4. **Transaction-based grouping for compound operations**: All edits within a single logical user action are grouped into one undo transaction. The `HistoryCoordinator` exposes `beginTransaction() -> TransactionID`, `commitTransaction(TransactionID)`, and `rollbackTransaction(TransactionID)`. Use cases: format-on-save (formatter produces N edits, all undone as one step), multi-cursor edit (N insertions across N cursor positions, one undo step), snippet expansion (placeholder insertion + cursor positioning), search-and-replace-all (M replacements, one undo step). A single `u` reverses the entire transaction. Transactions nest: an outer transaction (e.g., "rename symbol") can contain inner transactions (e.g., "edit file A" + "edit file B"), and undo at the outer level reverses everything.
+
+5. **Operational transform compatible edit representation**: Structure all edit operations as OT-compatible primitives: `retain(n)` (skip n characters), `insert(string)` (insert text at current position), `delete(n)` (delete n characters). Every edit in the undo tree is stored in this canonical form. Composition: two sequential operations can be composed into one. Transformation: two concurrent operations can be transformed against each other to produce convergent results. This does not require collaboration today, but it makes the data model directly compatible with future real-time collaboration (OT or CRDT-based), and it provides a clean, well-studied algebra for undo/redo, conflict detection, and operational rebasing.
+
+6. **Content-addressable checkpoints for fast reconstruction**: Every Nth edit (default: N=100), store a full content-addressable checkpoint: the complete piece table state plus a SHA-256 hash of the document content at that point. When seeking to a distant point in the undo tree (e.g., the user clicks a node 500 edits ago in the undo tree visualization), find the nearest checkpoint and replay edits forward from there, rather than replaying from the root. This bounds worst-case reconstruction time to O(N) edit replays regardless of total history depth. Checkpoints are also used to validate persistent undo file integrity on load.
+
+7. **Edit coalescing with configurable granularity**: Consecutive character inserts coalesce into a single undo step when: (a) they occur within 500ms of each other, (b) they are at adjacent positions (sequential typing), and (c) no word boundary has been crossed. Typing "foo bar" produces 2 undo steps ("foo " and "bar") because the space is a word boundary. Typing "hello" within 500ms produces 1 undo step. The following operations always break coalescing and create a new undo step: any delete operation, any paste operation, any programmatic edit (LSP rename, formatter), any cursor movement without editing, any mode switch, and any explicit transaction boundary. Coalescing parameters (timeout, word-boundary detection) are user-configurable.
+
+8. **Memory budget with intelligent branch eviction**: Set a per-buffer undo memory budget (default: 50MB). Track cumulative undo tree memory by summing edit delta sizes across all nodes. When the budget is exceeded, prune the oldest leaf branches of the undo tree first — branches that are furthest from the current position and oldest by timestamp. Never evict: the current branch (root to current node), any node within the last 100 edits, or any checkpoint node. Evicted branches are tombstoned (metadata preserved, delta data freed) so the tree visualization can still show "pruned branch" indicators. If persistent undo is enabled, evicted branches remain in the sidecar file and can be restored on demand.
+
+## SOTA Review and Accuracy Assessment
+
+This section evaluates the ADR's technical claims and recommendations against verified state-of-the-art knowledge as of March 2026.
+
+### Verified Accurate
+
+1. **VS Code's UndoRedoService architecture** — verified. VS Code uses a central service managing per-resource undo stacks with `IUndoRedoElement` entries. Compound edits use `pushEditOperations()` to group multiple operations into one undo step.
+
+2. **Neovim's undo tree** — verified. Neovim implements a true undo tree via `u_header_T` structs linked through `uh_next`/`uh_prev` (branch navigation) and `uh_alt_next`/`uh_alt_prev` (sibling branches). Time-based navigation (`:earlier`/`:later`) uses `uh_time` timestamps with depth-first tree walking.
+
+3. **Neovim's persistent undo** — verified. Serialized to a binary file with SHA-256 content hash in the header. On load, hash is compared against current file content; mismatch causes the undo file to be silently ignored. The format includes a magic header, depth-first tree serialization, and integrity checksum.
+
+4. **Zed's transaction-based CRDT model** — verified. Zed uses immutable insertion IDs with Lamport timestamps, tombstone-based deletion, and an undo map (odd count = undone, even = active). Per-user selective undo is supported via operation-ID-keyed undo maps.
+
+5. **The ADR's phased approach** (surface existing capabilities → add coordinator → improve workspace operations → add budgets) is well-sequenced and practical.
+
+6. **The decision to keep buffer and workspace history as separate domains** is correct. Every editor reviewed maintains this separation.
+
+### Requires Correction or Qualification
+
+1. **"O(1) structural sharing between undo states"** (piece table section, point 1) — **Misleading**. Creating a modified piece table or rope after an edit is O(log n) because the path from the edited leaf to the root must be duplicated (copy-on-write). Only cloning an unmodified snapshot (e.g., Helix's ropey clone) is O(1) — it increments a reference count. The distinction matters for undo cost analysis.
+
+2. **"Sub-microsecond undo on files of any size"** (piece table section, point 1) — **Overstated**. Piece descriptor manipulation is fast, but undo also involves line-index metadata updates and CRLF boundary checking, which add O(log n) cost. "Low microseconds" is more defensible. VS Code's blog itself notes that `getLineContent` is O(log n) vs O(1) for line arrays, "but we are talking about microseconds."
+
+3. **Xi maintains "a full revision graph with branch support"** (SOTA section) — **Partially accurate**. Xi's revision history is a linear sequence with undo-group toggling, not an explicitly navigable tree like Neovim's. Branches are implicit (toggled undo groups creating different active/inactive sets) rather than explicit tree nodes with navigation commands.
+
+4. **"CRDT-based rope: every edit inherently undoable without snapshots"** (Xi section) — **Imprecise**. Xi's CRDT undo uses rewind-and-replay from a base state, which is conceptually checkpoint-based. It avoids full-document snapshots but requires replaying history segments from the nearest point where toggled groups affect state.
+
+5. **"Operational transform compatible edit representation"** (recommendation 5) — **Forward-looking architectural choice, not current best practice**. The `retain(n)/insert(s)/delete(n)` format originates from Google Wave's OT protocol and is used by ShareDB and Yjs. It is sound for future collaboration support, but most single-user editors (VS Code, Neovim, Helix, Zed in local mode) use simpler `(range, replacement_text)` pairs internally. This should be explicitly labeled as a preparation-for-collaboration choice rather than a current necessity, and the additional complexity cost should be acknowledged.
+
+6. **Edit coalescing description** (point 7) — **Reasonable composite but no single editor uses exactly this combination**. Neovim uses mode boundaries only (entering/leaving insert mode). Apple NSTextView uses time-based coalescing. Most GUI editors use a combination of time + position continuity. The ADR's proposed model (500ms + word boundary + mode switch) is defensible but should note it is a novel composite rather than an established standard.
+
+### Academic References
+
+- Crowley, "Data Structures for Text Sequences" (1998) — foundational comparison of text data structures including piece tables
+- Prakash & Knister, "A Framework for Undoing Actions in Collaborative Systems" (1994, TOCHI)
+- Sun & Ellis, "OT in Real-time Group Editors" (1998, CSCW) — foundational OT framework
+- Sun, "Undo as Concurrent Inverse in Group Editors" (2002, TOCHI 9(4)) — undo as concurrent inverse
+- Cass et al., "An Empirical Evaluation of Undo Mechanisms" (2006) — users prefer cascading selective undo
+- VS Code Text Buffer Reimplementation (2018): https://code.visualstudio.com/blogs/2018/03/23/text-buffer-reimplementation
+- Xi editor CRDT details: https://xi-editor.io/docs/crdt-details.html
+- Zed CRDT blog: https://zed.dev/blog/crdts
+- Ropey crate: https://github.com/cessen/ropey
+- "Text Showdown: Gap Buffers vs Ropes" (2023): https://coredumped.dev/2023/08/09/text-showdown-gap-buffers-vs-ropes/

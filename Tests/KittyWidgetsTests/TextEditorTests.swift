@@ -111,7 +111,7 @@ struct TextEditorTests {
             lineSpans: [[StyledSpan(text: "abcd  ", style: .default)]],
             showLineNumbers: false,
             wrapLines: true,
-            selectionRanges: [0: 4...5],
+            highlights: [0: [TextHighlight(range: 4...5, role: .userSelection, style: .default)]],
             whitespaceConfig: .init(
                 showIndentation: false,
                 showSpaces: false,

@@ -22,16 +22,78 @@ enum FileTreeOperation: Sendable {
     case duplicate(snapshot: FileSystemSnapshot)
 }
 
+extension FileTreeOperation {
+    var affectedPaths: Set<String> {
+        switch self {
+        case .create(let snapshot), .delete(let snapshot), .duplicate(let snapshot):
+            return snapshot.allPaths
+        case .move(let sourcePath, let destinationPath):
+            return [sourcePath, destinationPath]
+        }
+    }
+
+    var humanDescription: String {
+        switch self {
+        case .create(let snapshot):
+            return "Create \(snapshot.displayName)"
+        case .delete(let snapshot):
+            return "Delete \(snapshot.displayName)"
+        case .move(let sourcePath, let destinationPath):
+            let from = URL(fileURLWithPath: sourcePath).lastPathComponent
+            let to = URL(fileURLWithPath: destinationPath).lastPathComponent
+            return from == to ? "Move \(to)" : "Rename \(from) → \(to)"
+        case .duplicate(let snapshot):
+            return "Duplicate \(snapshot.displayName)"
+        }
+    }
+}
+
+extension FileSystemSnapshot {
+    var displayName: String {
+        URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    var allPaths: Set<String> {
+        var result = Set<String>()
+        collectPaths(into: &result)
+        return result
+    }
+
+    private func collectPaths(into result: inout Set<String>) {
+        result.insert(path)
+        if case .directory(_, let children) = self {
+            for child in children {
+                child.collectPaths(into: &result)
+            }
+        }
+    }
+}
+
+struct FileTreeOperationRecord: Sendable {
+    let operation: FileTreeOperation
+    let affectedPaths: Set<String>
+    let description: String
+    let undoSelectionPath: String
+    let redoSelectionPath: String
+}
+
 final class FileTreeOperationHistory {
     enum StepResult {
-        case applied(FileTreeOperation)
+        case applied(FileTreeOperationRecord)
         case unavailable
         case invalidated
     }
 
-    private var undoStack: [FileTreeOperation] = []
-    private var redoStack: [FileTreeOperation] = []
-    private var currentFingerprint: Int?
+    enum InvalidationReason {
+        case externalFileChange
+        case pathSetMismatch
+    }
+
+    private var undoStack: [FileTreeOperationRecord] = []
+    private var redoStack: [FileTreeOperationRecord] = []
+    private var currentPathSet: Set<String>?
+    private(set) var lastInvalidationReason: InvalidationReason?
+    var maxOperationSteps: Int = 50
 
     var hasUndo: Bool {
         !undoStack.isEmpty
@@ -41,24 +103,60 @@ final class FileTreeOperationHistory {
         !redoStack.isEmpty
     }
 
-    func validateRefresh(with nodes: [FileNode]) -> Bool {
-        let fingerprint = Self.fingerprint(for: nodes)
-        defer { currentFingerprint = fingerprint }
-
-        guard let currentFingerprint else { return false }
-        let invalidated =
-            fingerprint != currentFingerprint && (!undoStack.isEmpty || !redoStack.isEmpty)
-        if invalidated {
-            undoStack.removeAll(keepingCapacity: true)
-            redoStack.removeAll(keepingCapacity: true)
-        }
-        return invalidated
+    var peekUndo: FileTreeOperationRecord? {
+        undoStack.last
     }
 
-    func record(_ operation: FileTreeOperation, currentNodes: [FileNode]) {
-        undoStack.append(operation)
+    var peekRedo: FileTreeOperationRecord? {
+        redoStack.last
+    }
+
+    func validateRefresh(with nodes: [FileNode]) -> Bool {
+        let newPathSet = Self.collectAllPaths(from: nodes)
+        defer { currentPathSet = newPathSet }
+
+        guard let oldPathSet = currentPathSet else { return false }
+        guard oldPathSet != newPathSet else { return false }
+        guard !undoStack.isEmpty || !redoStack.isEmpty else { return false }
+
+        let changedPaths = oldPathSet.symmetricDifference(newPathSet)
+        var didInvalidate = false
+
+        if let cutIndex = undoStack.firstIndex(where: { !$0.affectedPaths.isDisjoint(with: changedPaths) }) {
+            undoStack.removeSubrange(cutIndex...)
+            didInvalidate = true
+        }
+
+        if let cutIndex = redoStack.firstIndex(where: { !$0.affectedPaths.isDisjoint(with: changedPaths) }) {
+            redoStack.removeSubrange(cutIndex...)
+            didInvalidate = true
+        }
+
+        if didInvalidate {
+            lastInvalidationReason = .externalFileChange
+        }
+        return didInvalidate
+    }
+
+    func record(
+        _ operation: FileTreeOperation,
+        undoSelectionPath: String,
+        redoSelectionPath: String,
+        currentNodes: [FileNode]
+    ) {
+        let record = FileTreeOperationRecord(
+            operation: operation,
+            affectedPaths: operation.affectedPaths,
+            description: operation.humanDescription,
+            undoSelectionPath: undoSelectionPath,
+            redoSelectionPath: redoSelectionPath
+        )
+        undoStack.append(record)
+        if undoStack.count > maxOperationSteps {
+            undoStack.removeFirst(undoStack.count - maxOperationSteps)
+        }
         redoStack.removeAll(keepingCapacity: true)
-        currentFingerprint = Self.fingerprint(for: currentNodes)
+        currentPathSet = Self.collectAllPaths(from: currentNodes)
     }
 
     func undo(currentNodes: [FileNode]) -> StepResult {
@@ -66,12 +164,15 @@ final class FileTreeOperationHistory {
             invalidate(currentNodes: currentNodes)
             return .invalidated
         }
-        guard let operation = undoStack.popLast() else {
+        guard let record = undoStack.popLast() else {
             return .unavailable
         }
 
-        redoStack.append(operation)
-        return .applied(operation)
+        redoStack.append(record)
+        if redoStack.count > maxOperationSteps {
+            redoStack.removeFirst(redoStack.count - maxOperationSteps)
+        }
+        return .applied(record)
     }
 
     func redo(currentNodes: [FileNode]) -> StepResult {
@@ -79,22 +180,25 @@ final class FileTreeOperationHistory {
             invalidate(currentNodes: currentNodes)
             return .invalidated
         }
-        guard let operation = redoStack.popLast() else {
+        guard let record = redoStack.popLast() else {
             return .unavailable
         }
 
-        undoStack.append(operation)
-        return .applied(operation)
+        undoStack.append(record)
+        if undoStack.count > maxOperationSteps {
+            undoStack.removeFirst(undoStack.count - maxOperationSteps)
+        }
+        return .applied(record)
     }
 
     func updateCurrent(nodes: [FileNode]) {
-        currentFingerprint = Self.fingerprint(for: nodes)
+        currentPathSet = Self.collectAllPaths(from: nodes)
     }
 
     func clear(currentNodes: [FileNode]) {
         undoStack.removeAll(keepingCapacity: true)
         redoStack.removeAll(keepingCapacity: true)
-        currentFingerprint = Self.fingerprint(for: currentNodes)
+        currentPathSet = Self.collectAllPaths(from: currentNodes)
     }
 
     private func invalidate(currentNodes: [FileNode]) {
@@ -102,27 +206,24 @@ final class FileTreeOperationHistory {
     }
 
     private func matchesCurrent(nodes: [FileNode]) -> Bool {
-        let fingerprint = Self.fingerprint(for: nodes)
-        guard let currentFingerprint else {
-            self.currentFingerprint = fingerprint
+        let pathSet = Self.collectAllPaths(from: nodes)
+        guard let currentPathSet else {
+            self.currentPathSet = pathSet
             return true
         }
-        return fingerprint == currentFingerprint
+        return pathSet == currentPathSet
     }
 
-    private static func fingerprint(for nodes: [FileNode]) -> Int {
-        var hasher = Hasher()
-        hasher.combine(nodes.count)
-        fingerprint(nodes, into: &hasher)
-        return hasher.finalize()
+    static func collectAllPaths(from nodes: [FileNode]) -> Set<String> {
+        var result = Set<String>()
+        collectPaths(nodes, into: &result)
+        return result
     }
 
-    private static func fingerprint(_ nodes: [FileNode], into hasher: inout Hasher) {
+    private static func collectPaths(_ nodes: [FileNode], into result: inout Set<String>) {
         for node in nodes {
-            hasher.combine(node.path)
-            hasher.combine(node.isDirectory)
-            hasher.combine(node.children.count)
-            fingerprint(node.children, into: &hasher)
+            result.insert(node.path)
+            collectPaths(node.children, into: &result)
         }
     }
 }

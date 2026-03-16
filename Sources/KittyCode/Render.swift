@@ -61,7 +61,8 @@ func render(pipeline: RenderPipeline, state: EditorState) {
         )
     }
 
-    // Sidebar panel (tree or open files)
+    // Sidebar panel (tree, open files, or search)
+    var sidebarCursorPos: (row: Int, col: Int)?
     if sidebarWidth > 0 {
         let sidebarRect = Rect(
             x: activityBarWidth, y: contentStartRow, width: sidebarWidth, height: contentRows)
@@ -76,6 +77,13 @@ func render(pipeline: RenderPipeline, state: EditorState) {
             )
         case .openDocuments:
             renderOpenFilesPanel(
+                pipeline: pipeline,
+                state: state,
+                rect: sidebarRect,
+                colorScheme: colorScheme
+            )
+        case .search:
+            sidebarCursorPos = renderSearchPanel(
                 pipeline: pipeline,
                 state: state,
                 rect: sidebarRect,
@@ -123,6 +131,9 @@ func render(pipeline: RenderPipeline, state: EditorState) {
     )
 
     if let pos = overlayCursorPos {
+        pipeline.cursorRow = pos.row
+        pipeline.cursorCol = pos.col
+    } else if state.mode == .searchPanel, let pos = sidebarCursorPos {
         pipeline.cursorRow = pos.row
         pipeline.cursorCol = pos.col
     } else if let pos = terminalCursorPos {
