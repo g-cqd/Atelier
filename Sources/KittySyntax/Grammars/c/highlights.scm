@@ -3,76 +3,70 @@
 ((identifier) @constant
  (#match? @constant "^[A-Z][A-Z\\d_]*$"))
 
-"break" @keyword
-"case" @keyword
-"const" @keyword
-"continue" @keyword
-"default" @keyword
-"do" @keyword
-"else" @keyword
-"enum" @keyword
-"extern" @keyword
-"for" @keyword
-"if" @keyword
-"inline" @keyword
-"return" @keyword
-"sizeof" @keyword
-"static" @keyword
-"struct" @keyword
-"switch" @keyword
-"typedef" @keyword
-"union" @keyword
-"volatile" @keyword
-"while" @keyword
+; Keywords
 
-"#define" @keyword
-"#elif" @keyword
-"#else" @keyword
-"#endif" @keyword
-"#if" @keyword
-"#ifdef" @keyword
-"#ifndef" @keyword
-"#include" @keyword
+[
+  "break" "case" "const" "continue" "default" "do" "else"
+  "enum" "extern" "for" "if" "inline" "return" "sizeof"
+  "static" "struct" "switch" "typedef" "union" "volatile" "while"
+  "register" "restrict" "_Atomic" "_Bool" "_Complex"
+] @keyword
+
+[
+  "#define" "#elif" "#else" "#endif" "#if" "#ifdef"
+  "#ifndef" "#include" "#pragma" "#undef"
+] @keyword
 (preproc_directive) @keyword
 
-"--" @operator
-"-" @operator
-"-=" @operator
-"->" @operator
-"=" @operator
-"!=" @operator
-"*" @operator
-"&" @operator
-"&&" @operator
-"+" @operator
-"++" @operator
-"+=" @operator
-"<" @operator
-"==" @operator
-">" @operator
-"||" @operator
+; Operators
 
-"." @delimiter
-";" @delimiter
+[
+  "--" "-" "-=" "->" "=" "!=" "*" "&" "&&" "+" "++" "+="
+  "<" "==" ">" "||" "|" "^" "~" "%" "%=" "*=" "/=" "/""
+  "<<" "<<=" ">>" ">>=" "&=" "|=" "^=" "<=" ">=" "!"
+  "?" ":"
+] @operator
+
+; Punctuation
+
+[
+  "(" ")" "[" "]" "{" "}"
+] @punctuation.bracket
+
+[
+  "." ";" ","
+] @punctuation.delimiter
+
+; Literals
 
 (string_literal) @string
 (system_lib_string) @string
+(char_literal) @string
+(escape_sequence) @string.escape
 
-(null) @constant
+(null) @constant.builtin
 (number_literal) @number
-(char_literal) @number
+
+[
+  (true)
+  (false)
+] @boolean
+
+; Types
 
 (field_identifier) @property
 (statement_identifier) @label
 (type_identifier) @type
-(primitive_type) @type
+(primitive_type) @type.builtin
 (sized_type_specifier) @type
 
+; Functions
+
 (call_expression
-  function: (identifier) @function)
+  function: (identifier) @function.call)
 (call_expression
   function: (field_expression
-    field: (field_identifier) @function))
+    field: (field_identifier) @function.call))
 (function_declarator
   declarator: (identifier) @function)
 (preproc_function_def

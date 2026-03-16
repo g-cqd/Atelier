@@ -40,6 +40,12 @@ public enum LanguageHighlighter: Sendable {
         private var strategy: Strategy
         private var splitScratch = SplitLinesScratch()
 
+        /// Optional semantic token provider (e.g. LSP) for `.semantic` layer merging.
+        public var semanticProvider: (any SemanticTokenProvider)?
+
+        /// URI used when requesting semantic tokens from the provider.
+        public var documentURI: String?
+
         public var prefersLineInput: Bool {
             if case .fallback = strategy {
                 return true
@@ -64,7 +70,9 @@ public enum LanguageHighlighter: Sendable {
 
             if preferGrammar,
                 let language,
-                let artifacts = SyntaxArtifactsCache.artifacts(for: language) {
+                let artifacts = SyntaxArtifactsCache.artifacts(for: language),
+                !artifacts.needsExternalScanner
+            {
                 strategy = .grammar(GrammarSession(artifacts: artifacts, theme: theme))
             } else {
                 strategy = .fallback
@@ -108,6 +116,123 @@ public enum LanguageHighlighter: Sendable {
             case .fallback:
                 return fallbackHighlightDocument(source: source, language: language, theme: theme)
             }
+        }
+
+        /// Produce intermediate `HighlightToken`s preserving semantic roles.
+        /// Tokens can later be merged with semantic tokens and resolved to styles.
+        public func highlightDocumentTokens(source: String) -> [HighlightToken] {
+            switch strategy {
+            case .grammar(let gs):
+                guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
+                    return []
+                }
+                do {
+                    let tree = try gs.parser.parse(source, oldTree: gs.previousTree)
+                    guard tree.root.type != "_start" else {
+                        gs.previousTree = nil
+                        return []
+                    }
+                    gs.previousTree = tree
+                    let matches = QueryMatcher.execute(query: gs.query, tree: tree)
+                    return gs.highlighter.buildTokens(matches: matches, layer: .structural)
+                } catch {
+                    return []
+                }
+            case .fallback:
+                return []
+            }
+        }
+
+        /// Highlight a document with three-layer merging: lexical baseline,
+        /// structural tree-sitter tokens, and optional semantic tokens from LSP.
+        /// Lexical tokens always provide a baseline so no text is left unstyled.
+        public func highlightDocumentMerged(source: String) async -> [[StyledSpan]] {
+            // Layer 0: lexical baseline — always present
+            let lexicalTokens = buildLexicalTokens(source: source)
+
+            // Layer 1: structural tree-sitter tokens (may be empty)
+            let structuralTokens = highlightDocumentTokens(source: source)
+
+            // Layer 2: semantic tokens from LSP (may be empty)
+            var semanticTokens: [HighlightToken] = []
+            if let provider = semanticProvider, let uri = documentURI {
+                semanticTokens = (try? await provider.semanticTokens(for: uri)) ?? []
+            }
+
+            let allTokens = lexicalTokens + structuralTokens + semanticTokens
+            guard !allTokens.isEmpty else {
+                return highlightDocument(source: source)
+            }
+
+            let merged = HighlightMerger.merge(allTokens, sourceByteCount: source.utf8.count)
+            let resolver = RoleBasedThemeResolver(theme: theme)
+            let spans = HighlightMerger.resolveToSpans(
+                tokens: merged,
+                source: source,
+                resolver: resolver,
+                defaultStyle: theme.defaultStyle
+            )
+
+            var scratch = splitScratch
+            let result = splitDocumentSpans(
+                spans, source: source, defaultStyle: theme.defaultStyle, scratch: &scratch
+            )
+            return result
+        }
+
+        /// Build lexical-layer tokens from the fallback highlighter.
+        /// These provide Tier 1 (keyword/string/comment) highlighting as a baseline
+        /// that structural and semantic layers can refine.
+        private func buildLexicalTokens(source: String) -> [HighlightToken] {
+            let fallbackSpans = fallbackHighlightDocument(
+                source: source, language: language, theme: theme)
+            var tokens: [HighlightToken] = []
+            var byteOffset = 0
+
+            for lineSpans in fallbackSpans {
+                for span in lineSpans {
+                    let byteLen = span.text.utf8.count
+                    guard byteLen > 0 else { continue }
+                    let range = byteOffset..<(byteOffset + byteLen)
+
+                    // Only emit tokens for non-default-styled spans
+                    if span.style != theme.defaultStyle {
+                        let role = inferRoleFromStyle(span.style)
+                        tokens.append(HighlightToken(
+                            byteRange: range,
+                            role: role,
+                            layer: .lexical,
+                            priority: 0
+                        ))
+                    }
+                    byteOffset += byteLen
+                }
+                // Account for newline between lines (except after last line)
+                byteOffset += 1  // \n
+            }
+
+            // Correct for the extra newline added after the last line
+            if !fallbackSpans.isEmpty {
+                // We added one too many newlines; doesn't affect token ranges since
+                // we only emitted tokens for actual span text.
+            }
+
+            return tokens
+        }
+
+        /// Best-effort role inference from a lexical fallback style by matching
+        /// against known theme styles. This is intentionally coarse — lexical
+        /// tokens carry less information than structural ones.
+        private func inferRoleFromStyle(_ style: Style) -> HighlightRole {
+            if style == theme.style(for: "keyword") { return .keyword }
+            if style == theme.style(for: "string") { return .string }
+            if style == theme.style(for: "comment") { return .comment }
+            if style == theme.style(for: "number") { return .number }
+            if style == theme.style(for: "type") { return .type }
+            if style == theme.style(for: "attribute") { return .attribute }
+            if style == theme.style(for: "constant.builtin") { return .constantBuiltin }
+            if style == theme.style(for: "string.special.key") { return .stringSpecial }
+            return .variable
         }
 
         public func highlightLines<C: Collection>(_ lines: C) -> [[StyledSpan]]
@@ -193,6 +318,7 @@ private struct SyntaxArtifacts: Sendable {
     let lexTable: LexTable
     let productions: [ProductionRule]
     let query: Query
+    let needsExternalScanner: Bool
 }
 
 private struct SplitLinesScratch {
@@ -272,18 +398,24 @@ private enum SyntaxArtifactsCache {
 
         guard let querySource = try? String(contentsOf: queryURL, encoding: .utf8),
             let grammar = try? GrammarLoader.load(from: grammarURL.path),
-            grammar.externals.isEmpty,
             let compiled = try? ParseTableCompiler.compile(grammar),
             let query = try? QueryParser.parse(querySource)
         else {
             return nil
         }
 
+        let needsExternals = !grammar.externals.isEmpty
+
+        // Grammars that require external scanners cannot produce correct parse
+        // trees until a concrete scanner implementation is registered.
+        // Allow compilation (so capability reporter can inspect them) but mark
+        // them so Session will not use them for grammar-backed highlighting.
         return SyntaxArtifacts(
             parseTable: compiled.parseTable,
             lexTable: compiled.lexTable,
             productions: compiled.productions,
-            query: query
+            query: query,
+            needsExternalScanner: needsExternals
         )
     }
 }

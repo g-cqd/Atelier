@@ -30,8 +30,11 @@ public final class GLRParser: Sendable {
     private static let maxTokens = 100_000
 
     /// Parse source text and produce a syntax tree.
-    public func parse(_ source: String) throws(ParseError) -> SyntaxTree {
-        let lexer = Lexer(lexTable: lexTable)
+    public func parse(
+        _ source: String,
+        externalScanner: (any ExternalScanner)? = nil
+    ) throws(ParseError) -> SyntaxTree {
+        let lexer = Lexer(lexTable: lexTable, externalScanner: externalScanner)
         let tokens = lexer.tokenize(source)
         let nonExtraTokens = tokens.filter { !$0.isExtra }
 
