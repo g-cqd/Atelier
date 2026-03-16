@@ -1,3 +1,4 @@
+import Foundation
 import KittyRenderer
 import KittyWidgets
 
@@ -6,6 +7,12 @@ import KittyWidgets
 
 @MainActor
 func renderFrame(pipeline: RenderPipeline, state: EditorState) {
+    // Clear expired command feedback
+    if let expiry = state.commandFeedbackExpiry, Date() >= expiry {
+        state.commandFeedback = nil
+        state.commandFeedbackExpiry = nil
+    }
+
     pipeline.beginFrame()
     state.lastRenderColumns = pipeline.columns
     state.lastRenderRows = pipeline.rows
