@@ -45,7 +45,7 @@ struct SidebarDecorationRegressionTests {
         ])
         sut.state.gitLineDecorationProvider = TestGitProvider()
 
-        render(pipeline: sut.pipeline, state: sut.state)
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         #expect(sut.pipeline.buffer[0, 0].character == "+")
         #expect(sut.pipeline.buffer[0, 3].character == "1")
@@ -60,7 +60,7 @@ struct SidebarDecorationRegressionTests {
         sut.state.restoreStateFromActiveBuffer()
         sut.state.fileStatusProvider = TestGitProvider(statuses: ["/note.txt": .modified])
 
-        render(pipeline: sut.pipeline, state: sut.state)
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         let mCol = (0..<cols).first { sut.pipeline.buffer[0, $0].character == "M" }
         #expect(mCol != nil, "Expected 'M' indicator in tab ribbon row")
@@ -83,7 +83,7 @@ struct SidebarDecorationRegressionTests {
         sut.state.restoreStateFromActiveBuffer()
         sut.state.fileStatusProvider = TestGitProvider(statuses: ["/note.txt": .modified])
 
-        render(pipeline: sut.pipeline, state: sut.state)
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         let mCol = (0..<16).first { sut.pipeline.buffer[0, $0].character == "M" }
         #expect(mCol != nil, "Expected 'M' indicator in open files panel")

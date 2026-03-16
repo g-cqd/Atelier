@@ -8,7 +8,21 @@ public struct RenderContext: Sendable {
     public var bold: Bool?
     public var italic: Bool?
 
+    public var isFocused: Bool?
+
+    public var focusMap: FocusMapCollector?
+
+    private var _values: [ObjectIdentifier: any Sendable] = [:]
+
     public init() {}
+
+    public mutating func set<T: Sendable>(_ type: T.Type, value: T) {
+        _values[ObjectIdentifier(type)] = value
+    }
+
+    public func get<T: Sendable>(_ type: T.Type) -> T? {
+        _values[ObjectIdentifier(type)] as? T
+    }
 
     /// Apply context overrides to a base style.
     public func applyTo(_ style: Style) -> Style {
@@ -27,6 +41,11 @@ public struct RenderContext: Sendable {
         if let bg = other.background { result.background = bg }
         if let b = other.bold { result.bold = b }
         if let i = other.italic { result.italic = i }
+        if let f = other.isFocused { result.isFocused = f }
+        if let fm = other.focusMap { result.focusMap = fm }
+        for (key, val) in other._values {
+            result._values[key] = val
+        }
         return result
     }
 }

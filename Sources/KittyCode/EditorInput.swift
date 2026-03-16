@@ -23,14 +23,24 @@ func handleEditorKey(
         }
         insertText(insertedText, into: state)
         let layout = LayoutMetrics(state: state, columns: pipeline.columns, rows: pipeline.rows)
-        let editorRect = Rect(
-            x: layout.editorStart,
-            y: layout.contentStartRow,
-            width: layout.editorWidth,
-            height: layout.contentRows
-        )
-        let availWidth = max(
-            1, TextEditorLayout.contentWidth(for: makeEditorView(state: state), in: editorRect))
+        let availWidth: Int
+        if state.config.editor.wrapLines {
+            availWidth = state.resolvedWrapContentWidth(
+                columns: pipeline.columns,
+                rows: pipeline.rows
+            )
+        } else {
+            let editorRect = Rect(
+                x: layout.editorStart,
+                y: layout.contentStartRow,
+                width: layout.editorWidth,
+                height: layout.contentRows
+            )
+            availWidth = max(
+                1,
+                TextEditorLayout.contentWidth(for: makeEditorView(state: state), in: editorRect)
+            )
+        }
         ensureEditorVisible(state, contentRows: contentRows, availWidth: availWidth)
     }
     return true

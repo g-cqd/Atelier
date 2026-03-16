@@ -29,6 +29,31 @@ public struct TextHighlight: Sendable, Equatable {
 public struct TextEditor: View, Sendable {
     private var source: any DocumentSource
 
+    public struct WrapLayoutCache: Sendable, Equatable {
+        public var contentWidth: Int
+        public var tabSize: Int
+        public var lineCount: Int
+        public var totalRowCount: Int
+        public var lineWrapCounts: [Int]
+        public var visualOffsets: [Int]
+
+        public init(
+            contentWidth: Int,
+            tabSize: Int,
+            lineCount: Int,
+            totalRowCount: Int,
+            lineWrapCounts: [Int],
+            visualOffsets: [Int]
+        ) {
+            self.contentWidth = contentWidth
+            self.tabSize = tabSize
+            self.lineCount = lineCount
+            self.totalRowCount = totalRowCount
+            self.lineWrapCounts = lineWrapCounts
+            self.visualOffsets = visualOffsets
+        }
+    }
+
     public struct GutterDecoration: Sendable, Equatable {
         public var symbol: Character
         public var style: Style
@@ -62,6 +87,7 @@ public struct TextEditor: View, Sendable {
     public var maxLineWidth: Int
     public var tabSize: Int
     public var whitespaceConfig: WhitespaceRenderer.Config
+    public var wrapLayoutCache: WrapLayoutCache?
 
     public init(
         content: String = "",
@@ -88,7 +114,8 @@ public struct TextEditor: View, Sendable {
         modeShowsCursor: Bool = true,
         maxLineWidth: Int = 0,
         tabSize: Int = 4,
-        whitespaceConfig: WhitespaceRenderer.Config = .disabled
+        whitespaceConfig: WhitespaceRenderer.Config = .disabled,
+        wrapLayoutCache: WrapLayoutCache? = nil
     ) {
         let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(
             String.init)
@@ -116,6 +143,7 @@ public struct TextEditor: View, Sendable {
         self.maxLineWidth = maxLineWidth
         self.tabSize = tabSize
         self.whitespaceConfig = whitespaceConfig
+        self.wrapLayoutCache = wrapLayoutCache
     }
 
     public init(
@@ -143,7 +171,8 @@ public struct TextEditor: View, Sendable {
         modeShowsCursor: Bool = true,
         maxLineWidth: Int = 0,
         tabSize: Int = 4,
-        whitespaceConfig: WhitespaceRenderer.Config = .disabled
+        whitespaceConfig: WhitespaceRenderer.Config = .disabled,
+        wrapLayoutCache: WrapLayoutCache? = nil
     ) {
         self.source = ArrayDocumentSource(lines)
         self.lineSpans = lineSpans
@@ -169,6 +198,7 @@ public struct TextEditor: View, Sendable {
         self.maxLineWidth = maxLineWidth
         self.tabSize = tabSize
         self.whitespaceConfig = whitespaceConfig
+        self.wrapLayoutCache = wrapLayoutCache
     }
 
     public init(
@@ -196,7 +226,8 @@ public struct TextEditor: View, Sendable {
         modeShowsCursor: Bool = true,
         maxLineWidth: Int = 0,
         tabSize: Int = 4,
-        whitespaceConfig: WhitespaceRenderer.Config = .disabled
+        whitespaceConfig: WhitespaceRenderer.Config = .disabled,
+        wrapLayoutCache: WrapLayoutCache? = nil
     ) {
         self.source = buffer.lineCount == 0 ? TextBuffer(lines: [""]) : buffer
         self.lineSpans = lineSpans
@@ -222,6 +253,7 @@ public struct TextEditor: View, Sendable {
         self.maxLineWidth = maxLineWidth
         self.tabSize = tabSize
         self.whitespaceConfig = whitespaceConfig
+        self.wrapLayoutCache = wrapLayoutCache
     }
 
     public var body: Never { fatalError() }

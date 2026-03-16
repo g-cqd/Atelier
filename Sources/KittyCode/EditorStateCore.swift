@@ -690,6 +690,73 @@ final class EditorState {
         wrapCache.totalRowCount
     }
 
+    func lineAndWrapRowOffset(forVisualRowOffset visualRowOffset: Int) -> (line: Int, wrapRow: Int) {
+        guard !wrapCache.visualOffsets.isEmpty else { return (0, 0) }
+
+        let target = max(0, visualRowOffset)
+        var low = 0
+        var high = wrapCache.visualOffsets.count - 1
+
+        while low <= high {
+            let mid = (low + high) / 2
+            if wrapCache.visualOffsets[mid] <= target {
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+
+        let lineIndex = max(0, min(high, wrapCache.visualOffsets.count - 1))
+        let lineStart = wrapCache.visualOffsets[lineIndex]
+        let rowCount =
+            wrapCache.lineWrapCounts.indices.contains(lineIndex)
+            ? wrapCache.lineWrapCounts[lineIndex] : 1
+        let wrapRow = min(max(0, target - lineStart), max(0, rowCount - 1))
+        return (lineIndex, wrapRow)
+    }
+
+    func wrapLayoutCacheSnapshot() -> TextEditor.WrapLayoutCache? {
+        guard wrapCache.contentWidth > 0 else { return nil }
+        guard wrapCache.lineWrapCounts.count == fileLineCount else { return nil }
+        guard wrapCache.visualOffsets.count == fileLineCount else { return nil }
+
+        return TextEditor.WrapLayoutCache(
+            contentWidth: wrapCache.contentWidth,
+            tabSize: wrapCache.tabSize,
+            lineCount: fileLineCount,
+            totalRowCount: wrapCache.totalRowCount,
+            lineWrapCounts: wrapCache.lineWrapCounts,
+            visualOffsets: wrapCache.visualOffsets
+        )
+    }
+
+    func resolvedWrapContentWidth(columns: Int, rows: Int) -> Int {
+        let layout = LayoutMetrics(
+            state: self,
+            columns: max(1, columns),
+            rows: max(2, rows)
+        )
+        let lineNumberWidth = max(
+            3, TextDisplayMetrics.lineNumberDigits(forLineCount: fileLineCount) + 1)
+        let gutterDecorationWidth =
+            (config.git.enabled && config.git.decorations.showLineChanges
+                && gitLineDecorationProvider != nil) ? 2 : 0
+        let gutterWidth = gutterDecorationWidth + lineNumberWidth
+
+        let pessimisticContentWidth = max(1, layout.editorWidth - gutterWidth - 1)
+        buildWrapCache(contentWidth: pessimisticContentWidth)
+
+        guard wrapCache.totalRowCount <= layout.contentRows else {
+            return pessimisticContentWidth
+        }
+
+        let fullWidthContent = max(1, layout.editorWidth - gutterWidth)
+        if fullWidthContent != pessimisticContentWidth {
+            buildWrapCache(contentWidth: fullWidthContent)
+        }
+        return fullWidthContent
+    }
+
     func tabRibbonTabs() -> [TabRibbon.Tab] {
         bufferManager.buffers.map { buf in
             let status =
@@ -722,6 +789,7 @@ final class EditorState {
     var lastClickIndex = -1
     var isScrolling = false
     var scrollDragState: ScrollDragState?
+    var focusMap: FocusMap?
     var lastRenderColumns = 80
     var lastRenderRows = 24
     var lastScrollDirection: MouseButton?
