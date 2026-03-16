@@ -123,24 +123,13 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
         }
 
         if isTreeVerticalWheel {
-            let didScroll: Bool
-            if mouse.button == .scrollUp {
-                didScroll = scrollVertically(
-                    target: .tree,
-                    direction: mouse.button,
-                    scrollStep: scrollStep,
-                    state: state,
-                    at: now
-                )
-            } else {
-                didScroll = scrollVertically(
-                    target: .tree,
-                    direction: mouse.button,
-                    scrollStep: scrollStep,
-                    state: state,
-                    at: now
-                )
-            }
+            let didScroll = scrollVertically(
+                target: .tree,
+                direction: mouse.button,
+                scrollStep: scrollStep,
+                state: state,
+                at: now
+            )
             state.isScrolling = didScroll
             if didScroll {
                 updateMomentumTracking(
@@ -160,24 +149,13 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
                     state: state, editorRect: editorRect, delta: hStep)
             }
         } else if isEditorVerticalWheel {
-            let didScroll: Bool
-            if mouse.button == .scrollUp {
-                didScroll = scrollVertically(
-                    target: .editor,
-                    direction: mouse.button,
-                    scrollStep: scrollStep,
-                    state: state,
-                    at: now
-                )
-            } else {
-                didScroll = scrollVertically(
-                    target: .editor,
-                    direction: mouse.button,
-                    scrollStep: scrollStep,
-                    state: state,
-                    at: now
-                )
-            }
+            let didScroll = scrollVertically(
+                target: .editor,
+                direction: mouse.button,
+                scrollStep: scrollStep,
+                state: state,
+                at: now
+            )
             state.isScrolling = didScroll
             if didScroll {
                 updateMomentumTracking(
@@ -543,18 +521,10 @@ private func applyWrapModeScrollDelta(_ delta: Int, state: EditorState) -> Bool 
 
 @MainActor
 private func wrapModeContentWidth(state: EditorState) -> Int {
-    let layout = LayoutMetrics(
-        state: state,
+    state.resolvedWrapContentWidth(
         columns: max(1, state.lastRenderColumns),
         rows: max(2, state.lastRenderRows)
     )
-    let lineNumberWidth = max(
-        3, TextDisplayMetrics.lineNumberDigits(forLineCount: state.fileLineCount) + 1)
-    let gutterDecoWidth =
-        (state.config.git.enabled && state.config.git.decorations.showLineChanges
-            && state.gitLineDecorationProvider != nil) ? 2 : 0
-    let gutterWidth = gutterDecoWidth + lineNumberWidth
-    return max(1, layout.editorWidth - gutterWidth - 1)
 }
 
 @MainActor
@@ -947,7 +917,18 @@ private func updateScrollDrag(
 
 @MainActor
 func makeEditorView(state: EditorState) -> TextEditor {
-    TextEditor(
+    let wrapLayoutCache: TextEditor.WrapLayoutCache?
+    if state.config.editor.wrapLines {
+        _ = state.resolvedWrapContentWidth(
+            columns: max(1, state.lastRenderColumns),
+            rows: max(2, state.lastRenderRows)
+        )
+        wrapLayoutCache = state.wrapLayoutCacheSnapshot()
+    } else {
+        wrapLayoutCache = nil
+    }
+
+    return TextEditor(
         buffer: state.textBuffer,
         lineSpans: state.highlightedLines,
         scrollOffset: state.scrollOffset,
@@ -963,7 +944,8 @@ func makeEditorView(state: EditorState) -> TextEditor {
         showsVerticalScrollIndicator: true,
         showsHorizontalScrollIndicator: !state.config.editor.wrapLines,
         maxLineWidth: state.maxLineWidth,
-        tabSize: state.config.editor.tabSize
+        tabSize: state.config.editor.tabSize,
+        wrapLayoutCache: wrapLayoutCache
     )
 }
 

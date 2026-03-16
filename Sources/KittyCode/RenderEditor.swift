@@ -42,6 +42,7 @@ func renderEditorPanel(
         lineBreakStyle: colorScheme.whitespaceLineBreak,
         unexpectedStyle: colorScheme.whitespaceUnexpected
     )
+    let wrapLayoutCache = state.config.editor.wrapLines ? state.wrapLayoutCacheSnapshot() : nil
 
     let editor = TextEditor(
         buffer: state.textBuffer,
@@ -69,7 +70,8 @@ func renderEditorPanel(
         modeShowsCursor: state.mode == .editor,
         maxLineWidth: state.maxLineWidth,
         tabSize: state.config.editor.tabSize,
-        whitespaceConfig: wsConfig
+        whitespaceConfig: wsConfig,
+        wrapLayoutCache: wrapLayoutCache
     )
 
     let rect = Rect(x: editorStart, y: contentStartRow, width: editorWidth, height: contentRows)

@@ -151,4 +151,50 @@ struct TextEditorRenderingTests {
 
         #expect(cursor == .init(row: 1, col: 0))
     }
+
+    @Test func `wrapped selected tabs render a glyph and preserve their full span`() {
+        var buffer = makeSUT(columns: 6, rows: 1)
+        let rect = Rect(x: 0, y: 0, width: 6, height: 1)
+        let editor = TextEditor(
+            lines: ["\tab"],
+            lineSpans: [[StyledSpan(text: "\tab", style: .default)]],
+            showLineNumbers: false,
+            wrapLines: true,
+            highlights: [0: [TextHighlight(range: 0...0, role: .userSelection, style: .default)]],
+            tabSize: 4,
+            whitespaceConfig: .init(
+                showIndentation: false,
+                showSpaces: false,
+                showLineBreaks: false,
+                showUnexpected: false,
+                selectionVisibility: .indentation,
+                indentationStyle: .default,
+                spaceStyle: .default,
+                lineBreakStyle: .default,
+                unexpectedStyle: .default
+            )
+        )
+
+        editor.render(to: &buffer, in: rect)
+
+        #expect(String((0..<6).map { buffer[0, $0].character }) == "→   ab")
+    }
+
+    @Test func `wrapped emoji occupy two cells so following text stays aligned`() {
+        var buffer = makeSUT(columns: 5, rows: 1)
+        let rect = Rect(x: 0, y: 0, width: 5, height: 1)
+        let editor = TextEditor(
+            lines: ["❌ab"],
+            lineSpans: [[StyledSpan(text: "❌ab", style: .default)]],
+            showLineNumbers: false,
+            wrapLines: true
+        )
+
+        editor.render(to: &buffer, in: rect)
+
+        #expect(buffer[0, 0].character == "❌")
+        #expect(buffer[0, 1].isContinuation)
+        #expect(buffer[0, 2].character == "a")
+        #expect(buffer[0, 3].character == "b")
+    }
 }

@@ -39,7 +39,7 @@ struct EditorContentLayoutRegressionTests {
         sut.state.sidebarCollapsed = true
         sut.state.refreshHighlights()
         // Without tab ribbon, contentStartRow = 0
-        render(pipeline: sut.pipeline, state: sut.state)
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         // Without title bar, row 0 should have editor content (line numbers + text)
         let row1Chars = (0..<40).map { sut.pipeline.buffer[0, $0].character }
@@ -59,7 +59,7 @@ struct EditorContentLayoutRegressionTests {
         sut.state.restoreStateFromActiveBuffer()
         sut.state.refreshHighlights()
 
-        render(pipeline: sut.pipeline, state: sut.state)
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         // Row 0: tab ribbon, Row 1: editor content
         let row2Chars = (0..<cols).map { sut.pipeline.buffer[1, $0].character }
@@ -81,7 +81,7 @@ struct EditorContentLayoutRegressionTests {
             filePath: "/a.txt", fileName: "a.txt", content: "x", language: nil)
         sut.state.restoreStateFromActiveBuffer()
 
-        render(pipeline: sut.pipeline, state: sut.state)
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         // Row 1 is the tab ribbon — every column should be non-null (filled with background)
         for col in 0..<cols {
@@ -97,7 +97,7 @@ struct EditorContentLayoutRegressionTests {
         sut.state.sidebarCollapsed = true
         // With tab ribbon but no buffers, showTabRibbon=false (count=0)
         // So contentStartRow=1. Let's just verify render doesn't crash
-        render(pipeline: sut.pipeline, state: sut.state)
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         // No tab ribbon (no buffers), content starts at row 0
         // The empty editor message should be somewhere in the middle rows
@@ -112,7 +112,7 @@ struct EditorContentLayoutRegressionTests {
         let rows = 10
         let sut = makeSUT(fileContent: ["test"], columns: 40, rows: rows)
         sut.state.mode = .editor
-        render(pipeline: sut.pipeline, state: sut.state)
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         let lastRowChars = (0..<40).map { sut.pipeline.buffer[rows - 1, $0].character }
         let lastRowText = String(lastRowChars)
@@ -125,7 +125,7 @@ struct EditorContentLayoutRegressionTests {
         let rows = 10
         let sut = makeSUT(fileContent: (0..<20).map { "line \($0)" }, columns: 40, rows: rows)
         sut.state.mode = .editor
-        render(pipeline: sut.pipeline, state: sut.state)
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         // Row rows-2 (second to last) should have editor content, not be blank
         let penultimateChars = (0..<40).map { sut.pipeline.buffer[rows - 2, $0].character }
@@ -148,7 +148,7 @@ struct EditorContentLayoutRegressionTests {
             filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
         sut.state.restoreStateFromActiveBuffer()
 
-        render(pipeline: sut.pipeline, state: sut.state)
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         // Row 0: tab ribbon (full width)
         // Rows 1-10: activity bar (cols 0-2) + sidebar (cols 3-17) + separator (col 18) + editor (cols 19+)

@@ -22,9 +22,7 @@ func renderFrame(pipeline: RenderPipeline, state: EditorState) {
     // Compute the current visual scroll offset (accounts for wrap mode).
     let currentVisualOffset: Int
     if state.config.editor.wrapLines {
-        let contentWidth = max(
-            1, layout.editorWidth - TextEditorLayout.gutterWidth(for: makeEditorView(state: state)))
-        state.buildWrapCache(contentWidth: contentWidth)
+        _ = state.resolvedWrapContentWidth(columns: pipeline.columns, rows: pipeline.rows)
         currentVisualOffset =
             state.visualRowOffset(forLine: state.scrollOffset) + state.wrapRowOffset
     } else {
@@ -41,5 +39,5 @@ func renderFrame(pipeline: RenderPipeline, state: EditorState) {
     }
     lastVisualScrollOffset = currentVisualOffset
 
-    render(pipeline: pipeline, state: state)
+    renderShellLayout(pipeline: pipeline, state: state)
 }
