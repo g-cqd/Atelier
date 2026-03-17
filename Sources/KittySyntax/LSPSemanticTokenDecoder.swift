@@ -91,6 +91,58 @@ public enum LSPSemanticTokenDecoder: Sendable {
         return tokens
     }
 
+    /// A single edit in a semantic tokens delta response.
+    public struct SemanticTokenEdit: Sendable, Equatable {
+        public let start: Int
+        public let deleteCount: Int
+        public let data: [UInt32]
+
+        public init(start: Int, deleteCount: Int, data: [UInt32] = []) {
+            self.start = start
+            self.deleteCount = deleteCount
+            self.data = data
+        }
+    }
+
+    /// Apply delta edits to a previous token data array to produce updated data.
+    /// Edits are applied in reverse-start order to preserve indices.
+    public static func applyDelta(
+        previous: [UInt32],
+        edits: [SemanticTokenEdit]
+    ) -> [UInt32] {
+        var result = previous
+        let sorted = edits.sorted { $0.start > $1.start }
+        for edit in sorted {
+            let start = min(edit.start, result.count)
+            let end = min(start + edit.deleteCount, result.count)
+            result.replaceSubrange(start..<end, with: edit.data)
+        }
+        return result
+    }
+
+    /// Tracks the state of semantic tokens for incremental delta updates.
+    public struct SemanticTokensState: Sendable, Equatable {
+        public var resultId: String?
+        public var data: [UInt32]
+
+        public init(resultId: String? = nil, data: [UInt32] = []) {
+            self.resultId = resultId
+            self.data = data
+        }
+
+        /// Apply a full response, replacing all token data.
+        public mutating func applyFull(resultId: String?, data: [UInt32]) {
+            self.resultId = resultId
+            self.data = data
+        }
+
+        /// Apply a delta response, updating token data incrementally.
+        public mutating func applyDelta(resultId: String?, edits: [SemanticTokenEdit]) {
+            self.data = LSPSemanticTokenDecoder.applyDelta(previous: data, edits: edits)
+            self.resultId = resultId
+        }
+    }
+
     // MARK: - Private
 
     private static func buildLineStarts(_ source: String) -> [Int] {

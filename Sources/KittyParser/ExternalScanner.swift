@@ -13,6 +13,17 @@ public protocol ExternalScanner: Sendable {
         position: Int,
         validSymbols: Set<String>
     ) -> (type: String, length: Int)?
+
+    /// Serializes scanner state to bytes for incremental parse checkpointing.
+    func serialize() -> [UInt8]
+
+    /// Restores scanner state from a previously serialized byte sequence.
+    mutating func deserialize(_ data: [UInt8])
+}
+
+extension ExternalScanner {
+    public func serialize() -> [UInt8] { [] }
+    public mutating func deserialize(_ data: [UInt8]) {}
 }
 
 /// A no-op external scanner for grammars that don't need custom lexing.
@@ -28,4 +39,7 @@ public struct NullExternalScanner: ExternalScanner, Sendable {
     ) -> (type: String, length: Int)? {
         nil
     }
+
+    public func serialize() -> [UInt8] { [] }
+    public mutating func deserialize(_ data: [UInt8]) {}
 }

@@ -74,3 +74,48 @@
   "("
   "}"
 ] @punctuation.bracket
+
+; URL call expression
+(call_expression
+  function: (function_name) @function
+  (#eq? @function "url"))
+(call_expression (arguments (plain_value) @string))
+
+; Vendor-prefixed properties
+((property_name) @property
+ (#match? @property "^-(webkit|moz|ms|o)-"))
+
+; Common keyword values
+((plain_value) @constant
+ (#any-of? @constant "auto" "inherit" "initial" "unset" "revert" "none" "block" "inline" "flex" "grid" "absolute" "relative" "fixed" "sticky" "hidden" "visible" "solid" "dashed" "dotted" "bold" "italic" "normal" "center" "left" "right" "top" "bottom"))
+
+; Selector combinators
+(child_selector ">" @operator)
+(sibling_selector "~" @operator)
+(adjacent_sibling_selector "+" @operator)
+
+; Modern @-rules
+"@font-face" @keyword
+"@page" @keyword
+"@layer" @keyword
+"@property" @keyword
+"@container" @keyword
+"@scope" @keyword
+
+; Named pseudo-classes
+((pseudo_class_selector (class_name) @attribute)
+ (#any-of? @attribute "hover" "focus" "active" "visited" "first-child" "last-child" "nth-child" "first-of-type" "last-of-type" "not" "is" "where" "has"))
+
+; Media feature names
+(feature_query (feature_name) @property)
+
+; Math and color built-in functions
+((function_name) @function.builtin
+ (#any-of? @function.builtin "calc" "min" "max" "clamp" "var" "env" "rgb" "rgba" "hsl" "hsla" "linear-gradient" "radial-gradient"))
+
+; Commas in selector lists
+(selectors "," @punctuation.delimiter)
+
+; Attribute selector brackets
+(attribute_selector "[" @punctuation.bracket)
+(attribute_selector "]" @punctuation.bracket)

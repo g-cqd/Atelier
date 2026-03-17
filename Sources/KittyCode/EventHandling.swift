@@ -15,14 +15,6 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
         cancelPendingAcceleratedScroll(state: state, resetBurst: true)
         state.isScrolling = false
 
-        if state.contextMenu != nil {
-            return state.handleContextMenuKey(key)
-        }
-
-        if state.prompt != nil {
-            return state.handlePromptKey(key)
-        }
-
         if state.vimCommandLine != nil {
             return state.handleVimCommandLineKey(key)
         }
@@ -36,6 +28,45 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
             let context = KeyContext.from(state: state)
             let isRepeat = key.eventType == .repeat
             let resolver = KeymapResolver(config: state.config)
+
+            // Multi-key sequence handling (press only, not repeat)
+            if !isRepeat {
+                let sequenceTimeout =
+                    Double(state.config.keybindings.sequenceTimeoutMilliseconds) / 1000.0
+                if !state.pendingKeySequence.isEmpty,
+                    let pendingTime = state.pendingKeySequenceTime,
+                    Date().timeIntervalSince(pendingTime) > sequenceTimeout
+                {
+                    state.pendingKeySequence = []
+                    state.pendingKeySequenceTime = nil
+                }
+
+                let candidate = state.pendingKeySequence + [stroke]
+                switch resolver.resolveSequence(candidate, context: context) {
+                case .command(let command):
+                    state.pendingKeySequence = []
+                    state.pendingKeySequenceTime = nil
+                    let seqLabel = candidate.map { KeyStrokeFormatter.label(for: $0) }.joined(
+                        separator: " ")
+                    state.commandFeedback = "\(seqLabel) → \(command.rawValue)"
+                    state.commandFeedbackExpiry = Date().addingTimeInterval(1.5)
+                    return dispatchEditorAwareCommand(command, key: key, state: state, pipeline: pipeline)
+                case .partial:
+                    state.pendingKeySequence = candidate
+                    state.pendingKeySequenceTime = Date()
+                    let seqLabel = candidate.map { KeyStrokeFormatter.label(for: $0) }.joined(
+                        separator: " ")
+                    state.commandFeedback = "\(seqLabel)..."
+                    state.commandFeedbackExpiry = Date().addingTimeInterval(1.5)
+                    return true
+                case .none:
+                    if !state.pendingKeySequence.isEmpty {
+                        state.pendingKeySequence = []
+                        state.pendingKeySequenceTime = nil
+                    }
+                }
+            }
+
             if let command = resolver.resolve(stroke, context: context, isRepeat: isRepeat) {
                 // Throttle repeat events for navigation commands
                 if isRepeat, command.isEditorNavigation || command.isTreeNavigation {
@@ -72,6 +103,14 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
                         command, key: key, state: state, pipeline: pipeline)
                 }
             }
+        }
+
+        // Fallback for overlay contexts: text insertion in prompts, eat input in context menus
+        if state.contextMenu != nil {
+            return true
+        }
+        if state.prompt != nil {
+            return state.handlePromptKey(key)
         }
 
         switch state.mode {

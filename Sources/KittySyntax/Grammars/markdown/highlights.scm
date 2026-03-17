@@ -45,3 +45,39 @@
 ] @punctuation.special
 
 (backslash_escape) @string.escape
+
+; Emphasis and strong
+(emphasis) @text.emphasis
+(strong_emphasis) @text.strong
+
+; Inline code
+(code_span) @text.literal
+
+; Task list markers
+(task_list_marker_checked) @constant.builtin
+(task_list_marker_unchecked) @punctuation.special
+
+; Info string on fenced code blocks
+(info_string) @label
+
+; Images
+(image (image_description) @text.reference)
+(image (link_destination) @text.uri)
+
+; Inline links
+(inline_link (link_text) @text.reference)
+(inline_link (link_destination) @text.uri)
+
+; Shortcut links
+(shortcut_link) @text.reference
+
+; HTML blocks inside markdown
+(html_block) @none
+
+; Paragraph (structural, no highlight)
+(paragraph) @none
+
+; GFM table elements
+(pipe_table_header) @text.title
+(pipe_table_delimiter_row) @punctuation.special
+(pipe_table_delimiter_cell) @punctuation.special

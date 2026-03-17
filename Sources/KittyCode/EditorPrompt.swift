@@ -166,6 +166,18 @@ extension EditorState {
         )
     }
 
+    func confirmPrompt() {
+        guard let prompt else { return }
+        if commit(prompt: prompt) {
+            self.prompt = nil
+        }
+    }
+
+    func cancelPrompt() {
+        prompt = nil
+        statusMessage = "Canceled"
+    }
+
     func handlePromptKey(_ key: KeyEvent) -> Bool {
         guard var prompt else { return false }
 

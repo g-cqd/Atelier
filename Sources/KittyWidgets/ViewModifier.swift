@@ -136,3 +136,23 @@ extension View {
         ModifiedView(content: self, modifier: FocusedModifier(isFocused: isFocused))
     }
 }
+
+// MARK: - Environment Modifier
+
+public struct EnvironmentModifier<K: EnvironmentKey>: ViewModifier, Sendable where K.Value: Sendable {
+    let value: K.Value
+
+    public func body(content: Content) -> some View { content }
+
+    public func modifyContext(_ context: RenderContext) -> RenderContext {
+        var ctx = context
+        ctx.environmentValues[K.self] = value
+        return ctx
+    }
+}
+
+extension View {
+    public func environment<K: EnvironmentKey>(_ key: K.Type, _ value: K.Value) -> some View {
+        ModifiedView(content: self, modifier: EnvironmentModifier<K>(value: value))
+    }
+}

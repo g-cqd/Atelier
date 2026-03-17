@@ -56,6 +56,22 @@ enum CommandID: String, CaseIterable, Sendable {
     case searchReplaceAll
     case searchToggleCase
     case searchToggleRegex
+    case searchToggleWholeWord
+
+    // Search panel focus
+    case searchFocusFind
+    case searchFocusReplace
+    case searchFocusResults
+
+    // Prompt
+    case promptConfirm
+    case promptCancel
+
+    // Context menu
+    case contextMenuUp
+    case contextMenuDown
+    case contextMenuSelect
+    case contextMenuDismiss
 
     // Vim normal mode
     case vimEnterInsert
@@ -65,6 +81,24 @@ enum CommandID: String, CaseIterable, Sendable {
     case vimMoveUp
     case vimMoveRight
     case vimGotoLastLine
+
+    // Vim visual mode
+    case vimEnterVisual
+    case vimEnterVisualLine
+    case vimExitVisual
+
+    // Vim motions
+    case vimMoveWordForward
+    case vimMoveWordBackward
+    case vimMoveLineStart
+    case vimMoveLineEnd
+    case vimGotoFirstLine
+
+    // Vim editing
+    case vimDeleteLine
+    case vimYankLine
+    case vimPaste
+    case vimSearchForward
 
     var isTreeNavigation: Bool {
         switch self {
@@ -92,4 +126,8 @@ enum CommandID: String, CaseIterable, Sendable {
     case treeSelect
     case treeExpandOrOpen
     case treeCollapse
+
+    // Focus cycling
+    case focusNext
+    case focusPrevious
 }
