@@ -235,6 +235,217 @@ public enum LanguageHighlighter: Sendable {
             return .variable
         }
 
+        /// Highlight only the visible viewport lines for fast initial render.
+        /// Converts a line range to a byte range and uses scoped query execution.
+        /// Falls back to line-by-line lexical highlighting for non-grammar sessions.
+        public func highlightViewport(source: String, visibleLineRange: Range<Int>) -> [[StyledSpan]] {
+            guard !source.isEmpty else {
+                return [[StyledSpan(text: "", style: theme.defaultStyle)]]
+            }
+
+            switch strategy {
+            case .grammar(let gs):
+                guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
+                    return viewportFallback(source: source, visibleLineRange: visibleLineRange)
+                }
+                do {
+                    let tree = try gs.parser.parse(source, oldTree: gs.previousTree)
+                    guard tree.root.type != "_start" else {
+                        gs.previousTree = nil
+                        return viewportFallback(source: source, visibleLineRange: visibleLineRange)
+                    }
+                    gs.previousTree = tree
+
+                    let byteRange = lineRangeToByteRange(source: source, lineRange: visibleLineRange)
+                    let matches = QueryMatcher.execute(
+                        query: gs.query, tree: tree, byteRange: byteRange)
+                    let tokens = gs.highlighter.buildTokens(matches: matches, layer: .structural)
+
+                    guard !tokens.isEmpty else {
+                        return viewportFallback(source: source, visibleLineRange: visibleLineRange)
+                    }
+
+                    let resolver = RoleBasedThemeResolver(theme: theme)
+                    let viewportSource = extractViewportSource(
+                        source: source, byteRange: byteRange)
+                    let vpByteCount = viewportSource.utf8.count
+                    let localTokens = tokens.compactMap { token -> HighlightToken? in
+                        let start = token.byteRange.lowerBound - byteRange.lowerBound
+                        let end = token.byteRange.upperBound - byteRange.lowerBound
+                        guard start >= 0, end <= vpByteCount, start < end else { return nil }
+                        return HighlightToken(
+                            byteRange: start..<end,
+                            role: token.role,
+                            modifiers: token.modifiers,
+                            layer: token.layer,
+                            priority: token.priority
+                        )
+                    }
+
+                    let merged = HighlightMerger.merge(
+                        localTokens, sourceByteCount: viewportSource.utf8.count)
+                    let spans = HighlightMerger.resolveToSpans(
+                        tokens: merged,
+                        source: viewportSource,
+                        resolver: resolver,
+                        defaultStyle: theme.defaultStyle
+                    )
+
+                    var scratch = splitScratch
+                    return splitDocumentSpans(
+                        spans, source: viewportSource, defaultStyle: theme.defaultStyle,
+                        scratch: &scratch)
+                } catch {
+                    return viewportFallback(source: source, visibleLineRange: visibleLineRange)
+                }
+
+            case .fallback:
+                return viewportFallback(source: source, visibleLineRange: visibleLineRange)
+            }
+        }
+
+        /// Viewport-scoped three-layer merge highlighting.
+        /// Returns styled spans for only the visible range; caller should run
+        /// full-document `highlightDocumentMerged` in background after this returns.
+        public func highlightViewportMerged(
+            source: String, visibleLineRange: Range<Int>
+        ) async -> [[StyledSpan]] {
+            guard !source.isEmpty else {
+                return [[StyledSpan(text: "", style: theme.defaultStyle)]]
+            }
+
+            let byteRange = lineRangeToByteRange(source: source, lineRange: visibleLineRange)
+            let viewportSource = extractViewportSource(source: source, byteRange: byteRange)
+
+            // Layer 0: lexical baseline for visible lines only
+            let visibleLines = extractVisibleLines(
+                source: source, visibleLineRange: visibleLineRange)
+            let lexicalSpans = visibleLines.map {
+                fallbackHighlightLine($0, language: language, theme: theme)
+            }
+            var lexicalTokens: [HighlightToken] = []
+            var byteOffset = 0
+            for lineSpans in lexicalSpans {
+                for span in lineSpans {
+                    let byteLen = span.text.utf8.count
+                    guard byteLen > 0 else { continue }
+                    if span.style != theme.defaultStyle {
+                        let role = inferRoleFromStyle(span.style)
+                        lexicalTokens.append(HighlightToken(
+                            byteRange: byteOffset..<(byteOffset + byteLen),
+                            role: role, layer: .lexical, priority: 0))
+                    }
+                    byteOffset += byteLen
+                }
+                byteOffset += 1  // \n
+            }
+
+            // Layer 1: structural tokens scoped to viewport
+            var structuralTokens: [HighlightToken] = []
+            if case .grammar(let gs) = strategy {
+                if source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes {
+                    if let tree = try? gs.parser.parse(source, oldTree: gs.previousTree) {
+                        if tree.root.type != "_start" {
+                            gs.previousTree = tree
+                            let matches = QueryMatcher.execute(
+                                query: gs.query, tree: tree, byteRange: byteRange)
+                            let vpCount = viewportSource.utf8.count
+                            structuralTokens = gs.highlighter.buildTokens(
+                                matches: matches, layer: .structural
+                            ).compactMap { token -> HighlightToken? in
+                                let start = token.byteRange.lowerBound - byteRange.lowerBound
+                                let end = token.byteRange.upperBound - byteRange.lowerBound
+                                guard start >= 0, end <= vpCount, start < end else { return nil }
+                                return HighlightToken(
+                                    byteRange: start..<end,
+                                    role: token.role, modifiers: token.modifiers,
+                                    layer: token.layer, priority: token.priority)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Layer 2: semantic tokens from LSP scoped to viewport
+            var semanticTokens: [HighlightToken] = []
+            if let provider = semanticProvider, let uri = documentURI {
+                let allSemantic = (try? await provider.semanticTokens(for: uri)) ?? []
+                semanticTokens = allSemantic.compactMap { token in
+                    let start = token.byteRange.lowerBound - byteRange.lowerBound
+                    let end = token.byteRange.upperBound - byteRange.lowerBound
+                    guard start >= 0, end <= viewportSource.utf8.count, start < end else {
+                        return nil
+                    }
+                    return HighlightToken(
+                        byteRange: start..<end, role: token.role,
+                        modifiers: token.modifiers, layer: token.layer, priority: token.priority)
+                }
+            }
+
+            let allTokens = lexicalTokens + structuralTokens + semanticTokens
+            guard !allTokens.isEmpty else {
+                return lexicalSpans
+            }
+
+            let merged = HighlightMerger.merge(
+                allTokens, sourceByteCount: viewportSource.utf8.count)
+            let resolver = RoleBasedThemeResolver(theme: theme)
+            let spans = HighlightMerger.resolveToSpans(
+                tokens: merged, source: viewportSource, resolver: resolver,
+                defaultStyle: theme.defaultStyle)
+
+            var scratch = splitScratch
+            return splitDocumentSpans(
+                spans, source: viewportSource, defaultStyle: theme.defaultStyle, scratch: &scratch)
+        }
+
+        // MARK: - Viewport Helpers
+
+        private func lineRangeToByteRange(source: String, lineRange: Range<Int>) -> Range<Int> {
+            let utf8 = source.utf8
+            var lineStarts: [Int] = [0]
+            for (i, byte) in utf8.enumerated() where byte == 0x0A {
+                lineStarts.append(i + 1)
+            }
+
+            let startLine = min(lineRange.lowerBound, lineStarts.count - 1)
+            let endLine = min(lineRange.upperBound, lineStarts.count)
+
+            let startByte = lineStarts[max(startLine, 0)]
+            let endByte: Int
+            if endLine < lineStarts.count {
+                endByte = lineStarts[endLine]
+            } else {
+                endByte = utf8.count
+            }
+
+            return startByte..<endByte
+        }
+
+        private func extractViewportSource(source: String, byteRange: Range<Int>) -> String {
+            let utf8 = Array(source.utf8)
+            let start = max(byteRange.lowerBound, 0)
+            let end = min(byteRange.upperBound, utf8.count)
+            guard start < end else { return "" }
+            return String(decoding: utf8[start..<end], as: UTF8.self)
+        }
+
+        private func extractVisibleLines(source: String, visibleLineRange: Range<Int>) -> [String] {
+            let allLines = source.split(separator: "\n", omittingEmptySubsequences: false)
+                .map(String.init)
+            let start = max(visibleLineRange.lowerBound, 0)
+            let end = min(visibleLineRange.upperBound, allLines.count)
+            guard start < end else { return [""] }
+            return Array(allLines[start..<end])
+        }
+
+        private func viewportFallback(
+            source: String, visibleLineRange: Range<Int>
+        ) -> [[StyledSpan]] {
+            let lines = extractVisibleLines(source: source, visibleLineRange: visibleLineRange)
+            return lines.map { fallbackHighlightLine($0, language: language, theme: theme) }
+        }
+
         public func highlightLines<C: Collection>(_ lines: C) -> [[StyledSpan]]
         where C.Element == String {
             switch strategy {

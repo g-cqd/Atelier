@@ -170,7 +170,24 @@ extension EditorState {
         performContextMenuAction(contextMenu.items[index].action)
     }
 
-    private func performContextMenuAction(_ action: ContextMenuAction) {
+    func contextMenuMoveUp() {
+        guard var contextMenu else { return }
+        contextMenu.selectedIndex = max(0, contextMenu.selectedIndex - 1)
+        self.contextMenu = contextMenu
+    }
+
+    func contextMenuMoveDown() {
+        guard var contextMenu else { return }
+        contextMenu.selectedIndex = min(contextMenu.items.count - 1, contextMenu.selectedIndex + 1)
+        self.contextMenu = contextMenu
+    }
+
+    func contextMenuConfirm() {
+        guard let contextMenu else { return }
+        performContextMenuAction(contextMenu.items[contextMenu.selectedIndex].action)
+    }
+
+    func performContextMenuAction(_ action: ContextMenuAction) {
         dismissContextMenu()
 
         switch action {

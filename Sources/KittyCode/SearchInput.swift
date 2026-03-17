@@ -29,8 +29,9 @@ func openInFileSearch(state: EditorState) {
         pattern: nil,
         matches: [],
         activeMatchIndex: -1,
-        isCaseSensitive: false,
-        isRegex: false
+        isCaseSensitive: state.config.search.caseSensitiveByDefault,
+        isRegex: state.config.search.regexByDefault,
+        isWholeWord: state.config.search.wholeWordByDefault
     )
 
     if !prefill.isEmpty {
@@ -133,7 +134,8 @@ func executeSearch(
     let query = SearchQuery(
         text: search.query,
         isCaseSensitive: search.isCaseSensitive,
-        isRegex: search.isRegex
+        isRegex: search.isRegex,
+        wholeWord: search.isWholeWord
     )
     search.pattern = compilePattern(query)
     if let pattern = search.pattern {
@@ -552,7 +554,8 @@ func triggerWorkspaceSearch(state: EditorState) {
     let query = SearchQuery(
         text: search.query,
         isCaseSensitive: search.isCaseSensitive,
-        isRegex: search.isRegex
+        isRegex: search.isRegex,
+        wholeWord: search.isWholeWord
     )
     guard let pattern = compilePattern(query) else {
         state.workspaceSearchResults = []

@@ -10,6 +10,7 @@ enum QueryPatternExpectationError: Error {
     case expectedLiteral
     case expectedMatchPredicate
     case expectedNodeMatch
+    case expectedQuantified
     case expectedSequence
     case expectedWildcard
 }
@@ -67,6 +68,13 @@ func requireSequence(_ pattern: QueryPattern) throws -> [QueryPattern] {
         throw QueryPatternExpectationError.expectedSequence
     }
     return patterns
+}
+
+func requireQuantified(_ pattern: QueryPattern) throws -> (pattern: QueryPattern, quantifier: Quantifier) {
+    guard case .quantified(let inner, let quantifier) = pattern else {
+        throw QueryPatternExpectationError.expectedQuantified
+    }
+    return (inner, quantifier)
 }
 
 func requireWildcard(_ pattern: QueryPattern) throws -> String? {

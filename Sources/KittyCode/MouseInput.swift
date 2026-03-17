@@ -345,21 +345,37 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     state.isScrolling = false
     let contentRow = mouse.row - 1 - layout.contentStartRow
 
-    if mouse.col - 1 >= layout.activityBarWidth && mouse.col - 1 < layout.editorStart - 1
-        && contentRow >= 0
-    {
+    let clickRegion = state.focusMap?.hitTest(row: mouse.row - 1, col: mouse.col - 1)
+    if clickRegion == .sidebar && contentRow >= 0 {
         if isRightClick {
             state.showTreeContextMenu(at: state.treeScrollOffset + contentRow)
         } else {
             handleTreeClick(contentRow: contentRow, isDoubleClick: isDoubleClick, state: state)
         }
-    } else if mouse.col - 1 >= layout.editorStart && contentRow >= 0 {
+    } else if clickRegion == .editor && contentRow >= 0 {
         if isRightClick {
             state.mode = .editor
             state.showEditorContextMenu()
         } else {
             handleEditorClick(
                 mouseRow: mouse.row, mouseCol: mouse.col, editorRect: editorRect, state: state)
+        }
+    } else if clickRegion == nil && contentRow >= 0 {
+        // Fallback: manual rect check when FocusMap is not available
+        if mouse.col - 1 >= layout.activityBarWidth && mouse.col - 1 < layout.editorStart - 1 {
+            if isRightClick {
+                state.showTreeContextMenu(at: state.treeScrollOffset + contentRow)
+            } else {
+                handleTreeClick(contentRow: contentRow, isDoubleClick: isDoubleClick, state: state)
+            }
+        } else if mouse.col - 1 >= layout.editorStart {
+            if isRightClick {
+                state.mode = .editor
+                state.showEditorContextMenu()
+            } else {
+                handleEditorClick(
+                    mouseRow: mouse.row, mouseCol: mouse.col, editorRect: editorRect, state: state)
+            }
         }
     }
 

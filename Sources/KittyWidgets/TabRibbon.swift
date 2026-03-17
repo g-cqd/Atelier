@@ -2,7 +2,7 @@ import KittyCodecs
 import KittyRenderer
 import KittyText
 
-public struct TabRibbon: Sendable {
+public struct TabRibbon: View, Sendable {
     public struct Tab: Sendable {
         public var name: String
         public var isDirty: Bool
@@ -63,6 +63,8 @@ public struct TabRibbon: Sendable {
         self.scrollOffset = scrollOffset
         self.style = style
     }
+
+    public var body: Never { fatalError() }
 
     public func render(to buffer: inout ScreenBuffer, in rect: Rect) {
         guard rect.width > 0, rect.height > 0, !tabs.isEmpty else { return }
