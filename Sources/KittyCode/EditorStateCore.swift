@@ -124,6 +124,8 @@ final class EditorState {
     enum VimMode {
         case normal
         case insert
+        case visual
+        case visualLine
     }
 
     enum ContextMenuTarget: Equatable {
@@ -192,6 +194,7 @@ final class EditorState {
         var activeMatchIndex: Int
         var isCaseSensitive: Bool
         var isRegex: Bool
+        var isWholeWord: Bool
         var replaceText: String = ""
         var showReplace: Bool = false
 
@@ -391,6 +394,8 @@ final class EditorState {
         return true
     }
 
+    private static let viewportHighlightThreshold = 1000
+
     func refreshHighlights() {
         guard syntaxHighlightingEnabled else {
             highlightedLines = fileContent.map { line in
@@ -401,8 +406,56 @@ final class EditorState {
         let session = currentHighlightSession()
         if session.prefersLineInput {
             highlightedLines = session.highlightLines(fileContent)
-        } else {
-            highlightedLines = session.highlightDocument(source: documentText)
+            return
+        }
+
+        let lineCount = fileLineCount
+        let source = documentText
+
+        // For small files, highlight everything synchronously
+        guard lineCount > Self.viewportHighlightThreshold else {
+            highlightedLines = session.highlightDocument(source: source)
+            return
+        }
+
+        // Viewport-first: highlight only visible lines, then schedule full in background
+        let visibleStart = max(0, scrollOffset)
+        let visibleEnd = min(lineCount, visibleStart + lastRenderRows + 20)
+        let visibleRange = visibleStart..<visibleEnd
+
+        // Start with plain text for all lines
+        let defaultStyle = colorScheme.editorText
+        var lines = fileContent.map { line in
+            [StyledSpan(text: line, style: defaultStyle)]
+        }
+
+        // Highlight the viewport synchronously
+        let viewportHighlights = session.highlightViewport(
+            source: source, visibleLineRange: visibleRange)
+        for (i, highlight) in viewportHighlights.enumerated() {
+            let lineIdx = visibleStart + i
+            if lineIdx < lines.count {
+                lines[lineIdx] = highlight
+            }
+        }
+        highlightedLines = lines
+
+        // Schedule full document highlight in background
+        fullHighlightTask?.cancel()
+        fullHighlightTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            // Yield to let the viewport render first
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+
+            let fullHighlights = session.highlightDocument(source: source)
+            guard !Task.isCancelled else { return }
+
+            // Only apply if we're still on the same document
+            if self.documentText == source {
+                self.highlightedLines = fullHighlights
+                self.renderRefreshSource?.invalidate()
+            }
         }
     }
 
@@ -784,6 +837,7 @@ final class EditorState {
     var contextMenu: ContextMenuState?
     var mode: Mode = .tree
     var vimMode: VimMode = .normal
+    var vimVisualAnchor: (line: Int, col: Int)?
     var symbolTheme: TerminalSymbolTheme
     var lastClickTime: Date = .distantPast
     var lastClickIndex = -1
@@ -816,6 +870,9 @@ final class EditorState {
     var commandFeedback: String?
     var commandFeedbackExpiry: Date?
     var lastKeyRepeatProcessedAt: Date?
+    var pendingKeySequence: [KeyStroke] = []
+    var pendingKeySequenceTime: Date?
+    var fullHighlightTask: Task<Void, Never>?
     var fileTreeHistory = FileTreeOperationHistory()
 
     var maxLineWidth: Int {

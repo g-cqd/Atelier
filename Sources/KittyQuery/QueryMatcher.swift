@@ -96,23 +96,50 @@ public enum QueryMatcher: Sendable {
                         return false
                     }
                 default:
-                    var matched = false
-                    while childCursor < node.children.count {
-                        var candidateCaptures = localCaptures
-                        if matchPattern(
-                            childPattern,
-                            against: node.children[childCursor],
-                            source: source,
-                            captures: &candidateCaptures
-                        ) {
-                            childCursor += 1
-                            localCaptures = candidateCaptures
-                            matched = true
-                            break
+                    if case .quantified(let inner, let quantifier) = childPattern {
+                        var matchCount = 0
+                        while childCursor < node.children.count {
+                            var candidateCaptures = localCaptures
+                            if matchPattern(
+                                inner,
+                                against: node.children[childCursor],
+                                source: source,
+                                captures: &candidateCaptures
+                            ) {
+                                childCursor += 1
+                                localCaptures = candidateCaptures
+                                matchCount += 1
+                            } else {
+                                break
+                            }
                         }
-                        childCursor += 1
+                        switch quantifier {
+                        case .oneOrMore:
+                            if matchCount == 0 { return false }
+                        case .zeroOrMore:
+                            break  // always OK
+                        case .optional:
+                            break  // 0 or 1 match is fine; we stop after first non-match
+                        }
+                    } else {
+                        var matched = false
+                        while childCursor < node.children.count {
+                            var candidateCaptures = localCaptures
+                            if matchPattern(
+                                childPattern,
+                                against: node.children[childCursor],
+                                source: source,
+                                captures: &candidateCaptures
+                            ) {
+                                childCursor += 1
+                                localCaptures = candidateCaptures
+                                matched = true
+                                break
+                            }
+                            childCursor += 1
+                        }
+                        if !matched { return false }
                     }
-                    if !matched { return false }
                 }
             }
             if let captureName = capture {
@@ -163,6 +190,21 @@ public enum QueryMatcher: Sendable {
             }
             captures = localCaptures
             return true
+
+        case .quantified(let inner, let quantifier):
+            // Quantified patterns are only meaningful as children of nodeMatch.
+            // At the top level, match the inner pattern according to quantifier rules.
+            switch quantifier {
+            case .optional, .zeroOrMore:
+                // Zero matches is acceptable — try matching but don't fail
+                var tryCaptures = captures
+                _ = matchPattern(inner, against: node, source: source, captures: &tryCaptures)
+                captures = tryCaptures
+                return true
+            case .oneOrMore:
+                // Must match at least once
+                return matchPattern(inner, against: node, source: source, captures: &captures)
+            }
 
         case .anchor:
             return true

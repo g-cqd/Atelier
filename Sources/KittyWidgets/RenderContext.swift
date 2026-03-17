@@ -12,6 +12,8 @@ public struct RenderContext: Sendable {
 
     public var focusMap: FocusMapCollector?
 
+    public var environmentValues: EnvironmentValues = EnvironmentValues()
+
     private var _values: [ObjectIdentifier: any Sendable] = [:]
 
     public init() {}
@@ -43,6 +45,7 @@ public struct RenderContext: Sendable {
         if let i = other.italic { result.italic = i }
         if let f = other.isFocused { result.isFocused = f }
         if let fm = other.focusMap { result.focusMap = fm }
+        result.environmentValues = self.environmentValues.merging(other.environmentValues)
         for (key, val) in other._values {
             result._values[key] = val
         }

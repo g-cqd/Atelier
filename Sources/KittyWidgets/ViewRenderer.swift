@@ -33,6 +33,10 @@ public enum ViewRenderer {
             renderListView(list, into: &buffer, in: rect, context: context)
         case let centered as CenteredText:
             renderCenteredText(centered, into: &buffer, in: rect, context: context)
+        case let activityBar as ActivityBar:
+            activityBar.render(to: &buffer, in: rect)
+        case let tabRibbon as TabRibbon:
+            tabRibbon.render(to: &buffer, in: rect)
         case let spacer as Spacer:
             _ = spacer  // no-op: spacer just occupies space
         case let separator as Separator:
@@ -1154,12 +1158,19 @@ public enum ViewRenderer {
             return
         }
 
+        if let forEach = view as? any ForEachProtocol {
+            renderForEach(forEach, into: &buffer, in: rect, context: context)
+            return
+        }
+
         if let modified = view as? any _ModifiedViewProtocol {
             if let region = _extractFocusRegion(from: view) {
                 context.focusMap?.register(region, rect: rect)
             }
+            let contentRect = (modified as? any _RectAdjustingModifierProtocol)
+                .map { $0.adjustedRect(from: rect) } ?? rect
             let mergedContext = modified.modifiedContext(from: context)
-            modified.contentView.render(to: &buffer, in: rect, context: mergedContext)
+            modified.contentView.render(to: &buffer, in: contentRect, context: mergedContext)
             return
         }
 
@@ -1181,6 +1192,30 @@ public enum ViewRenderer {
         if V.Body.self != Never.self {
             let body = view.body
             render(body, into: &buffer, in: rect, context: context)
+        }
+    }
+
+    private static func renderForEach(
+        _ forEach: any ForEachProtocol,
+        into buffer: inout ScreenBuffer,
+        in rect: Rect,
+        context: RenderContext
+    ) {
+        let children = forEach.childViews
+        guard !children.isEmpty else { return }
+
+        let rowHeight = children.count > 0 ? rect.height / children.count : 0
+        var currentY = rect.y
+        for (index, child) in children.enumerated() {
+            let isLast = index == children.count - 1
+            let height = isLast ? rect.maxY - currentY : rowHeight
+            guard height > 0 else { continue }
+            let childRect = Rect(x: rect.x, y: currentY, width: rect.width, height: height)
+            if let region = _extractFocusRegion(from: child) {
+                context.focusMap?.register(region, rect: childRect)
+            }
+            child.render(to: &buffer, in: childRect, context: context)
+            currentY += height
         }
     }
 
@@ -1316,6 +1351,10 @@ private protocol _TreeViewProtocol {
     var scrollIndicatorStyle: VerticalScrollIndicatorStyle { get }
 }
 
+private protocol _RectAdjustingModifierProtocol {
+    func adjustedRect(from rect: Rect) -> Rect
+}
+
 private protocol _LayoutDimensionProvider {
     var layoutDimension: (width: LayoutDimension?, height: LayoutDimension?) { get }
 }
@@ -1366,6 +1405,17 @@ private func _extractLayoutDimension(from view: any View, axis: Axis) -> LayoutD
 extension ModifiedView: _LayoutDimensionProvider where Modifier == FrameModifier {
     fileprivate var layoutDimension: (width: LayoutDimension?, height: LayoutDimension?) {
         (width: modifier.width, height: modifier.height)
+    }
+}
+
+extension ModifiedView: _RectAdjustingModifierProtocol where Modifier == PaddingModifier {
+    fileprivate func adjustedRect(from rect: Rect) -> Rect {
+        let insets = modifier.insets
+        let x = rect.x + insets.left
+        let y = rect.y + insets.top
+        let width = max(0, rect.width - insets.left - insets.right)
+        let height = max(0, rect.height - insets.top - insets.bottom)
+        return Rect(x: x, y: y, width: width, height: height)
     }
 }
 

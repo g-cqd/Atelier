@@ -31,3 +31,28 @@
 "]]" @punctuation.bracket
 "{" @punctuation.bracket
 "}" @punctuation.bracket
+
+; Table headers
+(table (bare_key) @type)
+(table_array_element (bare_key) @type)
+
+; Dotted keys
+(dotted_key (bare_key) @property)
+(dotted_key "." @punctuation.delimiter)
+
+; Inline table structure
+(inline_table) @none
+(inline_table "{" @punctuation.bracket)
+(inline_table "}" @punctuation.bracket)
+
+; Escape sequences in strings
+(escape_sequence) @string.escape
+
+; Pair structure
+(pair "=" @operator)
+(pair (bare_key) @property)
+
+; Array punctuation
+(array "," @punctuation.delimiter)
+(array "[" @punctuation.bracket)
+(array "]" @punctuation.bracket)

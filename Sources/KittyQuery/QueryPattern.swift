@@ -11,6 +11,15 @@ public struct Query: Sendable, Equatable {
     }
 }
 
+// MARK: - Quantifier
+
+/// Repetition semantics for a quantified pattern.
+public enum Quantifier: Sendable, Equatable {
+    case oneOrMore
+    case zeroOrMore
+    case optional
+}
+
 // MARK: - Query Pattern
 
 /// A single pattern in a query, matching against syntax tree nodes.
@@ -24,6 +33,7 @@ public indirect enum QueryPattern: Sendable, Equatable {
     case predicate(Predicate)
     case sequence([QueryPattern])
     case anchor  // for `.` (anonymous nodes)
+    case quantified(pattern: QueryPattern, quantifier: Quantifier)
 }
 
 // MARK: - Predicate

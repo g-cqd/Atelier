@@ -1,3 +1,5 @@
+import Foundation
+import KittyCodecs
 import KittyFileTree
 import KittyRenderer
 import KittyText
@@ -193,6 +195,51 @@ func dispatchCommand(
         }
         return true
 
+    case .searchToggleWholeWord:
+        if state.inFileSearch != nil {
+            state.inFileSearch?.isWholeWord.toggle()
+            reExecuteSearch(state: state, pipeline: pipeline)
+        }
+        return true
+
+    case .searchFocusFind:
+        state.searchPanelFocus = .findField
+        state.searchPanelSelectedIndex = -1
+        return true
+
+    case .searchFocusReplace:
+        state.searchPanelFocus = .replaceField
+        return true
+
+    case .searchFocusResults:
+        state.searchPanelFocus = .resultsList
+        state.searchPanelSelectedIndex = max(0, state.inFileSearch?.activeMatchIndex ?? 0)
+        return true
+
+    case .promptConfirm:
+        state.confirmPrompt()
+        return true
+
+    case .promptCancel:
+        state.cancelPrompt()
+        return true
+
+    case .contextMenuUp:
+        state.contextMenuMoveUp()
+        return true
+
+    case .contextMenuDown:
+        state.contextMenuMoveDown()
+        return true
+
+    case .contextMenuSelect:
+        state.contextMenuConfirm()
+        return true
+
+    case .contextMenuDismiss:
+        state.dismissContextMenu()
+        return true
+
     case .escapeEditor:
         if state.mode == .editor {
             if state.config.keybindingMode == .vim {
@@ -302,28 +349,72 @@ func dispatchCommand(
 
     case .vimMoveLeft:
         state.cursorCol = max(0, state.cursorCol - 1)
+        updateVisualSelection(state: state)
         ensureEditorVisibleFull(state: state, pipeline: pipeline)
         return true
 
     case .vimMoveDown:
         state.cursorRow = min(state.cursorRow + 1, max(0, state.fileLineCount - 1))
+        updateVisualSelection(state: state)
         ensureEditorVisibleFull(state: state, pipeline: pipeline)
         return true
 
     case .vimMoveUp:
         state.cursorRow = max(0, state.cursorRow - 1)
+        updateVisualSelection(state: state)
         ensureEditorVisibleFull(state: state, pipeline: pipeline)
         return true
 
     case .vimMoveRight:
         let rowLength = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
         state.cursorCol = min(state.cursorCol + 1, rowLength)
+        updateVisualSelection(state: state)
         ensureEditorVisibleFull(state: state, pipeline: pipeline)
         return true
 
     case .vimGotoLastLine:
         state.cursorRow = max(0, state.fileLineCount - 1)
+        updateVisualSelection(state: state)
         ensureEditorVisibleFull(state: state, pipeline: pipeline)
+        return true
+
+    case .vimGotoFirstLine:
+        state.cursorRow = 0
+        state.cursorCol = 0
+        updateVisualSelection(state: state)
+        ensureEditorVisibleFull(state: state, pipeline: pipeline)
+        return true
+
+    case .vimDeleteLine:
+        guard !state.isFileEmpty else { return true }
+        let deletePreviousSnapshot = state.activeBufferSnapshot()
+        let deleteLineIndex = state.cursorRow
+        let deleteLineCount = state.fileLineCount
+        if deleteLineCount == 1 {
+            let mutation = TextOperations.deleteLine(in: &state.textBuffer, at: &state.textCursor)
+            state.textDidChange(mutation, previousSnapshot: deletePreviousSnapshot)
+        } else {
+            let mutation = TextOperations.deleteLine(in: &state.textBuffer, at: &state.textCursor)
+            state.textDidChange(mutation, previousSnapshot: deletePreviousSnapshot)
+            state.cursorRow = min(deleteLineIndex, state.fileLineCount - 1)
+        }
+        state.cursorCol = 0
+        state.vimMode = .normal
+        state.vimVisualAnchor = nil
+        state.clearSelection()
+        ensureEditorVisibleFull(state: state, pipeline: pipeline)
+        return true
+
+    case .vimYankLine:
+        let yankRow = state.cursorRow
+        let yankLine = state.fileLine(at: yankRow)
+        let yankText = yankLine + "\n"
+        let base64 = Data(yankText.utf8).base64EncodedString()
+        state.terminalWriter?(KittySequences.setClipboard(base64))
+        state.statusMessage = "Yanked line"
+        state.vimMode = .normal
+        state.vimVisualAnchor = nil
+        state.clearSelection()
         return true
 
     case .treeDown:
@@ -379,7 +470,108 @@ func dispatchCommand(
             state.toggleExpand(at: state.selectedTreeIndex)
         }
         return true
+
+    case .vimEnterVisual:
+        state.vimMode = .visual
+        state.vimVisualAnchor = (line: state.cursorRow, col: state.cursorCol)
+        state.selection = TextSelection(
+            anchor: TextPosition(row: state.cursorRow, col: state.cursorCol),
+            head: TextPosition(row: state.cursorRow, col: state.cursorCol))
+        state.statusMessage = "-- VISUAL -- [\(state.fileName)]"
+        return true
+
+    case .vimEnterVisualLine:
+        state.vimMode = .visualLine
+        state.vimVisualAnchor = (line: state.cursorRow, col: 0)
+        let visualLineLen = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
+        state.selection = TextSelection(
+            anchor: TextPosition(row: state.cursorRow, col: 0),
+            head: TextPosition(row: state.cursorRow, col: visualLineLen))
+        state.statusMessage = "-- VISUAL LINE -- [\(state.fileName)]"
+        return true
+
+    case .vimExitVisual:
+        state.vimMode = .normal
+        state.vimVisualAnchor = nil
+        state.clearSelection()
+        state.statusMessage = "-- NORMAL -- [\(state.fileName)]"
+        return true
+
+    case .vimMoveWordForward:
+        jumpWordForward(state: state)
+        updateVisualSelection(state: state)
+        ensureEditorVisibleFull(state: state, pipeline: pipeline)
+        return true
+
+    case .vimMoveWordBackward:
+        jumpWordBackward(state: state)
+        updateVisualSelection(state: state)
+        ensureEditorVisibleFull(state: state, pipeline: pipeline)
+        return true
+
+    case .vimMoveLineStart:
+        state.cursorCol = 0
+        updateVisualSelection(state: state)
+        ensureEditorVisibleFull(state: state, pipeline: pipeline)
+        return true
+
+    case .vimMoveLineEnd:
+        let lineEndLen = state.isFileEmpty ? 0 : state.fileLine(at: state.cursorRow).count
+        state.cursorCol = lineEndLen
+        updateVisualSelection(state: state)
+        ensureEditorVisibleFull(state: state, pipeline: pipeline)
+        return true
+
+    case .vimPaste:
+        handlePasteRequest(state: state)
+        return true
+
+    case .vimSearchForward:
+        openInFileSearch(state: state)
+        return true
+
+    case .focusNext:
+        switch state.mode {
+        case .tree:
+            state.mode = .editor
+        case .editor:
+            if state.activeSidebarPanel == .search && !state.sidebarCollapsed {
+                state.mode = .searchPanel
+                state.searchPanelFocus = .findField
+            } else {
+                state.mode = .tree
+            }
+        case .searchPanel:
+            state.mode = .tree
+        }
+        return true
+
+    case .focusPrevious:
+        switch state.mode {
+        case .tree:
+            if state.activeSidebarPanel == .search && !state.sidebarCollapsed {
+                state.mode = .searchPanel
+                state.searchPanelFocus = .findField
+            } else {
+                state.mode = .editor
+            }
+        case .editor:
+            state.mode = .tree
+        case .searchPanel:
+            state.mode = .editor
+        }
+        return true
     }
+}
+
+@MainActor
+private func updateVisualSelection(state: EditorState) {
+    guard state.vimMode == .visual || state.vimMode == .visualLine,
+        let anchor = state.vimVisualAnchor
+    else { return }
+    state.selection = TextSelection(
+        anchor: TextPosition(row: anchor.line, col: anchor.col),
+        head: TextPosition(row: state.cursorRow, col: state.cursorCol))
 }
 
 @MainActor

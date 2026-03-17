@@ -87,6 +87,35 @@ public enum TextOperations {
         return nil
     }
 
+    /// Deletes the line at the current cursor row.
+    ///
+    /// When the buffer has more than one line, the entire line including its newline is removed
+    /// and the cursor is placed at column 0 of the next line (or the last line if at the end).
+    /// When the buffer has only one line, the line content is cleared but the line itself is kept.
+    @discardableResult
+    public static func deleteLine(in buffer: inout TextBuffer, at cursor: inout TextCursor)
+        -> TextMutation {
+        let lineIndex = cursor.row
+        let lineCount = buffer.lineCount
+
+        if lineCount <= 1 {
+            buffer.setLine(at: lineIndex, to: "")
+            cursor.col = 0
+            return TextMutation(
+                originalLineRange: lineIndex..<(lineIndex + 1),
+                updatedLineRange: lineIndex..<(lineIndex + 1)
+            )
+        }
+
+        buffer.removeLine(at: lineIndex)
+        cursor.row = min(lineIndex, buffer.lineCount - 1)
+        cursor.col = 0
+        return TextMutation(
+            originalLineRange: lineIndex..<(lineIndex + 1),
+            updatedLineRange: lineIndex..<lineIndex
+        )
+    }
+
     @discardableResult
     public static func deleteRange(
         in buffer: inout TextBuffer, at cursor: inout TextCursor, selection: TextSelection

@@ -117,4 +117,48 @@ struct QueryParserTests {
         let query = try QueryParser.parse("((identifier) @type . (identifier) @member)+")
         #expect(query.patterns.count == 1)
     }
+
+    @Test
+    func `Parse quantifier plus`() throws {
+        let query = try QueryParser.parse("(identifier)+")
+        #expect(query.patterns.count == 1)
+        if case .quantified(let inner, let quantifier) = query.patterns[0] {
+            #expect(quantifier == .oneOrMore)
+            let (type, _) = try requireNodeMatch(inner)
+            #expect(type == "identifier")
+        } else {
+            Issue.record("Expected .quantified pattern")
+        }
+    }
+
+    @Test
+    func `Parse quantifier star`() throws {
+        let query = try QueryParser.parse("(identifier)*")
+        #expect(query.patterns.count == 1)
+        if case .quantified(_, let quantifier) = query.patterns[0] {
+            #expect(quantifier == .zeroOrMore)
+        } else {
+            Issue.record("Expected .quantified pattern")
+        }
+    }
+
+    @Test
+    func `Parse quantifier optional`() throws {
+        let query = try QueryParser.parse("(identifier)?")
+        #expect(query.patterns.count == 1)
+        if case .quantified(_, let quantifier) = query.patterns[0] {
+            #expect(quantifier == .optional)
+        } else {
+            Issue.record("Expected .quantified pattern")
+        }
+    }
+
+    @Test
+    func `Parse multiple captures on same node`() throws {
+        let query = try QueryParser.parse("(identifier) @var @name")
+        #expect(query.patterns.count == 1)
+        // Should produce a sequence that captures the same node under both names
+        let patterns = try requireSequence(query.patterns[0])
+        #expect(patterns.count == 2)
+    }
 }

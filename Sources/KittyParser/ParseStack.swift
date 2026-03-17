@@ -20,6 +20,8 @@ struct ParseStack: Sendable {
     var stateStack: [Int]
     var nodes: [SyntaxNode]
     var errorCount: Int
+    // TODO: Used for future incremental-lexing scanner checkpointing
+    var scannerState: [UInt8]
 
     var stateBeforeTop: Int {
         stateStack.last ?? 0
@@ -31,6 +33,7 @@ struct ParseStack: Sendable {
         self.stateStack = [state]
         self.nodes = []
         self.errorCount = 0
+        self.scannerState = []
     }
 
     mutating func pushNode(_ node: SyntaxNode) {
