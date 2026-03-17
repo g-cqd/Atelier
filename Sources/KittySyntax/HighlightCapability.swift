@@ -12,7 +12,7 @@ public enum HighlightTier: Int, Sendable, Comparable, Hashable {
 }
 
 /// Query features a grammar's query file may require.
-public enum QueryFeature: String, Sendable, Hashable {
+public enum QueryFeature: String, Sendable, Hashable, Codable {
     case predicates
     case quantifiers
     case multipleCaptures
@@ -47,6 +47,7 @@ public struct HostCapabilities: Sendable, Equatable {
         supportsExternalScanner: Bool = false,
         supportedQueryFeatures: Set<QueryFeature> = [
             .predicates, .fieldNames, .alternations, .anchors,
+            .quantifiers, .multipleCaptures,
         ]
     ) {
         self.supportsExternalScanner = supportsExternalScanner

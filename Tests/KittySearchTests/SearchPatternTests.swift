@@ -80,4 +80,104 @@ struct SearchPatternTests {
         let matches = line.matches(of: regex)
         #expect(matches.count == 0)
     }
+
+    // MARK: - Whole-word literal
+
+    @Test("Whole-word literal matches standalone word")
+    func wholeWordLiteralMatchesStandaloneWord() {
+        let query = SearchQuery(text: "foo", wholeWord: true)
+        guard let pattern = compilePattern(query), case .regex(let regex) = pattern else {
+            Issue.record("Expected regex pattern for whole-word literal")
+            return
+        }
+        let line = "foo bar baz"
+        let matches = line.matches(of: regex)
+        #expect(matches.count == 1)
+    }
+
+    @Test("Whole-word literal does not match substring")
+    func wholeWordLiteralDoesNotMatchSubstring() {
+        let query = SearchQuery(text: "foo", wholeWord: true)
+        guard let pattern = compilePattern(query), case .regex(let regex) = pattern else {
+            Issue.record("Expected regex pattern for whole-word literal")
+            return
+        }
+        let line = "foobar foobaz"
+        let matches = line.matches(of: regex)
+        #expect(matches.count == 0)
+    }
+
+    @Test("Whole-word literal matches multiple standalone occurrences")
+    func wholeWordLiteralMatchesMultipleOccurrences() {
+        let query = SearchQuery(text: "foo", wholeWord: true)
+        guard let pattern = compilePattern(query), case .regex(let regex) = pattern else {
+            Issue.record("Expected regex pattern for whole-word literal")
+            return
+        }
+        let line = "foo and foo again"
+        let matches = line.matches(of: regex)
+        #expect(matches.count == 2)
+    }
+
+    @Test("Whole-word literal case-insensitive matches standalone word")
+    func wholeWordLiteralCaseInsensitive() {
+        let query = SearchQuery(text: "foo", isCaseSensitive: false, wholeWord: true)
+        guard let pattern = compilePattern(query), case .regex(let regex) = pattern else {
+            Issue.record("Expected regex pattern for whole-word case-insensitive literal")
+            return
+        }
+        let line = "FOO bar"
+        let matches = line.matches(of: regex)
+        #expect(matches.count == 1)
+    }
+
+    @Test("Whole-word literal case-sensitive does not match different case")
+    func wholeWordLiteralCaseSensitiveNoMatch() {
+        let query = SearchQuery(text: "foo", isCaseSensitive: true, wholeWord: true)
+        guard let pattern = compilePattern(query), case .regex(let regex) = pattern else {
+            Issue.record("Expected regex pattern for whole-word case-sensitive literal")
+            return
+        }
+        let line = "FOO bar"
+        let matches = line.matches(of: regex)
+        #expect(matches.count == 0)
+    }
+
+    // MARK: - Whole-word regex
+
+    @Test("Whole-word regex matches standalone word")
+    func wholeWordRegexMatchesStandaloneWord() {
+        let query = SearchQuery(text: "fo+", isRegex: true, wholeWord: true)
+        guard let pattern = compilePattern(query), case .regex(let regex) = pattern else {
+            Issue.record("Expected regex pattern for whole-word regex")
+            return
+        }
+        let line = "foo bar"
+        let matches = line.matches(of: regex)
+        #expect(matches.count == 1)
+    }
+
+    @Test("Whole-word regex does not match substring")
+    func wholeWordRegexDoesNotMatchSubstring() {
+        let query = SearchQuery(text: "fo+", isRegex: true, wholeWord: true)
+        guard let pattern = compilePattern(query), case .regex(let regex) = pattern else {
+            Issue.record("Expected regex pattern for whole-word regex")
+            return
+        }
+        let line = "foobar"
+        let matches = line.matches(of: regex)
+        #expect(matches.count == 0)
+    }
+
+    @Test("Whole-word regex case-insensitive matches standalone word")
+    func wholeWordRegexCaseInsensitive() {
+        let query = SearchQuery(text: "fo+", isCaseSensitive: false, isRegex: true, wholeWord: true)
+        guard let pattern = compilePattern(query), case .regex(let regex) = pattern else {
+            Issue.record("Expected regex pattern for whole-word case-insensitive regex")
+            return
+        }
+        let line = "FOO bar"
+        let matches = line.matches(of: regex)
+        #expect(matches.count == 1)
+    }
 }

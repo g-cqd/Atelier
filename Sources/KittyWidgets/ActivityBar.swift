@@ -1,7 +1,7 @@
 import KittyCodecs
 import KittyRenderer
 
-public struct ActivityBar: Sendable {
+public struct ActivityBar: View, Sendable {
     public struct Item: Sendable {
         public var icon: String
         public var id: String
@@ -40,6 +40,8 @@ public struct ActivityBar: Sendable {
         self.activeIndex = activeIndex
         self.style = style
     }
+
+    public var body: Never { fatalError() }
 
     public func render(to buffer: inout ScreenBuffer, in rect: Rect) {
         guard rect.width >= Self.width, rect.height > 0 else { return }

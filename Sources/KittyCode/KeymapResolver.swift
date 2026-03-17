@@ -2,8 +2,15 @@ import KittyCodecs
 import KittyInput
 
 struct KeymapResolver: Sendable {
+    enum ResolveResult: Sendable, Equatable {
+        case command(CommandID)
+        case partial
+        case none
+    }
+
     private let globalBindings: [KeyStroke: CommandID]
     private let contextBindings: [KeyContext: [KeyStroke: CommandID]]
+    private let sequenceBindings: [KeyContext: [[KeyStroke]: CommandID]]
 
     init(config: KittyConfig) {
         var global: [KeyStroke: CommandID] = [:]
@@ -64,7 +71,36 @@ struct KeymapResolver: Sendable {
         vimNormalBindings[KeyStroke(keyCode: AsciiKey.k)] = .vimMoveUp
         vimNormalBindings[KeyStroke(keyCode: AsciiKey.l)] = .vimMoveRight
         vimNormalBindings[KeyStroke(keyCode: AsciiKey.g, modifiers: .shift)] = .vimGotoLastLine
+        vimNormalBindings[KeyStroke(keyCode: AsciiKey.v)] = .vimEnterVisual
+        vimNormalBindings[KeyStroke(keyCode: AsciiKey.v - 32, modifiers: .shift)] =
+            .vimEnterVisualLine
+        vimNormalBindings[KeyStroke(keyCode: AsciiKey.w)] = .vimMoveWordForward
+        vimNormalBindings[KeyStroke(keyCode: AsciiKey.b)] = .vimMoveWordBackward
+        vimNormalBindings[KeyStroke(keyCode: UInt32(Character("0").asciiValue!))] =
+            .vimMoveLineStart
+        vimNormalBindings[
+            KeyStroke(keyCode: UInt32(Character("$").asciiValue!), modifiers: .shift)] =
+            .vimMoveLineEnd
+        vimNormalBindings[KeyStroke(keyCode: AsciiKey.p)] = .vimPaste
+        vimNormalBindings[KeyStroke(keyCode: UInt32(Character("/").asciiValue!))] =
+            .vimSearchForward
         context[.editorVimNormal] = vimNormalBindings
+
+        // Vim visual mode context bindings
+        var vimVisualBindings: [KeyStroke: CommandID] = [:]
+        vimVisualBindings[KeyStroke(keyCode: AsciiKey.escape)] = .vimExitVisual
+        vimVisualBindings[KeyStroke(keyCode: AsciiKey.h)] = .vimMoveLeft
+        vimVisualBindings[KeyStroke(keyCode: AsciiKey.j)] = .vimMoveDown
+        vimVisualBindings[KeyStroke(keyCode: AsciiKey.k)] = .vimMoveUp
+        vimVisualBindings[KeyStroke(keyCode: AsciiKey.l)] = .vimMoveRight
+        vimVisualBindings[KeyStroke(keyCode: AsciiKey.w)] = .vimMoveWordForward
+        vimVisualBindings[KeyStroke(keyCode: AsciiKey.b)] = .vimMoveWordBackward
+        vimVisualBindings[KeyStroke(keyCode: UInt32(Character("0").asciiValue!))] =
+            .vimMoveLineStart
+        vimVisualBindings[
+            KeyStroke(keyCode: UInt32(Character("$").asciiValue!), modifiers: .shift)] =
+            .vimMoveLineEnd
+        context[.editorVimVisual] = vimVisualBindings
 
         // Tree context bindings
         var treeBindings: [KeyStroke: CommandID] = [:]
@@ -74,13 +110,50 @@ struct KeymapResolver: Sendable {
         treeBindings[KeyStroke(keyCode: Key.enterAlt.rawValue)] = .treeSelect
         treeBindings[KeyStroke(keyCode: Key.right.rawValue)] = .treeExpandOrOpen
         treeBindings[KeyStroke(keyCode: Key.left.rawValue)] = .treeCollapse
+        treeBindings[KeyStroke(keyCode: AsciiKey.tab)] = .focusNext
+        treeBindings[KeyStroke(keyCode: AsciiKey.tab, modifiers: .shift)] = .focusPrevious
         context[.tree] = treeBindings
+
+        // Search panel context bindings
+        var searchPanelBindings: [KeyStroke: CommandID] = [:]
+        searchPanelBindings[KeyStroke(keyCode: Key.enter.rawValue)] = .searchNext
+        searchPanelBindings[KeyStroke(keyCode: AsciiKey.escape)] = .searchClose
+        searchPanelBindings[KeyStroke(keyCode: AsciiKey.tab)] = .searchFocusResults
+        context[.searchPanel] = searchPanelBindings
+
+        // Prompt context bindings
+        var promptBindings: [KeyStroke: CommandID] = [:]
+        promptBindings[KeyStroke(keyCode: Key.enter.rawValue)] = .promptConfirm
+        promptBindings[KeyStroke(keyCode: Key.enterAlt.rawValue)] = .promptConfirm
+        promptBindings[KeyStroke(keyCode: AsciiKey.escape)] = .promptCancel
+        context[.prompt] = promptBindings
+
+        // Context menu context bindings
+        var contextMenuBindings: [KeyStroke: CommandID] = [:]
+        contextMenuBindings[KeyStroke(keyCode: Key.up.rawValue)] = .contextMenuUp
+        contextMenuBindings[KeyStroke(keyCode: Key.down.rawValue)] = .contextMenuDown
+        contextMenuBindings[KeyStroke(keyCode: Key.enter.rawValue)] = .contextMenuSelect
+        contextMenuBindings[KeyStroke(keyCode: Key.enterAlt.rawValue)] = .contextMenuSelect
+        contextMenuBindings[KeyStroke(keyCode: AsciiKey.escape)] = .contextMenuDismiss
+        context[.contextMenu] = contextMenuBindings
 
         // Apply config string overrides (Phase 3)
         Self.applyConfigOverrides(config: config, global: &global)
 
+        // Multi-key sequence bindings (vim normal mode)
+        var sequences: [KeyContext: [[KeyStroke]: CommandID]] = [:]
+        var vimNormalSeqs: [[KeyStroke]: CommandID] = [:]
+        let gKey = KeyStroke(keyCode: AsciiKey.g)
+        let dKey = KeyStroke(keyCode: 0x64)  // 'd'
+        let yKey = KeyStroke(keyCode: AsciiKey.y)
+        vimNormalSeqs[[gKey, gKey]] = .vimGotoFirstLine
+        vimNormalSeqs[[dKey, dKey]] = .vimDeleteLine
+        vimNormalSeqs[[yKey, yKey]] = .vimYankLine
+        sequences[.editorVimNormal] = vimNormalSeqs
+
         self.globalBindings = global
         self.contextBindings = context
+        self.sequenceBindings = sequences
     }
 
     func resolve(_ stroke: KeyStroke, context: KeyContext, isRepeat: Bool = false) -> CommandID? {
@@ -93,6 +166,22 @@ struct KeymapResolver: Sendable {
             return globalBindings[stroke]
         }
         return nil
+    }
+
+    func resolveSequence(_ strokes: [KeyStroke], context: KeyContext) -> ResolveResult {
+        guard let contextSeqs = sequenceBindings[context] else { return .none }
+
+        if let command = contextSeqs[strokes] {
+            return .command(command)
+        }
+
+        for seq in contextSeqs.keys {
+            if seq.count > strokes.count && Array(seq.prefix(strokes.count)) == strokes {
+                return .partial
+            }
+        }
+
+        return .none
     }
 
     // MARK: - Label lookup (Phase 4)
@@ -293,6 +382,19 @@ struct KeymapResolver: Sendable {
         applyOverride(config.keybindings.toggleSidebar, for: .toggleSidebar, in: &global)
         if let tabClose = config.keybindings.tabClose {
             applyOverride(tabClose, for: .closeTab, in: &global)
+        }
+
+        // General overrides: "commandName": ["key1", "key2"]
+        for (commandName, keyStrings) in config.keybindings.overrides {
+            guard let command = CommandID(rawValue: commandName) else { continue }
+            // Remove all existing bindings for this command
+            global = global.filter { $0.value != command }
+            // Add new bindings
+            for keyString in keyStrings {
+                if let parsed = KeyStrokeParser.parse(keyString) {
+                    global[parsed] = command
+                }
+            }
         }
     }
 

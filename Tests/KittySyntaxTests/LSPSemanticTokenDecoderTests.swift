@@ -118,4 +118,62 @@ struct LSPSemanticTokenDecoderTests {
         #expect(merged.count == 1)
         #expect(merged[0].role == .keywordFunction)
     }
+
+    @Test
+    func `Delta insert appends data`() {
+        let previous: [UInt32] = [0, 0, 3, 0, 0]
+        let edits = [LSPSemanticTokenDecoder.SemanticTokenEdit(
+            start: 5, deleteCount: 0, data: [1, 0, 3, 1, 0]
+        )]
+        let result = LSPSemanticTokenDecoder.applyDelta(previous: previous, edits: edits)
+        #expect(result == [0, 0, 3, 0, 0, 1, 0, 3, 1, 0])
+    }
+
+    @Test
+    func `Delta delete removes data`() {
+        let previous: [UInt32] = [0, 0, 3, 0, 0, 1, 0, 3, 1, 0]
+        let edits = [LSPSemanticTokenDecoder.SemanticTokenEdit(
+            start: 5, deleteCount: 5, data: []
+        )]
+        let result = LSPSemanticTokenDecoder.applyDelta(previous: previous, edits: edits)
+        #expect(result == [0, 0, 3, 0, 0])
+    }
+
+    @Test
+    func `Delta replace modifies data`() {
+        let previous: [UInt32] = [0, 0, 3, 0, 0]
+        let edits = [LSPSemanticTokenDecoder.SemanticTokenEdit(
+            start: 2, deleteCount: 1, data: [5]
+        )]
+        let result = LSPSemanticTokenDecoder.applyDelta(previous: previous, edits: edits)
+        #expect(result == [0, 0, 5, 0, 0])
+    }
+
+    @Test
+    func `SemanticTokensState full then delta round-trip`() {
+        var state = LSPSemanticTokenDecoder.SemanticTokensState()
+
+        // Apply full response
+        state.applyFull(resultId: "1", data: [0, 0, 3, 0, 0, 1, 0, 5, 1, 0])
+        #expect(state.resultId == "1")
+        #expect(state.data.count == 10)
+
+        // Apply delta: replace second token's length (index 7) from 5 to 8
+        state.applyDelta(resultId: "2", edits: [
+            LSPSemanticTokenDecoder.SemanticTokenEdit(start: 7, deleteCount: 1, data: [8])
+        ])
+        #expect(state.resultId == "2")
+        #expect(state.data == [0, 0, 3, 0, 0, 1, 0, 8, 1, 0])
+    }
+
+    @Test
+    func `Multiple delta edits applied in reverse order`() {
+        let previous: [UInt32] = [0, 0, 3, 0, 0, 1, 0, 5, 1, 0]
+        let edits = [
+            LSPSemanticTokenDecoder.SemanticTokenEdit(start: 2, deleteCount: 1, data: [4]),
+            LSPSemanticTokenDecoder.SemanticTokenEdit(start: 7, deleteCount: 1, data: [8]),
+        ]
+        let result = LSPSemanticTokenDecoder.applyDelta(previous: previous, edits: edits)
+        #expect(result == [0, 0, 4, 0, 0, 1, 0, 8, 1, 0])
+    }
 }

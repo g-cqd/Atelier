@@ -48,6 +48,8 @@ struct KittyConfig: Codable, Sendable {
         var toggleSidebar: String = "ctrl+b"
         var clipboardModifier: ShortcutModifier = .command
         var historyModifier: ShortcutModifier = .command
+        var overrides: [String: [String]] = [:]
+        var sequenceTimeoutMilliseconds: Int = 500
 
         init() {}
 
@@ -65,6 +67,11 @@ struct KittyConfig: Codable, Sendable {
             historyModifier =
                 try c.decodeIfPresent(ShortcutModifier.self, forKey: .historyModifier)
                 ?? d.historyModifier
+            overrides =
+                try c.decodeIfPresent([String: [String]].self, forKey: .overrides) ?? d.overrides
+            sequenceTimeoutMilliseconds =
+                try c.decodeIfPresent(Int.self, forKey: .sequenceTimeoutMilliseconds)
+                ?? d.sequenceTimeoutMilliseconds
         }
     }
 
@@ -291,6 +298,7 @@ struct KittyConfig: Codable, Sendable {
         var includeGitIgnoredByDefault: Bool = false
         var caseSensitiveByDefault: Bool = false
         var regexByDefault: Bool = false
+        var wholeWordByDefault: Bool = false
         var excludeGlobs: [String] = ["**/.git/**", "**/build/**", "**/.build/**"]
         var maxResults: Int = 5000
         var debounceMilliseconds: Int = 150
@@ -313,6 +321,9 @@ struct KittyConfig: Codable, Sendable {
                 ?? d.caseSensitiveByDefault
             regexByDefault =
                 try c.decodeIfPresent(Bool.self, forKey: .regexByDefault) ?? d.regexByDefault
+            wholeWordByDefault =
+                try c.decodeIfPresent(Bool.self, forKey: .wholeWordByDefault)
+                ?? d.wholeWordByDefault
             excludeGlobs =
                 try c.decodeIfPresent([String].self, forKey: .excludeGlobs) ?? d.excludeGlobs
             maxResults =

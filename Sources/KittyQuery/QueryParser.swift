@@ -57,16 +57,30 @@ public enum QueryParser: Sendable {
             throw .syntaxError("Unexpected character: \(ch)")
         }
 
-        // Check for trailing capture after pattern (e.g., (identifier) @var)
+        // Check for trailing captures after pattern (e.g., (identifier) @var @name)
         scanner.skipWhitespaceAndComments()
-        if scanner.peek() == "@" {
-            let capture = try parseCapture(&scanner)
-            pattern = attachCapture(capture, to: pattern)
+        var allCaptures: [String] = []
+        while scanner.peek() == "@" {
+            if let capture = try parseCapture(&scanner) {
+                allCaptures.append(capture)
+            }
+            scanner.skipWhitespaceAndComments()
+        }
+        if let first = allCaptures.first {
+            pattern = attachCapture(first, to: pattern)
+            // Additional captures: wrap in a sequence with extra copies
+            if allCaptures.count > 1 {
+                var parts = [pattern]
+                for extra in allCaptures.dropFirst() {
+                    parts.append(attachCapture(extra, to: stripCapture(from: pattern)))
+                }
+                pattern = .sequence(parts)
+            }
         }
 
         let predicates = try parsePredicates(&scanner)
         pattern = wrap(pattern, with: predicates)
-        consumeQuantifier(&scanner)
+        pattern = applyQuantifier(pattern, scanner: &scanner)
 
         return pattern
     }
@@ -320,11 +334,33 @@ public enum QueryParser: Sendable {
         return .sequence([pattern] + predicates)
     }
 
-    private static func consumeQuantifier(_ scanner: inout Scanner) {
+    private static func applyQuantifier(_ pattern: QueryPattern, scanner: inout Scanner)
+        -> QueryPattern
+    {
         guard let next = scanner.peek(), next == "+" || next == "*" || next == "?" else {
-            return
+            return pattern
         }
         scanner.advance()
+        let quantifier: Quantifier
+        switch next {
+        case "+": quantifier = .oneOrMore
+        case "*": quantifier = .zeroOrMore
+        default:  quantifier = .optional
+        }
+        return .quantified(pattern: pattern, quantifier: quantifier)
+    }
+
+    private static func stripCapture(from pattern: QueryPattern) -> QueryPattern {
+        switch pattern {
+        case .nodeMatch(let type, let children, _):
+            return .nodeMatch(type: type, children: children, capture: nil)
+        case .literal(let value, _):
+            return .literal(value, capture: nil)
+        case .wildcard:
+            return .wildcard(capture: nil)
+        default:
+            return pattern
+        }
     }
 }
 

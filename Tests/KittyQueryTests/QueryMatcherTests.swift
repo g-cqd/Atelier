@@ -118,4 +118,71 @@ struct QueryMatcherTests {
         let matches = QueryMatcher.execute(query: query, tree: tree)
         #expect(matches.isEmpty)
     }
+
+    @Test
+    func `Quantified oneOrMore matches multiple children`() {
+        let a = SyntaxNode(type: "identifier", byteRange: 0..<1)
+        let b = SyntaxNode(type: "identifier", byteRange: 1..<2)
+        let parent = SyntaxNode(type: "list", children: [a, b], byteRange: 0..<2)
+        let tree = SyntaxTree(root: parent, source: "ab")
+
+        let query = Query(patterns: [
+            .nodeMatch(
+                type: "list",
+                children: [.quantified(pattern: .nodeMatch(type: "identifier", children: [], capture: "item"), quantifier: .oneOrMore)],
+                capture: nil
+            )
+        ])
+        let matches = QueryMatcher.execute(query: query, tree: tree)
+        #expect(matches.count == 1)
+        #expect(matches[0].captures.count == 2)
+    }
+
+    @Test
+    func `Quantified oneOrMore fails with zero matches`() {
+        let number = SyntaxNode(type: "number", byteRange: 0..<1)
+        let parent = SyntaxNode(type: "list", children: [number], byteRange: 0..<1)
+        let tree = SyntaxTree(root: parent, source: "1")
+
+        let query = Query(patterns: [
+            .nodeMatch(
+                type: "list",
+                children: [.quantified(pattern: .nodeMatch(type: "identifier", children: [], capture: "item"), quantifier: .oneOrMore)],
+                capture: nil
+            )
+        ])
+        let matches = QueryMatcher.execute(query: query, tree: tree)
+        #expect(matches.isEmpty)
+    }
+
+    @Test
+    func `Quantified zeroOrMore matches zero children`() {
+        let parent = SyntaxNode(type: "list", children: [], byteRange: 0..<0)
+        let tree = SyntaxTree(root: parent, source: "")
+
+        let query = Query(patterns: [
+            .nodeMatch(
+                type: "list",
+                children: [.quantified(pattern: .nodeMatch(type: "identifier", children: [], capture: "item"), quantifier: .zeroOrMore)],
+                capture: nil
+            )
+        ])
+        let matches = QueryMatcher.execute(query: query, tree: tree)
+        #expect(matches.count == 1)
+        #expect(matches[0].captures.isEmpty)
+    }
+
+    @Test
+    func `Multiple captures produce both names`() throws {
+        let node = SyntaxNode(type: "identifier", byteRange: 0..<3)
+        let root = SyntaxNode(type: "source", children: [node], byteRange: 0..<3)
+        let tree = SyntaxTree(root: root, source: "abc")
+
+        let query = try QueryParser.parse("(identifier) @var @name")
+        let matches = QueryMatcher.execute(query: query, tree: tree)
+        #expect(matches.count == 1)
+        let captureNames = matches[0].captures.map(\.name)
+        #expect(captureNames.contains("var"))
+        #expect(captureNames.contains("name"))
+    }
 }

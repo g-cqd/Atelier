@@ -45,6 +45,12 @@ enum KeyStrokeParser {
             return KeyStroke(keyCode: keyCode, modifiers: modifiers)
         }
 
+        // Single digit 0-9
+        if key.count == 1, let char = key.first, char >= "0" && char <= "9" {
+            let keyCode = UInt32(char.asciiValue!)
+            return KeyStroke(keyCode: keyCode, modifiers: modifiers)
+        }
+
         return nil
     }
 
@@ -57,6 +63,8 @@ enum KeyStrokeParser {
         case "end": return Key.end.rawValue
         case "backspace": return Key.backspace.rawValue
         case "esc", "escape": return AsciiKey.escape
+        case "tab": return Key.tab.rawValue
+        case "space": return UInt32(Character(" ").asciiValue!)
         case "up": return Key.up.rawValue
         case "down": return Key.down.rawValue
         case "left": return Key.left.rawValue
