@@ -319,7 +319,12 @@ final class EditorState {
     }
     var treeScrollOffset: Int {
         get { treeState.treeScrollOffset }
-        set { treeState.treeScrollOffset = newValue }
+        set {
+            guard treeState.treeScrollOffset != newValue else { return }
+            treeState.treeScrollOffset = newValue
+            // Tree lives in the sidebar (chrome rect).
+            markChromeDirty()
+        }
     }
     var lastSelectedDirectoryPath: String? {
         get { treeState.lastSelectedDirectoryPath }
@@ -334,7 +339,9 @@ final class EditorState {
         case search
     }
 
-    var activeSidebarPanel: SidebarPanel = .explorer
+    var activeSidebarPanel: SidebarPanel = .explorer {
+        didSet { if activeSidebarPanel != oldValue { markChromeDirty() } }
+    }
     var sidebarCollapsed: Bool = false
     var openFilesScrollOffset: Int = 0
     var openFilesSelectedIndex: Int = 0
@@ -739,6 +746,7 @@ final class EditorState {
 
     func switchToTab(_ index: Int) {
         workspace.switchToTab(index)
+        markEverythingDirty()
     }
 
     func ensureActiveTabVisible(ribbonWidth: Int) {
@@ -891,11 +899,21 @@ final class EditorState {
 
     var treePanelWidth = 30
     var fileVisibility: FileVisibility = .defaultHidden
-    var statusMessage = ""
-    var prompt: EditorPrompt?
-    var vimCommandLine: VimCommandLine?
-    var inFileSearch: InFileSearch?
-    var contextMenu: ContextMenuState?
+    var statusMessage = "" {
+        didSet { if statusMessage != oldValue { markChromeDirty() } }
+    }
+    var prompt: EditorPrompt? {
+        didSet { markEverythingDirty() }
+    }
+    var vimCommandLine: VimCommandLine? {
+        didSet { markChromeDirty() }
+    }
+    var inFileSearch: InFileSearch? {
+        didSet { markEverythingDirty() }
+    }
+    var contextMenu: ContextMenuState? {
+        didSet { markEverythingDirty() }
+    }
     var mode: Mode = .tree {
         didSet {
             if mode != oldValue {
