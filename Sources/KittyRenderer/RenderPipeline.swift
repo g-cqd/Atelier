@@ -57,6 +57,13 @@ public final class RenderPipeline {
     /// scrolled by the full-width terminal scroll.
     public var scrollHint: ScrollHint?
 
+    /// Regions the pipeline has been told are dirty for the next frame.
+    ///
+    /// Callers describe what changed via `markDirty(_:)` or `markDirtyRow(_:)`.
+    /// Phase 1 only collects the data; later phases use it to skip painting
+    /// cells outside any dirty rect.
+    public private(set) var dirtyRegions = DirtyRegions()
+
     /// Creates a pipeline backed by the given terminal connection and initial viewport dimensions.
     ///
     /// - Parameters:
@@ -86,6 +93,28 @@ public final class RenderPipeline {
     public func beginFrame() {
         cursorRow = nil
         cursorCol = nil
+    }
+
+    /// Marks a screen region as needing repaint on the next frame. Coalescing
+    /// happens internally — callers can mark overlapping rects safely.
+    public func markDirty(_ rect: DirtyRect) {
+        dirtyRegions.mark(rect)
+    }
+
+    /// Convenience for marking a single full-width row dirty.
+    public func markDirtyRow(_ row: Int) {
+        dirtyRegions.markRow(row, columns: columns)
+    }
+
+    /// Marks every cell as dirty (used after a resize or mode flip).
+    public func markAllDirty() {
+        dirtyRegions.markAll(columns: columns, rows: rows)
+    }
+
+    /// Drops collected dirty regions, typically called after a successful flush.
+    /// Phase 1 does not auto-clear; callers / future phases will.
+    public func clearDirtyRegions() {
+        dirtyRegions.clear()
     }
 
     /// Flushes the diff between the front and back buffers to the terminal.
