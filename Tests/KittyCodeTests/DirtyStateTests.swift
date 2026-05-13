@@ -135,4 +135,73 @@ struct DirtyStateTests {
         #expect(sut.state.dirtyChrome)
         #expect(sut.state.dirtyContentAll)
     }
+
+    @Test
+    func `tree node mutation marks chrome dirty`() {
+        let sut = makeSUT()
+        _ = sut.state.drainDirtyState()
+        sut.state.treeNodes = sut.state.treeNodes  // wholesale reassignment
+        #expect(sut.state.dirtyChrome)
+    }
+
+    @Test
+    func `flat tree mutation marks chrome dirty`() {
+        let sut = makeSUT()
+        _ = sut.state.drainDirtyState()
+        sut.state.cachedFlatTree = sut.state.cachedFlatTree
+        #expect(sut.state.dirtyChrome)
+    }
+
+    @Test
+    func `tree selection change marks chrome dirty`() {
+        let sut = makeSUT()
+        _ = sut.state.drainDirtyState()
+        let original = sut.state.selectedTreeIndex
+        sut.state.selectedTreeIndex = original + 1
+        #expect(sut.state.dirtyChrome)
+    }
+
+    @Test
+    func `selection assignment marks content dirty`() {
+        let sut = makeSUT()
+        _ = sut.state.drainDirtyState()
+        sut.state.selection = TextSelection(
+            anchor: TextPosition(row: 0, col: 0),
+            head: TextPosition(row: 0, col: 1)
+        )
+        #expect(sut.state.dirtyContentAll)
+    }
+
+    @Test
+    func `sidebar panel state changes mark chrome dirty`() {
+        let sut = makeSUT()
+        _ = sut.state.drainDirtyState()
+        sut.state.openFilesScrollOffset = 5
+        #expect(sut.state.dirtyChrome)
+
+        _ = sut.state.drainDirtyState()
+        sut.state.searchPanelFocus = .replaceField
+        #expect(sut.state.dirtyChrome)
+
+        _ = sut.state.drainDirtyState()
+        sut.state.tabScrollOffset = 3
+        #expect(sut.state.dirtyChrome)
+    }
+
+    @Test
+    func `vim mode change marks chrome and content dirty`() {
+        let sut = makeSUT()
+        _ = sut.state.drainDirtyState()
+        sut.state.vimMode = .insert
+        #expect(sut.state.dirtyChrome)
+        #expect(sut.state.dirtyContentAll)
+    }
+
+    @Test
+    func `command feedback assignment marks chrome dirty`() {
+        let sut = makeSUT()
+        _ = sut.state.drainDirtyState()
+        sut.state.commandFeedback = "hint"
+        #expect(sut.state.dirtyChrome)
+    }
 }

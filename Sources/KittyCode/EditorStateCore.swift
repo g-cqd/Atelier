@@ -222,7 +222,9 @@ final class EditorState {
             highlightSession = nil
         }
     }
-    var tabScrollOffset: Int = 0
+    var tabScrollOffset: Int = 0 {
+        didSet { if tabScrollOffset != oldValue { markChromeDirty() } }
+    }
 
     // MARK: - Forwarding properties to workspace
 
@@ -255,6 +257,11 @@ final class EditorState {
 
     var highlightedLines: [[StyledSpan]] {
         get { workspace.highlightedLines }
+        // No didSet here: in-place mutations via `replaceSubrange` (see
+        // `refreshPlainHighlights`) also route through this setter and would
+        // wrongly escalate per-line dirty marks to contentAll. Wholesale
+        // reassignment sites (async post-load, full-document highlight,
+        // file watcher reload) mark dirty explicitly.
         set { workspace.highlightedLines = newValue }
     }
 
@@ -307,15 +314,25 @@ final class EditorState {
 
     var treeNodes: [FileNode] {
         get { treeState.treeNodes }
-        set { treeState.treeNodes = newValue }
+        set {
+            treeState.treeNodes = newValue
+            markChromeDirty()
+        }
     }
     var cachedFlatTree: [(depth: Int, node: FileNode)] {
         get { treeState.cachedFlatTree }
-        set { treeState.cachedFlatTree = newValue }
+        set {
+            treeState.cachedFlatTree = newValue
+            markChromeDirty()
+        }
     }
     var selectedTreeIndex: Int {
         get { treeState.selectedTreeIndex }
-        set { treeState.selectedTreeIndex = newValue }
+        set {
+            guard treeState.selectedTreeIndex != newValue else { return }
+            treeState.selectedTreeIndex = newValue
+            markChromeDirty()
+        }
     }
     var treeScrollOffset: Int {
         get { treeState.treeScrollOffset }
@@ -342,17 +359,39 @@ final class EditorState {
     var activeSidebarPanel: SidebarPanel = .explorer {
         didSet { if activeSidebarPanel != oldValue { markChromeDirty() } }
     }
-    var sidebarCollapsed: Bool = false
-    var openFilesScrollOffset: Int = 0
-    var openFilesSelectedIndex: Int = 0
-    var searchPanelScrollOffset: Int = 0
-    var searchPanelSelectedIndex: Int = -1  // -1 = query field focused
-    var searchPanelFocus: SearchPanelFocus = .findField
-    var searchTarget: SearchTarget = .currentFile
-    var workspaceSearchResults: [SearchFileResult] = []
+    var sidebarCollapsed: Bool = false {
+        // Collapsing/expanding the sidebar shifts the editor's horizontal
+        // origin, so both chrome and content layout change.
+        didSet { if sidebarCollapsed != oldValue { markEverythingDirty() } }
+    }
+    var openFilesScrollOffset: Int = 0 {
+        didSet { if openFilesScrollOffset != oldValue { markChromeDirty() } }
+    }
+    var openFilesSelectedIndex: Int = 0 {
+        didSet { if openFilesSelectedIndex != oldValue { markChromeDirty() } }
+    }
+    var searchPanelScrollOffset: Int = 0 {
+        didSet { if searchPanelScrollOffset != oldValue { markChromeDirty() } }
+    }
+    var searchPanelSelectedIndex: Int = -1 {  // -1 = query field focused
+        didSet { if searchPanelSelectedIndex != oldValue { markChromeDirty() } }
+    }
+    var searchPanelFocus: SearchPanelFocus = .findField {
+        didSet { if searchPanelFocus != oldValue { markChromeDirty() } }
+    }
+    var searchTarget: SearchTarget = .currentFile {
+        didSet { if searchTarget != oldValue { markChromeDirty() } }
+    }
+    var workspaceSearchResults: [SearchFileResult] = [] {
+        didSet { markChromeDirty() }
+    }
     var workspaceSearchTask: Task<Void, Never>?
-    var workspaceSearchSummary: String = ""
-    var isSearchingWorkspace: Bool = false
+    var workspaceSearchSummary: String = "" {
+        didSet { if workspaceSearchSummary != oldValue { markChromeDirty() } }
+    }
+    var isSearchingWorkspace: Bool = false {
+        didSet { if isSearchingWorkspace != oldValue { markChromeDirty() } }
+    }
 
     // MARK: - Highlighted document
 
@@ -461,6 +500,7 @@ final class EditorState {
             // Only apply if we're still on the same document
             if self.documentText == source {
                 self.highlightedLines = fullHighlights
+                self.markContentAllDirty()
                 self.renderRefreshSource?.invalidate()
             }
         }
@@ -924,7 +964,16 @@ final class EditorState {
             }
         }
     }
-    var vimMode: VimMode = .normal
+    var vimMode: VimMode = .normal {
+        // Status bar surfaces the vim mode label; mode changes also re-style
+        // the cursor cell so a content repaint is needed alongside chrome.
+        didSet {
+            if vimMode != oldValue {
+                markChromeDirty()
+                markContentAllDirty()
+            }
+        }
+    }
     var vimVisualAnchor: (line: Int, col: Int)?
     var symbolTheme: TerminalSymbolTheme
     var lastClickTime: ContinuousClock.Instant?
@@ -944,7 +993,9 @@ final class EditorState {
     var pendingAcceleratedScrollLines = 0
     var pendingAcceleratedScrollTarget: AcceleratedScrollTarget?
     var scrollAccelerationTask: Task<Void, Never>?
-    var isLoadingGrammar = false
+    var isLoadingGrammar = false {
+        didSet { if isLoadingGrammar != oldValue { markChromeDirty() } }
+    }
     var marqueeTickOffset: Int = 0
     var marqueeTimer: Task<Void, Never>?
     var marqueeTargetLabel: String?
@@ -998,11 +1049,19 @@ final class EditorState {
 
     var selection: TextSelection? {
         get { bufferManager.activeBuffer?.selection }
-        set { bufferManager.activeBuffer?.selection = newValue }
+        set {
+            bufferManager.activeBuffer?.selection = newValue
+            // Selection cells render differently from non-selected cells; any
+            // change must invalidate content so the new highlight (or its
+            // removal) is painted on the next frame.
+            markContentAllDirty()
+        }
     }
     var terminalWriter: (([UInt8]) -> Void)?
     var readOnly: Bool = false
-    var commandFeedback: String?
+    var commandFeedback: String? {
+        didSet { if commandFeedback != oldValue { markChromeDirty() } }
+    }
     var commandFeedbackExpiry: ContinuousClock.Instant?
     var lastKeyRepeatProcessedAt: ContinuousClock.Instant?
     var pendingKeySequence: [KeyStroke] = []
@@ -1119,6 +1178,9 @@ final class EditorState {
 
         refreshHighlights()
         gitDecorationManager?.scheduleRefreshForActiveBuffer()
+        // Undo/redo swaps the whole buffer; chrome (status, tab dirty marker)
+        // and content (cursor, highlights, selection) all change.
+        markEverythingDirty()
         renderRefreshSource?.invalidate()
     }
 
@@ -1206,5 +1268,7 @@ final class EditorState {
         symbolTheme = TerminalSymbolTheme.make(
             symbolsEnabled: newConfig.useSFSymbolsInTerminal, catalog: catalog)
         refreshHighlights()
+        // Theme / config / symbol-theme swap touches every visible cell.
+        markEverythingDirty()
     }
 }
