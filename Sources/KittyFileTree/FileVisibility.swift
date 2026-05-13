@@ -33,19 +33,17 @@ public enum FileVisibility: Sendable {
 /// Computes the set of gitignored paths under a root directory using `git ls-files`.
 public enum GitIgnoreChecker {
     public static func ignoredPaths(in rootPath: String) async -> Set<String> {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                let result = computeIgnoredPaths(in: rootPath)
-                continuation.resume(returning: result)
-            }
-        }
+        await Task.detached(priority: .utility) {
+            computeIgnoredPaths(in: rootPath)
+        }.value
     }
 
     private static func computeIgnoredPaths(in rootPath: String) -> Set<String> {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        // PATH lookup so Homebrew/MacPorts/system git resolutions all work.
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = [
-            "-C", rootPath, "ls-files", "--others", "--ignored", "--exclude-standard",
+            "git", "-C", rootPath, "ls-files", "--others", "--ignored", "--exclude-standard",
             "--directory",
         ]
         let pipe = Pipe()
@@ -56,7 +54,7 @@ public enum GitIgnoreChecker {
             try process.run()
             process.waitUntilExit()
             guard process.terminationStatus == 0 else { return [] }
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let data = (try? pipe.fileHandleForReading.readToEnd()) ?? Data()
             guard let output = String(data: data, encoding: .utf8) else { return [] }
             var paths = Set<String>()
             for line in output.split(separator: "\n") where !line.isEmpty {

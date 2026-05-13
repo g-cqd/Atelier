@@ -1383,11 +1383,10 @@ private func _extractLayoutDimension(from view: any View, axis: Axis) -> LayoutD
             if let h = dims.height { return h }
         }
     }
-    if view is Spacer {
-        return .flexible(min: (view as! Spacer).minLength)
+    if let spacer = view as? Spacer {
+        return .flexible(min: spacer.minLength)
     }
-    if view is Separator {
-        let sep = view as! Separator
+    if let sep = view as? Separator {
         switch axis {
         case .horizontal:
             return sep.axis == .vertical ? .fixed(1) : .flexible(min: 0)

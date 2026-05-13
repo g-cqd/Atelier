@@ -596,7 +596,7 @@ func triggerWorkspaceSearch(state: EditorState) {
             return
         }
 
-        let result = await Task.detached {
+        let result = await Task.detached { [openBuffers] in
             await searchWorkspace(
                 pattern: pattern,
                 files: files,

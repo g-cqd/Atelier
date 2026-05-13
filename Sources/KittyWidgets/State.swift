@@ -1,3 +1,5 @@
+import Synchronization
+
 /// Property wrapper for view-local mutable state.
 ///
 /// In a terminal UI, re-render is triggered by the event loop after each event,
@@ -5,27 +7,39 @@
 /// each frame (cheap for terminal UIs).
 @propertyWrapper
 public struct State<Value: Sendable>: Sendable {
-    private var storage: Value
+    private let storage: Storage
 
     public init(wrappedValue: Value) {
-        self.storage = wrappedValue
+        self.storage = Storage(value: wrappedValue)
     }
 
     public var wrappedValue: Value {
-        get { storage }
-        nonmutating set {
-            // In a full reactive system this would trigger invalidation.
-            // For now, the event loop handles re-rendering after each event.
-            nonisolated(unsafe) var mutableSelf = self
-            mutableSelf.storage = newValue
-        }
+        get { storage.read() }
+        nonmutating set { storage.write(newValue) }
     }
 
     public var projectedValue: Binding<Value> {
-        Binding(
-            get: { self.wrappedValue },
-            set: { self.wrappedValue = $0 }
+        let storage = self.storage
+        return Binding(
+            get: { storage.read() },
+            set: { storage.write($0) }
         )
+    }
+
+    private final class Storage: Sendable {
+        private let mutex: Mutex<Value>
+
+        init(value: Value) {
+            self.mutex = Mutex(value)
+        }
+
+        func read() -> Value {
+            mutex.withLock { $0 }
+        }
+
+        func write(_ newValue: Value) {
+            mutex.withLock { $0 = newValue }
+        }
     }
 }
 
