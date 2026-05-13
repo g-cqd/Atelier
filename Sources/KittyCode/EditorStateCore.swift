@@ -474,8 +474,8 @@ final class EditorState {
     }
 
     private func refreshHighlights(after mutation: TextMutation) {
-        guard syntaxHighlightingEnabled else {
-            refreshHighlights()
+        if !syntaxHighlightingEnabled {
+            refreshPlainHighlights(after: mutation)
             return
         }
         let session = currentHighlightSession()
@@ -485,17 +485,36 @@ final class EditorState {
         }
 
         let lines = fileContent
-        guard mutation.originalLineRange.lowerBound >= 0,
-            mutation.originalLineRange.upperBound <= highlightedLines.count,
-            mutation.updatedLineRange.lowerBound >= 0,
-            mutation.updatedLineRange.upperBound <= lines.count
-        else {
+        guard isMutationApplicable(mutation, lineCount: lines.count) else {
             refreshHighlights()
             return
         }
 
         let updatedHighlights = session.highlightLines(lines[mutation.updatedLineRange])
         highlightedLines.replaceSubrange(mutation.originalLineRange, with: updatedHighlights)
+    }
+
+    /// Plain-text refresh that only touches the lines covered by `mutation`.
+    /// Avoids rebuilding the full `highlightedLines` array on every keystroke
+    /// when syntax highlighting is off.
+    private func refreshPlainHighlights(after mutation: TextMutation) {
+        let lines = fileContent
+        guard isMutationApplicable(mutation, lineCount: lines.count) else {
+            refreshHighlights()
+            return
+        }
+        let style = colorScheme.editorText
+        let replacement = lines[mutation.updatedLineRange].map { line in
+            [StyledSpan(text: line, style: style)]
+        }
+        highlightedLines.replaceSubrange(mutation.originalLineRange, with: replacement)
+    }
+
+    private func isMutationApplicable(_ mutation: TextMutation, lineCount: Int) -> Bool {
+        mutation.originalLineRange.lowerBound >= 0
+            && mutation.originalLineRange.upperBound <= highlightedLines.count
+            && mutation.updatedLineRange.lowerBound >= 0
+            && mutation.updatedLineRange.upperBound <= lineCount
     }
 
     // MARK: - Backward-compatible text access
