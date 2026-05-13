@@ -683,13 +683,33 @@ final class EditorState {
     var scrollOffset: Int {
         get { textCursor.scrollRow }
         set {
-            guard textCursor.scrollRow != newValue else { return }
+            let oldValue = textCursor.scrollRow
+            guard oldValue != newValue else { return }
             textCursor.scrollRow = newValue
             wrapRowOffset = 0
-            // A vertical scroll shifts every visible line; full content repaint
-            // (until Phase 4 introduces the slide-via-ScrollHint fast path).
-            markContentAllDirty()
+            markScrollDirty(from: oldValue, to: newValue)
         }
+    }
+
+    /// Marks only the newly exposed buffer lines when scrolling vertically.
+    /// Falls back to a full content repaint when the delta is larger than the
+    /// estimated visible area (in which case sliding offers no win).
+    private func markScrollDirty(from oldOffset: Int, to newOffset: Int) {
+        let visibleRows = max(0, lastRenderRows - 2)
+        let delta = newOffset - oldOffset
+        guard visibleRows > 0, delta != 0, abs(delta) < visibleRows else {
+            markContentAllDirty()
+            return
+        }
+        let exposed: Range<Int>
+        if delta > 0 {
+            // Scrolling down: the new bottom strip exposes [old+visible, new+visible).
+            exposed = (oldOffset + visibleRows)..<(newOffset + visibleRows)
+        } else {
+            // Scrolling up: the new top strip exposes [new, old).
+            exposed = newOffset..<oldOffset
+        }
+        markLinesDirty(exposed)
     }
 
     var wrapRowOffset: Int = 0 {

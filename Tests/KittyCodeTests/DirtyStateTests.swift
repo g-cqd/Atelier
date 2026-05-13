@@ -94,10 +94,25 @@ struct DirtyStateTests {
     }
 
     @Test
-    func `changing scrollOffset marks all content dirty`() {
-        let sut = makeSUT(fileContent: (0..<20).map { "line \($0)" })
+    func `small scroll marks only the newly exposed rows`() {
+        let sut = makeSUT(fileContent: (0..<100).map { "line \($0)" })
+        // makeKittyCodeNavigationContext uses 24 rows; visibleRows ~= 22.
+        // Make sure we have a sensible row size so the delta is "small".
+        sut.state.lastRenderRows = 24
         _ = sut.state.drainDirtyState()
-        sut.state.scrollOffset = 5
+        sut.state.scrollOffset = 3  // small downward scroll
+        #expect(!sut.state.dirtyContentAll)
+        // The 3 newly exposed rows at the bottom should be marked.
+        #expect(!sut.state.dirtyContentLines.isEmpty)
+        #expect(sut.state.dirtyContentLines.count == 3)
+    }
+
+    @Test
+    func `large scroll falls back to all content dirty`() {
+        let sut = makeSUT(fileContent: (0..<200).map { "line \($0)" })
+        sut.state.lastRenderRows = 24
+        _ = sut.state.drainDirtyState()
+        sut.state.scrollOffset = 100  // way more than a screen
         #expect(sut.state.dirtyContentAll)
     }
 
