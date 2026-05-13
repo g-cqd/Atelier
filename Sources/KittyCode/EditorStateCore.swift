@@ -618,6 +618,8 @@ final class EditorState {
         refreshHighlights()
         gitDecorationManager?.scheduleRefreshForActiveBuffer()
         wrapCache.invalidate()
+        // Unknown mutation footprint → conservative full content repaint.
+        markContentAllDirty()
     }
 
     func textDidChange(_ mutation: TextMutation, previousSnapshot: BufferEditSnapshot? = nil) {
@@ -649,6 +651,14 @@ final class EditorState {
         refreshHighlights(after: mutation)
         gitDecorationManager?.scheduleRefreshForActiveBuffer()
         wrapCache.invalidate()
+        // If the mutation kept the line count stable, only the affected lines
+        // need a repaint. Anything that shifts line count downstream requires
+        // a full content repaint because line→screen-row mapping changes.
+        if mutation.originalLineRange.count == mutation.updatedLineRange.count {
+            markLinesDirty(mutation.updatedLineRange)
+        } else {
+            markContentAllDirty()
+        }
     }
 
     func replaceDocumentText(with content: String) {
@@ -673,16 +683,28 @@ final class EditorState {
     var scrollOffset: Int {
         get { textCursor.scrollRow }
         set {
+            guard textCursor.scrollRow != newValue else { return }
             textCursor.scrollRow = newValue
             wrapRowOffset = 0
+            // A vertical scroll shifts every visible line; full content repaint
+            // (until Phase 4 introduces the slide-via-ScrollHint fast path).
+            markContentAllDirty()
         }
     }
 
-    var wrapRowOffset: Int = 0
+    var wrapRowOffset: Int = 0 {
+        didSet {
+            if wrapRowOffset != oldValue { markContentAllDirty() }
+        }
+    }
 
     var hScrollOffset: Int {
         get { textCursor.scrollCol }
-        set { textCursor.scrollCol = newValue }
+        set {
+            guard textCursor.scrollCol != newValue else { return }
+            textCursor.scrollCol = newValue
+            markContentAllDirty()
+        }
     }
 
     // MARK: - Active buffer synchronization
@@ -854,7 +876,16 @@ final class EditorState {
     var vimCommandLine: VimCommandLine?
     var inFileSearch: InFileSearch?
     var contextMenu: ContextMenuState?
-    var mode: Mode = .tree
+    var mode: Mode = .tree {
+        didSet {
+            if mode != oldValue {
+                markChromeDirty()
+                // Cursor presence depends on mode, so the content area also
+                // needs a repaint to remove or add the cursor cell.
+                markContentAllDirty()
+            }
+        }
+    }
     var vimMode: VimMode = .normal
     var vimVisualAnchor: (line: Int, col: Int)?
     var symbolTheme: TerminalSymbolTheme
@@ -880,6 +911,53 @@ final class EditorState {
     var marqueeTimer: Task<Void, Never>?
     var marqueeTargetLabel: String?
     var wrapCache = WrapCache()
+
+    // MARK: - Dirty tracking (Phase 2)
+    //
+    // Logical-coordinate dirty state. Drained at the start of each render
+    // frame and translated into pipeline-level `DirtyRegions`. Phase 2 just
+    // collects the markers; Phase 3 makes the renderer act on them.
+
+    /// Buffer-line indices whose content has changed and need repaint.
+    var dirtyContentLines = Set<Int>()
+    /// Whole editor content area must be repainted (e.g. scroll, file switch).
+    var dirtyContentAll = true
+    /// Sidebar / status bar / tab ribbon must be repainted.
+    var dirtyChrome = true
+
+    /// Marks every logical line in `range` as dirty.
+    func markLinesDirty(_ range: Range<Int>) {
+        guard !dirtyContentAll else { return }
+        for line in range { dirtyContentLines.insert(line) }
+    }
+
+    /// Marks the entire editor content area as dirty. Supersedes per-line marks.
+    func markContentAllDirty() {
+        dirtyContentAll = true
+        dirtyContentLines.removeAll(keepingCapacity: true)
+    }
+
+    /// Marks the chrome (sidebar, status bar, tabs) as dirty.
+    func markChromeDirty() {
+        dirtyChrome = true
+    }
+
+    /// Marks both content and chrome as fully dirty (resize, theme change).
+    func markEverythingDirty() {
+        markContentAllDirty()
+        markChromeDirty()
+    }
+
+    /// Snapshots and clears the dirty markers. Called by the render frame
+    /// once it has translated logical dirty state into pipeline rects.
+    func drainDirtyState() -> (contentAll: Bool, contentLines: Set<Int>, chrome: Bool) {
+        let snapshot = (dirtyContentAll, dirtyContentLines, dirtyChrome)
+        dirtyContentLines.removeAll(keepingCapacity: true)
+        dirtyContentAll = false
+        dirtyChrome = false
+        return snapshot
+    }
+
     var selection: TextSelection? {
         get { bufferManager.activeBuffer?.selection }
         set { bufferManager.activeBuffer?.selection = newValue }
