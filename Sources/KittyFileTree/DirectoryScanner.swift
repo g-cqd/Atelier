@@ -1,5 +1,6 @@
 import Foundation
 import KittySync
+import System
 
 /// Recursively scans a directory tree into an array of ``FileNode`` values.
 ///
@@ -72,7 +73,7 @@ public enum DirectoryScanner {
 
         for item in items.sorted() {
             guard entryCount < maxEntries else { break }
-            let fullPath = (path as NSString).appendingPathComponent(item)
+            let fullPath = FilePath(path).appending(item).string
 
             guard visibility.shouldInclude(name: item, path: fullPath) else { continue }
             guard isWithinRoot(fullPath, root: path) else { continue }
@@ -142,7 +143,7 @@ public enum DirectoryScanner {
 
         for item in items.sorted() {
             guard counter.tryIncrement() else { break }
-            let fullPath = (path as NSString).appendingPathComponent(item)
+            let fullPath = FilePath(path).appending(item).string
 
             guard visibility.shouldInclude(name: item, path: fullPath) else { continue }
             guard isWithinRoot(fullPath, root: path) else { continue }
