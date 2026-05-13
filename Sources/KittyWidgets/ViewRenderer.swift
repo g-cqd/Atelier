@@ -1189,6 +1189,11 @@ public enum ViewRenderer {
             return
         }
 
+        if let array = view as? any _ForEachArrayViewProtocol {
+            renderTupleView(array, into: &buffer, in: rect, context: context)
+            return
+        }
+
         if V.Body.self != Never.self {
             let body = view.body
             render(body, into: &buffer, in: rect, context: context)
@@ -1302,6 +1307,8 @@ private enum _StackAxis {
 private protocol _TupleViewProtocol {
     var childViews: [any View] { get }
 }
+
+private protocol _ForEachArrayViewProtocol: _TupleViewProtocol {}
 
 private protocol _ConditionalViewProtocol {
     var activeView: any View { get }
@@ -1431,6 +1438,10 @@ private func _childViews<Content: View>(from content: Content) -> [any View] {
 
 extension TupleView: _TupleViewProtocol {
     fileprivate var childViews: [any View] { _children }
+}
+
+extension ForEachArrayView: _ForEachArrayViewProtocol {
+    fileprivate var childViews: [any View] { views }
 }
 
 extension ConditionalView: _ConditionalViewProtocol {
