@@ -69,6 +69,27 @@ public struct Rope: Sendable {
         return lines
     }
 
+    /// Stable hash of the rope's content. Computed once per content version
+    /// and memoized on the CoW storage; subsequent reads are O(1) until the
+    /// next mutation.
+    ///
+    /// Useful for change-detection paths (undo/redo invalidation, dirty
+    /// tracking) where the full lines-array hash would otherwise dominate
+    /// per-edit time on large files.
+    public var contentHash: Int {
+        if let cached = storage.cachedContentHash { return cached }
+        var hasher = Hasher()
+        hasher.combine(byteCount)
+        hasher.combine(lineCount)
+        var bytes = Data()
+        bytes.reserveCapacity(byteCount)
+        storage.root.appendAllBytes(to: &bytes)
+        hasher.combine(bytes)
+        let value = hasher.finalize()
+        storage.cachedContentHash = value
+        return value
+    }
+
     /// Byte offset of the start of line `line`, or `-1` if out of range.
     public func byteOffset(forLine line: Int) -> Int {
         guard line >= 0, line < lineCount else { return -1 }
@@ -256,16 +277,18 @@ extension Rope {
     /// Reference type that wraps the tree root so we can use
     /// `isKnownUniquelyReferenced` for copy-on-write.
     ///
-    /// Holds lazy caches for the materialized text and line array — both are
-    /// expensive to recompute and frequently re-read between edits.
-    /// Each mutation goes through `clone()` (which starts with empty caches)
-    /// or directly through `invalidateCaches()` when storage is uniquely held.
+    /// Holds lazy caches for the materialized text, the line array, and a
+    /// content hash — all expensive to recompute and frequently re-read
+    /// between edits. Each mutation goes through `clone()` (which starts with
+    /// empty caches) or directly through `invalidateCaches()` when storage is
+    /// uniquely held.
     fileprivate final class Storage: @unchecked Sendable {
         var root: RopeNode {
             didSet { invalidateCaches() }
         }
         var cachedText: String?
         var cachedLines: [String]?
+        var cachedContentHash: Int?
 
         init(root: RopeNode) {
             self.root = root
@@ -278,6 +301,7 @@ extension Rope {
         func invalidateCaches() {
             cachedText = nil
             cachedLines = nil
+            cachedContentHash = nil
         }
     }
 }
