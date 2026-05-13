@@ -44,10 +44,29 @@ public struct Rope: Sendable {
     public var lineCount: Int { storage.root.newlineCount + 1 }
 
     public var text: String {
+        if let cached = storage.cachedText { return cached }
         var data = Data()
         data.reserveCapacity(byteCount)
         storage.root.appendAllBytes(to: &data)
-        return String(decoding: data, as: UTF8.self)
+        let result = String(decoding: data, as: UTF8.self)
+        storage.cachedText = result
+        return result
+    }
+
+    /// Materializes every line as a `[String]` in a single tree walk.
+    ///
+    /// Faster than calling `line(at:)` in a loop because it visits each leaf
+    /// exactly once instead of walking from the root for every line. The
+    /// result is memoized on the CoW storage and invalidated on mutation.
+    public var allLines: [String] {
+        if let cached = storage.cachedLines { return cached }
+        var lines: [String] = []
+        lines.reserveCapacity(lineCount)
+        var current = Data()
+        storage.root.collectLines(into: &lines, current: &current)
+        lines.append(String(decoding: current, as: UTF8.self))
+        storage.cachedLines = lines
+        return lines
     }
 
     /// Byte offset of the start of line `line`, or `-1` if out of range.
@@ -71,10 +90,14 @@ public struct Rope: Sendable {
     /// UTF-8-decoded content of line `index`, or `""` if out of range.
     public func line(at index: Int) -> String {
         guard index >= 0, index < lineCount else { return "" }
-        let range = lineRange(forLine: index)
-        if range.isEmpty { return "" }
-        let slice = bytes(in: range)
-        return String(decoding: slice, as: UTF8.self)
+        // Fast path: if the lines array is already cached on storage we hit
+        // it in O(1) without walking the tree.
+        if let cached = storage.cachedLines {
+            return cached[index]
+        }
+        var out = Data()
+        storage.root.appendLineBytes(at: index, to: &out)
+        return String(decoding: out, as: UTF8.self)
     }
 
     /// UTF-8 bytes for the given range, clamped to the rope's bounds.
@@ -117,6 +140,84 @@ public struct Rope: Sendable {
         }
     }
 
+    // MARK: - Cache-aware editing
+
+    /// Replaces line `lineIndex` with `value` and, if the rope had a
+    /// materialized `lines` cache before the edit and the line count is
+    /// unchanged, patches the cache in place so the next read stays O(1).
+    public mutating func replaceLine(at lineIndex: Int, with value: String) {
+        guard lineIndex >= 0, lineIndex < lineCount else { return }
+        let range = lineRange(forLine: lineIndex)
+        let cacheBefore = storage.cachedLines
+        let countBefore = lineCount
+        replace(range, with: value)
+        if let cache = cacheBefore,
+            countBefore == lineCount,
+            !value.contains("\n"),
+            cache.count == lineCount {
+            var patched = cache
+            patched[lineIndex] = value
+            storage.cachedLines = patched
+        }
+    }
+
+    /// Inserts a new line containing `value` at logical position `lineIndex`.
+    /// Patches the lines cache in place if it was already materialized.
+    public mutating func insertLine(_ value: String, at lineIndex: Int) {
+        guard lineIndex >= 0, lineIndex <= lineCount else { return }
+        let cacheBefore = storage.cachedLines
+        let payload = value.contains("\n") ? nil : value
+
+        if lineIndex == lineCount {
+            insert("\n" + value, atByteOffset: byteCount)
+        } else {
+            let offset = byteOffset(forLine: lineIndex)
+            insert(value + "\n", atByteOffset: offset)
+        }
+
+        if let cache = cacheBefore, let payload {
+            var patched = cache
+            patched.insert(payload, at: lineIndex)
+            if patched.count == lineCount {
+                storage.cachedLines = patched
+            }
+        }
+    }
+
+    /// Removes line `lineIndex`. Patches the lines cache in place if present.
+    @discardableResult
+    public mutating func removeLine(at lineIndex: Int) -> String {
+        guard lineIndex >= 0, lineIndex < lineCount else { return "" }
+        let removed = line(at: lineIndex)
+        let cacheBefore = storage.cachedLines
+        let count = lineCount
+
+        if count == 1 {
+            storage.root = .leaf(LeafNode(data: Data(), newlineCount: 0))
+            storage.cachedLines = [""]
+            storage.cachedText = ""
+            return removed
+        }
+
+        if lineIndex == count - 1 {
+            let lineStart = byteOffset(forLine: lineIndex)
+            remove((lineStart - 1)..<byteCount)
+        } else {
+            let lineStart = byteOffset(forLine: lineIndex)
+            let nextStart = byteOffset(forLine: lineIndex + 1)
+            remove(lineStart..<nextStart)
+        }
+
+        if let cache = cacheBefore, cache.count == count {
+            var patched = cache
+            patched.remove(at: lineIndex)
+            if patched.count == lineCount {
+                storage.cachedLines = patched
+            }
+        }
+        return removed
+    }
+
     // MARK: - Internals
 
     private func clampRange(_ range: Range<Int>) -> Range<Int> {
@@ -154,8 +255,17 @@ public struct Rope: Sendable {
 extension Rope {
     /// Reference type that wraps the tree root so we can use
     /// `isKnownUniquelyReferenced` for copy-on-write.
+    ///
+    /// Holds lazy caches for the materialized text and line array — both are
+    /// expensive to recompute and frequently re-read between edits.
+    /// Each mutation goes through `clone()` (which starts with empty caches)
+    /// or directly through `invalidateCaches()` when storage is uniquely held.
     fileprivate final class Storage: @unchecked Sendable {
-        var root: RopeNode
+        var root: RopeNode {
+            didSet { invalidateCaches() }
+        }
+        var cachedText: String?
+        var cachedLines: [String]?
 
         init(root: RopeNode) {
             self.root = root
@@ -163,6 +273,11 @@ extension Rope {
 
         func clone() -> Storage {
             Storage(root: root)
+        }
+
+        func invalidateCaches() {
+            cachedText = nil
+            cachedLines = nil
         }
     }
 }
@@ -227,6 +342,78 @@ enum RopeNode: Sendable {
         case .branch(let branch):
             branch.left.appendAllBytes(to: &out)
             branch.right.appendAllBytes(to: &out)
+        }
+    }
+
+    /// Reads the UTF-8 bytes of the `index`-th line into `out`, excluding any
+    /// terminating newline. Single tree walk: descends to the leaf containing
+    /// the line start, then collects bytes forward across leaves until it
+    /// finds the terminator (or end of document).
+    func appendLineBytes(at index: Int, to out: inout Data) {
+        var lineRemaining = index
+        var collecting = false
+        // Returns true to continue walking, false to stop.
+        @discardableResult
+        func walk(_ node: RopeNode) -> Bool {
+            switch node {
+            case .leaf(let leaf):
+                let bytes = leaf.data
+                var idx = bytes.startIndex
+                if !collecting {
+                    // Need to skip `lineRemaining` newlines to reach the target line.
+                    while idx < bytes.endIndex, lineRemaining > 0 {
+                        if bytes[idx] == 0x0A {
+                            lineRemaining -= 1
+                        }
+                        idx = bytes.index(after: idx)
+                    }
+                    if lineRemaining > 0 { return true }
+                    collecting = true
+                }
+                // Collect bytes until the next newline.
+                let start = idx
+                while idx < bytes.endIndex, bytes[idx] != 0x0A {
+                    idx = bytes.index(after: idx)
+                }
+                if start < idx {
+                    out.append(bytes[start..<idx])
+                }
+                // Hit a newline → done.
+                if idx < bytes.endIndex { return false }
+                return true
+            case .branch(let branch):
+                if !walk(branch.left) { return false }
+                return walk(branch.right)
+            }
+        }
+        _ = walk(self)
+    }
+
+    /// Walks the tree once, accumulating bytes between newlines into `current`
+    /// and flushing decoded lines into `lines`. The final line stays in
+    /// `current` so the caller can decide whether to append a trailing entry.
+    func collectLines(into lines: inout [String], current: inout Data) {
+        switch self {
+        case .leaf(let leaf):
+            let bytes = leaf.data
+            var start = bytes.startIndex
+            for (offset, byte) in bytes.enumerated() {
+                if byte == 0x0A {
+                    let split = bytes.index(bytes.startIndex, offsetBy: offset)
+                    if start < split {
+                        current.append(bytes[start..<split])
+                    }
+                    lines.append(String(decoding: current, as: UTF8.self))
+                    current.removeAll(keepingCapacity: true)
+                    start = bytes.index(after: split)
+                }
+            }
+            if start < bytes.endIndex {
+                current.append(bytes[start..<bytes.endIndex])
+            }
+        case .branch(let branch):
+            branch.left.collectLines(into: &lines, current: &current)
+            branch.right.collectLines(into: &lines, current: &current)
         }
     }
 

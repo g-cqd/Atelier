@@ -14,17 +14,12 @@ public struct TextBuffer: Sendable {
 
     public var lineCount: Int { rope.lineCount }
 
-    /// Materializes every line as a `[String]`. O(n) — prefer the indexed
-    /// accessors when you only need a subset.
+    /// Materializes every line as a `[String]` in a single rope walk.
+    ///
+    /// The result is memoized inside the rope's storage and stays valid until
+    /// the next mutation. Subsequent reads are O(1).
     public var lines: [String] {
-        get {
-            var result: [String] = []
-            result.reserveCapacity(rope.lineCount)
-            for index in 0..<rope.lineCount {
-                result.append(rope.line(at: index))
-            }
-            return result
-        }
+        get { rope.allLines }
         set {
             let normalized = newValue.isEmpty ? [""] : newValue
             rope = Rope(normalized.joined(separator: "\n"))
@@ -58,51 +53,20 @@ public struct TextBuffer: Sendable {
 
     /// Replaces the line at `index` with `value`.
     public mutating func setLine(at index: Int, to value: String) {
-        guard index >= 0, index < lineCount else { return }
-        let range = rope.lineRange(forLine: index)
-        rope.replace(range, with: value)
+        rope.replaceLine(at: index, with: value)
     }
 
     /// Inserts `line` as a new line at logical position `index`.
     ///
     /// `index == lineCount` appends. Insertion is O(log n).
     public mutating func insertLine(_ line: String, at index: Int) {
-        let count = lineCount
-        guard index >= 0, index <= count else { return }
-        if index == count {
-            // Append a new last line: add "\n<line>" at the end.
-            rope.insert("\n" + line, atByteOffset: rope.byteCount)
-        } else {
-            // Insert "<line>\n" at the start of line `index`.
-            let offset = rope.byteOffset(forLine: index)
-            rope.insert(line + "\n", atByteOffset: offset)
-        }
+        rope.insertLine(line, at: index)
     }
 
     /// Removes the line at `index`, returning its previous content.
     @discardableResult
     public mutating func removeLine(at index: Int) -> String {
-        guard index >= 0, index < lineCount else { return "" }
-        let removed = rope.line(at: index)
-        let count = lineCount
-
-        if count == 1 {
-            // Removing the only line: clear content but keep the empty-line invariant.
-            rope = Rope("")
-            return removed
-        }
-
-        if index == count - 1 {
-            // Last line: drop the preceding newline + this line's bytes.
-            let lineStart = rope.byteOffset(forLine: index)
-            rope.remove((lineStart - 1)..<rope.byteCount)
-        } else {
-            // Drop this line + its terminating newline.
-            let lineStart = rope.byteOffset(forLine: index)
-            let nextStart = rope.byteOffset(forLine: index + 1)
-            rope.remove(lineStart..<nextStart)
-        }
-        return removed
+        rope.removeLine(at: index)
     }
 
     /// Reconstructs the full text by joining lines with newlines.
