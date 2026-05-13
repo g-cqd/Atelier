@@ -146,7 +146,12 @@ public actor FileWatcher {
     }
 }
 
-private final class SendableContinuationBox: @unchecked Sendable {
+/// Holds an immutable reference to the stream continuation so an opaque
+/// `UnsafeMutableRawPointer` can be handed to `FSEventStreamCreate`'s C
+/// context. `AsyncStream.Continuation` is already `Sendable`, so storing it
+/// in a `let` makes the wrapping class trivially `Sendable` — no `@unchecked`
+/// escape hatch needed.
+private final class SendableContinuationBox: Sendable {
     let continuation: AsyncStream<FileWatcher.FileWatchEvent>.Continuation?
 
     init(continuation: AsyncStream<FileWatcher.FileWatchEvent>.Continuation?) {

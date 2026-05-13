@@ -1,5 +1,6 @@
 import Darwin
 import Dispatch
+import Synchronization
 
 /// Installs signal handlers for SIGWINCH (resize), SIGINT, and SIGTERM.
 public final class SignalHandler: Sendable {
@@ -61,26 +62,37 @@ public final class SignalHandler: Sendable {
         }
     }
 
-    /// Captures and restores a POSIX signal disposition. Reference-typed so the
-    /// `onTermination` `@Sendable` closure can capture it by reference.
-    private final class PreviousDisposition: @unchecked Sendable {
+    /// Captures and restores a POSIX signal disposition. The saved `sigaction`
+    /// is guarded by a `Mutex` from the `Synchronization` module: `install`
+    /// runs once at stream creation, `restore` runs in `onTermination`, and
+    /// while POSIX guarantees `sigaction(2)` is async-signal-safe, the prior
+    /// `@unchecked Sendable` annotation made the data-race analysis manual.
+    /// Mutex makes the invariant explicit and lets the type be Sendable
+    /// directly.
+    private final class PreviousDisposition: Sendable {
         private let signal: Int32
-        private var saved: sigaction = sigaction()
+        private let saved = Mutex<sigaction>(sigaction())
 
         init(signal: Int32) {
             self.signal = signal
         }
 
         func install(handler: @escaping @convention(c) (Int32) -> Void) {
-            var new = sigaction()
-            new.__sigaction_u.__sa_handler = handler
-            sigemptyset(&new.sa_mask)
-            new.sa_flags = 0
-            _ = sigaction(signal, &new, &saved)
+            let sig = signal
+            saved.withLock { stored in
+                var new = sigaction()
+                new.__sigaction_u.__sa_handler = handler
+                sigemptyset(&new.sa_mask)
+                new.sa_flags = 0
+                _ = sigaction(sig, &new, &stored)
+            }
         }
 
         func restore() {
-            _ = sigaction(signal, &saved, nil)
+            let sig = signal
+            saved.withLock { stored in
+                _ = sigaction(sig, &stored, nil)
+            }
         }
     }
 }
