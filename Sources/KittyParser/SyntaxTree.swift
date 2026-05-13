@@ -1,8 +1,15 @@
 // MARK: - Syntax Tree
 
 /// An immutable syntax tree produced by parsing.
-/// Supports copy-on-write for incremental parsing subtree sharing.
-public struct SyntaxTree: Sendable, Equatable {
+///
+/// Reference type so that deep ASTs (e.g. large JSON arrays whose grammar
+/// rules build right-leaning structure) can be deallocated iteratively in
+/// `deinit`. The previous value-typed implementation triggered a recursive
+/// destruction chain — each `SyntaxNode` struct dropping its `children:
+/// [SyntaxNode]` recursed into the array's element destructors, blowing
+/// the 544 KB thread stack at ~2000 levels of nesting and surfacing as
+/// SIGBUS with `KERN_PROTECTION_FAILURE` at the stack guard.
+public final class SyntaxTree: @unchecked Sendable {
     public var root: SyntaxNode
     public var source: String
 
@@ -11,31 +18,59 @@ public struct SyntaxTree: Sendable, Equatable {
         self.source = source
     }
 
-    /// Walk the tree depth-first, calling the visitor for each node.
-    public func walk(_ visitor: (SyntaxNode, Int) -> Bool) {
-        walkNode(root, depth: 0, visitor: visitor)
+    deinit {
+        // Iteratively dispose the tree to avoid recursive struct
+        // destructors blowing the stack on deeply-nested ASTs. We
+        // hand-walk a stack, clearing each node's `children` and
+        // `fields` before letting it fall out of scope — the node's
+        // own destructor then only has to release empty arrays.
+        var stack: [SyntaxNode] = [root]
+        root = SyntaxNode(type: "")
+        while !stack.isEmpty {
+            var node = stack.removeLast()
+            stack.append(contentsOf: node.children)
+            node.children = []
+            for fieldChildren in node.fields.values {
+                stack.append(contentsOf: fieldChildren)
+            }
+            node.fields = [:]
+        }
     }
 
-    private func walkNode(_ node: SyntaxNode, depth: Int, visitor: (SyntaxNode, Int) -> Bool) {
-        guard visitor(node, depth) else { return }
-        for child in node.children {
-            walkNode(child, depth: depth + 1, visitor: visitor)
+    /// Walk the tree depth-first, calling the visitor for each node.
+    public func walk(_ visitor: (SyntaxNode, Int) -> Bool) {
+        // Iterative DFS so deep trees don't blow the stack.
+        var stack: [(SyntaxNode, Int)] = [(root, 0)]
+        while let (node, depth) = stack.popLast() {
+            guard visitor(node, depth) else { continue }
+            for child in node.children.reversed() {
+                stack.append((child, depth + 1))
+            }
         }
     }
 
     /// Find the deepest node at the given byte offset.
     public func nodeAt(byteOffset: Int) -> SyntaxNode? {
-        findNode(in: root, offset: byteOffset)
-    }
-
-    private func findNode(in node: SyntaxNode, offset: Int) -> SyntaxNode? {
-        guard node.byteRange.contains(offset) else { return nil }
-        for child in node.children {
-            if let found = findNode(in: child, offset: offset) {
-                return found
+        var current = root
+        guard current.byteRange.contains(byteOffset) else { return nil }
+        // Iterative descent — pick the first child whose range contains
+        // the offset, repeat. Avoids unbounded recursion on deep trees.
+        outer: while true {
+            for child in current.children where child.byteRange.contains(byteOffset) {
+                current = child
+                continue outer
             }
+            return current
         }
-        return node
+    }
+}
+
+// MARK: - Equatable
+
+extension SyntaxTree: Equatable {
+    /// Structural equality — preserves the previous value-type semantics.
+    public static func == (lhs: SyntaxTree, rhs: SyntaxTree) -> Bool {
+        lhs.source == rhs.source && lhs.root == rhs.root
     }
 }
 
