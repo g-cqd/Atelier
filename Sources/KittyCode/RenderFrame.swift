@@ -5,6 +5,34 @@ import KittyWidgets
 /// Tracks the previous frame's visual scroll offset for terminal scroll optimization.
 @MainActor private var lastVisualScrollOffset = 0
 
+/// State captured from the last successful `renderFrame` so the next call can
+/// skip when nothing visibly changed. `nil` until the first render so we
+/// always paint at least once.
+@MainActor private var lastRenderedSignature: RenderSignature?
+
+/// Lightweight view of state values that, when unchanged between frames AND
+/// with empty dirty markers, indicate the screen would be byte-identical.
+private struct RenderSignature: Equatable {
+    var cursorRow: Int
+    var cursorCol: Int
+    var scrollOffset: Int
+    var hScrollOffset: Int
+    var wrapRowOffset: Int
+    var columns: Int
+    var rows: Int
+
+    @MainActor
+    init(state: EditorState, pipeline: RenderPipeline) {
+        self.cursorRow = state.cursorRow
+        self.cursorCol = state.cursorCol
+        self.scrollOffset = state.scrollOffset
+        self.hScrollOffset = state.hScrollOffset
+        self.wrapRowOffset = state.wrapRowOffset
+        self.columns = pipeline.columns
+        self.rows = pipeline.rows
+    }
+}
+
 @MainActor
 func renderFrame(pipeline: RenderPipeline, state: EditorState) {
     // Clear expired command feedback (mark chrome dirty if we actually changed
@@ -15,12 +43,18 @@ func renderFrame(pipeline: RenderPipeline, state: EditorState) {
         state.markChromeDirty()
     }
 
-    // Snapshot what state explicitly marked as changed since the last frame.
-    // Phase 3 wires the drain through to the pipeline; Phase 4+ will use the
-    // regions to skip per-cell work. For now we keep the full repaint so any
-    // state mutation that has not yet been hooked into the dirty tracker
-    // continues to render correctly.
     let dirty = state.drainDirtyState()
+    let signature = RenderSignature(state: state, pipeline: pipeline)
+    let nothingDirty =
+        !dirty.contentAll && !dirty.chrome && dirty.contentLines.isEmpty
+            && pipeline.scrollHint == nil
+    if nothingDirty, let last = lastRenderedSignature, last == signature {
+        // No state mutation marked dirty and the inter-frame signature has not
+        // drifted (cursor / scroll / viewport unchanged). The previous frame is
+        // still the correct frame; skip the entire paint.
+        return
+    }
+    lastRenderedSignature = signature
 
     pipeline.beginFrame()
     state.lastRenderColumns = pipeline.columns
