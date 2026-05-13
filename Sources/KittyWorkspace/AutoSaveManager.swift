@@ -48,13 +48,24 @@ public final class AutoSaveManager {
             if buffer === bufferManager.activeBuffer {
                 saveActiveBuffer()
             } else {
-                let content = buffer.textBuffer.text
-                do {
-                    try content.write(toFile: buffer.filePath, atomically: true, encoding: .utf8)
-                    buffer.isDirty = false
-                    buffer.lastModifiedDate = Date()
-                } catch {
-                    // Silent failure for auto-save of non-active buffers
+                // Hand the write off to a background task so a slow disk can't
+                // stall the render loop. The buffer reference is captured but
+                // only used on the main actor after the write completes; the
+                // snapshot we serialize is value-typed and safe to send.
+                let path = buffer.filePath
+                let data = Data(buffer.textBuffer.text.utf8)
+                Task.detached(priority: .utility) { [weak buffer] in
+                    let url = URL(fileURLWithPath: path)
+                    do {
+                        try data.write(to: url, options: [.atomic])
+                    } catch {
+                        return  // Silent failure for auto-save of non-active buffers
+                    }
+                    await MainActor.run {
+                        guard let buffer else { return }
+                        buffer.isDirty = false
+                        buffer.lastModifiedDate = Date()
+                    }
                 }
             }
         }
