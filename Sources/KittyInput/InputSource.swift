@@ -46,8 +46,13 @@ public final class InputSource: Sendable {
                 do {
                     let count = try connection.read(into: buffer)
                     if Task.isCancelled { return }
-                    let bytes = UnsafeRawBufferPointer(start: buffer.baseAddress, count: count)
-                    router.feedAll(bytes, into: &routedEvents)
+                    // Borrow a `Span<UInt8>` view of the bytes actually read.
+                    // `~Escapable` means the span can't outlive `buffer`, so
+                    // the producer keeps the lifetime invariant the consumer
+                    // already relies on.
+                    let raw = UnsafeRawBufferPointer(start: buffer.baseAddress, count: count)
+                    let span: Span<UInt8> = raw.bytes._unsafeView(as: UInt8.self)
+                    router.feedAll(span, into: &routedEvents)
                     for event in routedEvents {
                         if Task.isCancelled { return }
                         continuation.yield(event)

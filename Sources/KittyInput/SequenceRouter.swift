@@ -262,22 +262,34 @@ public struct SequenceRouter: Sendable {
     /// Feed a chunk of bytes and collect all emitted events.
     public mutating func feedAll(_ bytes: [UInt8]) -> [InputEvent] {
         var events: [InputEvent] = []
-        feedAll(bytes, into: &events)
+        feedSequence(bytes, into: &events)
         return events
     }
 
-    mutating func feedAll(_ bytes: UnsafeRawBufferPointer, into events: inout [InputEvent]) {
+    /// Span-based entrypoint. `Span<UInt8>` is `~Escapable`, so the borrowed
+    /// view of incoming bytes cannot accidentally outlive the read buffer.
+    /// Preferred for hot paths like `InputSource` that already hold a
+    /// bounded raw buffer.
+    mutating func feedAll(_ bytes: Span<UInt8>, into events: inout [InputEvent]) {
         events.removeAll(keepingCapacity: true)
-        guard let baseAddress = bytes.baseAddress else { return }
-        let typedBytes = UnsafeBufferPointer(
-            start: baseAddress.assumingMemoryBound(to: UInt8.self),
-            count: bytes.count
-        )
-        feedAll(typedBytes, into: &events)
+        events.reserveCapacity(max(1, bytes.count))
+        for index in bytes.indices {
+            feed(bytes[index], into: &events)
+        }
     }
 
-    private mutating func feedAll<S: Sequence>(_ bytes: S, into events: inout [InputEvent])
-    where S.Element == UInt8 {
+    /// `UnsafeRawBufferPointer` entrypoint — kept for callers (tests, future
+    /// adapters) that don't have a `Span` view handy. Routes through the
+    /// span overload so the implementation lives in one place and the
+    /// `assumingMemoryBound` pitfall is avoided.
+    mutating func feedAll(_ bytes: UnsafeRawBufferPointer, into events: inout [InputEvent]) {
+        let span: Span<UInt8> = bytes.bytes._unsafeView(as: UInt8.self)
+        feedAll(span, into: &events)
+    }
+
+    private mutating func feedSequence<S: Sequence>(
+        _ bytes: S, into events: inout [InputEvent]
+    ) where S.Element == UInt8 {
         events.removeAll(keepingCapacity: true)
         events.reserveCapacity(max(1, bytes.underestimatedCount))
         for byte in bytes {
