@@ -9,7 +9,9 @@ import KittySyntax
 import KittyText
 import KittyWidgets
 import KittyWorkspace
+import Observation
 
+@Observable
 @MainActor
 final class EditorState {
     enum AcceleratedScrollTarget: Sendable {
