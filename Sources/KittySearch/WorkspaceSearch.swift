@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 public func searchWorkspace(
     pattern: SearchPattern,
@@ -41,11 +42,10 @@ public func searchWorkspace(
                     let matches = findMatches(in: lines, pattern: pattern)
                     guard !matches.isEmpty else { continue }
 
-                    let currentTotal = counters.addMatches(matches.count)
-                    if currentTotal > maxResults {
-                        counters.hitCap = true
-                    }
+                    let didHitCap = counters.addMatchesAndCheckCap(
+                        matches.count, maxResults: maxResults)
                     counters.incrementFilesMatched()
+                    if didHitCap { return }
 
                     let fileName = (filePath as NSString).lastPathComponent
                     let snippets = matches.prefix(20).map { match -> String in
@@ -68,8 +68,7 @@ public func searchWorkspace(
     }
 
     let elapsed = clock.now - startTime
-    let ms = Double(elapsed.components.attoseconds) / 1e15
-        + Double(elapsed.components.seconds) * 1000
+    let ms = elapsed.milliseconds
 
     let snapshot = counters.snapshot()
     return SearchRunResult(
@@ -90,53 +89,54 @@ private func readFileLines(at path: String) -> [String]? {
     return content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 }
 
+extension Duration {
+    /// Whole-and-fractional milliseconds as a `Double`. Combines the seconds and
+    /// attoseconds components in one place so call sites stay readable.
+    var milliseconds: Double {
+        Double(components.seconds) * 1000 + Double(components.attoseconds) / 1e15
+    }
+}
+
 // MARK: - Thread-safe counters
 
-private final class SearchCounters: @unchecked Sendable {
-    private let lock = NSLock()
-    private var _totalMatchCount: Int = 0
-    private var _filesSearched: Int = 0
-    private var _filesMatched: Int = 0
-    private var _results: [SearchFileResult] = []
-    private var _hitCap: Bool = false
+private final class SearchCounters: Sendable {
+    private struct State {
+        var totalMatchCount: Int = 0
+        var filesSearched: Int = 0
+        var filesMatched: Int = 0
+        var results: [SearchFileResult] = []
+        var hitCap: Bool = false
+    }
+
+    private let mutex = Mutex(State())
+
     var hitCap: Bool {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return _hitCap
-        }
-        set {
-            lock.lock()
-            _hitCap = newValue
-            lock.unlock()
-        }
+        mutex.withLock { $0.hitCap }
     }
 
     func incrementFilesSearched() {
-        lock.lock()
-        _filesSearched += 1
-        lock.unlock()
+        mutex.withLock { $0.filesSearched += 1 }
     }
 
     func incrementFilesMatched() {
-        lock.lock()
-        _filesMatched += 1
-        lock.unlock()
+        mutex.withLock { $0.filesMatched += 1 }
     }
 
-    @discardableResult
-    func addMatches(_ count: Int) -> Int {
-        lock.lock()
-        _totalMatchCount += count
-        let result = _totalMatchCount
-        lock.unlock()
-        return result
+    /// Atomically adds `count` matches and returns `true` if this addition crossed
+    /// the cap (so the caller should stop). Eliminates the TOCTOU window between
+    /// adding matches and observing the cap.
+    func addMatchesAndCheckCap(_ count: Int, maxResults: Int) -> Bool {
+        mutex.withLock { state in
+            state.totalMatchCount += count
+            if state.totalMatchCount > maxResults {
+                state.hitCap = true
+            }
+            return state.hitCap
+        }
     }
 
     func appendResult(_ result: SearchFileResult) {
-        lock.lock()
-        _results.append(result)
-        lock.unlock()
+        mutex.withLock { $0.results.append(result) }
     }
 
     struct Snapshot {
@@ -147,13 +147,13 @@ private final class SearchCounters: @unchecked Sendable {
     }
 
     func snapshot() -> Snapshot {
-        lock.lock()
-        defer { lock.unlock() }
-        return Snapshot(
-            totalMatchCount: _totalMatchCount,
-            filesSearched: _filesSearched,
-            filesMatched: _filesMatched,
-            results: _results
-        )
+        mutex.withLock { state in
+            Snapshot(
+                totalMatchCount: state.totalMatchCount,
+                filesSearched: state.filesSearched,
+                filesMatched: state.filesMatched,
+                results: state.results
+            )
+        }
     }
 }

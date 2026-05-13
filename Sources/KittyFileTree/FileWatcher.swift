@@ -11,6 +11,10 @@ public actor FileWatcher {
     private var streamQueue: DispatchQueue?
     private var continuation: AsyncStream<FileWatchEvent>.Continuation?
     private var suppressTimestamps: [String: Date] = [:]
+    /// Strong reference to the box passed to `FSEventStreamCreate` so the
+    /// callback's `info` pointer stays valid for the stream's lifetime.
+    /// Cleared in `stop()` after the stream has been invalidated.
+    private var directoryStreamBox: SendableContinuationBox?
 
     private static let debounceInterval: TimeInterval = 0.1
     private static let suppressWindow: TimeInterval = 1.0
@@ -31,20 +35,26 @@ public actor FileWatcher {
         let queue = DispatchQueue(label: "com.kittycode.fswatcher", qos: .utility)
         streamQueue = queue
 
+        // Box ownership lives on `self`. Passing an unretained pointer into
+        // `FSEventStreamContext.info` avoids relying on whether the CF API
+        // honours the optional `retain` callback for that field.
+        let box = SendableContinuationBox(continuation: continuation)
+        directoryStreamBox = box
+
         var context = FSEventStreamContext()
-        let boxed = Unmanaged.passRetained(SendableContinuationBox(continuation: continuation))
-            .toOpaque()
-        context.info = boxed
+        context.info = UnsafeMutableRawPointer(Unmanaged.passUnretained(box).toOpaque())
 
         let paths = [path] as CFArray
         let stream = FSEventStreamCreate(
             nil,
             { _, info, numEvents, eventPaths, _, _ in
-                guard let info, let paths = unsafeBitCast(eventPaths, to: NSArray.self) as? [String]
+                guard let info,
+                    let cfPaths = Unmanaged<CFArray>.fromOpaque(eventPaths).takeUnretainedValue()
+                        as? [String]
                 else { return }
                 let box = Unmanaged<SendableContinuationBox>.fromOpaque(info).takeUnretainedValue()
                 for i in 0..<numEvents {
-                    box.continuation?.yield(.directoryChanged(paths[i]))
+                    box.continuation?.yield(.directoryChanged(cfPaths[i]))
                 }
             },
             &context,
@@ -58,6 +68,9 @@ public actor FileWatcher {
             FSEventStreamSetDispatchQueue(stream, queue)
             FSEventStreamStart(stream)
             directoryStream = stream
+        } else {
+            // Stream creation failed; drop the box so it gets deallocated.
+            directoryStreamBox = nil
         }
     }
 
@@ -115,6 +128,9 @@ public actor FileWatcher {
             FSEventStreamRelease(stream)
             directoryStream = nil
         }
+        // Drop the box only after the stream has been fully torn down so the
+        // callback can never run with a dangling pointer.
+        directoryStreamBox = nil
 
         continuation?.finish()
         continuation = nil

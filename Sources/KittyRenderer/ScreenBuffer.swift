@@ -21,10 +21,14 @@ public struct ScreenBuffer: Sendable {
     ///   - columns: The number of horizontal cells.
     ///   - rows: The number of vertical cells.
     public init(columns: Int, rows: Int) {
-        self.columns = columns
-        self.rows = rows
-        self.cells = ContiguousArray<Cell>(repeating: .empty, count: columns * rows)
-        self.dirty = DirtyTracker(capacity: columns * rows)
+        let safeColumns = max(0, columns)
+        let safeRows = max(0, rows)
+        let (capacity, overflow) = safeColumns.multipliedReportingOverflow(by: safeRows)
+        precondition(!overflow, "ScreenBuffer size overflows Int: columns=\(columns), rows=\(rows)")
+        self.columns = safeColumns
+        self.rows = safeRows
+        self.cells = ContiguousArray<Cell>(repeating: .empty, count: capacity)
+        self.dirty = DirtyTracker(capacity: capacity)
     }
 
     /// Accesses the cell at the given row and column.
@@ -157,15 +161,19 @@ public struct ScreenBuffer: Sendable {
     ///   - newCols: The new number of columns.
     ///   - newRows: The new number of rows.
     public mutating func resize(columns newCols: Int, rows newRows: Int) {
-        var newCells = ContiguousArray<Cell>(repeating: .empty, count: newCols * newRows)
-        let copyRows = min(rows, newRows)
-        let copyCols = min(columns, newCols)
+        let safeCols = max(0, newCols)
+        let safeRows = max(0, newRows)
+        let (capacity, overflow) = safeCols.multipliedReportingOverflow(by: safeRows)
+        precondition(!overflow, "ScreenBuffer resize overflows Int: cols=\(newCols), rows=\(newRows)")
+        var newCells = ContiguousArray<Cell>(repeating: .empty, count: capacity)
+        let copyRows = min(rows, safeRows)
+        let copyCols = min(columns, safeCols)
         for r in 0..<copyRows {
             for c in 0..<copyCols {
-                newCells[r * newCols + c] = cells[r * columns + c]
+                newCells[r * safeCols + c] = cells[r * columns + c]
             }
         }
-        self = ScreenBuffer._fromParts(cells: newCells, columns: newCols, rows: newRows)
+        self = ScreenBuffer._fromParts(cells: newCells, columns: safeCols, rows: safeRows)
     }
 
     private static func _fromParts(cells: ContiguousArray<Cell>, columns: Int, rows: Int)

@@ -28,12 +28,25 @@ public enum SecurePath {
 
     /// Returns `true` when `path` resolves to a location inside `root`.
     ///
+    /// Both `path` and `root` are standardized (".." resolved, "//" collapsed)
+    /// and symlink-resolved before comparison. Containment is checked by path
+    /// components rather than string prefix to avoid false positives like
+    /// `/tmp/root-evil` matching `/tmp/root`.
+    ///
     /// - Parameters:
     ///   - path: The candidate path.
     ///   - root: The directory that must contain `path`.
     public static func isValid(_ path: String, root: String) -> Bool {
-        let resolved = (path as NSString).resolvingSymlinksInPath
-        let resolvedRoot = (root as NSString).resolvingSymlinksInPath
-        return resolved == resolvedRoot || resolved.hasPrefix(resolvedRoot + "/")
+        let rootURL = URL(fileURLWithPath: root, isDirectory: true)
+            .resolvingSymlinksInPath()
+            .standardizedFileURL
+        let pathURL = URL(fileURLWithPath: path)
+            .resolvingSymlinksInPath()
+            .standardizedFileURL
+
+        let rootComponents = rootURL.pathComponents
+        let pathComponents = pathURL.pathComponents
+        guard pathComponents.count >= rootComponents.count else { return false }
+        return Array(pathComponents.prefix(rootComponents.count)) == rootComponents
     }
 }

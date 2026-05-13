@@ -87,4 +87,46 @@ struct SearchReplaceTests {
             for: match, in: "line 123 end", pattern: pattern, replacement: "[$0]")
         #expect(result == "[123]")
     }
+
+    @Test("$$ produces literal $ in replacement")
+    func doubleDollarEscape() {
+        let regex = try! Regex("(\\w+)")
+        let pattern = SearchPattern.regex(regex)
+        let match = SearchMatch(row: 0, colStart: 0, colEnd: 5)
+        let result = buildReplacement(
+            for: match, in: "hello", pattern: pattern, replacement: "$$1=$1")
+        #expect(result == "$1=hello")
+    }
+
+    @Test("$10 with fewer groups falls back to longest valid prefix")
+    func multiDigitBackrefFallback() {
+        // Only 2 capture groups -> $10 should resolve as $1 + literal "0".
+        let regex = try! Regex("(\\w+) (\\w+)")
+        let pattern = SearchPattern.regex(regex)
+        let match = SearchMatch(row: 0, colStart: 0, colEnd: 11)
+        let result = buildReplacement(
+            for: match, in: "hello world", pattern: pattern, replacement: "$10")
+        #expect(result == "hello0")
+    }
+
+    @Test("multi-digit backref resolves when group exists")
+    func multiDigitBackrefResolves() {
+        // 10 capture groups → $10 should reference group 10.
+        let regex = try! Regex("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)")
+        let pattern = SearchPattern.regex(regex)
+        let match = SearchMatch(row: 0, colStart: 0, colEnd: 10)
+        let result = buildReplacement(
+            for: match, in: "abcdefghij", pattern: pattern, replacement: "$10")
+        #expect(result == "j")
+    }
+
+    @Test("trailing $ is emitted literally")
+    func trailingDollarLiteral() {
+        let regex = try! Regex("\\w+")
+        let pattern = SearchPattern.regex(regex)
+        let match = SearchMatch(row: 0, colStart: 0, colEnd: 5)
+        let result = buildReplacement(
+            for: match, in: "hello", pattern: pattern, replacement: "[$0]$")
+        #expect(result == "[hello]$")
+    }
 }

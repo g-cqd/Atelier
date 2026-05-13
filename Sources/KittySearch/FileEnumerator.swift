@@ -48,7 +48,7 @@ public func enumerateSearchableFiles(
 
 private func isBinaryFile(at path: String) -> Bool {
     guard let handle = FileHandle(forReadingAtPath: path) else { return false }
-    defer { handle.closeFile() }
-    let data = handle.readData(ofLength: 8192)
+    defer { try? handle.close() }
+    guard let data = try? handle.read(upToCount: 8192) else { return false }
     return data.contains(0)
 }
