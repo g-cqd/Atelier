@@ -609,7 +609,6 @@ private enum SyntaxArtifactsCache {
 
         guard let querySource = try? String(contentsOf: queryURL, encoding: .utf8),
             let grammar = try? GrammarLoader.load(from: grammarURL.path),
-            let compiled = try? ParseTableCompiler.compile(grammar),
             let query = try? QueryParser.parse(querySource)
         else {
             return nil
@@ -617,16 +616,38 @@ private enum SyntaxArtifactsCache {
 
         let needsExternals = !grammar.externals.isEmpty
 
-        // Grammars that require external scanners cannot produce correct parse
-        // trees until a concrete scanner implementation is registered.
-        // Allow compilation (so capability reporter can inspect them) but mark
-        // them so Session will not use them for grammar-backed highlighting.
+        // Grammars that require external scanners (e.g. bash here-docs,
+        // markdown line-break states) cannot produce correct parse trees
+        // until a concrete scanner is registered. Session always falls back
+        // to lexical highlighting in that case, so the compiled parse
+        // table would never be consulted — and the LR(1) item-set
+        // expansion for richer grammars (bash in particular) can grow into
+        // gigabytes of RAM before hitting the limit guards. Skip the
+        // compile entirely for externals grammars and store empty
+        // placeholder tables; capability reporting still sees the
+        // `needsExternalScanner` flag.
+        if needsExternals {
+            return SyntaxArtifacts(
+                parseTable: ParseTable(
+                    stateCount: 0, symbols: [], terminals: [], nonTerminals: [],
+                    actions: [], gotos: []),
+                lexTable: LexTable(),
+                productions: [],
+                query: query,
+                needsExternalScanner: true
+            )
+        }
+
+        guard let compiled = try? ParseTableCompiler.compile(grammar) else {
+            return nil
+        }
+
         return SyntaxArtifacts(
             parseTable: compiled.parseTable,
             lexTable: compiled.lexTable,
             productions: compiled.productions,
             query: query,
-            needsExternalScanner: needsExternals
+            needsExternalScanner: false
         )
     }
 }
