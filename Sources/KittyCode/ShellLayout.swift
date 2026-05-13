@@ -67,7 +67,9 @@ func computeShellLayout(state: EditorState, columns: Int, rows: Int) -> (rects: 
 }
 
 @MainActor
-func renderShellLayout(pipeline: RenderPipeline, state: EditorState) {
+func renderShellLayout(
+    pipeline: RenderPipeline, state: EditorState, skipChromeSections: Bool = false
+) {
     let cols = pipeline.columns
     let rows = pipeline.rows
     state.lastRenderColumns = cols
@@ -81,8 +83,17 @@ func renderShellLayout(pipeline: RenderPipeline, state: EditorState) {
     let layout = LayoutMetrics(state: state, columns: cols, rows: rows)
     guard layout.contentRows > 0 else { return }
 
+    // Render chrome sections (tab ribbon, activity bar, sidebar, separator, status bar)
+    // only when chrome state is dirty. Content-only edits (typing inside a
+    // line) skip this whole block — the previous frame's chrome pixels
+    // remain on screen unchanged.
+    let renderChrome = !skipChromeSections
+    // Search panel hosts the input cursor in the sidebar; if we're in that
+    // mode, the sidebar must always paint so the cursor position is in sync.
+    let mustRenderSidebar = state.activeSidebarPanel == .search && state.mode == .searchPanel
+
     // Tab ribbon
-    if layout.showTabRibbon, let tabRect = shellRects.tabRibbon {
+    if renderChrome, layout.showTabRibbon, let tabRect = shellRects.tabRibbon {
         let tabs = state.tabRibbonTabs()
         let theme = state.config.theme
         var tabStyle = TabRibbon.TabRibbonStyle()
@@ -110,7 +121,7 @@ func renderShellLayout(pipeline: RenderPipeline, state: EditorState) {
     }
 
     // Activity bar
-    if let abRect = shellRects.activityBar {
+    if renderChrome, let abRect = shellRects.activityBar {
         renderActivityBar(
             pipeline: pipeline,
             state: state,
@@ -121,7 +132,7 @@ func renderShellLayout(pipeline: RenderPipeline, state: EditorState) {
 
     // Sidebar panel
     var sidebarCursorPos: (row: Int, col: Int)?
-    if let sidebarRect = shellRects.sidebar {
+    if (renderChrome || mustRenderSidebar), let sidebarRect = shellRects.sidebar {
         switch state.activeSidebarPanel {
         case .explorer:
             renderTreePanel(
@@ -147,8 +158,8 @@ func renderShellLayout(pipeline: RenderPipeline, state: EditorState) {
         }
     }
 
-    // Separator
-    if let sepRect = shellRects.separator {
+    // Separator (decorative, only repainted with chrome)
+    if renderChrome, let sepRect = shellRects.separator {
         for row in sepRect.y..<sepRect.maxY {
             pipeline.buffer.write(
                 "\u{2502}", row: row, col: sepRect.x,
@@ -167,16 +178,18 @@ func renderShellLayout(pipeline: RenderPipeline, state: EditorState) {
         colorScheme: colorScheme
     )
 
-    // Status bar
-    let statusSegments =
-        state.config.statusBar.show
-        ? state.statusBarSegments(columns: cols, rows: rows)
-        : ("", state.contextHintText ?? "")
-    StatusBar(
-        left: statusSegments.0,
-        right: statusSegments.1,
-        style: colorScheme.statusBar
-    ).render(to: &pipeline.buffer, in: shellRects.statusBar)
+    // Status bar (chrome). Content-only edits leave it untouched.
+    if renderChrome {
+        let statusSegments =
+            state.config.statusBar.show
+            ? state.statusBarSegments(columns: cols, rows: rows)
+            : ("", state.contextHintText ?? "")
+        StatusBar(
+            left: statusSegments.0,
+            right: statusSegments.1,
+            style: colorScheme.statusBar
+        ).render(to: &pipeline.buffer, in: shellRects.statusBar)
+    }
 
     let overlayCursorPos = renderOverlay(
         pipeline: pipeline,

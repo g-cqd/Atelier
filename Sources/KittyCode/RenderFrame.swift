@@ -99,5 +99,8 @@ func renderFrame(pipeline: RenderPipeline, state: EditorState) {
     }
     lastVisualScrollOffset = currentVisualOffset
 
-    renderShellLayout(pipeline: pipeline, state: state)
+    renderShellLayout(
+        pipeline: pipeline, state: state,
+        skipChromeSections: !dirty.contentAll && !dirty.chrome
+    )
 }

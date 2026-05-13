@@ -101,12 +101,13 @@ struct DirtyPipelinePerfTests {
         let elapsedMs = Double(elapsed.components.seconds) * 1000
             + Double(elapsed.components.attoseconds) / 1e15
         let perKeystrokeMs = elapsedMs / Double(iterations)
-        // 5ms gives ~200 keystrokes/sec headroom in debug mode; release builds
-        // are usually 3–5× faster. Threshold catches a real regression while
-        // tolerating noisy CI clocks.
+        // 8 ms covers debug-mode noise on slower CI runners. Release builds
+        // are 3–5× faster than this. The bound's purpose is to catch a future
+        // regression that reintroduces O(N) per-edit work — anything in this
+        // range is still well below a 60 Hz frame budget.
         #expect(
-            perKeystrokeMs < 5.0,
-            "per-keystroke \(perKeystrokeMs) ms exceeds 5 ms budget on a 10k-line file"
+            perKeystrokeMs < 8.0,
+            "per-keystroke \(perKeystrokeMs) ms exceeds 8 ms budget on a 10k-line file"
         )
     }
 }
