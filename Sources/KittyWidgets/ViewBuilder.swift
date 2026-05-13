@@ -36,6 +36,28 @@ public struct ViewBuilder {
     {
         .second(component)
     }
+
+    /// Enables `for ... in` loops inside a `@ViewBuilder` body. Each iteration
+    /// must produce the same `View` type so the resulting array is homogeneous.
+    public static func buildArray<C: View>(_ components: [C]) -> ForEachArrayView<C> {
+        ForEachArrayView(views: components)
+    }
+
+    /// Enables `if #available` blocks inside a `@ViewBuilder` body. Wraps the
+    /// component so the builder type stays stable when the branch is taken on
+    /// platforms that meet the availability check.
+    public static func buildLimitedAvailability<C: View>(_ component: C) -> C {
+        component
+    }
+}
+
+// MARK: - ForEachArrayView
+
+/// View produced by `ViewBuilder.buildArray`. Rendered like a `TupleView` but
+/// with a homogeneous payload.
+public struct ForEachArrayView<Content: View>: View, Sendable {
+    public let views: [Content]
+    public var body: Never { fatalError() }
 }
 
 // MARK: - TupleView
