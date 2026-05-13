@@ -23,12 +23,12 @@ struct KittyCodeEntry {
             do {
                 try await runEditor(launchConfig: launchConfig)
             } catch {
-                let msg = "CRASH: \(error)\n"
+                let msg = "CRASH: \(error)"
                 let crashPath = FileManager.default.temporaryDirectory
                     .appendingPathComponent(
                         "kittycode-crash-\(ProcessInfo.processInfo.processIdentifier).log")
-                try? msg.write(to: crashPath, atomically: true, encoding: .utf8)
-                FileHandle.standardError.write(Data(msg.utf8))
+                try? (msg + "\n").write(to: crashPath, atomically: true, encoding: .utf8)
+                KittyLogger.stderr(msg)
             }
         }
     }

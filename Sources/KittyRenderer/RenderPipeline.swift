@@ -1,5 +1,6 @@
 import KittyCodecs
 import KittyTerminal
+import os
 
 /// Describes a terminal-level scroll operation to apply before diffing.
 ///
@@ -23,6 +24,10 @@ public struct ScrollHint: Sendable {
     }
 }
 
+/// Signposter used for frame-phase instrumentation. Inspect in Instruments
+/// under "kittycode.render" subsystem.
+private let signposter = OSSignposter(subsystem: "com.kittytui.render", category: "frame")
+
 /// Double-buffered render pipeline with synchronized output.
 @MainActor
 public final class RenderPipeline {
@@ -32,6 +37,10 @@ public final class RenderPipeline {
 
     /// Persistent output buffer reused across frames to avoid allocation.
     private var outputBuffer = ContiguousArray<UInt8>()
+
+    /// Active signpost interval state — only one frame in flight at a time per
+    /// pipeline, so a single optional is sufficient.
+    private var activeFrameInterval: OSSignpostIntervalState?
 
     /// The current number of columns in the render viewport.
     public var columns: Int { back.columns }
@@ -93,6 +102,7 @@ public final class RenderPipeline {
     public func beginFrame() {
         cursorRow = nil
         cursorCol = nil
+        activeFrameInterval = signposter.beginInterval("frame")
     }
 
     /// Marks a screen region as needing repaint on the next frame. Coalescing
@@ -126,6 +136,14 @@ public final class RenderPipeline {
     ///
     /// - Throws: `TerminalError` if the underlying connection write fails.
     public func flush() throws(TerminalError) {
+        let flushInterval = signposter.beginInterval("flush")
+        defer {
+            signposter.endInterval("flush", flushInterval)
+            if let interval = activeFrameInterval {
+                signposter.endInterval("frame", interval)
+                activeFrameInterval = nil
+            }
+        }
         outputBuffer.removeAll(keepingCapacity: true)
 
         KittySequences.appendBeginSyncUpdate(to: &outputBuffer)
@@ -215,6 +233,14 @@ public final class RenderPipeline {
     ///
     /// - Throws: `TerminalError` if the underlying connection write fails.
     public func forceRedraw() throws(TerminalError) {
+        let redrawInterval = signposter.beginInterval("forceRedraw")
+        defer {
+            signposter.endInterval("forceRedraw", redrawInterval)
+            if let interval = activeFrameInterval {
+                signposter.endInterval("frame", interval)
+                activeFrameInterval = nil
+            }
+        }
         outputBuffer.removeAll(keepingCapacity: true)
 
         KittySequences.appendBeginSyncUpdate(to: &outputBuffer)
