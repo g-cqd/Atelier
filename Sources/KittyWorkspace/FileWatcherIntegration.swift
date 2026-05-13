@@ -70,9 +70,10 @@ public final class FileWatcherIntegration {
         guard let index = bufferManager.bufferIndex(forPath: path) else { return }
         let buffer = bufferManager.buffers[index]
 
-        let fileManager = FileManager.default
-        guard let attrs = try? fileManager.attributesOfItem(atPath: path),
-            let diskDate = attrs[.modificationDate] as? Date
+        let url = URL(fileURLWithPath: path)
+        guard
+            let diskDate = try? url.resourceValues(forKeys: [.contentModificationDateKey])
+                .contentModificationDate
         else { return }
 
         if let lastMod = buffer.lastModifiedDate, diskDate <= lastMod {
