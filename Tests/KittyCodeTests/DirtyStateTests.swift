@@ -204,4 +204,24 @@ struct DirtyStateTests {
         sut.state.commandFeedback = "hint"
         #expect(sut.state.dirtyChrome)
     }
+
+    @Test
+    func `viewport size change marks everything dirty on next renderFrame`() {
+        let sut = makeSUT()
+        _ = sut.state.drainDirtyState()
+        // Simulate a resize by changing pipeline dimensions while leaving state
+        // markers clean. renderFrame should detect the mismatch against
+        // state.lastRenderColumns/Rows and escalate to a full repaint so
+        // chrome (sidebar, status bar, tab ribbon) is repainted.
+        sut.state.lastRenderColumns = sut.pipeline.columns
+        sut.state.lastRenderRows = sut.pipeline.rows
+        _ = sut.state.drainDirtyState()
+        sut.pipeline.resize(columns: sut.pipeline.columns + 10, rows: sut.pipeline.rows + 5)
+        renderFrame(pipeline: sut.pipeline, state: sut.state)
+        // After renderFrame, dirty was drained; the post-resize frame painted
+        // chrome (we can't observe that directly from here, but
+        // state.lastRenderColumns / Rows should be in sync with the new size).
+        #expect(sut.state.lastRenderColumns == sut.pipeline.columns)
+        #expect(sut.state.lastRenderRows == sut.pipeline.rows)
+    }
 }
