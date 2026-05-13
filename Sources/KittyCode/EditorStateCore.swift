@@ -839,7 +839,7 @@ final class EditorState {
     var vimMode: VimMode = .normal
     var vimVisualAnchor: (line: Int, col: Int)?
     var symbolTheme: TerminalSymbolTheme
-    var lastClickTime: Date = .distantPast
+    var lastClickTime: ContinuousClock.Instant?
     var lastClickIndex = -1
     var isScrolling = false
     var scrollDragState: ScrollDragState?
@@ -848,11 +848,11 @@ final class EditorState {
     var lastRenderRows = 24
     var lastScrollDirection: MouseButton?
     var blockedMomentumDirection: MouseButton?
-    var blockedMomentumDeadline: Date = .distantPast
+    var blockedMomentumDeadline: ContinuousClock.Instant?
     var scrollAccelerationDirection: MouseButton?
     var scrollAccelerationTarget: AcceleratedScrollTarget?
     var scrollAccelerationBurstCount = 0
-    var scrollAccelerationLastEventAt: Date = .distantPast
+    var scrollAccelerationLastEventAt: ContinuousClock.Instant?
     var pendingAcceleratedScrollLines = 0
     var pendingAcceleratedScrollTarget: AcceleratedScrollTarget?
     var scrollAccelerationTask: Task<Void, Never>?
@@ -868,10 +868,10 @@ final class EditorState {
     var terminalWriter: (([UInt8]) -> Void)?
     var readOnly: Bool = false
     var commandFeedback: String?
-    var commandFeedbackExpiry: Date?
-    var lastKeyRepeatProcessedAt: Date?
+    var commandFeedbackExpiry: ContinuousClock.Instant?
+    var lastKeyRepeatProcessedAt: ContinuousClock.Instant?
     var pendingKeySequence: [KeyStroke] = []
-    var pendingKeySequenceTime: Date?
+    var pendingKeySequenceTime: ContinuousClock.Instant?
     var fullHighlightTask: Task<Void, Never>?
     var fileTreeHistory = FileTreeOperationHistory()
 
