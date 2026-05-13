@@ -3,6 +3,7 @@ import KittyInput
 import KittyRenderer
 import KittyTerminal
 import KittyWidgets
+import Observation
 
 /// Orchestrates the application lifecycle.
 @MainActor
@@ -16,10 +17,16 @@ public final class ApplicationRuntime {
     /// Run with explicit render and event callbacks.
     /// `render` is called once initially and on each resize.
     /// `onEvent` is called for every input event; return `false` to quit.
+    /// If `renderClock` is non-nil, an observation-listener task is started
+    /// that injects `InputEvent.refresh` into the input source whenever the
+    /// clock's tick advances — so callers that just bump the clock from a
+    /// background task (`schedulePostLoadProcessing`, file watcher, git
+    /// refresh) don't need to also explicitly invalidate the refresh source.
     public func run(
         render: @MainActor (RenderPipeline) -> Void,
         onEvent: @MainActor (InputEvent, RenderPipeline) -> Bool = { _, _ in true },
-        configureInputSource: @MainActor (InputSource) -> Void = { _ in }
+        configureInputSource: @MainActor (InputSource) -> Void = { _ in },
+        renderClock: RenderClock? = nil
     ) async throws(AppError) {
         // Enter raw mode
         do {
@@ -82,6 +89,29 @@ public final class ApplicationRuntime {
         configureInputSource(inputSource)
         let readTask = inputSource.start()
 
+        // Observation-listener task: re-establishes a `withObservationTracking`
+        // dependency on `renderClock.tick` after each fire. Synchronous
+        // bursts of `advance()` calls inside one main-actor entry coalesce
+        // into a single resume + a single `.refresh` injection.
+        let observationTask: Task<Void, Never>?
+        if let renderClock {
+            observationTask = Task { @MainActor [weak inputSource] in
+                while !Task.isCancelled {
+                    await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                        withObservationTracking {
+                            _ = renderClock.tick
+                        } onChange: {
+                            cont.resume()
+                        }
+                    }
+                    guard !Task.isCancelled else { return }
+                    inputSource?.inject(.refresh)
+                }
+            }
+        } else {
+            observationTask = nil
+        }
+
         // Start signal handler for SIGWINCH
         let conn = connection
         let signalHandler = SignalHandler(
@@ -116,6 +146,7 @@ public final class ApplicationRuntime {
             if !shouldContinue {
                 readTask.cancel()
                 signalTask.cancel()
+                observationTask?.cancel()
                 return
             }
 
@@ -140,6 +171,7 @@ public final class ApplicationRuntime {
             }
         }
         signalTask.cancel()
+        observationTask?.cancel()
     }
 
     /// Run an App type, rendering its body into the terminal and dispatching events through the view hierarchy.
