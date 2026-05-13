@@ -1,4 +1,5 @@
 import Foundation
+import KittyTerminal
 
 /// Parses `CommandLine.arguments` into a structured launch action.
 struct CLIArguments: Sendable {
@@ -300,6 +301,6 @@ struct CLIArguments: Sendable {
     }
 
     private static func writeStderr(_ message: String) {
-        FileHandle.standardError.write(Data((message + "\n").utf8))
+        KittyLogger.stderr(message)
     }
 }

@@ -1,5 +1,16 @@
 import Foundation
 import KittyCodecs
+import KittyTerminal
+
+/// Errors surfaced while loading or decoding the user's `~/.kittycode.json`.
+///
+/// `load(from:)` always falls back to a default config, but these typed cases
+/// let internal callers distinguish "no file" from "bad file" (currently used
+/// by the logger to choose log level).
+enum ConfigError: Error {
+    case fileUnreadable(URL, any Error)
+    case decodeFailed(URL, any Error)
+}
 
 struct KittyConfig: Codable, Sendable {
     enum KeybindingMode: String, Codable, Sendable {
@@ -625,15 +636,24 @@ struct KittyConfig: Codable, Sendable {
     }
 
     static func load(from url: URL) -> KittyConfig {
-        guard let data = try? Data(contentsOf: url) else {
-            return KittyConfig()
-        }
         do {
+            let data: Data
+            do {
+                data = try Data(contentsOf: url)
+            } catch {
+                // Missing file is the common case (no user config) — silent fallback.
+                // Other read errors (permission, I/O) warrant a log entry.
+                if (error as NSError).code != NSFileReadNoSuchFileError {
+                    KittyLogger.warning("config unreadable at \(url.path): \(error). using defaults")
+                }
+                return KittyConfig()
+            }
             return try JSONDecoder().decode(KittyConfig.self, from: data)
+        } catch let error as DecodingError {
+            KittyLogger.warning("config decode failed at \(url.path): \(error). using defaults")
+            return KittyConfig()
         } catch {
-            FileHandle.standardError.write(
-                Data("Warning: failed to parse \(url.path): \(error). Using defaults.\n".utf8)
-            )
+            KittyLogger.warning("config load failed at \(url.path): \(error). using defaults")
             return KittyConfig()
         }
     }

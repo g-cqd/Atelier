@@ -1,3 +1,4 @@
+import Foundation
 import os
 
 /// Structured logger for macOS runtime diagnostics.
@@ -11,6 +12,10 @@ import os
 public enum KittyLogger: Sendable {
     private static let osLogger = Logger(subsystem: "com.kittytui", category: "runtime")
 
+    public static func fault(_ message: String) {
+        osLogger.fault("\(message, privacy: .private)")
+    }
+
     public static func error(_ message: String) {
         osLogger.error("\(message, privacy: .private)")
     }
@@ -21,6 +26,12 @@ public enum KittyLogger: Sendable {
 
     public static func debug(_ message: String) {
         osLogger.debug("\(message, privacy: .private)")
+    }
+
+    /// Logs `message` at the fault level without redaction. Use only for
+    /// content that contains no sensitive data (static literals, enum cases).
+    public static func fault(public message: String) {
+        osLogger.fault("\(message, privacy: .public)")
     }
 
     /// Logs `message` at the error level without redaction. Use only for
@@ -37,5 +48,14 @@ public enum KittyLogger: Sendable {
     /// Logs `message` at the debug level without redaction.
     public static func debug(public message: String) {
         osLogger.debug("\(message, privacy: .public)")
+    }
+
+    /// Logs at `.error` AND writes to stderr. Use for CLI parse failures and
+    /// terminal-mode crash reports — the user expects to see them in their
+    /// shell, while Console.app and Instruments captures them via the unified
+    /// logging system.
+    public static func stderr(_ message: String) {
+        osLogger.error("\(message, privacy: .private)")
+        FileHandle.standardError.write(Data((message + "\n").utf8))
     }
 }

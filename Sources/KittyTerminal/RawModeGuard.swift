@@ -7,6 +7,13 @@ public struct RawModeGuard: ~Copyable, Sendable {
     }
 
     deinit {
-        try? connection.restoreMode()
+        // The terminal must be left in a usable state. If `tcsetattr` fails we
+        // can't propagate the error from a deinit, so log at .fault level: the
+        // user will be staring at a scrambled tty until they `reset` manually.
+        do {
+            try connection.restoreMode()
+        } catch {
+            KittyLogger.fault(public: "RawModeGuard: tcsetattr restore failed; tty may be scrambled")
+        }
     }
 }
