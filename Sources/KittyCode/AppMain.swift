@@ -43,6 +43,8 @@ struct KittyCodeEntry {
         await state.loadInitialTree()
         let refreshSource = RenderRefreshSource()
         state.renderRefreshSource = refreshSource
+        let renderClock = RenderClock()
+        state.renderClock = renderClock
 
         if config.git.enabled,
             let repositoryRoot = await GitStatusProvider.repositoryRoot(for: launchConfig.rootPath)
@@ -157,7 +159,8 @@ struct KittyCodeEntry {
             },
             configureInputSource: { inputSource in
                 refreshSource.bind(inputSource: inputSource)
-            }
+            },
+            renderClock: renderClock
         )
 
         // Cleanup
