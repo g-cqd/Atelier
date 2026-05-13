@@ -19,21 +19,37 @@ public final class InputSource: Sendable {
     }
 
     /// Starts the read loop in a new Task. Returns the task for cancellation.
+    ///
+    /// Lifecycle guarantees:
+    /// - `continuation.finish()` is called via `defer` whether the loop exits
+    ///   cleanly, throws, or is cancelled at a check point.
+    /// - `onTermination` on the continuation cancels the read task so that if
+    ///   the consumer stops iterating first, the producer doesn't keep spinning.
+    /// - A blocked `connection.read(2)` cannot be unblocked from Swift today;
+    ///   that requires migrating to `FileDescriptor` + `poll(2)`/`select(2)`
+    ///   (tracked as the EINTR/FileDescriptor migration). Until then,
+    ///   cooperative cancellation lands on the next read return (EINTR or
+    ///   incoming byte).
     @discardableResult
     public func start() -> Task<Void, Never> {
-        Task { [connection, continuation] in
+        let task = Task { [connection, continuation] in
             var router = SequenceRouter()
             var routedEvents: [InputEvent] = []
             let bufferSize = 4096
             let buffer = UnsafeMutableRawBufferPointer.allocate(byteCount: bufferSize, alignment: 1)
-            defer { buffer.deallocate() }
+            defer {
+                buffer.deallocate()
+                continuation.finish()
+            }
 
             while !Task.isCancelled {
                 do {
                     let count = try connection.read(into: buffer)
+                    if Task.isCancelled { return }
                     let bytes = UnsafeRawBufferPointer(start: buffer.baseAddress, count: count)
                     router.feedAll(bytes, into: &routedEvents)
                     for event in routedEvents {
+                        if Task.isCancelled { return }
                         continuation.yield(event)
                     }
                 } catch TerminalError.readFailed(let code) where code == EINTR {
@@ -42,8 +58,15 @@ public final class InputSource: Sendable {
                     break
                 }
             }
-            continuation.finish()
         }
+        // If the consumer drops the stream's iterator (e.g. early break), the
+        // continuation fires its termination hook — wake the producer so it
+        // doesn't sit in a stale read.
+        let producerTask = task
+        continuation.onTermination = { @Sendable _ in
+            producerTask.cancel()
+        }
+        return task
     }
 
     /// Inject an event into the stream from outside the read loop (e.g., from a signal handler).
