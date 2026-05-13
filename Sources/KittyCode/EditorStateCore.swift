@@ -216,6 +216,13 @@ final class EditorState {
     var gitLineDecorationProvider: (any GitLineDecorationProvider)?
     var gitDecorationManager: GitDecorationManager?
     var renderRefreshSource: RenderRefreshSource?
+    /// Observation-aware tick source. When non-nil, every `mark*Dirty` call
+    /// advances it; an observation-listener task in `ApplicationRuntime` then
+    /// injects an `.refresh` input event so the existing event loop renders
+    /// the next frame. Lets us drop ad-hoc `renderRefreshSource.invalidate()`
+    /// calls from async completion sites — the dirty marker that already
+    /// runs there is enough.
+    var renderClock: RenderClock?
     weak var fileWatcherIntegration: FileWatcherIntegration?
     var colorScheme: ColorScheme {
         didSet {
@@ -1017,18 +1024,30 @@ final class EditorState {
     /// Marks every logical line in `range` as dirty.
     func markLinesDirty(_ range: Range<Int>) {
         guard !dirtyContentAll else { return }
+        let before = dirtyContentLines.count
         for line in range { dirtyContentLines.insert(line) }
+        if dirtyContentLines.count != before {
+            renderClock?.advance()
+        }
     }
 
     /// Marks the entire editor content area as dirty. Supersedes per-line marks.
     func markContentAllDirty() {
+        let wasClean = !dirtyContentAll
         dirtyContentAll = true
         dirtyContentLines.removeAll(keepingCapacity: true)
+        if wasClean {
+            renderClock?.advance()
+        }
     }
 
     /// Marks the chrome (sidebar, status bar, tabs) as dirty.
     func markChromeDirty() {
+        let wasClean = !dirtyChrome
         dirtyChrome = true
+        if wasClean {
+            renderClock?.advance()
+        }
     }
 
     /// Marks both content and chrome as fully dirty (resize, theme change).
