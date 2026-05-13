@@ -77,9 +77,9 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
 
     if mouse.button.isScroll {
         state.scrollDragState = nil
-        let now = Date()
-        let momentumBlockInterval =
-            TimeInterval(max(0, state.config.editor.scrollMomentumBlockMilliseconds)) / 1000
+        let now = ContinuousClock.now
+        let momentumBlockInterval = Duration.milliseconds(
+            max(0, state.config.editor.scrollMomentumBlockMilliseconds))
         let isVerticalWheel = mouse.button == .scrollUp || mouse.button == .scrollDown
         let isHorizontalEditorWheel =
             mouse.col - 1 >= layout.editorStart && !state.config.editor.wrapLines
@@ -101,17 +101,18 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
         }
 
         if handlesVerticalMomentum {
-            if let blockedDirection = state.blockedMomentumDirection {
-                if now < state.blockedMomentumDeadline, mouse.button == blockedDirection {
+            if let blockedDirection = state.blockedMomentumDirection,
+                let deadline = state.blockedMomentumDeadline {
+                if now < deadline, mouse.button == blockedDirection {
                     state.blockedMomentumDirection = nil
-                    state.blockedMomentumDeadline = .distantPast
+                    state.blockedMomentumDeadline = nil
                     state.isScrolling = false
                     return
                 }
 
-                if now >= state.blockedMomentumDeadline {
+                if now >= deadline {
                     state.blockedMomentumDirection = nil
-                    state.blockedMomentumDeadline = .distantPast
+                    state.blockedMomentumDeadline = nil
                 }
             }
         }
@@ -175,8 +176,8 @@ func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeli
     guard mouse.button == .left || mouse.button == .right else { return }
     let isRightClick = mouse.button == .right
 
-    let now = Date()
-    let isDoubleClick = !isRightClick && now.timeIntervalSince(state.lastClickTime) < 0.3
+    let now = ContinuousClock.now
+    let isDoubleClick = !isRightClick && isWithinDoubleClickThreshold(now: now, last: state.lastClickTime)
 
     // Tab ribbon click (mouse coords are 1-based, tab ribbon row uses layout.contentStartRow)
     if layout.showTabRibbon && mouse.row == layout.contentStartRow
@@ -409,17 +410,17 @@ private func shouldCancelPendingAcceleratedScroll(for direction: MouseButton, st
 @MainActor
 private func updateMomentumTracking(
     afterAcceptedVerticalScroll direction: MouseButton,
-    at now: Date,
-    momentumBlockInterval: TimeInterval,
+    at now: ContinuousClock.Instant,
+    momentumBlockInterval: Duration,
     state: EditorState
 ) {
     let previousDirection = state.lastScrollDirection
     if let previousDirection, previousDirection.isScroll, previousDirection != direction,
-        momentumBlockInterval > 0
+        momentumBlockInterval > .zero
     {
         // After a reversal, ignore at most one immediate rebound event from the old direction.
         state.blockedMomentumDirection = previousDirection
-        state.blockedMomentumDeadline = now.addingTimeInterval(momentumBlockInterval)
+        state.blockedMomentumDeadline = now.advanced(by: momentumBlockInterval)
     }
     state.lastScrollDirection = direction
 }
@@ -430,7 +431,7 @@ private func scrollVertically(
     direction: MouseButton,
     scrollStep: Int,
     state: EditorState,
-    at now: Date
+    at now: ContinuousClock.Instant
 ) -> Bool {
     let unitDelta = direction == .scrollUp ? -scrollStep : scrollStep
     let directionChanged =
@@ -549,7 +550,7 @@ private func extraAcceleratedScrollLines(
     target: EditorState.AcceleratedScrollTarget,
     scrollStep: Int,
     state: EditorState,
-    at now: Date
+    at now: ContinuousClock.Instant
 ) -> Int {
     let config = state.config.editor
     guard config.scrollAccelerationEnabled, scrollStep == 1 else {
@@ -557,11 +558,12 @@ private func extraAcceleratedScrollLines(
         return 0
     }
 
-    let window = TimeInterval(max(0, config.scrollAccelerationWindowMilliseconds)) / 1000
+    let window = Duration.milliseconds(max(0, config.scrollAccelerationWindowMilliseconds))
     if state.scrollAccelerationDirection == direction,
         state.scrollAccelerationTarget == target,
-        window > 0,
-        now.timeIntervalSince(state.scrollAccelerationLastEventAt) <= window
+        window > .zero,
+        let last = state.scrollAccelerationLastEventAt,
+        last.duration(to: now) <= window
     {
         state.scrollAccelerationBurstCount += 1
     } else {
@@ -687,7 +689,7 @@ private func resetScrollAccelerationBurst(state: EditorState) {
     state.scrollAccelerationDirection = nil
     state.scrollAccelerationTarget = nil
     state.scrollAccelerationBurstCount = 0
-    state.scrollAccelerationLastEventAt = .distantPast
+    state.scrollAccelerationLastEventAt = nil
 }
 
 @MainActor
@@ -736,8 +738,8 @@ private func handleEditorClick(mouseRow: Int, mouseCol: Int, editorRect: Rect, s
     state.cursorCol = position.col
     state.mode = .editor
 
-    let now = Date()
-    let isDoubleClick = now.timeIntervalSince(state.lastClickTime) < 0.3
+    let now = ContinuousClock.now
+    let isDoubleClick = isWithinDoubleClickThreshold(now: now, last: state.lastClickTime)
 
     state.lastClickTime = now
     state.lastClickIndex = position.row
@@ -745,6 +747,19 @@ private func handleEditorClick(mouseRow: Int, mouseCol: Int, editorRect: Rect, s
     if isDoubleClick {
         handleWordSelection(at: position, state: state)
     }
+}
+
+/// 300 ms double-click window matches the previous Date-based behavior.
+private let doubleClickThreshold: Duration = .milliseconds(300)
+
+/// Returns `true` when `now` is within the double-click window of `last`.
+@inline(__always)
+private func isWithinDoubleClickThreshold(
+    now: ContinuousClock.Instant,
+    last: ContinuousClock.Instant?
+) -> Bool {
+    guard let last else { return false }
+    return last.duration(to: now) < doubleClickThreshold
 }
 
 @MainActor
