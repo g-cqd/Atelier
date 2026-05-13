@@ -1,14 +1,16 @@
 import Foundation
 import KittySync
 
-// SAFETY: All mutable state is guarded by `state`, a single mutex-protected store.
 /// An in-memory `TerminalConnection` for use in tests.
 ///
 /// `MockTerminalConnection` replaces real PTY or stdin/stdout I/O with in-memory
 /// buffers, allowing tests to feed input programmatically and inspect what was written
 /// without touching any file descriptor.
-public final class MockTerminalConnection: TerminalConnection, @unchecked Sendable {
-    private struct State {
+///
+/// Mutable state is held inside a `StateLock` (Sendable), so the class needs no
+/// `@unchecked` escape hatch.
+public final class MockTerminalConnection: TerminalConnection {
+    private struct State: Sendable {
         var inputBuffer: [UInt8] = []
         var queuedReadResults: [Result<[UInt8], TerminalError>] = []
         var outputBuffer = ContiguousArray<UInt8>()

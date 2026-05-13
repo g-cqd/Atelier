@@ -1,6 +1,7 @@
 import Foundation
 import KittyFileTree
 import KittySync
+import Synchronization
 
 public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvider,
     @unchecked Sendable
@@ -99,26 +100,7 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
     }
 
     private func runGit(arguments: [String]) async -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = arguments
-        process.currentDirectoryURL = URL(fileURLWithPath: rootPath)
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-
-        do {
-            try process.run()
-        } catch {
-            return nil
-        }
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else { return nil }
-        return String(data: data, encoding: .utf8)
+        await Self.runGit(arguments: arguments, workingDirectory: rootPath)
     }
 
     private func readBaseContent(for normalizedPath: String, relativePath: String) async
@@ -268,13 +250,13 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
 
     // MARK: - Repository detection
 
-    public static func isGitRepository(_ path: String) -> Bool {
-        repositoryRoot(for: path) != nil
+    public static func isGitRepository(_ path: String) async -> Bool {
+        await repositoryRoot(for: path) != nil
     }
 
-    public static func repositoryRoot(for path: String) -> String? {
-        let root = runGitSync(arguments: ["-C", path, "rev-parse", "--show-toplevel"])
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+    public static func repositoryRoot(for path: String) async -> String? {
+        let raw = await runGit(arguments: ["-C", path, "rev-parse", "--show-toplevel"])
+        let root = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !root.isEmpty else { return nil }
         return normalizePath(root)
     }
@@ -416,25 +398,84 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         }
     }
 
-    private static func runGitSync(arguments: [String]) -> String {
+    /// Default deadline for any single git invocation. A hung `git` should never
+    /// freeze the editor — after this duration we send `SIGTERM` and return `nil`.
+    fileprivate static let defaultGitTimeout: Duration = .seconds(10)
+
+    /// Runs `git` asynchronously without blocking the executor thread.
+    ///
+    /// Uses `terminationHandler` to resume after the process exits and reads the
+    /// captured stdout via `FileHandle.readToEnd()` only after EOF is guaranteed.
+    /// Falls back to `nil` and terminates the child process if it exceeds
+    /// `timeout`.
+    fileprivate static func runGit(
+        arguments: [String],
+        workingDirectory: String? = nil,
+        timeout: Duration = defaultGitTimeout
+    ) async -> String? {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = arguments
+        // `/usr/bin/env` performs PATH lookup so Homebrew/MacPorts/system git all work,
+        // and avoids hard-failing on systems where /usr/bin/git is a missing Xcode stub.
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["git"] + arguments
+        if let workingDirectory {
+            process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
+        }
 
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
 
-        do {
-            try process.run()
-        } catch {
-            return ""
+        let guarded = ProcessGuard(process: process)
+
+        return await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+            let once = ResumeOnce()
+            let watchdog = Task {
+                try? await Task.sleep(for: timeout)
+                guarded.terminateIfRunning()
+            }
+
+            process.terminationHandler = { proc in
+                let data = (try? pipe.fileHandleForReading.readToEnd()) ?? Data()
+                let result: String? = proc.terminationStatus == 0
+                    ? String(data: data, encoding: .utf8) : nil
+                watchdog.cancel()
+                once.resume(continuation, with: result)
+            }
+
+            do {
+                try process.run()
+            } catch {
+                process.terminationHandler = nil
+                watchdog.cancel()
+                once.resume(continuation, with: nil)
+            }
         }
+    }
+}
 
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
+/// Wraps a `Process` reference so it can cross concurrency boundaries safely.
+/// `Process` itself is not `Sendable`, but `terminate()` is documented as safe
+/// to call from any thread and is the only operation we perform here.
+private final class ProcessGuard: @unchecked Sendable {
+    private let process: Process
+    init(process: Process) { self.process = process }
+    func terminateIfRunning() {
+        if process.isRunning { process.terminate() }
+    }
+}
 
-        guard process.terminationStatus == 0 else { return "" }
-        return String(data: data, encoding: .utf8) ?? ""
+/// Guarantees a `CheckedContinuation` is resumed exactly once across the
+/// termination-handler path and the timeout / launch-failure paths.
+private final class ResumeOnce: Sendable {
+    private let resumed = Mutex(false)
+
+    func resume(_ continuation: CheckedContinuation<String?, Never>, with value: String?) {
+        let shouldResume = resumed.withLock { state in
+            guard !state else { return false }
+            state = true
+            return true
+        }
+        if shouldResume { continuation.resume(returning: value) }
     }
 }

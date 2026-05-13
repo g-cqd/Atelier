@@ -83,7 +83,7 @@ struct KittyGitTests {
     }
 
     @Test
-    func `Repository detection works from nested directories`() throws {
+    func `Repository detection works from nested directories`() async throws {
         let fileManager = FileManager.default
         let tempRoot = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let nestedDirectory = tempRoot.appendingPathComponent("Sources/Nested", isDirectory: true)
@@ -101,8 +101,8 @@ struct KittyGitTests {
         process.waitUntilExit()
 
         #expect(process.terminationStatus == 0)
-        #expect(GitStatusProvider.isGitRepository(nestedDirectory.path))
-        #expect(GitStatusProvider.repositoryRoot(for: nestedDirectory.path) == tempRoot.path)
+        await #expect(GitStatusProvider.isGitRepository(nestedDirectory.path))
+        await #expect(GitStatusProvider.repositoryRoot(for: nestedDirectory.path) == tempRoot.path)
     }
 
     @Test

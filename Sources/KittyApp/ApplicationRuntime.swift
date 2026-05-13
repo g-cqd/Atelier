@@ -6,7 +6,7 @@ import KittyWidgets
 
 /// Orchestrates the application lifecycle.
 @MainActor
-public final class ApplicationRuntime: Sendable {
+public final class ApplicationRuntime {
     private let connection: any TerminalConnection
 
     public init(connection: any TerminalConnection) {
@@ -90,7 +90,7 @@ public final class ApplicationRuntime: Sendable {
                 if let newSize = try? conn.getSize() {
                     inputSource.inject(.resize(newSize))
                 } else {
-                    KittyLogger.debug("Failed to query terminal size on SIGWINCH")
+                    KittyLogger.debug(public: "Failed to query terminal size on SIGWINCH")
                 }
             },
             onShutdown: { [inputSource] in

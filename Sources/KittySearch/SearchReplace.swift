@@ -11,7 +11,8 @@ public func buildReplacement(
         return replacement
 
     case .regex(let regex):
-        // Support capture group substitution ($1, $2, etc.)
+        // Support capture group substitution ($0..$N) with proper handling
+        // for multi-digit indices and a literal `$$` escape.
         let chars = Array(line)
         guard match.colStart >= 0, match.colEnd <= chars.count else { return replacement }
         let matchStr = String(chars[match.colStart..<match.colEnd])
@@ -20,20 +21,7 @@ public func buildReplacement(
             return replacement
         }
 
-        var result = replacement
-        // Replace $0 with full match
-        result = result.replacingOccurrences(of: "$0", with: String(regexMatch.0))
-
-        // Replace $1..$9 with capture groups
-        for i in 1...9 {
-            let placeholder = "$\(i)"
-            guard result.contains(placeholder) else { continue }
-            if let value = captureGroup(at: i, in: regexMatch) {
-                result = result.replacingOccurrences(of: placeholder, with: value)
-            }
-        }
-
-        return result
+        return expandReplacementTemplate(replacement, using: regexMatch)
     }
 }
 
@@ -69,4 +57,88 @@ private func captureGroup(at index: Int, in match: Regex<AnyRegexOutput>.Match) 
     guard index < output.count else { return nil }
     guard let substring = output[index].substring else { return nil }
     return String(substring)
+}
+
+/// Expands `$N` references and `$$` escapes in a replacement template.
+///
+/// - `$$` produces a literal `$`.
+/// - `$N` (where `N` is one or more digits) produces the value of capture group `N`,
+///   with `$0` being the full match. The longest valid prefix is preferred:
+///   given `$12` with 5 capture groups, the result is `<group 1>` followed by `"2"`.
+/// - A trailing `$` or `$` followed by a non-digit, non-`$` character is emitted literally.
+private func expandReplacementTemplate(
+    _ template: String, using match: Regex<AnyRegexOutput>.Match
+) -> String {
+    let groupCount = match.output.count
+    var result = ""
+    result.reserveCapacity(template.count)
+
+    var index = template.startIndex
+    while index < template.endIndex {
+        let char = template[index]
+        if char != "$" {
+            result.append(char)
+            index = template.index(after: index)
+            continue
+        }
+
+        let afterDollar = template.index(after: index)
+        guard afterDollar < template.endIndex else {
+            result.append("$")
+            index = afterDollar
+            continue
+        }
+
+        let next = template[afterDollar]
+        if next == "$" {
+            result.append("$")
+            index = template.index(after: afterDollar)
+            continue
+        }
+
+        guard next.isASCII, next.isNumber else {
+            result.append("$")
+            index = afterDollar
+            continue
+        }
+
+        // Consume consecutive digits, then back off to the longest index that
+        // matches an existing capture group.
+        var scan = afterDollar
+        var digits = ""
+        while scan < template.endIndex, let digit = template[scan].asciiValue,
+            digit >= 0x30, digit <= 0x39 {
+            digits.append(template[scan])
+            scan = template.index(after: scan)
+        }
+
+        var consumed = digits.count
+        var resolved: String? = nil
+        while consumed > 0 {
+            let candidate = String(digits.prefix(consumed))
+            if let groupIndex = Int(candidate), groupIndex < groupCount {
+                resolved = captureGroup(at: groupIndex, in: match) ?? ""
+                break
+            }
+            consumed -= 1
+        }
+
+        if let resolved {
+            result.append(resolved)
+            // Advance past the digits we consumed.
+            index = template.index(afterDollar, offsetBy: consumed)
+            // Append any leftover digits as literals.
+            if consumed < digits.count {
+                result.append(contentsOf: digits.suffix(digits.count - consumed))
+                index = scan
+            }
+        } else {
+            // No valid index even for "$0" — emit "$" and the digits literally.
+            result.append("$")
+            result.append(contentsOf: digits)
+            index = scan
+        }
+    }
+
+    return result
 }
