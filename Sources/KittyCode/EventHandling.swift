@@ -4,6 +4,10 @@ import KittyInput
 import KittyRenderer
 import KittyText
 
+/// Duration that command-feedback overlays stay on screen after the key
+/// sequence that produced them. Matches the previous wall-clock 1.5 s window.
+private let commandFeedbackDuration: Duration = .milliseconds(1500)
+
 @MainActor
 func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline) -> Bool {
     let layout = LayoutMetrics(state: state, columns: pipeline.columns, rows: pipeline.rows)
@@ -31,11 +35,11 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
 
             // Multi-key sequence handling (press only, not repeat)
             if !isRepeat {
-                let sequenceTimeout =
-                    Double(state.config.keybindings.sequenceTimeoutMilliseconds) / 1000.0
+                let sequenceTimeout = Duration.milliseconds(
+                    state.config.keybindings.sequenceTimeoutMilliseconds)
                 if !state.pendingKeySequence.isEmpty,
                     let pendingTime = state.pendingKeySequenceTime,
-                    Date().timeIntervalSince(pendingTime) > sequenceTimeout
+                    pendingTime.duration(to: .now) > sequenceTimeout
                 {
                     state.pendingKeySequence = []
                     state.pendingKeySequenceTime = nil
@@ -49,15 +53,15 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
                     let seqLabel = candidate.map { KeyStrokeFormatter.label(for: $0) }.joined(
                         separator: " ")
                     state.commandFeedback = "\(seqLabel) → \(command.rawValue)"
-                    state.commandFeedbackExpiry = Date().addingTimeInterval(1.5)
+                    state.commandFeedbackExpiry = .now.advanced(by: commandFeedbackDuration)
                     return dispatchEditorAwareCommand(command, key: key, state: state, pipeline: pipeline)
                 case .partial:
                     state.pendingKeySequence = candidate
-                    state.pendingKeySequenceTime = Date()
+                    state.pendingKeySequenceTime = .now
                     let seqLabel = candidate.map { KeyStrokeFormatter.label(for: $0) }.joined(
                         separator: " ")
                     state.commandFeedback = "\(seqLabel)..."
-                    state.commandFeedbackExpiry = Date().addingTimeInterval(1.5)
+                    state.commandFeedbackExpiry = .now.advanced(by: commandFeedbackDuration)
                     return true
                 case .none:
                     if !state.pendingKeySequence.isEmpty {
@@ -72,9 +76,10 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
                 if isRepeat, command.isEditorNavigation || command.isTreeNavigation {
                     let interval = state.config.editor.keyRepeatIntervalMilliseconds
                     if interval > 0 {
-                        let now = Date()
+                        let now = ContinuousClock.now
+                        let threshold = Duration.milliseconds(interval)
                         if let last = state.lastKeyRepeatProcessedAt,
-                            now.timeIntervalSince(last) < Double(interval) / 1000.0
+                            last.duration(to: now) < threshold
                         {
                             return true  // Skip this repeat, too soon
                         }
@@ -87,7 +92,7 @@ func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderPipeline
                 // Set command feedback
                 let feedbackLabel = KeyStrokeFormatter.label(for: stroke)
                 state.commandFeedback = "\(feedbackLabel) → \(command.rawValue)"
-                state.commandFeedbackExpiry = Date().addingTimeInterval(1.5)
+                state.commandFeedbackExpiry = .now.advanced(by: commandFeedbackDuration)
                 return dispatchEditorAwareCommand(
                     command, key: key, state: state, pipeline: pipeline)
             }

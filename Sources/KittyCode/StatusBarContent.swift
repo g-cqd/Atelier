@@ -55,11 +55,10 @@ extension EditorState {
 
         // Command feedback takes priority when not expired
         if let feedback = commandFeedback, let expiry = commandFeedbackExpiry {
-            if Date() < expiry {
+            if ContinuousClock.now < expiry {
                 return feedback
-            } else {
-                // Will be cleared on next render cycle
             }
+            // Otherwise will be cleared on next render cycle.
         }
 
         if let search = inFileSearch, search.pattern != nil {
