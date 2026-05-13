@@ -16,6 +16,8 @@ extension EditorState: FileWatcherDelegate {
         isLoadingGrammar = false
         gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
         schedulePostLoadProcessing(for: buffer, content: content)
+        // External reload: buffer contents, gutter, and highlights all change.
+        markEverythingDirty()
         renderRefreshSource?.invalidate()
         if buffer.didInvalidateHistoryOnLastRefresh {
             statusMessage = "\(buffer.fileName) reloaded from disk; undo history cleared"

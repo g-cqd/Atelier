@@ -498,6 +498,7 @@ extension EditorState {
                 self.cachedMaxLineWidth = maxLineWidth
                 if let highlightedLines {
                     self.highlightedLines = highlightedLines
+                    self.markContentAllDirty()
                 }
                 self.isLoadingGrammar = false
                 self.renderRefreshSource?.invalidate()
