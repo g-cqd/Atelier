@@ -1,4 +1,5 @@
 import Foundation
+import System
 
 /// Controls which files are shown in the file tree.
 public enum FileVisibility: Sendable {
@@ -60,7 +61,7 @@ public enum GitIgnoreChecker {
             for line in output.split(separator: "\n") where !line.isEmpty {
                 var relative = String(line)
                 if relative.hasSuffix("/") { relative.removeLast() }
-                let fullPath = (rootPath as NSString).appendingPathComponent(relative)
+                let fullPath = FilePath(rootPath).appending(relative).string
                 paths.insert(fullPath)
             }
             return paths
