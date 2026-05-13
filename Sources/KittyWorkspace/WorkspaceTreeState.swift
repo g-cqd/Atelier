@@ -1,5 +1,6 @@
 import Foundation
 import KittyFileTree
+import System
 
 @MainActor
 public final class WorkspaceTreeState {
@@ -22,7 +23,7 @@ public final class WorkspaceTreeState {
         if isDirectory {
             directoryPath = path
         } else {
-            directoryPath = URL(fileURLWithPath: path).deletingLastPathComponent().path
+            directoryPath = FilePath(path).removingLastComponent().string
         }
         lastSelectedDirectoryPath = directoryPath
     }
