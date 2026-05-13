@@ -1,5 +1,6 @@
 import Darwin
 import KittySync
+import System
 
 // SAFETY: `fd` and `writeFd` are immutable (let). `originalTermios` is guarded
 // by `termiosLock`. POSIX read/write on file descriptors are thread-safe at the
@@ -32,16 +33,21 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
 
     /// Reads bytes from the file descriptor into `buffer`.
     ///
+    /// Uses `System.FileDescriptor.read` which handles `EINTR` retries
+    /// internally — the old manual loop is no longer needed.
+    ///
     /// - Parameter buffer: The destination buffer to fill with incoming bytes.
     /// - Returns: The number of bytes read.
-    /// - Throws: `TerminalError.readFailed` on a negative return from `read(2)`,
+    /// - Throws: `TerminalError.readFailed` on a syscall error,
     ///   or `TerminalError.connectionClosed` when the descriptor is at EOF.
     public func read(into buffer: UnsafeMutableRawBufferPointer) throws(TerminalError) -> Int {
-        let n = retryOnInterrupt {
-            Darwin.read(fd, buffer.baseAddress, buffer.count)
-        }
-        guard n >= 0 else {
-            throw .readFailed(errno)
+        let n: Int
+        do {
+            n = try FileDescriptor(rawValue: fd).read(into: buffer)
+        } catch let error as Errno {
+            throw .readFailed(error.rawValue)
+        } catch {
+            throw .readFailed(0)
         }
         guard n > 0 else {
             throw .connectionClosed
@@ -51,42 +57,35 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
 
     /// Writes all bytes to the write file descriptor, retrying on short writes.
     ///
+    /// `System.FileDescriptor.writeAll` retries on `EINTR` and handles short
+    /// writes by looping internally.
+    ///
     /// - Parameter bytes: The bytes to transmit.
-    /// - Throws: `TerminalError.writeFailed` if `write(2)` returns a negative value.
+    /// - Throws: `TerminalError.writeFailed` if the syscall returns an error.
     public func write(_ bytes: [UInt8]) throws(TerminalError) {
-        var offset = 0
-        while offset < bytes.count {
-            let n = retryOnInterrupt {
-                bytes.withUnsafeBufferPointer { buf in
-                    // swiftlint:disable:next force_unwrapping
-                    Darwin.write(self.writeFd, buf.baseAddress! + offset, buf.count - offset)
-                }
-            }
-            guard n >= 0 else {
-                throw .writeFailed(errno)
-            }
-            offset += n
+        do {
+            _ = try FileDescriptor(rawValue: writeFd).writeAll(bytes)
+        } catch let error as Errno {
+            throw .writeFailed(error.rawValue)
+        } catch {
+            throw .writeFailed(0)
         }
     }
 
-    /// Zero-copy write from ContiguousArray using direct pointer access.
+    /// Zero-copy write from `ContiguousArray` using direct pointer access.
     ///
     /// - Parameter bytes: The contiguous byte buffer to transmit.
-    /// - Throws: `TerminalError.writeFailed` if `write(2)` returns a negative value.
+    /// - Throws: `TerminalError.writeFailed` if the syscall returns an error.
     public func writeContiguous(_ bytes: ContiguousArray<UInt8>) throws(TerminalError) {
-        var offset = 0
-        let count = bytes.count
-        while offset < count {
-            let n = retryOnInterrupt {
-                bytes.withUnsafeBufferPointer { buf in
-                    // swiftlint:disable:next force_unwrapping
-                    Darwin.write(self.writeFd, buf.baseAddress! + offset, count - offset)
-                }
+        do {
+            try bytes.withUnsafeBufferPointer { buf in
+                let raw = UnsafeRawBufferPointer(buf)
+                _ = try FileDescriptor(rawValue: writeFd).writeAll(raw)
             }
-            guard n >= 0 else {
-                throw .writeFailed(errno)
-            }
-            offset += n
+        } catch let error as Errno {
+            throw .writeFailed(error.rawValue)
+        } catch {
+            throw .writeFailed(0)
         }
     }
 
