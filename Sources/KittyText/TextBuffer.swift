@@ -73,6 +73,13 @@ public struct TextBuffer: Sendable {
     public var text: String {
         rope.text
     }
+
+    /// Stable hash of the buffer content. Cached on the rope storage —
+    /// O(1) for repeated reads of the same content, O(n) on first read after
+    /// a mutation.
+    public var contentHash: Int {
+        rope.contentHash
+    }
 }
 
 // MARK: - DocumentSource

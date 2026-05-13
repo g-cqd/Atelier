@@ -22,10 +22,10 @@ public struct BufferEditSnapshot: Sendable {
     public var contentFingerprint: Int {
         var hasher = Hasher()
         hasher.combine(lineEnding.rawValue)
-        hasher.combine(textBuffer.lineCount)
-        for line in textBuffer.lines {
-            hasher.combine(line)
-        }
+        // `textBuffer.contentHash` is memoized on the rope storage; it stays
+        // O(1) across repeated reads of the same buffer state and only pays
+        // the full-content cost once per mutation.
+        hasher.combine(textBuffer.contentHash)
         return hasher.finalize()
     }
 }
