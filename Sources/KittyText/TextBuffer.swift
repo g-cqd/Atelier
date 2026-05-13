@@ -1,195 +1,113 @@
 import Foundation
 
-/// A text buffer backed by a gap buffer of lines for O(1) amortized insert/delete at the cursor.
+/// Line-indexed text buffer used by the editor.
 ///
-/// The gap buffer maintains a contiguous storage with a gap (unused region)
-/// that moves to the edit point. This makes sequential inserts and deletes
-/// near the cursor O(1) amortized, compared to O(n) for a plain array.
+/// Internally backed by a UTF-8 byte ``Rope`` so insertions and deletions —
+/// whether single-character or multi-line bulk replacements — cost O(log n)
+/// regardless of where they occur in the document. Line metadata is cached in
+/// the rope's tree, so line lookups are also O(log n).
+///
+/// The public API stays line-oriented for backward compatibility with the
+/// many call sites that index by `(row, col)`.
 public struct TextBuffer: Sendable {
-    /// Internal gap buffer storage for lines.
-    private var storage: ContiguousArray<String>
-    /// Start index of the gap in storage.
-    private var gapStart: Int
-    /// Length of the gap (number of unused slots).
-    private var gapLength: Int
+    private var rope: Rope
 
-    /// The number of logical lines in the buffer.
-    public var lineCount: Int {
-        storage.count - gapLength
-    }
+    public var lineCount: Int { rope.lineCount }
 
-    /// Array-based access to lines (materializes the logical view).
-    /// This property is provided for backward compatibility.
+    /// Materializes every line as a `[String]`. O(n) — prefer the indexed
+    /// accessors when you only need a subset.
     public var lines: [String] {
         get {
-            var result = [String]()
-            result.reserveCapacity(lineCount)
-            for storageIndex in 0..<gapStart {
-                result.append(storage[storageIndex])
-            }
-            for storageIndex in (gapStart + gapLength)..<storage.count {
-                result.append(storage[storageIndex])
+            var result: [String] = []
+            result.reserveCapacity(rope.lineCount)
+            for index in 0..<rope.lineCount {
+                result.append(rope.line(at: index))
             }
             return result
         }
         set {
-            let vals = newValue.isEmpty ? [""] : newValue
-            storage = ContiguousArray(vals)
-            // Place gap at the end with no gap space
-            gapStart = vals.count
-            gapLength = 0
+            let normalized = newValue.isEmpty ? [""] : newValue
+            rope = Rope(normalized.joined(separator: "\n"))
         }
     }
 
-    public var isEmpty: Bool { lineCount == 1 && line(at: 0).isEmpty }
+    public var isEmpty: Bool {
+        rope.lineCount == 1 && rope.line(at: 0).isEmpty
+    }
 
     public static func splitLines(from content: String) -> [String] {
         if content.isEmpty {
             return [""]
         }
-
         return content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
     }
 
     public init(_ content: String = "") {
-        let split = Self.splitLines(from: content)
-        storage = ContiguousArray(split)
-        gapStart = split.count
-        gapLength = 0
+        rope = Rope(content)
     }
 
     public init(lines: [String]) {
-        let vals = lines.isEmpty ? [""] : lines
-        storage = ContiguousArray(vals)
-        gapStart = vals.count
-        gapLength = 0
+        let normalized = lines.isEmpty ? [""] : lines
+        rope = Rope(normalized.joined(separator: "\n"))
     }
 
     /// Returns the line at the given logical index, or an empty string if out of bounds.
     public func line(at index: Int) -> String {
-        guard index >= 0 && index < lineCount else { return "" }
-        return storage[physicalIndex(index)]
+        rope.line(at: index)
     }
 
-    /// Sets the line at the given logical index.
+    /// Replaces the line at `index` with `value`.
     public mutating func setLine(at index: Int, to value: String) {
-        guard index >= 0 && index < lineCount else { return }
-        storage[physicalIndex(index)] = value
+        guard index >= 0, index < lineCount else { return }
+        let range = rope.lineRange(forLine: index)
+        rope.replace(range, with: value)
     }
 
-    /// Inserts a line at the given logical index.
+    /// Inserts `line` as a new line at logical position `index`.
+    ///
+    /// `index == lineCount` appends. Insertion is O(log n).
     public mutating func insertLine(_ line: String, at index: Int) {
         let count = lineCount
-        guard index >= 0 && index <= count else { return }
-        moveGap(to: index)
-        if gapLength == 0 {
-            growGap()
+        guard index >= 0, index <= count else { return }
+        if index == count {
+            // Append a new last line: add "\n<line>" at the end.
+            rope.insert("\n" + line, atByteOffset: rope.byteCount)
+        } else {
+            // Insert "<line>\n" at the start of line `index`.
+            let offset = rope.byteOffset(forLine: index)
+            rope.insert(line + "\n", atByteOffset: offset)
         }
-        storage[gapStart] = line
-        gapStart += 1
-        gapLength -= 1
     }
 
-    /// Removes the line at the given logical index.
+    /// Removes the line at `index`, returning its previous content.
     @discardableResult
     public mutating func removeLine(at index: Int) -> String {
-        guard index >= 0 && index < lineCount else { return "" }
-        moveGap(to: index)
-        // The line to remove is now at storage[gapStart + gapLength] (right after gap)
-        // Actually, after moveGap(to: index), the gap starts at index.
-        // The element at logical index is now at storage[gapStart + gapLength]
-        // Wait -- let me reconsider. When gap is at index, logical[index] maps to
-        // storage[gapStart + gapLength].
-        let phys = gapStart + gapLength
-        let removed = storage[phys]
-        storage[phys] = ""  // Clear reference
-        gapLength += 1
+        guard index >= 0, index < lineCount else { return "" }
+        let removed = rope.line(at: index)
+        let count = lineCount
+
+        if count == 1 {
+            // Removing the only line: clear content but keep the empty-line invariant.
+            rope = Rope("")
+            return removed
+        }
+
+        if index == count - 1 {
+            // Last line: drop the preceding newline + this line's bytes.
+            let lineStart = rope.byteOffset(forLine: index)
+            rope.remove((lineStart - 1)..<rope.byteCount)
+        } else {
+            // Drop this line + its terminating newline.
+            let lineStart = rope.byteOffset(forLine: index)
+            let nextStart = rope.byteOffset(forLine: index + 1)
+            rope.remove(lineStart..<nextStart)
+        }
         return removed
     }
 
     /// Reconstructs the full text by joining lines with newlines.
     public var text: String {
-        let count = lineCount
-        guard count > 0 else { return "" }
-        var totalBytes = count - 1  // newlines between lines
-        for logicalIndex in 0..<count {
-            totalBytes += storage[physicalIndex(logicalIndex)].utf8.count
-        }
-        var result = ""
-        result.reserveCapacity(totalBytes)
-        for logicalIndex in 0..<count {
-            if logicalIndex > 0 { result += "\n" }
-            result += storage[physicalIndex(logicalIndex)]
-        }
-        return result
-    }
-
-    // MARK: - Private
-
-    /// Converts a logical line index to a physical storage index.
-    @inline(__always)
-    private func physicalIndex(_ logical: Int) -> Int {
-        if logical < gapStart {
-            return logical
-        }
-        return logical + gapLength
-    }
-
-    /// Moves the gap so it starts at the given logical index.
-    private mutating func moveGap(to index: Int) {
-        if index == gapStart { return }
-
-        if gapLength == 0 {
-            // No gap to move — just reposition the logical gap start.
-            gapStart = index
-            return
-        }
-
-        if index < gapStart {
-            // Move elements from before gap to after gap
-            let moveCount = gapStart - index
-            let src = index
-            let dst = index + gapLength
-            // Move in reverse to avoid overwriting
-            for offset in stride(from: moveCount - 1, through: 0, by: -1) {
-                storage[dst + offset] = storage[src + offset]
-                storage[src + offset] = ""
-            }
-        } else {
-            // Move elements from after gap to before gap
-            let moveCount = index - gapStart
-            let src = gapStart + gapLength
-            let dst = gapStart
-            for offset in 0..<moveCount {
-                storage[dst + offset] = storage[src + offset]
-                storage[src + offset] = ""
-            }
-        }
-        gapStart = index
-    }
-
-    /// Grows the gap when exhausted. Uses half-of-lineCount growth to bound memory overhead.
-    private mutating func growGap() {
-        let newGapSize = max(16, min(lineCount / 2 + 1, 4096))
-        // Insert newGapSize empty slots at gapStart + gapLength
-        var newStorage = ContiguousArray<String>()
-        newStorage.reserveCapacity(storage.count + newGapSize)
-
-        // Copy before gap
-        for storageIndex in 0..<gapStart {
-            newStorage.append(storage[storageIndex])
-        }
-        // Add new gap
-        for _ in 0..<(gapLength + newGapSize) {
-            newStorage.append("")
-        }
-        // Copy after gap
-        for storageIndex in (gapStart + gapLength)..<storage.count {
-            newStorage.append(storage[storageIndex])
-        }
-
-        storage = newStorage
-        gapLength += newGapSize
+        rope.text
     }
 }
 
