@@ -8,7 +8,7 @@ import KittyWidgets
 @MainActor
 func renderFrame(pipeline: RenderPipeline, state: EditorState) {
     // Clear expired command feedback
-    if let expiry = state.commandFeedbackExpiry, Date() >= expiry {
+    if let expiry = state.commandFeedbackExpiry, ContinuousClock.now >= expiry {
         state.commandFeedback = nil
         state.commandFeedbackExpiry = nil
     }
