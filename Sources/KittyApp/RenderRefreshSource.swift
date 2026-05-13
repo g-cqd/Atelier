@@ -1,7 +1,7 @@
 import KittyInput
 import KittySync
 
-public final class RenderRefreshSource: @unchecked Sendable {
+public final class RenderRefreshSource: Sendable {
     private let lock = StateLock<(@Sendable () -> Void)?>(initialState: nil)
 
     public init() {}

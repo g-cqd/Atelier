@@ -54,4 +54,24 @@ struct StatePropertyWrapperTests {
         source = 7
         #expect(binding.wrappedValue == 7)
     }
+
+    @Test func `wrappedValue persists writes through nonmutating set`() {
+        let state = State(wrappedValue: 0)
+        state.wrappedValue = 42
+        #expect(state.wrappedValue == 42)
+    }
+
+    @Test func `projectedValue Binding writes are visible to State`() {
+        let state = State(wrappedValue: "old")
+        let binding = state.projectedValue
+        binding.wrappedValue = "new"
+        #expect(state.wrappedValue == "new")
+    }
+
+    @Test func `State storage is shared across copies`() {
+        let original = State(wrappedValue: 1)
+        let copy = original
+        copy.wrappedValue = 99
+        #expect(original.wrappedValue == 99)
+    }
 }

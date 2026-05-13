@@ -45,15 +45,42 @@ public final class SignalHandler: Sendable {
 
     private static func signalStream(_ sig: Int32) -> AsyncStream<Void> {
         AsyncStream { continuation in
-            signal(sig, SIG_IGN)
+            // Save the previous disposition so we can restore it on stream termination.
+            let previous = PreviousDisposition(signal: sig)
+            previous.install(handler: SIG_IGN)
+
             let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
             source.setEventHandler {
                 continuation.yield()
             }
             continuation.onTermination = { _ in
                 source.cancel()
+                previous.restore()
             }
             source.resume()
+        }
+    }
+
+    /// Captures and restores a POSIX signal disposition. Reference-typed so the
+    /// `onTermination` `@Sendable` closure can capture it by reference.
+    private final class PreviousDisposition: @unchecked Sendable {
+        private let signal: Int32
+        private var saved: sigaction = sigaction()
+
+        init(signal: Int32) {
+            self.signal = signal
+        }
+
+        func install(handler: @escaping @convention(c) (Int32) -> Void) {
+            var new = sigaction()
+            new.__sigaction_u.__sa_handler = handler
+            sigemptyset(&new.sa_mask)
+            new.sa_flags = 0
+            _ = sigaction(signal, &new, &saved)
+        }
+
+        func restore() {
+            _ = sigaction(signal, &saved, nil)
         }
     }
 }

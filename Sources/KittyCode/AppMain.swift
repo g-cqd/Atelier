@@ -45,7 +45,7 @@ struct KittyCodeEntry {
         state.renderRefreshSource = refreshSource
 
         if config.git.enabled,
-            let repositoryRoot = GitStatusProvider.repositoryRoot(for: launchConfig.rootPath)
+            let repositoryRoot = await GitStatusProvider.repositoryRoot(for: launchConfig.rootPath)
         {
             let gitProvider = GitStatusProvider(rootPath: repositoryRoot)
             state.fileStatusProvider = gitProvider
