@@ -2,6 +2,7 @@ import Foundation
 import KittyFileTree
 import KittySync
 import Synchronization
+import System
 
 public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvider,
     @unchecked Sendable
@@ -210,7 +211,7 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
     private func propagateToParents(
         _ path: String, status: FileStatus, root: String, into statuses: inout [String: FileStatus]
     ) {
-        var current = (path as NSString).deletingLastPathComponent
+        var current = FilePath(path).removingLastComponent().string
         while current.hasPrefix(root) || current + "/" == root {
             if current.count < root.count { break }
             if let existing = statuses[current] {
@@ -220,7 +221,7 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
             } else {
                 statuses[current] = status
             }
-            let parent = (current as NSString).deletingLastPathComponent
+            let parent = FilePath(current).removingLastComponent().string
             if parent == current { break }
             current = parent
         }
