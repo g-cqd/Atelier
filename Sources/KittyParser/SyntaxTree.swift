@@ -9,9 +9,16 @@
 /// [SyntaxNode]` recursed into the array's element destructors, blowing
 /// the 544 KB thread stack at ~2000 levels of nesting and surfacing as
 /// SIGBUS with `KERN_PROTECTION_FAILURE` at the stack guard.
+///
+/// `root` and `source` are `let` (and the class is therefore safely
+/// `Sendable` despite the `@unchecked` tag — they're set once at init,
+/// the iterative `deinit` doesn't mutate the tree at all, and no
+/// reference escapes after dealloc begins). The `@unchecked` only buys
+/// the freedom to hold `SyntaxNode` values (a struct whose `children`
+/// and `fields` are `var` arrays for parser-internal building).
 public final class SyntaxTree: @unchecked Sendable {
-    public var root: SyntaxNode
-    public var source: String
+    public let root: SyntaxNode
+    public let source: String
 
     public init(root: SyntaxNode, source: String) {
         self.root = root
@@ -21,11 +28,10 @@ public final class SyntaxTree: @unchecked Sendable {
     deinit {
         // Iteratively dispose the tree to avoid recursive struct
         // destructors blowing the stack on deeply-nested ASTs. We
-        // hand-walk a stack, clearing each node's `children` and
-        // `fields` before letting it fall out of scope — the node's
-        // own destructor then only has to release empty arrays.
+        // hand-walk a stack, popping nodes and pushing their children
+        // before they fall out of scope — the popped node's own
+        // destructor then never recurses, only releases scalars.
         var stack: [SyntaxNode] = [root]
-        root = SyntaxNode(type: "")
         while !stack.isEmpty {
             var node = stack.removeLast()
             stack.append(contentsOf: node.children)
