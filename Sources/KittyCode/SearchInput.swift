@@ -622,16 +622,14 @@ func triggerWorkspaceSearch(state: EditorState) {
 
 @MainActor
 func triggerWorkspaceSearchDebounced(state: EditorState) {
-    // Cancel and re-trigger with debounce
-    state.workspaceSearchTask?.cancel()
+    // Provide immediate UI feedback so the user sees the search panel
+    // acknowledged the keystroke even before the debounce window elapses.
     state.isSearchingWorkspace = true
     state.workspaceSearchSummary = "Searching..."
-
-    state.workspaceSearchTask = Task { @MainActor in
-        try? await Task.sleep(for: .milliseconds(state.config.search.debounceMilliseconds))
-        guard !Task.isCancelled else { return }
-        triggerWorkspaceSearch(state: state)
-    }
+    // The long-lived consumer on `EditorState` handles the debounce
+    // window via `Task.sleep` inside its loop; `bufferingNewest(1)`
+    // collapses bursts into a single subsequent search.
+    state.workspaceSearchDebounceContinuation.yield(())
 }
 
 // MARK: - Replace operations
