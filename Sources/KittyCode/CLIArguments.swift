@@ -61,7 +61,12 @@ struct CLIArguments: Sendable {
 
     // MARK: - Help / version text
 
-    static let versionString = "KittyCode 0.1.0"
+    /// Composed at compile time from `BuildVersion.release` (see
+    /// `Sources/KittyCode/Version.swift`). The release workflow
+    /// (`.github/workflows/release.yml`) overwrites that file before
+    /// `swift build -c release`, so tagged releases report their
+    /// semantic version while local builds report `0.0.0-dev`. Audit D9.
+    static let versionString = "KittyCode \(BuildVersion.release)"
 
     /// ArgumentParser-generated help text. Includes all options/flags/argument
     /// the command declares; documentation tests scan this for `--help`,
