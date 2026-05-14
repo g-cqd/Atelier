@@ -1,4 +1,5 @@
 import KittyApp
+import KittyCodecs
 import Observation
 import Synchronization
 import Testing
@@ -23,37 +24,47 @@ struct ObservationIntegrationTests {
         return state
     }
 
+    // The dirty markers (`dirtyContentAll` / `dirtyChrome`) and other
+    // pure-internal state are `@ObservationIgnored` on EditorState — the
+    // public observation surface is `RenderClock.tick`, advanced by
+    // `mark*Dirty`. The two tests below confirm the macro DOES fire for
+    // properties that are NOT ignored (`mode`, `colorScheme`), which is
+    // the contract a future observer would rely on if it tracked editor
+    // state directly.
+
     @Test
-    func `withObservationTracking fires when EditorState.dirtyContentAll flips`() async {
+    func `withObservationTracking fires when EditorState.mode changes`() async {
         let state = makeState()
         let fired = Mutex<Bool>(false)
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             withObservationTracking {
-                _ = state.dirtyContentAll
+                _ = state.mode
             } onChange: {
                 fired.withLock { $0 = true }
                 cont.resume()
             }
             Task { @MainActor in
-                state.markContentAllDirty()
+                state.mode = .editor
             }
         }
         #expect(fired.withLock { $0 })
     }
 
     @Test
-    func `withObservationTracking fires when EditorState.dirtyChrome flips`() async {
+    func `withObservationTracking fires when EditorState.colorScheme changes`() async {
         let state = makeState()
         let fired = Mutex<Bool>(false)
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             withObservationTracking {
-                _ = state.dirtyChrome
+                _ = state.colorScheme
             } onChange: {
                 fired.withLock { $0 = true }
                 cont.resume()
             }
             Task { @MainActor in
-                state.markChromeDirty()
+                var swapped = state.colorScheme
+                swapped.editorText = Style()
+                state.colorScheme = swapped
             }
         }
         #expect(fired.withLock { $0 })
