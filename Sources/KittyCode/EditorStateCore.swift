@@ -42,6 +42,82 @@ final class EditorState {
             self.contentWidth == contentWidth && self.tabSize == tabSize
                 && self.documentVersion == documentVersion && lineWrapCounts.count == lineCount
         }
+
+        /// Pure helper: how many wrapped rows does `line` produce at the given
+        /// `contentWidth` and `tabSize`? Used both by the full rebuild path in
+        /// `buildWrapCache` and the incremental patch path in `invalidateLines`.
+        static func wrapCount(of line: String, contentWidth: Int, tabSize: Int) -> Int {
+            var rowCount = 1
+            var currentRowWidth = 0
+            for char in line {
+                let width: Int =
+                    char == "\t"
+                    ? tabSize - (currentRowWidth % tabSize)
+                    : UnicodeWidth.displayWidth(of: char)
+                guard width > 0 else { continue }
+                if currentRowWidth > 0, currentRowWidth + width > contentWidth {
+                    rowCount += 1
+                    currentRowWidth = 0
+                }
+                currentRowWidth += width
+            }
+            return rowCount
+        }
+
+        /// Incrementally re-wraps only the lines affected by `mutation` instead
+        /// of clearing the entire cache and forcing a full rebuild on the next
+        /// frame. Falls back to `invalidate()` when an invariant (contentWidth /
+        /// tabSize / array length) doesn't match — those cases need a full
+        /// rebuild anyway. Called from `textDidChange(_ mutation:)`; the wholesale
+        /// `invalidate()` is kept for the no-mutation `textDidChange()` overload
+        /// where the mutation footprint is unknown.
+        mutating func invalidateLines(
+            mutation: TextMutation,
+            newDocumentVersion: Int,
+            tabSize: Int,
+            computeWrapCount: (Int) -> Int
+        ) {
+            guard contentWidth > 0, self.tabSize == tabSize else {
+                invalidate()
+                return
+            }
+            let original = mutation.originalLineRange
+            let updated = mutation.updatedLineRange
+            guard original.upperBound <= lineWrapCounts.count else {
+                invalidate()
+                return
+            }
+
+            // Delta on the row total is `newSum - oldSum` over the spliced range.
+            var oldSum = 0
+            for index in original { oldSum += lineWrapCounts[index] }
+            let newWraps = updated.map(computeWrapCount)
+            let newSum = newWraps.reduce(0, +)
+
+            lineWrapCounts.replaceSubrange(original, with: newWraps)
+            totalRowCount += newSum - oldSum
+
+            // Visual offsets are a prefix sum of `lineWrapCounts`. Lines below
+            // `original.lowerBound` are unchanged; the rest are recomputed.
+            let startLine = original.lowerBound
+            if visualOffsets.count < startLine {
+                invalidate()
+                return
+            }
+            if visualOffsets.count > startLine {
+                visualOffsets.removeLast(visualOffsets.count - startLine)
+            }
+            if startLine == 0 {
+                visualOffsets.append(0)
+            }
+            let newLineCount = lineWrapCounts.count
+            while visualOffsets.count < newLineCount {
+                let prev = visualOffsets.count - 1
+                visualOffsets.append(visualOffsets[prev] + lineWrapCounts[prev])
+            }
+
+            documentVersion = newDocumentVersion
+        }
     }
 
     struct ColorScheme {
@@ -707,7 +783,22 @@ final class EditorState {
         widenCachedMaxLineWidth(for: mutation.updatedLineRange)
         refreshHighlights(after: mutation)
         gitDecorationManager?.scheduleRefreshForActiveBuffer()
-        wrapCache.invalidate()
+        // Patch only the affected lines in the wrap cache. Falls back to a
+        // full invalidation when the cache invariants don't match (e.g. the
+        // first edit before a viewport has computed `contentWidth`).
+        let tabSize = config.editor.tabSize
+        let contentWidth = wrapCache.contentWidth
+        let nextDocVersion = bufferManager.activeBuffer?.documentVersion ?? 0
+        wrapCache.invalidateLines(
+            mutation: mutation,
+            newDocumentVersion: nextDocVersion,
+            tabSize: tabSize
+        ) { lineIndex in
+            WrapCache.wrapCount(
+                of: fileLine(at: lineIndex),
+                contentWidth: contentWidth,
+                tabSize: tabSize)
+        }
         // If the mutation kept the line count stable, only the affected lines
         // need a repaint. Anything that shifts line count downstream requires
         // a full content repaint because line→screen-row mapping changes.
@@ -826,21 +917,8 @@ final class EditorState {
         wrapCache.tabSize = tabSize
         wrapCache.documentVersion = docVersion
         wrapCache.lineWrapCounts = (0..<lineCount).map { lineIndex in
-            let line = fileLine(at: lineIndex)
-            var rowCount = 1
-            var currentRowWidth = 0
-            for char in line {
-                let width =
-                    char == "\t"
-                    ? tabSize - (currentRowWidth % tabSize) : UnicodeWidth.displayWidth(of: char)
-                guard width > 0 else { continue }
-                if currentRowWidth > 0, currentRowWidth + width > contentWidth {
-                    rowCount += 1
-                    currentRowWidth = 0
-                }
-                currentRowWidth += width
-            }
-            return rowCount
+            WrapCache.wrapCount(
+                of: fileLine(at: lineIndex), contentWidth: contentWidth, tabSize: tabSize)
         }
         wrapCache.totalRowCount = wrapCache.lineWrapCounts.reduce(0, +)
 
