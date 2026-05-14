@@ -1,6 +1,6 @@
-import KittyText
 import Testing
 
+@testable import KittyText
 @testable import KittyWorkspace
 
 @Suite struct BufferEditHistoryTests {
@@ -266,5 +266,61 @@ import Testing
             maxUndoSteps: 5
         )
         #expect(buffer.editHistory.maxUndoSteps == 5)
+    }
+
+    /// Audit A2c — snapshots that enter the undo stack must not retain the
+    /// rope's materialised `text` / `lines` caches. A warm snapshot pinning
+    /// multi-megabyte cached strings × 200 transitions × N buffers was the
+    /// proximate cause of the ~1 GB long-session drift before the cache-drop
+    /// at record time landed.
+    @Test func `recordChange drops snapshot text and lines caches`() {
+        let initial = makeSnapshot("alpha\nbeta\ngamma")
+        let after = makeSnapshot("alpha\nbeta\ngamma\ndelta")
+
+        // Warm both snapshots' caches BEFORE recordChange so we can verify
+        // the cache-drop took effect.
+        _ = initial.textBuffer.text
+        _ = initial.textBuffer.lines
+        _ = after.textBuffer.text
+        _ = after.textBuffer.lines
+        #expect(!initial.textBuffer._testSnapshotCachesAreEmpty)
+        #expect(!after.textBuffer._testSnapshotCachesAreEmpty)
+
+        let history = BufferEditHistory(initial: initial)
+        history.recordChange(from: initial, to: after, coalescingWindow: nil)
+
+        guard let top = history._testTopOfUndoStack else {
+            Issue.record("Expected a transition on top of the undo stack")
+            return
+        }
+        // The retained copies inside the undo stack carry empty caches.
+        #expect(top.before.textBuffer._testSnapshotCachesAreEmpty)
+        #expect(top.after.textBuffer._testSnapshotCachesAreEmpty)
+        // Content still intact and recomputable on demand.
+        #expect(top.before.textBuffer.text == "alpha\nbeta\ngamma")
+        #expect(top.after.textBuffer.text == "alpha\nbeta\ngamma\ndelta")
+    }
+
+    /// The coalescing path overwrites the trailing transition's `after`
+    /// snapshot. That new `after` must also have its caches dropped.
+    @Test func `recordChange drops caches on the coalesced after snapshot`() {
+        let initial = makeSnapshot("alpha")
+        let mid = makeSnapshot("alphabeta")
+        let final = makeSnapshot("alphabetagamma")
+
+        let history = BufferEditHistory(initial: initial)
+        history.recordChange(from: initial, to: mid, coalescingWindow: nil)
+
+        // Warm the final snapshot's caches, then coalesce.
+        _ = final.textBuffer.text
+        _ = final.textBuffer.lines
+        history.recordChange(from: mid, to: final, coalescingWindow: 10)
+
+        guard let top = history._testTopOfUndoStack else {
+            Issue.record("Expected a transition")
+            return
+        }
+        #expect(top.after.textBuffer._testSnapshotCachesAreEmpty)
+        #expect(top.after.textBuffer.text == "alphabetagamma")
     }
 }
