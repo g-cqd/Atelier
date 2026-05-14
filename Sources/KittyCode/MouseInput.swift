@@ -598,15 +598,21 @@ private func enqueueAcceleratedScroll(
     guard state.scrollAccelerationTask == nil else { return }
 
     // Use Task.detached so the loop runs on a background executor.
-    // Only the MainActor.run blocks hop to the main actor, avoiding
+    // Only the MainActor.run block hops to the main actor, avoiding
     // starvation when other @MainActor work is scheduled concurrently.
+    //
+    // Audit A13 — snapshot the interval once at task start. The
+    // user's `scrollAccelerationStepIntervalMilliseconds` doesn't
+    // change mid-acceleration; reading it every tick added an extra
+    // MainActor round-trip per ~16 ms cycle. Halving the actor-hop
+    // count keeps the scroll loop tight when other UI work is
+    // already contending for the main actor.
+    let intervalMilliseconds = max(
+        1, state.config.editor.scrollAccelerationStepIntervalMilliseconds)
     state.scrollAccelerationTask = Task.detached { [weak state] in
         guard let state else { return }
 
         while !Task.isCancelled {
-            let intervalMilliseconds = await MainActor.run {
-                max(1, state.config.editor.scrollAccelerationStepIntervalMilliseconds)
-            }
             try? await Task.sleep(for: .milliseconds(intervalMilliseconds))
 
             let shouldContinue = await MainActor.run { () -> Bool in
