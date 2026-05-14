@@ -1,7 +1,7 @@
-import KittyCodecs
 import KittyGrammar
 import KittyParser
 import KittyQuery
+import KittyStyle
 
 final class HighlightScratch {
     struct RawCaptureSpan {
