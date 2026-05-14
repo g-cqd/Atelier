@@ -334,7 +334,7 @@ extension EditorState {
     }
 
     private func resolvePromptPath(_ input: String) -> String {
-        let expandedPath = (input as NSString).expandingTildeInPath
+        let expandedPath = CLIArguments.expandingTilde(in: input)
         if expandedPath.hasPrefix("/") {
             return URL(fileURLWithPath: expandedPath).standardizedFileURL.path
         }
