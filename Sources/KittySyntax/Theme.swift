@@ -1,4 +1,4 @@
-import KittyCodecs
+import KittyStyle
 
 /// Maps capture names to visual styles with hierarchical fallback.
 /// For example, `@keyword.function` falls back to `@keyword` if no specific mapping exists.
