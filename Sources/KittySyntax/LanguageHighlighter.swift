@@ -18,14 +18,13 @@ public enum LanguageHighlighter: Sendable {
         }
 
         private final class GrammarSession {
-            let parser: IncrementalParser
+            let parser: GrammarParser
             let query: Query
             let highlighter: Highlighter
             let scratch = HighlightScratch()
-            var previousTree: SyntaxTree?
 
             init(artifacts: SyntaxArtifacts, theme: Theme) {
-                parser = IncrementalParser(
+                parser = GrammarParser(
                     parseTable: artifacts.parseTable,
                     lexTable: artifacts.lexTable,
                     productions: artifacts.productions
@@ -87,15 +86,12 @@ public enum LanguageHighlighter: Sendable {
                         source: source, language: language, theme: theme)
                 }
                 do {
-                    let tree = try grammarSession.parser.parse(
-                        source, oldTree: grammarSession.previousTree)
+                    let tree = try grammarSession.parser.parse(source)
                     guard tree.root.type != "_start" else {
-                        grammarSession.previousTree = nil
                         strategy = .fallback
                         return fallbackHighlightDocument(
                             source: source, language: language, theme: theme)
                     }
-                    grammarSession.previousTree = tree
                     let spans = grammarSession.highlighter.highlight(
                         source: source,
                         tree: tree,
@@ -127,12 +123,10 @@ public enum LanguageHighlighter: Sendable {
                     return []
                 }
                 do {
-                    let tree = try gs.parser.parse(source, oldTree: gs.previousTree)
+                    let tree = try gs.parser.parse(source)
                     guard tree.root.type != "_start" else {
-                        gs.previousTree = nil
                         return []
                     }
-                    gs.previousTree = tree
                     let matches = QueryMatcher.execute(query: gs.query, tree: tree)
                     return gs.highlighter.buildTokens(matches: matches, layer: .structural)
                 } catch {
@@ -249,12 +243,10 @@ public enum LanguageHighlighter: Sendable {
                     return viewportFallback(source: source, visibleLineRange: visibleLineRange)
                 }
                 do {
-                    let tree = try gs.parser.parse(source, oldTree: gs.previousTree)
+                    let tree = try gs.parser.parse(source)
                     guard tree.root.type != "_start" else {
-                        gs.previousTree = nil
                         return viewportFallback(source: source, visibleLineRange: visibleLineRange)
                     }
-                    gs.previousTree = tree
 
                     let byteRange = lineRangeToByteRange(source: source, lineRange: visibleLineRange)
                     let matches = QueryMatcher.execute(
@@ -344,9 +336,8 @@ public enum LanguageHighlighter: Sendable {
             var structuralTokens: [HighlightToken] = []
             if case .grammar(let gs) = strategy {
                 if source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes {
-                    if let tree = try? gs.parser.parse(source, oldTree: gs.previousTree) {
+                    if let tree = try? gs.parser.parse(source) {
                         if tree.root.type != "_start" {
-                            gs.previousTree = tree
                             let matches = QueryMatcher.execute(
                                 query: gs.query, tree: tree, byteRange: byteRange)
                             let vpCount = viewportSource.utf8.count

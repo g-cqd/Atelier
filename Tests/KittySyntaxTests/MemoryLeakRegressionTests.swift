@@ -128,8 +128,9 @@ struct MemoryLeakRegressionTests {
     }
 
     /// Repeatedly call session-bound highlightDocument — different surface
-    /// than the static path and a candidate for leaks if `previousTree`
-    /// retains across parses.
+    /// than the static path and a candidate for leaks if internal session
+    /// state retains across parses (the historical concern was the now-
+    /// removed `previousTree` storage on `GrammarSession`).
     @Test
     func `repeated bash session highlight does not accumulate memory`() async {
         _ = await LanguageHighlighter.ensureArtifacts(for: "bash")
