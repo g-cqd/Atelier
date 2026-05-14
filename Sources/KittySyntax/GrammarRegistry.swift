@@ -1,15 +1,33 @@
 import Foundation
 import KittyGrammar
+import KittySync
 
-/// Maps file extensions to grammar definitions.
-/// Loads `languages.json` and auto-discovers grammar bundles.
-public actor GrammarRegistry {
-    // extension → entry
-    private var entries: [String: LanguageEntry] = [:]
-    // language name → grammar
-    private var loadedGrammars: [String: GrammarDefinition] = [:]
-    // language name → compiled result
-    private var compiledTables: [String: ParseTableCompiler.CompilationResult] = [:]
+/// Runtime registry of language-grammar bindings.
+///
+/// Loads `languages.json` manifests, holds compiled parse tables in
+/// memory and a backing disk cache, and dispatches `entry(for*: …)`
+/// lookups for `SyntaxArtifactsCache` and (eventually) ADR 8
+/// extensions. Previously an `actor` — now a `Sendable final class`
+/// over `StateLock<State>` so callers in synchronous contexts
+/// (`SyntaxArtifactsCache.loadArtifacts`, `LanguageHighlighter.Session.
+/// init`) can consult it without an `await` and without paying the
+/// actor's reentrancy budget. The lock guards mutation; reads are
+/// snapshot copies. Audit D1.
+public final class GrammarRegistry: Sendable {
+    /// Process-wide instance used by `SyntaxArtifactsCache`. ADR 8
+    /// extension hosts can register additional languages by calling
+    /// `GrammarRegistry.shared.register(…)` at startup; the cache
+    /// consults the shared registry first and only falls back to
+    /// `BundledLanguageManifest` for unregistered names.
+    public static let shared = GrammarRegistry()
+
+    private struct State: Sendable {
+        var entries: [String: LanguageEntry] = [:]
+        var loadedGrammars: [String: GrammarDefinition] = [:]
+        var compiledTables: [String: ParseTableCompiler.CompilationResult] = [:]
+    }
+
+    private let state = StateLock(initialState: State())
 
     public struct LanguageEntry: Sendable, Equatable {
         public var name: String
@@ -25,14 +43,19 @@ public actor GrammarRegistry {
 
     public init() {}
 
-    /// Register a language entry.
+    /// Register a language entry. The extensions are stored verbatim;
+    /// `entry(forExtension:)` normalises the incoming query so a
+    /// caller may register either `".swift"` or `"swift"`.
     public func register(_ entry: LanguageEntry) {
-        for ext in entry.extensions {
-            entries[ext] = entry
+        state.withLock { state in
+            for ext in entry.extensions {
+                state.entries[ext] = entry
+            }
         }
     }
 
-    /// Load entries from a languages.json file.
+    /// Load entries from a `languages.json` file. Format mirrors
+    /// `BundledLanguageManifest` (`name`, `extensions`, `path`).
     public func loadManifest(from path: String) throws(GrammarError) {
         let url = URL(fileURLWithPath: path)
         let data: Data
@@ -62,20 +85,32 @@ public actor GrammarRegistry {
     /// Find the language entry for a file extension.
     public func entry(forExtension ext: String) -> LanguageEntry? {
         let normalized = ext.hasPrefix(".") ? ext : ".\(ext)"
-        return entries[normalized]
+        return state.withLock { $0.entries[normalized] }
+    }
+
+    /// Find the language entry by its registered name. Used by
+    /// `SyntaxArtifactsCache.loadArtifacts` as the primary dispatch
+    /// path; `BundledLanguageManifest` is the fallback for languages
+    /// not registered at runtime.
+    public func entry(forLanguage languageName: String) -> LanguageEntry? {
+        state.withLock { $0.entries.values.first { $0.name == languageName } }
     }
 
     /// Load and cache a grammar definition for a language.
     public func grammar(for languageName: String, grammarsPath: String) throws(GrammarError)
-        -> GrammarDefinition {
-        if let cached = loadedGrammars[languageName] { return cached }
+        -> GrammarDefinition
+    {
+        if let cached = state.withLock({ $0.loadedGrammars[languageName] }) {
+            return cached
+        }
 
-        let entry = entries.values.first { $0.name == languageName }
-        guard let entry else { throw .fileNotFound("No entry for language: \(languageName)") }
+        guard let entry = entry(forLanguage: languageName) else {
+            throw .fileNotFound("No entry for language: \(languageName)")
+        }
 
         let grammarPath = "\(grammarsPath)/\(entry.path)/grammar.json"
         let grammar = try GrammarLoader.load(from: grammarPath)
-        loadedGrammars[languageName] = grammar
+        state.withLock { $0.loadedGrammars[languageName] = grammar }
         return grammar
     }
 
@@ -89,24 +124,26 @@ public actor GrammarRegistry {
         for languageName: String,
         grammarsPath: String
     ) throws(GrammarError) -> ParseTableCompiler.CompilationResult {
-        if let cached = compiledTables[languageName] { return cached }
+        if let cached = state.withLock({ $0.compiledTables[languageName] }) {
+            return cached
+        }
 
         let cacheURL = Self.cacheDirectory.appendingPathComponent("\(languageName).ptable")
         if let result = try? loadFromDisk(at: cacheURL) {
-            compiledTables[languageName] = result
+            state.withLock { $0.compiledTables[languageName] = result }
             return result
         }
 
         let grammarDefinition = try grammar(for: languageName, grammarsPath: grammarsPath)
         let result = try ParseTableCompiler.compile(grammarDefinition)
-        compiledTables[languageName] = result
+        state.withLock { $0.compiledTables[languageName] = result }
         try? saveToDisk(result, at: cacheURL)
         return result
     }
 
     /// All registered language names.
     public var languageNames: [String] {
-        Array(Set(entries.values.map(\.name))).sorted()
+        state.withLock { Array(Set($0.entries.values.map(\.name))).sorted() }
     }
 
     // MARK: - Private disk-cache helpers
@@ -126,6 +163,18 @@ public actor GrammarRegistry {
         )
         let data = try JSONEncoder().encode(result)
         try data.write(to: url, options: .atomic)
+    }
+}
+
+// MARK: - Bundled entry bridge
+
+extension GrammarRegistry.LanguageEntry {
+    /// Wraps a `BundledLanguageEntry` for cases where the bundled
+    /// manifest is the fallback resolver — `SyntaxArtifactsCache` uses
+    /// this to convert a bundled entry into the shape it would have
+    /// found in the runtime registry.
+    init(bundled: BundledLanguageEntry) {
+        self.init(name: bundled.name, extensions: bundled.extensions, path: bundled.path)
     }
 }
 
