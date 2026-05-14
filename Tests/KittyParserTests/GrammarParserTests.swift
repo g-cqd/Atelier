@@ -5,9 +5,9 @@ import Testing
 @testable import KittyParser
 
 @Suite
-struct IncrementalParserTests {
+struct GrammarParserTests {
     @Test
-    func `Incremental parse produces tree`() throws {
+    func `Grammar parser produces a tree`() throws {
         let json = """
             {
                 "name": "inc_test",
@@ -19,14 +19,15 @@ struct IncrementalParserTests {
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let result = try ParseTableCompiler.compile(grammar)
 
-        let parser = IncrementalParser(
+        let parser = GrammarParser(
             parseTable: result.parseTable,
             lexTable: result.lexTable,
             productions: result.productions
         )
 
         let tree1 = try parser.parse("x")
-        let tree2 = try parser.parse("x", oldTree: tree1)
+        let tree2 = try parser.parse("x")
+        #expect(tree1.root.type != "")
         #expect(tree2.root.type != "")
     }
 }
