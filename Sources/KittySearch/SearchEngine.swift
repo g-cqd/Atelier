@@ -7,6 +7,11 @@ public func findMatches(in lines: [String], pattern: SearchPattern) -> [SearchMa
     case .literal(let text, let caseSensitive):
         let options: String.CompareOptions = caseSensitive ? [] : .caseInsensitive
         for (row, line) in lines.enumerated() {
+            // Per-line cancellation check (audit D6). The match loop below
+            // can stall on a pathological line (e.g. a multi-MB single line
+            // with many literal hits); a parent `Task.cancel` should land
+            // within a bounded number of lines, not at task-group boundary.
+            if Task.isCancelled { return matches }
             var searchStart = line.startIndex
             while searchStart < line.endIndex,
                 let range = line.range(
@@ -21,6 +26,10 @@ public func findMatches(in lines: [String], pattern: SearchPattern) -> [SearchMa
 
     case .regex(let regex):
         for (row, line) in lines.enumerated() {
+            // Same rationale as the literal branch. Regex pathologies
+            // (catastrophic backtracking on a long line) are the real
+            // reason this matters — pre-req for NF24 ReDoS mitigation.
+            if Task.isCancelled { return matches }
             for match in line.matches(of: regex) {
                 let colStart = line.distance(from: line.startIndex, to: match.range.lowerBound)
                 let colEnd = line.distance(from: line.startIndex, to: match.range.upperBound)
