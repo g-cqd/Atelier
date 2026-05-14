@@ -25,22 +25,26 @@ public final class DocumentBuffer {
         set { document.textCursor = newValue }
     }
 
-    public var cachedFileLines: [String]? {
+    // Cache forwarders — `package` access matches the underlying `TextDocument`
+    // fields. External callers should use `invalidateTextSnapshotCache()` and
+    // friends; these direct setters are only for `EditorState`'s forwarding
+    // layer in `KittyCode`. Audit B2.
+    package var cachedFileLines: [String]? {
         get { document.cachedFileLines }
         set { document.cachedFileLines = newValue }
     }
 
-    public var cachedDocumentText: String? {
+    package var cachedDocumentText: String? {
         get { document.cachedDocumentText }
         set { document.cachedDocumentText = newValue }
     }
 
-    public var cachedMaxLineWidth: Int? {
+    package var cachedMaxLineWidth: Int? {
         get { document.cachedMaxLineWidth }
         set { document.cachedMaxLineWidth = newValue }
     }
 
-    public var cachedSerializedByteCount: Int? {
+    package var cachedSerializedByteCount: Int? {
         get { document.cachedSerializedByteCount }
         set { document.cachedSerializedByteCount = newValue }
     }
