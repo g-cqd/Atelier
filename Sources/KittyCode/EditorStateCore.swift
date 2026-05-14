@@ -572,24 +572,11 @@ final class EditorState {
         }
         highlightedLines = lines
 
-        // Schedule full document highlight in background
-        fullHighlightTask?.cancel()
-        fullHighlightTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            // Yield to let the viewport render first
-            await Task.yield()
-            guard !Task.isCancelled else { return }
-
-            let fullHighlights = session.highlightDocument(source: source)
-            guard !Task.isCancelled else { return }
-
-            // Only apply if we're still on the same document
-            if self.documentText == source {
-                self.highlightedLines = fullHighlights
-                self.markContentAllDirty()
-                self.renderRefreshSource?.invalidate()
-            }
-        }
+        // Schedule the background full-document highlight via the
+        // long-lived consumer. The producer doesn't spawn anything; the
+        // consumer re-reads MainActor state at work time, so a burst of
+        // keystrokes coalesces into at most one full-highlight pass.
+        fullHighlightContinuation.yield(())
     }
 
     private func currentHighlightSession() -> LanguageHighlighter.Session {
@@ -1170,7 +1157,16 @@ final class EditorState {
     @ObservationIgnored var lastKeyRepeatProcessedAt: ContinuousClock.Instant?
     @ObservationIgnored var pendingKeySequence: [KeyStroke] = []
     @ObservationIgnored var pendingKeySequenceTime: ContinuousClock.Instant?
+    /// Long-lived consumer task that handles background full-document
+    /// highlights. `refreshHighlights()` yields into `fullHighlightSignal`
+    /// instead of spawning a fresh Task per call — eliminating the
+    /// per-keystroke Task allocation + cancellation overhead (audit NF12).
+    /// `bufferingNewest(1)` collapses a burst of keystrokes into a single
+    /// work cycle. Started lazily on first signal so EditorState's `init`
+    /// stays synchronous-only.
     @ObservationIgnored var fullHighlightTask: Task<Void, Never>?
+    @ObservationIgnored let fullHighlightSignal: AsyncStream<Void>
+    @ObservationIgnored let fullHighlightContinuation: AsyncStream<Void>.Continuation
     var fileTreeHistory = FileTreeOperationHistory()
 
     var maxLineWidth: Int {
@@ -1202,6 +1198,9 @@ final class EditorState {
         let catalog = config.useSFSymbolsInTerminal ? SymbolCatalogLoader.loadOrDiscover() : nil
         self.symbolTheme = TerminalSymbolTheme.make(
             symbolsEnabled: config.useSFSymbolsInTerminal, catalog: catalog)
+        let (stream, cont) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        self.fullHighlightSignal = stream
+        self.fullHighlightContinuation = cont
         self.fileTreeHistory.maxOperationSteps = config.editor.maxTreeUndoSteps
         let resolver = KeymapResolver(config: config)
         self.statusMessage = "Opened \(rootPath) | \(resolver.openedStatusHints())"
@@ -1211,7 +1210,42 @@ final class EditorState {
             self?.gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
         }
 
+        startFullHighlightConsumer()
         refreshHighlights()
+    }
+
+    private func startFullHighlightConsumer() {
+        guard fullHighlightTask == nil else { return }
+        fullHighlightTask = Task { @MainActor [weak self, fullHighlightSignal] in
+            for await _ in fullHighlightSignal {
+                guard let self else { return }
+                await self.performFullHighlight()
+            }
+        }
+    }
+
+    /// Background-highlight body invoked by the long-lived consumer task.
+    /// Re-reads session and document text on the main actor so a stale
+    /// signal arrives running against the current state, not the state at
+    /// signal-emit time. The `documentText == source` staleness gate
+    /// ensures a highlight pass that finishes after the user has moved on
+    /// is silently dropped.
+    private func performFullHighlight() async {
+        guard syntaxHighlightingEnabled else { return }
+        let session = currentHighlightSession()
+        guard !session.prefersLineInput else { return }
+
+        let lineCount = fileLineCount
+        guard lineCount > Self.viewportHighlightThreshold else { return }
+
+        let source = documentText
+        let fullHighlights = session.highlightDocument(source: source)
+
+        // Only apply if the document hasn't moved on while we worked.
+        guard documentText == source else { return }
+        highlightedLines = fullHighlights
+        markContentAllDirty()
+        renderRefreshSource?.invalidate()
     }
 
     func nextOpenRequestID() -> UInt64 {

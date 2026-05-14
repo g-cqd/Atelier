@@ -26,7 +26,23 @@ public final class GitDecorationManager {
     private let gitConfig: GitDecorationConfig
     private let gitLineDecorationProvider: (any GitLineDecorationProvider)?
     private let invalidateRender: @MainActor () -> Void
-    private var task: Task<Void, Never>?
+
+    /// Long-lived consumer that handles the debounced refresh path. The
+    /// producer (`scheduleRefreshForActiveBuffer(debounced: true)`) just
+    /// yields a tick into `debouncedSignal`; the consumer waits one
+    /// `lineChangeDebounceMilliseconds` window per signal and then re-reads
+    /// active-buffer state on the main actor to compute decorations.
+    /// `bufferingNewest(1)` collapses bursts of keystrokes (the hot path)
+    /// into a single work cycle.
+    private let debouncedSignal: AsyncStream<Void>
+    private let debouncedContinuation: AsyncStream<Void>.Continuation
+    private var debouncedConsumer: Task<Void, Never>?
+
+    /// One-shot task for the rare immediate refresh path (tab switch,
+    /// external file reload). Kept separate from the debounced consumer so
+    /// the tab-switch's "no delay" intent isn't accidentally coalesced into
+    /// the debounced stream when keystrokes arrive in quick succession.
+    private var immediateTask: Task<Void, Never>?
 
     public init(
         workspace: WorkspaceSession,
@@ -38,50 +54,81 @@ public final class GitDecorationManager {
         self.gitConfig = gitConfig
         self.gitLineDecorationProvider = gitLineDecorationProvider
         self.invalidateRender = invalidateRender
+
+        let (stream, cont) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        self.debouncedSignal = stream
+        self.debouncedContinuation = cont
+
+        let debounceMs = gitConfig.lineChangeDebounceMilliseconds
+        self.debouncedConsumer = Task { [weak self, stream] in
+            for await _ in stream {
+                try? await Task.sleep(for: .milliseconds(debounceMs))
+                guard let self else { return }
+                await self.performRefresh()
+            }
+        }
     }
 
     public func scheduleRefreshForActiveBuffer(debounced: Bool = true) {
-        task?.cancel()
-
         guard gitConfig.showGitStatus,
             gitConfig.showLineChanges,
-            let provider = gitLineDecorationProvider,
+            gitLineDecorationProvider != nil,
             let buffer = workspace.bufferManager.activeBuffer,
             !buffer.filePath.isEmpty
         else {
             clearActiveDecorations()
             return
         }
+        _ = buffer  // capture-by-existence; performRefresh re-reads state
+
+        if debounced {
+            debouncedContinuation.yield(())
+        } else {
+            immediateTask?.cancel()
+            immediateTask = Task { [weak self] in
+                guard let self else { return }
+                await self.performRefresh()
+            }
+        }
+    }
+
+    /// Re-reads active-buffer state on the main actor and computes the
+    /// decoration set. Safe to call from either the debounced consumer or
+    /// the one-shot immediate task — both paths route through here, and
+    /// the staleness gate inside `apply(_:for:version:)` rejects results
+    /// that arrive after the buffer has moved on.
+    private func performRefresh() async {
+        guard gitConfig.showGitStatus,
+            gitConfig.showLineChanges,
+            let provider = gitLineDecorationProvider,
+            let buffer = workspace.bufferManager.activeBuffer,
+            !buffer.filePath.isEmpty
+        else {
+            return
+        }
 
         let textBuffer = workspace.textBuffer
         let path = buffer.filePath
         let version = buffer.documentVersion
-        let debounceMilliseconds = gitConfig.lineChangeDebounceMilliseconds
         let maxLineDiffBytes = gitConfig.maxLineDiffBytes
 
-        task = Task { [weak self] in
-            if debounced {
-                try? await Task.sleep(for: .milliseconds(debounceMilliseconds))
-            }
-            guard !Task.isCancelled else { return }
-
-            let lines = textBuffer.lines
-            let documentByteCount = Self.approximateDocumentByteCount(lines: lines)
-            guard documentByteCount <= maxLineDiffBytes else {
-                self?.clearActiveDecorations(for: path, version: version)
-                return
-            }
-
-            let decorations = await provider.lineDecorations(for: path, lines: lines)
-            guard !Task.isCancelled else { return }
-
-            self?.apply(decorations, for: path, version: version)
+        let lines = textBuffer.lines
+        let documentByteCount = Self.approximateDocumentByteCount(lines: lines)
+        guard documentByteCount <= maxLineDiffBytes else {
+            clearActiveDecorations(for: path, version: version)
+            return
         }
+
+        let decorations = await provider.lineDecorations(for: path, lines: lines)
+        apply(decorations, for: path, version: version)
     }
 
     public func stop() {
-        task?.cancel()
-        task = nil
+        debouncedContinuation.finish()
+        debouncedConsumer?.cancel()
+        debouncedConsumer = nil
+        immediateTask?.cancel()
+        immediateTask = nil
     }
 
     private func apply(_ decorations: GitLineDecorations, for path: String, version: Int) {
@@ -97,8 +144,13 @@ public final class GitDecorationManager {
     }
 
     private func clearActiveDecorations() {
-        task?.cancel()
-        task = nil
+        // Cancel any in-flight immediate refresh so a stale `apply` can't
+        // re-populate decorations after we've explicitly cleared them.
+        // (The debounced consumer's stream still drains older queued
+        // signals harmlessly — `performRefresh` re-checks `gitConfig.show*`
+        // guards on entry.)
+        immediateTask?.cancel()
+        immediateTask = nil
 
         guard let buffer = workspace.bufferManager.activeBuffer,
             !buffer.gitLineDecorations.isEmpty
