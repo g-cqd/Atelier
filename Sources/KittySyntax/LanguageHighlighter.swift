@@ -22,6 +22,14 @@ public enum LanguageHighlighter: Sendable {
             let query: Query
             let highlighter: Highlighter
             let scratch = HighlightScratch()
+            /// Cache of the most recently parsed `source` and its tree. Lets
+            /// `parseTree(for:)` short-circuit when the document hasn't
+            /// changed since the last parse — common during undo/redo
+            /// navigation, viewport scroll, and identical reflows after
+            /// `bufferingNewest(1)` coalesces a typing burst. Mismatching
+            /// the source falls through to a full re-parse.
+            var lastParsedSourceHash: Int?
+            var lastParsedTree: SyntaxTree?
 
             init(artifacts: SyntaxArtifacts, theme: Theme) {
                 parser = GrammarParser(
@@ -31,6 +39,28 @@ public enum LanguageHighlighter: Sendable {
                 )
                 query = artifacts.query
                 highlighter = Highlighter(theme: theme)
+            }
+
+            /// Returns a parsed tree for `source`, reusing the previous parse
+            /// if `source.hashValue` matches the cached fingerprint. The
+            /// hash is `Hasher`-based so collisions across distinct source
+            /// strings are vanishingly improbable in practice; an additional
+            /// `source.utf8.count` comparison guards the cache against the
+            /// pathological case.
+            func parseTree(for source: String) throws(ParseError) -> SyntaxTree {
+                let sourceHash = source.hashValue
+                if let cached = lastParsedTree,
+                    let cachedHash = lastParsedSourceHash,
+                    cachedHash == sourceHash,
+                    cached.source.utf8.count == source.utf8.count,
+                    cached.source == source
+                {
+                    return cached
+                }
+                let tree = try parser.parse(source)
+                lastParsedSourceHash = sourceHash
+                lastParsedTree = tree
+                return tree
             }
         }
 
@@ -86,7 +116,7 @@ public enum LanguageHighlighter: Sendable {
                         source: source, language: language, theme: theme)
                 }
                 do {
-                    let tree = try grammarSession.parser.parse(source)
+                    let tree = try grammarSession.parseTree(for: source)
                     guard tree.root.type != "_start" else {
                         strategy = .fallback
                         return fallbackHighlightDocument(
@@ -123,7 +153,7 @@ public enum LanguageHighlighter: Sendable {
                     return []
                 }
                 do {
-                    let tree = try gs.parser.parse(source)
+                    let tree = try gs.parseTree(for: source)
                     guard tree.root.type != "_start" else {
                         return []
                     }
@@ -243,7 +273,7 @@ public enum LanguageHighlighter: Sendable {
                     return viewportFallback(source: source, visibleLineRange: visibleLineRange)
                 }
                 do {
-                    let tree = try gs.parser.parse(source)
+                    let tree = try gs.parseTree(for: source)
                     guard tree.root.type != "_start" else {
                         return viewportFallback(source: source, visibleLineRange: visibleLineRange)
                     }
@@ -336,7 +366,7 @@ public enum LanguageHighlighter: Sendable {
             var structuralTokens: [HighlightToken] = []
             if case .grammar(let gs) = strategy {
                 if source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes {
-                    if let tree = try? gs.parser.parse(source) {
+                    if let tree = try? gs.parseTree(for: source) {
                         if tree.root.type != "_start" {
                             let matches = QueryMatcher.execute(
                                 query: gs.query, tree: tree, byteRange: byteRange)

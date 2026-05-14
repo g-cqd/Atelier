@@ -112,13 +112,16 @@ public final class GitDecorationManager {
         let version = buffer.documentVersion
         let maxLineDiffBytes = gitConfig.maxLineDiffBytes
 
-        let lines = textBuffer.lines
-        let documentByteCount = Self.approximateDocumentByteCount(lines: lines)
-        guard documentByteCount <= maxLineDiffBytes else {
+        // `Rope.byteCount` is O(1) (cached on the tree root); avoid
+        // materialising `[String]` lines + summing UTF-8 lengths just to
+        // perform the size gate. Lines are still materialised below for the
+        // diff provider, but the cache will be warm by then.
+        guard textBuffer.byteCount <= maxLineDiffBytes else {
             clearActiveDecorations(for: path, version: version)
             return
         }
 
+        let lines = textBuffer.lines
         let decorations = await provider.lineDecorations(for: path, lines: lines)
         apply(decorations, for: path, version: version)
     }
