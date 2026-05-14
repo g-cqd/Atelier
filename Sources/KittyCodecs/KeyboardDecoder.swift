@@ -4,6 +4,20 @@
 ///
 /// The progressive enhancement flags determine which fields are present.
 public struct KeyboardDecoder: Sendable {
+    /// Hard cap on the in-flight buffer length. A hostile stream that
+    /// dribbles bytes into a never-terminating CSI sequence cannot grow
+    /// the decoder past this; on overflow the partial sequence is
+    /// returned as `.invalid` and state resets to `.ground`.
+    private static let maxSequenceBytes = 4096
+    /// Hard cap on `alternateKeys.count`. A real Kitty keyboard chord
+    /// uses at most a handful of alternates; this is a defence-in-depth
+    /// cap against `CSI <kc>:1:1:1:1:...` style payloads.
+    private static let maxAlternateKeys = 32
+    /// Hard cap on `textCodepoints.count`. A single grapheme cluster
+    /// rarely exceeds tens of codepoints; this is a defence-in-depth
+    /// cap against `CSI <kc>;1:1:1:1:...` style payloads.
+    private static let maxTextCodepoints = 256
+
     private enum State: Sendable {
         case ground
         case escape
@@ -32,6 +46,9 @@ public struct KeyboardDecoder: Sendable {
 
     public mutating func feed(_ byte: UInt8) -> DecoderResult<KeyEvent> {
         buffer.append(byte)
+        if buffer.count > Self.maxSequenceBytes {
+            return invalidResult()
+        }
 
         switch state {
         case .ground:
@@ -105,6 +122,9 @@ public struct KeyboardDecoder: Sendable {
                 return .pending
             }
             if byte == 0x3a {  // : — next alternate
+                guard alternateKeys.count < Self.maxAlternateKeys else {
+                    return invalidResult()
+                }
                 alternateKeys.append(currentAlternate)
                 currentAlternate = 0
                 return .pending
@@ -183,6 +203,9 @@ public struct KeyboardDecoder: Sendable {
                 return .pending
             }
             if byte == 0x3a {  // : — next codepoint
+                guard textCodepoints.count < Self.maxTextCodepoints else {
+                    return invalidResult()
+                }
                 textCodepoints.append(currentTextCP)
                 currentTextCP = 0
                 return .pending
