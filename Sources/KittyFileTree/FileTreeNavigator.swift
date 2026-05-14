@@ -29,26 +29,37 @@ public enum FileTreeNavigator {
     /// `path`, searching the tree recursively.
     ///
     /// When a directory is expanded for the first time and its `children`
-    /// array is empty, ``DirectoryScanner/scan(_:maxDepth:maxEntries:)`` is
-    /// called with `maxDepth: 1` to populate one level of children eagerly.
+    /// array is empty, ``DirectoryScanner/scan(_:maxDepth:maxEntries:visibility:withinRoot:)``
+    /// is called with `maxDepth: 1` to populate one level of children eagerly.
+    /// The optional `rootPath` parameter is forwarded as `withinRoot:` so
+    /// the symlink-traversal defence checks against the workspace root, not
+    /// the immediate subdirectory being expanded.
     ///
     /// - Parameters:
     ///   - nodes: The root node array, mutated in place.
     ///   - path: Absolute path identifying the node to toggle.
+    ///   - visibility: Hidden-file inclusion policy.
+    ///   - rootPath: Workspace root for the symlink containment check. When
+    ///     `nil`, the expanded subdirectory itself is used (legacy behavior,
+    ///     useful for isolated tests).
     public static func toggleExpand(
-        in nodes: inout [FileNode], at path: String, visibility: FileVisibility = .defaultHidden
+        in nodes: inout [FileNode],
+        at path: String,
+        visibility: FileVisibility = .defaultHidden,
+        rootPath: String? = nil
     ) {
         for i in nodes.indices {
             if nodes[i].path == path {
                 nodes[i].isExpanded.toggle()
                 if nodes[i].isExpanded && nodes[i].children.isEmpty {
                     nodes[i].children = DirectoryScanner.scan(
-                        nodes[i].path, maxDepth: 1, visibility: visibility)
+                        nodes[i].path, maxDepth: 1, visibility: visibility, withinRoot: rootPath)
                 }
                 return
             }
             if nodes[i].isDirectory {
-                toggleExpand(in: &nodes[i].children, at: path, visibility: visibility)
+                toggleExpand(
+                    in: &nodes[i].children, at: path, visibility: visibility, rootPath: rootPath)
             }
         }
     }

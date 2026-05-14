@@ -163,4 +163,96 @@ struct DirectoryScannerTests {
 
         #expect(file.path == "\(tree.root)/check.swift")
     }
+
+    // MARK: Symlink containment (NF4 regression)
+
+    /// Regression: `isWithinRoot` used to do `hasPrefix` on resolved paths,
+    /// so a symlink to a sibling whose name shared a prefix with the parent
+    /// (e.g. workspace `/tmp/root` → symlink target `/tmp/root-evil`) would
+    /// be accepted. Now SecurePath.isValid does component-by-component
+    /// containment so the prefix-only match no longer passes.
+    @Test func `scan rejects symlink whose target shares a prefix with sibling under root`()
+        throws
+    {
+        let tree = try TempTree()
+        // Create a sibling-of-root whose name begins with `tree.root` prefix.
+        let siblingPath = tree.root + "-evil-sibling"
+        try FileManager.default.createDirectory(
+            atPath: siblingPath, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: siblingPath) }
+        try "x".write(
+            toFile: siblingPath + "/secret.txt", atomically: true, encoding: .utf8)
+
+        // Place a symlink inside the workspace pointing at the sibling.
+        let linkPath = tree.root + "/link"
+        try FileManager.default.createSymbolicLink(
+            atPath: linkPath, withDestinationPath: siblingPath)
+
+        let entries = DirectoryScanner.scan(
+            tree.root, maxDepth: 2, withinRoot: tree.root)
+        let names = entries.map(\.name)
+        #expect(!names.contains("link"), "symlink escaping the workspace must not appear")
+    }
+
+    /// Regression: recursion used to pass the immediate parent directory as
+    /// `root`, so a symlink several levels deep pointing outside the
+    /// workspace was checked against the wrong root and incorrectly passed.
+    /// With workspace-root threading via `withinRoot:`, the check root stays
+    /// at the workspace level at every depth.
+    @Test func `scanAsync rejects deep symlink that escapes workspace`() async throws {
+        let tree = try TempTree()
+        try tree.createDirectory(named: "level1")
+        try tree.createDirectory(named: "level1/level2")
+
+        // Sibling-of-workspace acting as the escape target.
+        let escapeTarget = tree.root + "-escape-target"
+        try FileManager.default.createDirectory(
+            atPath: escapeTarget, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: escapeTarget) }
+        try "x".write(
+            toFile: escapeTarget + "/leaked.txt", atomically: true, encoding: .utf8)
+
+        let deepLink = tree.root + "/level1/level2/escape"
+        try FileManager.default.createSymbolicLink(
+            atPath: deepLink, withDestinationPath: escapeTarget)
+
+        let entries = await DirectoryScanner.scanAsync(
+            tree.root, maxDepth: 5, withinRoot: tree.root)
+
+        // Walk to level1/level2 children and assert no `escape` link survived.
+        let level1 = try #require(entries.first { $0.name == "level1" })
+        let level2 = try #require(level1.children.first { $0.name == "level2" })
+        let escapeNames = level2.children.map(\.name)
+        #expect(
+            !escapeNames.contains("escape"),
+            "deep symlink escaping the workspace must not appear at any depth")
+    }
+
+    /// Sanity: a symlink that resolves to a path inside the workspace is
+    /// still allowed (the defence rejects only escapes, not internal
+    /// references). Without workspace-root threading, this would be
+    /// incorrectly rejected when the link sits inside a nested subdirectory.
+    @Test func `scan accepts symlink whose target stays inside the workspace`() throws {
+        let tree = try TempTree()
+        try tree.createDirectory(named: "siblingA")
+        try tree.createFile(named: "siblingA/note.txt", content: "hi")
+        try tree.createDirectory(named: "siblingB")
+
+        // Link inside siblingB pointing at a file under siblingA. Both live
+        // under the workspace, so containment holds at workspace-root level
+        // but does NOT hold against the immediate parent (siblingB).
+        let linkPath = tree.root + "/siblingB/peek"
+        let targetPath = tree.root + "/siblingA/note.txt"
+        try FileManager.default.createSymbolicLink(
+            atPath: linkPath, withDestinationPath: targetPath)
+
+        let entries = DirectoryScanner.scan(
+            tree.root, maxDepth: 3, withinRoot: tree.root)
+
+        let siblingB = try #require(entries.first { $0.name == "siblingB" })
+        let names = siblingB.children.map(\.name)
+        #expect(
+            names.contains("peek"),
+            "intra-workspace symlink must be visible when withinRoot is the workspace")
+    }
 }

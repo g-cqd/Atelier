@@ -12,8 +12,15 @@ public final class InputSource: Sendable {
 
     public init(connection: any TerminalConnection) {
         self.connection = connection
+        // Unbounded buffering: an editor must deliver every keystroke in
+        // arrival order. The prior `.bufferingNewest(256)` dropped the OLDEST
+        // events on overflow, which means a fast paste under load could lose
+        // leading characters. The consumer is the main-actor event loop;
+        // back-pressure cannot meaningfully constrain a human's typing speed,
+        // and realistic queue depth during one main-actor hop is far below
+        // any pathological growth.
         let (stream, cont) = AsyncStream<InputEvent>.makeStream(
-            bufferingPolicy: .bufferingNewest(256))
+            bufferingPolicy: .unbounded)
         self._events = stream
         self.continuation = cont
     }
