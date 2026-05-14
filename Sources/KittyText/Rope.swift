@@ -97,6 +97,26 @@ public struct Rope: Sendable {
         return storage.root.byteOffsetAfterNewline(count: line)
     }
 
+    /// Drops the storage's cached `text` / `lines` / `contentHash` without
+    /// touching `root`. Used by `BufferEditHistory` immediately before pushing
+    /// a snapshot onto the undo stack — a long-lived snapshot would otherwise
+    /// keep multi-megabyte `cachedText` and `cachedLines` strings resident
+    /// even though no consumer ever reads from the snapshot's rope directly.
+    /// The next read on the live document pays the materialisation cost
+    /// once; subsequent reads are O(1) again. Tree structure and per-node
+    /// metadata (byte counts, newline counts) are unaffected.
+    public mutating func invalidateSnapshotCaches() {
+        storage.invalidateCaches()
+    }
+
+    /// Test-only probe — returns `true` when neither `cachedText` nor
+    /// `cachedLines` is currently materialised on the storage. Used by
+    /// `BufferEditHistoryTests` to pin the cache-drop invariant of
+    /// `recordChange`.
+    var _testSnapshotCachesAreEmpty: Bool {
+        storage.cachedText == nil && storage.cachedLines == nil
+    }
+
     /// Byte range of line `line` excluding its terminating newline.
     public func lineRange(forLine line: Int) -> Range<Int> {
         guard line >= 0, line < lineCount else { return 0..<0 }
