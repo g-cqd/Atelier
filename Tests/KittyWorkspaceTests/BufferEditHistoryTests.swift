@@ -323,4 +323,49 @@ import Testing
         #expect(top.after.textBuffer._testSnapshotCachesAreEmpty)
         #expect(top.after.textBuffer.text == "alphabetagamma")
     }
+
+    /// Audit A2a — count-based `maxUndoSteps` doesn't bound memory; a
+    /// 1 MB document × 200 entries is 400 MB regardless of count. The new
+    /// `maxUndoBytes` cap prunes oldest entries until total retained
+    /// snapshot bytes fall under the byte budget.
+    @Test func `recordChange prunes by byte budget when document is large`() {
+        // Use a small budget so we don't have to allocate hundreds of MB.
+        let initial = makeSnapshot(String(repeating: "x", count: 1_000))
+        let history = BufferEditHistory(initial: initial)
+        history.maxUndoBytes = 32 * 1024  // 32 KB budget for this test
+
+        // Each transition retains ~2 × 4 KB = ~8 KB. Record 20 of them.
+        var previous = initial
+        for index in 0..<20 {
+            let next = makeSnapshot(String(repeating: "x", count: 4_000 + index))
+            history.recordChange(from: previous, to: next, coalescingWindow: nil)
+            previous = next
+        }
+
+        let retained = history._testTotalUndoBytes
+        #expect(
+            retained <= history.maxUndoBytes,
+            "retained bytes \(retained) must be at most maxUndoBytes \(history.maxUndoBytes)"
+        )
+        // Count cap not in play; budget cap should have done the pruning.
+        // Sanity: we recorded 20 but expect far fewer to remain.
+        if let top = history._testTopOfUndoStack {
+            // Most recent transition still on top (count > 0).
+            #expect(top.after.textBuffer.byteCount > 0)
+        }
+    }
+
+    /// Confirm the byte cap doesn't drop the only remaining transition
+    /// even when a single transition exceeds the budget. The user should
+    /// always have at least one step of undo.
+    @Test func `recordChange retains one transition even past byte budget`() {
+        let initial = makeSnapshot("short")
+        let history = BufferEditHistory(initial: initial)
+        history.maxUndoBytes = 100  // absurdly small
+
+        let huge = makeSnapshot(String(repeating: "y", count: 10_000))
+        history.recordChange(from: initial, to: huge, coalescingWindow: nil)
+
+        #expect(history.hasUndo, "the single transition must survive even past budget")
+    }
 }
