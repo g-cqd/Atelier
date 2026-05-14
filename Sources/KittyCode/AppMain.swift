@@ -23,14 +23,48 @@ struct KittyCodeEntry {
             do {
                 try await runEditor(launchConfig: launchConfig)
             } catch {
-                let msg = "CRASH: \(error)"
-                let crashPath = FileManager.default.temporaryDirectory
-                    .appendingPathComponent(
-                        "kittycode-crash-\(ProcessInfo.processInfo.processIdentifier).log")
-                try? (msg + "\n").write(to: crashPath, atomically: true, encoding: .utf8)
-                KittyLogger.stderr(msg)
+                writeCrashLog(error: error)
+                KittyLogger.stderr("CRASH: \(error)")
             }
         }
+    }
+
+    /// Writes a crash diagnostic file at `~/$TMPDIR/kittycode-crash-<pid>.log`
+    /// with owner-only permissions and `O_EXCL` to avoid overwriting an
+    /// existing path of the same PID (defence against a symlink/typesquat
+    /// attack on shared temp dirs). The error description is logged via
+    /// `os.Logger` at `.fault` with `private` redaction; only the public
+    /// path is recorded in the system log so a Console.app reader sees
+    /// where to find the file but not its contents.
+    private static func writeCrashLog(error: any Error) {
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kittycode-crash-\(pid).log")
+            .path
+        let body = "CRASH: \(error)\n"
+
+        // `O_CREAT | O_EXCL | O_WRONLY` + mode 0600 produces a file that
+        // either is freshly created with owner-only access or fails — the
+        // prior `String.write(to:atomically:)` accepted any pre-existing
+        // file at the path. We use POSIX directly because Foundation has
+        // no first-class API that combines `.exclusive` with a permission
+        // mask.
+        let fd = path.withCString { Darwin.open($0, O_CREAT | O_EXCL | O_WRONLY, 0o600) }
+        guard fd >= 0 else {
+            KittyLogger.fault(public: "kittycode crash log open failed at \(path)")
+            return
+        }
+        defer { Darwin.close(fd) }
+        body.withCString { ptr in
+            let len = strlen(ptr)
+            var written = 0
+            while written < len {
+                let n = Darwin.write(fd, ptr.advanced(by: written), len - written)
+                if n <= 0 { break }
+                written += n
+            }
+        }
+        KittyLogger.fault(public: "kittycode crash log at \(path)")
     }
 
     @MainActor static func runEditor(launchConfig: CLIArguments.LaunchConfig) async throws {
@@ -169,6 +203,7 @@ struct KittyCodeEntry {
         autoSaveManager?.stop()
         gitRefreshManager?.stop()
         state.gitDecorationManager?.stop()
+        state.shutdown()
         fileWatcherIntegration?.stop()
 
         // Suppress unused variable warnings

@@ -306,6 +306,7 @@ final class EditorState {
     var colorScheme: ColorScheme {
         didSet {
             highlightSession = nil
+            cachedSyntaxTheme = nil
         }
     }
     var tabScrollOffset: Int = 0 {
@@ -488,7 +489,21 @@ final class EditorState {
         return highlightedLines[index]
     }
 
+    /// Cached syntax theme. The 22-call `setStyle` build is non-trivial and
+    /// `syntaxTheme` is read once per render line plus per edit — without
+    /// caching we'd rebuild ~1 000 themes per frame on a 1 000-line file.
+    /// Recomputed when `colorScheme.didSet` fires (theme switch / config
+    /// reload) — see init and `applyConfig`.
+    @ObservationIgnored private var cachedSyntaxTheme: Theme?
+
     var syntaxTheme: Theme {
+        if let cached = cachedSyntaxTheme { return cached }
+        let theme = Self.makeSyntaxTheme(from: colorScheme)
+        cachedSyntaxTheme = theme
+        return theme
+    }
+
+    private static func makeSyntaxTheme(from colorScheme: ColorScheme) -> Theme {
         var theme = Theme(defaultStyle: colorScheme.editorText)
         theme.setStyle(colorScheme.syntaxKeyword, for: "keyword")
         theme.setStyle(colorScheme.syntaxType, for: "type")
@@ -1222,6 +1237,16 @@ final class EditorState {
                 await self.performFullHighlight()
             }
         }
+    }
+
+    /// Cleanly stops the long-lived full-highlight consumer task. Symmetric
+    /// to `GitDecorationManager.stop()`; `AppMain` calls both during
+    /// shutdown so neither leaves an orphaned task running against a
+    /// deallocating state graph.
+    func shutdown() {
+        fullHighlightContinuation.finish()
+        fullHighlightTask?.cancel()
+        fullHighlightTask = nil
     }
 
     /// Background-highlight body invoked by the long-lived consumer task.
