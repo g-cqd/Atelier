@@ -86,6 +86,15 @@ public final class BufferEditHistory {
 
         guard beforeFingerprint != afterFingerprint else { return }
 
+        // Drop the snapshots' rope materialisation caches before they enter
+        // the undo stack. Without this, every retained transition pins a
+        // `cachedText` (full document `String`) and a `cachedLines`
+        // (`[String]` of every line) on its prior rope storage — multi-MB
+        // per snapshot on a 1 MB document, which accumulates linearly with
+        // history depth. Reads on the live buffer recompute on demand.
+        let recordedBefore = Self.snapshotForStorage(before)
+        let recordedAfter = Self.snapshotForStorage(after)
+
         let recordedAt = Date()
         if let coalescingWindow,
             coalescingWindow > 0,
@@ -95,17 +104,31 @@ public final class BufferEditHistory {
             before.textCursor.row == undoStack[lastIndex].after.textCursor.row,
             before.textCursor.col == undoStack[lastIndex].after.textCursor.col
         {
-            undoStack[lastIndex].after = after
+            undoStack[lastIndex].after = recordedAfter
             undoStack[lastIndex].recordedAt = recordedAt
             return
         }
 
-        undoStack.append(Transition(before: before, after: after, recordedAt: recordedAt))
+        undoStack.append(
+            Transition(before: recordedBefore, after: recordedAfter, recordedAt: recordedAt))
         redoStack.removeAll(keepingCapacity: true)
 
         if undoStack.count > maxUndoSteps {
             undoStack.removeFirst(undoStack.count - maxUndoSteps)
         }
+    }
+
+    private static func snapshotForStorage(_ snapshot: BufferEditSnapshot) -> BufferEditSnapshot {
+        var copy = snapshot
+        copy.textBuffer.invalidateSnapshotCaches()
+        return copy
+    }
+
+    /// Test-only probe — returns the most recently recorded undo transition's
+    /// `before`/`after` snapshots. Used by `BufferEditHistoryTests` to pin
+    /// the cache-drop invariant of `recordChange`.
+    var _testTopOfUndoStack: (before: BufferEditSnapshot, after: BufferEditSnapshot)? {
+        undoStack.last.map { ($0.before, $0.after) }
     }
 
     public func undo(current snapshot: BufferEditSnapshot) -> StepResult {

@@ -80,6 +80,25 @@ public struct TextBuffer: Sendable {
     public var contentHash: Int {
         rope.contentHash
     }
+
+    /// Drops the underlying rope's materialised `text`/`lines`/`contentHash`
+    /// caches. Used by `BufferEditHistory` so undo-stack snapshots don't
+    /// retain multi-megabyte cached strings. Tree structure is untouched;
+    /// reads recompute on demand.
+    public mutating func invalidateSnapshotCaches() {
+        rope.invalidateSnapshotCaches()
+    }
+
+    /// Document byte count, O(1). Useful when a caller needs to know retained
+    /// document size without materialising any line strings.
+    public var byteCount: Int {
+        rope.byteCount
+    }
+
+    /// Test-only probe — see ``Rope/_testSnapshotCachesAreEmpty``.
+    var _testSnapshotCachesAreEmpty: Bool {
+        rope._testSnapshotCachesAreEmpty
+    }
 }
 
 // MARK: - DocumentSource
