@@ -3,6 +3,11 @@
 /// Format: `CSI < Cb ; Cx ; Cy M` (press) or `CSI < Cb ; Cx ; Cy m` (release)
 /// Mode 1016 uses pixel coordinates instead of cell coordinates.
 public struct MouseDecoder: Sendable {
+    /// Hard cap on the in-flight buffer length. A legal SGR mouse
+    /// sequence is at most ~30 bytes; this is a defence-in-depth ceiling
+    /// against malformed streams that never reach a terminator.
+    private static let maxSequenceBytes = 256
+
     private enum State: Sendable {
         case ground
         case escape
@@ -26,6 +31,9 @@ public struct MouseDecoder: Sendable {
 
     public mutating func feed(_ byte: UInt8) -> DecoderResult<MouseEvent> {
         buffer.append(byte)
+        if buffer.count > Self.maxSequenceBytes {
+            return invalidResult()
+        }
 
         switch state {
         case .ground:

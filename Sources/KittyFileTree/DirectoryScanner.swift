@@ -21,17 +21,27 @@ public enum DirectoryScanner {
     ///   - path: Absolute path of the directory to scan.
     ///   - maxDepth: Maximum recursion depth. `0` returns only direct children.
     ///   - maxEntries: Hard cap on the total number of entries visited.
+    ///   - visibility: Hidden-file inclusion policy.
+    ///   - withinRoot: Optional containment boundary used by the symlink-
+    ///     traversal defence. Every entry whose resolved real path escapes
+    ///     this root is silently skipped. Defaults to the scanned `path`
+    ///     (treats the scan directory as its own root). When recursive
+    ///     scans are launched for subdirectories, pass the workspace root
+    ///     here so symlinks under nested subdirectories are still checked
+    ///     against the workspace, not against the immediate parent.
     /// - Returns: Sorted entries — directories first, then files, each group
     ///   sorted case-insensitively by name.
     public static func scan(
         _ path: String,
         maxDepth: Int = defaultMaxDepth,
         maxEntries: Int = defaultMaxEntries,
-        visibility: FileVisibility = .defaultHidden
+        visibility: FileVisibility = .defaultHidden,
+        withinRoot: String? = nil
     ) -> [FileNode] {
         var count = 0
+        let root = withinRoot ?? path
         return scanDirectory(
-            path, maxDepth: maxDepth, maxEntries: maxEntries, visibility: visibility,
+            path, root: root, maxDepth: maxDepth, maxEntries: maxEntries, visibility: visibility,
             entryCount: &count)
     }
 
@@ -45,23 +55,28 @@ public enum DirectoryScanner {
     ///   - path: Absolute path of the directory to scan.
     ///   - maxDepth: Maximum recursion depth. `0` returns only direct children.
     ///   - maxEntries: Hard cap on the total number of entries visited.
+    ///   - visibility: Hidden-file inclusion policy.
+    ///   - withinRoot: See ``scan(_:maxDepth:maxEntries:visibility:withinRoot:)``.
     /// - Returns: Sorted entries — directories first, then files, each group
     ///   sorted case-insensitively by name.
     public static func scanAsync(
         _ path: String,
         maxDepth: Int = defaultMaxDepth,
         maxEntries: Int = defaultMaxEntries,
-        visibility: FileVisibility = .defaultHidden
+        visibility: FileVisibility = .defaultHidden,
+        withinRoot: String? = nil
     ) async -> [FileNode] {
         let counter = EntryCounter(limit: maxEntries)
+        let root = withinRoot ?? path
         return await scanDirectoryAsync(
-            path, maxDepth: maxDepth, visibility: visibility, counter: counter)
+            path, root: root, maxDepth: maxDepth, visibility: visibility, counter: counter)
     }
 
     // MARK: - Synchronous (original)
 
     private static func scanDirectory(
         _ path: String,
+        root: String,
         maxDepth: Int,
         maxEntries: Int,
         visibility: FileVisibility,
@@ -76,7 +91,7 @@ public enum DirectoryScanner {
             let fullPath = FilePath(path).appending(item).string
 
             guard visibility.shouldInclude(name: item, path: fullPath) else { continue }
-            guard isWithinRoot(fullPath, root: path) else { continue }
+            guard SecurePath.isValid(fullPath, root: root) else { continue }
 
             var isDir: ObjCBool = false
             fm.fileExists(atPath: fullPath, isDirectory: &isDir)
@@ -86,6 +101,7 @@ public enum DirectoryScanner {
             if isDir.boolValue && maxDepth > 0 {
                 children = scanDirectory(
                     fullPath,
+                    root: root,
                     maxDepth: maxDepth - 1,
                     maxEntries: maxEntries,
                     visibility: visibility,
@@ -130,6 +146,7 @@ public enum DirectoryScanner {
 
     private static func scanDirectoryAsync(
         _ path: String,
+        root: String,
         maxDepth: Int,
         visibility: FileVisibility,
         counter: EntryCounter
@@ -146,7 +163,7 @@ public enum DirectoryScanner {
             let fullPath = FilePath(path).appending(item).string
 
             guard visibility.shouldInclude(name: item, path: fullPath) else { continue }
-            guard isWithinRoot(fullPath, root: path) else { continue }
+            guard SecurePath.isValid(fullPath, root: root) else { continue }
 
             var isDir: ObjCBool = false
             fm.fileExists(atPath: fullPath, isDirectory: &isDir)
@@ -166,6 +183,7 @@ public enum DirectoryScanner {
                     group.addTask {
                         let children = await scanDirectoryAsync(
                             dir.path,
+                            root: root,
                             maxDepth: maxDepth - 1,
                             visibility: visibility,
                             counter: counter
@@ -204,11 +222,4 @@ public enum DirectoryScanner {
         }
     }
 
-    /// Returns `true` when `path` resolves to a location inside `root`,
-    /// guarding against symlink-based path traversal.
-    private static func isWithinRoot(_ path: String, root: String) -> Bool {
-        let resolved = (path as NSString).resolvingSymlinksInPath
-        let resolvedRoot = (root as NSString).resolvingSymlinksInPath
-        return resolved.hasPrefix(resolvedRoot)
-    }
 }

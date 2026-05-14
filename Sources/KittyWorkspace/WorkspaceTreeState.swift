@@ -13,7 +13,7 @@ public final class WorkspaceTreeState {
     public init() {}
 
     public init(rootPath: String) {
-        self.treeNodes = DirectoryScanner.scan(rootPath, maxDepth: 1)
+        self.treeNodes = DirectoryScanner.scan(rootPath, maxDepth: 1, withinRoot: rootPath)
         self.cachedFlatTree = FileTreeNavigator.flatten(treeNodes)
         self.lastSelectedDirectoryPath = rootPath
     }

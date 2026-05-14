@@ -9,7 +9,7 @@ extension EditorState {
     func loadInitialTree(validateHistory: Bool = true) async {
         let expandedPaths = collectExpandedPaths(treeNodes)
         treeNodes = await DirectoryScanner.scanAsync(
-            rootPath, maxDepth: 1, visibility: fileVisibility)
+            rootPath, maxDepth: 1, visibility: fileVisibility, withinRoot: rootPath)
         if !expandedPaths.isEmpty {
             restoreExpandedPaths(expandedPaths, in: &treeNodes)
         }
@@ -40,7 +40,8 @@ extension EditorState {
             if nodes[i].isDirectory && paths.contains(nodes[i].path) {
                 if !nodes[i].isExpanded {
                     FileTreeNavigator.toggleExpand(
-                        in: &nodes, at: nodes[i].path, visibility: fileVisibility)
+                        in: &nodes, at: nodes[i].path, visibility: fileVisibility,
+                        rootPath: rootPath)
                 }
                 if !nodes[i].children.isEmpty {
                     restoreExpandedPaths(paths, in: &nodes[i].children)
@@ -63,7 +64,8 @@ extension EditorState {
         guard index < flat.count else { return }
         let node = flat[index].node
         guard node.isDirectory else { return }
-        FileTreeNavigator.toggleExpand(in: &treeNodes, at: node.path, visibility: fileVisibility)
+        FileTreeNavigator.toggleExpand(
+            in: &treeNodes, at: node.path, visibility: fileVisibility, rootPath: rootPath)
         refreshFlatTree()
     }
 
