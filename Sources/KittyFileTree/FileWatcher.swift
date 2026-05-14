@@ -113,7 +113,18 @@ public actor FileWatcher {
     }
 
     public func suppressNotifications(for path: String) {
-        suppressTimestamps[path] = Date()
+        // Opportunistic cleanup: every insertion also evicts any entry whose
+        // suppression window has already elapsed. Without this, a path whose
+        // suppression record never sees a matching fsevent stays in the
+        // dictionary forever — over a long session of rename/delete ops,
+        // memory grows linearly with the count of suppressed paths.
+        let now = Date()
+        suppressTimestamps[path] = now
+        if suppressTimestamps.count > 1 {
+            suppressTimestamps = suppressTimestamps.filter {
+                now.timeIntervalSince($0.value) < Self.suppressWindow
+            }
+        }
     }
 
     public func stop() {
