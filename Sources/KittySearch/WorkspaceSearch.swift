@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+import System
 
 public func searchWorkspace(
     pattern: SearchPattern,
@@ -47,7 +48,7 @@ public func searchWorkspace(
                     counters.incrementFilesMatched()
                     if didHitCap { return }
 
-                    let fileName = (filePath as NSString).lastPathComponent
+                    let fileName = FilePath(filePath).lastComponent?.string ?? filePath
                     let snippets = matches.prefix(20).map { match -> String in
                         guard match.row >= 0, match.row < lines.count else { return "" }
                         return lines[match.row].trimmingCharacters(in: .whitespaces)

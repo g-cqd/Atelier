@@ -3,6 +3,7 @@ import KittyFileTree
 import KittySyntax
 import KittyText
 import KittyWorkspace
+import System
 
 extension EditorState {
 
@@ -80,7 +81,7 @@ extension EditorState {
     }
 
     func openFileByPath(_ path: String) {
-        let name = (path as NSString).lastPathComponent
+        let name = FilePath(path).lastComponent?.string ?? path
         openFilePath(path, name: name)
     }
 

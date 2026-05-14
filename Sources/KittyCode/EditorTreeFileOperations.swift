@@ -1,5 +1,6 @@
 import Foundation
 import KittyFileTree
+import System
 
 extension EditorState {
     @discardableResult
@@ -345,7 +346,7 @@ extension EditorState {
         }
 
         while let relative = enumerator.nextObject() as? String {
-            let fullPath = (path as NSString).appendingPathComponent(relative)
+            let fullPath = FilePath(path).appending(relative).string
             var childIsDir: ObjCBool = false
             guard fileManager.fileExists(atPath: fullPath, isDirectory: &childIsDir) else {
                 continue
@@ -384,7 +385,7 @@ extension EditorState {
 
         if isDirectory.boolValue {
             let children = try fileManager.contentsOfDirectory(atPath: path).sorted().map { child in
-                try captureFileSystemSnapshot(at: (path as NSString).appendingPathComponent(child))
+                try captureFileSystemSnapshot(at: FilePath(path).appending(child).string)
             }
             return .directory(path: path, children: children)
         }

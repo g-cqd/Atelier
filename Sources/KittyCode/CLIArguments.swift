@@ -118,14 +118,29 @@ struct CLIArguments: Sendable {
         }
 
         let resolvedPath: String
-        if pathString.hasPrefix("/") || pathString.hasPrefix("~") {
-            resolvedPath = (pathString as NSString).expandingTildeInPath
+        if pathString.hasPrefix("/") {
+            resolvedPath = pathString
+        } else if pathString.hasPrefix("~") {
+            resolvedPath = Self.expandingTilde(in: pathString)
         } else {
             resolvedPath = FilePath(FileManager.default.currentDirectoryPath)
                 .appending(pathString).string
         }
 
         return (resolvedPath, line, column)
+    }
+
+    /// Expands a leading `~` or `~/` to the current user's home directory.
+    /// Equivalent to `(path as NSString).expandingTildeInPath` for the shapes
+    /// kittycode actually accepts (no `~username`); avoids the Foundation
+    /// bridge.
+    static func expandingTilde(in path: String) -> String {
+        guard path.hasPrefix("~") else { return path }
+        if path == "~" { return NSHomeDirectory() }
+        if path.hasPrefix("~/") {
+            return NSHomeDirectory() + String(path.dropFirst())
+        }
+        return path
     }
 }
 

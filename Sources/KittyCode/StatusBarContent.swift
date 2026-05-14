@@ -1,4 +1,5 @@
 import Foundation
+import System
 
 extension EditorState {
     private static let statusBarSeparator = " │ "
@@ -118,7 +119,7 @@ extension EditorState {
     private var statusBarPath: String {
         // When focused on tree or no file open, show the working directory name
         if mode == .tree || fileName.isEmpty {
-            return (rootPath as NSString).lastPathComponent
+            return FilePath(rootPath).lastComponent?.string ?? rootPath
         }
 
         // Show relative path from rootPath, with dirty indicator
