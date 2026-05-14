@@ -10,6 +10,7 @@ import KittyText
 import KittyWidgets
 import KittyWorkspace
 import Observation
+import System
 
 @Observable
 @MainActor
@@ -1261,16 +1262,16 @@ final class EditorState {
         }
     }
 
-    var isGitFilterAvailable: Bool {
+    var isGitIgnoreFilterAvailable: Bool {
         guard config.git.enabled, fileStatusProvider != nil else { return false }
         return FileManager.default.fileExists(
-            atPath: (rootPath as NSString).appendingPathComponent(".gitignore"))
+            atPath: FilePath(rootPath).appending(".gitignore").string)
     }
 
     func cycleFileVisibility() async {
         switch fileVisibility {
         case .defaultHidden:
-            if isGitFilterAvailable {
+            if isGitIgnoreFilterAvailable {
                 let ignored = await GitIgnoreChecker.ignoredPaths(in: rootPath)
                 fileVisibility = .gitFiltered(ignoredPaths: ignored)
             } else {
