@@ -4,6 +4,22 @@ import Testing
 
 @testable import KittyCode
 
+/// Local helper — deletes the given selection via
+/// `TextOperations.deleteRange` and drives `textDidChange(_:)` with the
+/// resulting mutation so the wrap cache participates in the incremental
+/// patch. Takes the selection explicitly because the
+/// `makeKittyCodeNavigationContext` fixture doesn't construct an active
+/// buffer (`state.selection` forwards to `bufferManager.activeBuffer?.
+/// selection`, which is nil in that fixture).
+@MainActor
+private func deleteSelection(_ state: EditorState, _ selection: TextSelection) {
+    let previous = state.activeBufferSnapshot()
+    let mutation = TextOperations.deleteRange(
+        in: &state.textBuffer, at: &state.textCursor, selection: selection)
+    state.textDidChange(mutation, previousSnapshot: previous)
+    state.clearSelection()
+}
+
 /// Audit NF2 — `wrapCache.invalidate()` cleared the entire visual-row
 /// cache on every per-line edit, forcing the next viewport to walk all
 /// lines and rebuild from scratch. The new `invalidateLines(...)` path
@@ -114,6 +130,98 @@ struct WrapCacheIncrementalTests {
         #expect(sut.state.wrapCache.lineWrapCounts.isEmpty)
         #expect(sut.state.wrapCache.visualOffsets.isEmpty)
         #expect(sut.state.wrapCache.contentWidth == -1)
+    }
+
+    /// Audit A11 — confirm that deleting a line shrinks both arrays and
+    /// re-establishes the prefix-sum invariant. The original
+    /// `WrapCacheIncrementalTests` covered insertion + same-line edits
+    /// but not the shrink path; a regression in
+    /// `WrapCache.invalidateLines` that mis-truncated `visualOffsets`
+    /// would have slipped through.
+    @Test
+    func `deleting a line shrinks lineWrapCounts and visualOffsets`() {
+        let sut = makeSUT(lineCount: 10)
+        sut.state.buildWrapCache(contentWidth: 80)
+        let beforeCount = sut.state.wrapCache.lineWrapCounts.count
+        let beforeOffsetsCount = sut.state.wrapCache.visualOffsets.count
+
+        // Delete line 3 by selecting it whole + the trailing newline.
+        deleteSelection(
+            sut.state,
+            TextSelection(
+                anchor: TextPosition(row: 3, col: 0),
+                head: TextPosition(row: 4, col: 0)))
+
+        #expect(sut.state.wrapCache.lineWrapCounts.count == beforeCount - 1)
+        #expect(sut.state.wrapCache.visualOffsets.count == beforeOffsetsCount - 1)
+
+        // Prefix-sum invariant restored.
+        let offsets = sut.state.wrapCache.visualOffsets
+        let counts = sut.state.wrapCache.lineWrapCounts
+        for index in 1..<offsets.count {
+            #expect(offsets[index] == offsets[index - 1] + counts[index - 1])
+        }
+        // Total matches sum.
+        #expect(sut.state.wrapCache.totalRowCount == counts.reduce(0, +))
+    }
+
+    /// Multi-line replacement that shrinks line count. Cache must
+    /// collapse correctly. Predicted line counts vary depending on the
+    /// editor's exact handling of trailing newlines; the test pins the
+    /// invariant rather than the absolute count.
+    @Test
+    func `replacing multiple lines with a single line preserves the prefix-sum invariant`() {
+        let sut = makeSUT(lineCount: 10)
+        sut.state.buildWrapCache(contentWidth: 80)
+        let beforeCount = sut.state.wrapCache.lineWrapCounts.count
+
+        deleteSelection(
+            sut.state,
+            TextSelection(
+                anchor: TextPosition(row: 2, col: 0),
+                head: TextPosition(row: 5, col: 0)))
+        insertText("merged", into: sut.state)
+
+        #expect(
+            sut.state.wrapCache.lineWrapCounts.count < beforeCount,
+            "deleting lines must shrink the wrap cache")
+        // Counts match file line count.
+        #expect(sut.state.wrapCache.lineWrapCounts.count == sut.state.fileLineCount)
+
+        let counts = sut.state.wrapCache.lineWrapCounts
+        let offsets = sut.state.wrapCache.visualOffsets
+        for index in 1..<offsets.count {
+            #expect(offsets[index] == offsets[index - 1] + counts[index - 1])
+        }
+        #expect(sut.state.wrapCache.totalRowCount == counts.reduce(0, +))
+    }
+
+    /// Multi-line replacement that grows: select 1 line, insert several.
+    /// Same approach — pin invariants instead of absolute counts.
+    @Test
+    func `inserting multiple lines grows the cache and preserves invariants`() {
+        let sut = makeSUT(lineCount: 10)
+        sut.state.buildWrapCache(contentWidth: 80)
+        let beforeCount = sut.state.wrapCache.lineWrapCounts.count
+
+        deleteSelection(
+            sut.state,
+            TextSelection(
+                anchor: TextPosition(row: 3, col: 0),
+                head: TextPosition(row: 4, col: 0)))
+        insertText("a\nb\nc\n", into: sut.state)
+
+        #expect(
+            sut.state.wrapCache.lineWrapCounts.count > beforeCount,
+            "inserting multiple lines must grow the wrap cache")
+        #expect(sut.state.wrapCache.lineWrapCounts.count == sut.state.fileLineCount)
+
+        let counts = sut.state.wrapCache.lineWrapCounts
+        let offsets = sut.state.wrapCache.visualOffsets
+        for index in 1..<offsets.count {
+            #expect(offsets[index] == offsets[index - 1] + counts[index - 1])
+        }
+        #expect(sut.state.wrapCache.totalRowCount == counts.reduce(0, +))
     }
 
     @Test
