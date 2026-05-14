@@ -1,3 +1,5 @@
+import KittyStyle
+
 // MARK: - SGR Encoder
 
 /// Converts `Style` values into ANSI/VT Select Graphic Rendition (SGR) escape sequences.

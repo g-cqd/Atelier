@@ -1,8 +1,9 @@
 import Foundation
-import KittyCodecs
 import KittyGrammar
 import KittyParser
 import KittyQuery
+import KittyStyle
+import KittySync
 import os
 
 /// Signpost emitter for syntax-highlighter hot paths. Audit D10 —
@@ -11,7 +12,6 @@ import os
 /// and viewport vs full-document highlights.
 private let highlighterSignposter = OSSignposter(
     subsystem: "com.kittytui.syntax", category: "highlight")
-import KittySync
 
 public enum LanguageHighlighter: Sendable {
     /// Maximum source size in bytes for grammar-backed highlighting.

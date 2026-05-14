@@ -20,6 +20,7 @@ let package = Package(
         // Their internal targets still exist below; only the product
         // declaration is dropped. Audit B5.
         .library(name: "KittyTerminal", targets: ["KittyTerminal"]),
+        .library(name: "KittyStyle", targets: ["KittyStyle"]),
         .library(name: "KittyCodecs", targets: ["KittyCodecs"]),
         .library(name: "KittyInput", targets: ["KittyInput"]),
         .library(name: "KittyRenderer", targets: ["KittyRenderer"]),
@@ -46,9 +47,15 @@ let package = Package(
         .target(
             name: "KittyTerminal", dependencies: ["KittySync"], swiftSettings: defaultSwiftSettings),
 
+        // Layer 0b — Pure visual-style value types (Color, UnderlineStyle,
+        // Style). No dependencies. KittySyntax depends on this directly
+        // so it doesn't transitively pull in the terminal-codec layer
+        // just to reference `Style`. Audit D2.
+        .target(name: "KittyStyle", swiftSettings: defaultSwiftSettings),
+
         // Layer 1 — Escape sequence encoders/decoders
         .target(
-            name: "KittyCodecs", dependencies: ["KittyTerminal"],
+            name: "KittyCodecs", dependencies: ["KittyTerminal", "KittyStyle"],
             swiftSettings: defaultSwiftSettings),
 
         // Layer 2a — Async InputEvent stream
@@ -95,15 +102,17 @@ let package = Package(
         .target(
             name: "KittySyntax",
             dependencies: [
-                "KittyGrammar", "KittyParser", "KittyQuery", "KittyRenderer", "KittySync",
+                "KittyGrammar", "KittyParser", "KittyQuery", "KittyStyle", "KittySync",
             ],
             resources: [.copy("Grammars")],
             swiftSettings: defaultSwiftSettings
         ),
 
-        // Layer 4 — View protocol, layout, tree/text widgets
+        // Layer 4 — View protocol, layout, tree/text widgets.
+        // Direct dep on `KittyRenderer` (was previously transitive via
+        // `KittySyntax` before audit D2 cleaned up that layering reach).
         .target(
-            name: "KittyWidgets", dependencies: ["KittySyntax", "KittyInput"],
+            name: "KittyWidgets", dependencies: ["KittySyntax", "KittyInput", "KittyRenderer"],
             swiftSettings: defaultSwiftSettings),
 
         // Layer 4b — Workspace domain: document, tab, file lifecycle, git coordination
