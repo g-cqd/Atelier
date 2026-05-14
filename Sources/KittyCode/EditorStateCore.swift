@@ -214,18 +214,18 @@ final class EditorState {
     // MARK: - Shell state
 
     var config: KittyConfig
-    var fileStatusProvider: (any FileStatusProvider)?
-    var gitLineDecorationProvider: (any GitLineDecorationProvider)?
-    var gitDecorationManager: GitDecorationManager?
-    var renderRefreshSource: RenderRefreshSource?
+    @ObservationIgnored var fileStatusProvider: (any FileStatusProvider)?
+    @ObservationIgnored var gitLineDecorationProvider: (any GitLineDecorationProvider)?
+    @ObservationIgnored var gitDecorationManager: GitDecorationManager?
+    @ObservationIgnored var renderRefreshSource: RenderRefreshSource?
     /// Observation-aware tick source. When non-nil, every `mark*Dirty` call
     /// advances it; an observation-listener task in `ApplicationRuntime` then
     /// injects an `.refresh` input event so the existing event loop renders
     /// the next frame. Lets us drop ad-hoc `renderRefreshSource.invalidate()`
     /// calls from async completion sites — the dirty marker that already
     /// runs there is enough.
-    var renderClock: RenderClock?
-    weak var fileWatcherIntegration: FileWatcherIntegration?
+    @ObservationIgnored var renderClock: RenderClock?
+    @ObservationIgnored weak var fileWatcherIntegration: FileWatcherIntegration?
     var colorScheme: ColorScheme {
         didSet {
             highlightSession = nil
@@ -394,7 +394,7 @@ final class EditorState {
     var workspaceSearchResults: [SearchFileResult] = [] {
         didSet { markChromeDirty() }
     }
-    var workspaceSearchTask: Task<Void, Never>?
+    @ObservationIgnored var workspaceSearchTask: Task<Void, Never>?
     var workspaceSearchSummary: String = "" {
         didSet { if workspaceSearchSummary != oldValue { markChromeDirty() } }
     }
@@ -983,45 +983,49 @@ final class EditorState {
             }
         }
     }
-    var vimVisualAnchor: (line: Int, col: Int)?
+    @ObservationIgnored var vimVisualAnchor: (line: Int, col: Int)?
     var symbolTheme: TerminalSymbolTheme
-    var lastClickTime: ContinuousClock.Instant?
-    var lastClickIndex = -1
-    var isScrolling = false
-    var scrollDragState: ScrollDragState?
-    var focusMap: FocusMap?
-    var lastRenderColumns = 80
-    var lastRenderRows = 24
-    var lastScrollDirection: MouseButton?
-    var blockedMomentumDirection: MouseButton?
-    var blockedMomentumDeadline: ContinuousClock.Instant?
-    var scrollAccelerationDirection: MouseButton?
-    var scrollAccelerationTarget: AcceleratedScrollTarget?
-    var scrollAccelerationBurstCount = 0
-    var scrollAccelerationLastEventAt: ContinuousClock.Instant?
-    var pendingAcceleratedScrollLines = 0
-    var pendingAcceleratedScrollTarget: AcceleratedScrollTarget?
-    var scrollAccelerationTask: Task<Void, Never>?
+    @ObservationIgnored var lastClickTime: ContinuousClock.Instant?
+    @ObservationIgnored var lastClickIndex = -1
+    @ObservationIgnored var isScrolling = false
+    @ObservationIgnored var scrollDragState: ScrollDragState?
+    @ObservationIgnored var focusMap: FocusMap?
+    @ObservationIgnored var lastRenderColumns = 80
+    @ObservationIgnored var lastRenderRows = 24
+    @ObservationIgnored var lastScrollDirection: MouseButton?
+    @ObservationIgnored var blockedMomentumDirection: MouseButton?
+    @ObservationIgnored var blockedMomentumDeadline: ContinuousClock.Instant?
+    @ObservationIgnored var scrollAccelerationDirection: MouseButton?
+    @ObservationIgnored var scrollAccelerationTarget: AcceleratedScrollTarget?
+    @ObservationIgnored var scrollAccelerationBurstCount = 0
+    @ObservationIgnored var scrollAccelerationLastEventAt: ContinuousClock.Instant?
+    @ObservationIgnored var pendingAcceleratedScrollLines = 0
+    @ObservationIgnored var pendingAcceleratedScrollTarget: AcceleratedScrollTarget?
+    @ObservationIgnored var scrollAccelerationTask: Task<Void, Never>?
     var isLoadingGrammar = false {
         didSet { if isLoadingGrammar != oldValue { markChromeDirty() } }
     }
-    var marqueeTickOffset: Int = 0
-    var marqueeTimer: Task<Void, Never>?
-    var marqueeTargetLabel: String?
-    var wrapCache = WrapCache()
+    @ObservationIgnored var marqueeTickOffset: Int = 0
+    @ObservationIgnored var marqueeTimer: Task<Void, Never>?
+    @ObservationIgnored var marqueeTargetLabel: String?
+    @ObservationIgnored var wrapCache = WrapCache()
 
     // MARK: - Dirty tracking (Phase 2)
     //
     // Logical-coordinate dirty state. Drained at the start of each render
     // frame and translated into pipeline-level `DirtyRegions`. Phase 2 just
-    // collects the markers; Phase 3 makes the renderer act on them.
+    // collects the markers; Phase 3 makes the renderer act on them. These
+    // are `@ObservationIgnored` because the public observation surface is
+    // `RenderClock.tick` (advanced by `mark*Dirty`) — letting consumers
+    // observe these directly would have the registrar fire per-set during
+    // hot edit loops with no benefit.
 
     /// Buffer-line indices whose content has changed and need repaint.
-    var dirtyContentLines = Set<Int>()
+    @ObservationIgnored var dirtyContentLines = Set<Int>()
     /// Whole editor content area must be repainted (e.g. scroll, file switch).
-    var dirtyContentAll = true
+    @ObservationIgnored var dirtyContentAll = true
     /// Sidebar / status bar / tab ribbon must be repainted.
-    var dirtyChrome = true
+    @ObservationIgnored var dirtyChrome = true
 
     /// Marks every logical line in `range` as dirty.
     func markLinesDirty(_ range: Range<Int>) {
@@ -1078,16 +1082,16 @@ final class EditorState {
             markContentAllDirty()
         }
     }
-    var terminalWriter: (([UInt8]) -> Void)?
+    @ObservationIgnored var terminalWriter: (([UInt8]) -> Void)?
     var readOnly: Bool = false
     var commandFeedback: String? {
         didSet { if commandFeedback != oldValue { markChromeDirty() } }
     }
-    var commandFeedbackExpiry: ContinuousClock.Instant?
-    var lastKeyRepeatProcessedAt: ContinuousClock.Instant?
-    var pendingKeySequence: [KeyStroke] = []
-    var pendingKeySequenceTime: ContinuousClock.Instant?
-    var fullHighlightTask: Task<Void, Never>?
+    @ObservationIgnored var commandFeedbackExpiry: ContinuousClock.Instant?
+    @ObservationIgnored var lastKeyRepeatProcessedAt: ContinuousClock.Instant?
+    @ObservationIgnored var pendingKeySequence: [KeyStroke] = []
+    @ObservationIgnored var pendingKeySequenceTime: ContinuousClock.Instant?
+    @ObservationIgnored var fullHighlightTask: Task<Void, Never>?
     var fileTreeHistory = FileTreeOperationHistory()
 
     var maxLineWidth: Int {
