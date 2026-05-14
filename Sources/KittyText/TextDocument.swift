@@ -1,6 +1,16 @@
 import Foundation
 
-@MainActor
+/// `TextDocument` was previously `@MainActor` even though it holds only
+/// data (`TextBuffer`, `TextCursor`, cached lines, file path, line
+/// ending) — no UI-bound state. The isolation propagated transitively
+/// into every test that constructed a `DocumentBuffer`, forcing tests
+/// onto the main actor with no functional benefit. Audit B3 / NF32.
+///
+/// The class stays a reference type because consumers (`BufferManager`,
+/// `WorkspaceSession`) rely on identity semantics for the active-buffer
+/// view-restore handshake. Owners are `@MainActor` (`WorkspaceSession`,
+/// `BufferManager`) so the document doesn't cross actor boundaries in
+/// practice — isolation is enforced at the owner, not at the document.
 public final class TextDocument {
     public enum LineEnding: String, Sendable, Equatable {
         case lineFeed = "lf"
