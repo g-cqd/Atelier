@@ -144,4 +144,62 @@ struct WorkspaceSearchTests {
         #expect(result.totalMatchCount == 1)
         #expect(result.filesSearched == 2)
     }
+
+    /// Audit A4 — the streaming `readFileLines` must produce the same
+    /// line splits as the previous `String.split(omittingEmptySubsequences:
+    /// false)` approach. These tests cover the boundary cases that a naive
+    /// chunked implementation drops on the floor: file with no trailing
+    /// newline, file with only `\n`, file with a line longer than the
+    /// 64 KB chunk size.
+    @Test("file without trailing newline counts every line")
+    func streamingNoTrailingNewline() async throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+
+        try writeFile(tmp + "/a.txt", content: "alpha\nbeta\ngamma")  // no trailing \n
+        let pattern = compilePattern(SearchQuery(text: "gamma"))!
+        let result = await searchWorkspace(
+            pattern: pattern, files: [tmp + "/a.txt"], openBuffers: [:], onProgress: { _ in })
+        #expect(result.totalMatchCount == 1)
+    }
+
+    @Test("file ending with newline preserves trailing empty line semantics")
+    func streamingTrailingNewline() async throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+
+        // Three lines, file ends with `\n`. Original split semantics produced
+        // ["alpha", "beta", ""]; the streaming reader must match.
+        try writeFile(tmp + "/a.txt", content: "alpha\nbeta\n")
+        let pattern = compilePattern(SearchQuery(text: "beta"))!
+        let result = await searchWorkspace(
+            pattern: pattern, files: [tmp + "/a.txt"], openBuffers: [:], onProgress: { _ in })
+        #expect(result.totalMatchCount == 1)
+    }
+
+    @Test("line longer than the chunk size is reassembled across chunks")
+    func streamingLongLine() async throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+
+        // 80 KB single line (~1.25 × 64 KB chunk) followed by a matching marker.
+        let bigLine = String(repeating: "x", count: 80 * 1024)
+        try writeFile(tmp + "/a.txt", content: bigLine + "\nNEEDLE\n")
+        let pattern = compilePattern(SearchQuery(text: "NEEDLE"))!
+        let result = await searchWorkspace(
+            pattern: pattern, files: [tmp + "/a.txt"], openBuffers: [:], onProgress: { _ in })
+        #expect(result.totalMatchCount == 1)
+    }
+
+    @Test("CRLF lines are tolerated (CR stays in the line, \\n splits)")
+    func streamingCRLF() async throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+
+        try writeFile(tmp + "/a.txt", content: "alpha\r\nbeta\r\n")
+        let pattern = compilePattern(SearchQuery(text: "beta"))!
+        let result = await searchWorkspace(
+            pattern: pattern, files: [tmp + "/a.txt"], openBuffers: [:], onProgress: { _ in })
+        #expect(result.totalMatchCount == 1)
+    }
 }
