@@ -104,8 +104,19 @@ public enum Predicates: Sendable {
 // MARK: - Thread-safe regex cache
 
 private final class RegexCache: Sendable {
-    private struct CacheState: @unchecked Sendable {
+    /// LRU upper bound — protects against a malformed query file that hands
+    /// us a stream of unique patterns and would otherwise grow the cache
+    /// without limit. 64 is comfortably above the predicate count any real
+    /// language query ships with.
+    private static let maxEntries = 64
+
+    private struct CacheState {
+        // `NSRegularExpression` is documented thread-safe, so the dictionary
+        // value type is naturally Sendable — no `@unchecked` escape hatch
+        // needed. The lock guards the dictionary mutation itself.
         var regexes: [String: NSRegularExpression] = [:]
+        /// FIFO of pattern strings in insertion order; oldest is at index 0.
+        var insertionOrder: [String] = []
     }
 
     private let storage = StateLock(initialState: CacheState())
@@ -114,7 +125,12 @@ private final class RegexCache: Sendable {
         return storage.withLock { cache in
             if let existing = cache.regexes[pattern] { return existing }
             guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+            if cache.regexes.count >= Self.maxEntries, !cache.insertionOrder.isEmpty {
+                let oldest = cache.insertionOrder.removeFirst()
+                cache.regexes.removeValue(forKey: oldest)
+            }
             cache.regexes[pattern] = regex
+            cache.insertionOrder.append(pattern)
             return regex
         }
     }
