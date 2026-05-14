@@ -3,6 +3,14 @@ import KittyCodecs
 import KittyGrammar
 import KittyParser
 import KittyQuery
+import os
+
+/// Signpost emitter for syntax-highlighter hot paths. Audit D10 —
+/// mirrors `RenderPipeline.swift` / `EditorStateCore.swift` so Instruments
+/// can attribute frame-budget time to grammar parsing, token merging,
+/// and viewport vs full-document highlights.
+private let highlighterSignposter = OSSignposter(
+    subsystem: "com.kittytui.syntax", category: "highlight")
 import KittySync
 
 public enum LanguageHighlighter: Sendable {
@@ -109,6 +117,8 @@ public enum LanguageHighlighter: Sendable {
         }
 
         public func highlightDocument(source: String) -> [[StyledSpan]] {
+            let interval = highlighterSignposter.beginInterval("highlightDocument")
+            defer { highlighterSignposter.endInterval("highlightDocument", interval) }
             switch strategy {
             case .grammar(let grammarSession):
                 guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
