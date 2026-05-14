@@ -69,25 +69,28 @@ public struct Rope: Sendable {
         return lines
     }
 
-    /// Stable hash of the rope's content. Computed once per content version
-    /// and memoized on the CoW storage; subsequent reads are O(1) until the
-    /// next mutation.
+    /// Stable hash of the rope's content. **O(1) per read** after the
+    /// rope has settled — the tree carries per-node hashes precomputed at
+    /// construction, so every read just combines `(byteCount, lineCount,
+    /// root.nodeHash)`.
+    ///
+    /// Per-edit cost is bounded by the depth of the mutation path: every
+    /// new `BranchNode` produced by `inserting` / `removing` / `replace`
+    /// runs its own O(1) hash combine in `init` from its children's
+    /// already-cached hashes. The leaf that was mutated computes its hash
+    /// once in `LeafNode.init`. Total work per edit: O(log N).
     ///
     /// Useful for change-detection paths (undo/redo invalidation, dirty
     /// tracking) where the full lines-array hash would otherwise dominate
-    /// per-edit time on large files.
+    /// per-edit time on large files. Within a single process run the value
+    /// is deterministic; across runs `Hasher`'s seed randomises so values
+    /// are not stable for serialisation.
     public var contentHash: Int {
-        if let cached = storage.cachedContentHash { return cached }
         var hasher = Hasher()
         hasher.combine(byteCount)
         hasher.combine(lineCount)
-        var bytes = Data()
-        bytes.reserveCapacity(byteCount)
-        storage.root.appendAllBytes(to: &bytes)
-        hasher.combine(bytes)
-        let value = hasher.finalize()
-        storage.cachedContentHash = value
-        return value
+        hasher.combine(storage.root.nodeHash)
+        return hasher.finalize()
     }
 
     /// Byte offset of the start of line `line`, or `-1` if out of range.
@@ -306,8 +309,6 @@ extension Rope {
         }
         var cachedText: String?
         var cachedLines: [String]?
-        var cachedContentHash: Int?
-
         init(root: RopeNode) {
             self.root = root
         }
@@ -319,7 +320,6 @@ extension Rope {
         func invalidateCaches() {
             cachedText = nil
             cachedLines = nil
-            cachedContentHash = nil
         }
     }
 }
@@ -331,10 +331,16 @@ extension Rope {
 final class LeafNode: @unchecked Sendable {
     let data: Data
     let newlineCount: Int
+    /// Per-leaf hash computed once at construction. Lets `Rope.contentHash`
+    /// run in O(1) after the rope settles — see `RopeNode.nodeHash`.
+    let leafHash: Int
 
     init(data: Data, newlineCount: Int) {
         self.data = data
         self.newlineCount = newlineCount
+        var hasher = Hasher()
+        hasher.combine(data)
+        self.leafHash = hasher.finalize()
     }
 }
 
@@ -345,12 +351,21 @@ final class BranchNode: @unchecked Sendable {
     let right: RopeNode
     let byteCount: Int
     let newlineCount: Int
+    /// Per-branch hash combined from `(left.nodeHash, right.nodeHash)` at
+    /// construction. Mutations produce new branches whose hash compute is
+    /// O(1) per node — total per-edit hash cost is bounded by the depth of
+    /// the path from the mutated leaf to the root (O(log N)).
+    let branchHash: Int
 
     init(left: RopeNode, right: RopeNode) {
         self.left = left
         self.right = right
         self.byteCount = left.byteCount + right.byteCount
         self.newlineCount = left.newlineCount + right.newlineCount
+        var hasher = Hasher()
+        hasher.combine(left.nodeHash)
+        hasher.combine(right.nodeHash)
+        self.branchHash = hasher.finalize()
     }
 }
 
@@ -372,6 +387,16 @@ enum RopeNode: Sendable {
         switch self {
         case .leaf(let leaf): return leaf.newlineCount
         case .branch(let branch): return branch.newlineCount
+        }
+    }
+
+    /// Precomputed per-node hash. Dispatches to the leaf or branch payload's
+    /// stored hash so `Rope.contentHash` doesn't have to walk the tree on
+    /// every read.
+    var nodeHash: Int {
+        switch self {
+        case .leaf(let leaf): return leaf.leafHash
+        case .branch(let branch): return branch.branchHash
         }
     }
 
