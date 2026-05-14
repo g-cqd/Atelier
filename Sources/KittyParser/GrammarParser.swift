@@ -1,8 +1,26 @@
 import KittyGrammar
 
-/// Wraps GLRParser for incremental re-parsing.
-/// Reuses unchanged subtrees from the previous parse tree.
-public final class IncrementalParser: Sendable {
+/// Wraps ``GLRParser`` with the per-language tables fixed at construction.
+///
+/// Despite the previous name (`IncrementalParser`) and a docstring that
+/// promised "reuses unchanged subtrees from the previous parse tree",
+/// this type does **not** perform incremental parsing today — every call
+/// to ``parse(_:externalScanner:)`` runs a full GLR pass on the entire
+/// source. The tree-editing primitives in this file
+/// (``SyntaxTree/applying(edit:)`` and the supporting `applyEdit` helpers)
+/// are the building blocks a future incremental implementation would use,
+/// but no callsite currently feeds them back into the parser.
+///
+/// If real incrementality is added later, the right shape is:
+///   1. Apply the edit to the old tree (shift byte and point offsets).
+///   2. Walk the old tree, identify reusable subtrees outside the edit
+///      region.
+///   3. Parse only the changed region plus minimal context.
+///   4. Return a new tree that shares unchanged nodes with the old tree.
+///
+/// Until that work lands, the type's name reflects what it actually does:
+/// a grammar-driven parser with fixed tables.
+public final class GrammarParser: Sendable {
     private let parser: GLRParser
 
     public init(parseTable: ParseTable, lexTable: LexTable, productions: [ProductionRule]) {
@@ -10,22 +28,12 @@ public final class IncrementalParser: Sendable {
             parseTable: parseTable, lexTable: lexTable, productions: productions)
     }
 
-    /// Parse source text, optionally reusing parts of the old tree.
+    /// Parse `source` and return the resulting ``SyntaxTree``.
     public func parse(
         _ source: String,
-        oldTree: SyntaxTree? = nil,
-        edit: TextEdit? = nil,
         externalScanner: (any ExternalScanner)? = nil
     ) throws(ParseError) -> SyntaxTree {
-        // For now, delegate to full parse. Incremental optimization can be added later
-        // when the basic parser is proven correct.
-        //
-        // Future optimization:
-        // 1. Apply edit to old tree (shift byte offsets)
-        // 2. Walk old tree, identify reusable subtrees (outside edit region)
-        // 3. Parse only changed region + minimal context
-        // 4. Return new tree sharing unchanged nodes with old tree
-        return try parser.parse(source, externalScanner: externalScanner)
+        try parser.parse(source, externalScanner: externalScanner)
     }
 }
 
@@ -33,7 +41,11 @@ public final class IncrementalParser: Sendable {
 
 extension SyntaxTree {
     /// Apply an edit to the tree, shifting byte/point ranges.
-    /// Returns a modified tree ready for incremental re-parse.
+    ///
+    /// Returns a modified tree ready for a future incremental re-parse to
+    /// reuse subtrees that fall outside the edit region. No production
+    /// callsite consumes the result today (the parser ignores `oldTree`);
+    /// tests exercise this primitive directly.
     public func applying(edit: TextEdit) -> SyntaxTree {
         let newRoot = applyEdit(to: root, edit: edit)
         return SyntaxTree(root: newRoot, source: source)
