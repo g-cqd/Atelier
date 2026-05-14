@@ -618,7 +618,17 @@ private enum SyntaxArtifactsCache {
     }
 
     private static func loadArtifacts(for language: String) -> SyntaxArtifacts? {
-        guard let entry = BundledLanguageManifest.entry(forLanguage: language) else {
+        // Audit D1 — the registry is the primary dispatch path so
+        // ADR 8 extensions can register additional languages; the
+        // bundled manifest is the default source for the languages
+        // that ship with the binary. `entry.path` is treated as a
+        // bundle-relative `Grammars/<path>` directory either way.
+        let entry: GrammarRegistry.LanguageEntry
+        if let registered = GrammarRegistry.shared.entry(forLanguage: language) {
+            entry = registered
+        } else if let bundled = BundledLanguageManifest.entry(forLanguage: language) {
+            entry = GrammarRegistry.LanguageEntry(bundled: bundled)
+        } else {
             return nil
         }
 
