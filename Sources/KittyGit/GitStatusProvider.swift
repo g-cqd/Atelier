@@ -429,28 +429,39 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
 
         let guarded = ProcessGuard(process: process)
 
-        return await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
-            let once = ResumeOnce()
-            let watchdog = Task {
-                try? await Task.sleep(for: timeout)
-                guarded.terminateIfRunning()
-            }
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation {
+                (continuation: CheckedContinuation<String?, Never>) in
+                let once = ResumeOnce()
+                let watchdog = Task {
+                    try? await Task.sleep(for: timeout)
+                    guarded.terminateIfRunning()
+                }
 
-            process.terminationHandler = { proc in
-                let data = (try? pipe.fileHandleForReading.readToEnd()) ?? Data()
-                let result: String? = proc.terminationStatus == 0
-                    ? String(data: data, encoding: .utf8) : nil
-                watchdog.cancel()
-                once.resume(continuation, with: result)
-            }
+                process.terminationHandler = { proc in
+                    let data = (try? pipe.fileHandleForReading.readToEnd()) ?? Data()
+                    let result: String? =
+                        proc.terminationStatus == 0
+                        ? String(data: data, encoding: .utf8) : nil
+                    watchdog.cancel()
+                    once.resume(continuation, with: result)
+                }
 
-            do {
-                try process.run()
-            } catch {
-                process.terminationHandler = nil
-                watchdog.cancel()
-                once.resume(continuation, with: nil)
+                do {
+                    try process.run()
+                } catch {
+                    process.terminationHandler = nil
+                    watchdog.cancel()
+                    once.resume(continuation, with: nil)
+                }
             }
+        } onCancel: {
+            // Audit D6 — propagate parent-task cancellation by terminating
+            // the git subprocess immediately. The watchdog already handles
+            // hard timeouts; this adds early-termination on
+            // cancel-and-respawn flows so a stale `git status` doesn't
+            // sit around eating CPU after the user's already moved on.
+            guarded.terminateIfRunning()
         }
     }
 }
