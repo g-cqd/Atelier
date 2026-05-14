@@ -1,5 +1,6 @@
 import Foundation
 import KittySync
+import System
 
 struct BundledLanguageEntry: Decodable, Sendable, Equatable {
     let name: String
@@ -30,7 +31,7 @@ enum BundledLanguageManifest {
     }
 
     static func entry(forFilename filename: String) -> BundledLanguageEntry? {
-        let fileExtension = (filename as NSString).pathExtension.lowercased()
+        let fileExtension = (FilePath(filename).extension ?? "").lowercased()
         guard !fileExtension.isEmpty else { return nil }
         return loadedManifest()?.entriesByExtension[".\(fileExtension)"]
     }
