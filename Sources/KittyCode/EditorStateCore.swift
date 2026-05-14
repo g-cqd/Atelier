@@ -473,6 +473,17 @@ final class EditorState {
         didSet { markChromeDirty() }
     }
     @ObservationIgnored var workspaceSearchTask: Task<Void, Never>?
+    /// Long-lived consumer that debounces workspace-search-as-you-type
+    /// signals. The producer (`triggerWorkspaceSearchDebounced`) yields a
+    /// tick on every find-field keystroke; the consumer sleeps the
+    /// configured debounce window and then runs `triggerWorkspaceSearch`.
+    /// `bufferingNewest(1)` collapses bursts of keystrokes into a single
+    /// work cycle. Mirrors `GitDecorationManager.debouncedConsumer`
+    /// (audit NF12 / A9).
+    @ObservationIgnored var workspaceSearchDebounceTask: Task<Void, Never>?
+    @ObservationIgnored let workspaceSearchDebounceSignal: AsyncStream<Void>
+    @ObservationIgnored let workspaceSearchDebounceContinuation:
+        AsyncStream<Void>.Continuation
     var workspaceSearchSummary: String = "" {
         didSet { if workspaceSearchSummary != oldValue { markChromeDirty() } }
     }
@@ -1216,6 +1227,10 @@ final class EditorState {
         let (stream, cont) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         self.fullHighlightSignal = stream
         self.fullHighlightContinuation = cont
+        let (searchStream, searchCont) = AsyncStream<Void>.makeStream(
+            bufferingPolicy: .bufferingNewest(1))
+        self.workspaceSearchDebounceSignal = searchStream
+        self.workspaceSearchDebounceContinuation = searchCont
         self.fileTreeHistory.maxOperationSteps = config.editor.maxTreeUndoSteps
         let resolver = KeymapResolver(config: config)
         self.statusMessage = "Opened \(rootPath) | \(resolver.openedStatusHints())"
@@ -1226,6 +1241,7 @@ final class EditorState {
         }
 
         startFullHighlightConsumer()
+        startWorkspaceSearchDebounceConsumer()
         refreshHighlights()
     }
 
@@ -1239,6 +1255,27 @@ final class EditorState {
         }
     }
 
+    /// Long-lived consumer for workspace-search-as-you-type debouncing.
+    /// One per `EditorState`; reads from the `bufferingNewest(1)` signal so
+    /// a burst of find-field keystrokes coalesces into a single search
+    /// after the debounce window elapses. The actual heavy work
+    /// (`triggerWorkspaceSearch`) keeps its own cancel-and-respawn
+    /// `workspaceSearchTask` since the search itself is preemptible and
+    /// benefits from explicit cancellation when the query changes.
+    private func startWorkspaceSearchDebounceConsumer() {
+        guard workspaceSearchDebounceTask == nil else { return }
+        workspaceSearchDebounceTask = Task {
+            @MainActor [weak self, workspaceSearchDebounceSignal] in
+            for await _ in workspaceSearchDebounceSignal {
+                guard let strong = self else { return }
+                let debounceMs = strong.config.search.debounceMilliseconds
+                try? await Task.sleep(for: .milliseconds(debounceMs))
+                guard let strong = self else { return }
+                triggerWorkspaceSearch(state: strong)
+            }
+        }
+    }
+
     /// Cleanly stops the long-lived full-highlight consumer task. Symmetric
     /// to `GitDecorationManager.stop()`; `AppMain` calls both during
     /// shutdown so neither leaves an orphaned task running against a
@@ -1246,6 +1283,9 @@ final class EditorState {
     func shutdown() {
         fullHighlightContinuation.finish()
         fullHighlightTask?.cancel()
+        workspaceSearchDebounceContinuation.finish()
+        workspaceSearchDebounceTask?.cancel()
+        workspaceSearchDebounceTask = nil
         fullHighlightTask = nil
     }
 

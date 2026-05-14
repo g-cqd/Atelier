@@ -83,11 +83,53 @@ public func searchWorkspace(
     )
 }
 
+/// Audit A4 — `FileManager.contents(atPath:)` reads the whole file into a
+/// `Data`, then `String(data:encoding:)` re-decodes into a UTF-8 String,
+/// then `split` allocates a `[String]` of every line. Peak RSS per worker
+/// = ~3× the largest file in flight, multiplied by worker count.
+///
+/// The streaming version below reads in 64 KB chunks, splits on `0x0A`
+/// directly in `Data` space, and decodes one line at a time. Peak per
+/// worker drops to ~64 KB chunk + one pending line + the per-file
+/// `[String]` accumulator. The match-line snippets stay correct because
+/// the final `[String]` is still produced — the win is in the in-flight
+/// allocation footprint.
 private func readFileLines(at path: String) -> [String]? {
-    guard let data = FileManager.default.contents(atPath: path),
-        let content = String(data: data, encoding: .utf8)
-    else { return nil }
-    return content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+    defer { try? handle.close() }
+
+    var lines: [String] = []
+    // Bytes accumulated since the last newline. A line that spans two
+    // chunks lives here briefly before being decoded.
+    var pending = Data()
+    let chunkSize = 64 * 1024
+
+    while let chunk = try? handle.read(upToCount: chunkSize), !chunk.isEmpty {
+        var cursor = chunk.startIndex
+        while let newlineIndex = chunk[cursor...].firstIndex(of: 0x0A) {
+            if pending.isEmpty {
+                lines.append(decodeLine(chunk[cursor..<newlineIndex]))
+            } else {
+                pending.append(chunk[cursor..<newlineIndex])
+                lines.append(decodeLine(pending))
+                pending.removeAll(keepingCapacity: true)
+            }
+            cursor = chunk.index(after: newlineIndex)
+        }
+        // Carry the trailing fragment forward; the next chunk completes the line.
+        if cursor < chunk.endIndex {
+            pending.append(chunk[cursor...])
+        }
+    }
+    // Trailing fragment (and explicit empty-trailing-line for files that
+    // end with `\n`, preserving the original
+    // `split(omittingEmptySubsequences: false)` semantics).
+    lines.append(decodeLine(pending))
+    return lines
+}
+
+private func decodeLine(_ slice: Data) -> String {
+    String(data: slice, encoding: .utf8) ?? ""
 }
 
 extension Duration {
