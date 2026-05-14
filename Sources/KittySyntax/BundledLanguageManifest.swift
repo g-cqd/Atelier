@@ -1,6 +1,7 @@
 import Foundation
 import KittySync
 import System
+import os
 
 struct BundledLanguageEntry: Decodable, Sendable, Equatable {
     let name: String
@@ -57,15 +58,39 @@ enum BundledLanguageManifest {
         }
     }
 
+    /// Logger for manifest load failures. Bundled resource missing or
+    /// corrupted is the only way `loadManifest` returns nil — that should
+    /// not be silent because it disables every grammar-backed highlighter
+    /// at runtime. Audit D5.
+    private static let logger = Logger(
+        subsystem: "kittycode.kittysyntax", category: "bundled-language-manifest")
+
     private static func loadManifest() -> Manifest? {
         guard
             let manifestURL = KittySyntaxResources.bundle.url(
                 forResource: "languages",
                 withExtension: "json",
                 subdirectory: "Grammars"
-            ), let data = try? Data(contentsOf: manifestURL),
-            let decodedEntries = try? JSONDecoder().decode([BundledLanguageEntry].self, from: data)
+            )
         else {
+            logger.fault("languages.json missing from KittySyntax resource bundle")
+            return nil
+        }
+        let data: Data
+        do {
+            data = try Data(contentsOf: manifestURL)
+        } catch {
+            logger.fault(
+                "languages.json read failed at \(manifestURL.path, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
+            return nil
+        }
+        let decodedEntries: [BundledLanguageEntry]
+        do {
+            decodedEntries = try JSONDecoder().decode([BundledLanguageEntry].self, from: data)
+        } catch {
+            logger.fault(
+                "languages.json decode failed: \(error.localizedDescription, privacy: .public)")
             return nil
         }
 
