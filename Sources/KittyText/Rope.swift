@@ -265,9 +265,7 @@ public struct Rope: Sendable {
     }
 
     static func countNewlines(in data: Data) -> Int {
-        var count = 0
-        for byte in data where byte == 0x0A { count += 1 }
-        return count
+        data.count(where: { $0 == 0x0A })
     }
 }
 
