@@ -21,11 +21,19 @@ public final class WorkspaceSession: ActiveDocumentView, WorkspaceCommands {
     public var highlightedLines: [[StyledSpan]] = [[StyledSpan(text: "", style: .default)]]
 
     // MARK: - Document caches
+    //
+    // Implementation detail of the cache invalidation contract — exposed
+    // at `package` access so `EditorState`'s forwarding setters in
+    // `KittyCode` can clear them in the right order (always together via
+    // `invalidateTextSnapshotCache()`, except for `cachedMaxLineWidth`
+    // which is rebuilt incrementally via `widenCachedMaxLineWidth`). No
+    // external package should write these; the public methods on
+    // `WorkspaceSession` are the supported surface. Audit B2.
 
-    public var cachedFileLines: [String]?
-    public var cachedDocumentText: String?
-    public var cachedSerializedByteCount: Int?
-    public var cachedMaxLineWidth: Int?
+    package var cachedFileLines: [String]?
+    package var cachedDocumentText: String?
+    package var cachedSerializedByteCount: Int?
+    package var cachedMaxLineWidth: Int?
 
     // MARK: - File open tracking
 

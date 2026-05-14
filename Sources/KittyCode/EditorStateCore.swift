@@ -11,6 +11,14 @@ import KittyWidgets
 import KittyWorkspace
 import Observation
 import System
+import os
+
+/// Signpost emitter for editor hot paths — wraps `textDidChange` and the
+/// wrap-cache rebuild so Instruments traces can attribute frame-budget
+/// overruns to specific subsystems. Audit D10 (mirrors the pattern in
+/// `RenderPipeline.swift`).
+private let editorSignposter = OSSignposter(
+    subsystem: "com.kittytui.editor", category: "edit")
 
 @Observable
 @MainActor
@@ -769,6 +777,9 @@ final class EditorState {
     }
 
     func textDidChange(_ mutation: TextMutation, previousSnapshot: BufferEditSnapshot? = nil) {
+        let interval = editorSignposter.beginInterval("textDidChange")
+        defer { editorSignposter.endInterval("textDidChange", interval) }
+
         guard !readOnly else {
             statusMessage = "Read-only mode"
             return
@@ -912,6 +923,9 @@ final class EditorState {
     }
 
     func buildWrapCache(contentWidth: Int) {
+        let interval = editorSignposter.beginInterval("buildWrapCache")
+        defer { editorSignposter.endInterval("buildWrapCache", interval) }
+
         guard contentWidth > 0 else { return }
 
         let docVersion = bufferManager.activeBuffer?.documentVersion ?? 0

@@ -12,12 +12,18 @@ let package = Package(
         .macOS(.v26)
     ],
     products: [
+        // Library products = modules an external SPM package can depend on
+        // by listing this package as a dependency. The list below is the
+        // intentional public surface; `KittyParser` and `KittySearch` are
+        // implementation details of the editor (only `KittyCode`
+        // consumes them) and are deliberately NOT promoted to products.
+        // Their internal targets still exist below; only the product
+        // declaration is dropped. Audit B5.
         .library(name: "KittyTerminal", targets: ["KittyTerminal"]),
         .library(name: "KittyCodecs", targets: ["KittyCodecs"]),
         .library(name: "KittyInput", targets: ["KittyInput"]),
         .library(name: "KittyRenderer", targets: ["KittyRenderer"]),
         .library(name: "KittyGrammar", targets: ["KittyGrammar"]),
-        .library(name: "KittyParser", targets: ["KittyParser"]),
         .library(name: "KittyQuery", targets: ["KittyQuery"]),
         .library(name: "KittySyntax", targets: ["KittySyntax"]),
         .library(name: "KittyWidgets", targets: ["KittyWidgets"]),
@@ -26,7 +32,6 @@ let package = Package(
         .library(name: "KittyFileTree", targets: ["KittyFileTree"]),
         .library(name: "KittySymbols", targets: ["KittySymbols"]),
         .library(name: "KittyGit", targets: ["KittyGit"]),
-        .library(name: "KittySearch", targets: ["KittySearch"]),
         .library(name: "KittyWorkspace", targets: ["KittyWorkspace"]),
         .executable(name: "KittyCode", targets: ["KittyCode"]),
         .executable(name: "KittySymbolsCLI", targets: ["KittySymbolsCLI"]),
