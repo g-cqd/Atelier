@@ -22,7 +22,15 @@ public final class GrammarRegistry: Sendable {
     public static let shared = GrammarRegistry()
 
     private struct State: Sendable {
+        /// Keyed by file extension (`.swift`, `.rb`, …) for the hot
+        /// `entry(forExtension:)` / `entry(forFilename:)` paths.
         var entries: [String: LanguageEntry] = [:]
+        /// Mirror of `entries` keyed by language name. Maintained
+        /// alongside `entries` in `register(_:)` so
+        /// `entry(forLanguage:)` is O(1) instead of a values walk —
+        /// matters at scale once ADR 8 extensions register hundreds of
+        /// languages. Audit B.7/E2.
+        var entriesByLanguage: [String: LanguageEntry] = [:]
         var loadedGrammars: [String: GrammarDefinition] = [:]
         var compiledTables: [String: ParseTableCompiler.CompilationResult] = [:]
     }
@@ -51,6 +59,7 @@ public final class GrammarRegistry: Sendable {
             for ext in entry.extensions {
                 state.entries[ext] = entry
             }
+            state.entriesByLanguage[entry.name] = entry
         }
     }
 
@@ -93,7 +102,8 @@ public final class GrammarRegistry: Sendable {
     /// path; `BundledLanguageManifest` is the fallback for languages
     /// not registered at runtime.
     public func entry(forLanguage languageName: String) -> LanguageEntry? {
-        state.withLock { $0.entries.values.first { $0.name == languageName } }
+        // O(1) lookup via the language-keyed mirror (audit B.7/E2).
+        state.withLock { $0.entriesByLanguage[languageName] }
     }
 
     /// Find the language entry for a given filename by extracting the
