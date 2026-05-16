@@ -25,6 +25,28 @@ public final class DocumentBuffer {
         set { document.textCursor = newValue }
     }
 
+    /// Drops the heavy materialised caches a buffer accumulates while
+    /// active: full-document text string, `[String]` line array, the
+    /// per-line styled-span highlight array, and the per-buffer
+    /// highlight session. Audit B.8/F12 — called when this buffer
+    /// becomes inactive (tab switch). Without it a 5-buffer session
+    /// with each buffer at ~1 MB pinned ~12–20 MB of redundant
+    /// highlight + cache data per inactive tab. On next activation the
+    /// caches rehydrate lazily.
+    ///
+    /// The document's `textBuffer` (the rope), `textCursor`,
+    /// `editHistory`, `gitLineDecorations`, and `selection` are
+    /// preserved — these are the user-visible state that distinguishes
+    /// one tab from another. Only the derived caches drop.
+    public func evictInactiveCaches() {
+        document.cachedFileLines = nil
+        document.cachedDocumentText = nil
+        document.cachedSerializedByteCount = nil
+        document.cachedMaxLineWidth = nil
+        highlightedLines = [[StyledSpan(text: "", style: .default)]]
+        highlightSession = nil
+    }
+
     // Cache forwarders — `package` access matches the underlying `TextDocument`
     // fields. External callers should use `invalidateTextSnapshotCache()` and
     // friends; these direct setters are only for `EditorState`'s forwarding
