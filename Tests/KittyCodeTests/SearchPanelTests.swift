@@ -9,7 +9,7 @@ import KittyWidgets
 import KittyWorkspace
 import Testing
 
-@testable import KittyCode
+@testable import KittyEditor
 
 @MainActor
 private func makeSearchPanelContext(

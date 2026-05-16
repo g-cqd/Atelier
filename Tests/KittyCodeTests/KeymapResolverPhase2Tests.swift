@@ -2,7 +2,7 @@ import KittyCodecs
 import KittyInput
 import Testing
 
-@testable import KittyCode
+@testable import KittyEditor
 
 @Suite
 struct KeymapResolverPhase2Tests {

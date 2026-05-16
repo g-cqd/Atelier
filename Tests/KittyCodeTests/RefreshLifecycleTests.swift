@@ -1,7 +1,7 @@
 import KittyText
 import Testing
 
-@testable import KittyCode
+@testable import KittyEditor
 
 /// Audit NF12 — `scheduleRefreshForActiveBuffer` and `fullHighlightTask`
 /// previously cancelled the prior task and spawned a fresh one on every
