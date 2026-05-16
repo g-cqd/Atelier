@@ -4,7 +4,7 @@ import Observation
 import Synchronization
 import Testing
 
-@testable import KittyCode
+@testable import KittyEditor
 
 /// Proves the `@Observable` macro on `EditorState` and `RenderClock` behaves
 /// correctly outside SwiftUI — i.e. plain `withObservationTracking` consumers

@@ -1,6 +1,7 @@
 import Foundation
 import KittyApp
 import KittyCodecs
+import KittyEditor
 import KittyFileTree
 import KittyGit
 import KittyRenderer

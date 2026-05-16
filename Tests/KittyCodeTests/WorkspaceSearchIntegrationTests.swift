@@ -9,7 +9,7 @@ import KittyWidgets
 import KittyWorkspace
 import Testing
 
-@testable import KittyCode
+@testable import KittyEditor
 
 @MainActor
 private func makeContext(
@@ -190,7 +190,7 @@ struct ReplaceIntegrationTests {
         state.inFileSearch?.showReplace = true
 
         // Execute replace all
-        KittyCode.replaceAllInFile(state: state, pipeline: pipeline)
+        KittyEditor.replaceAllInFile(state: state, pipeline: pipeline)
 
         // Verify replacements
         #expect(state.fileContent[0] == "hi world")
@@ -217,7 +217,7 @@ struct ReplaceIntegrationTests {
         state.inFileSearch?.showReplace = true
 
         // Replace current
-        KittyCode.replaceCurrentMatch(state: state, pipeline: pipeline)
+        KittyEditor.replaceCurrentMatch(state: state, pipeline: pipeline)
 
         // First occurrence replaced
         #expect(state.fileContent[0] == "hi world")
@@ -252,7 +252,7 @@ struct ReplaceIntegrationTests {
 
         state.inFileSearch?.replaceText = "hi"
         state.inFileSearch?.showReplace = true
-        KittyCode.replaceAllInFile(state: state, pipeline: pipeline)
+        KittyEditor.replaceAllInFile(state: state, pipeline: pipeline)
 
         #expect(state.fileContent[0] != originalContent[0])
 

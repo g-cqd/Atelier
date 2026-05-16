@@ -34,6 +34,7 @@ let package = Package(
         .library(name: "KittySymbols", targets: ["KittySymbols"]),
         .library(name: "KittyGit", targets: ["KittyGit"]),
         .library(name: "KittyWorkspace", targets: ["KittyWorkspace"]),
+        .library(name: "KittyEditor", targets: ["KittyEditor"]),
         .executable(name: "KittyCode", targets: ["KittyCode"]),
         .executable(name: "KittySymbolsCLI", targets: ["KittySymbolsCLI"]),
     ],
@@ -126,13 +127,31 @@ let package = Package(
             name: "KittyApp", dependencies: ["KittyWidgets", "KittyInput", "KittySync"],
             swiftSettings: defaultSwiftSettings),
 
-        // KittyCode — Terminal code editor
+        // Layer 6 — Editor logic library. Holds every editor file except
+        // the executable shell (`AppMain`, `CLIArguments`, `Version`). The
+        // split lets `KittyCodeTests` depend on a library rather than the
+        // executable target (fragile across SPM versions) and creates a
+        // clean seam for future platform shells (SwiftUI wrapper, XPC
+        // service, headless mode). Audit D3.
+        .target(
+            name: "KittyEditor",
+            dependencies: [
+                "KittyApp", "KittyWorkspace", "KittyInput", "KittyText", "KittyFileTree",
+                "KittyRenderer", "KittySyntax", "KittySymbols", "KittyGit", "KittySearch",
+                "KittyStyle", "KittyTerminal",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            swiftSettings: defaultSwiftSettings),
+
+        // KittyCode — Terminal code editor executable. Thin shell over
+        // `KittyEditor`: parses argv via `KittyEditor.CLIArguments`,
+        // loads config, applies launch overrides, wires the runtime,
+        // writes a crash log on uncaught error.
         .executableTarget(
             name: "KittyCode",
             dependencies: [
-                "KittyApp", "KittyWorkspace", "KittyInput", "KittyText", "KittyFileTree",
-                "KittySyntax", "KittySymbols", "KittyGit", "KittySearch",
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                "KittyEditor", "KittyApp", "KittyTerminal", "KittyCodecs",
+                "KittyFileTree", "KittyGit", "KittyRenderer", "KittyWorkspace",
             ], swiftSettings: defaultSwiftSettings),
 
         // KittySymbols CLI
@@ -171,7 +190,7 @@ let package = Package(
         .testTarget(
             name: "KittyAppTests", dependencies: ["KittyApp"], swiftSettings: defaultSwiftSettings),
         .testTarget(
-            name: "KittyCodeTests", dependencies: ["KittyCode", "KittyFileTree", "KittyWorkspace"],
+            name: "KittyCodeTests", dependencies: ["KittyEditor", "KittyFileTree", "KittyWorkspace"],
             swiftSettings: defaultSwiftSettings),
         .testTarget(
             name: "KittyTextTests", dependencies: ["KittyText"], swiftSettings: defaultSwiftSettings
