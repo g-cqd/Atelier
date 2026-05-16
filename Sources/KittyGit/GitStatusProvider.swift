@@ -409,19 +409,66 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
     /// captured stdout via `FileHandle.readToEnd()` only after EOF is guaranteed.
     /// Falls back to `nil` and terminates the child process if it exceeds
     /// `timeout`.
+    /// Minimal scrubbed environment for `git` invocations. Audit F9/NF6 —
+    /// the parent process's full environment used to be inherited:
+    /// `GIT_DIR`, `GIT_SSH_COMMAND`, `GIT_CONFIG_*`, `LD_*`, `PATH`,
+    /// `SSH_*` were all attacker-influenceable. Combined with workspace-
+    /// controlled `.git/config`, opening a hostile repo was an RCE class
+    /// (CVE-2024-32002, -32004 et al). The whitelist here pins git to:
+    ///   * a fixed `PATH` (no `~/bin/git` shadow)
+    ///   * `LANG`/`LC_ALL = C` (stable output parsing)
+    ///   * `HOME` (legitimately needed for `~/.gitconfig`)
+    ///   * `GIT_OPTIONAL_LOCKS=0` (no lockfile races)
+    ///   * `GIT_TERMINAL_PROMPT=0` (no credential prompt blocking)
+    ///   * `GIT_CONFIG_NOSYSTEM=1` (skip `/etc/gitconfig` which a
+    ///     shared-host attacker could control)
+    /// Every callsite ALSO passes hardening `-c` flags to refuse the
+    /// known-exploited config keys at invocation time.
+    private static var scrubbedEnvironment: [String: String] {
+        [
+            "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "HOME": NSHomeDirectory(),
+            "GIT_OPTIONAL_LOCKS": "0",
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_CONFIG_NOSYSTEM": "1",
+        ]
+    }
+
+    /// `-c key=value` flags applied to every git invocation. These
+    /// disable the config knobs Git CVE writeups have flagged as
+    /// remote-code-execution vectors when the workspace's `.git/config`
+    /// is attacker-controlled. Bypassable only by changing the source —
+    /// no workspace knob can re-enable them.
+    private static let gitHardeningFlags: [String] = [
+        "-c", "protocol.file.allow=user",
+        "-c", "core.fsmonitor=false",
+        "-c", "core.sshCommand=/usr/bin/false",
+        "-c", "core.hooksPath=/dev/null",
+    ]
+
     fileprivate static func runGit(
         arguments: [String],
         workingDirectory: String? = nil,
         timeout: Duration = defaultGitTimeout
     ) async -> String? {
         let process = Process()
-        // `/usr/bin/env` performs PATH lookup so Homebrew/MacPorts/system git all work,
-        // and avoids hard-failing on systems where /usr/bin/git is a missing Xcode stub.
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["git"] + arguments
+        // Locate git at a fixed path (no `PATH` lookup that could be
+        // shadowed by `~/bin/git`). Falls back to `/usr/bin/env git` only
+        // if the absolute paths are missing (e.g. CI image without Xcode
+        // command-line tools at the canonical location).
+        if FileManager.default.isExecutableFile(atPath: "/usr/bin/git") {
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+            process.arguments = gitHardeningFlags + arguments
+        } else {
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = ["git"] + gitHardeningFlags + arguments
+        }
         if let workingDirectory {
             process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
         }
+        process.environment = scrubbedEnvironment
 
         let pipe = Pipe()
         process.standardOutput = pipe
