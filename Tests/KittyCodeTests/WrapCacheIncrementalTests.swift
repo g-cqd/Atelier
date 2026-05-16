@@ -2,7 +2,7 @@ import KittyRenderer
 import KittyText
 import Testing
 
-@testable import KittyCode
+@testable import KittyEditor
 
 /// Local helper — deletes the given selection via
 /// `TextOperations.deleteRange` and drives `textDidChange(_:)` with the

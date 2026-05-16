@@ -5,7 +5,7 @@ import KittyTerminal
 import KittyText
 import Testing
 
-@testable import KittyCode
+@testable import KittyEditor
 
 @Suite
 @MainActor

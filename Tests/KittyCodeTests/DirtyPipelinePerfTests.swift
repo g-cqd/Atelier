@@ -3,7 +3,7 @@ import KittyRenderer
 import KittyText
 import Testing
 
-@testable import KittyCode
+@testable import KittyEditor
 
 /// Microbenchmarks that assert the per-keystroke edit cost no longer scales
 /// with file size after the dirty-pipeline work (phases 1–4).
