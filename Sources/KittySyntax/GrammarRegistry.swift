@@ -96,6 +96,18 @@ public final class GrammarRegistry: Sendable {
         state.withLock { $0.entries.values.first { $0.name == languageName } }
     }
 
+    /// Find the language entry for a given filename by extracting the
+    /// file extension. Mirrors `BundledLanguageManifest.entry(forFilename:)`
+    /// so `LanguageHighlighter.detectLanguage(for:)` can consult the
+    /// runtime registry before falling back to bundled. Without this,
+    /// ADR 8 extension hosts that register additional languages cannot
+    /// get their language detected on file open (audit F10).
+    public func entry(forFilename filename: String) -> LanguageEntry? {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        guard !ext.isEmpty else { return nil }
+        return entry(forExtension: ext)
+    }
+
     /// Load and cache a grammar definition for a language.
     public func grammar(for languageName: String, grammarsPath: String) throws(GrammarError)
         -> GrammarDefinition
