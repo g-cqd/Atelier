@@ -108,7 +108,19 @@ public struct Rope: Sendable {
     /// The next read on the live document pays the materialisation cost
     /// once; subsequent reads are O(1) again. Tree structure and per-node
     /// metadata (byte counts, newline counts) are unaffected.
+    ///
+    /// Audit B.5/F2 — clones storage first (`ensureUnique`) so the
+    /// invalidation operates on the snapshot's *own* storage instance.
+    /// Without this, immediately after `activeBufferSnapshot()` (before
+    /// the next mutation triggers CoW) the snapshot's `storage`
+    /// reference is the same object as the live document's, and
+    /// clearing its caches would nuke the live document's
+    /// `cachedText`/`cachedLines` too — re-introducing per-keystroke
+    /// rebuild cost. Post-clone, the snapshot owns a private storage
+    /// header (cheap — just a class instance + same root reference;
+    /// the tree itself is structurally shared until a real mutation).
     public mutating func invalidateSnapshotCaches() {
+        ensureUnique()
         storage.invalidateCaches()
     }
 
