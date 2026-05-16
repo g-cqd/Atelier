@@ -181,31 +181,47 @@ struct KittyCodeEntry {
             state.scrollOffset = max(0, state.cursorRow - 10)
         }
 
-        try await runtime.run(
-            render: { pipeline in
-                renderFrame(pipeline: pipeline, state: state)
-            },
-            onEvent: { event, pipeline in
-                let shouldContinue = handleEvent(event: event, state: state, pipeline: pipeline)
-                if shouldContinue {
-                    renderFrame(pipeline: pipeline, state: state)
-                }
-                return shouldContinue
-            },
-            configureInputSource: { inputSource in
-                refreshSource.bind(inputSource: inputSource)
-            },
-            renderClock: renderClock
-        )
+        // Audit B.4/F11 — cleanup must run unconditionally even if
+        // `runtime.run` throws (raw-mode setup failure, terminal-size
+        // query failure, signal mid-init). The previous flat sequence
+        // skipped every line below `runtime.run` on a thrown error and
+        // leaked the file watcher, autosave manager, git refresh
+        // manager, configWatcher subscription, and the EditorState's
+        // long-lived consumer tasks. `defer` runs in reverse order on
+        // any scope exit; the `await configWatcher.stop()` happens
+        // outside `defer` because Swift `defer` body cannot suspend.
+        defer {
+            configWatchTask?.cancel()
+            autoSaveManager?.stop()
+            gitRefreshManager?.stop()
+            state.gitDecorationManager?.stop()
+            state.shutdown()
+            fileWatcherIntegration?.stop()
+        }
 
-        // Cleanup
-        configWatchTask?.cancel()
-        await configWatcher.stop()
-        autoSaveManager?.stop()
-        gitRefreshManager?.stop()
-        state.gitDecorationManager?.stop()
-        state.shutdown()
-        fileWatcherIntegration?.stop()
+        do {
+            try await runtime.run(
+                render: { pipeline in
+                    renderFrame(pipeline: pipeline, state: state)
+                },
+                onEvent: { event, pipeline in
+                    let shouldContinue = handleEvent(
+                        event: event, state: state, pipeline: pipeline)
+                    if shouldContinue {
+                        renderFrame(pipeline: pipeline, state: state)
+                    }
+                    return shouldContinue
+                },
+                configureInputSource: { inputSource in
+                    refreshSource.bind(inputSource: inputSource)
+                },
+                renderClock: renderClock
+            )
+            await configWatcher.stop()
+        } catch {
+            await configWatcher.stop()
+            throw error
+        }
 
         // Suppress unused variable warnings
         _ = autoSaveManager

@@ -1284,6 +1284,13 @@ public final class EditorState {
                 guard let strong = self else { return }
                 let debounceMs = strong.config.search.debounceMilliseconds
                 try? await Task.sleep(for: .milliseconds(debounceMs))
+                // Audit B.2/F4 — `Task.sleep` swallows cancellation via
+                // `try?`, so check explicitly before running the search
+                // body. Without this, `shutdown()` racing with a pending
+                // debounce wakeup would invoke `triggerWorkspaceSearch`
+                // against a half-torn-down state graph (observed
+                // properties firing during shutdown, etc.).
+                if Task.isCancelled { return }
                 guard let strong = self else { return }
                 triggerWorkspaceSearch(state: strong)
             }
