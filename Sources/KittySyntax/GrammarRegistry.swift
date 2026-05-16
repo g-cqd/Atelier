@@ -118,7 +118,11 @@ public final class GrammarRegistry: Sendable {
         return entry(forExtension: ext)
     }
 
-    /// Load and cache a grammar definition for a language.
+    /// Load and cache a grammar definition for a language. Audit B.6 —
+    /// resolves the entry via the runtime registry first, falling back
+    /// to `BundledLanguageManifest` so `LanguageHighlighter.SyntaxArtifactsCache`
+    /// can route every grammar load through this method without
+    /// pre-seeding the registry with the bundled set.
     public func grammar(for languageName: String, grammarsPath: String) throws(GrammarError)
         -> GrammarDefinition
     {
@@ -126,11 +130,16 @@ public final class GrammarRegistry: Sendable {
             return cached
         }
 
-        guard let entry = entry(forLanguage: languageName) else {
+        let resolvedEntry: LanguageEntry
+        if let registered = entry(forLanguage: languageName) {
+            resolvedEntry = registered
+        } else if let bundled = BundledLanguageManifest.entry(forLanguage: languageName) {
+            resolvedEntry = LanguageEntry(bundled: bundled)
+        } else {
             throw .fileNotFound("No entry for language: \(languageName)")
         }
 
-        let grammarPath = "\(grammarsPath)/\(entry.path)/grammar.json"
+        let grammarPath = "\(grammarsPath)/\(resolvedEntry.path)/grammar.json"
         let grammar = try GrammarLoader.load(from: grammarPath)
         state.withLock { $0.loadedGrammars[languageName] = grammar }
         return grammar

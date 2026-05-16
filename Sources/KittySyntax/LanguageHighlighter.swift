@@ -656,11 +656,7 @@ private enum SyntaxArtifactsCache {
 
         let bundle = KittySyntaxResources.bundle
         guard
-            let grammarURL = bundle.url(
-                forResource: "grammar",
-                withExtension: "json",
-                subdirectory: "Grammars/\(entry.path)"
-            ),
+            let resourcePath = bundle.resourcePath,
             let queryURL = bundle.url(
                 forResource: "highlights",
                 withExtension: "scm",
@@ -671,9 +667,25 @@ private enum SyntaxArtifactsCache {
         }
 
         guard let querySource = try? String(contentsOf: queryURL, encoding: .utf8),
-            let grammar = try? GrammarLoader.load(from: grammarURL.path),
             let query = try? QueryParser.parse(querySource)
         else {
+            return nil
+        }
+
+        // Audit B.6/E1 — route the grammar load + parse-table compile
+        // through `GrammarRegistry.shared` instead of compiling
+        // in-process every launch. The registry's three-tier cache
+        // (in-memory → on-disk `$TMPDIR/kittycode-cache/*.ptable` →
+        // fresh compile) amortises the cold-start cost across launches
+        // of the same kittycode version. The needsExternals check still
+        // gates the compile so bash et al. never trigger the LR(1)
+        // item-set expansion the prior comment warned about.
+        let grammarsPath = "\(resourcePath)/Grammars"
+        let grammar: GrammarDefinition
+        do {
+            grammar = try GrammarRegistry.shared.grammar(
+                for: entry.name, grammarsPath: grammarsPath)
+        } catch {
             return nil
         }
 
@@ -701,7 +713,11 @@ private enum SyntaxArtifactsCache {
             )
         }
 
-        guard let compiled = try? ParseTableCompiler.compile(grammar) else {
+        let compiled: ParseTableCompiler.CompilationResult
+        do {
+            compiled = try GrammarRegistry.shared.compiledResult(
+                for: entry.name, grammarsPath: grammarsPath)
+        } catch {
             return nil
         }
 
