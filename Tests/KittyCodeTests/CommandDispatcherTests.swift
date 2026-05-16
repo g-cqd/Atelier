@@ -3,7 +3,7 @@ import KittyRenderer
 import KittyTerminal
 import Testing
 
-@testable import KittyCode
+@testable import KittyEditor
 
 @Suite
 @MainActor
