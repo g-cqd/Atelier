@@ -519,14 +519,36 @@ public enum LanguageHighlighter: Sendable {
     }
 
     public static func detectLanguage(for filename: String) -> String? {
-        BundledLanguageManifest.entry(forFilename: filename)?.name
+        // Audit A.4/F10 — consult the runtime registry first so ADR 8
+        // extension hosts that register additional grammars get their
+        // language detected on file open. Bundled is the fallback.
+        if let registered = GrammarRegistry.shared.entry(forFilename: filename) {
+            return registered.name
+        }
+        return BundledLanguageManifest.entry(forFilename: filename)?.name
     }
 
     public static var bundledLanguageNames: [String] {
-        BundledLanguageManifest.entries.map(\.name)
+        // Audit A.4 — union the runtime registry with the bundled manifest
+        // so the UI's "what languages do we support" surface reflects
+        // any ADR 8 extension contributions, not just the shipped set.
+        let bundled = BundledLanguageManifest.entries.map(\.name)
+        let runtime = GrammarRegistry.shared.languageNames
+        return Array(Set(bundled).union(runtime)).sorted()
     }
 
     public static func hasBundledResources(for language: String) -> Bool {
+        // Audit A.4 — a runtime-registered language with a resource path
+        // outside the bundled manifest still counts as "has resources"
+        // (its grammar/highlights live wherever the extension host
+        // serves them). Try the runtime registry first; fall back to
+        // checking the bundled resource layout.
+        if let entry = GrammarRegistry.shared.entry(forLanguage: language) {
+            // Runtime entry: trust the registration. The extension host
+            // is responsible for ensuring its `entry.path` resolves.
+            _ = entry
+            return true
+        }
         guard let entry = BundledLanguageManifest.entry(forLanguage: language) else {
             return false
         }

@@ -115,4 +115,21 @@ struct GrammarRegistryTests {
         #expect(registry.extensions == [".go"])
         #expect(registry.path == "go")
     }
+
+    /// Audit A.4/F10 — `entry(forFilename:)` is the surface
+    /// `LanguageHighlighter.detectLanguage(for:)` consults so file
+    /// opens can dispatch to runtime-registered grammars before the
+    /// bundled fallback.
+    @Test
+    func `entry forFilename extracts extension and looks up`() {
+        let registry = GrammarRegistry()
+        registry.register(
+            GrammarRegistry.LanguageEntry(
+                name: "elvish", extensions: [".elv"], path: "elvish"))
+
+        #expect(registry.entry(forFilename: "build.elv")?.name == "elvish")
+        #expect(registry.entry(forFilename: "BUILD.ELV")?.name == "elvish")
+        #expect(registry.entry(forFilename: "noext")?.name == nil)
+        #expect(registry.entry(forFilename: "untracked.foo")?.name == nil)
+    }
 }
