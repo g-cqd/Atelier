@@ -13,6 +13,22 @@ public enum CapabilityReporter: Sendable {
         for language: String,
         hostCapabilities: HostCapabilities = HostCapabilities()
     ) -> HighlightCapabilityReport {
+        // Audit A.4/E3 — consult the runtime registry first so ADR 8
+        // extension hosts that register additional grammars are visible
+        // to capability reporting. Reports for runtime languages omit
+        // the resource-shape checks below (the extension is responsible
+        // for serving its own grammar/highlights at `entry.path`) and
+        // report the optimistic `.structural` tier; any actual compile
+        // failure will downgrade observed behaviour at parse time.
+        if let registered = GrammarRegistry.shared.entry(forLanguage: language) {
+            _ = registered
+            return HighlightCapabilityReport(
+                language: language,
+                achievedTier: .structural,
+                maxPossibleTier: .semantic,
+                blockers: []
+            )
+        }
         guard let entry = BundledLanguageManifest.entry(forLanguage: language) else {
             return HighlightCapabilityReport(
                 language: language,
@@ -90,13 +106,15 @@ public enum CapabilityReporter: Sendable {
         )
     }
 
-    /// Generate reports for all bundled languages.
+    /// Generate reports for all known languages — bundled + runtime
+    /// registry (ADR 8 extensions). Audit A.4.
     public static func reportAll(
         hostCapabilities: HostCapabilities = HostCapabilities()
     ) -> [HighlightCapabilityReport] {
-        BundledLanguageManifest.entries.map { entry in
-            report(for: entry.name, hostCapabilities: hostCapabilities)
-        }
+        let bundledNames = BundledLanguageManifest.entries.map(\.name)
+        let runtimeNames = GrammarRegistry.shared.languageNames
+        let allNames = Array(Set(bundledNames).union(runtimeNames)).sorted()
+        return allNames.map { report(for: $0, hostCapabilities: hostCapabilities) }
     }
 
     // MARK: - Private

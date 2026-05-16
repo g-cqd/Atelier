@@ -37,8 +37,21 @@ public struct SequenceRouter: Sendable {
     private static let pasteEndMarker: [UInt8] = [0x1b, 0x5b, 0x32, 0x30, 0x31, 0x7e]
     private static let oscOverflowBytes = Array("osc overflow".utf8)
     private static let pasteOverflowBytes = Array("paste overflow".utf8)
+    private static let controlOverflowBytes = Array("control overflow".utf8)
 
     private static let maxPasteSize = 1_048_576  // 1MB
+    /// Per-sequence cap for non-paste control routes (.escape, .csi*,
+    /// .keyboard, .mouse, .osc, .ss3, .utf8Sequence). A legal control
+    /// sequence is at most ~30 bytes; 4096 is comfortably above any
+    /// real CSI / Kitty-keyboard / SGR-mouse payload but small enough
+    /// to prevent a hostile stream of digit + separator bytes from
+    /// pinning `buffer` in `.csiParam` indefinitely (audit F6).
+    /// `.osc` and `.paste` keep their dedicated 1 MB cap because they
+    /// legitimately carry payload-sized data (title sequences, paste
+    /// content); the runtime check here only fires for the smaller
+    /// limit so the dedicated checks downstream still own those
+    /// states' overflow semantics.
+    private static let maxControlSequenceSize = 4096
 
     private var keyboardDecoder = KeyboardDecoder()
     private var mouseDecoder = MouseDecoder()
@@ -57,6 +70,24 @@ public struct SequenceRouter: Sendable {
     }
 
     private mutating func feed(_ byte: UInt8, into events: inout [InputEvent]) {
+        // Global per-sequence cap. `.osc` and `.paste` have their own
+        // 1 MB cap downstream; this check fires for the smaller
+        // control-sequence cap (4096 bytes) covering every other state
+        // that accumulates into `buffer`. Without it, a hostile peer
+        // feeding e.g. `ESC [` followed by an unbounded stream of
+        // semicolon-separated digits pins `.csiParam` forever — a
+        // memory-exhaustion DoS reachable from any pty (audit F6).
+        if routeState != .ground,
+            routeState != .osc,
+            routeState != .paste,
+            buffer.count >= Self.maxControlSequenceSize
+        {
+            events.append(.unknown(Self.controlOverflowBytes))
+            resetRouting()
+            feed(byte, into: &events)
+            return
+        }
+
         switch routeState {
         case .ground:
             if byte == 0x1b {
