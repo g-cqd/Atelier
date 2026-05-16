@@ -86,6 +86,14 @@ public final class WorkspaceSession: ActiveDocumentView, WorkspaceCommands {
             return
         }
         saveStateToActiveBuffer()
+        // Audit B.8/F12 — drop the now-inactive buffer's
+        // text/lines/highlight caches before switching. With ~5
+        // buffers each at 1 MB, this caps inactive-buffer cache
+        // residency at ~0 (just the rope itself, which is the
+        // user-visible state) instead of ~12-20 MB per tab.
+        if let outgoing = bufferManager.activeBuffer {
+            outgoing.evictInactiveCaches()
+        }
         bufferManager.switchTo(index: index)
         restoreStateFromActiveBuffer()
         onTabSwitched?()
