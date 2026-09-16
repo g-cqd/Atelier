@@ -18,13 +18,15 @@ package protocol SourceReading: Sendable {
 /// Concurrent file reads for sources without batch reads; bounded so a large folder does not open a file storm.
 private let fileReadConcurrency = 6
 
-package extension SourceReading {
-    func ignoredEntries(of source: ComparisonSource) async throws -> [SourceEntry] {
+extension SourceReading {
+    package func ignoredEntries(of source: ComparisonSource) async throws -> [SourceEntry] {
         []
     }
 
-    func contents(of entries: [SourceEntry], in source: ComparisonSource) async throws -> [String: String] {
-        let pairs = try await mapConcurrently(entries, limit: fileReadConcurrency) { entry in (entry.relativePath, try await content(of: entry, in: source)) }
+    package func contents(of entries: [SourceEntry], in source: ComparisonSource) async throws -> [String: String] {
+        let pairs = try await mapConcurrently(entries, limit: fileReadConcurrency) { entry in
+            (entry.relativePath, try await content(of: entry, in: source))
+        }
         return Dictionary(pairs, uniquingKeysWith: { first, _ in first })
     }
 }

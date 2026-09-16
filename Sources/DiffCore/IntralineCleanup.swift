@@ -1,8 +1,10 @@
 /// Adjusts the token-level edit script of a line pair without changing what it reconstructs.
 public protocol IntralineRefining: Sendable {
     /// - Parameters:
+    ///   - edits: The token-level edit script to adjust.
     ///   - oldRanges: Unit ranges of the old line's tokens, the edit script's deletions index into them.
     ///   - newRanges: Unit ranges of the new line's tokens, the edit script's insertions index into them.
+    /// - Returns: An edit script over the same tokens that reconstructs the same lines.
     func refine(_ edits: [DiffEdit], oldRanges: [Range<Int>], newRanges: [Range<Int>]) -> [DiffEdit]
 }
 
@@ -26,10 +28,11 @@ public struct SemanticCleanup: IntralineRefining {
                 let before = Run.changeLength(of: runs, endingAt: index)
                 let after = Run.changeLength(of: runs, startingAt: index + 1)
                 if run.units <= max(before.deleted, before.inserted), run.units <= max(after.deleted, after.inserted) {
-                    runs[index] = Run(edits: run.edits.flatMap { edit -> [DiffEdit] in
-                        guard case .equal(let old, let new) = edit else { return [edit] }
-                        return [.delete(old: old), .insert(new: new)]
-                    }, deleted: run.deleted, inserted: run.inserted, isEqual: false)
+                    runs[index] = Run(
+                        edits: run.edits.flatMap { edit -> [DiffEdit] in
+                            guard case .equal(let old, let new) = edit else { return [edit] }
+                            return [.delete(old: old), .insert(new: new)]
+                        }, deleted: run.deleted, inserted: run.inserted, isEqual: false)
                     changed = true
                 }
                 index += 1
@@ -46,9 +49,9 @@ public struct SemanticCleanup: IntralineRefining {
 
     private static func position(of edit: DiffEdit) -> (Int, Int, Int) {
         switch edit {
-        case .equal(let old, let new): (old + new, 0, 0)
-        case .delete(let old): (old * 2, 1, old)
-        case .insert(let new): (new * 2, 2, new)
+            case .equal(let old, let new): (old + new, 0, 0)
+            case .delete(let old): (old * 2, 1, old)
+            case .insert(let new): (new * 2, 2, new)
         }
     }
 
@@ -67,12 +70,13 @@ public struct SemanticCleanup: IntralineRefining {
             for edit in edits {
                 let run: Run
                 switch edit {
-                case .equal(let old, _):
-                    run = Run(edits: [edit], deleted: oldRanges[old].count, inserted: oldRanges[old].count, isEqual: true)
-                case .delete(let old):
-                    run = Run(edits: [edit], deleted: oldRanges[old].count, inserted: 0, isEqual: false)
-                case .insert(let new):
-                    run = Run(edits: [edit], deleted: 0, inserted: newRanges[new].count, isEqual: false)
+                    case .equal(let old, _):
+                        run = Run(
+                            edits: [edit], deleted: oldRanges[old].count, inserted: oldRanges[old].count, isEqual: true)
+                    case .delete(let old):
+                        run = Run(edits: [edit], deleted: oldRanges[old].count, inserted: 0, isEqual: false)
+                    case .insert(let new):
+                        run = Run(edits: [edit], deleted: 0, inserted: newRanges[new].count, isEqual: false)
                 }
                 if let last = runs.last, last.isEqual == run.isEqual {
                     runs[runs.count - 1].edits += run.edits

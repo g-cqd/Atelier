@@ -46,10 +46,12 @@ package enum DetailState: Equatable {
 
     package static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
-        case (.noSources, .noSources), (.loading, .loading), (.noSelection, .noSelection), (.noChanges, .noChanges), (.cards, .cards): true
-        case (.error(let a), .error(let b)): a == b
-        case (.file(let a), .file(let b)): a.unified?.id == b.unified?.id && a.old?.id == b.old?.id
-        default: false
+            case (.noSources, .noSources), (.loading, .loading), (.noSelection, .noSelection), (.noChanges, .noChanges),
+                (.cards, .cards):
+                true
+            case (.error(let a), .error(let b)): a == b
+            case (.file(let a), .file(let b)): a.unified?.id == b.unified?.id && a.old?.id == b.old?.id
+            default: false
         }
     }
 }

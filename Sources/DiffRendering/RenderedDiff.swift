@@ -42,9 +42,13 @@ package final class PreparedDiff: Sendable {
     package let oldTokens: [[Token]]
     package let newTokens: [[Token]]
 
-    package init(_ input: FileDiffInput, granularity: IntralineGranularity, heuristics: DiffHeuristics = DiffHeuristics()) {
+    package init(
+        _ input: FileDiffInput, granularity: IntralineGranularity, heuristics: DiffHeuristics = DiffHeuristics()
+    ) {
         title = input.title
-        model = DiffModel(oldText: input.oldText, newText: input.newText, granularity: granularity, language: input.language, pipeline: DiffPipeline(heuristics: heuristics))
+        model = DiffModel(
+            oldText: input.oldText, newText: input.newText, granularity: granularity, language: input.language,
+            pipeline: DiffPipeline(heuristics: heuristics))
         oldTokens = DiffRenderer.tokensByLine(text: input.oldText, lines: model.oldLines, language: input.language)
         newTokens = DiffRenderer.tokensByLine(text: input.newText, lines: model.newLines, language: input.language)
     }
@@ -103,7 +107,8 @@ package final class RenderedText: @unchecked Sendable {
 
     /// Width an unwrapped pane needs to show every row in full.
     package var unwrappedWidth: CGFloat {
-        CGFloat(longestLine) * ("0" as NSString).size(withAttributes: [.font: palette.font]).width + 2 * DiffPaneMetrics.lineFragmentPadding
+        CGFloat(longestLine) * ("0" as NSString).size(withAttributes: [.font: palette.font]).width + 2
+            * DiffPaneMetrics.lineFragmentPadding
     }
 
     /// The row a UTF-16 offset falls in, or nil for an empty side, which TextKit still lays out as one fragment.

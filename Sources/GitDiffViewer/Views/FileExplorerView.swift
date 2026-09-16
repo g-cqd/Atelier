@@ -26,7 +26,9 @@ struct FileExplorerView: View {
         )
         .overlay {
             if side.source == nil {
-                ContentUnavailableView("No source", systemImage: "folder.badge.questionmark", description: Text("Pick a folder, repository or file above."))
+                ContentUnavailableView(
+                    "No source", systemImage: "folder.badge.questionmark",
+                    description: Text("Pick a folder, repository or file above."))
             }
         }
     }
@@ -49,7 +51,9 @@ struct UnifiedExplorerView: View {
         )
         .overlay {
             if model.left.source == nil, model.right.source == nil {
-                ContentUnavailableView("No sources", systemImage: "folder.badge.questionmark", description: Text("Pick the two sides above."))
+                ContentUnavailableView(
+                    "No sources", systemImage: "folder.badge.questionmark",
+                    description: Text("Pick the two sides above."))
             }
         }
     }

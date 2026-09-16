@@ -95,11 +95,11 @@ package struct FileNode: Identifiable, Hashable, Sendable {
     }
 }
 
-package extension [FileNode] {
+extension [FileNode] {
     /// Folds every chain of single-child directories into one node whose name is the joined path, the way
     /// compact folders work in code editors. Directories holding a single file keep their own node.
     /// - Complexity: O(nodes)
-    func compacted() -> [FileNode] {
+    package func compacted() -> [FileNode] {
         map { node in
             guard node.isDirectory, var children = node.children else { return node }
             var name = node.name

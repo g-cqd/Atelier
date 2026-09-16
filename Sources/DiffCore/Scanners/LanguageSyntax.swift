@@ -20,18 +20,18 @@ struct LanguageSyntax: Sendable {
 
     static func syntax(for language: Language) -> LanguageSyntax {
         switch language {
-        case .swift: swift
-        case .objectiveC: objectiveC
-        case .kotlin: kotlin
-        case .java: java
-        case .javascript: javascript
-        case .typescript: typescript
-        case .c: c
-        case .cpp: cpp
-        case .python: python
-        case .shell: shell
-        case .fish: fish
-        default: LanguageSyntax(keywords: [])
+            case .swift: swift
+            case .objectiveC: objectiveC
+            case .kotlin: kotlin
+            case .java: java
+            case .javascript: javascript
+            case .typescript: typescript
+            case .c: c
+            case .cpp: cpp
+            case .python: python
+            case .shell: shell
+            case .fish: fish
+            default: LanguageSyntax(keywords: [])
         }
     }
 
@@ -39,12 +39,13 @@ struct LanguageSyntax: Sendable {
         keywords: [
             "associatedtype", "class", "deinit", "enum", "extension", "fileprivate", "func", "import", "init", "inout",
             "internal", "let", "open", "operator", "private", "precedencegroup", "protocol", "public", "rethrows",
-            "static", "struct", "subscript", "typealias", "var", "break", "case", "catch", "continue", "default", "defer",
+            "static", "struct", "subscript", "typealias", "var", "break", "case", "catch", "continue", "default",
+            "defer",
             "do", "else", "fallthrough", "for", "guard", "if", "in", "repeat", "return", "throw", "switch", "where",
             "while", "Any", "as", "await", "false", "is", "nil", "self", "Self", "super", "throws", "true", "try",
             "async", "actor", "some", "any", "consuming", "borrowing", "nonisolated", "isolated", "macro", "package",
             "lazy", "weak", "unowned", "override", "final", "mutating", "nonmutating", "indirect", "convenience",
-            "required", "optional", "dynamic", "willSet", "didSet", "get", "set", "each",
+            "required", "optional", "dynamic", "willSet", "didSet", "get", "set", "each"
         ],
         nestsBlockComments: true, tripleQuotes: [ASCII.quote], hasAnnotations: true
     )
@@ -53,14 +54,15 @@ struct LanguageSyntax: Sendable {
         "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else", "enum", "extern",
         "float", "for", "goto", "if", "inline", "int", "long", "register", "restrict", "return", "short", "signed",
         "sizeof", "static", "struct", "switch", "typedef", "union", "unsigned", "void", "volatile", "while", "bool",
-        "true", "false", "NULL", "_Bool", "_Static_assert", "_Alignof", "_Atomic", "_Thread_local", "typeof",
+        "true", "false", "NULL", "_Bool", "_Static_assert", "_Alignof", "_Atomic", "_Thread_local", "typeof"
     ]
 
     static let objectiveC = LanguageSyntax(
         keywords: cKeywords.union([
-            "id", "self", "super", "nil", "Nil", "YES", "NO", "BOOL", "instancetype", "SEL", "IMP", "Class", "in", "out",
+            "id", "self", "super", "nil", "Nil", "YES", "NO", "BOOL", "instancetype", "SEL", "IMP", "Class", "in",
+            "out",
             "inout", "bycopy", "byref", "oneway", "nonnull", "nullable", "__weak", "__strong", "__block", "__bridge",
-            "__kindof", "NS_ENUM", "NS_OPTIONS", "NSInteger", "NSUInteger", "CGFloat",
+            "__kindof", "NS_ENUM", "NS_OPTIONS", "NSInteger", "NSUInteger", "CGFloat"
         ]),
         quotes: [ASCII.quote, ASCII.apostrophe], hasPreprocessor: true, hasAnnotations: true
     )
@@ -74,7 +76,7 @@ struct LanguageSyntax: Sendable {
             "co_yield", "decltype", "delete", "dynamic_cast", "explicit", "export", "friend", "mutable", "namespace",
             "new", "noexcept", "not", "not_eq", "nullptr", "operator", "or", "or_eq", "private", "protected", "public",
             "reinterpret_cast", "requires", "static_assert", "static_cast", "template", "this", "thread_local", "throw",
-            "try", "typeid", "typename", "using", "virtual", "wchar_t", "xor", "xor_eq", "override", "final",
+            "try", "typeid", "typename", "using", "virtual", "wchar_t", "xor", "xor_eq", "override", "final"
         ]),
         quotes: [ASCII.quote, ASCII.apostrophe], hasPreprocessor: true
     )
@@ -85,8 +87,9 @@ struct LanguageSyntax: Sendable {
             "default", "do", "double", "else", "enum", "extends", "final", "finally", "float", "for", "goto", "if",
             "implements", "import", "instanceof", "int", "interface", "long", "native", "new", "package", "private",
             "protected", "public", "return", "short", "static", "strictfp", "super", "switch", "synchronized", "this",
-            "throw", "throws", "transient", "try", "void", "volatile", "while", "true", "false", "null", "var", "record",
-            "sealed", "permits", "yield", "non-sealed",
+            "throw", "throws", "transient", "try", "void", "volatile", "while", "true", "false", "null", "var",
+            "record",
+            "sealed", "permits", "yield", "non-sealed"
         ],
         quotes: [ASCII.quote, ASCII.apostrophe], tripleQuotes: [ASCII.quote], hasAnnotations: true
     )
@@ -94,12 +97,13 @@ struct LanguageSyntax: Sendable {
     static let kotlin = LanguageSyntax(
         keywords: [
             "as", "break", "class", "continue", "do", "else", "false", "for", "fun", "if", "in", "interface", "is",
-            "null", "object", "package", "return", "super", "this", "throw", "true", "try", "typealias", "typeof", "val",
+            "null", "object", "package", "return", "super", "this", "throw", "true", "try", "typealias", "typeof",
+            "val",
             "var", "when", "while", "by", "catch", "constructor", "delegate", "dynamic", "field", "file", "finally",
             "get", "import", "init", "param", "property", "receiver", "set", "setparam", "value", "where", "abstract",
             "actual", "annotation", "companion", "const", "crossinline", "data", "enum", "expect", "external", "final",
             "infix", "inline", "inner", "internal", "lateinit", "noinline", "open", "operator", "out", "override",
-            "private", "protected", "public", "reified", "sealed", "suspend", "tailrec", "vararg", "it",
+            "private", "protected", "public", "reified", "sealed", "suspend", "tailrec", "vararg", "it"
         ],
         nestsBlockComments: true, quotes: [ASCII.quote, ASCII.apostrophe], tripleQuotes: [ASCII.quote],
         hasAnnotations: true, hasVariables: true
@@ -109,7 +113,7 @@ struct LanguageSyntax: Sendable {
         "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete", "do", "else",
         "enum", "export", "extends", "false", "finally", "for", "function", "if", "import", "in", "instanceof", "let",
         "new", "null", "return", "super", "switch", "this", "throw", "true", "try", "typeof", "undefined", "var",
-        "void", "while", "with", "yield", "async", "of", "static", "get", "set",
+        "void", "while", "with", "yield", "async", "of", "static", "get", "set"
     ]
 
     static let javascript = LanguageSyntax(
@@ -121,16 +125,17 @@ struct LanguageSyntax: Sendable {
         keywords: javascriptKeywords.union([
             "abstract", "any", "as", "asserts", "bigint", "boolean", "declare", "implements", "infer", "interface",
             "is", "keyof", "module", "namespace", "never", "number", "object", "override", "private", "protected",
-            "public", "readonly", "satisfies", "string", "symbol", "type", "unique", "unknown",
+            "public", "readonly", "satisfies", "string", "symbol", "type", "unique", "unknown"
         ]),
         quotes: [ASCII.quote, ASCII.apostrophe, ASCII.backtick], multilineQuotes: [ASCII.backtick], hasAnnotations: true
     )
 
     static let python = LanguageSyntax(
         keywords: [
-            "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del",
+            "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue", "def",
+            "del",
             "elif", "else", "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda",
-            "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield", "match", "case", "self",
+            "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield", "match", "case", "self"
         ],
         lineComments: [Array("#".utf16)], blockComment: nil, quotes: [ASCII.quote, ASCII.apostrophe],
         tripleQuotes: [ASCII.quote, ASCII.apostrophe], hasAnnotations: true
@@ -140,7 +145,8 @@ struct LanguageSyntax: Sendable {
         keywords: [
             "if", "then", "else", "elif", "fi", "for", "in", "do", "done", "while", "until", "case", "esac", "function",
             "select", "time", "local", "export", "return", "exit", "declare", "readonly", "unset", "shift", "source",
-            "alias", "eval", "exec", "set", "trap", "true", "false", "break", "continue", "echo", "printf", "read", "test",
+            "alias", "eval", "exec", "set", "trap", "true", "false", "break", "continue", "echo", "printf", "read",
+            "test"
         ],
         lineComments: [Array("#".utf16)], blockComment: nil, quotes: [ASCII.quote, ASCII.apostrophe], hasVariables: true
     )
@@ -150,7 +156,7 @@ struct LanguageSyntax: Sendable {
             "if", "else", "end", "for", "in", "while", "function", "switch", "case", "begin", "and", "or", "not",
             "return", "break", "continue", "set", "source", "command", "builtin", "test", "true", "false", "echo",
             "printf", "read", "string", "math", "argparse", "status", "exit", "abbr", "alias", "block", "contains",
-            "count", "functions", "type", "eval", "exec",
+            "count", "functions", "type", "eval", "exec"
         ],
         lineComments: [Array("#".utf16)], blockComment: nil, quotes: [ASCII.quote, ASCII.apostrophe], hasVariables: true
     )

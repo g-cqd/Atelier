@@ -1,5 +1,5 @@
-import AemiRuntime
 import AemiIO
+import AemiRuntime
 import CryptoKit
 package import DiffCore
 package import Foundation
@@ -22,7 +22,7 @@ package struct SourceLoader: SourceReading {
         "zip", "gz", "tgz", "bz2", "xz", "7z", "tar", "jar", "dmg", "pkg", "ipa", "apk", "car", "nib", "mlmodel",
         "mlmodelc", "realm", "sqlite", "sqlite3", "db", "bin", "dat", "exe", "dll", "dylib", "so", "a", "o", "class",
         "pyc", "wasm", "mp3", "mp4", "m4a", "m4v", "mov", "avi", "wav", "aac", "flac", "ogg", "ttf", "otf", "woff",
-        "woff2", "eot", "ttc", "mtl", "obj", "usdz", "scn", "reality",
+        "woff2", "eot", "ttc", "mtl", "obj", "usdz", "scn", "reality"
     ]
 
     private let patches = PatchCache()
@@ -65,26 +65,28 @@ package struct SourceLoader: SourceReading {
 
     private func provider(for source: ComparisonSource) -> any SourceProvider {
         switch source {
-        case .file(let url): FileSource(url: url)
-        case .directory(let url): DirectorySource(root: url)
-        case .gitRef(let repository, let ref): GitRefSource(repository: repository, ref: ref)
-        case .patch(let url, let side): PatchSource(url: url, side: side, cache: patches)
+            case .file(let url): FileSource(url: url)
+            case .directory(let url): DirectorySource(root: url)
+            case .gitRef(let repository, let ref): GitRefSource(repository: repository, ref: ref)
+            case .patch(let url, let side): PatchSource(url: url, side: side, cache: patches)
         }
     }
 
     package func renames(from left: ComparisonSource, to right: ComparisonSource) async -> [String: String] {
         switch (left, right) {
-        case (.gitRef(let repository, let from), .gitRef(let other, let to)) where repository == other:
-            (try? await GitClient(repository: repository).renames(from: from, to: to)) ?? [:]
-        case (.gitRef(let repository, let from), .directory(let folder)) where repository.standardizedFileURL == folder.standardizedFileURL:
-            (try? await GitClient(repository: repository).renames(from: from, to: nil)) ?? [:]
-        case (.patch(let url, .old), .patch(let other, .new)) where url == other:
-            Dictionary(
-                ((try? await patches.patch(at: url))?.files ?? []).filter(\.isRename).compactMap { file in file.oldPath.flatMap { old in file.newPath.map { (old, $0) } } },
-                uniquingKeysWith: { first, _ in first }
-            )
-        default:
-            [:]
+            case (.gitRef(let repository, let from), .gitRef(let other, let to)) where repository == other:
+                (try? await GitClient(repository: repository).renames(from: from, to: to)) ?? [:]
+            case (.gitRef(let repository, let from), .directory(let folder))
+            where repository.standardizedFileURL == folder.standardizedFileURL:
+                (try? await GitClient(repository: repository).renames(from: from, to: nil)) ?? [:]
+            case (.patch(let url, .old), .patch(let other, .new)) where url == other:
+                Dictionary(
+                    ((try? await patches.patch(at: url))?.files ?? []).filter(\.isRename)
+                        .compactMap { file in file.oldPath.flatMap { old in file.newPath.map { (old, $0) } } },
+                    uniquingKeysWith: { first, _ in first }
+                )
+            default:
+                [:]
         }
     }
 
@@ -131,13 +133,15 @@ package protocol SourceProvider: Sendable {
     func contents(of entries: [SourceEntry]) async throws -> [String: String]
 }
 
-package extension SourceProvider {
-    func ignoredEntries() async throws -> [SourceEntry] {
+extension SourceProvider {
+    package func ignoredEntries() async throws -> [SourceEntry] {
         []
     }
 
-    func contents(of entries: [SourceEntry]) async throws -> [String: String] {
-        let pairs = try await mapConcurrently(entries, limit: SourceLoader.hashingConcurrency) { entry in (entry.relativePath, try await content(of: entry)) }
+    package func contents(of entries: [SourceEntry]) async throws -> [String: String] {
+        let pairs = try await mapConcurrently(entries, limit: SourceLoader.hashingConcurrency) { entry in
+            (entry.relativePath, try await content(of: entry))
+        }
         return Dictionary(pairs, uniquingKeysWith: { first, _ in first })
     }
 }
@@ -147,7 +151,9 @@ package struct FileSource: SourceProvider {
 
     package func entries() async throws -> [SourceEntry] {
         let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-        let blobID = size <= SourceLoader.maximumHashedSize ? try await Self.blobID(atPath: url.path(percentEncoded: false), size: size) : nil
+        let blobID =
+            size <= SourceLoader.maximumHashedSize
+            ? try await Self.blobID(atPath: url.path(percentEncoded: false), size: size) : nil
         return [SourceEntry(relativePath: url.lastPathComponent, blobID: blobID, size: size)]
     }
 
@@ -173,13 +179,16 @@ package struct DirectorySource: SourceProvider {
     /// git ignores. Elsewhere, a folder scan that leaves hidden files out.
     @concurrent
     package func entries() async throws -> [SourceEntry] {
-        let files = if let git = await gitClient() {
-            try Self.stat(try await git.workingTreePaths(), under: root)
-        } else {
-            try Self.scan(root)
-        }
+        let files =
+            if let git = await gitClient() {
+                try Self.stat(try await git.workingTreePaths(), under: root)
+            } else {
+                try Self.scan(root)
+            }
         return try await mapConcurrently(files, limit: SourceLoader.hashingConcurrency) { file in
-            let blobID = file.size <= SourceLoader.maximumHashedSize ? try SourceLoader.blobID(atPath: file.fullPath, size: file.size) : nil
+            let blobID =
+                file.size <= SourceLoader.maximumHashedSize
+                ? try SourceLoader.blobID(atPath: file.fullPath, size: file.size) : nil
             return SourceEntry(relativePath: file.relativePath, blobID: blobID, size: file.size)
         }
     }
@@ -220,7 +229,10 @@ package struct DirectorySource: SourceProvider {
             guard SourceLoader.isSupported(path: path), !liesUnderSkippedDirectory(path) else { continue }
             let url = root.appending(path: path)
             guard let values = try? url.resourceValues(forKeys: keys), values.isRegularFile == true else { continue }
-            files.append(File(fullPath: url.standardizedFileURL.path(percentEncoded: false), relativePath: path, size: values.fileSize ?? 0))
+            files.append(
+                File(
+                    fullPath: url.standardizedFileURL.path(percentEncoded: false), relativePath: path,
+                    size: values.fileSize ?? 0))
         }
         return files
     }
@@ -231,11 +243,13 @@ package struct DirectorySource: SourceProvider {
 
     private static func scan(_ root: URL) throws -> [File] {
         let keys: Set<URLResourceKey> = [.isDirectoryKey, .isRegularFileKey, .fileSizeKey, .nameKey]
-        guard let enumerator = FileManager.default.enumerator(
-            at: root,
-            includingPropertiesForKeys: Array(keys),
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else {
+        guard
+            let enumerator = FileManager.default.enumerator(
+                at: root,
+                includingPropertiesForKeys: Array(keys),
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            )
+        else {
             throw CocoaError(.fileReadNoSuchFile)
         }
 
@@ -273,11 +287,14 @@ package struct GitRefSource: SourceProvider {
     package func contents(of entries: [SourceEntry]) async throws -> [String: String] {
         let client = GitClient(repository: repository)
         let ids = Array(Set(entries.compactMap(\.blobID)))
-        let batches = stride(from: 0, to: ids.count, by: SourceLoader.blobBatchSize).map { Array(ids[$0..<min($0 + SourceLoader.blobBatchSize, ids.count)]) }
-        let blobs = try await mapConcurrently(batches, limit: 3) { try await client.blobs($0) }.reduce(into: [:]) { $0.merge($1) { first, _ in first } }
-        return Dictionary(entries.map { entry in
-            (entry.relativePath, entry.blobID.flatMap { blobs[$0] }.map(SourceLoader.text(from:)) ?? "")
-        }, uniquingKeysWith: { first, _ in first })
+        let batches = stride(from: 0, to: ids.count, by: SourceLoader.blobBatchSize)
+            .map { Array(ids[$0 ..< min($0 + SourceLoader.blobBatchSize, ids.count)]) }
+        let blobs = try await mapConcurrently(batches, limit: 3) { try await client.blobs($0) }
+            .reduce(into: [:]) { $0.merge($1) { first, _ in first } }
+        return Dictionary(
+            entries.map { entry in
+                (entry.relativePath, entry.blobID.flatMap { blobs[$0] }.map(SourceLoader.text(from:)) ?? "")
+            }, uniquingKeysWith: { first, _ in first })
     }
 }
 
@@ -287,11 +304,13 @@ package struct PatchSource: SourceProvider {
     package let cache: PatchCache
 
     package func entries() async throws -> [SourceEntry] {
-        try await cache.patch(at: url).files.compactMap { file in
-            guard !file.isBinary, let path = path(of: file) else { return nil }
-            let text = text(of: file)
-            return SourceEntry(relativePath: path, blobID: SourceLoader.patchBlobID(path: path, text: text), size: text.utf8.count)
-        }
+        try await cache.patch(at: url).files
+            .compactMap { file in
+                guard !file.isBinary, let path = path(of: file) else { return nil }
+                let text = text(of: file)
+                return SourceEntry(
+                    relativePath: path, blobID: SourceLoader.patchBlobID(path: path, text: text), size: text.utf8.count)
+            }
     }
 
     package func content(of entry: SourceEntry) async throws -> String {

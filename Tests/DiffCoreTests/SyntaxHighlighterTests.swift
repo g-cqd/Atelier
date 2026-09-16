@@ -1,5 +1,6 @@
-@testable import DiffCore
 import Testing
+
+@testable import DiffCore
 
 struct SyntaxHighlighterTests {
     @Test
@@ -17,30 +18,50 @@ struct SyntaxHighlighterTests {
     func `html scanner classifies tags attributes strings comments and entities`() {
         let source = "<!DOCTYPE html><div class=\"a\">&amp;<!-- c --><script>if (a < b) {}</script></div>"
         let kinds = SyntaxHighlighter.tokens(in: source, language: .html).map(\.kind)
-        #expect(kinds == [
-            .keyword, .tag, .attributeName, .string, .tag, .entity, .comment, .tag, .tag, .tag, .tag, .tag, .tag,
-        ])
+        #expect(
+            kinds == [
+                .keyword, .tag, .attributeName, .string, .tag, .entity, .comment, .tag, .tag, .tag, .tag, .tag, .tag
+            ])
     }
 
     @Test(arguments: [
-        (Language.kotlin, "@Composable fun Greet(name: String) { /* c */ val s = \"\"\"hi\nthere\"\"\" // x\n return 1 }",
-         [TokenKind.attribute, .keyword, .type, .type, .comment, .keyword, .string, .comment, .keyword, .number]),
-        (.java, "@Override public String name() { return \"n\" + 'c' + 0x1F; } // end",
-         [.attribute, .keyword, .type, .keyword, .string, .string, .number, .comment]),
-        (.javascript, "const f = async (x) => `a ${x}\nb`; // c\nreturn null;",
-         [.keyword, .keyword, .string, .comment, .keyword, .keyword]),
-        (.typescript, "interface A { readonly id: number } @dec class B {}",
-         [.keyword, .type, .keyword, .keyword, .attribute, .keyword, .type]),
-        (.c, "#include <stdio.h>\nint main(void) { return 'a' + 1; } /* done */",
-         [.attribute, .keyword, .keyword, .keyword, .string, .number, .comment]),
-        (.cpp, "namespace N { template<typename T> T id(T v) { return nullptr; } }",
-         [.keyword, .type, .keyword, .keyword, .type, .type, .type, .keyword, .keyword]),
-        (.python, "@app.route\ndef f(self):\n    \"\"\"doc\nstring\"\"\"\n    return None  # c",
-         [.attribute, .keyword, .keyword, .string, .keyword, .keyword, .comment]),
-        (.shell, "if [ -z \"$HOME\" ]; then echo ${X:-1} 'q'; fi # c",
-         [.keyword, .string, .keyword, .keyword, .attribute, .string, .keyword, .comment]),
-        (.fish, "function greet; set -l n $argv[1]; echo \"hi $n\"; end",
-         [.keyword, .keyword, .attribute, .number, .keyword, .string, .keyword]),
+        (
+            Language.kotlin,
+            "@Composable fun Greet(name: String) { /* c */ val s = \"\"\"hi\nthere\"\"\" // x\n return 1 }",
+            [TokenKind.attribute, .keyword, .type, .type, .comment, .keyword, .string, .comment, .keyword, .number]
+        ),
+        (
+            .java, "@Override public String name() { return \"n\" + 'c' + 0x1F; } // end",
+            [.attribute, .keyword, .type, .keyword, .string, .string, .number, .comment]
+        ),
+        (
+            .javascript, "const f = async (x) => `a ${x}\nb`; // c\nreturn null;",
+            [.keyword, .keyword, .string, .comment, .keyword, .keyword]
+        ),
+        (
+            .typescript, "interface A { readonly id: number } @dec class B {}",
+            [.keyword, .type, .keyword, .keyword, .attribute, .keyword, .type]
+        ),
+        (
+            .c, "#include <stdio.h>\nint main(void) { return 'a' + 1; } /* done */",
+            [.attribute, .keyword, .keyword, .keyword, .string, .number, .comment]
+        ),
+        (
+            .cpp, "namespace N { template<typename T> T id(T v) { return nullptr; } }",
+            [.keyword, .type, .keyword, .keyword, .type, .type, .type, .keyword, .keyword]
+        ),
+        (
+            .python, "@app.route\ndef f(self):\n    \"\"\"doc\nstring\"\"\"\n    return None  # c",
+            [.attribute, .keyword, .keyword, .string, .keyword, .keyword, .comment]
+        ),
+        (
+            .shell, "if [ -z \"$HOME\" ]; then echo ${X:-1} 'q'; fi # c",
+            [.keyword, .string, .keyword, .keyword, .attribute, .string, .keyword, .comment]
+        ),
+        (
+            .fish, "function greet; set -l n $argv[1]; echo \"hi $n\"; end",
+            [.keyword, .keyword, .attribute, .number, .keyword, .string, .keyword]
+        )
     ])
     func `code scanners classify each language`(language: Language, source: String, expected: [TokenKind]) {
         #expect(SyntaxHighlighter.tokens(in: source, language: language).map(\.kind) == expected)
@@ -48,7 +69,8 @@ struct SyntaxHighlighterTests {
 
     @Test
     func `json scanner tells keys from values and marks literals`() {
-        let kinds = SyntaxHighlighter.tokens(in: "{\"a\": [1, -2.5, true, null], \"b\": \"x\"}", language: .json).map(\.kind)
+        let kinds = SyntaxHighlighter.tokens(in: "{\"a\": [1, -2.5, true, null], \"b\": \"x\"}", language: .json)
+            .map(\.kind)
         #expect(kinds == [.attributeName, .number, .number, .keyword, .keyword, .attributeName, .string])
     }
 
@@ -56,21 +78,32 @@ struct SyntaxHighlighterTests {
     func `yaml scanner marks documents keys anchors comments and literals`() {
         let source = "---\n# c\nname: app # trailing\nlist:\n  - &a 1\n  - *a\n  - yes\nkey with spaces: \"v\"\n"
         let kinds = SyntaxHighlighter.tokens(in: source, language: .yaml).map(\.kind)
-        #expect(kinds == [.keyword, .comment, .attributeName, .comment, .attributeName, .attribute, .number, .attribute, .keyword, .attributeName, .string])
+        #expect(
+            kinds == [
+                .keyword, .comment, .attributeName, .comment, .attributeName, .attribute, .number, .attribute, .keyword,
+                .attributeName, .string
+            ])
     }
 
     @Test
     func `toml scanner marks tables keys strings numbers dates and literals`() {
         let source = "[server]\nhost = \"a\" # c\nport = 8080\n[[items]]\ndate = 1979-05-27T07:32:00Z\nok = true\n"
         let kinds = SyntaxHighlighter.tokens(in: source, language: .toml).map(\.kind)
-        #expect(kinds == [.tag, .attributeName, .string, .comment, .attributeName, .number, .tag, .attributeName, .number, .attributeName, .keyword])
+        #expect(
+            kinds == [
+                .tag, .attributeName, .string, .comment, .attributeName, .number, .tag, .attributeName, .number,
+                .attributeName, .keyword
+            ])
     }
 
     @Test
     func `css scanner marks selectors properties numbers colours at rules and importance`() {
         let source = "@media (min-width: 10px) { .card #id { color: #fff; margin: -1.5em !important; /* c */ } }"
         let kinds = SyntaxHighlighter.tokens(in: source, language: .css).map(\.kind)
-        #expect(kinds == [.attribute, .number, .type, .type, .attributeName, .number, .attributeName, .number, .keyword, .comment])
+        #expect(
+            kinds == [
+                .attribute, .number, .type, .type, .attributeName, .number, .attributeName, .number, .keyword, .comment
+            ])
     }
 
     @Test
@@ -79,7 +112,8 @@ struct SyntaxHighlighterTests {
         #expect(Language(fileExtension: "tsx") == .typescript)
         #expect(Language(fileExtension: "yml") == .yaml)
         #expect(Language(fileExtension: "unknown") == .plain)
-        #expect(Set(Language.byExtension.keys).isSuperset(of: ["py", "sh", "fish", "toml", "json", "css", "java", "cpp"]))
+        #expect(
+            Set(Language.byExtension.keys).isSuperset(of: ["py", "sh", "fish", "toml", "json", "css", "java", "cpp"]))
     }
 
     @Test
@@ -87,14 +121,14 @@ struct SyntaxHighlighterTests {
         let source = "/* a\nb */ x"
         let tokens = SyntaxHighlighter.tokens(in: source, language: .swift)
         let byLine = SyntaxHighlighter.tokensByLine(tokens, lineStarts: [0, 5], textLength: 11)
-        #expect(byLine == [[Token(kind: .comment, range: 0..<4)], [Token(kind: .comment, range: 0..<4)]])
+        #expect(byLine == [[Token(kind: .comment, range: 0 ..< 4)], [Token(kind: .comment, range: 0 ..< 4)]])
     }
 }
 
-private extension String.UTF16View {
-    subscript(range: Range<Int>) -> String {
+extension String.UTF16View {
+    fileprivate subscript(range: Range<Int>) -> String {
         let start = index(startIndex, offsetBy: range.lowerBound)
         let end = index(startIndex, offsetBy: range.upperBound)
-        return String(decoding: Array(self[start..<end]), as: UTF16.self)
+        return String(decoding: Array(self[start ..< end]), as: UTF16.self)
     }
 }

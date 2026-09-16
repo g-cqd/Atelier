@@ -28,7 +28,8 @@ package final class DiffFragmentProvider: NSObject, @preconcurrency NSTextLayout
         guard let rendered, let contentManager = textLayoutManager.textContentManager else { return fragment }
         let offset = contentManager.offset(from: textLayoutManager.documentRange.location, to: location)
         if let row = rendered.row(containing: offset) {
-            fragment.backgroundColor = rendered.palette.rowBackground(for: row.kind, side: rendered.side, isMoved: row.isMoved)
+            fragment.backgroundColor = rendered.palette.rowBackground(
+                for: row.kind, side: rendered.side, isMoved: row.isMoved)
         }
         return fragment
     }

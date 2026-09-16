@@ -30,6 +30,7 @@ public enum HunkLayout {
 
     /// - Parameters:
     ///   - changeRanges: Ascending, disjoint ranges of changed rows.
+    ///   - rowCount: Rows in the file; hunks are clipped to it.
     ///   - context: Unchanged rows kept on each side of a change.
     ///   - expansions: Extra rows revealed per gap, keyed by base gap index: gap `i` sits before base hunk `i`, so
     ///     gap `0` precedes the first hunk and gap `baseCount` follows the last one. An expansion stops at the
@@ -49,9 +50,11 @@ public enum HunkLayout {
             let below = expansions[index + 1]?.below ?? 0
             let floor = index > 0 ? base[index - 1].upperBound : 0
             let ceiling = index + 1 < base.count ? base[index + 1].lowerBound : rowCount
-            let rows = max(hunk.lowerBound - above, floor)..<min(hunk.upperBound + below, ceiling)
+            let rows = max(hunk.lowerBound - above, floor) ..< min(hunk.upperBound + below, ceiling)
             if let last = result.last, rows.lowerBound <= last.rows.upperBound {
-                result[result.count - 1] = Hunk(rows: last.rows.lowerBound..<max(last.rows.upperBound, rows.upperBound), firstBase: last.firstBase, lastBase: index)
+                result[result.count - 1] = Hunk(
+                    rows: last.rows.lowerBound ..< max(last.rows.upperBound, rows.upperBound),
+                    firstBase: last.firstBase, lastBase: index)
             } else {
                 result.append(Hunk(rows: rows, firstBase: index, lastBase: index))
             }
@@ -66,18 +69,19 @@ public enum HunkLayout {
         context: Int,
         expansions: [Int: GapExpansion] = [:]
     ) -> [Range<Int>] {
-        layout(changeRanges: changeRanges, rowCount: rowCount, context: context, expansions: expansions).hunks.map(\.rows)
+        layout(changeRanges: changeRanges, rowCount: rowCount, context: context, expansions: expansions).hunks
+            .map(\.rows)
     }
 
     private static func padded(_ range: Range<Int>, by context: Int, rowCount: Int) -> Range<Int> {
-        max(range.lowerBound - context, 0)..<min(range.upperBound + context, rowCount)
+        max(range.lowerBound - context, 0) ..< min(range.upperBound + context, rowCount)
     }
 
     private static func merged(_ ranges: [Range<Int>]) -> [Range<Int>] {
         var result: [Range<Int>] = []
         for range in ranges where !range.isEmpty {
             if let last = result.last, range.lowerBound <= last.upperBound {
-                result[result.count - 1] = last.lowerBound..<max(last.upperBound, range.upperBound)
+                result[result.count - 1] = last.lowerBound ..< max(last.upperBound, range.upperBound)
             } else {
                 result.append(range)
             }

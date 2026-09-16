@@ -57,7 +57,9 @@ public enum LineDiff {
     static let maximumAnchorOccurrences = 64
 
     /// Shared prefix and suffix are matched directly; the middle goes to the histogram anchoring or to Myers.
-    public static func diff<Element: Hashable>(_ old: [Element], _ new: [Element], anchoringRareLines: Bool = true) -> [DiffEdit] {
+    public static func diff<Element: Hashable>(_ old: [Element], _ new: [Element], anchoringRareLines: Bool = true)
+        -> [DiffEdit]
+    {
         var edits: [DiffEdit] = []
         edits.reserveCapacity(max(old.count, new.count))
 
@@ -77,12 +79,12 @@ public enum LineDiff {
         var solver = MyersSolver(old: old, new: new)
         if anchoringRareLines {
             var histogram = HistogramSolver(old: old, new: new, myers: solver)
-            histogram.solve(old: prefix..<oldEnd, new: prefix..<newEnd, into: &edits)
+            histogram.solve(old: prefix ..< oldEnd, new: prefix ..< newEnd, into: &edits)
         } else {
-            solver.solve(old: prefix..<oldEnd, new: prefix..<newEnd, into: &edits)
+            solver.solve(old: prefix ..< oldEnd, new: prefix ..< newEnd, into: &edits)
         }
 
-        for offset in 0..<(old.count - oldEnd) {
+        for offset in 0 ..< (old.count - oldEnd) {
             edits.append(.equal(old: oldEnd + offset, new: newEnd + offset))
         }
         return edits
@@ -90,7 +92,9 @@ public enum LineDiff {
 
     /// Diffs lines through `pipeline`: interned so each comparison in the inner loop is an integer comparison,
     /// then refined by every stage the pipeline wires in.
-    public static func diffLines(_ old: [Substring], _ new: [Substring], pipeline: DiffPipeline = DiffPipeline()) -> [DiffEdit] {
+    public static func diffLines(_ old: [Substring], _ new: [Substring], pipeline: DiffPipeline = DiffPipeline())
+        -> [DiffEdit]
+    {
         var identifiers: [Substring: Int] = [:]
         identifiers.reserveCapacity(old.count + new.count)
 
@@ -104,7 +108,8 @@ public enum LineDiff {
             }
         }
 
-        let context = LineDiffContext(old: intern(old), new: intern(new), oldIndents: old.map(indent(of:)), newIndents: new.map(indent(of:)))
+        let context = LineDiffContext(
+            old: intern(old), new: intern(new), oldIndents: old.map(indent(of:)), newIndents: new.map(indent(of:)))
         var edits = pipeline.lineDiff.diff(context.old, context.new)
         for refiner in pipeline.refiners {
             edits = refiner.refine(edits, lines: context)
@@ -117,10 +122,10 @@ public enum LineDiff {
         var width = 0
         for byte in line.utf8 {
             switch byte {
-            case UInt8(ascii: " "): width += 1
-            case UInt8(ascii: "\t"): width += 8 - width % 8
-            case UInt8(ascii: "\r"), UInt8(ascii: "\u{0C}"), UInt8(ascii: "\u{0B}"): continue
-            default: return min(width, IndentHeuristic.maximumIndent)
+                case UInt8(ascii: " "): width += 1
+                case UInt8(ascii: "\t"): width += 8 - width % 8
+                case UInt8(ascii: "\r"), UInt8(ascii: "\u{0C}"), UInt8(ascii: "\u{0B}"): continue
+                default: return min(width, IndentHeuristic.maximumIndent)
             }
         }
         return nil
@@ -158,20 +163,24 @@ private struct HistogramSolver<Element: Hashable> {
         var work: [Work] = [.ranges(oldRange, newRange)]
         while let item = work.popLast() {
             switch item {
-            case .equal(let oldStart, let newStart, let count):
-                for index in 0..<count { edits.append(.equal(old: oldStart + index, new: newStart + index)) }
-            case .ranges(let oldRange, let newRange):
-                if oldRange.isEmpty {
-                    for index in newRange { edits.append(.insert(new: index)) }
-                } else if newRange.isEmpty {
-                    for index in oldRange { edits.append(.delete(old: index)) }
-                } else if let anchor = bestAnchor(old: oldRange, new: newRange) {
-                    work.append(.ranges((anchor.oldStart + anchor.length)..<oldRange.upperBound, (anchor.newStart + anchor.length)..<newRange.upperBound))
-                    work.append(.equal(oldStart: anchor.oldStart, newStart: anchor.newStart, count: anchor.length))
-                    work.append(.ranges(oldRange.lowerBound..<anchor.oldStart, newRange.lowerBound..<anchor.newStart))
-                } else {
-                    myers.solve(old: oldRange, new: newRange, into: &edits)
-                }
+                case .equal(let oldStart, let newStart, let count):
+                    for index in 0 ..< count { edits.append(.equal(old: oldStart + index, new: newStart + index)) }
+                case .ranges(let oldRange, let newRange):
+                    if oldRange.isEmpty {
+                        for index in newRange { edits.append(.insert(new: index)) }
+                    } else if newRange.isEmpty {
+                        for index in oldRange { edits.append(.delete(old: index)) }
+                    } else if let anchor = bestAnchor(old: oldRange, new: newRange) {
+                        work.append(
+                            .ranges(
+                                (anchor.oldStart + anchor.length) ..< oldRange.upperBound,
+                                (anchor.newStart + anchor.length) ..< newRange.upperBound))
+                        work.append(.equal(oldStart: anchor.oldStart, newStart: anchor.newStart, count: anchor.length))
+                        work.append(
+                            .ranges(oldRange.lowerBound ..< anchor.oldStart, newRange.lowerBound ..< anchor.newStart))
+                    } else {
+                        myers.solve(old: oldRange, new: newRange, into: &edits)
+                    }
             }
         }
     }
@@ -184,7 +193,8 @@ private struct HistogramSolver<Element: Hashable> {
         var best: Anchor?
         var newIndex = newRange.lowerBound
         while newIndex < newRange.upperBound {
-            guard let candidates = positions[new[newIndex]], candidates.count <= LineDiff.maximumAnchorOccurrences else {
+            guard let candidates = positions[new[newIndex]], candidates.count <= LineDiff.maximumAnchorOccurrences
+            else {
                 newIndex += 1
                 continue
             }
@@ -194,7 +204,9 @@ private struct HistogramSolver<Element: Hashable> {
                 var oldStart = oldIndex
                 var newStart = newIndex
                 var occurrences = candidates.count
-                while oldStart > oldRange.lowerBound, newStart > newRange.lowerBound, old[oldStart - 1] == new[newStart - 1] {
+                while oldStart > oldRange.lowerBound, newStart > newRange.lowerBound,
+                    old[oldStart - 1] == new[newStart - 1]
+                {
                     oldStart -= 1
                     newStart -= 1
                     occurrences = max(occurrences, positions[old[oldStart]]?.count ?? 0)
@@ -208,7 +220,9 @@ private struct HistogramSolver<Element: Hashable> {
                 }
                 let length = oldEnd - oldStart
                 if let current = best {
-                    if occurrences < current.occurrences || (occurrences == current.occurrences && length > current.length) {
+                    if occurrences < current.occurrences
+                        || (occurrences == current.occurrences && length > current.length)
+                    {
                         best = Anchor(oldStart: oldStart, newStart: newStart, length: length, occurrences: occurrences)
                     }
                 } else {
@@ -219,190 +233,6 @@ private struct HistogramSolver<Element: Hashable> {
             newIndex = nextNewIndex
         }
         return best
-    }
-}
-
-/// Git's indent heuristic (`xdiff/xdiffi.c`): a run of inserted or deleted lines can often slide up or down over
-/// identical lines without changing the diff; among those positions, prefer the one that starts on a shallow
-/// indentation and after blank lines, the way a reader would cut the change.
-public struct IndentHeuristic: EditScriptRefining {
-    static let maximumIndent = 200
-    static let maximumBlanks = 20
-    static let maximumSliding = 100
-    private static let startOfFilePenalty = 1
-    private static let endOfFilePenalty = 21
-    private static let totalBlankWeight = -30
-    private static let postBlankWeight = 18
-    private static let relativeIndentPenalty = -4
-    private static let relativeIndentWithBlankPenalty = 10
-    private static let relativeOutdentPenalty = 24
-    private static let relativeOutdentWithBlankPenalty = 17
-    private static let relativeDedentPenalty = 23
-    private static let relativeDedentWithBlankPenalty = 17
-    private static let indentWeight = 60
-
-    public init() {}
-
-    public func refine(_ edits: [DiffEdit], lines: LineDiffContext) -> [DiffEdit] {
-        Self.slide(edits, old: lines.old, new: lines.new, oldIndents: lines.oldIndents, newIndents: lines.newIndents)
-    }
-
-    static func slide(_ edits: [DiffEdit], old: [Int], new: [Int], oldIndents: [Int?], newIndents: [Int?]) -> [DiffEdit] {
-        var oldChanged = [Bool](repeating: false, count: old.count)
-        var newChanged = [Bool](repeating: false, count: new.count)
-        for edit in edits {
-            switch edit {
-            case .delete(let index): oldChanged[index] = true
-            case .insert(let index): newChanged[index] = true
-            case .equal: break
-            }
-        }
-        slideGroups(lines: old, indents: oldIndents, changed: &oldChanged)
-        slideGroups(lines: new, indents: newIndents, changed: &newChanged)
-
-        var result: [DiffEdit] = []
-        result.reserveCapacity(edits.count)
-        var oldIndex = 0
-        var newIndex = 0
-        while oldIndex < old.count || newIndex < new.count {
-            if oldIndex < old.count, newIndex < new.count, !oldChanged[oldIndex], !newChanged[newIndex] {
-                result.append(.equal(old: oldIndex, new: newIndex))
-                oldIndex += 1
-                newIndex += 1
-                continue
-            }
-            while oldIndex < old.count, oldChanged[oldIndex] {
-                result.append(.delete(old: oldIndex))
-                oldIndex += 1
-            }
-            while newIndex < new.count, newChanged[newIndex] {
-                result.append(.insert(new: newIndex))
-                newIndex += 1
-            }
-        }
-        return result
-    }
-
-    private static func slideGroups(lines: [Int], indents: [Int?], changed: inout [Bool]) {
-        var end = 0
-        while end < lines.count {
-            guard changed[end] else {
-                end += 1
-                continue
-            }
-            var start = end
-            while end < lines.count, changed[end] { end += 1 }
-            // Slide up as far as identical lines allow, then down; the reachable positions are the candidates.
-            while start > 0, !changed[start - 1], lines[start - 1] == lines[end - 1] {
-                start -= 1
-                end -= 1
-                changed[start] = true
-                changed[end] = false
-            }
-            let earliestEnd = end
-            while end < lines.count, !changed[end], lines[end] == lines[start] {
-                changed[start] = false
-                changed[end] = true
-                start += 1
-                end += 1
-            }
-            let groupSize = end - start
-            if end - earliestEnd > maximumSliding {
-                // Too many positions to score; the group stays slid down, which is what git does too.
-            } else if end > earliestEnd {
-                var bestEnd = end
-                var bestScore: Score?
-                var candidate = earliestEnd
-                while candidate <= end {
-                    let score = measure(lines: lines, indents: indents, split: candidate) + measure(lines: lines, indents: indents, split: candidate - groupSize)
-                    if let current = bestScore, score.compared(to: current) > 0 {
-                        // worse than best
-                    } else {
-                        bestScore = score
-                        bestEnd = candidate
-                    }
-                    candidate += 1
-                }
-                while end > bestEnd {
-                    end -= 1
-                    start -= 1
-                    changed[start] = true
-                    changed[end] = false
-                }
-            }
-            // A group that slid down to touch the next one is now one group; continue after it.
-        }
-    }
-
-    private struct Score {
-        var effectiveIndent = 0
-        var penalty = 0
-
-        static func + (lhs: Score, rhs: Score) -> Score {
-            Score(effectiveIndent: lhs.effectiveIndent + rhs.effectiveIndent, penalty: lhs.penalty + rhs.penalty)
-        }
-
-        /// Negative when `self` is the better split.
-        func compared(to other: Score) -> Int {
-            let indentOrder = (effectiveIndent > other.effectiveIndent ? 1 : 0) - (effectiveIndent < other.effectiveIndent ? 1 : 0)
-            return indentWeight * indentOrder + (penalty - other.penalty)
-        }
-    }
-
-    /// Scores a split between line `split - 1` and line `split`; git's `measure_split` and `score_add_split`.
-    private static func measure(lines: [Int], indents: [Int?], split: Int) -> Score {
-        let endOfFile = split >= lines.count
-        let indent: Int? = endOfFile ? nil : indents[split]
-        var preBlank = 0
-        var preIndent: Int?
-        var index = split - 1
-        while index >= 0 {
-            if let value = indents[index] {
-                preIndent = value
-                break
-            }
-            preBlank += 1
-            if preBlank == maximumBlanks { break }
-            index -= 1
-        }
-        var postBlank = 0
-        var postIndent: Int?
-        index = split + 1
-        while index < lines.count {
-            if let value = indents[index] {
-                postIndent = value
-                break
-            }
-            postBlank += 1
-            if postBlank == maximumBlanks { break }
-            index += 1
-        }
-
-        var penalty = 0
-        if preIndent == nil, preBlank == 0 { penalty += startOfFilePenalty }
-        if endOfFile { penalty += endOfFilePenalty }
-        let totalBlank = preBlank + postBlank
-        penalty += totalBlankWeight * totalBlank
-        penalty += postBlankWeight * postBlank
-        let effectiveIndent: Int
-        if let indent {
-            effectiveIndent = indent
-        } else {
-            effectiveIndent = postIndent ?? -1
-        }
-        let anyBlanks = totalBlank > 0
-        if let indent, let preIndent {
-            if indent > preIndent {
-                penalty += anyBlanks ? relativeIndentWithBlankPenalty : relativeIndentPenalty
-            } else if indent < preIndent {
-                if let postIndent, postIndent > indent {
-                    penalty += anyBlanks ? relativeOutdentWithBlankPenalty : relativeOutdentPenalty
-                } else {
-                    penalty += anyBlanks ? relativeDedentWithBlankPenalty : relativeDedentPenalty
-                }
-            }
-        }
-        return Score(effectiveIndent: effectiveIndent, penalty: penalty)
     }
 }
 
@@ -440,41 +270,44 @@ private struct MyersSolver<Element: Equatable> {
 
         while let work = stack.popLast() {
             switch work {
-            case .equal(let oldStart, let newStart, let count):
-                for index in 0..<count {
-                    edits.append(.equal(old: oldStart + index, new: newStart + index))
-                }
+                case .equal(let oldStart, let newStart, let count):
+                    for index in 0 ..< count {
+                        edits.append(.equal(old: oldStart + index, new: newStart + index))
+                    }
 
-            case .solve(let oldRange, let newRange):
-                let n = oldRange.count
-                let m = newRange.count
-                if n == 0 {
-                    for index in newRange { edits.append(.insert(new: index)) }
-                    continue
-                }
-                if m == 0 {
-                    for index in oldRange { edits.append(.delete(old: index)) }
-                    continue
-                }
+                case .solve(let oldRange, let newRange):
+                    let n = oldRange.count
+                    let m = newRange.count
+                    if n == 0 {
+                        for index in newRange { edits.append(.insert(new: index)) }
+                        continue
+                    }
+                    if m == 0 {
+                        for index in oldRange { edits.append(.delete(old: index)) }
+                        continue
+                    }
 
-                let snake = middleSnake(old: oldRange, new: newRange)
-                if snake.edits > 1 {
-                    stack.append(.solve(
-                        old: (oldRange.lowerBound + snake.u)..<oldRange.upperBound,
-                        new: (newRange.lowerBound + snake.v)..<newRange.upperBound
-                    ))
-                    stack.append(.equal(
-                        old: oldRange.lowerBound + snake.x,
-                        new: newRange.lowerBound + snake.y,
-                        count: snake.u - snake.x
-                    ))
-                    stack.append(.solve(
-                        old: oldRange.lowerBound..<(oldRange.lowerBound + snake.x),
-                        new: newRange.lowerBound..<(newRange.lowerBound + snake.y)
-                    ))
-                } else {
-                    appendTrivial(old: oldRange, new: newRange, into: &edits)
-                }
+                    let snake = middleSnake(old: oldRange, new: newRange)
+                    if snake.edits > 1 {
+                        stack.append(
+                            .solve(
+                                old: (oldRange.lowerBound + snake.u) ..< oldRange.upperBound,
+                                new: (newRange.lowerBound + snake.v) ..< newRange.upperBound
+                            ))
+                        stack.append(
+                            .equal(
+                                old: oldRange.lowerBound + snake.x,
+                                new: newRange.lowerBound + snake.y,
+                                count: snake.u - snake.x
+                            ))
+                        stack.append(
+                            .solve(
+                                old: oldRange.lowerBound ..< (oldRange.lowerBound + snake.x),
+                                new: newRange.lowerBound ..< (newRange.lowerBound + snake.y)
+                            ))
+                    } else {
+                        appendTrivial(old: oldRange, new: newRange, into: &edits)
+                    }
             }
         }
     }
@@ -496,7 +329,7 @@ private struct MyersSolver<Element: Equatable> {
         }
         let oldRest = oldRange.lowerBound + index + (n > m ? 1 : 0)
         let newRest = newRange.lowerBound + index + (m > n ? 1 : 0)
-        for rest in 0..<(common - index) {
+        for rest in 0 ..< (common - index) {
             edits.append(.equal(old: oldRest + rest, new: newRest + rest))
         }
     }
@@ -511,14 +344,15 @@ private struct MyersSolver<Element: Equatable> {
         forward[offset + 1] = 0
         backward[offset + 1] = 0
 
-        for d in 0...maximum {
+        for d in 0 ... maximum {
             var k = -d
             while k <= d {
-                var x = if k == -d || (k != d && forward[offset + k - 1] < forward[offset + k + 1]) {
-                    forward[offset + k + 1]
-                } else {
-                    forward[offset + k - 1] + 1
-                }
+                var x =
+                    if k == -d || (k != d && forward[offset + k - 1] < forward[offset + k + 1]) {
+                        forward[offset + k + 1]
+                    } else {
+                        forward[offset + k - 1] + 1
+                    }
                 var y = x - k
                 let startX = x
                 let startY = y
@@ -539,11 +373,12 @@ private struct MyersSolver<Element: Equatable> {
 
             k = -d
             while k <= d {
-                var x = if k == -d || (k != d && backward[offset + k - 1] < backward[offset + k + 1]) {
-                    backward[offset + k + 1]
-                } else {
-                    backward[offset + k - 1] + 1
-                }
+                var x =
+                    if k == -d || (k != d && backward[offset + k - 1] < backward[offset + k + 1]) {
+                        backward[offset + k + 1]
+                    } else {
+                        backward[offset + k - 1] + 1
+                    }
                 var y = x - k
                 let startX = x
                 let startY = y

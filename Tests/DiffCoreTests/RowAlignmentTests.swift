@@ -1,5 +1,6 @@
-@testable import DiffCore
 import Testing
+
+@testable import DiffCore
 
 struct RowAlignmentTests {
     @Test

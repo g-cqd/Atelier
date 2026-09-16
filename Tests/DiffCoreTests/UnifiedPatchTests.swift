@@ -1,47 +1,48 @@
-@testable import DiffCore
 import Testing
+
+@testable import DiffCore
 
 struct UnifiedPatchTests {
     static let gitPatch = """
-    From 1234 Mon Sep 17 00:00:00 2001
-    Subject: [PATCH] Example
+        From 1234 Mon Sep 17 00:00:00 2001
+        Subject: [PATCH] Example
 
-    diff --git a/Sources/App.swift b/Sources/App.swift
-    index 1111..2222 100644
-    --- a/Sources/App.swift
-    +++ b/Sources/App.swift
-    @@ -3,4 +3,4 @@ import Foundation
-     let a = 1
-    -let b = 2
-    +let b = 3
-     let c = 4
-    \\ No newline at end of file
-    diff --git a/New.swift b/New.swift
-    new file mode 100644
-    --- /dev/null
-    +++ b/New.swift
-    @@ -0,0 +1,2 @@
-    +line one
-    +line two
-    diff --git a/Old.swift b/Old.swift
-    deleted file mode 100644
-    --- a/Old.swift
-    +++ /dev/null
-    @@ -1 +0,0 @@
-    -gone
-    diff --git a/Was.swift b/Is.swift
-    similarity index 90%
-    rename from Was.swift
-    rename to Is.swift
-    --- a/Was.swift
-    +++ b/Is.swift
-    @@ -10,2 +10,2 @@
-     keep
-    -old
-    +new
-    diff --git a/Image.png b/Image.png
-    Binary files a/Image.png and b/Image.png differ
-    """
+        diff --git a/Sources/App.swift b/Sources/App.swift
+        index 1111..2222 100644
+        --- a/Sources/App.swift
+        +++ b/Sources/App.swift
+        @@ -3,4 +3,4 @@ import Foundation
+         let a = 1
+        -let b = 2
+        +let b = 3
+         let c = 4
+        \\ No newline at end of file
+        diff --git a/New.swift b/New.swift
+        new file mode 100644
+        --- /dev/null
+        +++ b/New.swift
+        @@ -0,0 +1,2 @@
+        +line one
+        +line two
+        diff --git a/Old.swift b/Old.swift
+        deleted file mode 100644
+        --- a/Old.swift
+        +++ /dev/null
+        @@ -1 +0,0 @@
+        -gone
+        diff --git a/Was.swift b/Is.swift
+        similarity index 90%
+        rename from Was.swift
+        rename to Is.swift
+        --- a/Was.swift
+        +++ b/Is.swift
+        @@ -10,2 +10,2 @@
+         keep
+        -old
+        +new
+        diff --git a/Image.png b/Image.png
+        Binary files a/Image.png and b/Image.png differ
+        """
 
     @Test
     func `git patches parse into per-file hunks with added, deleted, renamed and binary files`() {
@@ -70,24 +71,25 @@ struct UnifiedPatchTests {
         let deleted = patch.files[2].reconstructedTexts
         #expect(deleted.old == "gone\n")
         #expect(deleted.new == nil)
-        #expect(patch.files[3].reconstructedTexts.new?.split(separator: "\n", omittingEmptySubsequences: false).count == 12)
+        #expect(
+            patch.files[3].reconstructedTexts.new?.split(separator: "\n", omittingEmptySubsequences: false).count == 12)
     }
 
     @Test
     func `plain unified diffs without git headers parse too`() {
         let text = """
-        --- before.txt\t2024-01-01 10:00:00
-        +++ after.txt\t2024-01-02 10:00:00
-        @@ -1,2 +1,2 @@
-         same
-        -a
-        +b
-        --- other.txt
-        +++ other.txt
-        @@ -1 +1 @@
-        -x
-        +y
-        """
+            --- before.txt\t2024-01-01 10:00:00
+            +++ after.txt\t2024-01-02 10:00:00
+            @@ -1,2 +1,2 @@
+             same
+            -a
+            +b
+            --- other.txt
+            +++ other.txt
+            @@ -1 +1 @@
+            -x
+            +y
+            """
         let patch = UnifiedPatch(parsing: text)
 
         #expect(patch.files.map(\.oldPath) == ["before.txt", "other.txt"])
@@ -98,11 +100,13 @@ struct UnifiedPatchTests {
 
     @Test
     func `blank lines inside a hunk are context and CRLF endings are stripped`() {
-        let patch = UnifiedPatch(parsing: "--- a/x.txt\r\n+++ b/x.txt\r\n@@ -1,3 +1,3 @@\r\n one\r\n\r\n-two\r\n+deux\r\n")
+        let patch = UnifiedPatch(
+            parsing: "--- a/x.txt\r\n+++ b/x.txt\r\n@@ -1,3 +1,3 @@\r\n one\r\n\r\n-two\r\n+deux\r\n")
 
-        #expect(patch.files[0].hunks[0].lines == [
-            .init(kind: .context, text: "one"), .init(kind: .context, text: ""),
-            .init(kind: .removed, text: "two"), .init(kind: .added, text: "deux"),
-        ])
+        #expect(
+            patch.files[0].hunks[0].lines == [
+                .init(kind: .context, text: "one"), .init(kind: .context, text: ""),
+                .init(kind: .removed, text: "two"), .init(kind: .added, text: "deux")
+            ])
     }
 }
