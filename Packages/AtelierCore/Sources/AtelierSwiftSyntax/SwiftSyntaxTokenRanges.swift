@@ -1,16 +1,21 @@
+public import AtelierDiff
+import AtelierLexers
+public import AtelierSyntaxModel
 import SwiftParser
 import SwiftSyntax
 
-/// Token boundaries per line, as UTF-16 ranges relative to the line, for the syntax tier of the intraline diff.
-public enum SyntaxTokenizer {
+/// Token boundaries per line for the syntax tier of the intraline diff: swift-syntax tokens for Swift, with comments
+/// split into words, and the code-aware lexer for every other language.
+public struct SwiftSyntaxTokenRanges: SyntaxTokenRanging {
+    public init() {}
+
     /// - Complexity: O(text) plus one swift-syntax parse for Swift.
-    public static func tokenRangesByLine(text: String, language: Language) -> [[Range<Int>]] {
-        let lines = DiffModel.lines(of: text)
+    public func tokenRangesByLine(text: String, language: Language) -> [[Range<Int>]] {
         switch language {
             case .swift:
-                return swiftTokenRangesByLine(text: text, lineCount: lines.count)
+                Self.swiftTokenRangesByLine(text: text, lineCount: DiffModel.lines(of: text).count)
             default:
-                return lines.map { IntralineTokenizer.codeTokens(Array($0.utf16)) }
+                CodeTokenRanges().tokenRangesByLine(text: text, language: language)
         }
     }
 

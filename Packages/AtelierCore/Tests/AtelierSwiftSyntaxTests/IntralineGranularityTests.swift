@@ -1,6 +1,8 @@
+import AtelierDiff
+import AtelierSyntaxModel
 import Testing
 
-@testable import DiffCore
+@testable import AtelierSwiftSyntax
 
 struct IntralineGranularityTests {
     @Test
@@ -26,8 +28,8 @@ struct IntralineGranularityTests {
     func `syntax tier marks a whole string segment as one token`() {
         let old = "print(\"hello world\", terminator: \"\")"
         let new = "print(\"hello there\", terminator: \"\")"
-        let oldTokens = SyntaxTokenizer.tokenRangesByLine(text: old, language: .swift)
-        let newTokens = SyntaxTokenizer.tokenRangesByLine(text: new, language: .swift)
+        let oldTokens = SwiftSyntaxTokenRanges().tokenRangesByLine(text: old, language: .swift)
+        let newTokens = SwiftSyntaxTokenRanges().tokenRangesByLine(text: new, language: .swift)
         let emphasis = IntralineDiff.emphasis(
             old: old[...], new: new[...], granularity: .syntax, oldTokens: oldTokens[0], newTokens: newTokens[0]
         )
@@ -38,7 +40,7 @@ struct IntralineGranularityTests {
     @Test
     func `swift tokens are split per line with comments broken into words`() {
         let text = "let a = 1\n// hi there\n"
-        let byLine = SyntaxTokenizer.tokenRangesByLine(text: text, language: .swift)
+        let byLine = SwiftSyntaxTokenRanges().tokenRangesByLine(text: text, language: .swift)
         #expect(byLine.count == 2)
         #expect(byLine[0] == [0 ..< 3, 3 ..< 4, 4 ..< 5, 5 ..< 6, 6 ..< 7, 7 ..< 8, 8 ..< 9])
         #expect(byLine[1] == [0 ..< 1, 1 ..< 2, 2 ..< 3, 3 ..< 5, 5 ..< 6, 6 ..< 11])
@@ -46,14 +48,15 @@ struct IntralineGranularityTests {
 
     @Test
     func `swift tokens use utf16 offsets after non ascii characters`() {
-        let byLine = SyntaxTokenizer.tokenRangesByLine(text: "let é = \"😀\" + x", language: .swift)
+        let byLine = SwiftSyntaxTokenRanges().tokenRangesByLine(text: "let é = \"😀\" + x", language: .swift)
         #expect(byLine[0].last == 15 ..< 16)
     }
 
     @Test
     func `objective c syntax tier keeps directives and strings whole`() {
-        let byLine = SyntaxTokenizer.tokenRangesByLine(
-            text: "@interface Foo : NSObject @\"a b\"", language: .objectiveC)
+        let byLine = SwiftSyntaxTokenRanges()
+            .tokenRangesByLine(
+                text: "@interface Foo : NSObject @\"a b\"", language: .objectiveC)
         #expect(
             byLine[0] == [
                 0 ..< 10, 10 ..< 11, 11 ..< 14, 14 ..< 15, 15 ..< 16, 16 ..< 17, 17 ..< 25, 25 ..< 26, 26 ..< 32

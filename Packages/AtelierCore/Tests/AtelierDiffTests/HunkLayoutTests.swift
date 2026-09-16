@@ -1,6 +1,6 @@
 import Testing
 
-@testable import DiffCore
+@testable import AtelierDiff
 
 struct HunkLayoutTests {
     @Test
