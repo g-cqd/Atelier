@@ -1,10 +1,11 @@
 import AemiCore
 import Foundation
+import Testing
+
 @testable import DiffComparison
 @testable import DiffGit
 @testable import DiffRendering
 @testable import DiffTextKit
-import Testing
 
 struct PatchSourceTests {
     @Test
@@ -36,7 +37,8 @@ struct PatchSourceTests {
         +++ /dev/null
         @@ -1 +0,0 @@
         -bye
-        """.write(to: url, atomically: true, encoding: .utf8)
+        """
+        .write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
         let loader = SourceLoader()
         let old = ComparisonSource.patch(url, side: .old)

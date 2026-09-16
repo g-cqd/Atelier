@@ -51,7 +51,15 @@ package final class DiffGutterView: NSView {
     private weak var clipView: NSClipView?
     private let padding: CGFloat = 8
     private let columnGap: CGFloat = 10
-    private var drag: (marker: GapMarker, base: GapExpansion, startY: CGFloat, lineHeight: CGFloat)?
+    /// A gap handle drag in progress: the gap, the expansion it started from, and the geometry rows are counted in.
+    private struct GapDrag {
+        let marker: GapMarker
+        let base: GapExpansion
+        let startY: CGFloat
+        let lineHeight: CGFloat
+    }
+
+    private var drag: GapDrag?
 
     /// Without a clip view the gutter belongs to an embedded pane that shows its whole document.
     package init(clipView: NSClipView?) {
@@ -118,13 +126,19 @@ package final class DiffGutterView: NSView {
     }
 
     package override func scrollWheel(with event: NSEvent) {
-        if let clipView { clipView.enclosingScrollView?.scrollWheel(with: event) } else { super.scrollWheel(with: event) }
+        if let clipView {
+            clipView.enclosingScrollView?.scrollWheel(with: event)
+        } else {
+            super.scrollWheel(with: event)
+        }
     }
 
     package override func resetCursorRects() {
         forEachVisibleFragment { fragment, row, y in
             guard row.kind == .gap else { return }
-            addCursorRect(NSRect(x: 0, y: y, width: bounds.width, height: fragment.layoutFragmentFrame.height), cursor: .resizeUpDown)
+            addCursorRect(
+                NSRect(x: 0, y: y, width: bounds.width, height: fragment.layoutFragmentFrame.height),
+                cursor: .resizeUpDown)
         }
     }
 
@@ -144,7 +158,7 @@ package final class DiffGutterView: NSView {
             onGapDrag?(marker, base, marker.hiddenRows)
             return
         }
-        drag = (marker, base, point.y, max(lineHeight, 1))
+        drag = GapDrag(marker: marker, base: base, startY: point.y, lineHeight: max(lineHeight, 1))
     }
 
     package override func mouseDragged(with event: NSEvent) {
@@ -161,12 +175,13 @@ package final class DiffGutterView: NSView {
     /// Visits the laid-out fragments intersecting the clip view, with each row's metadata and its y in this view.
     private func forEachVisibleFragment(_ body: (NSTextLayoutFragment, RowMeta, CGFloat) -> Void) {
         guard let source, let rendered, let layoutManager = source.gutterLayoutManager,
-              let contentManager = layoutManager.textContentManager
+            let contentManager = layoutManager.textContentManager
         else { return }
         let scrollOffset = clipView?.bounds.origin.y ?? 0
         let inset = source.gutterInset
         let visibleHeight = clipView?.bounds.height ?? bounds.height
-        let start = clipView == nil
+        let start =
+            clipView == nil
             ? layoutManager.documentRange.location
             : layoutManager.textViewportLayoutController.viewportRange?.location ?? layoutManager.documentRange.location
         layoutManager.enumerateTextLayoutFragments(from: start, options: [.ensuresLayout]) { fragment in
@@ -174,7 +189,8 @@ package final class DiffGutterView: NSView {
             let y = frame.minY + inset - scrollOffset
             if y > visibleHeight { return false }
             if y + frame.height < 0 { return true }
-            let offset = contentManager.offset(from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
+            let offset = contentManager.offset(
+                from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
             guard let row = rendered.row(containing: offset) else { return true }
             body(fragment, row, y)
             return true
@@ -187,8 +203,12 @@ package final class DiffGutterView: NSView {
         NSColor.separatorColor.setFill()
         NSRect(x: bounds.maxX - 1, y: 0, width: 1, height: bounds.height).fill()
 
-        let baseAttributes: [NSAttributedString.Key: Any] = [.font: palette.gutterFont, .foregroundColor: palette.gutterText]
-        let changedAttributes: [NSAttributedString.Key: Any] = [.font: palette.gutterFont, .foregroundColor: palette.gutterChangedText]
+        let baseAttributes: [NSAttributedString.Key: Any] = [
+            .font: palette.gutterFont, .foregroundColor: palette.gutterText
+        ]
+        let changedAttributes: [NSAttributedString.Key: Any] = [
+            .font: palette.gutterFont, .foregroundColor: palette.gutterChangedText
+        ]
 
         forEachVisibleFragment { fragment, row, y in
             let frame = fragment.layoutFragmentFrame
@@ -198,16 +218,18 @@ package final class DiffGutterView: NSView {
             }
             let attributes = row.kind == .context ? baseAttributes : changedAttributes
             // A line numbered the same on both sides shows its number once, next to the text.
-            let numbers: [Int?] = switch style {
-            case .dual: row.oldNumber == row.newNumber ? [nil, row.newNumber] : [row.oldNumber, row.newNumber]
-            case .old: [row.oldNumber]
-            case .new: [row.newNumber]
-            }
+            let numbers: [Int?] =
+                switch style {
+                    case .dual: row.oldNumber == row.newNumber ? [nil, row.newNumber] : [row.oldNumber, row.newNumber]
+                    case .old: [row.oldNumber]
+                    case .new: [row.newNumber]
+                }
             // Numbers sit on the same baseline as the row's first line of text, whatever the line height is, so
             // they follow the text up when a taller line centres it: TextKit reports the baseline it laid out,
             // which is not where a baseline offset then drew the glyphs.
             let firstLine = fragment.textLineFragments.first
-            let baseline = y + (firstLine.map { $0.typographicBounds.minY + $0.glyphOrigin.y } ?? frame.height * 0.75)
+            let baseline =
+                y + (firstLine.map { $0.typographicBounds.minY + $0.glyphOrigin.y } ?? frame.height * 0.75)
                 - (rendered?.baselineOffset ?? 0)
             let top = baseline - palette.gutterFont.ascender
             for (column, number) in numbers.enumerated() {
@@ -258,7 +280,8 @@ package final class DiffPaneView: NSView {
         let thickness = gutterView.thickness
         let minimapWidth = minimapView.isHidden ? 0 : MinimapView.width
         gutterView.frame = NSRect(x: 0, y: 0, width: thickness, height: bounds.height)
-        contentView.frame = NSRect(x: thickness, y: 0, width: max(bounds.width - thickness - minimapWidth, 0), height: bounds.height)
+        contentView.frame = NSRect(
+            x: thickness, y: 0, width: max(bounds.width - thickness - minimapWidth, 0), height: bounds.height)
         minimapView.frame = NSRect(x: bounds.width - minimapWidth, y: 0, width: minimapWidth, height: bounds.height)
     }
 }

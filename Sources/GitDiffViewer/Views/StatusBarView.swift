@@ -26,41 +26,43 @@ struct StatusBarView: View {
 
     @ViewBuilder private var subject: some View {
         switch model.detailState {
-        case .cards:
-            let count = model.combinedFiles.count
-            Text("\(count) changed \(count == 1 ? "file" : "files")")
-            if let path = model.selectedPath {
-                Text("in \(path)")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .truncationMode(.middle)
-            }
-            Text("+\(model.renderedFiles.reduce(0) { $0 + $1.rendered.addedLines })").foregroundStyle(.green)
-            Text("−\(model.renderedFiles.reduce(0) { $0 + $1.rendered.removedLines })").foregroundStyle(.red)
-        case .file(let rendered):
-            if let path = model.selectedPath {
-                let summary = model.changeSummary(for: path, rendered: rendered)
-                ChangeGlyphBadge(glyph: ChangeGlyph(summary.kind))
-                    .help(ChangeGlyph(summary.kind).title)
-                Text(model.displayPath(for: path))
-                    .font(.system(.caption, design: .monospaced))
-                    .truncationMode(.middle)
-                if summary.addedLines + summary.removedLines > 0 {
-                    Text("+\(summary.addedLines)").foregroundStyle(.green)
-                    Text("−\(summary.removedLines)").foregroundStyle(.red)
+            case .cards:
+                let count = model.combinedFiles.count
+                Text("\(count) changed \(count == 1 ? "file" : "files")")
+                if let path = model.selectedPath {
+                    Text("in \(path)")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .truncationMode(.middle)
                 }
-            }
-        case .loading:
-            Text("Comparing…").foregroundStyle(.secondary)
-        case .error, .noChanges, .noSelection, .noSources:
-            Text("Ready").foregroundStyle(.secondary)
+                Text("+\(model.renderedFiles.reduce(0) { $0 + $1.rendered.addedLines })").foregroundStyle(.green)
+                Text("−\(model.renderedFiles.reduce(0) { $0 + $1.rendered.removedLines })").foregroundStyle(.red)
+            case .file(let rendered):
+                if let path = model.selectedPath {
+                    let summary = model.changeSummary(for: path, rendered: rendered)
+                    ChangeGlyphBadge(glyph: ChangeGlyph(summary.kind))
+                        .help(ChangeGlyph(summary.kind).title)
+                    Text(model.displayPath(for: path))
+                        .font(.system(.caption, design: .monospaced))
+                        .truncationMode(.middle)
+                    if summary.addedLines + summary.removedLines > 0 {
+                        Text("+\(summary.addedLines)").foregroundStyle(.green)
+                        Text("−\(summary.removedLines)").foregroundStyle(.red)
+                    }
+                }
+            case .loading:
+                Text("Comparing…").foregroundStyle(.secondary)
+            case .error, .noChanges, .noSelection, .noSources:
+                Text("Ready").foregroundStyle(.secondary)
         }
     }
 
     @ViewBuilder private var position: some View {
         if model.changeCount > 0 {
-            Text("\(model.isShowingCombinedFiles ? "File" : "Change") \(model.currentChange.map(String.init) ?? "–") of \(model.changeCount)")
-                .foregroundStyle(.secondary)
+            Text(
+                "\(model.isShowingCombinedFiles ? "File" : "Change") \(model.currentChange.map(String.init) ?? "–") of \(model.changeCount)"
+            )
+            .foregroundStyle(.secondary)
         }
     }
 

@@ -5,7 +5,9 @@ public enum MovedBlocks {
 
     /// Old and new line indices that belong to a moved block, given the removed and added line ids of a diff.
     /// - Complexity: O(removed runs × added runs × block length)
-    public static func detect(removed: [(index: Int, id: Int)], added: [(index: Int, id: Int)]) -> (old: Set<Int>, new: Set<Int>) {
+    public static func detect(removed: [(index: Int, id: Int)], added: [(index: Int, id: Int)]) -> (
+        old: Set<Int>, new: Set<Int>
+    ) {
         let removedRuns = runs(of: removed)
         let addedRuns = runs(of: added)
         var movedOld: Set<Int> = []
@@ -24,7 +26,8 @@ public enum MovedBlocks {
                     let source = removedRuns[candidate.run]
                     var length = 0
                     while start + length < run.count, candidate.offset + length < source.count,
-                          run[start + length].id == source[candidate.offset + length].id {
+                        run[start + length].id == source[candidate.offset + length].id
+                    {
                         length += 1
                     }
                     if length > bestLength {
@@ -34,7 +37,7 @@ public enum MovedBlocks {
                 }
                 if let bestMatch, bestLength >= minimumLines {
                     let source = removedRuns[bestMatch.run]
-                    for offset in 0..<bestLength {
+                    for offset in 0 ..< bestLength {
                         movedOld.insert(source[bestMatch.offset + offset].index)
                         movedNew.insert(run[start + offset].index)
                     }

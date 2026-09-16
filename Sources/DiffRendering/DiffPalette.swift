@@ -37,7 +37,7 @@ package struct DiffPalette: @unchecked Sendable {
         tokenColors: [
             .keyword: .systemPink, .string: .systemRed, .comment: .secondaryLabelColor, .number: .systemBlue,
             .type: .systemTeal, .attribute: .systemOrange, .tag: .systemBlue, .attributeName: .systemPurple,
-            .entity: .systemOrange,
+            .entity: .systemOrange
         ]
     )
 
@@ -82,7 +82,7 @@ package struct DiffPalette: @unchecked Sendable {
                 .attribute: color("xcode.syntax.attribute"),
                 .tag: color("xcode.syntax.keyword"),
                 .attributeName: color("xcode.syntax.identifier.variable", "xcode.syntax.attribute"),
-                .entity: color("xcode.syntax.number"),
+                .entity: color("xcode.syntax.number")
             ]
         )
     }
@@ -94,22 +94,24 @@ package struct DiffPalette: @unchecked Sendable {
     package func rowBackground(for kind: RowKind, side: RenderedSide, isMoved: Bool = false) -> NSColor? {
         if isMoved, [.added, .removed, .modified].contains(kind) { return NSColor.systemBlue.withAlphaComponent(0.12) }
         return switch kind {
-        case .context: nil
-        case .added: NSColor.systemGreen.withAlphaComponent(0.16)
-        case .removed: NSColor.systemRed.withAlphaComponent(0.16)
-        case .modified: side == .old ? NSColor.systemRed.withAlphaComponent(0.16) : NSColor.systemGreen.withAlphaComponent(0.16)
-        case .filler: textColor.withAlphaComponent(0.06)
-        case .gap: textColor.withAlphaComponent(0.04)
-        case .header: textColor.withAlphaComponent(0.1)
+            case .context: nil
+            case .added: NSColor.systemGreen.withAlphaComponent(0.16)
+            case .removed: NSColor.systemRed.withAlphaComponent(0.16)
+            case .modified:
+                side == .old ? NSColor.systemRed.withAlphaComponent(0.16) : NSColor.systemGreen.withAlphaComponent(0.16)
+            case .filler: textColor.withAlphaComponent(0.06)
+            case .gap: textColor.withAlphaComponent(0.04)
+            case .header: textColor.withAlphaComponent(0.1)
         }
     }
 
     package func emphasis(for kind: RowKind, side: RenderedSide) -> NSColor {
         switch kind {
-        case .added: NSColor.systemGreen.withAlphaComponent(0.4)
-        case .removed: NSColor.systemRed.withAlphaComponent(0.4)
-        case .modified: side == .old ? NSColor.systemRed.withAlphaComponent(0.4) : NSColor.systemGreen.withAlphaComponent(0.4)
-        case .context, .filler, .gap, .header: .clear
+            case .added: NSColor.systemGreen.withAlphaComponent(0.4)
+            case .removed: NSColor.systemRed.withAlphaComponent(0.4)
+            case .modified:
+                side == .old ? NSColor.systemRed.withAlphaComponent(0.4) : NSColor.systemGreen.withAlphaComponent(0.4)
+            case .context, .filler, .gap, .header: .clear
         }
     }
 
@@ -117,21 +119,22 @@ package struct DiffPalette: @unchecked Sendable {
     /// a pane of the split view shows its own side's color.
     package func minimapColor(for kind: RowKind, side: RenderedSide) -> NSColor? {
         switch (kind, side) {
-        case (.context, _): textColor.withAlphaComponent(0.25)
-        case (.filler, _), (.gap, _): nil
-        case (.header, _): textColor.withAlphaComponent(0.6)
-        case (.added, .unified), (.removed, .unified), (.modified, .unified): .controlAccentColor
-        case (.added, _): .systemGreen
-        case (.removed, _): .systemRed
-        case (.modified, .old): .systemRed
-        case (.modified, .new): .systemGreen
+            case (.context, _): textColor.withAlphaComponent(0.25)
+            case (.filler, _), (.gap, _): nil
+            case (.header, _): textColor.withAlphaComponent(0.6)
+            case (.added, .unified), (.removed, .unified), (.modified, .unified): .controlAccentColor
+            case (.added, _): .systemGreen
+            case (.removed, _): .systemRed
+            case (.modified, .old): .systemRed
+            case (.modified, .new): .systemGreen
         }
     }
 
     /// The pane's monospaced face, two points smaller, so numbers line up in columns and read as part of the text.
     package var gutterFont: NSFont {
         let size = max(font.pointSize - 2, 9)
-        return NSFont(descriptor: font.fontDescriptor, size: size) ?? .monospacedSystemFont(ofSize: size, weight: .regular)
+        return NSFont(descriptor: font.fontDescriptor, size: size)
+            ?? .monospacedSystemFont(ofSize: size, weight: .regular)
     }
 
     /// Width of the text container that wraps at `column` characters of `font`, plus the line fragment padding.

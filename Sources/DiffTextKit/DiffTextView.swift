@@ -22,9 +22,12 @@ package struct DiffTextView: NSViewRepresentable {
     package var onDisplayed: (() -> Void)?
 
     package init(
-        rendered: RenderedText, gutter: GutterStyle, keepsScrollPosition: Bool = false, wrapsLines: Bool = true, wrapColumn: Int = 0,
-        showsMinimap: Bool = true, syncsScrolling: Bool = true, scrollRequest: ScrollRequest? = nil, splitController: SplitPaneController? = nil,
-        onGapDrag: ((GapMarker, GapExpansion, Int) -> Void)? = nil, currentExpansion: ((GapKey) -> GapExpansion)? = nil, onDisplayed: (() -> Void)? = nil
+        rendered: RenderedText, gutter: GutterStyle, keepsScrollPosition: Bool = false, wrapsLines: Bool = true,
+        wrapColumn: Int = 0,
+        showsMinimap: Bool = true, syncsScrolling: Bool = true, scrollRequest: ScrollRequest? = nil,
+        splitController: SplitPaneController? = nil,
+        onGapDrag: ((GapMarker, GapExpansion, Int) -> Void)? = nil, currentExpansion: ((GapKey) -> GapExpansion)? = nil,
+        onDisplayed: (() -> Void)? = nil
     ) {
         self.rendered = rendered
         self.gutter = gutter
@@ -64,7 +67,8 @@ package struct DiffTextView: NSViewRepresentable {
         textView.textContainer?.lineFragmentPadding = DiffPaneMetrics.lineFragmentPadding
         textView.textLayoutManager?.delegate = context.coordinator.fragmentProvider
         context.coordinator.wrapColumn = wrapColumn
-        Coordinator.configureWrapping(wrapsLines, column: wrapColumn, font: rendered.palette.font, textView: textView, scrollView: scrollView)
+        Coordinator.configureWrapping(
+            wrapsLines, column: wrapColumn, font: rendered.palette.font, textView: textView, scrollView: scrollView)
 
         let gutterView = DiffGutterView(clipView: scrollView.contentView)
         gutterView.source = textView
@@ -74,7 +78,7 @@ package struct DiffTextView: NSViewRepresentable {
         let minimapView = MinimapView()
         minimapView.scrollView = scrollView
         minimapView.isHidden = !showsMinimap
-        minimapView.visibleRows = { [weak coordinator = context.coordinator] in coordinator?.visibleRows() ?? 0..<0 }
+        minimapView.visibleRows = { [weak coordinator = context.coordinator] in coordinator?.visibleRows() ?? 0 ..< 0 }
         minimapView.onSelectRow = { [weak coordinator = context.coordinator, weak scrollView] row in
             guard let scrollView else { return }
             coordinator?.scroll(toRow: row, in: scrollView, centered: true)
@@ -108,17 +112,21 @@ package struct DiffTextView: NSViewRepresentable {
             object: textView
         )
         context.coordinator.apply(rendered)
-        return DiffPaneView(gutterView: gutterView, scrollView: scrollView, contentView: scrollView, minimapView: minimapView)
+        return DiffPaneView(
+            gutterView: gutterView, scrollView: scrollView, contentView: scrollView, minimapView: minimapView)
     }
 
     package func updateNSView(_ pane: DiffPaneView, context: Context) {
         let coordinator = context.coordinator
         guard let scrollView = pane.scrollView else { return }
         coordinator.metrics.width = max(scrollView.contentView.bounds.width, coordinator.textView?.frame.width ?? 0)
-        if coordinator.wrapsLines != wrapsLines || coordinator.wrapColumn != wrapColumn, let textView = coordinator.textView {
+        if coordinator.wrapsLines != wrapsLines || coordinator.wrapColumn != wrapColumn,
+            let textView = coordinator.textView
+        {
             coordinator.wrapsLines = wrapsLines
             coordinator.wrapColumn = wrapColumn
-            Coordinator.configureWrapping(wrapsLines, column: wrapColumn, font: rendered.palette.font, textView: textView, scrollView: scrollView)
+            Coordinator.configureWrapping(
+                wrapsLines, column: wrapColumn, font: rendered.palette.font, textView: textView, scrollView: scrollView)
             splitController?.wrapsLines = wrapsLines
         }
         if pane.minimapView.isHidden == showsMinimap {
@@ -169,7 +177,9 @@ package struct DiffTextView: NSViewRepresentable {
                 contentStorage.textStorage?.setAttributedString(rendered.attributed)
             }
             if paletteChanged, let scrollView = textView.enclosingScrollView {
-                Self.configureWrapping(wrapsLines, column: wrapColumn, font: rendered.palette.font, textView: textView, scrollView: scrollView)
+                Self.configureWrapping(
+                    wrapsLines, column: wrapColumn, font: rendered.palette.font, textView: textView,
+                    scrollView: scrollView)
             }
             gutterView?.rendered = rendered
             minimapView?.rendered = rendered
@@ -191,19 +201,22 @@ package struct DiffTextView: NSViewRepresentable {
 
         /// Wrapped panes track the viewport width, or wrap at a fixed column and scroll sideways when the viewport is
         /// narrower; unwrapped panes grow with their longest line.
-        package static func configureWrapping(_ wraps: Bool, column: Int, font: NSFont, textView: NSTextView, scrollView: NSScrollView) {
+        package static func configureWrapping(
+            _ wraps: Bool, column: Int, font: NSFont, textView: NSTextView, scrollView: NSScrollView
+        ) {
             guard let container = textView.textContainer else { return }
             let tracksViewport = wraps && column <= 0
             textView.isHorizontallyResizable = !tracksViewport
             textView.autoresizingMask = tracksViewport ? [.width] : []
             container.widthTracksTextView = tracksViewport
-            let width: CGFloat = if !wraps {
-                CGFloat.greatestFiniteMagnitude
-            } else if column > 0 {
-                DiffPalette.wrapWidth(column: column, font: font, padding: container.lineFragmentPadding)
-            } else {
-                scrollView.contentView.bounds.width
-            }
+            let width: CGFloat =
+                if !wraps {
+                    CGFloat.greatestFiniteMagnitude
+                } else if column > 0 {
+                    DiffPalette.wrapWidth(column: column, font: font, padding: container.lineFragmentPadding)
+                } else {
+                    scrollView.contentView.bounds.width
+                }
             container.size = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
             scrollView.hasHorizontalScroller = !tracksViewport
             if tracksViewport {
@@ -219,8 +232,9 @@ package struct DiffTextView: NSViewRepresentable {
 
         package func scroll(toRow row: Int, in scrollView: NSScrollView, centered: Bool = false) {
             guard let textView, let rendered, row < rendered.lineStarts.count,
-                  let layoutManager = textView.textLayoutManager, let contentManager = layoutManager.textContentManager,
-                  let location = contentManager.location(layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row])
+                let layoutManager = textView.textLayoutManager, let contentManager = layoutManager.textContentManager,
+                let location = contentManager.location(
+                    layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row])
             else { return }
             layoutManager.ensureLayout(for: NSTextRange(location: location))
             guard let fragment = layoutManager.textLayoutFragment(for: location) else { return }
@@ -234,25 +248,30 @@ package struct DiffTextView: NSViewRepresentable {
         /// Rows intersecting the clip view, from the laid-out fragments at its top and bottom edges.
         package func visibleRows() -> Range<Int> {
             guard let textView, let rendered, !rendered.rows.isEmpty,
-                  let layoutManager = textView.textLayoutManager, let contentManager = layoutManager.textContentManager,
-                  let clipView = textView.enclosingScrollView?.contentView
-            else { return 0..<0 }
+                let layoutManager = textView.textLayoutManager, let contentManager = layoutManager.textContentManager,
+                let clipView = textView.enclosingScrollView?.contentView
+            else { return 0 ..< 0 }
             let inset = textView.textContainerInset.height
             let lastRow = rendered.rows.count - 1
             let contentBottom = layoutManager.usageBoundsForTextContainer.maxY + inset
             /// Points below the document, in the overscroll space, belong to the last row.
             func row(at y: CGFloat) -> Int {
                 guard y < contentBottom,
-                      let fragment = layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: y - inset))
+                    let fragment = layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: y - inset))
                 else { return y >= contentBottom ? lastRow : 0 }
-                return rendered.rowIndex(containing: contentManager.offset(from: layoutManager.documentRange.location, to: fragment.rangeInElement.location))
+                return rendered.rowIndex(
+                    containing: contentManager.offset(
+                        from: layoutManager.documentRange.location, to: fragment.rangeInElement.location))
             }
             // TextKit 2 lays out lazily: a fragment the viewport reaches may not exist yet, and a row lookup that
             // fails answers 0, which put the bottom edge above the top edge and trapped on the range.
-            layoutManager.ensureLayout(for: CGRect(x: 0, y: clipView.bounds.minY - inset, width: clipView.bounds.width, height: clipView.bounds.height))
+            layoutManager.ensureLayout(
+                for: CGRect(
+                    x: 0, y: clipView.bounds.minY - inset, width: clipView.bounds.width, height: clipView.bounds.height)
+            )
             let first = min(row(at: max(clipView.bounds.minY, 0)), lastRow)
             let last = min(max(row(at: clipView.bounds.maxY), first), lastRow)
-            return first..<(last + 1)
+            return first ..< (last + 1)
         }
 
         @objc package func viewportDidResize(_ notification: Notification) {
@@ -278,15 +297,17 @@ package struct DiffTextView: NSViewRepresentable {
             // The row's own height, not the font's: a taller line height would otherwise leave the last row short
             // of the top of the pane, half of it hidden under whatever sits above.
             let lineHeight = rendered?.lineHeight ?? DiffPalette.system.defaultLineHeight
-            let contentHeight = layoutManager.usageBoundsForTextContainer.height + 2 * textView.textContainerInset.height
+            let contentHeight =
+                layoutManager.usageBoundsForTextContainer.height + 2 * textView.textContainerInset.height
             let minimumHeight = (contentHeight + max(clipView.bounds.height - lineHeight, 0)).rounded(.up)
-            let minimumWidth: CGFloat = if textView.textContainer?.widthTracksTextView == true {
-                0
-            } else if wrapColumn > 0, wrapsLines {
-                max(clipView.bounds.width, textView.textContainer?.size.width ?? 0)
-            } else {
-                max(clipView.bounds.width, (rendered?.unwrappedWidth ?? 0).rounded(.up))
-            }
+            let minimumWidth: CGFloat =
+                if textView.textContainer?.widthTracksTextView == true {
+                    0
+                } else if wrapColumn > 0, wrapsLines {
+                    max(clipView.bounds.width, textView.textContainer?.size.width ?? 0)
+                } else {
+                    max(clipView.bounds.width, (rendered?.unwrappedWidth ?? 0).rounded(.up))
+                }
             let minimum = NSSize(width: minimumWidth, height: minimumHeight)
             guard textView.minSize != minimum else { return }
             textView.minSize = minimum

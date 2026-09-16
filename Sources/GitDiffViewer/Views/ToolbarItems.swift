@@ -25,9 +25,11 @@ struct DiffTotalsLabel: View {
         .toolbarItemMetrics()
         // One name in the customization sheet: the numbers would otherwise be read out as the item's name.
         .accessibilityLabel("Diff totals")
-        .help(totals.coversEveryFile
-            ? "\(totals.added) lines added, \(totals.removed) removed across \(totals.files) changed files"
-            : "\(totals.added) lines added, \(totals.removed) removed in the file shown; \(totals.files) files changed in all")
+        .help(
+            totals.coversEveryFile
+                ? "\(totals.added) lines added, \(totals.removed) removed across \(totals.files) changed files"
+                : "\(totals.added) lines added, \(totals.removed) removed in the file shown; \(totals.files) files changed in all"
+        )
     }
 }
 

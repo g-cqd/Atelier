@@ -31,6 +31,20 @@ to compare (or one ref and the working tree), compare two folders or two files, 
 recent comparisons. Every comparison gets a window of its own; closing the last one brings the welcome window
 back, as does File ▸ Welcome to Git Diff Viewer (⇧⌘1). A launch with paths on the command line skips the welcome.
 
+## Requirements and dependencies
+
+Xcode 27 (Swift 6.4) and macOS 26.1. Every target compiles in Swift 6 language mode with warnings as errors and
+the `ExistentialAny`, `InferIsolatedConformances`, `InternalImportsByDefault` and `MemberImportVisibility`
+features on.
+
+| Package | Used for |
+|---|---|
+| [aemi](https://github.com/Aemi-Studio/aemi) (`main`) | `AemiCore` task provider behind every spawned task; `AemiRuntime` blocking pool for git and clock seam for timings; `AemiIO` memory-mapped blob hashing; `AemiTesting` test clock, probes and task-provider spy |
+| [swift-syntax](https://github.com/swiftlang/swift-syntax) (604) | The syntax tier of the intraline emphasis for Swift |
+
+Formatting and the size and complexity gates follow aemi's canonical `.swift-format` and `.swiftlint.yml`
+(`scripts/sync-config.sh` in aemi copies them); CI is aemi's reusable `swift-quality` workflow.
+
 ## Run
 
 ```sh

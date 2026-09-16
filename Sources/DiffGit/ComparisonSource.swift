@@ -16,21 +16,21 @@ package enum ComparisonSource: Hashable, Sendable {
 
     package var displayName: String {
         switch self {
-        case .file(let url), .directory(let url):
-            url.lastPathComponent
-        case .gitRef(let repository, let ref):
-            "\(repository.lastPathComponent) @ \(ref)"
-        case .patch(let url, let side):
-            "\(url.lastPathComponent) (\(side == .old ? "before" : "after"))"
+            case .file(let url), .directory(let url):
+                url.lastPathComponent
+            case .gitRef(let repository, let ref):
+                "\(repository.lastPathComponent) @ \(ref)"
+            case .patch(let url, let side):
+                "\(url.lastPathComponent) (\(side == .old ? "before" : "after"))"
         }
     }
 
     package var detail: String {
         switch self {
-        case .file(let url), .directory(let url), .patch(let url, _):
-            url.path(percentEncoded: false)
-        case .gitRef(let repository, let ref):
-            "\(ref) in \(repository.path(percentEncoded: false))"
+            case .file(let url), .directory(let url), .patch(let url, _):
+                url.path(percentEncoded: false)
+            case .gitRef(let repository, let ref):
+                "\(ref) in \(repository.path(percentEncoded: false))"
         }
     }
 

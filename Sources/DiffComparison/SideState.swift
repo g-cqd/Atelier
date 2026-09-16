@@ -50,8 +50,8 @@ package final class SideState {
         set {
             guard let repository else { return }
             switch newValue {
-            case .workingTree: load(.directory(repository.root), repository: repository)
-            case .ref(let ref): load(.gitRef(repository: repository.root, ref: ref), repository: repository)
+                case .workingTree: load(.directory(repository.root), repository: repository)
+                case .ref(let ref): load(.gitRef(repository: repository.root, ref: ref), repository: repository)
             }
         }
     }
@@ -110,7 +110,9 @@ package final class SideState {
 
     /// Adopts entries the owner already read, so the comparison starts without another round trip. The owner
     /// reports the change itself, so both sides can be swapped in before anything is recomputed.
-    package func load(_ source: ComparisonSource, repository: RepositoryInfo?, entries: [SourceEntry], ignored: [SourceEntry]? = nil) {
+    package func load(
+        _ source: ComparisonSource, repository: RepositoryInfo?, entries: [SourceEntry], ignored: [SourceEntry]? = nil
+    ) {
         loadTask?.cancel()
         self.source = source
         self.repository = repository

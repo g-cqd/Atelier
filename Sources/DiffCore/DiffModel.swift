@@ -56,6 +56,8 @@ public struct DiffModel: Sendable {
     public let splitChangeRanges: [Range<Int>]
 
     /// - Parameters:
+    ///   - oldText: The left side, split into lines on `\n`.
+    ///   - newText: The right side, split into lines on `\n`.
     ///   - granularity: Unit of change for the emphasis inside paired lines.
     ///   - language: Drives the syntax tier's tokenizer; ignored by the other tiers.
     ///   - pipeline: The stages the diff goes through; the default wires every heuristic in.
@@ -122,15 +124,15 @@ public struct DiffModel: Sendable {
 
         mutating func append(_ edit: DiffEdit) {
             switch edit {
-            case .equal(let old, let new):
-                flushChange()
-                let row = DiffRow(kind: .context, old: DiffLineRef(index: old), new: DiffLineRef(index: new))
-                unified.append(row)
-                split.append(row)
-            case .delete(let old):
-                pendingOld.append(old)
-            case .insert(let new):
-                pendingNew.append(new)
+                case .equal(let old, let new):
+                    flushChange()
+                    let row = DiffRow(kind: .context, old: DiffLineRef(index: old), new: DiffLineRef(index: new))
+                    unified.append(row)
+                    split.append(row)
+                case .delete(let old):
+                    pendingOld.append(old)
+                case .insert(let new):
+                    pendingNew.append(new)
             }
         }
 
@@ -139,7 +141,8 @@ public struct DiffModel: Sendable {
             unifiedStarts.append(unified.count)
             splitStarts.append(split.count)
 
-            let pairs = pipeline.pairing.pairs(removed: pendingOld.map { oldLines[$0] }, added: pendingNew.map { newLines[$0] })
+            let pairs = pipeline.pairing.pairs(
+                removed: pendingOld.map { oldLines[$0] }, added: pendingNew.map { newLines[$0] })
             var oldRefs = pendingOld.map { DiffLineRef(index: $0) }
             var newRefs = pendingNew.map { DiffLineRef(index: $0) }
             for pair in pairs {
@@ -165,15 +168,16 @@ public struct DiffModel: Sendable {
             for pair in pairs {
                 let old = pair.old.map { oldRefs[$0] }
                 let new = pair.new.map { newRefs[$0] }
-                let kind: RowKind = switch (old, new) {
-                case (.some, .some): .modified
-                case (.some, .none): .removed
-                default: .added
-                }
+                let kind: RowKind =
+                    switch (old, new) {
+                        case (.some, .some): .modified
+                        case (.some, .none): .removed
+                        default: .added
+                    }
                 split.append(DiffRow(kind: kind, old: old, new: new))
             }
-            unifiedRanges.append(unifiedStarts[unifiedStarts.count - 1]..<unified.count)
-            splitRanges.append(splitStarts[splitStarts.count - 1]..<split.count)
+            unifiedRanges.append(unifiedStarts[unifiedStarts.count - 1] ..< unified.count)
+            splitRanges.append(splitStarts[splitStarts.count - 1] ..< split.count)
             pendingOld.removeAll(keepingCapacity: true)
             pendingNew.removeAll(keepingCapacity: true)
         }
@@ -191,17 +195,21 @@ public struct DiffModel: Sendable {
             var added: [(index: Int, id: Int)] = []
             for edit in edits {
                 switch edit {
-                case .delete(let index): removed.append((index, id(oldLines[index])))
-                case .insert(let index): added.append((index, id(newLines[index])))
-                case .equal: break
+                    case .delete(let index): removed.append((index, id(oldLines[index])))
+                    case .insert(let index): added.append((index, id(newLines[index])))
+                    case .equal: break
                 }
             }
             let moved = MovedBlocks.detect(removed: removed, added: added)
             guard !moved.old.isEmpty else { return }
             for index in unified.indices {
                 let row = unified[index]
-                if let old = row.old, row.kind == .removed, moved.old.contains(old.index) { unified[index].isMoved = true }
-                if let new = row.new, row.kind == .added, moved.new.contains(new.index) { unified[index].isMoved = true }
+                if let old = row.old, row.kind == .removed, moved.old.contains(old.index) {
+                    unified[index].isMoved = true
+                }
+                if let new = row.new, row.kind == .added, moved.new.contains(new.index) {
+                    unified[index].isMoved = true
+                }
             }
             for index in split.indices {
                 let row = split[index]
@@ -217,9 +225,10 @@ public struct DiffModel: Sendable {
     /// Splits on "\n" bytes, since Swift folds "\r\n" into one Character, drops a trailing "\r" per line so CRLF files
     /// align, and ignores the empty tail after a final newline.
     static func lines(of text: String) -> [Substring] {
-        var lines = text.utf8.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false).map { line in
-            line.last == UInt8(ascii: "\r") ? Substring(line.dropLast()) : Substring(line)
-        }
+        var lines = text.utf8.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false)
+            .map { line in
+                line.last == UInt8(ascii: "\r") ? Substring(line.dropLast()) : Substring(line)
+            }
         if lines.count > 1, lines[lines.count - 1].isEmpty {
             lines.removeLast()
         }

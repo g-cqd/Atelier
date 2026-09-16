@@ -3,6 +3,7 @@ import DiffGit
 import DiffRendering
 import Foundation
 import Observation
+
 /// Position among the changes of a file, or among the cards of a list.
 package struct ChangeNavigator: Equatable {
     package private(set) var index = -1

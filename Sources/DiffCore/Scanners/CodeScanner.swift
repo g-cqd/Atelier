@@ -27,7 +27,9 @@ struct CodeScanner {
                 index = scanString(from: index, quote: unit)
             } else if syntax.hasAnnotations, unit == ASCII.at, ASCII.isIdentifierStart(next) {
                 index = scanWord(from: index, kind: .attribute)
-            } else if syntax.hasVariables, unit == ASCII.dollar, ASCII.isIdentifierStart(next) || next == ASCII.openBrace {
+            } else if syntax.hasVariables, unit == ASCII.dollar,
+                ASCII.isIdentifierStart(next) || next == ASCII.openBrace
+            {
                 index = scanVariable(from: index)
             } else if ASCII.isDigit(unit) {
                 index = scanNumber(from: index)
@@ -49,7 +51,7 @@ struct CodeScanner {
     private mutating func scanLineComment(from start: Int, length: Int) -> Int {
         var index = start + length
         while index < units.count, units[index] != ASCII.newline { index += 1 }
-        tokens.append(Token(kind: .comment, range: start..<index))
+        tokens.append(Token(kind: .comment, range: start ..< index))
         return index
     }
 
@@ -67,12 +69,13 @@ struct CodeScanner {
                 index += 1
             }
         }
-        tokens.append(Token(kind: .comment, range: start..<index))
+        tokens.append(Token(kind: .comment, range: start ..< index))
         return index
     }
 
     private mutating func scanString(from start: Int, quote: UInt16, prefixLength: Int = 0) -> Int {
-        let isTriple = syntax.tripleQuotes.contains(quote) && start + 2 < units.count
+        let isTriple =
+            syntax.tripleQuotes.contains(quote) && start + 2 < units.count
             && units[start + 1] == quote && units[start + 2] == quote
         let spansLines = isTriple || syntax.multilineQuotes.contains(quote)
         var index = start + (isTriple ? 3 : 1)
@@ -96,7 +99,7 @@ struct CodeScanner {
             index += 1
         }
         index = min(index, units.count)
-        tokens.append(Token(kind: .string, range: (start - prefixLength)..<index))
+        tokens.append(Token(kind: .string, range: (start - prefixLength) ..< index))
         return index
     }
 
@@ -108,7 +111,7 @@ struct CodeScanner {
         } else {
             while index < units.count, ASCII.isIdentifier(units[index]) { index += 1 }
         }
-        tokens.append(Token(kind: .attribute, range: start..<index))
+        tokens.append(Token(kind: .attribute, range: start ..< index))
         return index
     }
 
@@ -118,25 +121,25 @@ struct CodeScanner {
             if units[index] == ASCII.dot, index + 1 < units.count, !ASCII.isDigit(units[index + 1]) { break }
             index += 1
         }
-        tokens.append(Token(kind: .number, range: start..<index))
+        tokens.append(Token(kind: .number, range: start ..< index))
         return index
     }
 
     private mutating func scanWord(from start: Int, kind: TokenKind) -> Int {
         var index = start + 1
         while index < units.count, ASCII.isIdentifier(units[index]) { index += 1 }
-        tokens.append(Token(kind: kind, range: start..<index))
+        tokens.append(Token(kind: kind, range: start ..< index))
         return index
     }
 
     private mutating func scanIdentifier(from start: Int) -> Int {
         var index = start
         while index < units.count, ASCII.isIdentifier(units[index]) { index += 1 }
-        let word = String(decoding: units[start..<index], as: UTF16.self)
+        let word = String(decoding: units[start ..< index], as: UTF16.self)
         if syntax.keywords.contains(word) {
-            tokens.append(Token(kind: .keyword, range: start..<index))
+            tokens.append(Token(kind: .keyword, range: start ..< index))
         } else if ASCII.isUpper(units[start]) {
-            tokens.append(Token(kind: .type, range: start..<index))
+            tokens.append(Token(kind: .type, range: start ..< index))
         }
         return index
     }

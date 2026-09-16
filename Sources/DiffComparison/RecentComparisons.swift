@@ -16,7 +16,9 @@ package final class RecentComparisons {
 
     package init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        entries = defaults.data(forKey: Key.entries).flatMap { try? JSONDecoder().decode([LaunchConfiguration].self, from: $0) } ?? []
+        entries =
+            defaults.data(forKey: Key.entries)
+            .flatMap { try? JSONDecoder().decode([LaunchConfiguration].self, from: $0) } ?? []
     }
 
     package func record(_ configuration: LaunchConfiguration) {
@@ -45,13 +47,15 @@ package final class RecentComparisons {
     }
 }
 
-package extension LaunchConfiguration {
+extension LaunchConfiguration {
     /// What makes two entries the same comparison target, refs aside.
-    var identity: String {
+    package var identity: String {
         switch self {
-        case .patch(let url): "patch:" + url.standardizedFileURL.path(percentEncoded: false)
-        case .files(let left, let right): "files:" + left.standardizedFileURL.path(percentEncoded: false) + "\u{0}" + right.standardizedFileURL.path(percentEncoded: false)
-        case .repository(let url, _, _): "repository:" + url.standardizedFileURL.path(percentEncoded: false)
+            case .patch(let url): "patch:" + url.standardizedFileURL.path(percentEncoded: false)
+            case .files(let left, let right):
+                "files:" + left.standardizedFileURL.path(percentEncoded: false) + "\u{0}"
+                    + right.standardizedFileURL.path(percentEncoded: false)
+            case .repository(let url, _, _): "repository:" + url.standardizedFileURL.path(percentEncoded: false)
         }
     }
 }

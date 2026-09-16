@@ -30,7 +30,8 @@ struct ViewOptionsMenu: NSViewRepresentable {
         guard context.coordinator.snapshot != snapshot else { return }
         context.coordinator.snapshot = snapshot
         button.menu = context.coordinator.menu(for: snapshot)
-        button.item(at: 0)?.image = NSImage(systemSymbolName: "slider.horizontal.3", accessibilityDescription: "View options")
+        button.item(at: 0)?.image = NSImage(
+            systemSymbolName: "slider.horizontal.3", accessibilityDescription: "View options")
     }
 
     /// The settings the menu shows, so it is rebuilt only when one of them changes.
@@ -79,37 +80,64 @@ struct ViewOptionsMenu: NSViewRepresentable {
             menu.addItem(toggle("Status bar", snapshot.showsStatusBar, #selector(toggleStatusBar)))
             menu.addItem(toggle("Isolate changes", snapshot.isolatesChanges, #selector(toggleIsolate), key: "4"))
             menu.addItem(.separator())
-            menu.addItem(submenu("Highlight changes by", [
-                ("Characters", snapshot.granularity == .character, #selector(granularityCharacter)),
-                ("Words", snapshot.granularity == .word, #selector(granularityWord)),
-                ("Syntax", snapshot.granularity == .syntax, #selector(granularitySyntax)),
-            ]))
-            menu.addItem(submenu("Diff heuristics", [
-                ("Anchor on rare lines", snapshot.heuristics.anchorsRareLines, #selector(toggleAnchors)),
-                ("Slide by indentation", snapshot.heuristics.slidesToIndentation, #selector(toggleSlides)),
-                ("Pair similar lines", snapshot.heuristics.pairsSimilarLines, #selector(togglePairs)),
-                ("Clean up emphasis", snapshot.heuristics.cleansUpEmphasis, #selector(toggleCleanup)),
-                ("Mark moved blocks", snapshot.heuristics.detectsMovedBlocks, #selector(toggleMoved)),
-            ]))
-            menu.addItem(submenu("Whitespace", [
-                ("Compare exactly", snapshot.heuristics.whitespace == .exact, #selector(whitespaceExact)),
-                ("Ignore trailing", snapshot.heuristics.whitespace == .ignoreTrailing, #selector(whitespaceTrailing)),
-                ("Ignore leading and trailing", snapshot.heuristics.whitespace == .ignoreLeadingAndTrailing, #selector(whitespaceEdges)),
-                ("Ignore all", snapshot.heuristics.whitespace == .ignoreAll, #selector(whitespaceAll)),
-            ]))
+            menu.addItem(
+                submenu(
+                    "Highlight changes by",
+                    [
+                        ("Characters", snapshot.granularity == .character, #selector(granularityCharacter)),
+                        ("Words", snapshot.granularity == .word, #selector(granularityWord)),
+                        ("Syntax", snapshot.granularity == .syntax, #selector(granularitySyntax))
+                    ]))
+            menu.addItem(
+                submenu(
+                    "Diff heuristics",
+                    [
+                        ("Anchor on rare lines", snapshot.heuristics.anchorsRareLines, #selector(toggleAnchors)),
+                        ("Slide by indentation", snapshot.heuristics.slidesToIndentation, #selector(toggleSlides)),
+                        ("Pair similar lines", snapshot.heuristics.pairsSimilarLines, #selector(togglePairs)),
+                        ("Clean up emphasis", snapshot.heuristics.cleansUpEmphasis, #selector(toggleCleanup)),
+                        ("Mark moved blocks", snapshot.heuristics.detectsMovedBlocks, #selector(toggleMoved))
+                    ]))
+            menu.addItem(
+                submenu(
+                    "Whitespace",
+                    [
+                        ("Compare exactly", snapshot.heuristics.whitespace == .exact, #selector(whitespaceExact)),
+                        (
+                            "Ignore trailing", snapshot.heuristics.whitespace == .ignoreTrailing,
+                            #selector(whitespaceTrailing)
+                        ),
+                        (
+                            "Ignore leading and trailing", snapshot.heuristics.whitespace == .ignoreLeadingAndTrailing,
+                            #selector(whitespaceEdges)
+                        ),
+                        ("Ignore all", snapshot.heuristics.whitespace == .ignoreAll, #selector(whitespaceAll))
+                    ]))
             menu.addItem(.separator())
             menu.addItem(toggle("Changed files only", snapshot.showsChangesOnly, #selector(toggleChangesOnly)))
             menu.addItem(toggle("Ignored files", snapshot.showsIgnoredFiles, #selector(toggleIgnoredFiles)))
-            menu.addItem(submenu("Files", [
-                ("Tree", snapshot.treeStyle == .hierarchy, #selector(treeHierarchy)),
-                ("Compact tree", snapshot.treeStyle == .compact, #selector(treeCompact)),
-                ("Flat list", snapshot.treeStyle == .flat, #selector(treeFlat)),
-            ]))
-            menu.addItem(submenu("Explorers", [
-                ("Two explorers on top", snapshot.explorerPlacement == .top, #selector(placementTop)),
-                ("Two explorers in a sidebar", snapshot.explorerPlacement == .sidebar, #selector(placementSidebar)),
-                ("One merged tree in a sidebar", snapshot.explorerPlacement == .unifiedSidebar, #selector(placementUnified)),
-            ]))
+            menu.addItem(
+                submenu(
+                    "Files",
+                    [
+                        ("Tree", snapshot.treeStyle == .hierarchy, #selector(treeHierarchy)),
+                        ("Compact tree", snapshot.treeStyle == .compact, #selector(treeCompact)),
+                        ("Flat list", snapshot.treeStyle == .flat, #selector(treeFlat))
+                    ]))
+            menu.addItem(
+                submenu(
+                    "Explorers",
+                    [
+                        ("Two explorers on top", snapshot.explorerPlacement == .top, #selector(placementTop)),
+                        (
+                            "Two explorers in a sidebar", snapshot.explorerPlacement == .sidebar,
+                            #selector(placementSidebar)
+                        ),
+                        (
+                            "One merged tree in a sidebar", snapshot.explorerPlacement == .unifiedSidebar,
+                            #selector(placementUnified)
+                        )
+                    ]))
             return menu
         }
 

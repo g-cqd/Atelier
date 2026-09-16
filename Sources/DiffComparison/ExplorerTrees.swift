@@ -3,6 +3,7 @@ package import DiffGit
 import DiffRendering
 import Foundation
 import Observation
+
 /// The explorer trees for both sides and the merged view, with every directory carrying the aggregate status of
 /// its files. Built as one value from the comparison and the display settings.
 package struct ExplorerTrees: Sendable, Equatable {
@@ -20,7 +21,8 @@ package struct ExplorerTrees: Sendable, Equatable {
     package static let empty = ExplorerTrees()
 
     package static func build(
-        comparison: Comparison, leftTree: [FileNode], rightTree: [FileNode], showsChangesOnly: Bool, showsIgnoredFiles: Bool = false, style: FileTreeStyle
+        comparison: Comparison, leftTree: [FileNode], rightTree: [FileNode], showsChangesOnly: Bool,
+        showsIgnoredFiles: Bool = false, style: FileTreeStyle
     ) -> ExplorerTrees {
         var trees = ExplorerTrees()
         var leftNodes = leftTree
@@ -34,7 +36,9 @@ package struct ExplorerTrees: Sendable, Equatable {
         if showsChangesOnly {
             let statuses = comparison.statuses
             leftNodes = leftNodes.compactMap { $0.filtered { statuses[$0] != .same } }
-            rightNodes = rightNodes.compactMap { $0.filtered { statuses[comparison.counterpartPath(of: $0, in: .right)] != .same } }
+            rightNodes = rightNodes.compactMap {
+                $0.filtered { statuses[comparison.counterpartPath(of: $0, in: .right)] != .same }
+            }
             unifiedNodes = unifiedNodes.compactMap { $0.filtered { statuses[$0] != .same } }
         }
         trees.left = arranged(leftNodes, style: style)
@@ -52,9 +56,9 @@ package struct ExplorerTrees: Sendable, Equatable {
 
     private static func arranged(_ nodes: [FileNode], style: FileTreeStyle) -> [FileNode] {
         switch style {
-        case .hierarchy: nodes
-        case .compact: nodes.compacted()
-        case .flat: FileNode.flatList(from: nodes.flatMap(\.filePaths))
+            case .hierarchy: nodes
+            case .compact: nodes.compacted()
+            case .flat: FileNode.flatList(from: nodes.flatMap(\.filePaths))
         }
     }
 
@@ -66,10 +70,11 @@ package struct ExplorerTrees: Sendable, Equatable {
         var aggregate: PathStatus?
         for child in children {
             guard let status = aggregateStatus(of: child) else { continue }
-            aggregate = switch aggregate {
-            case nil, status: status
-            default: .different
-            }
+            aggregate =
+                switch aggregate {
+                    case nil, status: status
+                    default: .different
+                }
         }
         statuses[node.id] = aggregate
         return aggregate

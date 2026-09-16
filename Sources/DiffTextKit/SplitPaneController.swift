@@ -53,7 +53,8 @@ package final class SplitPaneController: NSObject {
 
     package func unregister(textView: NSTextView) {
         if let scrollView = members.first(where: { $0.textView === textView })?.scrollView {
-            NotificationCenter.default.removeObserver(self, name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+            NotificationCenter.default.removeObserver(
+                self, name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
         }
         members.removeAll { $0.textView === textView }
     }
@@ -80,7 +81,8 @@ package final class SplitPaneController: NSObject {
         let y = clipView.bounds.origin.y
         for member in members {
             guard let scrollView = member.scrollView, scrollView.contentView !== clipView,
-                  scrollView.contentView.bounds.origin.y != y else { continue }
+                scrollView.contentView.bounds.origin.y != y
+            else { continue }
             scrollView.contentView.scroll(to: NSPoint(x: scrollView.contentView.bounds.origin.x, y: y))
             scrollView.reflectScrolledClipView(scrollView.contentView)
         }
@@ -90,9 +92,9 @@ package final class SplitPaneController: NSObject {
 
     private func alignRows() {
         guard members.count == 2,
-              let leftView = members[0].textView, let rightView = members[1].textView,
-              let left = members[0].rendered, let right = members[1].rendered,
-              left.rows.count == right.rows.count
+            let leftView = members[0].textView, let rightView = members[1].textView,
+            let left = members[0].rendered, let right = members[1].rendered,
+            left.rows.count == right.rows.count
         else { return }
 
         guard wrapsLines else {

@@ -1,10 +1,11 @@
 import DiffCore
 import Foundation
+import Testing
+
 @testable import DiffComparison
 @testable import DiffGit
 @testable import DiffRendering
 @testable import DiffTextKit
-import Testing
 
 @MainActor
 struct RecentComparisonsTests {
@@ -18,12 +19,16 @@ struct RecentComparisonsTests {
         sut.record(.repository(repository, leftRef: "main", rightRef: nil))
         sut.record(.patch(URL(filePath: "/tmp/a.patch")))
         sut.record(.repository(repository, leftRef: "feature", rightRef: "main"))
-        for index in 0..<RecentComparisons.limit {
+        for index in 0 ..< RecentComparisons.limit {
             sut.record(.files(left: URL(filePath: "/l\(index)"), right: URL(filePath: "/r\(index)")))
         }
 
         #expect(sut.entries.count == RecentComparisons.limit)
-        #expect(sut.entries.first == .files(left: URL(filePath: "/l\(RecentComparisons.limit - 1)"), right: URL(filePath: "/r\(RecentComparisons.limit - 1)")))
+        #expect(
+            sut.entries.first
+                == .files(
+                    left: URL(filePath: "/l\(RecentComparisons.limit - 1)"),
+                    right: URL(filePath: "/r\(RecentComparisons.limit - 1)")))
         #expect(!sut.entries.contains(.repository(repository, leftRef: "main", rightRef: nil)))
 
         let reloaded = RecentComparisons(defaults: defaults)
@@ -38,7 +43,10 @@ struct RecentComparisonsTests {
 
         sut.record(.repository(repository, leftRef: "v2", rightRef: "v1"))
 
-        #expect(sut.entries == [.repository(repository, leftRef: "v2", rightRef: "v1"), .patch(URL(filePath: "/tmp/a.patch"))])
+        #expect(
+            sut.entries == [
+                .repository(repository, leftRef: "v2", rightRef: "v1"), .patch(URL(filePath: "/tmp/a.patch"))
+            ])
 
         sut.remove(.patch(URL(filePath: "/tmp/a.patch")))
         #expect(sut.entries.count == 1)
@@ -51,7 +59,7 @@ struct RecentComparisonsTests {
         let configurations: [LaunchConfiguration] = [
             .repository(repository, leftRef: "main", rightRef: nil),
             .files(left: URL(filePath: "/a.swift"), right: URL(filePath: "/b.swift")),
-            .patch(URL(filePath: "/tmp/a.patch")),
+            .patch(URL(filePath: "/tmp/a.patch"))
         ]
         let data = try JSONEncoder().encode(configurations)
         #expect(try JSONDecoder().decode([LaunchConfiguration].self, from: data) == configurations)
