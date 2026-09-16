@@ -36,6 +36,7 @@ public enum SecurePath {
     /// - Parameters:
     ///   - path: The candidate path.
     ///   - root: The directory that must contain `path`.
+    /// - Returns: True when the resolved `path` lies inside the resolved `root`, component by component.
     public static func isValid(_ path: String, root: String) -> Bool {
         let rootURL = URL(fileURLWithPath: root, isDirectory: true)
             .resolvingSymlinksInPath()

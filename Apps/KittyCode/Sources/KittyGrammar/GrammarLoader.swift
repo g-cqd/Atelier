@@ -1,8 +1,9 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable cyclomatic_complexity
 public import Foundation
 
 /// Loads and validates tree-sitter grammar.json files.
 public enum GrammarLoader: Sendable {
-
     private static let maxGrammarFileSize = 10_000_000  // 10MB
 
     /// Load a grammar definition from a file path.
@@ -96,86 +97,86 @@ public enum GrammarLoader: Sendable {
         }
 
         switch type {
-        case "SYMBOL":
-            guard let name = dict["name"] as? String else { throw .missingField("name") }
-            return .symbol(name)
+            case "SYMBOL":
+                guard let name = dict["name"] as? String else { throw .missingField("name") }
+                return .symbol(name)
 
-        case "STRING":
-            guard let value = dict["value"] as? String else { throw .missingField("value") }
-            return .string(value)
+            case "STRING":
+                guard let value = dict["value"] as? String else { throw .missingField("value") }
+                return .string(value)
 
-        case "PATTERN":
-            guard let value = dict["value"] as? String else { throw .missingField("value") }
-            return .pattern(value)
+            case "PATTERN":
+                guard let value = dict["value"] as? String else { throw .missingField("value") }
+                return .pattern(value)
 
-        case "SEQ":
-            guard let members = dict["members"] as? [Any] else { throw .missingField("members") }
-            var seqRules: [Rule] = []
-            for m in members { seqRules.append(try parseRule(m)) }
-            return .seq(seqRules)
+            case "SEQ":
+                guard let members = dict["members"] as? [Any] else { throw .missingField("members") }
+                var seqRules: [Rule] = []
+                for m in members { seqRules.append(try parseRule(m)) }
+                return .seq(seqRules)
 
-        case "CHOICE":
-            guard let members = dict["members"] as? [Any] else { throw .missingField("members") }
-            var choiceRules: [Rule] = []
-            for m in members { choiceRules.append(try parseRule(m)) }
-            return .choice(choiceRules)
+            case "CHOICE":
+                guard let members = dict["members"] as? [Any] else { throw .missingField("members") }
+                var choiceRules: [Rule] = []
+                for m in members { choiceRules.append(try parseRule(m)) }
+                return .choice(choiceRules)
 
-        case "REPEAT":
-            guard let content = dict["content"] else { throw .missingField("content") }
-            return .repeat(try parseRule(content))
+            case "REPEAT":
+                guard let content = dict["content"] else { throw .missingField("content") }
+                return .repeat(try parseRule(content))
 
-        case "REPEAT1":
-            guard let content = dict["content"] else { throw .missingField("content") }
-            return .repeat1(try parseRule(content))
+            case "REPEAT1":
+                guard let content = dict["content"] else { throw .missingField("content") }
+                return .repeat1(try parseRule(content))
 
-        case "OPTIONAL":  // tree-sitter uses CHOICE with BLANK for optional
-            guard let content = dict["content"] else { throw .missingField("content") }
-            return .optional(try parseRule(content))
+            case "OPTIONAL":  // tree-sitter uses CHOICE with BLANK for optional
+                guard let content = dict["content"] else { throw .missingField("content") }
+                return .optional(try parseRule(content))
 
-        case "PREC":
-            guard let value = dict["value"] as? Int else { throw .missingField("value") }
-            guard let content = dict["content"] else { throw .missingField("content") }
-            return .prec(value, try parseRule(content))
+            case "PREC":
+                guard let value = dict["value"] as? Int else { throw .missingField("value") }
+                guard let content = dict["content"] else { throw .missingField("content") }
+                return .prec(value, try parseRule(content))
 
-        case "PREC_LEFT":
-            guard let value = dict["value"] as? Int else { throw .missingField("value") }
-            guard let content = dict["content"] else { throw .missingField("content") }
-            return .precLeft(value, try parseRule(content))
+            case "PREC_LEFT":
+                guard let value = dict["value"] as? Int else { throw .missingField("value") }
+                guard let content = dict["content"] else { throw .missingField("content") }
+                return .precLeft(value, try parseRule(content))
 
-        case "PREC_RIGHT":
-            guard let value = dict["value"] as? Int else { throw .missingField("value") }
-            guard let content = dict["content"] else { throw .missingField("content") }
-            return .precRight(value, try parseRule(content))
+            case "PREC_RIGHT":
+                guard let value = dict["value"] as? Int else { throw .missingField("value") }
+                guard let content = dict["content"] else { throw .missingField("content") }
+                return .precRight(value, try parseRule(content))
 
-        case "PREC_DYNAMIC":
-            guard let value = dict["value"] as? Int else { throw .missingField("value") }
-            guard let content = dict["content"] else { throw .missingField("content") }
-            return .precDynamic(value, try parseRule(content))
+            case "PREC_DYNAMIC":
+                guard let value = dict["value"] as? Int else { throw .missingField("value") }
+                guard let content = dict["content"] else { throw .missingField("content") }
+                return .precDynamic(value, try parseRule(content))
 
-        case "TOKEN":
-            guard let content = dict["content"] else { throw .missingField("content") }
-            return .token(try parseRule(content))
+            case "TOKEN":
+                guard let content = dict["content"] else { throw .missingField("content") }
+                return .token(try parseRule(content))
 
-        case "IMMEDIATE_TOKEN":
-            guard let content = dict["content"] else { throw .missingField("content") }
-            return .immediateToken(try parseRule(content))
+            case "IMMEDIATE_TOKEN":
+                guard let content = dict["content"] else { throw .missingField("content") }
+                return .immediateToken(try parseRule(content))
 
-        case "FIELD":
-            guard let name = dict["name"] as? String else { throw .missingField("name") }
-            guard let content = dict["content"] else { throw .missingField("content") }
-            return .field(name, try parseRule(content))
+            case "FIELD":
+                guard let name = dict["name"] as? String else { throw .missingField("name") }
+                guard let content = dict["content"] else { throw .missingField("content") }
+                return .field(name, try parseRule(content))
 
-        case "ALIAS":
-            guard let content = dict["content"] else { throw .missingField("content") }
-            guard let value = dict["value"] as? String else { throw .missingField("value") }
-            let named = dict["named"] as? Bool ?? false
-            return .alias(try parseRule(content), value, named)
+            case "ALIAS":
+                guard let content = dict["content"] else { throw .missingField("content") }
+                guard let value = dict["value"] as? String else { throw .missingField("value") }
+                let named = dict["named"] as? Bool ?? false
+                return .alias(try parseRule(content), value, named)
 
-        case "BLANK":
-            return .blank
+            case "BLANK":
+                return .blank
 
-        default:
-            throw .invalidRuleType(type)
+            default:
+                throw .invalidRuleType(type)
         }
     }
 
@@ -305,14 +306,14 @@ private struct JSONOrderScanner: Sendable {
         }
 
         switch character {
-        case "\"":
-            _ = try parseString()
-        case "{":
-            try skipObject()
-        case "[":
-            try skipArray()
-        default:
-            skipScalarValue()
+            case "\"":
+                _ = try parseString()
+            case "{":
+                try skipObject()
+            case "[":
+                try skipArray()
+            default:
+                skipScalarValue()
         }
     }
 
@@ -402,26 +403,26 @@ private struct JSONOrderScanner: Sendable {
         to result: inout String
     ) throws(GrammarError) {
         switch escapedCharacter {
-        case "\"":
-            result.append("\"")
-        case "\\":
-            result.append("\\")
-        case "/":
-            result.append("/")
-        case "b":
-            result.append("\u{08}")
-        case "f":
-            result.append("\u{0C}")
-        case "n":
-            result.append("\n")
-        case "r":
-            result.append("\r")
-        case "t":
-            result.append("\t")
-        case "u":
-            try appendUnicodeEscape(to: &result)
-        default:
-            throw .invalidJSON("Unsupported escape sequence \\(escapedCharacter)")
+            case "\"":
+                result.append("\"")
+            case "\\":
+                result.append("\\")
+            case "/":
+                result.append("/")
+            case "b":
+                result.append("\u{08}")
+            case "f":
+                result.append("\u{0C}")
+            case "n":
+                result.append("\n")
+            case "r":
+                result.append("\r")
+            case "t":
+                result.append("\t")
+            case "u":
+                try appendUnicodeEscape(to: &result)
+            default:
+                throw .invalidJSON("Unsupported escape sequence \\(escapedCharacter)")
         }
     }
 
@@ -463,7 +464,7 @@ private struct JSONOrderScanner: Sendable {
             throw .invalidJSON("Incomplete unicode escape")
         }
 
-        let hex = String(source[start..<end])
+        let hex = String(source[start ..< end])
         guard hex.count == 4, let codeUnit = UInt32(hex, radix: 16) else {
             throw .invalidJSON("Invalid unicode escape \\u\(hex)")
         }

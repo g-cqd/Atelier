@@ -30,7 +30,7 @@ struct TreeViewTests {
     @Test
     func `Scroll indicator drag maps track rows into tree scroll offsets`() {
         let tree = TreeView(
-            root: (0..<20).map { TreeNode(value: "node-\($0)") },
+            root: (0 ..< 20).map { TreeNode(value: "node-\($0)") },
             scrollOffset: 0,
             showsVerticalScrollIndicator: true,
             label: { $0 }
@@ -53,7 +53,7 @@ struct TreeViewTests {
     @Test
     func `Tree scroll indicator hidden when all items fit in viewport`() {
         let tree = TreeView(
-            root: (0..<3).map { TreeNode(value: "node-\($0)") },
+            root: (0 ..< 3).map { TreeNode(value: "node-\($0)") },
             scrollOffset: 0,
             showsVerticalScrollIndicator: true,
             label: { $0 }
@@ -69,15 +69,16 @@ struct TreeViewTests {
     func `Tree scroll indicator hidden when rendered with fewer items than viewport`() {
         var buffer = ScreenBuffer(columns: 10, rows: 5)
         let tree = TreeView(
-            root: (0..<3).map { TreeNode(value: "n\($0)") },
+            root: (0 ..< 3).map { TreeNode(value: "n\($0)") },
             scrollOffset: 0,
             showsVerticalScrollIndicator: true,
-            style: TreeView<String>.TreeViewStyle(
-                scrollIndicatorStyle: VerticalScrollIndicatorStyle(
-                    trackCharacter: "|",
-                    thumbCharacter: "#"
-                )
-            ),
+            style: TreeView<String>
+                .TreeViewStyle(
+                    scrollIndicatorStyle: VerticalScrollIndicatorStyle(
+                        trackCharacter: "|",
+                        thumbCharacter: "#"
+                    )
+                ),
             label: { $0 }
         )
         let rect = Rect(x: 0, y: 0, width: 10, height: 5)
@@ -85,7 +86,7 @@ struct TreeViewTests {
         tree.render(to: &buffer, in: rect)
 
         // Last column should NOT have scrollbar characters since 3 items < 5 rows
-        for row in 0..<5 {
+        for row in 0 ..< 5 {
             #expect(buffer[row, 9].character != "#")
             #expect(buffer[row, 9].character != "|")
         }

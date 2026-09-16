@@ -16,9 +16,9 @@ struct ShiftRowsTests {
 
         buffer.shiftRows(regionY: 0, regionHeight: 4, regionX: 0, regionWidth: 5, delta: 1)
 
-        let row0 = (0..<5).map { buffer[0, $0].character }
-        let row1 = (0..<5).map { buffer[1, $0].character }
-        let row2 = (0..<5).map { buffer[2, $0].character }
+        let row0 = (0 ..< 5).map { buffer[0, $0].character }
+        let row1 = (0 ..< 5).map { buffer[1, $0].character }
+        let row2 = (0 ..< 5).map { buffer[2, $0].character }
         #expect(row0 == ["B", "B", "B", "B", "B"])
         #expect(row1 == ["C", "C", "C", "C", "C"])
         #expect(row2 == ["D", "D", "D", "D", "D"])
@@ -36,9 +36,9 @@ struct ShiftRowsTests {
 
         buffer.shiftRows(regionY: 0, regionHeight: 4, regionX: 0, regionWidth: 5, delta: -1)
 
-        let row1 = (0..<5).map { buffer[1, $0].character }
-        let row2 = (0..<5).map { buffer[2, $0].character }
-        let row3 = (0..<5).map { buffer[3, $0].character }
+        let row1 = (0 ..< 5).map { buffer[1, $0].character }
+        let row2 = (0 ..< 5).map { buffer[2, $0].character }
+        let row3 = (0 ..< 5).map { buffer[3, $0].character }
         // Row 0 retains old content (vacated row)
         #expect(buffer[0, 0].character == "A")
         #expect(row1 == ["A", "A", "A", "A", "A"])
@@ -60,7 +60,7 @@ struct ShiftRowsTests {
         buffer.shiftRows(regionY: 1, regionHeight: 3, regionX: 2, regionWidth: 4, delta: 1)
 
         // Row 1, cols 2..5 should now have BBBB (shifted from row 2)
-        let shifted = (2..<6).map { buffer[1, $0].character }
+        let shifted = (2 ..< 6).map { buffer[1, $0].character }
         #expect(shifted == ["B", "B", "B", "B"])
 
         // Outside region: row 0 and cols 0..1 are untouched
@@ -107,7 +107,7 @@ struct ShiftRowsTests {
     @Test
     func `Shift up by 2 moves content correctly`() {
         var buffer = ScreenBuffer(columns: 3, rows: 5)
-        for r in 0..<5 {
+        for r in 0 ..< 5 {
             // swiftlint:disable:next force_unwrapping
             let ch = Character(UnicodeScalar(65 + r)!)  // A, B, C, D, E
             buffer.fill(

@@ -53,7 +53,7 @@ struct MouseDecoderTests {
     @Test(arguments: [
         ("\u{1B}[<65536;1;1M", "\u{1B}[<65536"),
         ("\u{1B}[<0;65536;1M", "\u{1B}[<0;65536"),
-        ("\u{1B}[<0;1;65536M", "\u{1B}[<0;1;65536"),
+        ("\u{1B}[<0;1;65536M", "\u{1B}[<0;1;65536")
     ])
     func `Numeric overflow returns invalid`(sequence: String, invalidPrefix: String) {
         var decoder = MouseDecoder()
@@ -63,7 +63,7 @@ struct MouseDecoderTests {
 
     @Test(arguments: [
         ("\u{1B}[<128;1;1M", MouseButton.button4),
-        ("\u{1B}[<129;1;1M", MouseButton.button5),
+        ("\u{1B}[<129;1;1M", MouseButton.button5)
     ])
     func `Extra buttons decode from high values`(sequence: String, expectedButton: MouseButton)
         throws

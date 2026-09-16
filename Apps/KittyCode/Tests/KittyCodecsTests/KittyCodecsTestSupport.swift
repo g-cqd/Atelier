@@ -9,10 +9,10 @@ func feedKeyboard(_ sequence: String, into decoder: inout KeyboardDecoder) -> De
     for byte in sequence.utf8 {
         result = decoder.feed(byte)
         switch result {
-        case .pending:
-            continue
-        case .complete, .invalid:
-            return result
+            case .pending:
+                continue
+            case .complete, .invalid:
+                return result
         }
     }
     return result
@@ -25,10 +25,10 @@ func feedMouse(_ sequence: String, into decoder: inout MouseDecoder) -> DecoderR
     for byte in sequence.utf8 {
         result = decoder.feed(byte)
         switch result {
-        case .pending:
-            continue
-        case .complete, .invalid:
-            return result
+            case .pending:
+                continue
+            case .complete, .invalid:
+                return result
         }
     }
     return result

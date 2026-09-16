@@ -14,7 +14,6 @@ import Testing
 
 @Suite
 struct CLIArgumentsDocumentationTests {
-
     @Test
     func `versionString contains KittyCode`() {
         #expect(CLIArguments.versionString.contains("KittyCode"))

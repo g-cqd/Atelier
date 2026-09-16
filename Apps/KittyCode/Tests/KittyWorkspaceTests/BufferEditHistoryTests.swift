@@ -94,7 +94,7 @@ import Testing
         history.maxUndoSteps = 3
 
         var prev = initial
-        for i in 1...5 {
+        for i in 1 ... 5 {
             let next = makeSnapshot("v\(i)")
             history.recordChange(from: prev, to: next, coalescingWindow: nil)
             prev = next
@@ -237,7 +237,7 @@ import Testing
         history.maxUndoSteps = 3
 
         var prev = initial
-        for i in 1...5 {
+        for i in 1 ... 5 {
             let next = makeSnapshot("v\(i)")
             history.recordChange(from: prev, to: next, coalescingWindow: nil)
             prev = next
@@ -336,7 +336,7 @@ import Testing
 
         // Each transition retains ~2 × 4 KB = ~8 KB. Record 20 of them.
         var previous = initial
-        for index in 0..<20 {
+        for index in 0 ..< 20 {
             let next = makeSnapshot(String(repeating: "x", count: 4_000 + index))
             history.recordChange(from: previous, to: next, coalescingWindow: nil)
             previous = next

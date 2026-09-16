@@ -13,8 +13,8 @@ struct HighlighterTests {
     func `Highlight produces styled spans`() {
         let highlighter = Highlighter(theme: .monokai)
 
-        let node = SyntaxNode(type: "keyword", byteRange: 0..<3, isNamed: true)
-        let root = SyntaxNode(type: "source", children: [node], byteRange: 0..<7)
+        let node = SyntaxNode(type: "keyword", byteRange: 0 ..< 3, isNamed: true)
+        let root = SyntaxNode(type: "source", children: [node], byteRange: 0 ..< 7)
         let tree = SyntaxTree(root: root, source: "let x =")
 
         let query = Query(patterns: [
@@ -37,38 +37,39 @@ struct HighlighterTests {
         theme.setStyle(functionNameStyle, for: "function.name")
         theme.setStyle(keywordStyle, for: "keyword")
 
-        let identifier = SyntaxNode(type: "identifier", byteRange: 5..<10, isNamed: true)
+        let identifier = SyntaxNode(type: "identifier", byteRange: 5 ..< 10, isNamed: true)
         let function = SyntaxNode(
             type: "function_definition",
             children: [identifier],
-            byteRange: 0..<20,
+            byteRange: 0 ..< 20,
             isNamed: true
         )
-        let keyword = SyntaxNode(type: "keyword", byteRange: 20..<23, isNamed: true)
+        let keyword = SyntaxNode(type: "keyword", byteRange: 20 ..< 23, isNamed: true)
         let root = SyntaxNode(
             type: "source",
             children: [function, keyword],
-            byteRange: 0..<23
+            byteRange: 0 ..< 23
         )
         let tree = SyntaxTree(root: root, source: "abcdefghijklmnopqrstuvw")
         let query = Query(patterns: [
             .nodeMatch(type: "function_definition", children: [], capture: "function"),
             .nodeMatch(type: "identifier", children: [], capture: "function.name"),
-            .nodeMatch(type: "keyword", children: [], capture: "keyword"),
+            .nodeMatch(type: "keyword", children: [], capture: "keyword")
         ])
 
-        let spans = Highlighter(theme: theme).highlight(
-            source: tree.source,
-            tree: tree,
-            query: query
-        )
+        let spans = Highlighter(theme: theme)
+            .highlight(
+                source: tree.source,
+                tree: tree,
+                query: query
+            )
 
         #expect(
             spans == [
                 StyledSpan(text: "abcde", style: functionStyle),
                 StyledSpan(text: "fghij", style: functionNameStyle),
                 StyledSpan(text: "klmnopqrst", style: functionStyle),
-                StyledSpan(text: "uvw", style: keywordStyle),
+                StyledSpan(text: "uvw", style: keywordStyle)
             ])
     }
 
@@ -80,21 +81,22 @@ struct HighlighterTests {
         theme.setStyle(keyStyle, for: "string.special.key")
         theme.setStyle(stringStyle, for: "string")
 
-        let stringNode = SyntaxNode(type: "string", byteRange: 0..<6, isNamed: true)
+        let stringNode = SyntaxNode(type: "string", byteRange: 0 ..< 6, isNamed: true)
         let tree = SyntaxTree(
-            root: SyntaxNode(type: "document", children: [stringNode], byteRange: 0..<6),
+            root: SyntaxNode(type: "document", children: [stringNode], byteRange: 0 ..< 6),
             source: "\"name\""
         )
         let query = Query(patterns: [
             .nodeMatch(type: "string", children: [], capture: "string.special.key"),
-            .nodeMatch(type: "string", children: [], capture: "string"),
+            .nodeMatch(type: "string", children: [], capture: "string")
         ])
 
-        let spans = Highlighter(theme: theme).highlight(
-            source: tree.source,
-            tree: tree,
-            query: query
-        )
+        let spans = Highlighter(theme: theme)
+            .highlight(
+                source: tree.source,
+                tree: tree,
+                query: query
+            )
 
         #expect(spans == [StyledSpan(text: "\"name\"", style: keyStyle)])
     }

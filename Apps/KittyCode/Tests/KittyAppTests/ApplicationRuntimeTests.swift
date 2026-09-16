@@ -66,13 +66,13 @@ struct ApplicationRuntimeTests {
             onEvent: { event, _ in
                 events.append(event)
                 switch event {
-                case .refresh:
-                    refreshEventCount += 1
-                    return true
-                case .key(let key):
-                    return key.keyCode != 3
-                default:
-                    return true
+                    case .refresh:
+                        refreshEventCount += 1
+                        return true
+                    case .key(let key):
+                        return key.keyCode != 3
+                    default:
+                        return true
                 }
             },
             configureInputSource: { inputSource in

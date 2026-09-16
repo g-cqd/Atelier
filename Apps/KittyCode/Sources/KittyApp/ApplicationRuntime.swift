@@ -1,9 +1,11 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable function_body_length
 import KittyCodecs
 public import KittyInput
-import Observation
 public import KittyRenderer
 public import KittyTerminal
 import KittyWidgets
+import Observation
 
 /// Orchestrates the application lifecycle.
 @MainActor
@@ -151,17 +153,17 @@ public final class ApplicationRuntime {
             }
 
             switch event {
-            case .resize(let newSize):
-                pipeline.resize(columns: newSize.columns, rows: newSize.rows)
-                pipeline.buffer.clear()
-                render(pipeline)
-                do {
-                    try pipeline.forceRedraw()
-                } catch {
-                    KittyLogger.error("Redraw after resize failed: \(error)")
-                }
-            default:
-                break
+                case .resize(let newSize):
+                    pipeline.resize(columns: newSize.columns, rows: newSize.rows)
+                    pipeline.buffer.clear()
+                    render(pipeline)
+                    do {
+                        try pipeline.forceRedraw()
+                    } catch {
+                        KittyLogger.error("Redraw after resize failed: \(error)")
+                    }
+                default:
+                    break
             }
 
             do {

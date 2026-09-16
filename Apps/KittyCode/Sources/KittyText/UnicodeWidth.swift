@@ -62,7 +62,7 @@ public enum UnicodeWidth {
         (0xAC00, 0xD7AF),  // Hangul Syllables
         (0xFE30, 0xFE6F),  // CJK Compatibility Forms
         (0xFF01, 0xFF60),  // Fullwidth Latin & Katakana
-        (0xFFE0, 0xFFE6),  // Fullwidth Signs
+        (0xFFE0, 0xFFE6)  // Fullwidth Signs
     ]
 
     @inline(__always)

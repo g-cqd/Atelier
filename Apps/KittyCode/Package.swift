@@ -8,7 +8,7 @@ let strict: [SwiftSetting] = [
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("InferIsolatedConformances"),
     .enableUpcomingFeature("InternalImportsByDefault"),
-    .enableUpcomingFeature("MemberImportVisibility"),
+    .enableUpcomingFeature("MemberImportVisibility")
 ]
 
 let package = Package(
@@ -41,11 +41,11 @@ let package = Package(
         .library(name: "KittyWorkspace", targets: ["KittyWorkspace"]),
         .library(name: "KittyEditor", targets: ["KittyEditor"]),
         .executable(name: "KittyCode", targets: ["KittyCode"]),
-        .executable(name: "KittySymbolsCLI", targets: ["KittySymbolsCLI"]),
+        .executable(name: "KittySymbolsCLI", targets: ["KittySymbolsCLI"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main")
     ],
     targets: [
         // Layer 0 — Raw mode, FD I/O, terminal queries
@@ -105,7 +105,7 @@ let package = Package(
         .target(
             name: "KittySyntax",
             dependencies: [
-                "KittyGrammar", "KittyParser", "KittyQuery", "KittyStyle",
+                "KittyGrammar", "KittyParser", "KittyQuery", "KittyStyle"
             ],
             resources: [.copy("Grammars")],
             swiftSettings: strict
@@ -141,7 +141,7 @@ let package = Package(
                 "KittyApp", "KittyWorkspace", "KittyInput", "KittyText", "KittyFileTree",
                 "KittyRenderer", "KittySyntax", "KittySymbols", "KittyGit", "KittySearch",
                 "KittyStyle", "KittyTerminal",
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
             swiftSettings: strict),
 
@@ -153,7 +153,7 @@ let package = Package(
             name: "KittyCode",
             dependencies: [
                 "KittyEditor", "KittyApp", "KittyTerminal", "KittyCodecs",
-                "KittyFileTree", "KittyGit", "KittyRenderer", "KittyWorkspace",
+                "KittyFileTree", "KittyGit", "KittyRenderer", "KittyWorkspace"
             ], swiftSettings: strict),
 
         // KittySymbols CLI
@@ -210,6 +210,6 @@ let package = Package(
             name: "KittyGitTests", dependencies: ["KittyGit"], swiftSettings: strict),
         .testTarget(
             name: "KittySearchTests", dependencies: ["KittySearch"],
-            swiftSettings: strict),
+            swiftSettings: strict)
     ]
 )

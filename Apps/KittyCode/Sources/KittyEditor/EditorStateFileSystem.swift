@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable function_body_length function_parameter_count
 import Foundation
 import KittyApp
 import KittyFileTree
@@ -7,9 +9,8 @@ import KittyText
 public import KittyWorkspace
 import System
 
-public extension EditorState {
-
-    func loadInitialTree(validateHistory: Bool = true) async {
+extension EditorState {
+    public func loadInitialTree(validateHistory: Bool = true) async {
         let expandedPaths = collectExpandedPaths(treeNodes)
         treeNodes = await DirectoryScanner.scanAsync(
             rootPath, maxDepth: 1, visibility: fileVisibility, withinRoot: rootPath)
@@ -29,31 +30,27 @@ public extension EditorState {
 
     private func collectExpandedPaths(_ nodes: [FileNode]) -> Set<String> {
         var paths = Set<String>()
-        for node in nodes {
-            if node.isDirectory && node.isExpanded {
-                paths.insert(node.path)
-                paths.formUnion(collectExpandedPaths(node.children))
-            }
+        for node in nodes where node.isDirectory && node.isExpanded {
+            paths.insert(node.path)
+            paths.formUnion(collectExpandedPaths(node.children))
         }
         return paths
     }
 
     private func restoreExpandedPaths(_ paths: Set<String>, in nodes: inout [FileNode]) {
-        for i in nodes.indices {
-            if nodes[i].isDirectory && paths.contains(nodes[i].path) {
-                if !nodes[i].isExpanded {
-                    FileTreeNavigator.toggleExpand(
-                        in: &nodes, at: nodes[i].path, visibility: fileVisibility,
-                        rootPath: rootPath)
-                }
-                if !nodes[i].children.isEmpty {
-                    restoreExpandedPaths(paths, in: &nodes[i].children)
-                }
+        for i in nodes.indices where nodes[i].isDirectory && paths.contains(nodes[i].path) {
+            if !nodes[i].isExpanded {
+                FileTreeNavigator.toggleExpand(
+                    in: &nodes, at: nodes[i].path, visibility: fileVisibility,
+                    rootPath: rootPath)
+            }
+            if !nodes[i].children.isEmpty {
+                restoreExpandedPaths(paths, in: &nodes[i].children)
             }
         }
     }
 
-    func refreshFlatTree() {
+    public func refreshFlatTree() {
         cachedFlatTree = FileTreeNavigator.flatten(treeNodes)
         // Clamp scroll/selection to valid range
         let maxIndex = max(0, cachedFlatTree.count - 1)
@@ -62,7 +59,7 @@ public extension EditorState {
         prewarmVisibleSyntaxArtifacts()
     }
 
-    func toggleExpand(at index: Int) {
+    public func toggleExpand(at index: Int) {
         let flat = cachedFlatTree
         guard index < flat.count else { return }
         let node = flat[index].node
@@ -72,7 +69,7 @@ public extension EditorState {
         refreshFlatTree()
     }
 
-    func openFile(at index: Int) {
+    public func openFile(at index: Int) {
         let flat = cachedFlatTree
         guard index < flat.count else { return }
         let node = flat[index].node
@@ -82,12 +79,12 @@ public extension EditorState {
         openFilePath(node.path, name: node.name)
     }
 
-    func openFileByPath(_ path: String) {
+    public func openFileByPath(_ path: String) {
         let name = FilePath(path).lastComponent?.string ?? path
         openFilePath(path, name: name)
     }
 
-    func openFilePath(_ path: String, name: String) {
+    public func openFilePath(_ path: String, name: String) {
         // Path traversal protection
         guard SecurePath.isValid(path, root: rootPath) else {
             statusMessage = "Access denied: path outside project root"
@@ -158,11 +155,11 @@ public extension EditorState {
     }
 
     /// Detect language name from file extension.
-    static func detectLanguage(for filename: String) -> String? {
+    public static func detectLanguage(for filename: String) -> String? {
         LanguageHighlighter.detectLanguage(for: filename)
     }
 
-    func saveFile() {
+    public func saveFile() {
         if bufferManager.activeBuffer == nil {
             beginNewFile()
         }
@@ -176,7 +173,7 @@ public extension EditorState {
     }
 
     @discardableResult
-    func writeBufferToDisk(at destinationPath: String) -> Bool {
+    public func writeBufferToDisk(at destinationPath: String) -> Bool {
         guard !readOnly else {
             statusMessage = "Read-only mode"
             return false
@@ -274,44 +271,44 @@ public extension EditorState {
         }
     }
 
-    func writeBufferToDisk() {
+    public func writeBufferToDisk() {
         guard !filePath.isEmpty else { return }
         _ = writeBufferToDisk(at: filePath)
     }
 
-    func closeCurrentTab() {
+    public func closeCurrentTab() {
         guard bufferManager.count > 0 else { return }
         let index = bufferManager.activeIndex
         let closedPath = bufferManager.buffers[index].filePath
         let result = bufferManager.close(at: index)
         switch result {
-        case .promptSave:
-            statusMessage = "Buffer has unsaved changes. Save first (^O) or force close."
-        case .closed:
-            if !closedPath.isEmpty {
-                fileWatcherIntegration?.unwatchClosedFile(closedPath)
-            }
-            // Clamp open files scroll offset after removing a buffer
-            if openFilesScrollOffset > 0 {
-                openFilesScrollOffset = min(openFilesScrollOffset, max(0, bufferManager.count - 1))
-            }
-            if bufferManager.isEmpty {
-                // Reset to empty editor state
-                fileName = ""
-                filePath = ""
-                currentLanguage = nil
-                replaceDocumentText(with: "")
-                textCursor = TextCursor()
-                highlightedLines = [[StyledSpan(text: "", style: .default)]]
-                invalidateHighlightSession()
-                prompt = nil
-                mode = .tree
-                statusMessage = "All buffers closed"
-            } else {
-                restoreStateFromActiveBuffer()
-                refreshHighlights()
-                gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
-            }
+            case .promptSave:
+                statusMessage = "Buffer has unsaved changes. Save first (^O) or force close."
+            case .closed:
+                if !closedPath.isEmpty {
+                    fileWatcherIntegration?.unwatchClosedFile(closedPath)
+                }
+                // Clamp open files scroll offset after removing a buffer
+                if openFilesScrollOffset > 0 {
+                    openFilesScrollOffset = min(openFilesScrollOffset, max(0, bufferManager.count - 1))
+                }
+                if bufferManager.isEmpty {
+                    // Reset to empty editor state
+                    fileName = ""
+                    filePath = ""
+                    currentLanguage = nil
+                    replaceDocumentText(with: "")
+                    textCursor = TextCursor()
+                    highlightedLines = [[StyledSpan(text: "", style: .default)]]
+                    invalidateHighlightSession()
+                    prompt = nil
+                    mode = .tree
+                    statusMessage = "All buffers closed"
+                } else {
+                    restoreStateFromActiveBuffer()
+                    refreshHighlights()
+                    gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
+                }
         }
     }
 
@@ -426,7 +423,7 @@ public extension EditorState {
         schedulePostLoadProcessing(for: buffer, content: content)
     }
 
-    func schedulePostLoadProcessing(for buffer: DocumentBuffer, content: String) {
+    public func schedulePostLoadProcessing(for buffer: DocumentBuffer, content: String) {
         buffer.postOpenProcessingTask?.cancel()
 
         let version = buffer.documentVersion
@@ -478,10 +475,10 @@ public extension EditorState {
 
                 for await result in group {
                     switch result {
-                    case .maxLineWidth(let width):
-                        resolvedMaxLineWidth = width
-                    case .highlightedLines(let lines):
-                        resolvedHighlightedLines = lines
+                        case .maxLineWidth(let width):
+                            resolvedMaxLineWidth = width
+                        case .highlightedLines(let lines):
+                            resolvedHighlightedLines = lines
                     }
                 }
 

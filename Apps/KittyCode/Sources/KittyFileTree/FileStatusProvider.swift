@@ -10,14 +10,14 @@ public enum FileStatus: String, Sendable, Equatable, Hashable {
 
     public var indicator: String {
         switch self {
-        case .modified: return "M"
-        case .added: return "A"
-        case .untracked: return "?"
-        case .deleted: return "D"
-        case .renamed: return "R"
-        case .conflicted: return "!"
-        case .ignored: return "I"
-        case .clean: return ""
+            case .modified: return "M"
+            case .added: return "A"
+            case .untracked: return "?"
+            case .deleted: return "D"
+            case .renamed: return "R"
+            case .conflicted: return "!"
+            case .ignored: return "I"
+            case .clean: return ""
         }
     }
 }
@@ -34,12 +34,12 @@ public enum FileStatusColor: Sendable {
 extension FileStatus {
     public var statusColor: FileStatusColor {
         switch self {
-        case .modified, .renamed: return .modified
-        case .added: return .added
-        case .untracked: return .untracked
-        case .deleted: return .deleted
-        case .conflicted: return .conflicted
-        case .ignored, .clean: return .clean
+            case .modified, .renamed: return .modified
+            case .added: return .added
+            case .untracked: return .untracked
+            case .deleted: return .deleted
+            case .conflicted: return .conflicted
+            case .ignored, .clean: return .clean
         }
     }
 }

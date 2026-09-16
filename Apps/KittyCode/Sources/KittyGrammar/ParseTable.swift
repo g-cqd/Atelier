@@ -50,47 +50,47 @@ public enum Action: Sendable, Equatable, Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(String.self, forKey: .type)
         switch type {
-        case "shift":
-            self = .shift(try container.decode(Int.self, forKey: .state))
-        case "reduce":
-            self = .reduce(
-                ruleIndex: try container.decode(Int.self, forKey: .ruleIndex),
-                count: try container.decode(Int.self, forKey: .count),
-                nonTerminal: try container.decode(String.self, forKey: .nonTerminal)
-            )
-        case "accept":
-            self = .accept
-        case "error":
-            self = .error
-        case "conflict":
-            self = .conflict(try container.decode([Action].self, forKey: .actions))
-        default:
-            throw DecodingError.dataCorruptedError(
-                forKey: .type,
-                in: container,
-                debugDescription: "Unknown Action type: \(type)"
-            )
+            case "shift":
+                self = .shift(try container.decode(Int.self, forKey: .state))
+            case "reduce":
+                self = .reduce(
+                    ruleIndex: try container.decode(Int.self, forKey: .ruleIndex),
+                    count: try container.decode(Int.self, forKey: .count),
+                    nonTerminal: try container.decode(String.self, forKey: .nonTerminal)
+                )
+            case "accept":
+                self = .accept
+            case "error":
+                self = .error
+            case "conflict":
+                self = .conflict(try container.decode([Action].self, forKey: .actions))
+            default:
+                throw DecodingError.dataCorruptedError(
+                    forKey: .type,
+                    in: container,
+                    debugDescription: "Unknown Action type: \(type)"
+                )
         }
     }
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case .shift(let state):
-            try container.encode("shift", forKey: .type)
-            try container.encode(state, forKey: .state)
-        case .reduce(let ruleIndex, let count, let nonTerminal):
-            try container.encode("reduce", forKey: .type)
-            try container.encode(ruleIndex, forKey: .ruleIndex)
-            try container.encode(count, forKey: .count)
-            try container.encode(nonTerminal, forKey: .nonTerminal)
-        case .accept:
-            try container.encode("accept", forKey: .type)
-        case .error:
-            try container.encode("error", forKey: .type)
-        case .conflict(let actions):
-            try container.encode("conflict", forKey: .type)
-            try container.encode(actions, forKey: .actions)
+            case .shift(let state):
+                try container.encode("shift", forKey: .type)
+                try container.encode(state, forKey: .state)
+            case .reduce(let ruleIndex, let count, let nonTerminal):
+                try container.encode("reduce", forKey: .type)
+                try container.encode(ruleIndex, forKey: .ruleIndex)
+                try container.encode(count, forKey: .count)
+                try container.encode(nonTerminal, forKey: .nonTerminal)
+            case .accept:
+                try container.encode("accept", forKey: .type)
+            case .error:
+                try container.encode("error", forKey: .type)
+            case .conflict(let actions):
+                try container.encode("conflict", forKey: .type)
+                try container.encode(actions, forKey: .actions)
         }
     }
 }
@@ -112,29 +112,29 @@ extension CommentPattern: Codable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let kind = try c.decode(String.self, forKey: .kind)
         switch kind {
-        case "line":
-            self = .line(prefix: try c.decode(String.self, forKey: .prefix))
-        case "block":
-            self = .block(
-                open: try c.decode(String.self, forKey: .open),
-                close: try c.decode(String.self, forKey: .close)
-            )
-        default:
-            throw DecodingError.dataCorruptedError(
-                forKey: .kind, in: c, debugDescription: "Unknown CommentPattern kind: \(kind)")
+            case "line":
+                self = .line(prefix: try c.decode(String.self, forKey: .prefix))
+            case "block":
+                self = .block(
+                    open: try c.decode(String.self, forKey: .open),
+                    close: try c.decode(String.self, forKey: .close)
+                )
+            default:
+                throw DecodingError.dataCorruptedError(
+                    forKey: .kind, in: c, debugDescription: "Unknown CommentPattern kind: \(kind)")
         }
     }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case .line(let prefix):
-            try c.encode("line", forKey: .kind)
-            try c.encode(prefix, forKey: .prefix)
-        case .block(let open, let close):
-            try c.encode("block", forKey: .kind)
-            try c.encode(open, forKey: .open)
-            try c.encode(close, forKey: .close)
+            case .line(let prefix):
+                try c.encode("line", forKey: .kind)
+                try c.encode(prefix, forKey: .prefix)
+            case .block(let open, let close):
+                try c.encode("block", forKey: .kind)
+                try c.encode(open, forKey: .open)
+                try c.encode(close, forKey: .close)
         }
     }
 }
@@ -188,7 +188,7 @@ public struct LexState: Sendable, Equatable, Codable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let entries = try container.decode([TransitionEntry].self, forKey: .transitions)
-        self.transitions = entries.map { ($0.lower...$0.upper, $0.target) }
+        self.transitions = entries.map { ($0.lower ... $0.upper, $0.target) }
         self.accepting = try container.decodeIfPresent(Int.self, forKey: .accepting)
     }
 

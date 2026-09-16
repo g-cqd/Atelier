@@ -10,12 +10,11 @@ import Testing
 /// leaf and branch carries its own hash precomputed at construction.
 @Suite
 struct RopeContentHashTests {
-
     @Test
     func `hash is stable across repeated reads without mutation`() {
         let rope = Rope("the quick brown fox jumps over the lazy dog")
         let first = rope.contentHash
-        for _ in 0..<10 {
+        for _ in 0 ..< 10 {
             #expect(rope.contentHash == first)
         }
     }
@@ -79,16 +78,17 @@ struct RopeContentHashTests {
         // surfaces in CI rather than silently in production.
         var content = ""
         content.reserveCapacity(100_000)
-        for _ in 0..<2_000 { content += "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" }
+        for _ in 0 ..< 2_000 { content += "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" }
         let rope = Rope(content)
 
         let start = ContinuousClock.now
         var checksum = 0
-        for _ in 0..<1_000 {
+        for _ in 0 ..< 1_000 {
             checksum &+= rope.contentHash
         }
         let elapsed = start.duration(to: .now)
-        let elapsedMs = Double(elapsed.components.seconds) * 1000
+        let elapsedMs =
+            Double(elapsed.components.seconds) * 1000
             + Double(elapsed.components.attoseconds) / 1e15
         #expect(
             elapsedMs < 10.0,

@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable function_body_length
 /// Decodes SGR mouse events (mode 1006 and 1016).
 ///
 /// Format: `CSI < Cb ; Cx ; Cy M` (press) or `CSI < Cb ; Cx ; Cy m` (release)
@@ -36,89 +38,89 @@ public struct MouseDecoder: Sendable {
         }
 
         switch state {
-        case .ground:
-            if byte == 0x1b {
-                state = .escape
-                return .pending
-            }
-            let invalid = buffer
-            reset()
-            return .invalid(invalid)
-
-        case .escape:
-            if byte == 0x5b {  // [
-                state = .csi
-                return .pending
-            }
-            let invalid = buffer
-            reset()
-            return .invalid(invalid)
-
-        case .csi:
-            if byte == 0x3c {  // <
-                state = .lt
-                return .pending
-            }
-            let invalid = buffer
-            reset()
-            return .invalid(invalid)
-
-        case .lt:
-            if isDigit(byte) {
-                state = .button
-                buttonBits = UInt16(byte - 0x30)
-                return .pending
-            }
-            let invalid = buffer
-            reset()
-            return .invalid(invalid)
-
-        case .button:
-            if isDigit(byte) {
-                guard Self.appendDigit(byte - 0x30, to: &buttonBits, maximum: UInt16.max) else {
-                    return invalidResult()
+            case .ground:
+                if byte == 0x1b {
+                    state = .escape
+                    return .pending
                 }
-                return .pending
-            }
-            if byte == 0x3b {  // ;
-                state = .coordX
-                return .pending
-            }
-            let invalid = buffer
-            reset()
-            return .invalid(invalid)
-
-        case .coordX:
-            if isDigit(byte) {
-                guard Self.appendDigit(byte - 0x30, to: &coordX, maximum: 65_535) else {
-                    return invalidResult()
-                }
-                return .pending
-            }
-            if byte == 0x3b {  // ;
-                state = .coordY
-                return .pending
-            }
-            let invalid = buffer
-            reset()
-            return .invalid(invalid)
-
-        case .coordY:
-            if isDigit(byte) {
-                guard Self.appendDigit(byte - 0x30, to: &coordY, maximum: 65_535) else {
-                    return invalidResult()
-                }
-                return .pending
-            }
-            if byte == 0x4d || byte == 0x6d {  // M (press) or m (release)
-                let isRelease = byte == 0x6d
-                let event = decodeEvent(isRelease: isRelease)
+                let invalid = buffer
                 reset()
-                return .complete(event)
-            }
-            let invalid = buffer
-            reset()
-            return .invalid(invalid)
+                return .invalid(invalid)
+
+            case .escape:
+                if byte == 0x5b {  // [
+                    state = .csi
+                    return .pending
+                }
+                let invalid = buffer
+                reset()
+                return .invalid(invalid)
+
+            case .csi:
+                if byte == 0x3c {  // <
+                    state = .lt
+                    return .pending
+                }
+                let invalid = buffer
+                reset()
+                return .invalid(invalid)
+
+            case .lt:
+                if isDigit(byte) {
+                    state = .button
+                    buttonBits = UInt16(byte - 0x30)
+                    return .pending
+                }
+                let invalid = buffer
+                reset()
+                return .invalid(invalid)
+
+            case .button:
+                if isDigit(byte) {
+                    guard Self.appendDigit(byte - 0x30, to: &buttonBits, maximum: UInt16.max) else {
+                        return invalidResult()
+                    }
+                    return .pending
+                }
+                if byte == 0x3b {  // ;
+                    state = .coordX
+                    return .pending
+                }
+                let invalid = buffer
+                reset()
+                return .invalid(invalid)
+
+            case .coordX:
+                if isDigit(byte) {
+                    guard Self.appendDigit(byte - 0x30, to: &coordX, maximum: 65_535) else {
+                        return invalidResult()
+                    }
+                    return .pending
+                }
+                if byte == 0x3b {  // ;
+                    state = .coordY
+                    return .pending
+                }
+                let invalid = buffer
+                reset()
+                return .invalid(invalid)
+
+            case .coordY:
+                if isDigit(byte) {
+                    guard Self.appendDigit(byte - 0x30, to: &coordY, maximum: 65_535) else {
+                        return invalidResult()
+                    }
+                    return .pending
+                }
+                if byte == 0x4d || byte == 0x6d {  // M (press) or m (release)
+                    let isRelease = byte == 0x6d
+                    let event = decodeEvent(isRelease: isRelease)
+                    reset()
+                    return .complete(event)
+                }
+                let invalid = buffer
+                reset()
+                return .invalid(invalid)
         }
     }
 
@@ -151,20 +153,19 @@ public struct MouseDecoder: Sendable {
         if buttonBits & 8 != 0 { mods.insert(.alt) }
         if buttonBits & 16 != 0 { mods.insert(.ctrl) }
 
-        if pixelMode {
-            return MouseEvent(
-                button: button, modifiers: mods,
-                row: 0, col: 0,
-                pixelX: coordX, pixelY: coordY,
-                kind: kind
-            )
-        } else {
+        guard pixelMode else {
             return MouseEvent(
                 button: button, modifiers: mods,
                 row: coordY, col: coordX,
                 kind: kind
             )
         }
+        return MouseEvent(
+            button: button, modifiers: mods,
+            row: 0, col: 0,
+            pixelX: coordX, pixelY: coordY,
+            kind: kind
+        )
     }
 
     private mutating func reset() {
@@ -191,12 +192,12 @@ public struct MouseDecoder: Sendable {
 
     private func extraButton(from rawButton: UInt16) -> MouseButton {
         switch rawButton {
-        case 0, 2:
-            .button4
-        case 1, 3:
-            .button5
-        default:
-            .button4
+            case 0, 2:
+                .button4
+            case 1, 3:
+                .button5
+            default:
+                .button4
         }
     }
 

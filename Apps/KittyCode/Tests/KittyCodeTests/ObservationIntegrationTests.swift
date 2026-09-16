@@ -13,7 +13,6 @@ import Testing
 @Suite
 @MainActor
 struct ObservationIntegrationTests {
-
     private func makeState() -> EditorState {
         var config = KittyConfig()
         config.activityBar.show = false
@@ -95,13 +94,13 @@ struct ObservationIntegrationTests {
         state.renderClock = clock
         let initial = clock.tick
 
-        state.markLinesDirty(2..<5)
+        state.markLinesDirty(2 ..< 5)
         #expect(clock.tick == initial &+ 1, "first call inserts new lines")
 
-        state.markLinesDirty(2..<5)
+        state.markLinesDirty(2 ..< 5)
         #expect(clock.tick == initial &+ 1, "same range re-marked: no insertion, no advance")
 
-        state.markLinesDirty(10..<11)
+        state.markLinesDirty(10 ..< 11)
         #expect(clock.tick == initial &+ 2, "new line inserted: advance")
     }
 
@@ -125,7 +124,7 @@ struct ObservationIntegrationTests {
             Task { @MainActor in
                 state.markContentAllDirty()
                 state.markChromeDirty()
-                state.markLinesDirty(0..<5)
+                state.markLinesDirty(0 ..< 5)
             }
         }
         #expect(fireCount.withLock { $0 } == 1)

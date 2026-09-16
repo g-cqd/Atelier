@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable function_body_length
 import KittyCodecs
 public import KittyRenderer
 public import KittyWidgets
@@ -13,24 +15,34 @@ public struct ShellLayoutRects {
 }
 
 @MainActor
-public func computeShellLayout(state: EditorState, columns: Int, rows: Int) -> (rects: ShellLayoutRects, focusMap: FocusMap) {
+public func computeShellLayout(state: EditorState, columns: Int, rows: Int) -> (
+    rects: ShellLayoutRects, focusMap: FocusMap
+) {
     let layout = LayoutMetrics(state: state, columns: columns, rows: rows)
     let collector = FocusMapCollector()
 
-    let tabRect: Rect? = layout.showTabRibbon
+    let tabRect: Rect? =
+        layout.showTabRibbon
         ? Rect(x: 0, y: 0, width: columns, height: 1)
         : nil
 
-    let activityBarRect: Rect? = layout.activityBarWidth > 0
+    let activityBarRect: Rect? =
+        layout.activityBarWidth > 0
         ? Rect(x: 0, y: layout.contentStartRow, width: layout.activityBarWidth, height: layout.contentRows)
         : nil
 
-    let sidebarRect: Rect? = layout.sidebarWidth > 0
-        ? Rect(x: layout.activityBarWidth, y: layout.contentStartRow, width: layout.sidebarWidth, height: layout.contentRows)
+    let sidebarRect: Rect? =
+        layout.sidebarWidth > 0
+        ? Rect(
+            x: layout.activityBarWidth, y: layout.contentStartRow, width: layout.sidebarWidth,
+            height: layout.contentRows)
         : nil
 
-    let separatorRect: Rect? = layout.sidebarWidth > 0
-        ? Rect(x: layout.activityBarWidth + layout.sidebarWidth, y: layout.contentStartRow, width: 1, height: layout.contentRows)
+    let separatorRect: Rect? =
+        layout.sidebarWidth > 0
+        ? Rect(
+            x: layout.activityBarWidth + layout.sidebarWidth, y: layout.contentStartRow, width: 1,
+            height: layout.contentRows)
         : nil
 
     let editorRect = Rect(
@@ -43,7 +55,9 @@ public func computeShellLayout(state: EditorState, columns: Int, rows: Int) -> (
     let statusBarRect = Rect(x: 0, y: rows - 1, width: columns, height: 1)
 
     // Build focus map
-    if let r = tabRect { collector.register(.tabRibbon, rect: Rect(x: layout.editorStart, y: r.y, width: layout.editorWidth, height: 1)) }
+    if let r = tabRect {
+        collector.register(.tabRibbon, rect: Rect(x: layout.editorStart, y: r.y, width: layout.editorWidth, height: 1))
+    }
     if let r = activityBarRect { collector.register(.activityBar, rect: r) }
     if let r = sidebarRect {
         if state.activeSidebarPanel == .search {
@@ -133,35 +147,35 @@ public func renderShellLayout(
 
     // Sidebar panel
     var sidebarCursorPos: (row: Int, col: Int)?
-    if (renderChrome || mustRenderSidebar), let sidebarRect = shellRects.sidebar {
+    if renderChrome || mustRenderSidebar, let sidebarRect = shellRects.sidebar {
         switch state.activeSidebarPanel {
-        case .explorer:
-            renderTreePanel(
-                pipeline: pipeline,
-                state: state,
-                treeRect: sidebarRect,
-                colorScheme: colorScheme
-            )
-        case .openDocuments:
-            renderOpenFilesPanel(
-                pipeline: pipeline,
-                state: state,
-                rect: sidebarRect,
-                colorScheme: colorScheme
-            )
-        case .search:
-            sidebarCursorPos = renderSearchPanel(
-                pipeline: pipeline,
-                state: state,
-                rect: sidebarRect,
-                colorScheme: colorScheme
-            )
+            case .explorer:
+                renderTreePanel(
+                    pipeline: pipeline,
+                    state: state,
+                    treeRect: sidebarRect,
+                    colorScheme: colorScheme
+                )
+            case .openDocuments:
+                renderOpenFilesPanel(
+                    pipeline: pipeline,
+                    state: state,
+                    rect: sidebarRect,
+                    colorScheme: colorScheme
+                )
+            case .search:
+                sidebarCursorPos = renderSearchPanel(
+                    pipeline: pipeline,
+                    state: state,
+                    rect: sidebarRect,
+                    colorScheme: colorScheme
+                )
         }
     }
 
     // Separator (decorative, only repainted with chrome)
     if renderChrome, let sepRect = shellRects.separator {
-        for row in sepRect.y..<sepRect.maxY {
+        for row in sepRect.y ..< sepRect.maxY {
             pipeline.buffer.write(
                 "\u{2502}", row: row, col: sepRect.x,
                 style: colorScheme.separator)
@@ -189,7 +203,8 @@ public func renderShellLayout(
             left: statusSegments.0,
             right: statusSegments.1,
             style: colorScheme.statusBar
-        ).render(to: &pipeline.buffer, in: shellRects.statusBar)
+        )
+        .render(to: &pipeline.buffer, in: shellRects.statusBar)
     }
 
     let overlayCursorPos = renderOverlay(

@@ -176,8 +176,9 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
 
     private func setRawModeControlCharacters(on raw: inout termios) {
         withUnsafeMutablePointer(to: &raw.c_cc) { pointer in
-            let controlCharacters = UnsafeMutableRawPointer(pointer).assumingMemoryBound(
-                to: cc_t.self)
+            let controlCharacters = UnsafeMutableRawPointer(pointer)
+                .assumingMemoryBound(
+                    to: cc_t.self)
             controlCharacters[Int(VMIN)] = 1
             controlCharacters[Int(VTIME)] = 0
         }

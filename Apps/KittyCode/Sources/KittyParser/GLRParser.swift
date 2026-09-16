@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable function_body_length
 public import KittyGrammar
 
 /// GLR parser: handles ambiguous grammars by forking on conflict and merging on reduce.
@@ -46,7 +48,7 @@ public final class GLRParser: Sendable {
         guard !nonExtraTokens.isEmpty else {
             // Empty input
             return SyntaxTree(
-                root: SyntaxNode(type: productions.first?.name ?? "source", byteRange: 0..<0),
+                root: SyntaxNode(type: productions.first?.name ?? "source", byteRange: 0 ..< 0),
                 source: source
             )
         }
@@ -80,47 +82,47 @@ public final class GLRParser: Sendable {
             for var stack in stacks {
                 let action = parseTable.actions[stack.state][termIdx]
                 switch action {
-                case .shift(let nextState):
-                    stack.pushNode(
-                        SyntaxNode(
-                            type: token.type,
-                            byteRange: token.byteRange,
-                            pointRange: token.pointRange,
-                            isNamed: false
-                        ))
-                    stack.state = nextState
-                    newStacks.append(stack)
+                    case .shift(let nextState):
+                        stack.pushNode(
+                            SyntaxNode(
+                                type: token.type,
+                                byteRange: token.byteRange,
+                                pointRange: token.pointRange,
+                                isNamed: false
+                            ))
+                        stack.state = nextState
+                        newStacks.append(stack)
 
-                case .conflict(let actions):
-                    for act in actions {
-                        if case .shift(let nextState) = act {
-                            var forked = stack
-                            forked.pushNode(
-                                SyntaxNode(
-                                    type: token.type,
-                                    byteRange: token.byteRange,
-                                    pointRange: token.pointRange,
-                                    isNamed: false
-                                ))
-                            forked.state = nextState
-                            newStacks.append(forked)
+                    case .conflict(let actions):
+                        for act in actions {
+                            if case .shift(let nextState) = act {
+                                var forked = stack
+                                forked.pushNode(
+                                    SyntaxNode(
+                                        type: token.type,
+                                        byteRange: token.byteRange,
+                                        pointRange: token.pointRange,
+                                        isNamed: false
+                                    ))
+                                forked.state = nextState
+                                newStacks.append(forked)
+                            }
                         }
-                    }
 
-                case .accept:
-                    newStacks.append(stack)
+                    case .accept:
+                        newStacks.append(stack)
 
-                case .reduce, .error:
-                    // Error recovery: skip token
-                    var errStack = stack
-                    errStack.pushNode(
-                        SyntaxNode(
-                            type: "ERROR",
-                            byteRange: token.byteRange,
-                            pointRange: token.pointRange,
-                            isError: true
-                        ))
-                    newStacks.append(errStack)
+                    case .reduce, .error:
+                        // Error recovery: skip token
+                        var errStack = stack
+                        errStack.pushNode(
+                            SyntaxNode(
+                                type: "ERROR",
+                                byteRange: token.byteRange,
+                                pointRange: token.pointRange,
+                                isError: true
+                            ))
+                        newStacks.append(errStack)
                 }
             }
 
@@ -176,31 +178,31 @@ public final class GLRParser: Sendable {
                 let action = parseTable.actions[stack.state][termIdx]
 
                 switch action {
-                case .reduce(let ruleIndex, let count, let nonTerminal):
-                    stack = performReduce(
-                        stack: stack, ruleIndex: ruleIndex, count: count, nonTerminal: nonTerminal)
-                    continue reduceLoop
+                    case .reduce(let ruleIndex, let count, let nonTerminal):
+                        stack = performReduce(
+                            stack: stack, ruleIndex: ruleIndex, count: count, nonTerminal: nonTerminal)
+                        continue reduceLoop
 
-                case .conflict(let actions):
-                    // Fork: one stack per reduce action
-                    for act in actions {
-                        if case .reduce(let ri, let c, let nt) = act {
-                            let forked = performReduce(
-                                stack: stack, ruleIndex: ri, count: c, nonTerminal: nt)
-                            result.append(forked)
+                    case .conflict(let actions):
+                        // Fork: one stack per reduce action
+                        for act in actions {
+                            if case .reduce(let ri, let c, let nt) = act {
+                                let forked = performReduce(
+                                    stack: stack, ruleIndex: ri, count: c, nonTerminal: nt)
+                                result.append(forked)
+                            }
                         }
-                    }
-                    if actions.contains(where: {
-                        if case .shift = $0 { return true }
-                        return false
-                    }) {
-                        result.append(stack)
-                    }
-                    shouldAppendStack = false
-                    break reduceLoop
+                        if actions.contains(where: {
+                            if case .shift = $0 { return true }
+                            return false
+                        }) {
+                            result.append(stack)
+                        }
+                        shouldAppendStack = false
+                        break reduceLoop
 
-                default:
-                    break reduceLoop
+                    default:
+                        break reduceLoop
                 }
             }
 
@@ -231,8 +233,8 @@ public final class GLRParser: Sendable {
         let node = SyntaxNode(
             type: nonTerminal,
             children: children,
-            byteRange: byteStart..<byteEnd,
-            pointRange: pointStart..<pointEnd,
+            byteRange: byteStart ..< byteEnd,
+            pointRange: pointStart ..< pointEnd,
             fields: nodeFields,
             isNamed: true
         )
@@ -262,8 +264,8 @@ public final class GLRParser: Sendable {
         return SyntaxNode(
             type: productions.first?.name ?? "source",
             children: stack.nodes,
-            byteRange: 0..<byteEnd,
-            pointRange: .zero..<Point(row: 0, column: byteEnd),
+            byteRange: 0 ..< byteEnd,
+            pointRange: .zero ..< Point(row: 0, column: byteEnd),
             isNamed: true
         )
     }

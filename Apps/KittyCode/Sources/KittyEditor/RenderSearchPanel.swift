@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable function_body_length
 import Foundation
 import KittyCodecs
 public import KittyRenderer
@@ -140,7 +142,7 @@ private func renderInFileResults(
     let matches = search.matches
     let lines = state.fileContent
 
-    for i in 0..<availRows {
+    for i in 0 ..< availRows {
         let matchIdx = scrollOffset + i
         guard matchIdx < matches.count else { break }
 
@@ -158,7 +160,8 @@ private func renderInFileResults(
             snippet = ""
         }
 
-        let isSelected = state.searchPanelFocus == .resultsList
+        let isSelected =
+            state.searchPanelFocus == .resultsList
             && matchIdx == state.searchPanelSelectedIndex
         let isActive = matchIdx == search.activeMatchIndex
         let rowStyle: Style
@@ -198,7 +201,7 @@ private func renderInFileResults(
                     let chars = Array(trimmed)
                     let startIdx = min(highlightStart, chars.count)
                     let endIdx = min(highlightEnd, chars.count)
-                    let matchText = String(chars[startIdx..<endIdx])
+                    let matchText = String(chars[startIdx ..< endIdx])
                     pipeline.buffer.write(
                         matchText, row: displayRow, col: snippetCol + highlightStart, style: matchStyle)
                 }
@@ -235,7 +238,8 @@ private func renderWorkspaceResults(
         if flatIndex >= scrollOffset {
             let displayRow = startRow + displayedRows
             let headerText = "\(fileResult.fileName) (\(fileResult.matches.count))"
-            let isSelected = state.searchPanelFocus == .resultsList
+            let isSelected =
+                state.searchPanelFocus == .resultsList
                 && flatIndex == state.searchPanelSelectedIndex
             let headerStyle = isSelected ? colorScheme.treeSelected : colorScheme.treeDir
             if isSelected {
@@ -264,7 +268,8 @@ private func renderWorkspaceResults(
                     snippet = ""
                 }
 
-                let isSelected = state.searchPanelFocus == .resultsList
+                let isSelected =
+                    state.searchPanelFocus == .resultsList
                     && flatIndex == state.searchPanelSelectedIndex
                 let rowStyle = isSelected ? colorScheme.treeSelected : colorScheme.treeBg
 
@@ -291,12 +296,13 @@ private func renderWorkspaceResults(
                         let hStart = max(0, mStart)
                         let hEnd = min(snippetWidth, mEnd)
                         if hStart < hEnd {
-                            let matchStyle = isSelected
+                            let matchStyle =
+                                isSelected
                                 ? colorScheme.activeSearchMatch : colorScheme.searchMatch
                             let chars = Array(trimmed)
                             let sIdx = min(hStart, chars.count)
                             let eIdx = min(hEnd, chars.count)
-                            let matchText = String(chars[sIdx..<eIdx])
+                            let matchText = String(chars[sIdx ..< eIdx])
                             pipeline.buffer.write(
                                 matchText, row: displayRow, col: snippetCol + hStart,
                                 style: matchStyle)

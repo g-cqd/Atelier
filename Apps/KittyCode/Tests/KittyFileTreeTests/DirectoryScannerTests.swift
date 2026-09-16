@@ -5,7 +5,6 @@ import Testing
 
 @Suite(.tags(.scanner))
 struct DirectoryScannerTests {
-
     // MARK: Basic scanning
 
     @Test func `scan returns entries for each visible file in directory`() throws {
@@ -64,7 +63,7 @@ struct DirectoryScannerTests {
 
     @Test func `scan respects maxEntries limit`() throws {
         let tree = try TempTree()
-        for i in 1...10 {
+        for i in 1 ... 10 {
             try tree.createFile(named: "file\(i).txt")
         }
 
@@ -180,8 +179,9 @@ struct DirectoryScannerTests {
         try FileManager.default.createDirectory(
             atPath: siblingPath, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(atPath: siblingPath) }
-        try "x".write(
-            toFile: siblingPath + "/secret.txt", atomically: true, encoding: .utf8)
+        try "x"
+            .write(
+                toFile: siblingPath + "/secret.txt", atomically: true, encoding: .utf8)
 
         // Place a symlink inside the workspace pointing at the sibling.
         let linkPath = tree.root + "/link"
@@ -209,8 +209,9 @@ struct DirectoryScannerTests {
         try FileManager.default.createDirectory(
             atPath: escapeTarget, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(atPath: escapeTarget) }
-        try "x".write(
-            toFile: escapeTarget + "/leaked.txt", atomically: true, encoding: .utf8)
+        try "x"
+            .write(
+                toFile: escapeTarget + "/leaked.txt", atomically: true, encoding: .utf8)
 
         let deepLink = tree.root + "/level1/level2/escape"
         try FileManager.default.createSymbolicLink(

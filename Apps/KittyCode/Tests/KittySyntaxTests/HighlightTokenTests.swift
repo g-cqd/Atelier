@@ -12,19 +12,19 @@ struct HighlightTokenTests {
     func `buildTokens produces tokens from query matches`() {
         let highlighter = Highlighter(theme: .monokai)
 
-        let node = SyntaxNode(type: "keyword", byteRange: 0..<3, isNamed: true)
-        let root = SyntaxNode(type: "source", children: [node], byteRange: 0..<7)
+        let node = SyntaxNode(type: "keyword", byteRange: 0 ..< 3, isNamed: true)
+        let root = SyntaxNode(type: "source", children: [node], byteRange: 0 ..< 7)
         let tree = SyntaxTree(root: root, source: "let x =")
 
         let query = Query(patterns: [
-            .nodeMatch(type: "keyword", children: [], capture: "keyword"),
+            .nodeMatch(type: "keyword", children: [], capture: "keyword")
         ])
         let matches = QueryMatcher.execute(query: query, tree: tree)
         let tokens = highlighter.buildTokens(matches: matches, layer: .structural)
 
         #expect(tokens.count == 1)
         #expect(tokens[0].role == .keyword)
-        #expect(tokens[0].byteRange == 0..<3)
+        #expect(tokens[0].byteRange == 0 ..< 3)
         #expect(tokens[0].layer == .structural)
     }
 
@@ -35,7 +35,7 @@ struct HighlightTokenTests {
         let resolver = RoleBasedThemeResolver(theme: theme)
 
         let tokens = [
-            HighlightToken(byteRange: 0..<3, role: .keyword, layer: .structural),
+            HighlightToken(byteRange: 0 ..< 3, role: .keyword, layer: .structural)
         ]
 
         let spans = highlighter.tokensToSpans(
@@ -77,9 +77,9 @@ struct HighlightTokenTests {
         theme.setStyle(keyStyle, for: "string.special")
         theme.setStyle(stringStyle, for: "string")
 
-        let stringNode = SyntaxNode(type: "string", byteRange: 0..<6, isNamed: true)
+        let stringNode = SyntaxNode(type: "string", byteRange: 0 ..< 6, isNamed: true)
         let tree = SyntaxTree(
-            root: SyntaxNode(type: "document", children: [stringNode], byteRange: 0..<6),
+            root: SyntaxNode(type: "document", children: [stringNode], byteRange: 0 ..< 6),
             source: "\"name\""
         )
 
@@ -87,12 +87,13 @@ struct HighlightTokenTests {
         // Pattern 1 = string (later, should lose)
         let query = Query(patterns: [
             .nodeMatch(type: "string", children: [], capture: "string.special.key"),
-            .nodeMatch(type: "string", children: [], capture: "string"),
+            .nodeMatch(type: "string", children: [], capture: "string")
         ])
 
         // Span path
-        let spanResult = Highlighter(theme: theme).highlight(
-            source: tree.source, tree: tree, query: query)
+        let spanResult = Highlighter(theme: theme)
+            .highlight(
+                source: tree.source, tree: tree, query: query)
 
         // Token path
         let highlighter = Highlighter(theme: theme)

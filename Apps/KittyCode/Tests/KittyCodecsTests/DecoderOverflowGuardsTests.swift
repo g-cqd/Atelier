@@ -10,7 +10,6 @@ import Testing
 /// parsing correctly afterward.
 @Suite
 struct DecoderOverflowGuardsTests {
-
     @Test
     func `KeyboardDecoder rejects a never-terminating CSI sequence longer than the cap`() {
         var decoder = KeyboardDecoder()
@@ -24,7 +23,7 @@ struct DecoderOverflowGuardsTests {
             #expect(lastResult == .pending)
         }
         var sawInvalid = false
-        for _ in 0..<5_000 {
+        for _ in 0 ..< 5_000 {
             lastResult = decoder.feed(0x30)  // '0'
             if case .invalid = lastResult {
                 sawInvalid = true
@@ -49,7 +48,7 @@ struct DecoderOverflowGuardsTests {
             #expect(decoder.feed(byte) == .pending)
         }
         var sawInvalid = false
-        for _ in 0..<1_000 {
+        for _ in 0 ..< 1_000 {
             let colon = decoder.feed(0x3a)  // ':'
             if case .invalid = colon {
                 sawInvalid = true
@@ -76,13 +75,13 @@ struct DecoderOverflowGuardsTests {
             0x3b,  // ; (start modifiers)
             0x31,  // 1
             0x3b,  // ; (start textCodepoints)
-            0x31,  // 1 (first codepoint)
+            0x31  // 1 (first codepoint)
         ]
         for byte in header {
             #expect(decoder.feed(byte) == .pending)
         }
         var sawInvalid = false
-        for _ in 0..<2_000 {
+        for _ in 0 ..< 2_000 {
             let colon = decoder.feed(0x3a)
             if case .invalid = colon {
                 sawInvalid = true
@@ -121,7 +120,7 @@ struct DecoderOverflowGuardsTests {
         // we don't blow past the buffer cap and crash; cycle the decoder
         // through many short failures to assert the cap holds across many
         // resets.
-        for _ in 0..<500 {
+        for _ in 0 ..< 500 {
             let r = decoder.feed(0x30)  // '0'
             if case .invalid = r {
                 sawInvalid = true

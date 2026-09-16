@@ -23,29 +23,29 @@ public struct EditorPrompt: Sendable, Equatable {
 
     public var isEditable: Bool {
         switch kind {
-        case .confirmDelete, .confirmReplaceAll:
-            return false
-        case .savePath, .createFile, .createDirectory, .rename, .duplicate, .move:
-            return true
+            case .confirmDelete, .confirmReplaceAll:
+                return false
+            case .savePath, .createFile, .createDirectory, .rename, .duplicate, .move:
+                return true
         }
     }
 
     public var submitLabel: String {
         switch kind {
-        case .savePath:
-            return "Save"
-        case .createFile, .createDirectory:
-            return "Create"
-        case .rename:
-            return "Rename"
-        case .duplicate:
-            return "Duplicate"
-        case .move:
-            return "Move"
-        case .confirmDelete:
-            return "Delete"
-        case .confirmReplaceAll:
-            return "Replace"
+            case .savePath:
+                return "Save"
+            case .createFile, .createDirectory:
+                return "Create"
+            case .rename:
+                return "Rename"
+            case .duplicate:
+                return "Duplicate"
+            case .move:
+                return "Move"
+            case .confirmDelete:
+                return "Delete"
+            case .confirmReplaceAll:
+                return "Replace"
         }
     }
 
@@ -57,8 +57,8 @@ public struct EditorPrompt: Sendable, Equatable {
     }
 }
 
-public extension EditorState {
-    var displayedStatusMessage: String {
+extension EditorState {
+    public var displayedStatusMessage: String {
         if let prompt {
             return prompt.displayText
         }
@@ -68,7 +68,7 @@ public extension EditorState {
         return statusMessage
     }
 
-    var promptCursorOffset: Int? {
+    public var promptCursorOffset: Int? {
         if let prompt {
             return prompt.isEditable ? prompt.displayText.count : nil
         }
@@ -78,7 +78,7 @@ public extension EditorState {
         return nil
     }
 
-    func beginNewFile() {
+    public func beginNewFile() {
         prompt = nil
         contextMenu = nil
         saveStateToActiveBuffer()
@@ -100,7 +100,7 @@ public extension EditorState {
         statusMessage = "New file | \(resolver.openedStatusHints())"
     }
 
-    func beginSavePrompt(suggestedPath: String? = nil) {
+    public func beginSavePrompt(suggestedPath: String? = nil) {
         if bufferManager.activeBuffer == nil {
             beginNewFile()
         }
@@ -113,7 +113,7 @@ public extension EditorState {
         )
     }
 
-    func beginCreateFilePrompt(in directory: String) {
+    public func beginCreateFilePrompt(in directory: String) {
         contextMenu = nil
         prompt = EditorPrompt(
             kind: .createFile(inDirectory: directory),
@@ -122,7 +122,7 @@ public extension EditorState {
         )
     }
 
-    func beginCreateDirectoryPrompt(in directory: String) {
+    public func beginCreateDirectoryPrompt(in directory: String) {
         contextMenu = nil
         prompt = EditorPrompt(
             kind: .createDirectory(inDirectory: directory),
@@ -131,7 +131,7 @@ public extension EditorState {
         )
     }
 
-    func beginRenamePrompt(for path: String) {
+    public func beginRenamePrompt(for path: String) {
         contextMenu = nil
         prompt = EditorPrompt(
             kind: .rename(path: path),
@@ -140,7 +140,7 @@ public extension EditorState {
         )
     }
 
-    func beginDuplicatePrompt(for path: String) {
+    public func beginDuplicatePrompt(for path: String) {
         contextMenu = nil
         prompt = EditorPrompt(
             kind: .duplicate(path: path),
@@ -149,7 +149,7 @@ public extension EditorState {
         )
     }
 
-    func beginMovePrompt(for path: String) {
+    public func beginMovePrompt(for path: String) {
         contextMenu = nil
         prompt = EditorPrompt(
             kind: .move(path: path),
@@ -158,7 +158,7 @@ public extension EditorState {
         )
     }
 
-    func beginDeletePrompt(for path: String) {
+    public func beginDeletePrompt(for path: String) {
         contextMenu = nil
         prompt = EditorPrompt(
             kind: .confirmDelete(path: path),
@@ -167,119 +167,119 @@ public extension EditorState {
         )
     }
 
-    func confirmPrompt() {
+    public func confirmPrompt() {
         guard let prompt else { return }
         if commit(prompt: prompt) {
             self.prompt = nil
         }
     }
 
-    func cancelPrompt() {
+    public func cancelPrompt() {
         prompt = nil
         statusMessage = "Canceled"
     }
 
-    func handlePromptKey(_ key: KeyEvent) -> Bool {
+    public func handlePromptKey(_ key: KeyEvent) -> Bool {
         guard var prompt else { return false }
 
         switch key.keyCode {
-        case Key.enter.rawValue, Key.enterAlt.rawValue:
-            if commit(prompt: prompt) {
+            case Key.enter.rawValue, Key.enterAlt.rawValue:
+                if commit(prompt: prompt) {
+                    self.prompt = nil
+                }
+                return true
+            case AsciiKey.escape:
                 self.prompt = nil
-            }
-            return true
-        case AsciiKey.escape:
-            self.prompt = nil
-            statusMessage = "Canceled"
-            return true
-        case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
-            guard prompt.isEditable else { return true }
-            if !prompt.input.isEmpty {
-                prompt.input.removeLast()
-            }
-            prompt.message = nil
-            self.prompt = prompt
-            return true
-        default:
-            guard prompt.isEditable else { return true }
-            let insertedText = promptText(for: key)
-            guard !insertedText.isEmpty else { return true }
-            prompt.input += insertedText
-            prompt.message = nil
-            self.prompt = prompt
-            return true
+                statusMessage = "Canceled"
+                return true
+            case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
+                guard prompt.isEditable else { return true }
+                if !prompt.input.isEmpty {
+                    prompt.input.removeLast()
+                }
+                prompt.message = nil
+                self.prompt = prompt
+                return true
+            default:
+                guard prompt.isEditable else { return true }
+                let insertedText = promptText(for: key)
+                guard !insertedText.isEmpty else { return true }
+                prompt.input += insertedText
+                prompt.message = nil
+                self.prompt = prompt
+                return true
         }
     }
 
     private func commit(prompt: EditorPrompt) -> Bool {
         switch prompt.kind {
-        case .savePath:
-            let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmedPath.isEmpty else {
-                self.prompt = EditorPrompt(
-                    kind: prompt.kind,
-                    promptText: prompt.promptText,
-                    input: prompt.input,
-                    message: "Path required"
-                )
-                return false
-            }
-            let saveSucceeded = writeBufferToDisk(at: resolvePromptPath(trimmedPath))
-            if !saveSucceeded {
-                self.prompt = EditorPrompt(
-                    kind: prompt.kind,
-                    promptText: prompt.promptText,
-                    input: prompt.input,
-                    message: statusMessage
-                )
-            }
-            return saveSucceeded
-        case .createFile(let directory):
-            let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
-            return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
-                await self.createTreeFile(
-                    at: self.resolvePromptPath(trimmedPath), suggestedDirectory: directory)
-            }
-        case .createDirectory(let directory):
-            let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
-            return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
-                await self.createTreeDirectory(
-                    at: self.resolvePromptPath(trimmedPath), suggestedDirectory: directory)
-            }
-        case .rename(let path):
-            let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
-            return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
-                await self.renameTreeItem(from: path, to: self.resolvePromptPath(trimmedPath))
-            }
-        case .duplicate(let path):
-            let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
-            return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
-                await self.duplicateTreeItem(at: path, to: self.resolvePromptPath(trimmedPath))
-            }
-        case .move(let path):
-            let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
-            return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
-                await self.moveTreeItem(from: path, to: self.resolvePromptPath(trimmedPath))
-            }
-        case .confirmDelete(let path):
-            Task { @MainActor in
-                if !(await deleteTreeItem(at: path)) {
+            case .savePath:
+                let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmedPath.isEmpty else {
                     self.prompt = EditorPrompt(
                         kind: prompt.kind,
                         promptText: prompt.promptText,
                         input: prompt.input,
-                        message: self.statusMessage
+                        message: "Path required"
                     )
-                } else {
-                    self.prompt = nil
+                    return false
                 }
-            }
-            return false
+                let saveSucceeded = writeBufferToDisk(at: resolvePromptPath(trimmedPath))
+                if !saveSucceeded {
+                    self.prompt = EditorPrompt(
+                        kind: prompt.kind,
+                        promptText: prompt.promptText,
+                        input: prompt.input,
+                        message: statusMessage
+                    )
+                }
+                return saveSucceeded
+            case .createFile(let directory):
+                let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
+                return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
+                    await self.createTreeFile(
+                        at: self.resolvePromptPath(trimmedPath), suggestedDirectory: directory)
+                }
+            case .createDirectory(let directory):
+                let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
+                return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
+                    await self.createTreeDirectory(
+                        at: self.resolvePromptPath(trimmedPath), suggestedDirectory: directory)
+                }
+            case .rename(let path):
+                let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
+                return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
+                    await self.renameTreeItem(from: path, to: self.resolvePromptPath(trimmedPath))
+                }
+            case .duplicate(let path):
+                let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
+                return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
+                    await self.duplicateTreeItem(at: path, to: self.resolvePromptPath(trimmedPath))
+                }
+            case .move(let path):
+                let trimmedPath = prompt.input.trimmingCharacters(in: .whitespacesAndNewlines)
+                return commitTreePathPrompt(prompt, trimmedPath: trimmedPath) {
+                    await self.moveTreeItem(from: path, to: self.resolvePromptPath(trimmedPath))
+                }
+            case .confirmDelete(let path):
+                Task { @MainActor in
+                    if !(await deleteTreeItem(at: path)) {
+                        self.prompt = EditorPrompt(
+                            kind: prompt.kind,
+                            promptText: prompt.promptText,
+                            input: prompt.input,
+                            message: self.statusMessage
+                        )
+                    } else {
+                        self.prompt = nil
+                    }
+                }
+                return false
 
-        case .confirmReplaceAll:
-            // Perform workspace-wide replace
-            performWorkspaceReplaceAll()
-            return true
+            case .confirmReplaceAll:
+                // Perform workspace-wide replace
+                performWorkspaceReplaceAll()
+                return true
         }
     }
 
@@ -326,7 +326,7 @@ public extension EditorState {
         return relativePath.hasSuffix("/") ? relativePath : relativePath + "/"
     }
 
-    func relativePathForPrompt(_ path: String) -> String {
+    public func relativePathForPrompt(_ path: String) -> String {
         let rootPrefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
         if path.hasPrefix(rootPrefix) {
             return String(path.dropFirst(rootPrefix.count))
@@ -370,7 +370,7 @@ public extension EditorState {
         return relativePath.hasSuffix("/") ? relativePath : relativePath + "/"
     }
 
-    func performWorkspaceReplaceAll() {
+    public func performWorkspaceReplaceAll() {
         guard let search = inFileSearch,
             let pattern = search.pattern,
             !workspaceSearchResults.isEmpty
@@ -380,9 +380,7 @@ public extension EditorState {
         var filesChanged = 0
         let replacement = search.replaceText
 
-        for fileResult in workspaceSearchResults {
-            guard !fileResult.matches.isEmpty else { continue }
-
+        for fileResult in workspaceSearchResults where !fileResult.matches.isEmpty {
             // Check if file is in an open buffer
             if let bufferIdx = bufferManager.bufferIndex(forPath: fileResult.filePath) {
                 let buffer = bufferManager.buffers[bufferIdx]
@@ -407,9 +405,11 @@ public extension EditorState {
                     let content = String(data: data, encoding: .utf8)
                 else { continue }
 
-                let lines = content.split(
-                    separator: "\n", omittingEmptySubsequences: false
-                ).map(String.init)
+                let lines =
+                    content.split(
+                        separator: "\n", omittingEmptySubsequences: false
+                    )
+                    .map(String.init)
                 let (newLines, count) = applyReplacements(
                     to: lines, matches: fileResult.matches,
                     pattern: pattern, replacement: replacement)

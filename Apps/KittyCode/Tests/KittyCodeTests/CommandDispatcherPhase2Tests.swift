@@ -9,7 +9,6 @@ import Testing
 @Suite
 @MainActor
 struct CommandDispatcherPhase2Tests {
-
     private func makeSUT(
         keybindingMode: KittyConfig.KeybindingMode = .nano,
         columns: Int = 80,

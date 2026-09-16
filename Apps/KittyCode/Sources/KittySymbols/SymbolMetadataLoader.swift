@@ -8,7 +8,7 @@ struct SymbolMetadataLoader {
     }
 
     func loadFrameworkMetadata(from bundleURL: URL) throws -> Metadata {
-        return Metadata(
+        Metadata(
             searchTermsByName: (try? loadStringArrayDictionary(
                 at: bundleURL.appending(path: "symbol_search.plist"))) ?? [:],
             categoriesByName: (try? loadStringArrayDictionary(

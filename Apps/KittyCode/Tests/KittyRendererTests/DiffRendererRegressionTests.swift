@@ -63,11 +63,10 @@ struct DiffRendererRegressionTests {
         // Should contain the wide character's UTF-8 encoding
         let wideCharBytes = Array("界".utf8)
         var found = false
-        for i in 0..<(output.count - wideCharBytes.count + 1) {
-            if Array(output[i..<(i + wideCharBytes.count)]) == wideCharBytes {
-                found = true
-                break
-            }
+        for i in 0 ..< (output.count - wideCharBytes.count + 1)
+        where Array(output[i ..< (i + wideCharBytes.count)]) == wideCharBytes {
+            found = true
+            break
         }
         #expect(found, "Wide character should be emitted")
         #expect(output.contains(0x41), "Narrow 'A' after wide char should be emitted")

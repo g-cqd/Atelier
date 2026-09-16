@@ -87,7 +87,7 @@ public struct TabRibbon: View, Sendable {
 
         let rightBound = hasRightOverflow ? maxCol - 1 : maxCol
 
-        for i in scrollOffset..<tabs.count {
+        for i in scrollOffset ..< tabs.count {
             guard col < rightBound else { break }
             let tab = tabs[i]
             let isActive = (i == activeIndex)
@@ -128,7 +128,7 @@ public struct TabRibbon: View, Sendable {
 
         var col = ribbonX
         if scrollOffset > 0 { col += 1 }  // skip left overflow indicator
-        for i in scrollOffset..<tabs.count {
+        for i in scrollOffset ..< tabs.count {
             let tabWidth = tabLabelWidth(at: i)
 
             if clickCol >= col && clickCol < min(col + tabWidth, rightBound) {
@@ -172,9 +172,10 @@ public struct TabRibbon: View, Sendable {
             let reserveLeft = offset > 0 ? 1 : 0
             let reserveRight = target < tabs.count - 1 ? 1 : 0
             let availableWidth = max(0, ribbonWidth - reserveLeft - reserveRight)
-            let requiredWidth = (offset...target).reduce(into: 0) { total, index in
-                total += tabLabelWidth(at: index)
-            }
+            let requiredWidth = (offset ... target)
+                .reduce(into: 0) { total, index in
+                    total += tabLabelWidth(at: index)
+                }
             if requiredWidth <= availableWidth {
                 break
             }
@@ -188,7 +189,7 @@ public struct TabRibbon: View, Sendable {
     public func tabsExtendBeyond(ribbonWidth: Int) -> Bool {
         let availableWidth = max(0, ribbonWidth - (scrollOffset > 0 ? 1 : 0))
         var width = 0
-        for i in scrollOffset..<tabs.count {
+        for i in scrollOffset ..< tabs.count {
             width += tabLabelWidth(at: i)
             if width > availableWidth { return true }
         }

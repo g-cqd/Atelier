@@ -152,7 +152,8 @@ public final class RenderPipeline {
         // This physically scrolls the terminal display, then shifts the front
         // buffer to match, so DiffRenderer only emits the delta.
         if let hint = scrollHint, hint.delta != 0, hint.regionHeight > 0,
-            hint.delta.magnitude < UInt(hint.regionHeight) {
+            hint.delta.magnitude < UInt(hint.regionHeight)
+        {
             let top1 = hint.regionTop + 1  // 1-based
             let bottom1 = hint.regionTop + hint.regionHeight  // 1-based inclusive
             KittySequences.appendSetScrollRegion(top: top1, bottom: bottom1, to: &outputBuffer)
@@ -188,9 +189,9 @@ public final class RenderPipeline {
             // from back so DiffRenderer will re-emit it.
             let cols = back.columns
             let regionEnd = hint.regionTop + hint.regionHeight
-            for row in hint.regionTop..<regionEnd {
+            for row in hint.regionTop ..< regionEnd {
                 let base = row &* cols
-                for col in 0..<cols {
+                for col in 0 ..< cols {
                     let idx = base &+ col
                     if front.cells[idx] != back.cells[idx] {
                         back.dirty.mark(idx)

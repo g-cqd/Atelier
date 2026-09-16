@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable function_parameter_count
 import KittyCodecs
 import KittyFileTree
 import KittyGit
@@ -106,11 +108,11 @@ private func activeGutterDecorations(
 
 private func gutterSymbol(for color: FileStatusColor) -> Character {
     switch color {
-    case .added: return "+"
-    case .modified: return "~"
-    case .untracked: return "?"
-    case .deleted: return "-"
-    case .conflicted, .clean: return "!"
+        case .added: return "+"
+        case .modified: return "~"
+        case .untracked: return "?"
+        case .deleted: return "-"
+        case .conflicted, .clean: return "!"
     }
 }
 
@@ -129,41 +131,40 @@ private func activeHighlights(
             if end.col > start.col {
                 highlights[start.row] = [
                     TextHighlight(
-                        range: start.col...end.col - 1, role: .userSelection, style: style)
+                        range: start.col ... end.col - 1, role: .userSelection, style: style)
                 ]
             }
         } else {
             let firstLineLength = state.fileLine(at: start.row).count
             highlights[start.row] = [
                 TextHighlight(
-                    range: start.col...firstLineLength, role: .userSelection, style: style)
+                    range: start.col ... firstLineLength, role: .userSelection, style: style)
             ]
 
-            for row in (start.row + 1)..<end.row {
+            for row in (start.row + 1) ..< end.row {
                 let lineLength = state.fileLine(at: row).count
                 highlights[row] = [
-                    TextHighlight(range: 0...lineLength, role: .userSelection, style: style)
+                    TextHighlight(range: 0 ... lineLength, role: .userSelection, style: style)
                 ]
             }
 
             if end.row > start.row && end.col > 0 {
                 highlights[end.row] = [
-                    TextHighlight(range: 0...end.col - 1, role: .userSelection, style: style)
+                    TextHighlight(range: 0 ... end.col - 1, role: .userSelection, style: style)
                 ]
             }
         }
     }
 
     if let search = state.inFileSearch {
-        for (index, match) in search.matches.enumerated() {
-            guard match.colEnd > match.colStart else { continue }
+        for (index, match) in search.matches.enumerated() where match.colEnd > match.colStart {
             let role: TextHighlight.Role =
                 index == search.activeMatchIndex ? .activeSearchMatch : .searchMatch
             let style =
                 index == search.activeMatchIndex
                 ? colorScheme.activeSearchMatch : colorScheme.searchMatch
             let highlight = TextHighlight(
-                range: match.colStart...(match.colEnd - 1), role: role, style: style)
+                range: match.colStart ... (match.colEnd - 1), role: role, style: style)
             highlights[match.row, default: []].append(highlight)
         }
     }
@@ -175,9 +176,9 @@ private func selectionVisibility(
     from config: KittyConfig.WhitespaceVisibility
 ) -> WhitespaceRenderer.SelectionVisibility {
     switch config {
-    case .none: return .none
-    case .indentation: return .indentation
-    case .all: return .all
-    case .boundary: return .boundary
+        case .none: return .none
+        case .indentation: return .indentation
+        case .all: return .all
+        case .boundary: return .boundary
     }
 }

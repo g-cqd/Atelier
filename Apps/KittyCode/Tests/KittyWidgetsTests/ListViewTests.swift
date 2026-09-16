@@ -26,7 +26,7 @@ struct ListViewTests {
         var buffer = makeSUT()
         let items = [
             ListView.Item(label: "alpha"),
-            ListView.Item(label: "beta"),
+            ListView.Item(label: "beta")
         ]
         let style = ListView.ListViewStyle(
             normalStyle: Style(fg: .rgb(r: 100, g: 100, b: 100)),
@@ -45,7 +45,7 @@ struct ListViewTests {
         let items = [ListView.Item(label: "file.txt", isDirty: true)]
         let list = ListView(items: items, style: ListView.ListViewStyle())
         list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 5))
-        let rowChars = (0..<20).map { buffer[0, $0].character }
+        let rowChars = (0 ..< 20).map { buffer[0, $0].character }
         let rowText = String(rowChars)
         #expect(rowText.contains("\u{25CF}"))
     }
@@ -59,7 +59,7 @@ struct ListViewTests {
         let list = ListView(items: items, style: ListView.ListViewStyle())
         list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 30, height: 5))
         // Find the M character and check its style
-        let mCol = (0..<30).first { buffer[0, $0].character == "M" }
+        let mCol = (0 ..< 30).first { buffer[0, $0].character == "M" }
         #expect(mCol != nil)
         if let col = mCol {
             #expect(buffer[0, col].style.fg == .rgb(r: 255, g: 0, b: 0))
@@ -68,11 +68,11 @@ struct ListViewTests {
 
     @Test func `scroll offset shifts visible items`() {
         var buffer = makeSUT(rows: 2)
-        let items = (0..<5).map { ListView.Item(label: "item\($0)") }
+        let items = (0 ..< 5).map { ListView.Item(label: "item\($0)") }
         let list = ListView(
             items: items, selectedIndex: 3, scrollOffset: 2, style: ListView.ListViewStyle())
         list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 2))
-        let row0Chars = (0..<20).map { buffer[0, $0].character }
+        let row0Chars = (0 ..< 20).map { buffer[0, $0].character }
         let row0Text = String(row0Chars).trimmingCharacters(in: .whitespaces)
         #expect(row0Text.contains("item2"))
     }
@@ -82,7 +82,7 @@ struct ListViewTests {
         let items = [ListView.Item(label: "test.txt", icon: "F")]
         let list = ListView(items: items, style: ListView.ListViewStyle())
         list.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 5))
-        let rowChars = (0..<20).map { buffer[0, $0].character }
+        let rowChars = (0 ..< 20).map { buffer[0, $0].character }
         let rowText = String(rowChars)
         #expect(rowText.contains("F"))
         #expect(rowText.contains("test.txt"))

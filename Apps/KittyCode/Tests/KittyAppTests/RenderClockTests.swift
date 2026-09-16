@@ -7,7 +7,6 @@ import Testing
 @Suite
 @MainActor
 struct RenderClockTests {
-
     @Test
     func `advance increments tick`() {
         let clock = RenderClock()

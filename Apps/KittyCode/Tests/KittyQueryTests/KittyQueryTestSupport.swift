@@ -31,8 +31,7 @@ func requireDirectivePredicate(_ pattern: QueryPattern) throws -> (
     return (name, arguments)
 }
 
-func requireEqPredicate(_ pattern: QueryPattern) throws -> (capture: String, value: String)
-{
+func requireEqPredicate(_ pattern: QueryPattern) throws -> (capture: String, value: String) {
     guard case .predicate(.eq(capture: let capture, value: let value)) = pattern else {
         throw QueryPatternExpectationError.expectedEqPredicate
     }

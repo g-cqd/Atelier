@@ -6,7 +6,6 @@ import Testing
 
 @Suite
 struct EditorNavigationResolverTests {
-
     private func stroke(_ keyCode: UInt32, _ modifiers: KeyModifiers = []) -> KeyStroke {
         KeyStroke(keyCode: keyCode, modifiers: modifiers)
     }
@@ -123,7 +122,7 @@ struct EditorNavigationResolverTests {
         let navCommands: [CommandID] = [
             .editorMoveDown, .editorMoveUp, .editorMoveLeft, .editorMoveRight,
             .editorMoveDownPage, .editorMoveUpPage, .editorHome, .editorEnd,
-            .editorWordForward, .editorWordBackward,
+            .editorWordForward, .editorWordBackward
         ]
         for command in navCommands {
             #expect(command.isEditorNavigation, "Expected \(command) to be navigation")
@@ -133,7 +132,7 @@ struct EditorNavigationResolverTests {
     @Test
     func isEditorNavigationFalseForNonMovementCommands() {
         let nonNavCommands: [CommandID] = [
-            .editorInsertNewline, .editorDeleteBackward, .saveFile, .copy,
+            .editorInsertNewline, .editorDeleteBackward, .saveFile, .copy
         ]
         for command in nonNavCommands {
             #expect(!command.isEditorNavigation, "Expected \(command) to not be navigation")

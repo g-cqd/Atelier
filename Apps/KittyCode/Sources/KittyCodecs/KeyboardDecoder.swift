@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable cyclomatic_complexity function_body_length
 /// Decodes Kitty keyboard protocol (CSI u) sequences.
 ///
 /// Format: `CSI unicode-key-code:alternate-key-codes ; modifiers:event-type ; text-as-codepoints u`
@@ -51,174 +53,174 @@ public struct KeyboardDecoder: Sendable {
         }
 
         switch state {
-        case .ground:
-            if byte == 0x1b {
-                state = .escape
-                return .pending
-            }
-            // Plain ASCII character (no CSI wrapper)
-            let event = KeyEvent(keyCode: UInt32(byte))
-            reset()
-            return .complete(event)
-
-        case .escape:
-            if byte == 0x5b {  // [
-                state = .csi
-                return .pending
-            }
-            // ESC + char = Alt+char
-            let event = KeyEvent(keyCode: UInt32(byte), modifiers: .alt)
-            reset()
-            return .complete(event)
-
-        case .csi:
-            if isDigit(byte) {
-                state = .keyCode
-                keyCodeValue = UInt32(byte - 0x30)
-                return .pending
-            }
-            if byte == 0x75 {  // u — empty CSI u
-                let event = KeyEvent(keyCode: 0)
+            case .ground:
+                if byte == 0x1b {
+                    state = .escape
+                    return .pending
+                }
+                // Plain ASCII character (no CSI wrapper)
+                let event = KeyEvent(keyCode: UInt32(byte))
                 reset()
                 return .complete(event)
-            }
-            // Could be other CSI sequence — mark invalid for this decoder
-            let invalid = buffer
-            reset()
-            return .invalid(invalid)
 
-        case .keyCode:
-            if isDigit(byte) {
-                guard Self.appendDigit(byte - 0x30, to: &keyCodeValue, maximum: UInt32.max) else {
-                    return invalidResult()
+            case .escape:
+                if byte == 0x5b {  // [
+                    state = .csi
+                    return .pending
                 }
-                return .pending
-            }
-            if byte == 0x3a {  // : — alternate key codes follow
-                state = .alternateKeys
-                currentAlternate = 0
-                return .pending
-            }
-            if byte == 0x3b {  // ; — modifiers follow
-                state = .modifiers
-                hasModifiers = true
-                return .pending
-            }
-            if byte == 0x75 {  // u — end
-                let event = KeyEvent(keyCode: keyCodeValue)
+                // ESC + char = Alt+char
+                let event = KeyEvent(keyCode: UInt32(byte), modifiers: .alt)
                 reset()
                 return .complete(event)
-            }
-            let invalid = buffer
-            reset()
-            return .invalid(invalid)
 
-        case .alternateKeys:
-            if isDigit(byte) {
-                guard Self.appendDigit(byte - 0x30, to: &currentAlternate, maximum: UInt32.max)
-                else {
-                    return invalidResult()
+            case .csi:
+                if isDigit(byte) {
+                    state = .keyCode
+                    keyCodeValue = UInt32(byte - 0x30)
+                    return .pending
                 }
-                return .pending
-            }
-            if byte == 0x3a {  // : — next alternate
-                guard alternateKeys.count < Self.maxAlternateKeys else {
-                    return invalidResult()
+                if byte == 0x75 {  // u — empty CSI u
+                    let event = KeyEvent(keyCode: 0)
+                    reset()
+                    return .complete(event)
                 }
-                alternateKeys.append(currentAlternate)
-                currentAlternate = 0
-                return .pending
-            }
-            if byte == 0x3b {  // ; — modifiers follow
-                alternateKeys.append(currentAlternate)
-                state = .modifiers
-                hasModifiers = true
-                return .pending
-            }
-            if byte == 0x75 {  // u — end
-                alternateKeys.append(currentAlternate)
-                let event = KeyEvent(
-                    keyCode: keyCodeValue,
-                    alternateKeys: alternateKeys
-                )
+                // Could be other CSI sequence — mark invalid for this decoder
+                let invalid = buffer
                 reset()
-                return .complete(event)
-            }
-            let invalid = buffer
-            reset()
-            return .invalid(invalid)
+                return .invalid(invalid)
 
-        case .modifiers:
-            if isDigit(byte) {
-                guard Self.appendDigit(byte - 0x30, to: &modifierValue, maximum: UInt8.max) else {
-                    return invalidResult()
+            case .keyCode:
+                if isDigit(byte) {
+                    guard Self.appendDigit(byte - 0x30, to: &keyCodeValue, maximum: UInt32.max) else {
+                        return invalidResult()
+                    }
+                    return .pending
                 }
-                return .pending
-            }
-            if byte == 0x3a {  // : — event type follows
-                state = .eventType
-                hasEventType = true
-                return .pending
-            }
-            if byte == 0x3b {  // ; — text codepoints follow
-                state = .textCodepoints
-                hasText = true
-                return .pending
-            }
-            if byte == 0x75 {  // u — end
-                let event = makeEvent()
+                if byte == 0x3a {  // : — alternate key codes follow
+                    state = .alternateKeys
+                    currentAlternate = 0
+                    return .pending
+                }
+                if byte == 0x3b {  // ; — modifiers follow
+                    state = .modifiers
+                    hasModifiers = true
+                    return .pending
+                }
+                if byte == 0x75 {  // u — end
+                    let event = KeyEvent(keyCode: keyCodeValue)
+                    reset()
+                    return .complete(event)
+                }
+                let invalid = buffer
                 reset()
-                return .complete(event)
-            }
-            let invalid = buffer
-            reset()
-            return .invalid(invalid)
+                return .invalid(invalid)
 
-        case .eventType:
-            if isDigit(byte) {
-                guard Self.appendDigit(byte - 0x30, to: &eventTypeValue, maximum: UInt8.max) else {
-                    return invalidResult()
+            case .alternateKeys:
+                if isDigit(byte) {
+                    guard Self.appendDigit(byte - 0x30, to: &currentAlternate, maximum: UInt32.max)
+                    else {
+                        return invalidResult()
+                    }
+                    return .pending
                 }
-                return .pending
-            }
-            if byte == 0x3b {  // ; — text codepoints follow
-                state = .textCodepoints
-                hasText = true
-                return .pending
-            }
-            if byte == 0x75 {  // u — end
-                let event = makeEvent()
+                if byte == 0x3a {  // : — next alternate
+                    guard alternateKeys.count < Self.maxAlternateKeys else {
+                        return invalidResult()
+                    }
+                    alternateKeys.append(currentAlternate)
+                    currentAlternate = 0
+                    return .pending
+                }
+                if byte == 0x3b {  // ; — modifiers follow
+                    alternateKeys.append(currentAlternate)
+                    state = .modifiers
+                    hasModifiers = true
+                    return .pending
+                }
+                if byte == 0x75 {  // u — end
+                    alternateKeys.append(currentAlternate)
+                    let event = KeyEvent(
+                        keyCode: keyCodeValue,
+                        alternateKeys: alternateKeys
+                    )
+                    reset()
+                    return .complete(event)
+                }
+                let invalid = buffer
                 reset()
-                return .complete(event)
-            }
-            let invalid = buffer
-            reset()
-            return .invalid(invalid)
+                return .invalid(invalid)
 
-        case .textCodepoints:
-            if isDigit(byte) {
-                guard Self.appendDigit(byte - 0x30, to: &currentTextCP, maximum: UInt32.max) else {
-                    return invalidResult()
+            case .modifiers:
+                if isDigit(byte) {
+                    guard Self.appendDigit(byte - 0x30, to: &modifierValue, maximum: UInt8.max) else {
+                        return invalidResult()
+                    }
+                    return .pending
                 }
-                return .pending
-            }
-            if byte == 0x3a {  // : — next codepoint
-                guard textCodepoints.count < Self.maxTextCodepoints else {
-                    return invalidResult()
+                if byte == 0x3a {  // : — event type follows
+                    state = .eventType
+                    hasEventType = true
+                    return .pending
                 }
-                textCodepoints.append(currentTextCP)
-                currentTextCP = 0
-                return .pending
-            }
-            if byte == 0x75 {  // u — end
-                textCodepoints.append(currentTextCP)
-                let event = makeEvent()
+                if byte == 0x3b {  // ; — text codepoints follow
+                    state = .textCodepoints
+                    hasText = true
+                    return .pending
+                }
+                if byte == 0x75 {  // u — end
+                    let event = makeEvent()
+                    reset()
+                    return .complete(event)
+                }
+                let invalid = buffer
                 reset()
-                return .complete(event)
-            }
-            let invalid = buffer
-            reset()
-            return .invalid(invalid)
+                return .invalid(invalid)
+
+            case .eventType:
+                if isDigit(byte) {
+                    guard Self.appendDigit(byte - 0x30, to: &eventTypeValue, maximum: UInt8.max) else {
+                        return invalidResult()
+                    }
+                    return .pending
+                }
+                if byte == 0x3b {  // ; — text codepoints follow
+                    state = .textCodepoints
+                    hasText = true
+                    return .pending
+                }
+                if byte == 0x75 {  // u — end
+                    let event = makeEvent()
+                    reset()
+                    return .complete(event)
+                }
+                let invalid = buffer
+                reset()
+                return .invalid(invalid)
+
+            case .textCodepoints:
+                if isDigit(byte) {
+                    guard Self.appendDigit(byte - 0x30, to: &currentTextCP, maximum: UInt32.max) else {
+                        return invalidResult()
+                    }
+                    return .pending
+                }
+                if byte == 0x3a {  // : — next codepoint
+                    guard textCodepoints.count < Self.maxTextCodepoints else {
+                        return invalidResult()
+                    }
+                    textCodepoints.append(currentTextCP)
+                    currentTextCP = 0
+                    return .pending
+                }
+                if byte == 0x75 {  // u — end
+                    textCodepoints.append(currentTextCP)
+                    let event = makeEvent()
+                    reset()
+                    return .complete(event)
+                }
+                let invalid = buffer
+                reset()
+                return .invalid(invalid)
         }
     }
 

@@ -8,7 +8,6 @@
 /// (identifier) @var (#eq? @var "self")
 /// ```
 public enum QueryParser: Sendable {
-
     private static let maxRecursionDepth = 128
 
     public static func parse(_ source: String) throws(QueryError) -> Query {
@@ -41,20 +40,20 @@ public enum QueryParser: Sendable {
 
         var pattern: QueryPattern
         switch ch {
-        case "(":
-            pattern = try parseNodePattern(&scanner)
-        case "\"":
-            pattern = try parseLiteralPattern(&scanner)
-        case "_":
-            pattern = try parseWildcard(&scanner)
-        case ".":
-            pattern = parseAnchor(&scanner)
-        case "[":
-            pattern = try parseAlternation(&scanner)
-        case "#":
-            pattern = try parsePredicatePattern(&scanner)
-        default:
-            throw .syntaxError("Unexpected character: \(ch)")
+            case "(":
+                pattern = try parseNodePattern(&scanner)
+            case "\"":
+                pattern = try parseLiteralPattern(&scanner)
+            case "_":
+                pattern = try parseWildcard(&scanner)
+            case ".":
+                pattern = parseAnchor(&scanner)
+            case "[":
+                pattern = try parseAlternation(&scanner)
+            case "#":
+                pattern = try parsePredicatePattern(&scanner)
+            default:
+                throw .syntaxError("Unexpected character: \(ch)")
         }
 
         // Check for trailing captures after pattern (e.g., (identifier) @var @name)
@@ -85,25 +84,24 @@ public enum QueryParser: Sendable {
         return pattern
     }
 
-    private static func attachCapture(_ capture: String?, to pattern: QueryPattern) -> QueryPattern
-    {
+    private static func attachCapture(_ capture: String?, to pattern: QueryPattern) -> QueryPattern {
         guard let capture else { return pattern }
         switch pattern {
-        case .nodeMatch(let type, let children, let existing):
-            return .nodeMatch(type: type, children: children, capture: existing ?? capture)
-        case .literal(let value, let existing):
-            return .literal(value, capture: existing ?? capture)
-        case .wildcard(let existing):
-            return .wildcard(capture: existing ?? capture)
-        case .alternation(let patterns):
-            return .alternation(patterns.map { attachCapture(capture, to: $0) })
-        case .sequence(let patterns):
-            guard !patterns.isEmpty else { return pattern }
-            var updatedPatterns = patterns
-            updatedPatterns[0] = attachCapture(capture, to: updatedPatterns[0])
-            return .sequence(updatedPatterns)
-        default:
-            return pattern
+            case .nodeMatch(let type, let children, let existing):
+                return .nodeMatch(type: type, children: children, capture: existing ?? capture)
+            case .literal(let value, let existing):
+                return .literal(value, capture: existing ?? capture)
+            case .wildcard(let existing):
+                return .wildcard(capture: existing ?? capture)
+            case .alternation(let patterns):
+                return .alternation(patterns.map { attachCapture(capture, to: $0) })
+            case .sequence(let patterns):
+                guard !patterns.isEmpty else { return pattern }
+                var updatedPatterns = patterns
+                updatedPatterns[0] = attachCapture(capture, to: updatedPatterns[0])
+                return .sequence(updatedPatterns)
+            default:
+                return pattern
         }
     }
 
@@ -293,37 +291,36 @@ public enum QueryParser: Sendable {
     }
 
     // swiftlint:disable:next cyclomatic_complexity
-    private static func buildPredicate(name: String, args: [String]) throws(QueryError) -> Predicate
-    {
+    private static func buildPredicate(name: String, args: [String]) throws(QueryError) -> Predicate {
         switch name {
-        case "#eq?":
-            guard args.count >= 2 else { throw .syntaxError("eq? requires 2 arguments") }
-            return .eq(capture: args[0], value: args[1])
-        case "#not-eq?":
-            guard args.count >= 2 else { throw .syntaxError("not-eq? requires 2 arguments") }
-            return .notEq(capture: args[0], value: args[1])
-        case "#match?":
-            guard args.count >= 2 else { throw .syntaxError("match? requires 2 arguments") }
-            return .match(capture: args[0], pattern: args[1])
-        case "#not-match?":
-            guard args.count >= 2 else { throw .syntaxError("not-match? requires 2 arguments") }
-            return .notMatch(capture: args[0], pattern: args[1])
-        case "#any-of?":
-            guard args.count >= 2 else {
-                throw .syntaxError("any-of? requires at least 2 arguments")
-            }
-            return .anyOf(capture: args[0], values: Array(args.dropFirst()))
-        case "#contains?":
-            guard args.count >= 2 else { throw .syntaxError("contains? requires 2 arguments") }
-            return .contains(capture: args[0], value: args[1])
-        case "#is?":
-            guard args.count >= 2 else { throw .syntaxError("is? requires 2 arguments") }
-            return .is(capture: args[0], property: args[1])
-        case "#is-not?":
-            guard args.count >= 2 else { throw .syntaxError("is-not? requires 2 arguments") }
-            return .isNot(capture: args[0], property: args[1])
-        default:
-            return .directive(name: name, arguments: args)
+            case "#eq?":
+                guard args.count >= 2 else { throw .syntaxError("eq? requires 2 arguments") }
+                return .eq(capture: args[0], value: args[1])
+            case "#not-eq?":
+                guard args.count >= 2 else { throw .syntaxError("not-eq? requires 2 arguments") }
+                return .notEq(capture: args[0], value: args[1])
+            case "#match?":
+                guard args.count >= 2 else { throw .syntaxError("match? requires 2 arguments") }
+                return .match(capture: args[0], pattern: args[1])
+            case "#not-match?":
+                guard args.count >= 2 else { throw .syntaxError("not-match? requires 2 arguments") }
+                return .notMatch(capture: args[0], pattern: args[1])
+            case "#any-of?":
+                guard args.count >= 2 else {
+                    throw .syntaxError("any-of? requires at least 2 arguments")
+                }
+                return .anyOf(capture: args[0], values: Array(args.dropFirst()))
+            case "#contains?":
+                guard args.count >= 2 else { throw .syntaxError("contains? requires 2 arguments") }
+                return .contains(capture: args[0], value: args[1])
+            case "#is?":
+                guard args.count >= 2 else { throw .syntaxError("is? requires 2 arguments") }
+                return .is(capture: args[0], property: args[1])
+            case "#is-not?":
+                guard args.count >= 2 else { throw .syntaxError("is-not? requires 2 arguments") }
+                return .isNot(capture: args[0], property: args[1])
+            default:
+                return .directive(name: name, arguments: args)
         }
     }
 
@@ -343,23 +340,23 @@ public enum QueryParser: Sendable {
         scanner.advance()
         let quantifier: Quantifier
         switch next {
-        case "+": quantifier = .oneOrMore
-        case "*": quantifier = .zeroOrMore
-        default:  quantifier = .optional
+            case "+": quantifier = .oneOrMore
+            case "*": quantifier = .zeroOrMore
+            default: quantifier = .optional
         }
         return .quantified(pattern: pattern, quantifier: quantifier)
     }
 
     private static func stripCapture(from pattern: QueryPattern) -> QueryPattern {
         switch pattern {
-        case .nodeMatch(let type, let children, _):
-            return .nodeMatch(type: type, children: children, capture: nil)
-        case .literal(let value, _):
-            return .literal(value, capture: nil)
-        case .wildcard:
-            return .wildcard(capture: nil)
-        default:
-            return pattern
+            case .nodeMatch(let type, let children, _):
+                return .nodeMatch(type: type, children: children, capture: nil)
+            case .literal(let value, _):
+                return .literal(value, capture: nil)
+            case .wildcard:
+                return .wildcard(capture: nil)
+            default:
+                return pattern
         }
     }
 }

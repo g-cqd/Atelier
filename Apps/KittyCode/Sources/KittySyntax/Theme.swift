@@ -93,6 +93,6 @@ public struct Theme: Sendable {
             "label": Style(fg: .rgb(r: 230, g: 219, b: 116)),
             "constructor": Style(fg: .rgb(r: 102, g: 217, b: 239)),
             "embedded": Style(fg: .rgb(r: 248, g: 248, b: 242)),
-            "escape": Style(fg: .rgb(r: 174, g: 129, b: 255)),
+            "escape": Style(fg: .rgb(r: 174, g: 129, b: 255))
         ], defaultStyle: Style(fg: .rgb(r: 248, g: 248, b: 242)))
 }

@@ -1,7 +1,6 @@
 /// Maps tree-sitter capture names (e.g. `"keyword.function"`) to
 /// `(HighlightRole, HighlightModifierSet)` pairs.
 public enum CaptureRoleMapper: Sendable {
-
     /// Map a tree-sitter capture name to a role and modifier set.
     public static func map(_ captureName: String) -> (role: HighlightRole, modifiers: HighlightModifierSet) {
         let name = captureName.hasPrefix("@") ? String(captureName.dropFirst()) : captureName
@@ -32,93 +31,93 @@ public enum CaptureRoleMapper: Sendable {
 
     private static let exactLookup: [String: (role: HighlightRole, modifiers: HighlightModifierSet)] = [
         // Keywords
-        "keyword":               (.keyword, []),
-        "keyword.function":      (.keywordFunction, []),
-        "keyword.return":        (.keywordReturn, []),
-        "keyword.operator":      (.keywordOperator, []),
+        "keyword": (.keyword, []),
+        "keyword.function": (.keywordFunction, []),
+        "keyword.return": (.keywordReturn, []),
+        "keyword.operator": (.keywordOperator, []),
 
         // Types
-        "type":                  (.type, []),
-        "type.builtin":          (.typeBuiltin, []),
-        "type.parameter":        (.typeParameter, []),
+        "type": (.type, []),
+        "type.builtin": (.typeBuiltin, []),
+        "type.parameter": (.typeParameter, []),
 
         // Functions
-        "function":              (.function, []),
-        "function.name":         (.function, .definition),
-        "function.method":       (.functionMethod, []),
-        "function.builtin":      (.functionBuiltin, []),
-        "function.call":         (.functionCall, []),
-        "function.macro":        (.functionMacro, []),
-        "function.special":      (.functionSpecial, []),
+        "function": (.function, []),
+        "function.name": (.function, .definition),
+        "function.method": (.functionMethod, []),
+        "function.builtin": (.functionBuiltin, []),
+        "function.call": (.functionCall, []),
+        "function.macro": (.functionMacro, []),
+        "function.special": (.functionSpecial, []),
 
         // Variables
-        "variable":              (.variable, []),
-        "variable.builtin":      (.variableBuiltin, []),
-        "variable.parameter":    (.variableParameter, []),
+        "variable": (.variable, []),
+        "variable.builtin": (.variableBuiltin, []),
+        "variable.parameter": (.variableParameter, []),
 
         // Strings
-        "string":                (.string, []),
-        "string.special":        (.stringSpecial, []),
-        "string.special.key":    (.stringSpecial, []),
-        "string.escape":         (.stringEscape, []),
+        "string": (.string, []),
+        "string.special": (.stringSpecial, []),
+        "string.special.key": (.stringSpecial, []),
+        "string.escape": (.stringEscape, []),
 
         // Numbers
-        "number":                (.number, []),
-        "number.float":          (.numberFloat, []),
+        "number": (.number, []),
+        "number.float": (.numberFloat, []),
 
         // Comments
-        "comment":               (.comment, []),
+        "comment": (.comment, []),
         "comment.documentation": (.commentDocumentation, .documentation),
 
         // Operators & punctuation
-        "operator":              (.operator, []),
-        "punctuation":           (.punctuationDelimiter, []),
-        "punctuation.bracket":   (.punctuationBracket, []),
+        "operator": (.operator, []),
+        "punctuation": (.punctuationDelimiter, []),
+        "punctuation.bracket": (.punctuationBracket, []),
         "punctuation.delimiter": (.punctuationDelimiter, []),
-        "punctuation.special":   (.punctuationSpecial, []),
+        "punctuation.special": (.punctuationSpecial, []),
 
         // Constants
-        "constant":              (.constant, []),
-        "constant.builtin":      (.constantBuiltin, []),
-        "boolean":               (.boolean, []),
+        "constant": (.constant, []),
+        "constant.builtin": (.constantBuiltin, []),
+        "boolean": (.boolean, []),
 
         // Other
-        "attribute":             (.attribute, []),
-        "property":              (.property, []),
-        "namespace":             (.namespace, []),
-        "module":                (.namespace, []),
-        "label":                 (.label, []),
-        "tag":                   (.tag, []),
-        "constructor":           (.constructor, []),
-        "embedded":              (.embedded, []),
-        "escape":                (.escape, []),
+        "attribute": (.attribute, []),
+        "property": (.property, []),
+        "namespace": (.namespace, []),
+        "module": (.namespace, []),
+        "label": (.label, []),
+        "tag": (.tag, []),
+        "constructor": (.constructor, []),
+        "embedded": (.embedded, []),
+        "escape": (.escape, []),
 
         // Delimiter (legacy capture name used by some queries)
-        "delimiter":             (.punctuationDelimiter, []),
+        "delimiter": (.punctuationDelimiter, [])
     ]
 
     private static let lspTokenTypeLookup: [String: HighlightRole] = [
-        "namespace":    .namespace,
-        "type":         .type,
-        "class":        .type,
-        "enum":         .type,
-        "interface":    .type,
-        "struct":       .type,
+        "namespace": .namespace,
+        "type": .type,
+        "class": .type,
+        "enum": .type,
+        "interface": .type,
+        "struct": .type,
         "typeParameter": .typeParameter,
-        "parameter":    .variableParameter,
-        "variable":     .variable,
-        "property":     .property,
-        "enumMember":   .constantBuiltin,
-        "function":     .function,
-        "method":       .functionMethod,
-        "macro":        .functionMacro,
-        "keyword":      .keyword,
-        "modifier":     .keyword,
-        "comment":      .comment,
-        "string":       .string,
-        "number":       .number,
-        "regexp":       .stringSpecial,
-        "operator":     .operator,
-        "decorator":    .attribute,
+        "parameter": .variableParameter,
+        "variable": .variable,
+        "property": .property,
+        "enumMember": .constantBuiltin,
+        "function": .function,
+        "method": .functionMethod,
+        "macro": .functionMacro,
+        "keyword": .keyword,
+        "modifier": .keyword,
+        "comment": .comment,
+        "string": .string,
+        "number": .number,
+        "regexp": .stringSpecial,
+        "operator": .operator,
+        "decorator": .attribute
     ]
 }

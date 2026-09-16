@@ -102,21 +102,21 @@ public enum CommandID: String, CaseIterable, Sendable {
 
     public var isTreeNavigation: Bool {
         switch self {
-        case .treeDown, .treeUp:
-            return true
-        default:
-            return false
+            case .treeDown, .treeUp:
+                return true
+            default:
+                return false
         }
     }
 
     public var isEditorNavigation: Bool {
         switch self {
-        case .editorMoveDown, .editorMoveUp, .editorMoveLeft, .editorMoveRight,
-            .editorMoveDownPage, .editorMoveUpPage, .editorHome, .editorEnd,
-            .editorWordForward, .editorWordBackward:
-            return true
-        default:
-            return false
+            case .editorMoveDown, .editorMoveUp, .editorMoveLeft, .editorMoveRight,
+                .editorMoveDownPage, .editorMoveUpPage, .editorHome, .editorEnd,
+                .editorWordForward, .editorWordBackward:
+                return true
+            default:
+                return false
         }
     }
 

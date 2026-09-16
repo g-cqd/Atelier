@@ -11,7 +11,6 @@ import Testing
 
 @Suite
 struct KeymapResolverSequenceTests {
-
     private func stroke(_ keyCode: UInt32, _ modifiers: KeyModifiers = []) -> KeyStroke {
         KeyStroke(keyCode: keyCode, modifiers: modifiers)
     }
@@ -107,7 +106,6 @@ struct KeymapResolverSequenceTests {
 
 @Suite
 struct TextOperationsDeleteLineTests {
-
     @Test
     func `deleteLine on multi-line buffer removes the target line`() {
         var buffer = TextBuffer(lines: ["first", "second", "third"])
@@ -144,7 +142,7 @@ struct TextOperationsDeleteLineTests {
         var buffer = TextBuffer(lines: ["a", "b", "c"])
         var cursor = TextCursor(row: 0, col: 0)
         let mutation = TextOperations.deleteLine(in: &buffer, at: &cursor)
-        #expect(mutation.originalLineRange == 0..<1)
+        #expect(mutation.originalLineRange == 0 ..< 1)
     }
 }
 
@@ -153,7 +151,6 @@ struct TextOperationsDeleteLineTests {
 @Suite
 @MainActor
 struct VimSequenceCommandDispatchTests {
-
     private func makeSUT(lines: [String] = ["alpha", "beta", "gamma"]) -> (
         state: EditorState, pipeline: RenderPipeline
     ) {

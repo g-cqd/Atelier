@@ -15,12 +15,11 @@ public struct FocusMap: Sendable {
     }
 
     public func hitTest(row: Int, col: Int) -> FocusRegion? {
-        for entry in entries.reversed() {
-            if row >= entry.rect.y && row < entry.rect.maxY
-                && col >= entry.rect.x && col < entry.rect.maxX
-            {
-                return entry.region
-            }
+        for entry in entries.reversed()
+        where row >= entry.rect.y && row < entry.rect.maxY
+            && col >= entry.rect.x && col < entry.rect.maxX
+        {
+            return entry.region
         }
         return nil
     }

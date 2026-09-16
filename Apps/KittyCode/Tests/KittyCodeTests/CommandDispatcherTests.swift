@@ -10,7 +10,6 @@ import Testing
 @Suite
 @MainActor
 struct CommandDispatcherTests {
-
     private func makeSUT(columns: Int = 80, rows: Int = 24) -> (
         state: EditorState, pipeline: RenderPipeline
     ) {

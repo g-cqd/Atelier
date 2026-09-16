@@ -154,7 +154,7 @@ struct TreeFileOperationTests {
         let state = EditorState(rootPath: rootURL.path, config: config)
         await state.loadInitialTree(validateHistory: false)
 
-        for i in 1...5 {
+        for i in 1 ... 5 {
             let file = rootURL.appendingPathComponent("file\(i).txt")
             #expect(await state.createTreeFile(at: file.path, suggestedDirectory: rootURL.path))
         }
@@ -182,7 +182,7 @@ struct TreeFileOperationTests {
         // Create a directory with more files than the threshold
         let bigDir = rootURL.appendingPathComponent("bigdir")
         try FileManager.default.createDirectory(at: bigDir, withIntermediateDirectories: true)
-        for i in 0..<10 {
+        for i in 0 ..< 10 {
             let file = bigDir.appendingPathComponent("f\(i).txt")
             FileManager.default.createFile(atPath: file.path, contents: Data("x".utf8))
         }
@@ -205,7 +205,7 @@ struct TreeFileOperationTests {
 
         let smallDir = rootURL.appendingPathComponent("smalldir")
         try FileManager.default.createDirectory(at: smallDir, withIntermediateDirectories: true)
-        for i in 0..<3 {
+        for i in 0 ..< 3 {
             let file = smallDir.appendingPathComponent("f\(i).txt")
             FileManager.default.createFile(atPath: file.path, contents: Data("x".utf8))
         }

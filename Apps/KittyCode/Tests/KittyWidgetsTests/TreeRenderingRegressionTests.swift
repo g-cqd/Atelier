@@ -7,7 +7,6 @@ import Testing
 
 @Suite
 struct TreeRenderingRegressionTests {
-
     private func makeSUT(columns: Int = 20, rows: Int = 5) -> ScreenBuffer {
         makeTextRenderingBuffer(columns: columns, rows: rows)
     }
@@ -21,30 +20,34 @@ struct TreeRenderingRegressionTests {
         TreeView(
             root: [TreeNode(value: "LongerName", children: [child], isExpanded: false)],
             selectedIndex: 0,
-            style: TreeView<String>.TreeViewStyle(
-                normalStyle: .default,
-                selectedStyle: selectedStyle,
-                expandedIcon: "[-]",
-                collapsedIcon: "[+]",
-                leafIcon: "   ",
-                indent: 2
-            ),
+            style: TreeView<String>
+                .TreeViewStyle(
+                    normalStyle: .default,
+                    selectedStyle: selectedStyle,
+                    expandedIcon: "[-]",
+                    collapsedIcon: "[+]",
+                    leafIcon: "   ",
+                    indent: 2
+                ),
             label: { $0 }
-        ).render(to: &buffer, in: rect)
+        )
+        .render(to: &buffer, in: rect)
 
         TreeView(
             root: [TreeNode(value: "Tests", children: [child], isExpanded: false)],
             selectedIndex: 0,
-            style: TreeView<String>.TreeViewStyle(
-                normalStyle: .default,
-                selectedStyle: selectedStyle,
-                expandedIcon: "[-]",
-                collapsedIcon: "[+]",
-                leafIcon: "   ",
-                indent: 2
-            ),
+            style: TreeView<String>
+                .TreeViewStyle(
+                    normalStyle: .default,
+                    selectedStyle: selectedStyle,
+                    expandedIcon: "[-]",
+                    collapsedIcon: "[+]",
+                    leafIcon: "   ",
+                    indent: 2
+                ),
             label: { $0 }
-        ).render(to: &buffer, in: rect)
+        )
+        .render(to: &buffer, in: rect)
 
         #expect(buffer[0, 0].character == "[")
         #expect(buffer[0, 1].character == "+")
@@ -62,29 +65,33 @@ struct TreeRenderingRegressionTests {
 
         TreeView(
             root: [TreeNode(value: "Root", isExpanded: false)],
-            style: TreeView<String>.TreeViewStyle(
-                normalStyle: normalStyle,
-                selectedStyle: .default,
-                expandedIcon: "[-]",
-                collapsedIcon: "[+]",
-                leafIcon: "   ",
-                indent: 2
-            ),
+            style: TreeView<String>
+                .TreeViewStyle(
+                    normalStyle: normalStyle,
+                    selectedStyle: .default,
+                    expandedIcon: "[-]",
+                    collapsedIcon: "[+]",
+                    leafIcon: "   ",
+                    indent: 2
+                ),
             label: { $0 }
-        ).render(to: &buffer, in: rect)
+        )
+        .render(to: &buffer, in: rect)
 
         TreeView(
             root: [],
-            style: TreeView<String>.TreeViewStyle(
-                normalStyle: normalStyle,
-                selectedStyle: .default,
-                expandedIcon: "[-]",
-                collapsedIcon: "[+]",
-                leafIcon: "   ",
-                indent: 2
-            ),
+            style: TreeView<String>
+                .TreeViewStyle(
+                    normalStyle: normalStyle,
+                    selectedStyle: .default,
+                    expandedIcon: "[-]",
+                    collapsedIcon: "[+]",
+                    leafIcon: "   ",
+                    indent: 2
+                ),
             label: { $0 }
-        ).render(to: &buffer, in: rect)
+        )
+        .render(to: &buffer, in: rect)
 
         #expect(buffer[0, 0].character == " ")
         #expect(buffer[0, 0].style.bg == normalStyle.bg)
@@ -103,11 +110,12 @@ struct TreeRenderingRegressionTests {
         )
 
         TreeView(
-            root: (0..<10).map { TreeNode(value: "row-\($0)") },
+            root: (0 ..< 10).map { TreeNode(value: "row-\($0)") },
             showsVerticalScrollIndicator: true,
             style: TreeView<String>.TreeViewStyle(scrollIndicatorStyle: scrollStyle),
             label: { $0 }
-        ).render(to: &buffer, in: rect)
+        )
+        .render(to: &buffer, in: rect)
 
         #expect(buffer[0, 7].character == "#")
         #expect(buffer[1, 7].character == "#")

@@ -15,7 +15,6 @@ import Testing
 @Suite
 @MainActor
 struct MouseHitTestingAndScrollDragTests {
-
     private func makeSUT(fileContent: [String], columns: Int = 80, rows: Int = 24) -> (
         state: EditorState, pipeline: RenderPipeline
     ) {
@@ -72,7 +71,7 @@ struct MouseHitTestingAndScrollDragTests {
 
     @Test
     func `dragging the editor scroll indicator updates the shared scroll offset`() {
-        let sut = makeSUT(fileContent: (0..<20).map(String.init), columns: 18, rows: 8)
+        let sut = makeSUT(fileContent: (0 ..< 20).map(String.init), columns: 18, rows: 8)
         sut.state.treePanelWidth = 3
         sut.state.mode = .editor
 
@@ -102,9 +101,10 @@ struct MouseHitTestingAndScrollDragTests {
         let sut = makeSUT(fileContent: [""], columns: 18, rows: 8)
         sut.state.treePanelWidth = 5
         sut.state.mode = .tree
-        sut.state.treeNodes = (0..<30).map { i in
-            FileNode(name: "f\(i)", path: "p\(i)", isDirectory: false)
-        }
+        sut.state.treeNodes = (0 ..< 30)
+            .map { i in
+                FileNode(name: "f\(i)", path: "p\(i)", isDirectory: false)
+            }
         sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
 
         // Tree indicator is at col 5 (treeWidth = min(5, 9) = 5, treeRect.maxX - 1 = 5)

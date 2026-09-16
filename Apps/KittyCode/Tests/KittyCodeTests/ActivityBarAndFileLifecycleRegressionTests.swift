@@ -15,7 +15,6 @@ import Testing
 @Suite
 @MainActor
 struct ActivityBarAndFileLifecycleRegressionTests {
-
     private func makeSUT(
         fileContent: [String] = [""],
         columns: Int = 80,
@@ -135,11 +134,15 @@ struct ActivityBarAndFileLifecycleRegressionTests {
         renderFrame(pipeline: sut.pipeline, state: sut.state)
 
         let promptCorner = try #require(
-            (0..<10).lazy.compactMap { row in
-                (0..<40).lazy.compactMap { col in
-                    sut.pipeline.buffer[row, col].character == "┌" ? (row, col) : nil
-                }.first
-            }.first
+            (0 ..< 10).lazy
+                .compactMap { row in
+                    (0 ..< 40).lazy
+                        .compactMap { col in
+                            sut.pipeline.buffer[row, col].character == "┌" ? (row, col) : nil
+                        }
+                        .first
+                }
+                .first
         )
 
         sut.state.prompt = nil

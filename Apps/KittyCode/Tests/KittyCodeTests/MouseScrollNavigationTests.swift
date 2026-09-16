@@ -15,7 +15,6 @@ import Testing
 @Suite
 @MainActor
 struct MouseScrollNavigationTests {
-
     private func makeSUT(fileContent: [String], columns: Int = 80, rows: Int = 24) -> (
         state: EditorState, pipeline: RenderPipeline
     ) {
@@ -40,7 +39,7 @@ struct MouseScrollNavigationTests {
 
     @Test
     func `reversing scroll direction keeps accepting the new direction`() {
-        let sut = makeSUT(fileContent: (0..<200).map(String.init), rows: 12)
+        let sut = makeSUT(fileContent: (0 ..< 200).map(String.init), rows: 12)
         sut.state.config.editor.scrollLines = 1
         sut.state.config.editor.scrollAccelerationEnabled = false
         sut.state.scrollOffset = 30
@@ -67,7 +66,7 @@ struct MouseScrollNavigationTests {
 
     @Test
     func `stale rebound event is ignored once after a reversal`() {
-        let sut = makeSUT(fileContent: (0..<200).map(String.init), rows: 12)
+        let sut = makeSUT(fileContent: (0 ..< 200).map(String.init), rows: 12)
         sut.state.config.editor.scrollLines = 1
         sut.state.config.editor.scrollAccelerationEnabled = false
         sut.state.scrollOffset = 30
@@ -94,7 +93,7 @@ struct MouseScrollNavigationTests {
 
     @Test
     func `rapid same-direction scroll bursts enqueue extra line-by-line steps`() {
-        let sut = makeSUT(fileContent: (0..<200).map(String.init), rows: 12)
+        let sut = makeSUT(fileContent: (0 ..< 200).map(String.init), rows: 12)
         sut.state.sidebarCollapsed = true
         sut.state.config.editor.scrollLines = 1
         sut.state.config.editor.scrollAccelerationEnabled = true
@@ -127,7 +126,7 @@ struct MouseScrollNavigationTests {
 
     @Test
     func `opposing direction cancels pending accelerated scroll immediately`() {
-        let sut = makeSUT(fileContent: (0..<200).map(String.init), rows: 12)
+        let sut = makeSUT(fileContent: (0 ..< 200).map(String.init), rows: 12)
         sut.state.sidebarCollapsed = true
         sut.state.config.editor.scrollLines = 1
         sut.state.config.editor.scrollAccelerationEnabled = true
@@ -168,7 +167,7 @@ struct MouseScrollNavigationTests {
 
     @Test
     func `scrolling past vertical limits cancels immediately`() {
-        let top = makeSUT(fileContent: (0..<5).map(String.init), rows: 12)
+        let top = makeSUT(fileContent: (0 ..< 5).map(String.init), rows: 12)
         top.state.sidebarCollapsed = true
         top.state.config.editor.scrollLines = 1
         top.state.config.editor.scrollAccelerationEnabled = true
@@ -193,7 +192,7 @@ struct MouseScrollNavigationTests {
         #expect(top.state.lastScrollDirection == nil)
         #expect(top.state.isScrolling == false)
 
-        let bottom = makeSUT(fileContent: (0..<5).map(String.init), rows: 12)
+        let bottom = makeSUT(fileContent: (0 ..< 5).map(String.init), rows: 12)
         bottom.state.sidebarCollapsed = true
         bottom.state.config.editor.scrollLines = 1
         bottom.state.config.editor.scrollAccelerationEnabled = true

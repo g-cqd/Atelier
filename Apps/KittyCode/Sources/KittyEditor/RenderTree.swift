@@ -28,7 +28,7 @@ public func renderTreePanel(
     let start = max(0, min(metrics.offset, rowCount))
     let visibleCount = min(treeRect.height, rowCount - start)
 
-    for offset in 0..<visibleCount {
+    for offset in 0 ..< visibleCount {
         let rowIndex = start + offset
         let entry = rows[rowIndex]
         let node = entry.node
@@ -76,7 +76,7 @@ public func renderTreePanel(
 
     if visibleCount < treeRect.height {
         let emptyCell = Cell(character: " ", style: normalStyle)
-        for offset in visibleCount..<treeRect.height {
+        for offset in visibleCount ..< treeRect.height {
             pipeline.buffer.fill(
                 row: treeRect.y + offset,
                 col: treeRect.x,
@@ -93,7 +93,8 @@ public func renderTreePanel(
         VerticalScrollIndicator(
             metrics: metrics,
             style: colorScheme.verticalScrollIndicator
-        ).render(to: &pipeline.buffer, in: indicatorRect)
+        )
+        .render(to: &pipeline.buffer, in: indicatorRect)
     }
 }
 
@@ -105,27 +106,27 @@ public func truncateSidebarLabel(
     guard label.count > contentWidth else { return label }
 
     switch overflowMode {
-    case .truncateEnd:
-        if isSelected, contentWidth > 3 {
-            return "..." + String(label.suffix(contentWidth - 3))
-        } else if contentWidth > 3 {
-            return String(label.prefix(contentWidth - 3)) + "..."
-        } else {
-            return String(label.prefix(contentWidth))
-        }
-    case .marquee:
-        if isSelected {
-            let gap = "   "
-            let scrollText = label + gap
-            let totalLen = scrollText.count
-            let offset = marqueeOffset % totalLen
-            let rotated = String(scrollText.dropFirst(offset)) + String(scrollText.prefix(offset))
-            return String(rotated.prefix(contentWidth))
-        } else if contentWidth > 3 {
-            return String(label.prefix(contentWidth - 3)) + "..."
-        } else {
-            return String(label.prefix(contentWidth))
-        }
+        case .truncateEnd:
+            if isSelected, contentWidth > 3 {
+                return "..." + String(label.suffix(contentWidth - 3))
+            } else if contentWidth > 3 {
+                return String(label.prefix(contentWidth - 3)) + "..."
+            } else {
+                return String(label.prefix(contentWidth))
+            }
+        case .marquee:
+            if isSelected {
+                let gap = "   "
+                let scrollText = label + gap
+                let totalLen = scrollText.count
+                let offset = marqueeOffset % totalLen
+                let rotated = String(scrollText.dropFirst(offset)) + String(scrollText.prefix(offset))
+                return String(rotated.prefix(contentWidth))
+            } else if contentWidth > 3 {
+                return String(label.prefix(contentWidth - 3)) + "..."
+            } else {
+                return String(label.prefix(contentWidth))
+            }
     }
 }
 

@@ -58,10 +58,10 @@ public final class FileWatcherIntegration {
 
     private func handleEvent(_ event: FileWatcher.FileWatchEvent) async {
         switch event {
-        case .fileChanged(let path):
-            await handleFileChanged(path)
-        case .directoryChanged:
-            await delegate?.fileWatcherDidDetectDirectoryChange()
+            case .fileChanged(let path):
+                await handleFileChanged(path)
+            case .directoryChanged:
+                await delegate?.fileWatcherDidDetectDirectoryChange()
         }
     }
 
