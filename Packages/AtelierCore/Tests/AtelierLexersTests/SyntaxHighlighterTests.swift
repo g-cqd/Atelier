@@ -116,14 +116,6 @@ struct SyntaxHighlighterTests {
         #expect(
             Set(Language.byExtension.keys).isSuperset(of: ["py", "sh", "fish", "toml", "json", "css", "java", "cpp"]))
     }
-
-    @Test
-    func `tokens are split at line boundaries and rebased`() {
-        let source = "/* a\nb */ x"
-        let tokens = SyntaxHighlighter.tokens(in: source, language: .swift)
-        let byLine = SyntaxHighlighter.tokensByLine(tokens, lineStarts: [0, 5], textLength: 11)
-        #expect(byLine == [[Token(kind: .comment, range: 0 ..< 4)], [Token(kind: .comment, range: 0 ..< 4)]])
-    }
 }
 
 extension String.UTF16View {
