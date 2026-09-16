@@ -44,7 +44,7 @@ struct HunkLayoutTests {
 
     @Test
     func `the diff model exposes change ranges for both layouts`() {
-        let model = DiffModel(oldText: "a\nb\nc\nd\n", newText: "a\nB\nc\nd\ne\n")
+        let model = DiffModel(oldText: "a\nb\nc\nd\n", newText: "a\nB\nc\nd\ne\n", tokenRanges: CodeTokenRanges())
         #expect(model.unifiedChangeRanges == [1 ..< 3, 5 ..< 6])
         #expect(model.splitChangeRanges == [1 ..< 2, 4 ..< 5])
     }
