@@ -1,5 +1,6 @@
 import Testing
 
+@testable import AtelierSyntaxModel
 @testable import KittySyntax
 
 @Suite

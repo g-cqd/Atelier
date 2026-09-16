@@ -94,7 +94,8 @@ let package = Package(
             dependencies: [
                 .product(name: "AtelierGrammar", package: "AtelierCore"),
                 .product(name: "AtelierParser", package: "AtelierCore"),
-                .product(name: "AtelierQuery", package: "AtelierCore"), "KittyStyle"
+                .product(name: "AtelierQuery", package: "AtelierCore"), "KittyStyle",
+                .product(name: "AtelierSyntaxModel", package: "AtelierCore")
             ],
             resources: [.copy("Grammars")],
             swiftSettings: strict
@@ -167,7 +168,8 @@ let package = Package(
             name: "KittyRendererTests", dependencies: ["KittyRenderer", "KittyTerminal"],
             swiftSettings: strict),
         .testTarget(
-            name: "KittySyntaxTests", dependencies: ["KittySyntax", "KittyCodecs"],
+            name: "KittySyntaxTests",
+            dependencies: ["KittySyntax", "KittyCodecs", .product(name: "AtelierSyntaxModel", package: "AtelierCore")],
             swiftSettings: strict),
         .testTarget(
             name: "KittyWidgetsTests", dependencies: ["KittyWidgets"],

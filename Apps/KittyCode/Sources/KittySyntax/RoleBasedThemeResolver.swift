@@ -1,3 +1,4 @@
+public import AtelierSyntaxModel
 public import KittyStyle
 
 /// Resolves `(HighlightRole, HighlightModifierSet)` to a visual `Style`
