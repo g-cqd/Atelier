@@ -87,7 +87,29 @@ public final class GrammarRegistry: Sendable {
                 let extensions = item["extensions"] as? [String],
                 let path = item["path"] as? String
             else { continue }
+            // Audit C.5/F4 — reject path-traversal payloads in the
+            // attacker-controllable `path` field of an extension
+            // manifest. Without this guard, a malicious
+            // `languages.json` could set `"path": "../../../etc"` and
+            // `grammar(for:grammarsPath:)` would read arbitrary files
+            // outside the bundled-grammar root. Allow only a single
+            // safe-name token; reject `..`, `/`, leading `~`, and
+            // anything that contains non-`[A-Za-z0-9_-]` characters.
+            guard Self.isSafePathToken(path) else { continue }
             register(LanguageEntry(name: name, extensions: extensions, path: path))
+        }
+    }
+
+    private static func isSafePathToken(_ value: String) -> Bool {
+        guard !value.isEmpty,
+            !value.hasPrefix("~"),
+            !value.contains(".."),
+            !value.contains("/"),
+            !value.contains("\\")
+        else { return false }
+        return value.allSatisfy { ch in
+            ch.isASCII
+                && (ch.isLetter || ch.isNumber || ch == "_" || ch == "-" || ch == ".")
         }
     }
 
