@@ -10,6 +10,7 @@ import SwiftUI
 /// never outgrows the screen.
 struct SettingsView: View {
     @Bindable var settings: ViewerSettings
+    let runner: any ProcessRunner
 
     var body: some View {
         TabView {
@@ -20,7 +21,7 @@ struct SettingsView: View {
                 DiffSettings(settings: settings)
             }
             Tab("Appearance", systemImage: "paintpalette") {
-                AppearanceSettings(settings: settings)
+                AppearanceSettings(settings: settings, runner: runner)
             }
         }
         .frame(width: 560, height: 520)
@@ -111,7 +112,8 @@ private struct DiffSettings: View {
 
 private struct AppearanceSettings: View {
     @Bindable var settings: ViewerSettings
-    @State private var themes = XcodeThemeLibrary.entries()
+    let runner: any ProcessRunner
+    @State private var themes: [XcodeThemeLibrary.Entry] = []
 
     var body: some View {
         Form {
@@ -145,7 +147,7 @@ private struct AppearanceSettings: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear { themes = XcodeThemeLibrary.entries() }
+        .task { themes = await XcodeThemeLibrary.entries(runner: runner) }
     }
 
     private var wrapsAtColumn: Binding<Bool> {
