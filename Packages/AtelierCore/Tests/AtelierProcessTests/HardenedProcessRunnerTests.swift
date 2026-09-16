@@ -49,6 +49,35 @@ struct HardenedProcessRunnerTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func `overrides sit on top of the inherited environment`() async throws {
+        let pool = BlockingOffloadPool(width: 2)
+        defer { pool.shutdown() }
+        let runner = HardenedProcessRunner(pool: pool)
+        let spec = ProcessSpec(
+            executable: URL(filePath: "/bin/sh"), arguments: ["-c", "printf '%s|%s' \"$HOME\" \"$ATELIER_PROBE\""],
+            environment: .inherited(overriding: ["ATELIER_PROBE": "set"]))
+        let output = try await runner.run(spec)
+        let home = ProcessInfo.processInfo.environment["HOME"] ?? ""
+        #expect(String(decoding: output.standardOutput, as: UTF8.self) == "\(home)|set")
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func `a child that ignores the termination is killed after the grace period`() async throws {
+        let pool = BlockingOffloadPool(width: 2)
+        defer { pool.shutdown() }
+        let clock = TestClock()
+        let runner = HardenedProcessRunner(pool: pool, clock: clock)
+        // `trap '' TERM` makes the shell ignore SIGTERM; only SIGKILL ends it.
+        let run = Task { try await runner.run(Self.shell("trap '' TERM; sleep 60", timeout: .seconds(5))) }
+        try await clock.waitForSleepers(atLeast: 1)
+        clock.advance(by: .seconds(5))
+        // The timeout sleeper left the queue when it fired; the grace sleeper is the only one that can be queued now.
+        try await clock.waitForSleepers(atLeast: 1)
+        clock.advance(by: HardenedProcessRunner.killGracePeriod)
+        await #expect(throws: ProcessError.timedOut(.seconds(5))) { try await run.value }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func `a missing executable fails to launch`() async throws {
         let pool = BlockingOffloadPool(width: 2)
         defer { pool.shutdown() }

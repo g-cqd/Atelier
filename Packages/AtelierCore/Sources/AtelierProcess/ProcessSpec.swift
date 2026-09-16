@@ -4,10 +4,22 @@ public import Foundation
 public struct ProcessSpec: Sendable, Hashable {
     /// How the child's environment is built.
     public enum Environment: Sendable, Hashable {
-        /// The parent's environment, as `Process` inherits it.
-        case inherited
+        /// The parent's environment as `Process` inherits it, with `overriding` set on top of it.
+        case inherited(overriding: [String: String] = [:])
         /// Exactly these variables and nothing else; the parent's environment does not leak through.
         case exactly([String: String])
+
+        /// The variables the child is given, or nil for the parent's environment untouched.
+        public var variables: [String: String]? {
+            switch self {
+                case .inherited(let overrides) where overrides.isEmpty:
+                    nil
+                case .inherited(let overrides):
+                    ProcessInfo.processInfo.environment.merging(overrides) { _, override in override }
+                case .exactly(let variables):
+                    variables
+            }
+        }
     }
 
     public var executable: URL
@@ -23,7 +35,7 @@ public struct ProcessSpec: Sendable, Hashable {
         executable: URL,
         arguments: [String] = [],
         currentDirectory: URL? = nil,
-        environment: Environment = .inherited,
+        environment: Environment = .inherited(),
         standardInput: Data? = nil,
         timeout: Duration? = nil
     ) {
