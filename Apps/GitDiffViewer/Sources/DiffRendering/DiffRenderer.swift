@@ -149,7 +149,7 @@ package enum DiffRenderer {
 
     // MARK: Attributed text
 
-    package static func tokensByLine(text: String, lines: [Substring], language: Language) -> [[Token]] {
+    package static func tokensByLine(text: String, lines: [Substring], language: Language) -> [[HighlightToken]] {
         var lineStarts: [Int] = []
         lineStarts.reserveCapacity(lines.count)
         var offset = 0
@@ -157,8 +157,8 @@ package enum DiffRenderer {
             lineStarts.append(offset)
             offset += line.utf16.count + 1
         }
-        let tokens = SyntaxHighlighter.tokens(in: text, language: language)
-        return SyntaxHighlighter.tokensByLine(tokens, lineStarts: lineStarts, textLength: text.utf16.count)
+        let tokens = LexicalHighlightEngine().highlight(utf16: Array(text.utf16), language: language)
+        return HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: text.utf16.count)
     }
 
     private static func render(rows: [RenderRow], side: RenderedSide, options: Options) -> RenderedText {
@@ -183,8 +183,9 @@ package enum DiffRenderer {
                         for token in shown.tokens {
                             spans.tokens.append(
                                 (
-                                    NSRange(location: offset + token.range.lowerBound, length: token.range.count),
-                                    token.kind
+                                    NSRange(
+                                        location: offset + token.byteRange.lowerBound, length: token.byteRange.count),
+                                    token.role
                                 ))
                         }
                         for range in shown.ref.emphasis {
@@ -234,7 +235,7 @@ package enum DiffRenderer {
     /// labels and bold headers.
     /// The coloured stretches of an assembled text, in UTF-16 ranges over the whole text.
     private struct RenderSpans {
-        var tokens: [(NSRange, TokenKind)] = []
+        var tokens: [(NSRange, HighlightRole)] = []
         var emphasis: [(NSRange, RowKind)] = []
         var secondary: [NSRange] = []
     }
@@ -286,7 +287,7 @@ package enum DiffRenderer {
     private struct ShownLine {
         let ref: DiffLineRef
         let line: Substring
-        let tokens: [Token]
+        let tokens: [HighlightToken]
     }
 
     private static func shownLine(of row: DiffRow, in file: PreparedDiff, side: RenderedSide) -> ShownLine? {
