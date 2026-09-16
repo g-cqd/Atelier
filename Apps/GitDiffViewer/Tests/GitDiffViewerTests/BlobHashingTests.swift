@@ -21,4 +21,17 @@ struct BlobHashingTests {
             #expect(mapped == "ce013625030ba8dba906f756967f9e9ca394464a")
         }
     }
+
+    @Test
+    func `a file that shrank after the scan is hashed at its size on disk, not the stale one`() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "gdv-\(UUID().uuidString).txt")
+        try Data("hello\n".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let path = url.path(percentEncoded: false)
+
+        // The scan saw a longer file; mapping that length would touch pages past the end and take SIGBUS.
+        #expect(try SourceLoader.blobID(atPath: path, size: 100_000) == "ce013625030ba8dba906f756967f9e9ca394464a")
+        try Data().write(to: url)
+        #expect(try SourceLoader.blobID(atPath: path, size: 6) == SourceLoader.blobID(of: Data()))
+    }
 }

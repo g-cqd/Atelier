@@ -1,12 +1,20 @@
 import AemiIO
-import AemiRuntime
 import CryptoKit
 package import DiffCore
 package import Foundation
 import Synchronization
 
+import func AemiRuntime.mapConcurrently
+
 /// Reads comparison targets through one provider per kind of source; renames need both sides so they stay here.
 package struct SourceLoader: SourceReading {
+    /// How git is spawned; the app owns the pool behind it.
+    package let runner: any ProcessRunner
+
+    package init(runner: any ProcessRunner) {
+        self.runner = runner
+    }
+
     /// Files above this size are listed but not hashed, so they always count as different.
     package static let maximumHashedSize = 8 * 1024 * 1024
     package static let skippedDirectories: Set<String> = ["node_modules", "DerivedData", "Pods", "Carthage"]
@@ -27,8 +35,6 @@ package struct SourceLoader: SourceReading {
 
     private let patches = PatchCache()
 
-    package init() {}
-
     package static func isSupported(path: String) -> Bool {
         !binaryExtensions.contains(URL(filePath: path).pathExtension.lowercased())
     }
@@ -43,8 +49,8 @@ package struct SourceLoader: SourceReading {
     }
 
     package func repositoryInfo(containing url: URL) async -> RepositoryInfo? {
-        guard let root = await GitClient.repositoryRoot(containing: url) else { return nil }
-        return try? await GitClient(repository: root).info()
+        guard let root = await GitClient.repositoryRoot(containing: url, runner: runner) else { return nil }
+        return try? await GitClient(repository: root, runner: runner).info()
     }
 
     package func entries(of source: ComparisonSource) async throws -> [SourceEntry] {
@@ -66,19 +72,23 @@ package struct SourceLoader: SourceReading {
     private func provider(for source: ComparisonSource) -> any SourceProvider {
         switch source {
             case .file(let url): FileSource(url: url)
-            case .directory(let url): DirectorySource(root: url)
-            case .gitRef(let repository, let ref): GitRefSource(repository: repository, ref: ref)
+            case .directory(let url): DirectorySource(root: url, runner: runner)
+            case .gitRef(let repository, let ref): GitRefSource(repository: repository, ref: ref, runner: runner)
             case .patch(let url, let side): PatchSource(url: url, side: side, cache: patches)
         }
+    }
+
+    package func resolve(ref: String, in repository: URL) async throws -> String {
+        try await GitClient(repository: repository, runner: runner).resolve(ref: ref)
     }
 
     package func renames(from left: ComparisonSource, to right: ComparisonSource) async -> [String: String] {
         switch (left, right) {
             case (.gitRef(let repository, let from), .gitRef(let other, let to)) where repository == other:
-                (try? await GitClient(repository: repository).renames(from: from, to: to)) ?? [:]
+                (try? await GitClient(repository: repository, runner: runner).renames(from: from, to: to)) ?? [:]
             case (.gitRef(let repository, let from), .directory(let folder))
             where repository.standardizedFileURL == folder.standardizedFileURL:
-                (try? await GitClient(repository: repository).renames(from: from, to: nil)) ?? [:]
+                (try? await GitClient(repository: repository, runner: runner).renames(from: from, to: nil)) ?? [:]
             case (.patch(let url, .old), .patch(let other, .new)) where url == other:
                 Dictionary(
                     ((try? await patches.patch(at: url))?.files ?? []).filter(\.isRename)
@@ -101,16 +111,30 @@ package struct SourceLoader: SourceReading {
     }
 
     /// Hashes a file through a read-only memory mapping, so no copy of the contents is made.
+    /// Hashes a file through a read-only memory mapping, so no copy of its contents is made. The length comes from
+    /// the open descriptor, not from `size`: a file truncated between the directory scan and this hash would
+    /// otherwise be mapped past its end, and touching such a page raises SIGBUS. A truncation after the descriptor
+    /// is measured is the one window that remains.
+    /// - Parameters:
+    ///   - path: The file to hash.
+    ///   - size: The size the scan saw; only used to skip the mapping of an empty file.
+    /// - Returns: The hex git blob id of the file's current contents.
+    /// - Throws: `IOError` when the file cannot be opened, measured or mapped.
     package static func blobID(atPath path: String, size: Int) throws -> String {
         var hasher = Insecure.SHA1()
-        hasher.update(data: Data("blob \(size)\0".utf8))
-        if size > 0 {
-            let file = try PosixFile(path: path, mode: .readOnly)
-            defer { file.close() }
-            let map = try RawFileMap(fileDescriptor: file.fileDescriptor, capacity: size)
+        guard size > 0 else {
+            hasher.update(data: Data("blob 0\0".utf8))
+            return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        }
+        let file = try PosixFile(path: path, mode: .readOnly)
+        defer { file.close() }
+        let count = try file.fileSize()
+        hasher.update(data: Data("blob \(count)\0".utf8))
+        if count > 0 {
+            let map = try RawFileMap(fileDescriptor: file.fileDescriptor, capacity: count)
             // The whole file is read once, front to back: let the kernel page it in ahead of the hash.
-            map.prefetch(offset: 0, length: size)
-            map.withRegion(offset: 0, count: size) { region in
+            map.prefetch(offset: 0, length: count)
+            map.withRegion(offset: 0, count: count) { region in
                 region.withUnsafeBytes { hasher.update(bufferPointer: $0) }
             }
         }
@@ -174,6 +198,7 @@ package struct FileSource: SourceProvider {
 
 package struct DirectorySource: SourceProvider {
     package let root: URL
+    package let runner: any ProcessRunner
 
     /// Inside a repository, the folder as git sees it: tracked and untracked files, dotfiles included, nothing
     /// git ignores. Elsewhere, a folder scan that leaves hidden files out.
@@ -215,7 +240,8 @@ package struct DirectorySource: SourceProvider {
 
     /// Git run in this folder, when it lies in a repository: `ls-files` then lists paths relative to the folder.
     private func gitClient() async -> GitClient? {
-        await GitClient.repositoryRoot(containing: root) == nil ? nil : GitClient(repository: root)
+        await GitClient.repositoryRoot(containing: root, runner: runner) == nil
+            ? nil : GitClient(repository: root, runner: runner)
     }
 
     /// Keeps the regular, supported files among `paths`: an index entry whose file is gone, a submodule or an
@@ -274,18 +300,20 @@ package struct DirectorySource: SourceProvider {
 package struct GitRefSource: SourceProvider {
     package let repository: URL
     package let ref: String
+    package let runner: any ProcessRunner
 
     package func entries() async throws -> [SourceEntry] {
-        try await GitClient(repository: repository).tree(at: ref, isSupported: SourceLoader.isSupported(path:))
+        try await GitClient(repository: repository, runner: runner)
+            .tree(at: ref, isSupported: SourceLoader.isSupported(path:))
     }
 
     package func content(of entry: SourceEntry) async throws -> String {
-        SourceLoader.text(from: try await GitClient(repository: repository).blob(entry.blobID ?? ""))
+        SourceLoader.text(from: try await GitClient(repository: repository, runner: runner).blob(entry.blobID ?? ""))
     }
 
     /// Blobs are fetched through one `cat-file --batch` process per batch instead of one process per file.
     package func contents(of entries: [SourceEntry]) async throws -> [String: String] {
-        let client = GitClient(repository: repository)
+        let client = GitClient(repository: repository, runner: runner)
         let ids = Array(Set(entries.compactMap(\.blobID)))
         let batches = stride(from: 0, to: ids.count, by: SourceLoader.blobBatchSize)
             .map { Array(ids[$0 ..< min($0 + SourceLoader.blobBatchSize, ids.count)]) }

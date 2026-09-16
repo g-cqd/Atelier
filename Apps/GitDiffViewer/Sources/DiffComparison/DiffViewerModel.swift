@@ -45,7 +45,7 @@ package final class DiffViewerModel {
 
     package init(
         settings: ViewerSettings = ViewerSettings(),
-        reader: any SourceReading = SourceLoader(),
+        reader: any SourceReading,
         taskProvider: any TaskProvider = .default,
         uptime: @escaping MonotonicNanosecondsProvider = LiveClock.monotonicNanoseconds
     ) {
