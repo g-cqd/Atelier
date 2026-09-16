@@ -7,10 +7,10 @@ public enum SyntaxTokenizer {
     public static func tokenRangesByLine(text: String, language: Language) -> [[Range<Int>]] {
         let lines = DiffModel.lines(of: text)
         switch language {
-        case .swift:
-            return swiftTokenRangesByLine(text: text, lineCount: lines.count)
-        default:
-            return lines.map { IntralineTokenizer.codeTokens(Array($0.utf16)) }
+            case .swift:
+                return swiftTokenRangesByLine(text: text, lineCount: lines.count)
+            default:
+                return lines.map { IntralineTokenizer.codeTokens(Array($0.utf16)) }
         }
     }
 
@@ -25,7 +25,7 @@ public enum SyntaxTokenizer {
             }
             let length = token.text.utf8.count
             if length > 0 {
-                utf8Ranges.append(offset..<(offset + length))
+                utf8Ranges.append(offset ..< (offset + length))
             }
             offset += length
             for piece in token.trailingTrivia.pieces {
@@ -39,16 +39,16 @@ public enum SyntaxTokenizer {
     /// Comments are split into words so a changed word inside a comment is emphasized on its own.
     private static func append(trivia piece: TriviaPiece, at offset: Int, to ranges: inout [Range<Int>]) {
         switch piece {
-        case .lineComment(let text), .blockComment(let text), .docLineComment(let text), .docBlockComment(let text):
-            for word in IntralineTokenizer.words(Array(text.utf16)) {
-                let start = utf8Offset(of: word.lowerBound, inUTF16Of: text)
-                let end = utf8Offset(of: word.upperBound, inUTF16Of: text)
-                ranges.append((offset + start)..<(offset + end))
-            }
-        case .spaces(let count), .tabs(let count):
-            ranges.append(offset..<(offset + count))
-        default:
-            break
+            case .lineComment(let text), .blockComment(let text), .docLineComment(let text), .docBlockComment(let text):
+                for word in IntralineTokenizer.words(Array(text.utf16)) {
+                    let start = utf8Offset(of: word.lowerBound, inUTF16Of: text)
+                    let end = utf8Offset(of: word.upperBound, inUTF16Of: text)
+                    ranges.append((offset + start) ..< (offset + end))
+                }
+            case .spaces(let count), .tabs(let count):
+                ranges.append(offset ..< (offset + count))
+            default:
+                break
         }
     }
 
@@ -86,7 +86,7 @@ public enum SyntaxTokenizer {
             converted[next] = utf16Offset
             next += 1
         }
-        return stride(from: 0, to: converted.count, by: 2).map { converted[$0]..<converted[$0 + 1] }
+        return stride(from: 0, to: converted.count, by: 2).map { converted[$0] ..< converted[$0 + 1] }
     }
 
     private static func splitByLine(_ ranges: [Range<Int>], text: String, lineCount: Int) -> [[Range<Int>]] {

@@ -17,7 +17,7 @@ package final class MinimapView: NSView {
     }
 
     /// Rows currently visible in the pane, asked for at draw time.
-    package var visibleRows: () -> Range<Int> = { 0..<0 }
+    package var visibleRows: () -> Range<Int> = { 0 ..< 0 }
     /// Called with the row under the pointer while clicking or dragging.
     package var onSelectRow: (Int) -> Void = { _ in }
 
@@ -91,10 +91,10 @@ package final class MinimapView: NSView {
         let width = Int(bounds.width * scale)
         let height = Int(bounds.height * scale)
         guard width > 0, height > 0,
-              let context = CGContext(
-                  data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
-                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-              )
+            let context = CGContext(
+                data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
         else { return nil }
         context.scaleBy(x: scale, y: scale)
 
@@ -102,18 +102,20 @@ package final class MinimapView: NSView {
         let barSpace = bounds.width - 2 * horizontalPadding
         for bucket in buckets(of: rendered, geometry: geometry) {
             guard let color = rendered.palette.minimapColor(for: bucket.kind, side: rendered.side) else { continue }
-            let share: CGFloat = switch geometry.detail {
-            case .full, .aggregated: CGFloat(min(bucket.length, longestBar)) / CGFloat(longestBar)
-            case .schematic: bucket.kind == .context ? 0.35 : 1
-            }
+            let share: CGFloat =
+                switch geometry.detail {
+                    case .full, .aggregated: CGFloat(min(bucket.length, longestBar)) / CGFloat(longestBar)
+                    case .schematic: bucket.kind == .context ? 0.35 : 1
+                }
             let barHeight = max(bucket.height * 0.8, 1)
             context.setFillColor(color.cgColor)
-            context.fill(CGRect(
-                x: horizontalPadding,
-                y: bounds.height - bucket.y - barHeight,
-                width: 2 + barSpace * share,
-                height: barHeight
-            ))
+            context.fill(
+                CGRect(
+                    x: horizontalPadding,
+                    y: bounds.height - bucket.y - barHeight,
+                    width: 2 + barSpace * share,
+                    height: barHeight
+                ))
         }
         return context.makeImage()
     }
@@ -128,13 +130,16 @@ package final class MinimapView: NSView {
     /// One bucket per row at full detail, otherwise one per point holding the strongest kind and longest line.
     private func buckets(of rendered: RenderedText, geometry: MinimapGeometry) -> [Bucket] {
         func length(ofRow row: Int) -> Int {
-            let nextStart = row + 1 < rendered.lineStarts.count ? rendered.lineStarts[row + 1] : rendered.lineStarts[row] + 1
+            let nextStart =
+                row + 1 < rendered.lineStarts.count ? rendered.lineStarts[row + 1] : rendered.lineStarts[row] + 1
             return nextStart - rendered.lineStarts[row] - 1
         }
         if geometry.detail == .full {
-            return rendered.rows.enumerated().map { row, meta in
-                Bucket(y: geometry.y(ofRow: row), height: geometry.pitch, kind: meta.kind, length: length(ofRow: row))
-            }
+            return rendered.rows.enumerated()
+                .map { row, meta in
+                    Bucket(
+                        y: geometry.y(ofRow: row), height: geometry.pitch, kind: meta.kind, length: length(ofRow: row))
+                }
         }
         var buckets = [Bucket?](repeating: nil, count: geometry.bucketCount)
         for (row, meta) in rendered.rows.enumerated() {
@@ -153,11 +158,11 @@ package final class MinimapView: NSView {
 
     private static func priority(of kind: RowKind) -> Int {
         switch kind {
-        case .filler, .gap: 0
-        case .context: 1
-        case .header: 2
-        case .modified: 3
-        case .added, .removed: 4
+            case .filler, .gap: 0
+            case .context: 1
+            case .header: 2
+            case .modified: 3
+            case .added, .removed: 4
         }
     }
 }

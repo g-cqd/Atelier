@@ -1,9 +1,10 @@
 import Foundation
+import Testing
+
 @testable import DiffComparison
 @testable import DiffGit
 @testable import DiffRendering
 @testable import DiffTextKit
-import Testing
 
 struct BlobHashingTests {
     @Test(arguments: ["", "hello\n", String(repeating: "x", count: 100_000)])

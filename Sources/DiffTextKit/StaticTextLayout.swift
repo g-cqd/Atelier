@@ -47,11 +47,14 @@ package final class StaticTextLayout {
 
     /// Lays the text out for `mode` in a pane `viewportWidth` wide.
     package func layOut(mode: WrapMode, viewportWidth: CGFloat) {
-        let width: CGFloat = switch mode {
-        case .viewport: viewportWidth
-        case .column(let column): DiffPalette.wrapWidth(column: column, font: rendered.palette.font, padding: container.lineFragmentPadding)
-        case .none: DiffPaneMetrics.unboundedExtent
-        }
+        let width: CGFloat =
+            switch mode {
+                case .viewport: viewportWidth
+                case .column(let column):
+                    DiffPalette.wrapWidth(
+                        column: column, font: rendered.palette.font, padding: container.lineFragmentPadding)
+                case .none: DiffPaneMetrics.unboundedExtent
+            }
         if width != self.width {
             self.width = width
             container.size = NSSize(width: max(width, 1), height: DiffPaneMetrics.unboundedExtent)
@@ -108,4 +111,3 @@ package final class CardLayouts {
         new.apply(spacing: spacing.right)
     }
 }
-

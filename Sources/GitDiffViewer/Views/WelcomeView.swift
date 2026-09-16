@@ -49,9 +49,16 @@ struct WelcomeView: View {
 
     private var actions: some View {
         VStack(alignment: .leading, spacing: 10) {
-            WelcomeAction("Open Repository…", symbol: "arrow.triangle.branch", detail: "Compare two branches, tags or commits, or one with the working tree") { openRepository() }
-            WelcomeAction("Compare Folders…", symbol: "folder", detail: "Two folders, file by file") { compareFolders() }
-            WelcomeAction("Compare Files…", symbol: "doc.text", detail: "Two files, whatever their names") { compareFiles() }
+            WelcomeAction(
+                "Open Repository…", symbol: "arrow.triangle.branch",
+                detail: "Compare two branches, tags or commits, or one with the working tree"
+            ) { openRepository() }
+            WelcomeAction("Compare Folders…", symbol: "folder", detail: "Two folders, file by file") {
+                compareFolders()
+            }
+            WelcomeAction("Compare Files…", symbol: "doc.text", detail: "Two files, whatever their names") {
+                compareFiles()
+            }
             WelcomeAction("Open Patch…", symbol: "doc.plaintext", detail: "A unified diff or git patch file") {
                 if let url = PatchOpenPanel.choose() { open(.patch(url)) }
             }
@@ -60,7 +67,8 @@ struct WelcomeView: View {
 
     @ViewBuilder private var recentList: some View {
         if recents.entries.isEmpty {
-            ContentUnavailableView("No Recent Comparisons", systemImage: "clock", description: Text("Comparisons you open appear here."))
+            ContentUnavailableView(
+                "No Recent Comparisons", systemImage: "clock", description: Text("Comparisons you open appear here."))
         } else {
             List(recents.entries, id: \.self) { entry in
                 RecentRow(entry: entry)
@@ -87,20 +95,23 @@ struct WelcomeView: View {
             if let info = await SourceLoader().repositoryInfo(containing: url) {
                 pendingRepository = PendingRepository(info: info)
             } else {
-                failure = "\(url.lastPathComponent) is not inside a git repository. Use Compare Folders to compare it with another folder."
+                failure =
+                    "\(url.lastPathComponent) is not inside a git repository. Use Compare Folders to compare it with another folder."
             }
         }
     }
 
     private func compareFolders() {
         guard let left = Self.choose(directories: true, message: "Choose the left folder"),
-              let right = Self.choose(directories: true, message: "Choose the right folder") else { return }
+            let right = Self.choose(directories: true, message: "Choose the right folder")
+        else { return }
         open(.files(left: left, right: right))
     }
 
     private func compareFiles() {
         guard let left = Self.choose(directories: false, message: "Choose the left file"),
-              let right = Self.choose(directories: false, message: "Choose the right file") else { return }
+            let right = Self.choose(directories: false, message: "Choose the right file")
+        else { return }
         open(.files(left: left, right: right))
     }
 
@@ -175,25 +186,26 @@ private struct RecentRow: View {
 
     private var symbol: String {
         switch entry {
-        case .repository: "arrow.triangle.branch"
-        case .files(let left, _): left.hasDirectoryPath ? "folder" : "doc.text"
-        case .patch: "doc.plaintext"
+            case .repository: "arrow.triangle.branch"
+            case .files(let left, _): left.hasDirectoryPath ? "folder" : "doc.text"
+            case .patch: "doc.plaintext"
         }
     }
 
     private var title: String {
         switch entry {
-        case .repository(let url, _, _): url.lastPathComponent
-        case .files(let left, let right): "\(left.lastPathComponent) ↔ \(right.lastPathComponent)"
-        case .patch(let url): url.lastPathComponent
+            case .repository(let url, _, _): url.lastPathComponent
+            case .files(let left, let right): "\(left.lastPathComponent) ↔ \(right.lastPathComponent)"
+            case .patch(let url): url.lastPathComponent
         }
     }
 
     private var subtitle: String {
         switch entry {
-        case .repository(_, let leftRef, let rightRef): "\(GitCommit.abbreviated(leftRef)) ↔ \(rightRef.map(GitCommit.abbreviated) ?? "working tree")"
-        case .files(let left, _): left.deletingLastPathComponent().path(percentEncoded: false)
-        case .patch(let url): url.deletingLastPathComponent().path(percentEncoded: false)
+            case .repository(_, let leftRef, let rightRef):
+                "\(GitCommit.abbreviated(leftRef)) ↔ \(rightRef.map(GitCommit.abbreviated) ?? "working tree")"
+            case .files(let left, _): left.deletingLastPathComponent().path(percentEncoded: false)
+            case .patch(let url): url.deletingLastPathComponent().path(percentEncoded: false)
         }
     }
 }
@@ -213,7 +225,8 @@ struct RefPickerView: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(repository.root.lastPathComponent).font(.title2.bold())
-                Text(repository.root.path(percentEncoded: false)).font(.caption).foregroundStyle(.secondary).truncationMode(.middle)
+                Text(repository.root.path(percentEncoded: false)).font(.caption).foregroundStyle(.secondary)
+                    .truncationMode(.middle)
             }
             Form {
                 Picker("Compare", selection: $leftRef) {
@@ -242,7 +255,9 @@ struct RefPickerView: View {
         .frame(width: 480)
     }
 
-    @ViewBuilder private func refSections<Item: View>(@ViewBuilder item: @escaping (String, String) -> Item) -> some View {
+    @ViewBuilder private func refSections<Item: View>(@ViewBuilder item: @escaping (String, String) -> Item)
+        -> some View
+    {
         Section("Branches") {
             ForEach(repository.branches, id: \.self) { item($0, $0) }
         }

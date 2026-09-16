@@ -32,8 +32,10 @@ struct GitDiffViewerApp: App {
         }
 
         WindowGroup(id: WindowID.comparison, for: LaunchConfiguration.self) { $configuration in
-            ComparisonWindow(configuration: configuration ?? LaunchOptions.configuration, settings: settings, recents: recents)
-                .frame(minWidth: 900, minHeight: 600)
+            ComparisonWindow(
+                configuration: configuration ?? LaunchOptions.configuration, settings: settings, recents: recents
+            )
+            .frame(minWidth: 900, minHeight: 600)
         }
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1400, height: 900)
@@ -63,7 +65,8 @@ enum LaunchOptions {
     static var configuration: LaunchConfiguration {
         if let patch { return .patch(patch) }
         if let left, let right { return .files(left: left, right: right) }
-        let repository = self.repository ?? URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+        let repository =
+            self.repository ?? URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
         return .repository(repository, leftRef: leftRef ?? "HEAD", rightRef: rightRef)
     }
     static var leftRef: String? { UserDefaults.standard.string(forKey: "leftRef") }
@@ -81,7 +84,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-        NotificationCenter.default.addObserver(self, selector: #selector(windowWillClose(_:)), name: NSWindow.willCloseNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(windowWillClose(_:)), name: NSWindow.willCloseNotification, object: nil)
     }
 
     /// Closing the last comparison brings the welcome window back instead of quitting, as Xcode does.
@@ -136,7 +140,10 @@ struct WelcomeCommand: View {
 }
 
 enum PatchOpenPanel {
-    static let contentTypes: [UTType] = [UTType(filenameExtension: "patch"), UTType(filenameExtension: "diff"), .plainText].compactMap { $0 }
+    static let contentTypes: [UTType] = [
+        UTType(filenameExtension: "patch"), UTType(filenameExtension: "diff"), .plainText
+    ]
+    .compactMap { $0 }
 
     static func choose() -> URL? {
         let panel = NSOpenPanel()

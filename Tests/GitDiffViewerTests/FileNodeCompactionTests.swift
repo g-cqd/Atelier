@@ -1,8 +1,9 @@
+import Testing
+
 @testable import DiffComparison
 @testable import DiffGit
 @testable import DiffRendering
 @testable import DiffTextKit
-import Testing
 
 struct FileNodeCompactionTests {
     @Test

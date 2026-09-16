@@ -7,7 +7,7 @@ public enum RowAlignment {
         let count = max(left.count, right.count)
         var leftSpacing = [Double](repeating: 0, count: count)
         var rightSpacing = [Double](repeating: 0, count: count)
-        for row in 0..<count {
+        for row in 0 ..< count {
             let leftHeight = row < left.count ? left[row] : 0
             let rightHeight = row < right.count ? right[row] : 0
             let target = max(leftHeight, rightHeight)

@@ -39,8 +39,11 @@ private struct GeneralSettings: View {
                     Text("Stacked").tag(ViewMode.stacked)
                 }
                 Toggle("Isolate changes", isOn: $settings.isolatesChanges)
-                Stepper("Context lines around changes: \(settings.contextLines)", value: $settings.contextLines, in: 0...20)
-                    .disabled(!settings.isolatesChanges)
+                Stepper(
+                    "Context lines around changes: \(settings.contextLines)", value: $settings.contextLines,
+                    in: 0 ... 20
+                )
+                .disabled(!settings.isolatesChanges)
                 Text("Isolating changes shows only the changed regions, with the context lines around each.")
                     .settingsCaption()
             }
@@ -57,8 +60,10 @@ private struct GeneralSettings: View {
                 }
                 Toggle("Show changed files only", isOn: $settings.showsChangesOnly)
                 Toggle("Show the files git ignores in a section of their own", isOn: $settings.showsIgnoredFiles)
-                Text("Folders take the status of their contents: added or removed when all files are, changed otherwise.")
-                    .settingsCaption()
+                Text(
+                    "Folders take the status of their contents: added or removed when all files are, changed otherwise."
+                )
+                .settingsCaption()
             }
             Section("Window") {
                 Toggle("Keep split panes scrolled together", isOn: $settings.syncsScrolling)
@@ -124,7 +129,7 @@ private struct AppearanceSettings: View {
                 Picker("Line height", selection: $settings.lineHeightMultiple) {
                     Text("Theme").tag(0.0)
                     ForEach([0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.5, 1.75, 2.0], id: \.self) { multiple in
-                        Text(multiple.formatted(.number.precision(.fractionLength(0...2))) + "×").tag(multiple)
+                        Text(multiple.formatted(.number.precision(.fractionLength(0 ... 2))) + "×").tag(multiple)
                     }
                 }
                 Text("Theme follows the selected Xcode theme's line spacing, or 1× with the system colors.")
@@ -133,7 +138,7 @@ private struct AppearanceSettings: View {
                 Toggle("Wrap at a fixed column", isOn: wrapsAtColumn)
                     .disabled(!settings.wrapsLines)
                 if settings.wrapsLines, settings.wrapColumn > 0 {
-                    Stepper("Column: \(settings.wrapColumn)", value: $settings.wrapColumn, in: 40...400, step: 10)
+                    Stepper("Column: \(settings.wrapColumn)", value: $settings.wrapColumn, in: 40 ... 400, step: 10)
                 }
                 Text("In the side-by-side layout, paired rows keep the same height on both sides when lines wrap.")
                     .settingsCaption()
@@ -151,8 +156,8 @@ private struct AppearanceSettings: View {
     }
 }
 
-private extension Text {
-    func settingsCaption() -> some View {
+extension Text {
+    fileprivate func settingsCaption() -> some View {
         font(.caption).foregroundStyle(.secondary)
     }
 }

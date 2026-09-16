@@ -21,7 +21,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
 
     package init(
         layouts: CardLayouts, side: RenderedSide, gutter: GutterStyle, width: CGFloat, wrapMode: WrapMode = .viewport,
-        onGapDrag: ((GapMarker, GapExpansion, Int) -> Void)? = nil, currentExpansion: ((GapKey) -> GapExpansion)? = nil, onDisplayed: (() -> Void)? = nil
+        onGapDrag: ((GapMarker, GapExpansion, Int) -> Void)? = nil, currentExpansion: ((GapKey) -> GapExpansion)? = nil,
+        onDisplayed: (() -> Void)? = nil
     ) {
         self.layouts = layouts
         self.side = side
@@ -35,9 +36,9 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
 
     private var layout: StaticTextLayout? {
         switch side {
-        case .unified: layouts.unified
-        case .old: layouts.old
-        case .new: layouts.new
+            case .unified: layouts.unified
+            case .old: layouts.old
+            case .new: layouts.new
         }
     }
 
@@ -74,7 +75,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         gutterView.style = gutter
         let minimapView = MinimapView()
         minimapView.isHidden = true
-        let pane = DiffPaneView(gutterView: gutterView, scrollView: nil, contentView: scrollView, minimapView: minimapView)
+        let pane = DiffPaneView(
+            gutterView: gutterView, scrollView: nil, contentView: scrollView, minimapView: minimapView)
         context.coordinator.textView = textView
         update(pane, context: context)
         return pane

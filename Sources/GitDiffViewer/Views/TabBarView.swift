@@ -14,7 +14,10 @@ struct TabBarView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 2) {
                 ForEach(model.tabs.tabs) { tab in
-                    TabItem(tab: tab, isActive: tab.id == model.tabs.activeID, isFolder: !model.comparison.isFile(tab.path), status: model.status(ofPath: tab.path)) {
+                    TabItem(
+                        tab: tab, isActive: tab.id == model.tabs.activeID, isFolder: !model.comparison.isFile(tab.path),
+                        status: model.status(ofPath: tab.path)
+                    ) {
                         model.activateTab(tab.id)
                     } pin: {
                         model.pinTab(tab.id)
@@ -69,7 +72,10 @@ private struct TabItem: View {
         .padding(.trailing, 10)
         .padding(.vertical, 5)
         .background(RoundedRectangle(cornerRadius: 6).fill(isActive ? Color.accentColor.opacity(0.18) : Color.clear))
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(isActive ? Color.accentColor.opacity(0.5) : Color(nsColor: .separatorColor)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(isActive ? Color.accentColor.opacity(0.5) : Color(nsColor: .separatorColor))
+        )
         .contentShape(Rectangle())
         .onTapGesture(perform: activate)
         .simultaneousGesture(TapGesture(count: 2).onEnded(pin))
@@ -79,11 +85,11 @@ private struct TabItem: View {
 
     private var color: Color {
         switch status {
-        case .onlyLeft: .red
-        case .onlyRight: .green
-        case .renamed: .purple
-        case .different: .orange
-        default: .secondary
+            case .onlyLeft: .red
+            case .onlyRight: .green
+            case .renamed: .purple
+            case .different: .orange
+            default: .secondary
         }
     }
 }

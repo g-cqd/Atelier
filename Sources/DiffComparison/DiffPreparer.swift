@@ -1,10 +1,11 @@
-import func AemiRuntime.mapConcurrently
 package import AemiCore
 package import DiffCore
 package import DiffGit
 package import DiffRendering
 import Foundation
 import Observation
+
+import func AemiRuntime.mapConcurrently
 
 /// Reads and diffs files, keeping every result by content so a file compared once shows at once afterwards.
 /// Blob ids are content hashes on every kind of source, so cached entries never go stale; the cache is only bounded.
@@ -31,7 +32,9 @@ package final class DiffPreparer {
         let heuristics: DiffHeuristics
 
         init?(_ pair: FilePair, granularity: IntralineGranularity, heuristics: DiffHeuristics) {
-            guard pair.old == nil || pair.old?.blobID != nil, pair.new == nil || pair.new?.blobID != nil else { return nil }
+            guard pair.old == nil || pair.old?.blobID != nil, pair.new == nil || pair.new?.blobID != nil else {
+                return nil
+            }
             path = pair.path
             oldBlob = pair.old?.blobID ?? ""
             newBlob = pair.new?.blobID ?? ""
@@ -40,7 +43,9 @@ package final class DiffPreparer {
         }
     }
 
-    package func cached(_ pair: FilePair, granularity: IntralineGranularity, heuristics: DiffHeuristics) -> PreparedDiff? {
+    package func cached(_ pair: FilePair, granularity: IntralineGranularity, heuristics: DiffHeuristics)
+        -> PreparedDiff?
+    {
         Key(pair, granularity: granularity, heuristics: heuristics).flatMap { cache[$0] }
     }
 
@@ -48,7 +53,8 @@ package final class DiffPreparer {
     /// parallel off the main actor, then cached. Structured, so cancelling the caller stops the work and the
     /// caller's priority is the work's priority.
     package func prepare(
-        _ pairs: [FilePair], left: ComparisonSource, right: ComparisonSource, granularity: IntralineGranularity, heuristics: DiffHeuristics
+        _ pairs: [FilePair], left: ComparisonSource, right: ComparisonSource, granularity: IntralineGranularity,
+        heuristics: DiffHeuristics
     ) async throws -> [PreparedDiff] {
         guard !pairs.isEmpty else { return [] }
         try Task.checkCancellation()
@@ -56,7 +62,9 @@ package final class DiffPreparer {
         let misses = pairs.indices.filter { result[$0] == nil }
         guard !misses.isEmpty else { return result.compactMap { $0 } }
 
-        let prepared = try await Self.load(misses.map { pairs[$0] }, left: left, right: right, granularity: granularity, heuristics: heuristics, reader: reader)
+        let prepared = try await Self.load(
+            misses.map { pairs[$0] }, left: left, right: right, granularity: granularity, heuristics: heuristics,
+            reader: reader)
         try Task.checkCancellation()
         if cache.count + prepared.count > Self.cacheLimit { cache.removeAll(keepingCapacity: true) }
         for (index, diff) in zip(misses, prepared) {
@@ -67,14 +75,19 @@ package final class DiffPreparer {
     }
 
     /// Prepares `pairs` in the background at low priority; a new prefetch or a cancel supersedes it.
-    package func prefetch(_ pairs: [FilePair], left: ComparisonSource, right: ComparisonSource, granularity: IntralineGranularity, heuristics: DiffHeuristics) {
+    package func prefetch(
+        _ pairs: [FilePair], left: ComparisonSource, right: ComparisonSource, granularity: IntralineGranularity,
+        heuristics: DiffHeuristics
+    ) {
         prefetchTask?.cancel()
         let pending = pairs.filter { cached($0, granularity: granularity, heuristics: heuristics) == nil }
         guard !pending.isEmpty else { return }
         prefetchTask = taskProvider.task(priority: .utility) {
             for start in stride(from: 0, to: pending.count, by: Self.prefetchBatch) {
                 guard !Task.isCancelled else { return }
-                _ = try? await prepare(Array(pending[start..<min(start + Self.prefetchBatch, pending.count)]), left: left, right: right, granularity: granularity, heuristics: heuristics)
+                _ = try? await prepare(
+                    Array(pending[start ..< min(start + Self.prefetchBatch, pending.count)]), left: left, right: right,
+                    granularity: granularity, heuristics: heuristics)
             }
         }
     }
@@ -86,7 +99,8 @@ package final class DiffPreparer {
 
     @concurrent
     private static func load(
-        _ pairs: [FilePair], left: ComparisonSource, right: ComparisonSource, granularity: IntralineGranularity, heuristics: DiffHeuristics, reader: any SourceReading
+        _ pairs: [FilePair], left: ComparisonSource, right: ComparisonSource, granularity: IntralineGranularity,
+        heuristics: DiffHeuristics, reader: any SourceReading
     ) async throws -> [PreparedDiff] {
         async let oldTexts = reader.contents(of: pairs.compactMap(\.old), in: left)
         async let newTexts = reader.contents(of: pairs.compactMap(\.new), in: right)

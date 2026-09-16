@@ -15,58 +15,59 @@ enum ChangeGlyph {
     case renamed
 
     init(_ kind: FileChangeSummary.Kind) {
-        self = switch kind {
-        case .added: .added
-        case .deleted: .deleted
-        case .modified: .modified
-        case .renamed: .renamed
-        }
+        self =
+            switch kind {
+                case .added: .added
+                case .deleted: .deleted
+                case .modified: .modified
+                case .renamed: .renamed
+            }
     }
 
     /// Nil for an identical path, which gets no badge.
     init?(_ status: PathStatus) {
         switch status {
-        case .same: return nil
-        case .different: self = .modified
-        case .onlyLeft: self = .deleted
-        case .onlyRight: self = .added
-        case .renamed: self = .renamed
+            case .same: return nil
+            case .different: self = .modified
+            case .onlyLeft: self = .deleted
+            case .onlyRight: self = .added
+            case .renamed: self = .renamed
         }
     }
 
     var letter: String {
         switch self {
-        case .added: "A"
-        case .deleted: "D"
-        case .modified: "M"
-        case .renamed: "R"
+            case .added: "A"
+            case .deleted: "D"
+            case .modified: "M"
+            case .renamed: "R"
         }
     }
 
     var title: String {
         switch self {
-        case .added: "Added"
-        case .deleted: "Deleted"
-        case .modified: "Modified"
-        case .renamed: "Renamed"
+            case .added: "Added"
+            case .deleted: "Deleted"
+            case .modified: "Modified"
+            case .renamed: "Renamed"
         }
     }
 
     var color: Color {
         switch self {
-        case .added: .green
-        case .deleted: .red
-        case .modified: .orange
-        case .renamed: .purple
+            case .added: .green
+            case .deleted: .red
+            case .modified: .orange
+            case .renamed: .purple
         }
     }
 
     var nsColor: NSColor {
         switch self {
-        case .added: .systemGreen
-        case .deleted: .systemRed
-        case .modified: .systemOrange
-        case .renamed: .systemPurple
+            case .added: .systemGreen
+            case .deleted: .systemRed
+            case .modified: .systemOrange
+            case .renamed: .systemPurple
         }
     }
 
@@ -95,9 +96,9 @@ struct ChangeBadge: View {
 
     private var showsCounts: Bool {
         switch summary.kind {
-        case .added, .deleted: false
-        case .modified: true
-        case .renamed: summary.addedLines + summary.removedLines > 0
+            case .added, .deleted: false
+            case .modified: true
+            case .renamed: summary.addedLines + summary.removedLines > 0
         }
     }
 
@@ -145,7 +146,7 @@ final class ChangeBadgeView: NSView {
         NSBezierPath(roundedRect: bounds, xRadius: ChangeGlyph.cornerRadius, yRadius: ChangeGlyph.cornerRadius).fill()
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .bold),
-            .foregroundColor: NSColor.white.withAlphaComponent(alpha),
+            .foregroundColor: NSColor.white.withAlphaComponent(alpha)
         ]
         let text = NSAttributedString(string: glyph.letter, attributes: attributes)
         let size = text.size()

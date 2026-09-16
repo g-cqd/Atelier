@@ -10,35 +10,37 @@ let strict: [SwiftSetting] = [
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("InferIsolatedConformances"),
     .enableUpcomingFeature("InternalImportsByDefault"),
-    .enableUpcomingFeature("MemberImportVisibility"),
+    .enableUpcomingFeature("MemberImportVisibility")
 ]
 
 let package = Package(
     name: "GitDiffViewer",
     platforms: [
-        .macOS("26.1"),
+        .macOS("26.1")
     ],
     products: [
         .executable(name: "GitDiffViewer", targets: ["GitDiffViewer"]),
-        .library(name: "DiffCore", targets: ["DiffCore"]),
+        .library(name: "DiffCore", targets: ["DiffCore"])
     ],
     dependencies: [
         .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0")
     ],
     targets: [
         .target(
             name: "DiffCore",
             dependencies: [
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
-                .product(name: "SwiftParser", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax")
             ],
             swiftSettings: strict
         ),
         // Git runs through aemi's blocking-work pool and reads blobs through its POSIX file map.
         .target(
             name: "DiffGit",
-            dependencies: ["DiffCore", .product(name: "AemiIO", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")],
+            dependencies: [
+                "DiffCore", .product(name: "AemiIO", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
+            ],
             swiftSettings: strict
         ),
         .target(name: "DiffRendering", dependencies: ["DiffCore", "DiffGit"], swiftSettings: strict),
@@ -52,7 +54,7 @@ let package = Package(
             name: "DiffComparison",
             dependencies: [
                 "DiffCore", "DiffGit", "DiffRendering",
-                .product(name: "AemiCore", package: "aemi"), .product(name: "AemiRuntime", package: "aemi"),
+                .product(name: "AemiCore", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
             ],
             swiftSettings: strict
         ),
@@ -67,9 +69,9 @@ let package = Package(
             name: "GitDiffViewerTests",
             dependencies: [
                 "DiffComparison", "DiffGit", "DiffRendering", "DiffTextKit",
-                .product(name: "AemiCore", package: "aemi"), .product(name: "AemiTesting", package: "aemi"),
+                .product(name: "AemiCore", package: "aemi"), .product(name: "AemiTesting", package: "aemi")
             ],
             swiftSettings: strict
-        ),
+        )
     ]
 )

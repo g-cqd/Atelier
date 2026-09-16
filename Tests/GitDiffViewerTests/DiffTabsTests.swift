@@ -1,5 +1,6 @@
-@testable import DiffComparison
 import Testing
+
+@testable import DiffComparison
 
 struct DiffTabsTests {
     @Test

@@ -28,7 +28,9 @@ struct CSSScanner {
                 index = scanWord(from: index, kind: isHexColor(at: index) ? .number : .type)
             } else if unit == ASCII.dot, ASCII.isIdentifierStart(next) || next == ASCII.hyphen {
                 index = scanWord(from: index, kind: .type)
-            } else if ASCII.isDigit(unit) || unit == ASCII.dot && ASCII.isDigit(next) || unit == ASCII.hyphen && ASCII.isDigit(next) {
+            } else if ASCII.isDigit(unit) || unit == ASCII.dot && ASCII.isDigit(next)
+                || unit == ASCII.hyphen && ASCII.isDigit(next)
+            {
                 index = scanNumber(from: index)
             } else if ASCII.isIdentifierStart(unit) || unit == ASCII.hyphen && ASCII.isIdentifierStart(next) {
                 index = scanIdentifier(from: index)
@@ -44,23 +46,27 @@ struct CSSScanner {
     /// `#` followed by 3, 4, 6 or 8 hex digits is a colour; anything else is an id selector.
     private func isHexColor(at start: Int) -> Bool {
         var index = start + 1
-        while index < units.count, ASCII.isDigit(units[index]) || (units[index] | 32) >= 97 && (units[index] | 32) <= 102 { index += 1 }
+        while index < units.count,
+            ASCII.isDigit(units[index]) || (units[index] | 32) >= 97 && (units[index] | 32) <= 102
+        { index += 1 }
         let length = index - start - 1
         return [3, 4, 6, 8].contains(length) && (index >= units.count || !ASCII.isIdentifier(units[index]))
     }
 
     private mutating func scanBlockComment(from start: Int) -> Int {
         var index = start + 2
-        while index + 1 < units.count, !(units[index] == ASCII.asterisk && units[index + 1] == ASCII.slash) { index += 1 }
+        while index + 1 < units.count, !(units[index] == ASCII.asterisk && units[index + 1] == ASCII.slash) {
+            index += 1
+        }
         index = min(index + 2, units.count)
-        tokens.append(Token(kind: .comment, range: start..<index))
+        tokens.append(Token(kind: .comment, range: start ..< index))
         return index
     }
 
     private mutating func scanUntilNewline(from start: Int, kind: TokenKind) -> Int {
         var index = start
         while index < units.count, units[index] != ASCII.newline { index += 1 }
-        tokens.append(Token(kind: kind, range: start..<index))
+        tokens.append(Token(kind: kind, range: start ..< index))
         return index
     }
 
@@ -70,21 +76,25 @@ struct CSSScanner {
             index += units[index] == ASCII.backslash ? 2 : 1
         }
         index = min(index + 1, units.count)
-        tokens.append(Token(kind: .string, range: start..<index))
+        tokens.append(Token(kind: .string, range: start ..< index))
         return index
     }
 
     private mutating func scanWord(from start: Int, kind: TokenKind, allowsHyphen: Bool = true) -> Int {
         var index = start + 1
-        while index < units.count, ASCII.isIdentifier(units[index]) || allowsHyphen && units[index] == ASCII.hyphen { index += 1 }
-        tokens.append(Token(kind: kind, range: start..<index))
+        while index < units.count, ASCII.isIdentifier(units[index]) || allowsHyphen && units[index] == ASCII.hyphen {
+            index += 1
+        }
+        tokens.append(Token(kind: kind, range: start ..< index))
         return index
     }
 
     private mutating func scanNumber(from start: Int) -> Int {
         var index = start + 1
-        while index < units.count, ASCII.isIdentifier(units[index]) || units[index] == ASCII.dot || units[index] == ASCII.percent { index += 1 }
-        tokens.append(Token(kind: .number, range: start..<index))
+        while index < units.count,
+            ASCII.isIdentifier(units[index]) || units[index] == ASCII.dot || units[index] == ASCII.percent
+        { index += 1 }
+        tokens.append(Token(kind: .number, range: start ..< index))
         return index
     }
 
@@ -95,7 +105,7 @@ struct CSSScanner {
         var cursor = index
         while cursor < units.count, units[cursor] == 32 { cursor += 1 }
         if depth > 0, cursor < units.count, units[cursor] == ASCII.colon {
-            tokens.append(Token(kind: .attributeName, range: start..<index))
+            tokens.append(Token(kind: .attributeName, range: start ..< index))
         }
         return index
     }

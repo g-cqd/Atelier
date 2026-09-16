@@ -26,7 +26,7 @@ enum IntralineTokenizer {
             } else {
                 index += 1
             }
-            ranges.append(start..<index)
+            ranges.append(start ..< index)
         }
         return ranges
     }
@@ -45,7 +45,7 @@ enum IntralineTokenizer {
                     index += units[index] == backslash ? 2 : 1
                 }
                 index = min(index + 1, units.count)
-            } else if (unit == at || unit == hash), index + 1 < units.count, isWord(units[index + 1]) {
+            } else if unit == at || unit == hash, index + 1 < units.count, isWord(units[index + 1]) {
                 index += 1
                 while index < units.count, isWord(units[index]) { index += 1 }
             } else if isWord(unit) {
@@ -55,7 +55,7 @@ enum IntralineTokenizer {
             } else {
                 index += 1
             }
-            ranges.append(start..<index)
+            ranges.append(start ..< index)
         }
         return ranges
     }
@@ -66,7 +66,8 @@ enum IntralineTokenizer {
     private static let backslash = UInt16(92)
 
     private static func isWord(_ unit: UInt16) -> Bool {
-        (unit >= 48 && unit <= 57) || (unit >= 65 && unit <= 90) || (unit >= 97 && unit <= 122) || unit == 95 || unit >= 128
+        (unit >= 48 && unit <= 57) || (unit >= 65 && unit <= 90) || (unit >= 97 && unit <= 122) || unit == 95
+            || unit >= 128
     }
 
     private static func isSpace(_ unit: UInt16) -> Bool {

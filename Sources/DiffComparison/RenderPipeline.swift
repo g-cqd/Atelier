@@ -1,10 +1,11 @@
-import func AemiRuntime.mapConcurrently
 package import AemiCore
 package import DiffCore
 package import DiffGit
 package import DiffRendering
 import Foundation
 import Observation
+
+import func AemiRuntime.mapConcurrently
 
 /// Turns the selection into what the detail area shows: one document for a file, one card per file for a folder.
 /// Every publish carries the generation it belongs to, so a superseded render can never overwrite a newer one, and
@@ -18,8 +19,8 @@ package final class RenderPipeline {
 
         package var pairs: [FilePair] {
             switch self {
-            case .file(let pair): [pair]
-            case .cards(let pairs): pairs
+                case .file(let pair): [pair]
+                case .cards(let pairs): pairs
             }
         }
 
@@ -81,7 +82,10 @@ package final class RenderPipeline {
     }
 
     /// Renders `target` afresh. Whatever is already prepared is published in this very update, before any task hop.
-    package func render(_ target: Target, left: ComparisonSource, right: ComparisonSource, granularity: IntralineGranularity, heuristics: DiffHeuristics) {
+    package func render(
+        _ target: Target, left: ComparisonSource, right: ComparisonSource, granularity: IntralineGranularity,
+        heuristics: DiffHeuristics
+    ) {
         task?.cancel()
         generation += 1
         let generation = generation
@@ -94,9 +98,12 @@ package final class RenderPipeline {
         preparer.cancelPrefetch()
 
         let pairs = target.pairs
-        if let head = pairs.first, let cached = preparer.cached(head, granularity: granularity, heuristics: heuristics) {
+        if let head = pairs.first, let cached = preparer.cached(head, granularity: granularity, heuristics: heuristics)
+        {
             prepared = [cached]
-            publish(Self.render(prepared, target: target, options: options, layout: renderLayout, keepingScroll: false), generation: generation, appending: false)
+            publish(
+                Self.render(prepared, target: target, options: options, layout: renderLayout, keepingScroll: false),
+                generation: generation, appending: false)
             if pairs.count == 1 {
                 finish(generation)
                 return
@@ -105,16 +112,26 @@ package final class RenderPipeline {
         task = taskProvider.task {
             do {
                 if prepared.isEmpty {
-                    let head = try await preparer.prepare(Array(pairs.prefix(1)), left: left, right: right, granularity: granularity, heuristics: heuristics)
+                    let head = try await preparer.prepare(
+                        Array(pairs.prefix(1)), left: left, right: right, granularity: granularity,
+                        heuristics: heuristics)
                     guard generation == self.generation else { return }
                     prepared = head
-                    publish(try await Self.renderOffMain(head, target: target, options: options, layout: renderLayout, keepingScroll: false), generation: generation, appending: false)
+                    publish(
+                        try await Self.renderOffMain(
+                            head, target: target, options: options, layout: renderLayout, keepingScroll: false),
+                        generation: generation, appending: false)
                 }
                 if pairs.count > 1 {
-                    let tail = try await preparer.prepare(Array(pairs.dropFirst()), left: left, right: right, granularity: granularity, heuristics: heuristics)
+                    let tail = try await preparer.prepare(
+                        Array(pairs.dropFirst()), left: left, right: right, granularity: granularity,
+                        heuristics: heuristics)
                     guard generation == self.generation else { return }
                     prepared += tail
-                    publish(try await Self.renderOffMain(tail, target: target, options: options, layout: renderLayout, keepingScroll: false, firstIndex: 1), generation: generation, appending: true)
+                    publish(
+                        try await Self.renderOffMain(
+                            tail, target: target, options: options, layout: renderLayout, keepingScroll: false,
+                            firstIndex: 1), generation: generation, appending: true)
                 }
                 finish(generation)
             } catch is CancellationError {
@@ -133,12 +150,13 @@ package final class RenderPipeline {
     package func relayout(keepingScroll: Bool) {
         guard let target, !prepared.isEmpty else { return }
         if !keepingScroll { gapExpansions = [:] }
-        let rendered = Self.render(prepared, target: target, options: options, layout: renderLayout, keepingScroll: keepingScroll)
+        let rendered = Self.render(
+            prepared, target: target, options: options, layout: renderLayout, keepingScroll: keepingScroll)
         switch target {
-        case .file:
-            file = rendered.file
-        case .cards:
-            cards = rendered.cards
+            case .file:
+                file = rendered.file
+            case .cards:
+                cards = rendered.cards
         }
         if !isRendering { onEvent?(.finished) }
     }
@@ -166,26 +184,27 @@ package final class RenderPipeline {
     }
 
     private var renderLayout: RenderLayout {
-        layout.isolates || target?.isCards == true ? .changes(context: layout.context, expansions: gapExpansions) : .full
+        layout.isolates || target?.isCards == true
+            ? .changes(context: layout.context, expansions: gapExpansions) : .full
     }
 
     private func publish(_ rendered: Rendered, generation: Int, appending: Bool) {
         guard generation == self.generation else { return }
         switch rendered {
-        case .file(let diff):
-            PhaseTrace.log("publish file")
-            file = diff
-            onEvent?(.published(diff.id, isFirst: true))
-        case .cards(let files):
-            guard !files.isEmpty else { return }
-            PhaseTrace.log("publish \(files.count) cards\(appending ? " more" : "")")
-            if appending {
-                cards += files
-                onEvent?(.published(files[0].rendered.id, isFirst: false))
-            } else {
-                cards = files
-                onEvent?(.published(files[0].rendered.id, isFirst: true))
-            }
+            case .file(let diff):
+                PhaseTrace.log("publish file")
+                file = diff
+                onEvent?(.published(diff.id, isFirst: true))
+            case .cards(let files):
+                guard !files.isEmpty else { return }
+                PhaseTrace.log("publish \(files.count) cards\(appending ? " more" : "")")
+                if appending {
+                    cards += files
+                    onEvent?(.published(files[0].rendered.id, isFirst: false))
+                } else {
+                    cards = files
+                    onEvent?(.published(files[0].rendered.id, isFirst: true))
+                }
         }
     }
 
@@ -206,35 +225,47 @@ package final class RenderPipeline {
 
     /// Pure, so it runs inline for a cache hit and off the main actor for a batch.
     nonisolated private static func render(
-        _ prepared: [PreparedDiff], target: Target, options: DiffRenderer.Options, layout: RenderLayout, keepingScroll: Bool, firstIndex: Int = 0
+        _ prepared: [PreparedDiff], target: Target, options: DiffRenderer.Options, layout: RenderLayout,
+        keepingScroll: Bool, firstIndex: Int = 0
     ) -> Rendered {
         switch target {
-        case .file:
-            var rendered = DiffRenderer.render(prepared: prepared, options: options, layout: layout, withHeaders: false)
-            rendered.keepsScrollPosition = keepingScroll
-            return .file(rendered)
-        case .cards:
-            return .cards(prepared.enumerated().map { offset, file in
-                var rendered = DiffRenderer.render(prepared: [file], options: options, layout: layout, withHeaders: false, firstFileIndex: firstIndex + offset)
+            case .file:
+                var rendered = DiffRenderer.render(
+                    prepared: prepared, options: options, layout: layout, withHeaders: false)
                 rendered.keepsScrollPosition = keepingScroll
-                return RenderedFile(path: file.title, rendered: rendered)
-            })
+                return .file(rendered)
+            case .cards:
+                return .cards(
+                    prepared.enumerated()
+                        .map { offset, file in
+                            var rendered = DiffRenderer.render(
+                                prepared: [file], options: options, layout: layout, withHeaders: false,
+                                firstFileIndex: firstIndex + offset)
+                            rendered.keepsScrollPosition = keepingScroll
+                            return RenderedFile(path: file.title, rendered: rendered)
+                        })
         }
     }
 
     @concurrent
     private static func renderOffMain(
-        _ prepared: [PreparedDiff], target: Target, options: DiffRenderer.Options, layout: RenderLayout, keepingScroll: Bool, firstIndex: Int = 0
+        _ prepared: [PreparedDiff], target: Target, options: DiffRenderer.Options, layout: RenderLayout,
+        keepingScroll: Bool, firstIndex: Int = 0
     ) async throws -> Rendered {
         switch target {
-        case .file:
-            return render(prepared, target: target, options: options, layout: layout, keepingScroll: keepingScroll)
-        case .cards:
-            let indexed = Array(prepared.enumerated())
-            let files = try await mapConcurrently(indexed, limit: ProcessInfo.processInfo.activeProcessorCount) { offset, file in
-                render([file], target: target, options: options, layout: layout, keepingScroll: keepingScroll, firstIndex: firstIndex + offset).cards[0]
-            }
-            return .cards(files)
+            case .file:
+                return render(prepared, target: target, options: options, layout: layout, keepingScroll: keepingScroll)
+            case .cards:
+                let indexed = Array(prepared.enumerated())
+                let files = try await mapConcurrently(indexed, limit: ProcessInfo.processInfo.activeProcessorCount) {
+                    offset, file in
+                    render(
+                        [file], target: target, options: options, layout: layout, keepingScroll: keepingScroll,
+                        firstIndex: firstIndex + offset
+                    )
+                    .cards[0]
+                }
+                return .cards(files)
         }
     }
 }

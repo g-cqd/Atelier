@@ -64,21 +64,28 @@ struct SourceToolbarControl: NSViewRepresentable {
         }
 
         private static func attributedTitle(for source: ComparisonSource?, fallback: String) -> NSAttributedString {
-            let context: [NSAttributedString.Key: Any] = [.foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: NSFont.systemFontSize)]
-            let main: [NSAttributedString.Key: Any] = [.foregroundColor: NSColor.labelColor, .font: NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .medium)]
+            let context: [NSAttributedString.Key: Any] = [
+                .foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: NSFont.systemFontSize)
+            ]
+            let main: [NSAttributedString.Key: Any] = [
+                .foregroundColor: NSColor.labelColor,
+                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
+            ]
             let title = NSMutableAttributedString()
             switch source {
-            case .gitRef(let repository, let ref):
-                title.append(NSAttributedString(string: repository.lastPathComponent + "  ", attributes: context))
-                title.append(NSAttributedString(string: shortened(GitCommit.abbreviated(ref)), attributes: main))
-            case .patch(let url, let side):
-                title.append(NSAttributedString(string: url.lastPathComponent + "  ", attributes: context))
-                title.append(NSAttributedString(string: side == .old ? "before" : "after", attributes: main))
-            case .file(let url), .directory(let url):
-                title.append(NSAttributedString(string: url.deletingLastPathComponent().lastPathComponent + "  ", attributes: context))
-                title.append(NSAttributedString(string: url.lastPathComponent, attributes: main))
-            case nil:
-                title.append(NSAttributedString(string: fallback, attributes: main))
+                case .gitRef(let repository, let ref):
+                    title.append(NSAttributedString(string: repository.lastPathComponent + "  ", attributes: context))
+                    title.append(NSAttributedString(string: shortened(GitCommit.abbreviated(ref)), attributes: main))
+                case .patch(let url, let side):
+                    title.append(NSAttributedString(string: url.lastPathComponent + "  ", attributes: context))
+                    title.append(NSAttributedString(string: side == .old ? "before" : "after", attributes: main))
+                case .file(let url), .directory(let url):
+                    title.append(
+                        NSAttributedString(
+                            string: url.deletingLastPathComponent().lastPathComponent + "  ", attributes: context))
+                    title.append(NSAttributedString(string: url.lastPathComponent, attributes: main))
+                case nil:
+                    title.append(NSAttributedString(string: fallback, attributes: main))
             }
             return title
         }
@@ -86,13 +93,14 @@ struct SourceToolbarControl: NSViewRepresentable {
         init(side: SideState, position: Side) {
             title = side.source?.displayName ?? "Choose \(position == .left ? "left" : "right") side…"
             attributedTitle = Self.attributedTitle(for: side.source, fallback: title)
-            symbol = switch side.source {
-            case .file: "doc"
-            case .directory: "folder"
-            case .gitRef: "arrow.triangle.branch"
-            case .patch: "doc.plaintext"
-            case nil: "plus.circle"
-            }
+            symbol =
+                switch side.source {
+                    case .file: "doc"
+                    case .directory: "folder"
+                    case .gitRef: "arrow.triangle.branch"
+                    case .patch: "doc.plaintext"
+                    case nil: "plus.circle"
+                }
             detail = side.source?.detail ?? ""
             fileCount = side.source == nil ? nil : side.entries.count
             isLoading = side.isLoading
@@ -115,8 +123,11 @@ struct SourceToolbarControl: NSViewRepresentable {
         func menu(for snapshot: Snapshot) -> NSMenu {
             let menu = NSMenu()
             menu.autoenablesItems = false
-            let heading = NSMenuItem(title: snapshot.isLoading ? snapshot.title + " (loading…)" : snapshot.title, action: nil, keyEquivalent: "")
-            heading.image = NSImage(systemSymbolName: snapshot.isLoading ? "hourglass" : snapshot.symbol, accessibilityDescription: nil)
+            let heading = NSMenuItem(
+                title: snapshot.isLoading ? snapshot.title + " (loading…)" : snapshot.title, action: nil,
+                keyEquivalent: "")
+            heading.image = NSImage(
+                systemSymbolName: snapshot.isLoading ? "hourglass" : snapshot.symbol, accessibilityDescription: nil)
             menu.addItem(heading)
             if let fileCount = snapshot.fileCount {
                 let info = snapshot.errorMessage ?? "\(fileCount.formatted()) files"
@@ -126,13 +137,22 @@ struct SourceToolbarControl: NSViewRepresentable {
                 menu.addItem(.separator())
             }
             if let repository = snapshot.repository, !snapshot.isSingleFile {
-                menu.addItem(check("Working tree", snapshot.hasSource && snapshot.refChoice == .workingTree, #selector(chooseWorkingTree)))
-                if case .ref(let ref) = snapshot.refChoice, !repository.branches.contains(ref), !repository.tags.contains(ref), !repository.commits.contains(where: { $0.hash == ref }) {
+                menu.addItem(
+                    check(
+                        "Working tree", snapshot.hasSource && snapshot.refChoice == .workingTree,
+                        #selector(chooseWorkingTree)))
+                if case .ref(let ref) = snapshot.refChoice, !repository.branches.contains(ref),
+                    !repository.tags.contains(ref), !repository.commits.contains(where: { $0.hash == ref })
+                {
                     menu.addItem(check(GitCommit.abbreviated(ref), true, #selector(chooseRef(_:)), represented: ref))
                 }
                 menu.addItem(refs("Branches", repository.branches, current: snapshot.refChoice))
                 if !repository.tags.isEmpty { menu.addItem(refs("Tags", repository.tags, current: snapshot.refChoice)) }
-                menu.addItem(refs("Recent commits", repository.commits.map(\.hash), titles: repository.commits.map { "\($0.shortHash) \($0.subject)" }, current: snapshot.refChoice))
+                menu.addItem(
+                    refs(
+                        "Recent commits", repository.commits.map(\.hash),
+                        titles: repository.commits.map { "\($0.shortHash) \($0.subject)" }, current: snapshot.refChoice)
+                )
                 menu.addItem(item("Commit or ref…", #selector(enterRef)))
                 menu.addItem(.separator())
             }
@@ -151,17 +171,21 @@ struct SourceToolbarControl: NSViewRepresentable {
             return item
         }
 
-        private func check(_ title: String, _ isOn: Bool, _ action: Selector, represented: String? = nil) -> NSMenuItem {
+        private func check(_ title: String, _ isOn: Bool, _ action: Selector, represented: String? = nil) -> NSMenuItem
+        {
             let item = item(title, action)
             item.state = isOn ? .on : .off
             item.representedObject = represented
             return item
         }
 
-        private func refs(_ title: String, _ refs: [String], titles: [String]? = nil, current: SideState.RefChoice) -> NSMenuItem {
+        private func refs(_ title: String, _ refs: [String], titles: [String]? = nil, current: SideState.RefChoice)
+            -> NSMenuItem
+        {
             let submenu = NSMenu(title: title)
             for (index, ref) in refs.enumerated() {
-                submenu.addItem(check(titles?[index] ?? ref, current == .ref(ref), #selector(chooseRef(_:)), represented: ref))
+                submenu.addItem(
+                    check(titles?[index] ?? ref, current == .ref(ref), #selector(chooseRef(_:)), represented: ref))
             }
             let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
             item.submenu = submenu

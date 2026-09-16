@@ -1,15 +1,18 @@
 import AemiRuntime
 import DiffCore
+import Foundation
+import Testing
+
 @testable import DiffComparison
 @testable import DiffGit
 @testable import DiffRendering
 @testable import DiffTextKit
-import Testing
-import Foundation
 
 struct DiffRendererTests {
-    private let old = (1...30).map { "line \($0)" }.joined(separator: "\n") + "\n"
-    private var new: String { old.replacingOccurrences(of: "line 10\n", with: "line ten\n").replacingOccurrences(of: "line 25\n", with: "") }
+    private let old = (1 ... 30).map { "line \($0)" }.joined(separator: "\n") + "\n"
+    private var new: String {
+        old.replacingOccurrences(of: "line 10\n", with: "line ten\n").replacingOccurrences(of: "line 25\n", with: "")
+    }
 
     @Test
     func `the changes layout keeps hunks with context and marks the hidden rows between them`() throws {
@@ -41,7 +44,7 @@ struct DiffRendererTests {
     func `several files are rendered one after another with a header each`() throws {
         let files = [
             FileDiffInput(title: "a.txt", oldText: "x\n", newText: "y\n", language: .plain),
-            FileDiffInput(title: "b.txt", oldText: "same\n", newText: "same\nmore\n", language: .plain),
+            FileDiffInput(title: "b.txt", oldText: "same\n", newText: "same\nmore\n", language: .plain)
         ]
         let rendered = DiffRenderer.renderCombined(files: files, context: 1, expansions: [:])
         let rows = try #require(rendered.unified?.rows)
@@ -59,7 +62,9 @@ struct DiffRendererTests {
     func `rendering only the requested sides leaves the others nil`() {
         var options = DiffRenderer.Options()
         options.sides = [.unified]
-        let rendered = DiffRenderer.renderCombined(files: [FileDiffInput(title: "a", oldText: "x\n", newText: "y\n", language: .plain)], options: options, context: 1, expansions: [:])
+        let rendered = DiffRenderer.renderCombined(
+            files: [FileDiffInput(title: "a", oldText: "x\n", newText: "y\n", language: .plain)], options: options,
+            context: 1, expansions: [:])
         #expect(rendered.unified != nil)
         #expect(rendered.old == nil)
         #expect(rendered.new == nil)
@@ -67,12 +72,22 @@ struct DiffRendererTests {
 
     @Test
     func `rendering is deterministic under concurrency`() async throws {
-        let prepared = PreparedDiff(FileDiffInput(title: "a", oldText: old, newText: new, language: .swift), granularity: .syntax)
+        let prepared = PreparedDiff(
+            FileDiffInput(title: "a", oldText: old, newText: new, language: .swift), granularity: .syntax)
         let layout = RenderLayout.changes(context: 2, expansions: [:])
-        let results = try await mapConcurrently(Array(0..<16), limit: 8) { _ in
-            DiffRenderer.render(prepared: [prepared], options: DiffRenderer.Options(), layout: layout, withHeaders: false).unified?.attributed.string
+        let results = try await mapConcurrently(Array(0 ..< 16), limit: 8) { _ in
+            DiffRenderer.render(
+                prepared: [prepared], options: DiffRenderer.Options(), layout: layout, withHeaders: false
+            )
+            .unified?
+            .attributed.string
         }
-        let reference = DiffRenderer.render(prepared: [prepared], options: DiffRenderer.Options(), layout: layout, withHeaders: false).unified?.attributed.string
+        let reference =
+            DiffRenderer.render(
+                prepared: [prepared], options: DiffRenderer.Options(), layout: layout, withHeaders: false
+            )
+            .unified?
+            .attributed.string
         #expect(results.allSatisfy { $0 == reference })
     }
 }
