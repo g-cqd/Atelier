@@ -1,3 +1,4 @@
+import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable cyclomatic_complexity file_length function_body_length
 import Foundation
@@ -6,7 +7,6 @@ import KittyCodecs
 import KittyFileTree
 public import KittyRenderer
 import KittySearch
-import KittyText
 import KittyWidgets
 import KittyWorkspace
 

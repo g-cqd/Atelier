@@ -1,6 +1,6 @@
+import AtelierText
 public import KittyCodecs
 public import KittyRenderer
-import KittyText
 
 public struct TabRibbon: View, Sendable {
     public struct Tab: Sendable {

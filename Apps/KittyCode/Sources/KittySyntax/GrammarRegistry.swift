@@ -1,5 +1,5 @@
+public import AtelierGrammar
 import Foundation
-public import KittyGrammar
 import Synchronization
 
 /// Runtime registry of language-grammar bindings.

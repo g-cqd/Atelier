@@ -29,12 +29,9 @@ let package = Package(
         .library(name: "KittyCodecs", targets: ["KittyCodecs"]),
         .library(name: "KittyInput", targets: ["KittyInput"]),
         .library(name: "KittyRenderer", targets: ["KittyRenderer"]),
-        .library(name: "KittyGrammar", targets: ["KittyGrammar"]),
-        .library(name: "KittyQuery", targets: ["KittyQuery"]),
         .library(name: "KittySyntax", targets: ["KittySyntax"]),
         .library(name: "KittyWidgets", targets: ["KittyWidgets"]),
         .library(name: "KittyApp", targets: ["KittyApp"]),
-        .library(name: "KittyText", targets: ["KittyText"]),
         .library(name: "KittyFileTree", targets: ["KittyFileTree"]),
         .library(name: "KittySymbols", targets: ["KittySymbols"]),
         .library(name: "KittyGit", targets: ["KittyGit"]),
@@ -44,6 +41,7 @@ let package = Package(
         .executable(name: "KittySymbolsCLI", targets: ["KittySymbolsCLI"])
     ],
     dependencies: [
+        .package(path: "../../Packages/AtelierCore"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
         .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main")
     ],
@@ -68,11 +66,11 @@ let package = Package(
 
         // Layer 2b — Screen buffer, diff renderer
         .target(
-            name: "KittyRenderer", dependencies: ["KittyCodecs", "KittyText", "KittyStyle"],
+            name: "KittyRenderer",
+            dependencies: ["KittyCodecs", .product(name: "AtelierText", package: "AtelierCore"), "KittyStyle"],
             swiftSettings: strict),
 
         // Layer 2c — Text buffer primitives
-        .target(name: "KittyText", swiftSettings: strict),
 
         // Layer 2d — File system browsing
         .target(name: "KittyFileTree", swiftSettings: strict),
@@ -88,24 +86,15 @@ let package = Package(
         // Layer 2g — Search engine primitives
         .target(name: "KittySearch", swiftSettings: strict),
 
-        // Layer 3a — grammar.json loader + LR table compiler
-        .target(name: "KittyGrammar", swiftSettings: strict),
-
-        // Layer 3b — GLR incremental parser engine
-        .target(
-            name: "KittyParser", dependencies: ["KittyGrammar"],
-            swiftSettings: strict),
-
-        // Layer 3c — .scm query parser + pattern matcher
-        .target(
-            name: "KittyQuery", dependencies: ["KittyParser"],
-            swiftSettings: strict),
+        // Layers 3a–3c (grammar tables, GLR parser, queries) and 2c (text storage) live in AtelierCore.
 
         // Layer 3d — Themes + styled text producer
         .target(
             name: "KittySyntax",
             dependencies: [
-                "KittyGrammar", "KittyParser", "KittyQuery", "KittyStyle"
+                .product(name: "AtelierGrammar", package: "AtelierCore"),
+                .product(name: "AtelierParser", package: "AtelierCore"),
+                .product(name: "AtelierQuery", package: "AtelierCore"), "KittyStyle"
             ],
             resources: [.copy("Grammars")],
             swiftSettings: strict
@@ -121,7 +110,9 @@ let package = Package(
         // Layer 4b — Workspace domain: document, tab, file lifecycle, git coordination
         .target(
             name: "KittyWorkspace",
-            dependencies: ["KittyText", "KittySyntax", "KittyFileTree", "KittyGit"],
+            dependencies: [
+                .product(name: "AtelierText", package: "AtelierCore"), "KittySyntax", "KittyFileTree", "KittyGit"
+            ],
             swiftSettings: strict),
 
         // Layer 5 — App lifecycle, event loop, signals
@@ -138,7 +129,8 @@ let package = Package(
         .target(
             name: "KittyEditor",
             dependencies: [
-                "KittyApp", "KittyWorkspace", "KittyInput", "KittyText", "KittyFileTree",
+                "KittyApp", "KittyWorkspace", "KittyInput", .product(name: "AtelierText", package: "AtelierCore"),
+                "KittyFileTree",
                 "KittyRenderer", "KittySyntax", "KittySymbols", "KittyGit", "KittySearch",
                 "KittyStyle", "KittyTerminal",
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
@@ -175,15 +167,6 @@ let package = Package(
             name: "KittyRendererTests", dependencies: ["KittyRenderer", "KittyTerminal"],
             swiftSettings: strict),
         .testTarget(
-            name: "KittyGrammarTests", dependencies: ["KittyGrammar"],
-            swiftSettings: strict),
-        .testTarget(
-            name: "KittyParserTests", dependencies: ["KittyParser"],
-            swiftSettings: strict),
-        .testTarget(
-            name: "KittyQueryTests", dependencies: ["KittyQuery"],
-            swiftSettings: strict),
-        .testTarget(
             name: "KittySyntaxTests", dependencies: ["KittySyntax", "KittyCodecs"],
             swiftSettings: strict),
         .testTarget(
@@ -194,9 +177,6 @@ let package = Package(
         .testTarget(
             name: "KittyCodeTests", dependencies: ["KittyEditor", "KittyFileTree", "KittyWorkspace"],
             swiftSettings: strict),
-        .testTarget(
-            name: "KittyTextTests", dependencies: ["KittyText"], swiftSettings: strict
-        ),
         .testTarget(
             name: "KittyFileTreeTests", dependencies: ["KittyFileTree"],
             swiftSettings: strict),

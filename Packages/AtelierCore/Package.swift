@@ -29,7 +29,11 @@ let package = Package(
         .library(name: "AtelierProcess", targets: ["AtelierProcess"]),
         .library(name: "AtelierGit", targets: ["AtelierGit"]),
         .library(name: "AtelierTestSupport", targets: ["AtelierTestSupport"]),
-        .library(name: "AtelierSources", targets: ["AtelierSources"])
+        .library(name: "AtelierSources", targets: ["AtelierSources"]),
+        .library(name: "AtelierText", targets: ["AtelierText"]),
+        .library(name: "AtelierGrammar", targets: ["AtelierGrammar"]),
+        .library(name: "AtelierParser", targets: ["AtelierParser"]),
+        .library(name: "AtelierQuery", targets: ["AtelierQuery"])
     ],
     dependencies: [
         .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
@@ -74,7 +78,19 @@ let package = Package(
             ],
             swiftSettings: strict
         ),
+        // Text storage: a UTF-8 rope with a line index, cursors, selections, mutations and display metrics.
+        .target(name: "AtelierText", swiftSettings: strict),
+        // tree-sitter grammar.json loading and LR/lex table compilation.
+        .target(name: "AtelierGrammar", swiftSettings: strict),
+        // The GLR parser over compiled tables.
+        .target(name: "AtelierParser", dependencies: ["AtelierGrammar"], swiftSettings: strict),
+        // tree-sitter .scm query parsing and matching over syntax trees.
+        .target(name: "AtelierQuery", dependencies: ["AtelierParser"], swiftSettings: strict),
         .testTarget(name: "AtelierDiffTests", dependencies: ["AtelierDiff"], swiftSettings: strict),
+        .testTarget(name: "AtelierTextTests", dependencies: ["AtelierText"], swiftSettings: strict),
+        .testTarget(name: "AtelierGrammarTests", dependencies: ["AtelierGrammar"], swiftSettings: strict),
+        .testTarget(name: "AtelierParserTests", dependencies: ["AtelierParser"], swiftSettings: strict),
+        .testTarget(name: "AtelierQueryTests", dependencies: ["AtelierQuery"], swiftSettings: strict),
         .testTarget(
             name: "AtelierSourcesTests",
             dependencies: [

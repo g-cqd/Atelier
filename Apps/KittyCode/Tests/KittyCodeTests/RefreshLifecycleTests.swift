@@ -1,4 +1,4 @@
-import KittyText
+import AtelierText
 import Testing
 
 @testable import KittyEditor

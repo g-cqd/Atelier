@@ -1,6 +1,6 @@
+import AtelierGrammar
+import AtelierQuery
 import Foundation
-import KittyGrammar
-import KittyQuery
 
 /// Analyzes a language's grammar and query setup to determine what highlighting tier it achieves.
 ///
