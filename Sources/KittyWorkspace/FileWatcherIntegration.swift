@@ -1,5 +1,5 @@
 import Foundation
-import KittyFileTree
+public import KittyFileTree
 import KittyText
 
 @MainActor
@@ -14,10 +14,10 @@ public protocol FileWatcherDelegate: AnyObject {
 public final class FileWatcherIntegration {
     private let watcher: FileWatcher
     private let workspace: WorkspaceSession
-    private weak var delegate: FileWatcherDelegate?
+    private weak var delegate: (any FileWatcherDelegate)?
     private var watchTask: Task<Void, Never>?
 
-    public init(watcher: FileWatcher, workspace: WorkspaceSession, delegate: FileWatcherDelegate) {
+    public init(watcher: FileWatcher, workspace: WorkspaceSession, delegate: any FileWatcherDelegate) {
         self.watcher = watcher
         self.workspace = workspace
         self.delegate = delegate

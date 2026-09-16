@@ -1,6 +1,6 @@
 import KittyGit
-import KittySyntax
-import KittyText
+public import KittySyntax
+public import KittyText
 
 /// Read-only view of the active document for renderers.
 @MainActor
