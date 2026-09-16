@@ -1,4 +1,6 @@
 package import AppKit
+package import AtelierSyntaxModel
+package import AtelierTheme
 package import DiffCore
 import DiffGit
 import Foundation
@@ -23,7 +25,7 @@ package struct DiffPalette: @unchecked Sendable {
     /// The height TextKit gives a line of `font` at its natural spacing, measured once here: it is what a line
     /// height multiple multiplies, and rendering runs on several threads at once.
     package let defaultLineHeight: CGFloat
-    private let tokenColors: [TokenKind: NSColor]
+    private let roleColors: [HighlightRole: NSColor]
 
     package static let system = DiffPalette(
         font: .monospacedSystemFont(ofSize: 12, weight: .regular),
@@ -34,16 +36,17 @@ package struct DiffPalette: @unchecked Sendable {
         gutterText: .tertiaryLabelColor,
         gutterChangedText: .labelColor,
         lineHeightMultiple: 1,
-        tokenColors: [
+        roleColors: [
             .keyword: .systemPink, .string: .systemRed, .comment: .secondaryLabelColor, .number: .systemBlue,
-            .type: .systemTeal, .attribute: .systemOrange, .tag: .systemBlue, .attributeName: .systemPurple,
-            .entity: .systemOrange
+            .type: .systemTeal, .attribute: .systemOrange, .tag: .systemBlue, .property: .systemPurple,
+            .escape: .systemOrange
         ]
     )
 
     private init(
         font: NSFont, textColor: NSColor, background: NSColor, selection: NSColor, gutterBackground: NSColor,
-        gutterText: NSColor, gutterChangedText: NSColor, lineHeightMultiple: Double, tokenColors: [TokenKind: NSColor]
+        gutterText: NSColor, gutterChangedText: NSColor, lineHeightMultiple: Double,
+        roleColors: [HighlightRole: NSColor]
     ) {
         self.font = font
         self.textColor = textColor
@@ -54,41 +57,39 @@ package struct DiffPalette: @unchecked Sendable {
         self.gutterChangedText = gutterChangedText
         self.lineHeightMultiple = lineHeightMultiple
         defaultLineHeight = NSLayoutManager().defaultLineHeight(for: font)
-        self.tokenColors = tokenColors
+        self.roleColors = roleColors
     }
 
-    /// Maps Xcode's syntax categories onto the viewer's token kinds; missing keys fall back to the plain text color.
-    package init(theme: XcodeTheme) {
-        let text = theme.color(for: "xcode.syntax.plain") ?? Self.system.textColor
-        let background = theme.background ?? Self.system.background
-        func color(_ keys: String...) -> NSColor {
-            keys.lazy.compactMap(theme.color(for:)).first ?? text
+    /// The colours a theme states for its roles; a role the theme leaves out resolves through the theme's own
+    /// hierarchy fallback, down to the plain text.
+    package init(theme: SyntaxTheme) {
+        let text = theme.plainText.foreground.map(NSColor.init) ?? Self.system.textColor
+        let background = theme.background.map(NSColor.init) ?? Self.system.background
+        var roles: [HighlightRole: NSColor] = [:]
+        for role in HighlightRole.allCases {
+            if let foreground = theme.style(for: role).foreground { roles[role] = NSColor(foreground) }
         }
         self.init(
-            font: theme.plainFont ?? Self.system.font,
+            font: theme.font.flatMap(NSFont.init) ?? Self.system.font,
             textColor: text,
             background: background,
-            selection: theme.selection ?? text.withAlphaComponent(0.2),
+            selection: theme.selection.map(NSColor.init) ?? text.withAlphaComponent(0.2),
             gutterBackground: background.blended(withFraction: 0.04, of: text) ?? background,
             gutterText: text.withAlphaComponent(0.4),
             gutterChangedText: text,
             lineHeightMultiple: theme.lineHeightMultiple ?? 1,
-            tokenColors: [
-                .keyword: color("xcode.syntax.keyword"),
-                .string: color("xcode.syntax.string"),
-                .comment: color("xcode.syntax.comment"),
-                .number: color("xcode.syntax.number"),
-                .type: color("xcode.syntax.identifier.type", "xcode.syntax.identifier.class"),
-                .attribute: color("xcode.syntax.attribute"),
-                .tag: color("xcode.syntax.keyword"),
-                .attributeName: color("xcode.syntax.identifier.variable", "xcode.syntax.attribute"),
-                .entity: color("xcode.syntax.number")
-            ]
+            roleColors: roles
         )
     }
 
-    package func color(for token: TokenKind) -> NSColor {
-        tokenColors[token] ?? textColor
+    /// The colour of a role: its own, else its parent's, else the plain text colour.
+    package func color(for role: HighlightRole) -> NSColor {
+        var current: HighlightRole? = role
+        while let candidate = current {
+            if let color = roleColors[candidate] { return color }
+            current = candidate.parent
+        }
+        return textColor
     }
 
     package func rowBackground(for kind: RowKind, side: RenderedSide, isMoved: Bool = false) -> NSColor? {
@@ -140,5 +141,19 @@ package struct DiffPalette: @unchecked Sendable {
     /// Width of the text container that wraps at `column` characters of `font`, plus the line fragment padding.
     package static func wrapWidth(column: Int, font: NSFont, padding: CGFloat) -> CGFloat {
         CGFloat(column) * ("0" as NSString).size(withAttributes: [.font: font]).width + 2 * padding
+    }
+}
+
+extension NSColor {
+    /// The theme's sRGB components.
+    package convenience init(_ color: ThemeColor) {
+        self.init(srgbRed: color.red, green: color.green, blue: color.blue, alpha: color.alpha)
+    }
+}
+
+extension NSFont {
+    /// The font the descriptor names, when it is installed.
+    package convenience init?(_ descriptor: FontDescriptor) {
+        self.init(name: descriptor.postScriptName, size: descriptor.size)
     }
 }
