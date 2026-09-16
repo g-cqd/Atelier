@@ -1,9 +1,12 @@
 import Foundation
 import KittyCodecs
+import KittyApp
 import KittyFileTree
-import KittyRenderer
+public import KittyRenderer
+import KittySearch
 import KittyText
 import KittyWidgets
+import KittyWorkspace
 
 @MainActor
 public func dispatchCommand(

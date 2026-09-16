@@ -1,4 +1,4 @@
-import KittyWidgets
+public import KittyWidgets
 
 public enum TreePanelLayout {
     public static func verticalScrollMetrics(

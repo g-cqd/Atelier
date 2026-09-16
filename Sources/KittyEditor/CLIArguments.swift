@@ -1,6 +1,5 @@
 import ArgumentParser
 import Foundation
-import KittyEditor
 import KittyTerminal
 import System
 

@@ -1,24 +1,25 @@
 import Foundation
 import KittyCodecs
+import KittyWorkspace
 
 public extension EditorState {
-    public enum HistoryDomain {
+    enum HistoryDomain {
         case buffer
         case fileTree
     }
 
-    public struct HistoryAvailability {
+    struct HistoryAvailability {
         public var canUndo: Bool
         public var canRedo: Bool
         public var domain: HistoryDomain
         public var atSaveBoundary: Bool
     }
 
-    public var activeHistoryDomain: HistoryDomain {
+    var activeHistoryDomain: HistoryDomain {
         mode == .editor ? .buffer : .fileTree
     }
 
-    public var historyAvailability: HistoryAvailability {
+    var historyAvailability: HistoryAvailability {
         switch activeHistoryDomain {
         case .buffer:
             let buffer = bufferManager.activeBuffer
@@ -38,7 +39,7 @@ public extension EditorState {
         }
     }
 
-    public func performUndo() {
+    func performUndo() {
         switch activeHistoryDomain {
         case .buffer:
             let wasAtSaveBoundary =
@@ -54,7 +55,7 @@ public extension EditorState {
         }
     }
 
-    public func performRedo() {
+    func performRedo() {
         switch activeHistoryDomain {
         case .buffer:
             redoActiveBuffer()

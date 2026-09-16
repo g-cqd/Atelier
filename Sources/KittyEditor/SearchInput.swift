@@ -1,8 +1,10 @@
-import KittyCodecs
+import KittyApp
+public import KittyCodecs
 import KittyInput
-import KittyRenderer
-import KittySearch
+public import KittyRenderer
+public import KittySearch
 import KittyText
+import KittyWorkspace
 
 public enum SearchStepDirection {
     case next

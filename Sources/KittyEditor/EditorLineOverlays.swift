@@ -1,5 +1,7 @@
 import KittyFileTree
-import KittyWidgets
+import KittyGit
+public import KittyWidgets
+import KittyWorkspace
 
 @MainActor
 public func activeLineStyleOverlays(

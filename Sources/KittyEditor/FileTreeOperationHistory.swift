@@ -1,5 +1,5 @@
-import Foundation
-import KittyFileTree
+public import Foundation
+public import KittyFileTree
 
 public indirect enum FileSystemSnapshot: Sendable {
     case file(path: String, data: Data)

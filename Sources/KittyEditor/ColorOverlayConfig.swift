@@ -1,5 +1,5 @@
 import Foundation
-import KittyCodecs
+public import KittyCodecs
 
 public struct ColorOverlayConfig: Codable, Sendable, Equatable {
     public var color: ColorRGB
@@ -10,7 +10,7 @@ public struct ColorOverlayConfig: Codable, Sendable, Equatable {
         self.alpha = min(1, max(0, alpha * color.alpha))
     }
 
-    public init(from decoder: Decoder) throws {
+    public init(from decoder: any Decoder) throws {
         if let singleValue = try? decoder.singleValueContainer(),
             let hex = try? singleValue.decode(String.self),
             let parsed = ColorRGB(hex: hex)
@@ -33,7 +33,7 @@ public struct ColorOverlayConfig: Codable, Sendable, Equatable {
         self = ColorOverlayConfig(color: color, alpha: alpha)
     }
 
-    public func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: any Encoder) throws {
         if alpha == 1 {
             var singleValue = encoder.singleValueContainer()
             try singleValue.encode(color)

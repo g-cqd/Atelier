@@ -1,9 +1,9 @@
 import KittyCodecs
 import KittyFileTree
-import KittyRenderer
+public import KittyRenderer
 import KittySymbols
 import KittyText
-import KittyWidgets
+public import KittyWidgets
 
 @MainActor
 public func renderTreePanel(

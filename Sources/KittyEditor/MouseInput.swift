@@ -1,8 +1,12 @@
 import Foundation
-import KittyCodecs
-import KittyRenderer
+import KittyApp
+public import KittyCodecs
+import KittyFileTree
+public import KittyRenderer
+import KittySearch
 import KittyText
-import KittyWidgets
+public import KittyWidgets
+import KittyWorkspace
 
 @MainActor
 public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeline) {
