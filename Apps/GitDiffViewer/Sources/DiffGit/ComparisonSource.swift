@@ -49,26 +49,3 @@ package enum PathStatus: Sendable {
     /// Present on both sides under different paths.
     case renamed
 }
-
-/// A file inside a source, identified by its path relative to the source root.
-package struct SourceEntry: Sendable, Hashable {
-    package let relativePath: String
-    /// Git blob object id; nil when the file was too large to hash.
-    package let blobID: String?
-    package let size: Int
-}
-
-package struct GitCommit: Sendable, Hashable, Identifiable {
-    package let hash: String
-    package let shortHash: String
-    package let subject: String
-
-    package var id: String { hash }
-}
-
-package struct RepositoryInfo: Sendable, Hashable {
-    package let root: URL
-    package let branches: [String]
-    package let tags: [String]
-    package let commits: [GitCommit]
-}

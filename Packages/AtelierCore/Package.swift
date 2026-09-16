@@ -26,7 +26,8 @@ let package = Package(
         .library(name: "AtelierDiff", targets: ["AtelierDiff"]),
         .library(name: "AtelierLexers", targets: ["AtelierLexers"]),
         .library(name: "AtelierSwiftSyntax", targets: ["AtelierSwiftSyntax"]),
-        .library(name: "AtelierProcess", targets: ["AtelierProcess"])
+        .library(name: "AtelierProcess", targets: ["AtelierProcess"]),
+        .library(name: "AtelierGit", targets: ["AtelierGit"])
     ],
     dependencies: [
         .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
@@ -55,7 +56,14 @@ let package = Package(
             dependencies: [.product(name: "AemiRuntime", package: "aemi")],
             swiftSettings: strict
         ),
+        // A git client over AtelierProcess: commands as methods, output parsed by pure functions in GitParsers.
+        .target(
+            name: "AtelierGit",
+            dependencies: ["AtelierProcess", .product(name: "AemiRuntime", package: "aemi")],
+            swiftSettings: strict
+        ),
         .testTarget(name: "AtelierDiffTests", dependencies: ["AtelierDiff"], swiftSettings: strict),
+        .testTarget(name: "AtelierGitTests", dependencies: ["AtelierGit", "AtelierProcess"], swiftSettings: strict),
         .testTarget(
             name: "AtelierProcessTests",
             dependencies: [

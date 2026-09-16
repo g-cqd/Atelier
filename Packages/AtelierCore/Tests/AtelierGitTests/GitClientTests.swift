@@ -1,10 +1,8 @@
+import AtelierProcess
 import Foundation
 import Testing
 
-@testable import DiffComparison
-@testable import DiffGit
-@testable import DiffRendering
-@testable import DiffTextKit
+@testable import AtelierGit
 
 struct GitClientTests {
     @Test
@@ -44,7 +42,7 @@ struct GitClientTests {
     func `batch output parsing keeps sizes exact and skips missing objects`() {
         let output = Data("aaa blob 3\nxyz\nbbb missing\nccc blob 0\n\n".utf8)
 
-        let blobs = GitClient.parseBatch(output)
+        let blobs = GitParsers.batch(output)
 
         #expect(blobs.keys.sorted() == ["aaa", "ccc"])
         #expect(blobs["aaa"] == Data("xyz".utf8))
@@ -61,7 +59,7 @@ struct GitClientTests {
         ]
         let output = Data((records.joined(separator: "\0") + "\0").utf8)
 
-        let entries = GitClient.parseTree(output) { $0.hasSuffix(".swift") }
+        let entries = GitParsers.tree(output) { $0.hasSuffix(".swift") }
 
         #expect(entries.map(\.relativePath) == ["Sources/a.swift", "link with space.swift"])
         #expect(entries.first?.blobID == "8e8ea3c1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7")
@@ -72,7 +70,7 @@ struct GitClientTests {
     func `rename records map old paths to new ones`() {
         let output = Data("R100\0old/a.swift\0new/a.swift\0R075\0b.swift\0c.swift\0".utf8)
 
-        let renames = GitClient.parseRenames(output)
+        let renames = GitParsers.renames(output)
 
         #expect(renames == ["old/a.swift": "new/a.swift", "b.swift": "c.swift"])
     }
@@ -81,7 +79,7 @@ struct GitClientTests {
     func `references keep their order and leave out remote HEAD pointers`() {
         let output = Data("feature/x\nmain\norigin/HEAD\norigin/main\nv1.0\n".utf8)
 
-        #expect(GitClient.parseReferences(output) == ["feature/x", "main", "origin/main", "v1.0"])
+        #expect(GitParsers.references(output) == ["feature/x", "main", "origin/main", "v1.0"])
     }
 
     @Test
@@ -89,7 +87,7 @@ struct GitClientTests {
         let hash = String(repeating: "a", count: 40)
         let output = Data("\(hash)\u{1f}aaaaaaa\u{1f}Add a feature\u{1f}with a stray separator\nnot a commit\n".utf8)
 
-        let commits = GitClient.parseCommits(output)
+        let commits = GitParsers.commits(output)
 
         #expect(commits.count == 1)
         #expect(
