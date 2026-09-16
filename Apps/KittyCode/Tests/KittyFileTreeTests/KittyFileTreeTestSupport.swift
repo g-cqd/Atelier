@@ -1,3 +1,4 @@
+import AemiTestKit
 import Foundation
 import Testing
 
@@ -10,30 +11,30 @@ extension Tag {
     @Tag static var securePath: Self
 }
 
-/// Creates a temporary directory subtree for scanner tests and removes it on deinit.
+/// Creates a temporary directory subtree for scanner tests and removes it on deinit. A thin
+/// `createFile`/`createDirectory` convenience layer over `AemiTestKit.TemporaryDirectory`, whose
+/// own cleanup is an explicit `cleanup()` call rather than a `deinit` — this wrapper calls it from
+/// its own `deinit` so every existing call site keeps a create-and-forget lifetime.
 final class TempTree: Sendable {
-    let root: String
+    private let directory: TemporaryDirectory
+    var root: String { directory.path }
 
     init() throws {
-        let tmp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("KittyFileTreeTests-\(Int.random(in: 100_000 ... 999_999))")
-        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
-        root = tmp.path
+        directory = TemporaryDirectory(prefix: "KittyFileTreeTests")
     }
 
     /// Creates a file relative to `root` with the given name and optional content.
     func createFile(named name: String, content: String = "") throws {
-        let url = URL(fileURLWithPath: root).appendingPathComponent(name)
-        try content.write(to: url, atomically: true, encoding: .utf8)
+        try content.write(toFile: directory.file(name), atomically: true, encoding: .utf8)
     }
 
     /// Creates a subdirectory relative to `root`.
     func createDirectory(named name: String) throws {
-        let url = URL(fileURLWithPath: root).appendingPathComponent(name)
-        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            atPath: directory.file(name), withIntermediateDirectories: true)
     }
 
     deinit {
-        try? FileManager.default.removeItem(atPath: root)
+        directory.cleanup()
     }
 }

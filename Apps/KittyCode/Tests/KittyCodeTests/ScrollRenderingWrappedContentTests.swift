@@ -1,3 +1,4 @@
+import AemiTesting
 import AtelierText
 import Foundation
 import KittyCodecs
@@ -77,7 +78,9 @@ struct ScrollRenderingWrappedContentTests {
         config.editor.scrollAccelerationWindowMilliseconds = 200
         config.editor.scrollAccelerationStepIntervalMilliseconds = 1
         config.editor.scrollAccelerationMaxExtraLines = 8
-        let state = EditorState(rootPath: ".", config: config)
+        let taskProvider = TaskProviderSpy()
+        let clock = TestClock()
+        let state = EditorState(rootPath: ".", config: config, taskProvider: taskProvider, clock: clock)
         state.sidebarCollapsed = true
         state.mode = .editor
         state.fileContent = ["AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH", "after", "tail", "done"]
@@ -93,11 +96,22 @@ struct ScrollRenderingWrappedContentTests {
             )
         }
 
-        let deadline = Date().addingTimeInterval(1)
-        while state.pendingAcceleratedScrollLines != 0 || state.scrollAccelerationTask != nil,
-            Date() < deadline
-        {
-            try? await Task.sleep(for: .milliseconds(5))
+        // Drains the accelerated-scroll loop's repeated `clock.sleep` steps: a pump task advances
+        // the virtual clock every time the loop registers a new sleeper, racing against the real
+        // completion of the detached scroll task; the first to finish cancels the other.
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await taskProvider.waitForAllTasks(timeout: .seconds(30))
+            }
+            group.addTask {
+                while true {
+                    try Task.checkCancellation()
+                    try await clock.waitForSleepers(count: 1)
+                    clock.advance(by: .milliseconds(1))
+                }
+            }
+            try await group.next()
+            group.cancelAll()
         }
 
         #expect(state.scrollOffset == 3)

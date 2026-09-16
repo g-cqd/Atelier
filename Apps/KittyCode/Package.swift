@@ -211,7 +211,10 @@ let package = Package(
             swiftSettings: strict),
         .testTarget(
             name: "KittyFileTreeTests",
-            dependencies: ["KittyFileTree", .product(name: "AemiTesting", package: "aemi")],
+            dependencies: [
+                "KittyFileTree", .product(name: "AemiTesting", package: "aemi"),
+                .product(name: "AemiTestKit", package: "aemi")
+            ],
             swiftSettings: strict),
         .testTarget(
             name: "KittySymbolsTests", dependencies: ["KittySymbols"],
