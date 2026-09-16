@@ -1,8 +1,8 @@
-struct HTMLScanner {
-    let units: [UInt16]
+struct HTMLScanner<Unit: LexerUnit> {
+    let units: [Unit]
     private var tokens: [Token] = []
 
-    init(units: [UInt16]) {
+    init(units: [Unit]) {
         self.units = units
     }
 
@@ -62,7 +62,7 @@ struct HTMLScanner {
             index += 1
         }
         tokens.append(Token(kind: .tag, range: start ..< index))
-        let name = String(decoding: units[nameStart ..< index], as: UTF16.self).lowercased()
+        let name = Unit.text(units[nameStart ..< index]).lowercased()
 
         index = scanAttributes(from: index)
         if !isClosing, name == "script" || name == "style" {
