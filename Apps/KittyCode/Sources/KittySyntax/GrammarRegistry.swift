@@ -1,3 +1,4 @@
+import AemiKernel
 public import AtelierGrammar
 import Foundation
 import Synchronization
@@ -108,8 +109,8 @@ public final class GrammarRegistry: Sendable {
             !value.contains("\\")
         else { return false }
         return value.allSatisfy { ch in
-            ch.isASCII
-                && (ch.isLetter || ch.isNumber || ch == "_" || ch == "-" || ch == ".")
+            guard let byte = ch.asciiValue else { return false }
+            return ASCII.isAlphanumeric(byte) || ch == "_" || ch == "-" || ch == "."
         }
     }
 
