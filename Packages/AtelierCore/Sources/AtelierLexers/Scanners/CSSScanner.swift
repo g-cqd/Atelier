@@ -1,11 +1,11 @@
 /// Scans CSS and its supersets: comments, strings, at-rules, property names inside blocks, numbers with units,
 /// hex colours, `!important`, and class or id selectors outside blocks.
-struct CSSScanner {
-    let units: [UInt16]
+struct CSSScanner<Unit: LexerUnit> {
+    let units: [Unit]
     private var tokens: [Token] = []
     private var depth = 0
 
-    init(units: [UInt16]) {
+    init(units: [Unit]) {
         self.units = units
     }
 
@@ -70,7 +70,7 @@ struct CSSScanner {
         return index
     }
 
-    private mutating func scanString(from start: Int, quote: UInt16) -> Int {
+    private mutating func scanString(from start: Int, quote: Unit) -> Int {
         var index = start + 1
         while index < units.count, units[index] != quote, units[index] != ASCII.newline {
             index += units[index] == ASCII.backslash ? 2 : 1
