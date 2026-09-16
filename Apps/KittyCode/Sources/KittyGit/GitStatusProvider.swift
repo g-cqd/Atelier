@@ -1,9 +1,12 @@
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable type_body_length
+public import AtelierProcess
 import Foundation
 public import KittyFileTree
 import Synchronization
 import System
+
+import struct AtelierGit.GitClient
 
 public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvider,
     @unchecked Sendable
@@ -21,11 +24,16 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
     }
 
     private let rootPath: String
+    private let runner: any ProcessRunner
     private let lock: Mutex<State>
     private let inFlightLock = Mutex([String: Task<BaseContent, Never>]())
 
-    public init(rootPath: String) {
+    /// - Parameters:
+    ///   - rootPath: The repository root every git invocation runs in.
+    ///   - runner: How `git` is spawned; the app owns the pool behind it, tests inject a fake.
+    public init(rootPath: String, runner: any ProcessRunner) {
         self.rootPath = Self.normalizePath(rootPath)
+        self.runner = runner
         self.lock = Mutex(State())
     }
 
@@ -102,7 +110,7 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
     }
 
     private func runGit(arguments: [String]) async -> String? {
-        await Self.runGit(arguments: arguments, workingDirectory: rootPath)
+        await Self.runGit(arguments: arguments, workingDirectory: rootPath, runner: runner)
     }
 
     private func readBaseContent(for normalizedPath: String, relativePath: String) async
@@ -251,12 +259,13 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
 
     // MARK: - Repository detection
 
-    public static func isGitRepository(_ path: String) async -> Bool {
-        await repositoryRoot(for: path) != nil
+    public static func isGitRepository(_ path: String, runner: any ProcessRunner) async -> Bool {
+        await repositoryRoot(for: path, runner: runner) != nil
     }
 
-    public static func repositoryRoot(for path: String) async -> String? {
-        let raw = await runGit(arguments: ["-C", path, "rev-parse", "--show-toplevel"])
+    public static func repositoryRoot(for path: String, runner: any ProcessRunner) async -> String? {
+        let raw = await runGit(
+            arguments: ["-C", path, "rev-parse", "--show-toplevel"], runner: runner)
         let root = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !root.isEmpty else { return nil }
         return normalizePath(root)
@@ -453,93 +462,24 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         "-c", "core.hooksPath=/dev/null"
     ]
 
+    /// Runs `git` through the injected runner and returns its trimmed standard output, or nil on
+    /// a non-zero exit, a launch failure, a timeout, or cancellation — the runner owns
+    /// terminating the child in every one of those cases, so there is no watchdog here.
     fileprivate static func runGit(
         arguments: [String],
         workingDirectory: String? = nil,
+        runner: any ProcessRunner,
         timeout: Duration = defaultGitTimeout
     ) async -> String? {
-        let process = Process()
-        // Locate git at a fixed path (no `PATH` lookup that could be
-        // shadowed by `~/bin/git`). Falls back to `/usr/bin/env git` only
-        // if the absolute paths are missing (e.g. CI image without Xcode
-        // command-line tools at the canonical location).
-        if FileManager.default.isExecutableFile(atPath: "/usr/bin/git") {
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-            process.arguments = gitHardeningFlags + arguments
-        } else {
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = ["git"] + gitHardeningFlags + arguments
-        }
-        if let workingDirectory {
-            process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
-        }
-        process.environment = scrubbedEnvironment
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-
-        let guarded = ProcessGuard(process: process)
-
-        return await withTaskCancellationHandler {
-            await withCheckedContinuation {
-                (continuation: CheckedContinuation<String?, Never>) in
-                let once = ResumeOnce()
-                let watchdog = Task {
-                    try? await Task.sleep(for: timeout)
-                    guarded.terminateIfRunning()
-                }
-
-                process.terminationHandler = { proc in
-                    let data = (try? pipe.fileHandleForReading.readToEnd()) ?? Data()
-                    let result: String? =
-                        proc.terminationStatus == 0
-                        ? String(data: data, encoding: .utf8) : nil
-                    watchdog.cancel()
-                    once.resume(continuation, with: result)
-                }
-
-                do {
-                    try process.run()
-                } catch {
-                    process.terminationHandler = nil
-                    watchdog.cancel()
-                    once.resume(continuation, with: nil)
-                }
-            }
-        } onCancel: {
-            // Audit D6 — propagate parent-task cancellation by terminating
-            // the git subprocess immediately. The watchdog already handles
-            // hard timeouts; this adds early-termination on
-            // cancel-and-respawn flows so a stale `git status` doesn't
-            // sit around eating CPU after the user's already moved on.
-            guarded.terminateIfRunning()
-        }
-    }
-}
-
-/// Wraps a `Process` reference so it can cross concurrency boundaries safely.
-/// `Process` itself is not `Sendable`, but `terminate()` is documented as safe
-/// to call from any thread and is the only operation we perform here.
-private final class ProcessGuard: @unchecked Sendable {
-    private let process: Process
-    init(process: Process) { self.process = process }
-    func terminateIfRunning() {
-        if process.isRunning { process.terminate() }
-    }
-}
-
-/// Guarantees a `CheckedContinuation` is resumed exactly once across the
-/// termination-handler path and the timeout / launch-failure paths.
-private final class ResumeOnce: Sendable {
-    private let resumed = Mutex(false)
-
-    func resume(_ continuation: CheckedContinuation<String?, Never>, with value: String?) {
-        let shouldResume = resumed.withLock { state in
-            guard !state else { return false }
-            state = true
-            return true
-        }
-        if shouldResume { continuation.resume(returning: value) }
+        let environment = scrubbedEnvironment.merging(GitClient.hardeningEnvironment) { current, _ in current }
+        let spec = ProcessSpec(
+            executable: GitClient.executable,
+            arguments: gitHardeningFlags + arguments,
+            currentDirectory: workingDirectory.map { URL(fileURLWithPath: $0) },
+            environment: .exactly(environment),
+            timeout: timeout
+        )
+        guard let output = try? await runner.run(spec), output.succeeded else { return nil }
+        return String(data: output.standardOutput, encoding: .utf8)
     }
 }

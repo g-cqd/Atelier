@@ -75,7 +75,11 @@ let package = Package(
         // Layer 2d — File system browsing
         .target(
             name: "KittyFileTree",
-            dependencies: [.product(name: "AemiCore", package: "aemi")],
+            dependencies: [
+                .product(name: "AemiCore", package: "aemi"),
+                .product(name: "AtelierGit", package: "AtelierCore"),
+                .product(name: "AtelierProcess", package: "AtelierCore")
+            ],
             swiftSettings: strict),
 
         // Layer 2e — SF Symbols discovery + terminal glyph helpers
@@ -83,11 +87,18 @@ let package = Package(
 
         // Layer 2f — Git integration (pluggable)
         .target(
-            name: "KittyGit", dependencies: ["KittyFileTree"],
+            name: "KittyGit",
+            dependencies: [
+                "KittyFileTree", .product(name: "AtelierProcess", package: "AtelierCore"),
+                .product(name: "AtelierGit", package: "AtelierCore")
+            ],
             swiftSettings: strict),
 
         // Layer 2g — Search engine primitives
-        .target(name: "KittySearch", swiftSettings: strict),
+        .target(
+            name: "KittySearch",
+            dependencies: [.product(name: "AemiKernels", package: "aemi")],
+            swiftSettings: strict),
 
         // Layers 3a–3c (grammar tables, GLR parser, queries) and 2c (text storage) live in AtelierCore.
 
@@ -154,7 +165,9 @@ let package = Package(
             dependencies: [
                 "KittyEditor", "KittyApp", "KittyTerminal", "KittyCodecs",
                 "KittyFileTree", "KittyGit", "KittyRenderer", "KittyWorkspace",
-                .product(name: "AemiCore", package: "aemi")
+                .product(name: "AemiCore", package: "aemi"),
+                .product(name: "AemiRuntime", package: "aemi"),
+                .product(name: "AtelierProcess", package: "AtelierCore")
             ], swiftSettings: strict),
 
         // KittySymbols CLI
@@ -204,7 +217,13 @@ let package = Package(
             dependencies: ["KittyWorkspace", .product(name: "AemiTesting", package: "aemi")],
             swiftSettings: strict),
         .testTarget(
-            name: "KittyGitTests", dependencies: ["KittyGit"], swiftSettings: strict),
+            name: "KittyGitTests",
+            dependencies: [
+                "KittyGit", .product(name: "AtelierProcess", package: "AtelierCore"),
+                .product(name: "AtelierTestSupport", package: "AtelierCore"),
+                .product(name: "AemiRuntime", package: "aemi")
+            ],
+            swiftSettings: strict),
         .testTarget(
             name: "KittySearchTests", dependencies: ["KittySearch"],
             swiftSettings: strict)
