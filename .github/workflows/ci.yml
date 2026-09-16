@@ -39,6 +39,17 @@ jobs:
               - 'Apps/KittyCode/**'
               - '.github/**'
 
+  core:
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
+    uses: Aemi-Studio/aemi/.github/workflows/swift-quality.yml@main
+    with:
+      package-path: Packages/AtelierCore
+      dev-env-var: ATELIER_DEV
+      enable-linux: false
+      enable-sanitizers: true
+      sanitizers: thread
+
   gitdiffviewer:
     needs: changes
     if: ${{ needs.changes.outputs.gitdiffviewer == 'true' }}

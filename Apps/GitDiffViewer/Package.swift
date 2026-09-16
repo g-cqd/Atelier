@@ -23,15 +23,18 @@ let package = Package(
         .library(name: "DiffCore", targets: ["DiffCore"])
     ],
     dependencies: [
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0")
+        .package(path: "../../Packages/AtelierCore"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main")
     ],
     targets: [
+        // Re-exports the core diff, lexers, language vocabulary and swift-syntax provider under the old name.
         .target(
             name: "DiffCore",
             dependencies: [
-                .product(name: "SwiftSyntax", package: "swift-syntax"),
-                .product(name: "SwiftParser", package: "swift-syntax")
+                .product(name: "AtelierDiff", package: "AtelierCore"),
+                .product(name: "AtelierLexers", package: "AtelierCore"),
+                .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),
+                .product(name: "AtelierSyntaxModel", package: "AtelierCore")
             ],
             swiftSettings: strict
         ),
@@ -64,7 +67,6 @@ let package = Package(
             // Views, coordinators and panels all live on the main actor; nothing in the app target runs elsewhere.
             swiftSettings: strict + [.defaultIsolation(MainActor.self)]
         ),
-        .testTarget(name: "DiffCoreTests", dependencies: ["DiffCore"], swiftSettings: strict),
         .testTarget(
             name: "GitDiffViewerTests",
             dependencies: [

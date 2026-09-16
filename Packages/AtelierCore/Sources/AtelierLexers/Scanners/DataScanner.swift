@@ -1,3 +1,5 @@
+import AtelierSyntaxModel
+
 /// Scans JSON, YAML and TOML: keys, strings, numbers, the few literal keywords, comments, tables and anchors.
 struct DataScanner {
     let units: [UInt16]

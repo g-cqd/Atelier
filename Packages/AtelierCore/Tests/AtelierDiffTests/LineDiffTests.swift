@@ -1,6 +1,6 @@
 import Testing
 
-@testable import DiffCore
+@testable import AtelierDiff
 
 struct LineDiffTests {
     /// Typed up front: an untyped literal of tuples this long is more than the Swift 6.4 type checker
