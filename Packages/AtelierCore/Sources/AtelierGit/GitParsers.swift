@@ -67,4 +67,88 @@ public enum GitParsers {
                 return GitCommit(hash: String(fields[0]), shortHash: String(fields[1]), subject: String(fields[2]))
             }
     }
+
+    /// Splits `status --porcelain=v2 -z --branch` output: NUL-terminated records, a rename or copy record followed by
+    /// its original path as one more record. Records that do not fit the format are skipped.
+    /// - Complexity: O(output)
+    public static func porcelainV2(_ data: Data) -> GitStatusSnapshot {
+        var head: String?
+        var upstream: String?
+        var ahead = 0
+        var behind = 0
+        var sawBranch = false
+        var entries: [GitStatusEntry] = []
+        let records = data.split(separator: 0, omittingEmptySubsequences: true)
+            .map { String(decoding: $0, as: UTF8.self) }
+        var index = 0
+        while index < records.count {
+            let record = records[index]
+            index += 1
+            if record.hasPrefix("# branch.") {
+                sawBranch = true
+                let fields = record.dropFirst("# branch.".count).split(separator: " ", maxSplits: 1)
+                guard fields.count == 2 else { continue }
+                let value = String(fields[1])
+                switch fields[0] {
+                    case "head": head = value == "(detached)" ? nil : value
+                    case "upstream": upstream = value
+                    case "ab":
+                        let counts = value.split(separator: " ")
+                        ahead = counts.first.flatMap { Int($0.dropFirst()) } ?? 0
+                        behind = counts.count > 1 ? Int(counts[1].dropFirst()) ?? 0 : 0
+                    default: break
+                }
+                continue
+            }
+            guard let kind = record.first else { continue }
+            let rest = record.dropFirst(2)
+            switch kind {
+                case "?":
+                    entries.append(GitStatusEntry(path: String(rest), status: .untracked))
+                case "!":
+                    entries.append(GitStatusEntry(path: String(rest), status: .ignored))
+                case "1":
+                    // XY sub mH mI mW hH hI path
+                    let fields = rest.split(separator: " ", maxSplits: 7, omittingEmptySubsequences: false)
+                    guard fields.count == 8 else { continue }
+                    entries.append(
+                        GitStatusEntry(
+                            path: String(fields[7]), status: ordinaryStatus(fields[0]),
+                            isSubmodule: fields[1].first == "S"))
+                case "2":
+                    // XY sub mH mI mW hH hI Xscore path, then the original path as the next record.
+                    let fields = rest.split(separator: " ", maxSplits: 8, omittingEmptySubsequences: false)
+                    guard fields.count == 9, index < records.count else { continue }
+                    let original = records[index]
+                    index += 1
+                    let isCopy = fields[7].first == "C"
+                    entries.append(
+                        GitStatusEntry(
+                            path: String(fields[8]), originalPath: original, status: isCopy ? .added : .renamed,
+                            isSubmodule: fields[1].first == "S"))
+                case "u":
+                    // XY sub m1 m2 m3 mW h1 h2 h3 path
+                    let fields = rest.split(separator: " ", maxSplits: 9, omittingEmptySubsequences: false)
+                    guard fields.count == 10 else { continue }
+                    entries.append(
+                        GitStatusEntry(
+                            path: String(fields[9]), status: .conflicted, isSubmodule: fields[1].first == "S"))
+                default:
+                    continue
+            }
+        }
+        let branch = sawBranch ? GitBranchStatus(head: head, upstream: upstream, ahead: ahead, behind: behind) : nil
+        return GitStatusSnapshot(branch: branch, entries: entries)
+    }
+
+    /// The status of an ordinary (`1`) record from its `XY` field: deletion and addition on either side win over a
+    /// modification; a type change counts as a modification.
+    private static func ordinaryStatus(_ xy: Substring) -> FileStatus {
+        let x = xy.first ?? "."
+        let y = xy.dropFirst().first ?? "."
+        if x == "D" || y == "D" { return .deleted }
+        if x == "A" || y == "A" { return .added }
+        if x == "." && y == "." { return .clean }
+        return .modified
+    }
 }
