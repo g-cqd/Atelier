@@ -33,7 +33,8 @@ let package = Package(
         .library(name: "AtelierText", targets: ["AtelierText"]),
         .library(name: "AtelierGrammar", targets: ["AtelierGrammar"]),
         .library(name: "AtelierParser", targets: ["AtelierParser"]),
-        .library(name: "AtelierQuery", targets: ["AtelierQuery"])
+        .library(name: "AtelierQuery", targets: ["AtelierQuery"]),
+        .library(name: "AtelierTheme", targets: ["AtelierTheme"])
     ],
     dependencies: [
         .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
@@ -94,6 +95,10 @@ let package = Package(
             name: "AtelierDiffTests", dependencies: ["AtelierDiff", .product(name: "AemiTestKit", package: "aemi")],
             swiftSettings: strict),
         .testTarget(name: "AtelierSyntaxModelTests", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
+        // Themes as values keyed by highlight role, with Xcode theme import; the apps bridge to their colour types.
+        .target(name: "AtelierTheme", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
+        .testTarget(
+            name: "AtelierThemeTests", dependencies: ["AtelierTheme", "AtelierSyntaxModel"], swiftSettings: strict),
         .testTarget(name: "AtelierTextTests", dependencies: ["AtelierText"], swiftSettings: strict),
         .testTarget(name: "AtelierGrammarTests", dependencies: ["AtelierGrammar"], swiftSettings: strict),
         .testTarget(name: "AtelierParserTests", dependencies: ["AtelierParser"], swiftSettings: strict),
