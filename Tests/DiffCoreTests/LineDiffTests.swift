@@ -2,7 +2,9 @@
 import Testing
 
 struct LineDiffTests {
-    @Test(arguments: [
+    /// Typed up front: an untyped literal of tuples this long is more than the Swift 6.4 type checker
+    /// resolves inside its budget, and the `@Test` macro expansion then fails to compile.
+    private static let editScriptCases: [(old: [Int], new: [Int])] = [
         ([Int](), [Int]()),
         ([1, 2, 3], [1, 2, 3]),
         ([1, 2, 3], []),
@@ -15,7 +17,9 @@ struct LineDiffTests {
         ([3, 1, 2], [1, 2, 3]),
         ([1, 1, 1, 1], [1, 1]),
         (Array(1...200), Array(1...200).filter { $0 % 7 != 0 } + [999, 1000]),
-    ])
+    ]
+
+    @Test(arguments: editScriptCases)
     func `applying the edit script to old reproduces new`(old: [Int], new: [Int]) {
         let edits = LineDiff.diff(old, new)
 
