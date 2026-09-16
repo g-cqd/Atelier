@@ -3,6 +3,7 @@ import Testing
 @testable import KittyCodecs
 @testable import KittyRenderer
 @testable import KittySyntax
+@testable import KittyText
 @testable import KittyWidgets
 
 @Suite
