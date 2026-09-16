@@ -1,3 +1,4 @@
+import AemiRuntime
 import AtelierProcess
 import Foundation
 import Testing
@@ -27,7 +28,9 @@ struct GitClientTests {
             .write(to: root.appending(path: "big.swift"), atomically: true, encoding: .utf8)
         try git("add", ".")
         try git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init")
-        let client = GitClient(repository: root)
+        let pool = BlockingOffloadPool(width: 2)
+        defer { pool.shutdown() }
+        let client = GitClient(repository: root, runner: HardenedProcessRunner(pool: pool))
         let entries = try await client.tree(at: "HEAD", isSupported: { _ in true })
         let ids = entries.compactMap(\.blobID)
 
@@ -116,8 +119,9 @@ struct GitClientTests {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
-        await #expect(throws: GitError.self) {
-            try await GitClient(repository: root).resolve(ref: "HEAD")
-        }
+        let pool = BlockingOffloadPool(width: 2)
+        defer { pool.shutdown() }
+        let client = GitClient(repository: root, runner: HardenedProcessRunner(pool: pool))
+        await #expect(throws: GitError.self) { try await client.resolve(ref: "HEAD") }
     }
 }
