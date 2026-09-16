@@ -1,4 +1,4 @@
-import KittyCodecs
+public import KittyCodecs
 
 /// Accumulated style context passed down the view tree during rendering.
 /// Modifiers push style overrides onto this context.

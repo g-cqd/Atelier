@@ -1,4 +1,4 @@
-import KittyCodecs
+public import KittyCodecs
 import KittyText
 
 /// Status bar with left/center/right aligned segments.

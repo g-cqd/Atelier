@@ -1,4 +1,4 @@
-import KittyCodecs
+public import KittyCodecs
 import KittyInput
 
 extension KeyEvent {

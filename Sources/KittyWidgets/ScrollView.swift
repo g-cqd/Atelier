@@ -1,4 +1,4 @@
-import KittyCodecs
+public import KittyCodecs
 
 /// Style configuration for ScrollView's scroll indicator.
 ///

@@ -1,4 +1,4 @@
-import KittyCodecs
+public import KittyCodecs
 
 public struct CenteredText: View, Sendable {
     public var text: String

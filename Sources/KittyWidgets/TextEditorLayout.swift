@@ -1,4 +1,4 @@
-import KittyText
+public import KittyText
 
 /// Shared layout calculations for `TextEditor` rendering and cursor placement.
 public enum TextEditorLayout {
