@@ -9,14 +9,16 @@ struct SearchReplaceTests {
     func literalReplacement() {
         let pattern = SearchPattern.literal(text: "hello", caseSensitive: true)
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 5)
-        let result = buildReplacement(for: match, in: "hello world", pattern: pattern, replacement: "hi")
+        let result = buildReplacement(
+            for: match, in: "hello world", pattern: pattern, replacement: "hi")
         #expect(result == "hi")
     }
 
     @Test("regex capture group substitution")
-    func regexCaptureGroups() {
-        let regex = try! Regex("(\\w+)_(\\w+)")
-        let pattern = SearchPattern.regex(regex)
+    func regexCaptureGroups() throws {
+        let pattern = try #require(
+            compilePattern(SearchQuery(text: "(\\w+)_(\\w+)", isCaseSensitive: true, isRegex: true))
+        )
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 11)
         let result = buildReplacement(
             for: match, in: "hello_world", pattern: pattern, replacement: "$2_$1")
@@ -74,14 +76,15 @@ struct SearchReplaceTests {
     func caseInsensitiveLiteral() {
         let pattern = SearchPattern.literal(text: "HELLO", caseSensitive: false)
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 5)
-        let result = buildReplacement(for: match, in: "hello world", pattern: pattern, replacement: "HI")
+        let result = buildReplacement(
+            for: match, in: "hello world", pattern: pattern, replacement: "HI")
         #expect(result == "HI")
     }
 
     @Test("$0 captures full regex match")
-    func dollarZeroCapturesFullMatch() {
-        let regex = try! Regex("\\d+")
-        let pattern = SearchPattern.regex(regex)
+    func dollarZeroCapturesFullMatch() throws {
+        let pattern = try #require(
+            compilePattern(SearchQuery(text: "\\d+", isCaseSensitive: true, isRegex: true)))
         let match = SearchMatch(row: 0, colStart: 5, colEnd: 8)
         let result = buildReplacement(
             for: match, in: "line 123 end", pattern: pattern, replacement: "[$0]")
@@ -89,9 +92,9 @@ struct SearchReplaceTests {
     }
 
     @Test("$$ produces literal $ in replacement")
-    func doubleDollarEscape() {
-        let regex = try! Regex("(\\w+)")
-        let pattern = SearchPattern.regex(regex)
+    func doubleDollarEscape() throws {
+        let pattern = try #require(
+            compilePattern(SearchQuery(text: "(\\w+)", isCaseSensitive: true, isRegex: true)))
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 5)
         let result = buildReplacement(
             for: match, in: "hello", pattern: pattern, replacement: "$$1=$1")
@@ -99,10 +102,11 @@ struct SearchReplaceTests {
     }
 
     @Test("$10 with fewer groups falls back to longest valid prefix")
-    func multiDigitBackrefFallback() {
+    func multiDigitBackrefFallback() throws {
         // Only 2 capture groups -> $10 should resolve as $1 + literal "0".
-        let regex = try! Regex("(\\w+) (\\w+)")
-        let pattern = SearchPattern.regex(regex)
+        let pattern = try #require(
+            compilePattern(SearchQuery(text: "(\\w+) (\\w+)", isCaseSensitive: true, isRegex: true))
+        )
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 11)
         let result = buildReplacement(
             for: match, in: "hello world", pattern: pattern, replacement: "$10")
@@ -110,10 +114,12 @@ struct SearchReplaceTests {
     }
 
     @Test("multi-digit backref resolves when group exists")
-    func multiDigitBackrefResolves() {
+    func multiDigitBackrefResolves() throws {
         // 10 capture groups → $10 should reference group 10.
-        let regex = try! Regex("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)")
-        let pattern = SearchPattern.regex(regex)
+        let pattern = try #require(
+            compilePattern(
+                SearchQuery(
+                    text: "(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)", isCaseSensitive: true, isRegex: true)))
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 10)
         let result = buildReplacement(
             for: match, in: "abcdefghij", pattern: pattern, replacement: "$10")
@@ -121,9 +127,9 @@ struct SearchReplaceTests {
     }
 
     @Test("trailing $ is emitted literally")
-    func trailingDollarLiteral() {
-        let regex = try! Regex("\\w+")
-        let pattern = SearchPattern.regex(regex)
+    func trailingDollarLiteral() throws {
+        let pattern = try #require(
+            compilePattern(SearchQuery(text: "\\w+", isCaseSensitive: true, isRegex: true)))
         let match = SearchMatch(row: 0, colStart: 0, colEnd: 5)
         let result = buildReplacement(
             for: match, in: "hello", pattern: pattern, replacement: "[$0]$")

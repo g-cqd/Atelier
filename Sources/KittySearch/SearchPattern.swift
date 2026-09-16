@@ -1,20 +1,21 @@
 import Foundation
 import Synchronization
 
-// SAFETY: Regex<AnyRegexOutput> is not yet declared Sendable in Swift stdlib, but
-// once compiled, a Regex is immutable and the backing storage is internally safe
-// to share across concurrency domains.
-public enum SearchPattern: @unchecked Sendable {
+/// A literal query or an interruptible ICU regular expression.
+/// - Note: Regex syntax follows Foundation, including `\X` for a whole grapheme cluster.
+/// Swift Regex-specific syntax is not supported.
+public enum SearchPattern: Sendable {
     case literal(text: String, caseSensitive: Bool)
-    case regex(Regex<AnyRegexOutput>)
+    case regex(SearchRegex)
 }
 
+/// Compiles a search query, returning nil for empty or invalid ICU expressions.
 public func compilePattern(_ query: SearchQuery) -> SearchPattern? {
     guard !query.text.isEmpty else { return nil }
     return SearchPatternCache.shared.pattern(for: query)
 }
 
-/// Audit A7 — `compilePattern` used to allocate a fresh `Regex<AnyRegexOutput>`
+/// Audit A7 — `compilePattern` used to allocate a fresh regular expression
 /// for every find-field keystroke. A 20-character regex query paid 20 compile
 /// passes on the way in. This cache keeps the most recent compilations
 /// keyed by `(text, isRegex, isCaseSensitive, wholeWord)`. LRU 4 entries
@@ -71,21 +72,24 @@ private final class SearchPatternCache: Sendable {
     }
 
     private static func compile(_ query: SearchQuery) -> SearchPattern? {
-        func applyCaseOption(_ regex: Regex<AnyRegexOutput>) -> Regex<AnyRegexOutput> {
-            query.isCaseSensitive ? regex : regex.ignoresCase()
-        }
 
         if query.isRegex {
             // Wrap user pattern in a non-capturing group so whole-word
             // anchoring applies to the entire alternation.
             let patternText = query.wholeWord ? "\\b(?:\(query.text))\\b" : query.text
-            guard let regex = try? Regex(patternText) else { return nil }
-            return .regex(applyCaseOption(regex))
+            guard
+                let regex = try? SearchRegex(
+                    pattern: patternText, caseSensitive: query.isCaseSensitive)
+            else { return nil }
+            return .regex(regex)
         } else {
             if query.wholeWord {
                 let escaped = NSRegularExpression.escapedPattern(for: query.text)
-                guard let regex = try? Regex("\\b\(escaped)\\b") else { return nil }
-                return .regex(applyCaseOption(regex))
+                guard
+                    let regex = try? SearchRegex(
+                        pattern: "\\b\(escaped)\\b", caseSensitive: query.isCaseSensitive)
+                else { return nil }
+                return .regex(regex)
             }
             return .literal(text: query.text, caseSensitive: query.isCaseSensitive)
         }

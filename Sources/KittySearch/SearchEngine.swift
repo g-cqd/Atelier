@@ -1,5 +1,9 @@
 import Foundation
 
+/// Returns non-overlapping matches with character-based columns.
+/// Regex matches that split an extended grapheme cluster are omitted so replacement cannot
+/// corrupt a character. ICU's `\X` matches a complete grapheme cluster.
+/// - Note: Cancellation or the cooperative per-line regex budget returns matches collected so far.
 public func findMatches(in lines: [String], pattern: SearchPattern) -> [SearchMatch] {
     var matches: [SearchMatch] = []
 
@@ -26,14 +30,16 @@ public func findMatches(in lines: [String], pattern: SearchPattern) -> [SearchMa
 
     case .regex(let regex):
         for (row, line) in lines.enumerated() {
-            // Same rationale as the literal branch. Regex pathologies
-            // (catastrophic backtracking on a long line) are the real
-            // reason this matters — pre-req for NF24 ReDoS mitigation.
             if Task.isCancelled { return matches }
-            for match in line.matches(of: regex) {
-                let colStart = line.distance(from: line.startIndex, to: match.range.lowerBound)
-                let colEnd = line.distance(from: line.startIndex, to: match.range.upperBound)
+            RegexMatcher.enumerate(regex.expression, in: line) { match in
+                guard let range = Range(match.range, in: line),
+                    range.lowerBound.samePosition(in: line) != nil,
+                    range.upperBound.samePosition(in: line) != nil
+                else { return true }
+                let colStart = line.distance(from: line.startIndex, to: range.lowerBound)
+                let colEnd = line.distance(from: line.startIndex, to: range.upperBound)
                 matches.append(SearchMatch(row: row, colStart: colStart, colEnd: colEnd))
+                return true
             }
         }
     }
