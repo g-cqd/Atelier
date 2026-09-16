@@ -1,5 +1,8 @@
+public import AtelierProcess
 import Foundation
 import System
+
+import struct AtelierGit.GitClient
 
 /// Controls which files are shown in the file tree.
 public enum FileVisibility: Sendable {
@@ -33,41 +36,19 @@ public enum FileVisibility: Sendable {
 
 /// Computes the set of gitignored paths under a root directory using `git ls-files`.
 public enum GitIgnoreChecker {
-    public static func ignoredPaths(in rootPath: String) async -> Set<String> {
-        await Task.detached(priority: .utility) {
-            computeIgnoredPaths(in: rootPath)
+    /// - Parameters:
+    ///   - rootPath: The repository root to scan.
+    ///   - runner: How git is spawned; the app owns the pool behind it, tests inject a fake.
+    /// - Returns: The absolute paths of every file git ignores under `rootPath`.
+    public static func ignoredPaths(in rootPath: String, runner: any ProcessRunner) async -> Set<String> {
+        let client = GitClient(repository: URL(fileURLWithPath: rootPath), runner: runner)
+        guard let relativePaths = try? await client.ignoredPaths() else { return [] }
+        var paths = Set<String>()
+        for relative in relativePaths {
+            var trimmed = relative
+            if trimmed.hasSuffix("/") { trimmed.removeLast() }
+            paths.insert(FilePath(rootPath).appending(trimmed).string)
         }
-        .value
-    }
-
-    private static func computeIgnoredPaths(in rootPath: String) -> Set<String> {
-        let process = Process()
-        // PATH lookup so Homebrew/MacPorts/system git resolutions all work.
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = [
-            "git", "-C", rootPath, "ls-files", "--others", "--ignored", "--exclude-standard",
-            "--directory"
-        ]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else { return [] }
-            let data = (try? pipe.fileHandleForReading.readToEnd()) ?? Data()
-            guard let output = String(data: data, encoding: .utf8) else { return [] }
-            var paths = Set<String>()
-            for line in output.split(separator: "\n") where !line.isEmpty {
-                var relative = String(line)
-                if relative.hasSuffix("/") { relative.removeLast() }
-                let fullPath = FilePath(rootPath).appending(relative).string
-                paths.insert(fullPath)
-            }
-            return paths
-        } catch {
-            return []
-        }
+        return paths
     }
 }
