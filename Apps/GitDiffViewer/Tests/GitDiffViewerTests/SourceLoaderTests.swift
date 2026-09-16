@@ -28,7 +28,7 @@ struct SourceLoaderTests {
         try handle.truncate(atOffset: UInt64(oversizeLength))
         try handle.close()
 
-        let entries = try await SourceLoader().entries(of: .directory(root))
+        let entries = try await TestProcesses.loader.entries(of: .directory(root))
             .sorted { $0.relativePath < $1.relativePath }
 
         #expect(entries.map(\.relativePath) == ["Sources/Nested/a.swift", "big.swift"])

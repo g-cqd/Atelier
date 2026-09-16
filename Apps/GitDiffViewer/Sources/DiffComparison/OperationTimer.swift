@@ -1,8 +1,4 @@
-import DiffCore
-import DiffGit
 package import DiffRendering
-import Foundation
-import Observation
 
 /// Times one operation, from the change that started it to its render and to its first appearance on screen.
 package struct OperationTimer {

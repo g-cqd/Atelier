@@ -1,4 +1,5 @@
 package import AppKit
+import AtelierSwiftSyntax
 package import DiffCore
 import DiffGit
 package import Foundation
@@ -48,7 +49,7 @@ package final class PreparedDiff: Sendable {
         title = input.title
         model = DiffModel(
             oldText: input.oldText, newText: input.newText, granularity: granularity, language: input.language,
-            pipeline: DiffPipeline(heuristics: heuristics), tokenizer: SwiftSyntaxTokenRanges())
+            pipeline: DiffPipeline(heuristics: heuristics), tokenRanges: SwiftSyntaxTokenRanges())
         oldTokens = DiffRenderer.tokensByLine(text: input.oldText, lines: model.oldLines, language: input.language)
         newTokens = DiffRenderer.tokensByLine(text: input.newText, lines: model.newLines, language: input.language)
     }

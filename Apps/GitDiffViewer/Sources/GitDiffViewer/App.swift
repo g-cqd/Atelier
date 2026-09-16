@@ -1,4 +1,6 @@
+import AemiRuntime
 import AppKit
+import AtelierProcess
 import DiffComparison
 import DiffCore
 import DiffGit
@@ -18,7 +20,7 @@ struct GitDiffViewerApp: App {
         // First, so a click on the Dock icon with no window open brings the welcome back. A launch with paths on
         // the command line skips it and opens the comparison straight away.
         Window("Welcome to Git Diff Viewer", id: WindowID.welcome) {
-            WelcomeView(recents: recents)
+            WelcomeView(recents: recents, reader: appDelegate.services.loader)
         }
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(LaunchOptions.hasArguments ? .suppressed : .presented)
@@ -33,7 +35,8 @@ struct GitDiffViewerApp: App {
 
         WindowGroup(id: WindowID.comparison, for: LaunchConfiguration.self) { $configuration in
             ComparisonWindow(
-                configuration: configuration ?? LaunchOptions.configuration, settings: settings, recents: recents
+                configuration: configuration ?? LaunchOptions.configuration, settings: settings, recents: recents,
+                reader: appDelegate.services.loader
             )
             .frame(minWidth: 900, minHeight: 600)
         }
@@ -80,7 +83,28 @@ enum LaunchOptions {
     }
 }
 
+/// What the app owns for its whole life and every window shares: the pool git runs on and the loader over it.
+final class AppServices {
+    /// Four threads: enough for the batch reads a large selection runs side by side, further runs queue.
+    let pool = BlockingOffloadPool(width: 4)
+    let loader: SourceLoader
+
+    init() {
+        loader = SourceLoader(runner: HardenedProcessRunner(pool: pool))
+    }
+
+    func shutdown() {
+        pool.shutdown()
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    let services = AppServices()
+
+    func applicationWillTerminate(_ notification: Notification) {
+        services.shutdown()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
@@ -99,7 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard remaining.isEmpty else { return }
         // Through the menu item, which outlives every window, and on the next turn: opened while the close is
         // still under way, SwiftUI presents the closing window again.
-        Task { Self.performWelcomeCommand() }
+        Task { @MainActor in Self.performWelcomeCommand() }
     }
 
     private static func performWelcomeCommand() {

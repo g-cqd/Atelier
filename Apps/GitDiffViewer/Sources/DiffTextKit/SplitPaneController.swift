@@ -3,7 +3,6 @@ package import AppKit
 import DiffCore
 package import DiffRendering
 import Foundation
-import SwiftUI
 
 /// Keeps the two panes of the split view in step: mirrored scrolling, and, when lines wrap, equal row heights.
 @MainActor
