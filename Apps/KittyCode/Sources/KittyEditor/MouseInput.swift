@@ -1,3 +1,4 @@
+import AemiCore
 import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable cyclomatic_complexity file_length function_body_length
@@ -82,7 +83,7 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
 
     if mouse.button.isScroll {
         state.scrollDragState = nil
-        let now = ContinuousClock.now
+        let now = state.clock.erasedNow()
         let momentumBlockInterval = Duration.milliseconds(
             max(0, state.config.editor.scrollMomentumBlockMilliseconds))
         let isVerticalWheel = mouse.button == .scrollUp || mouse.button == .scrollDown
@@ -182,7 +183,7 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
     guard mouse.button == .left || mouse.button == .right else { return }
     let isRightClick = mouse.button == .right
 
-    let now = ContinuousClock.now
+    let now = state.clock.erasedNow()
     let isDoubleClick = !isRightClick && isWithinDoubleClickThreshold(now: now, last: state.lastClickTime)
 
     // Tab ribbon click (mouse coords are 1-based, tab ribbon row uses layout.contentStartRow)
@@ -418,7 +419,7 @@ private func shouldCancelPendingAcceleratedScroll(for direction: MouseButton, st
 @MainActor
 private func updateMomentumTracking(
     afterAcceptedVerticalScroll direction: MouseButton,
-    at now: ContinuousClock.Instant,
+    at now: ClockInstant,
     momentumBlockInterval: Duration,
     state: EditorState
 ) {
@@ -439,7 +440,7 @@ private func scrollVertically(
     direction: MouseButton,
     scrollStep: Int,
     state: EditorState,
-    at now: ContinuousClock.Instant
+    at now: ClockInstant
 ) -> Bool {
     let unitDelta = direction == .scrollUp ? -scrollStep : scrollStep
     let directionChanged =
@@ -558,7 +559,7 @@ private func extraAcceleratedScrollLines(
     target: EditorState.AcceleratedScrollTarget,
     scrollStep: Int,
     state: EditorState,
-    at now: ContinuousClock.Instant
+    at now: ClockInstant
 ) -> Int {
     let config = state.config.editor
     guard config.scrollAccelerationEnabled, scrollStep == 1 else {
@@ -617,11 +618,13 @@ private func enqueueAcceleratedScroll(
     // already contending for the main actor.
     let intervalMilliseconds = max(
         1, state.config.editor.scrollAccelerationStepIntervalMilliseconds)
-    state.scrollAccelerationTask = Task.detached { [weak state] in
+    let taskProvider = state.taskProvider
+    let clock = state.clock
+    state.scrollAccelerationTask = taskProvider.detachedTask(role: .work) { [weak state] in
         guard let state else { return }
 
         while !Task.isCancelled {
-            try? await Task.sleep(for: .milliseconds(intervalMilliseconds))
+            try? await clock.sleep(for: .milliseconds(intervalMilliseconds))
 
             let shouldContinue = await MainActor.run { () -> Bool in
                 guard state.config.editor.scrollAccelerationEnabled else {
@@ -752,7 +755,7 @@ private func handleEditorClick(mouseRow: Int, mouseCol: Int, editorRect: Rect, s
     state.cursorCol = position.col
     state.mode = .editor
 
-    let now = ContinuousClock.now
+    let now = state.clock.erasedNow()
     let isDoubleClick = isWithinDoubleClickThreshold(now: now, last: state.lastClickTime)
 
     state.lastClickTime = now
@@ -769,8 +772,8 @@ private let doubleClickThreshold: Duration = .milliseconds(300)
 /// Returns `true` when `now` is within the double-click window of `last`.
 @inline(__always)
 private func isWithinDoubleClickThreshold(
-    now: ContinuousClock.Instant,
-    last: ContinuousClock.Instant?
+    now: ClockInstant,
+    last: ClockInstant?
 ) -> Bool {
     guard let last else { return false }
     return last.duration(to: now) < doubleClickThreshold

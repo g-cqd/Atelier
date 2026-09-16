@@ -1,3 +1,4 @@
+public import AemiCore
 import AtelierGrammar
 import AtelierParser
 import AtelierQuery
@@ -570,8 +571,10 @@ public enum LanguageHighlighter: Sendable {
 
     /// Ensures grammar artifacts are loaded for a language, compiling off the main thread.
     /// Returns true if artifacts became available (newly loaded or already cached).
-    public static func ensureArtifacts(for language: String) async -> Bool {
-        await Task.detached(priority: .userInitiated) {
+    public static func ensureArtifacts(
+        for language: String, taskProvider: any TaskProvider = .default
+    ) async -> Bool {
+        await taskProvider.detachedTask(role: .work, priority: .userInitiated) {
             SyntaxArtifactsCache.loadIfNeeded(for: language)
             return SyntaxArtifactsCache.artifacts(for: language) != nil
         }

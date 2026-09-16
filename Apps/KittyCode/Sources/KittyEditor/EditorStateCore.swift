@@ -1,3 +1,4 @@
+public import AemiCore
 public import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable file_length type_body_length
@@ -739,9 +740,9 @@ public final class EditorState {
         )
     }
 
-    private var bufferUndoCoalescingWindow: TimeInterval? {
+    private var bufferUndoCoalescingWindow: Duration? {
         guard config.editor.undoCoalescingEnabled else { return nil }
-        return Double(max(0, config.editor.undoCoalescingMilliseconds)) / 1_000
+        return .milliseconds(max(0, config.editor.undoCoalescingMilliseconds))
     }
 
     public func textDidChange(previousSnapshot: BufferEditSnapshot? = nil) {
@@ -1093,7 +1094,7 @@ public final class EditorState {
     }
     @ObservationIgnored public var vimVisualAnchor: (line: Int, col: Int)?
     public var symbolTheme: TerminalSymbolTheme
-    @ObservationIgnored public var lastClickTime: ContinuousClock.Instant?
+    @ObservationIgnored public var lastClickTime: ClockInstant?
     @ObservationIgnored public var lastClickIndex = -1
     @ObservationIgnored public var isScrolling = false
     @ObservationIgnored public var scrollDragState: ScrollDragState?
@@ -1102,11 +1103,11 @@ public final class EditorState {
     @ObservationIgnored public var lastRenderRows = 24
     @ObservationIgnored public var lastScrollDirection: MouseButton?
     @ObservationIgnored public var blockedMomentumDirection: MouseButton?
-    @ObservationIgnored public var blockedMomentumDeadline: ContinuousClock.Instant?
+    @ObservationIgnored public var blockedMomentumDeadline: ClockInstant?
     @ObservationIgnored public var scrollAccelerationDirection: MouseButton?
     @ObservationIgnored public var scrollAccelerationTarget: AcceleratedScrollTarget?
     @ObservationIgnored public var scrollAccelerationBurstCount = 0
-    @ObservationIgnored public var scrollAccelerationLastEventAt: ContinuousClock.Instant?
+    @ObservationIgnored public var scrollAccelerationLastEventAt: ClockInstant?
     @ObservationIgnored public var pendingAcceleratedScrollLines = 0
     @ObservationIgnored public var pendingAcceleratedScrollTarget: AcceleratedScrollTarget?
     @ObservationIgnored public var scrollAccelerationTask: Task<Void, Never>?
@@ -1195,10 +1196,10 @@ public final class EditorState {
     public var commandFeedback: String? {
         didSet { if commandFeedback != oldValue { markChromeDirty() } }
     }
-    @ObservationIgnored public var commandFeedbackExpiry: ContinuousClock.Instant?
-    @ObservationIgnored public var lastKeyRepeatProcessedAt: ContinuousClock.Instant?
+    @ObservationIgnored public var commandFeedbackExpiry: ClockInstant?
+    @ObservationIgnored public var lastKeyRepeatProcessedAt: ClockInstant?
     @ObservationIgnored public var pendingKeySequence: [KeyStroke] = []
-    @ObservationIgnored public var pendingKeySequenceTime: ContinuousClock.Instant?
+    @ObservationIgnored public var pendingKeySequenceTime: ClockInstant?
     /// Long-lived consumer task that handles background full-document
     /// highlights. `refreshHighlights()` yields into `fullHighlightSignal`
     /// instead of spawning a fresh Task per call — eliminating the
@@ -1230,7 +1231,15 @@ public final class EditorState {
         selection = nil
     }
 
-    public init(rootPath: String, config: KittyConfig) {
+    @ObservationIgnored public let taskProvider: any TaskProvider
+    @ObservationIgnored public let clock: any Clock<Duration>
+
+    public init(
+        rootPath: String, config: KittyConfig,
+        taskProvider: any TaskProvider = .default, clock: any Clock<Duration> = ContinuousClock()
+    ) {
+        self.taskProvider = taskProvider
+        self.clock = clock
         self.workspace = WorkspaceSession(rootPath: rootPath)
         self.bufferManager = workspace.bufferManager
         self.treeState = workspace.treeState
@@ -1264,7 +1273,7 @@ public final class EditorState {
 
     private func startFullHighlightConsumer() {
         guard fullHighlightTask == nil else { return }
-        fullHighlightTask = Task { @MainActor [weak self, fullHighlightSignal] in
+        fullHighlightTask = taskProvider.task(role: .observation) { @MainActor [weak self, fullHighlightSignal] in
             for await _ in fullHighlightSignal {
                 guard let self else { return }
                 await self.performFullHighlight()
@@ -1281,12 +1290,13 @@ public final class EditorState {
     /// benefits from explicit cancellation when the query changes.
     private func startWorkspaceSearchDebounceConsumer() {
         guard workspaceSearchDebounceTask == nil else { return }
-        workspaceSearchDebounceTask = Task {
+        let clock = clock
+        workspaceSearchDebounceTask = taskProvider.task(role: .observation) {
             @MainActor [weak self, workspaceSearchDebounceSignal] in
             for await _ in workspaceSearchDebounceSignal {
                 guard let strong = self else { return }
                 let debounceMs = strong.config.search.debounceMilliseconds
-                try? await Task.sleep(for: .milliseconds(debounceMs))
+                try? await clock.sleep(for: .milliseconds(debounceMs))
                 // Audit B.2/F4 — `Task.sleep` swallows cancellation via
                 // `try?`, so check explicitly before running the search
                 // body. Without this, `shutdown()` racing with a pending

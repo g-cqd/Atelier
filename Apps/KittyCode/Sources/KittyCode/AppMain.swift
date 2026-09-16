@@ -1,5 +1,6 @@
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable function_body_length
+import AemiCore
 import Foundation
 import KittyApp
 import KittyCodecs
@@ -74,7 +75,13 @@ struct KittyCodeEntry {
         var config = loadConfig(launchConfig: launchConfig)
         applyOverrides(from: launchConfig, to: &config)
 
-        let state = EditorState(rootPath: launchConfig.rootPath, config: config)
+        // Composition root: one task provider and one clock for the whole process, threaded
+        // explicitly into every type below instead of letting each default separately.
+        let taskProvider: any TaskProvider = .default
+        let clock: any Clock<Duration> = ContinuousClock()
+
+        let state = EditorState(
+            rootPath: launchConfig.rootPath, config: config, taskProvider: taskProvider, clock: clock)
         state.readOnly = launchConfig.readOnly
 
         await state.loadInitialTree()
@@ -99,19 +106,21 @@ struct KittyCodeEntry {
                     maxLineDiffBytes: config.git.decorations.maxLineDiffBytes
                 ),
                 gitLineDecorationProvider: gitProvider,
-                invalidateRender: { [refreshSource] in refreshSource.invalidate() }
+                invalidateRender: { [refreshSource] in refreshSource.invalidate() },
+                taskProvider: taskProvider,
+                clock: clock
             )
         }
 
         // Config file watcher
-        let configWatcher = FileWatcher()
+        let configWatcher = FileWatcher(taskProvider: taskProvider, clock: clock)
         let configURL =
             launchConfig.configPath.map { URL(fileURLWithPath: $0) } ?? KittyConfig.configURL
         let configPath = configURL.path
         let configWatchTask: Task<Void, Never>?
         if FileManager.default.fileExists(atPath: configPath) {
             await configWatcher.watchFile(configPath)
-            configWatchTask = Task { @MainActor in
+            configWatchTask = taskProvider.task(role: .observation) { @MainActor in
                 for await event in configWatcher.events {
                     guard case .fileChanged = event else { continue }
                     var newConfig = KittyConfig.load(from: configURL)
@@ -127,9 +136,9 @@ struct KittyCodeEntry {
         // File watcher
         var fileWatcherIntegration: FileWatcherIntegration?
         if config.fileWatcherEnabled {
-            let watcher = FileWatcher()
+            let watcher = FileWatcher(taskProvider: taskProvider, clock: clock)
             let integration = FileWatcherIntegration(
-                watcher: watcher, workspace: state.workspace, delegate: state)
+                watcher: watcher, workspace: state.workspace, delegate: state, taskProvider: taskProvider)
             integration.start()
             state.fileWatcherIntegration = integration
             fileWatcherIntegration = integration
@@ -142,7 +151,9 @@ struct KittyCodeEntry {
                 workspace: state.workspace,
                 fileWatcherIntegration: fileWatcherIntegration,
                 autoSaveInterval: config.autoSave.interval,
-                saveActiveBuffer: { [weak state] in state?.writeBufferToDisk() }
+                saveActiveBuffer: { [weak state] in state?.writeBufferToDisk() },
+                taskProvider: taskProvider,
+                clock: clock
             )
             manager.start()
             autoSaveManager = manager
@@ -155,7 +166,9 @@ struct KittyCodeEntry {
                 fileStatusProvider: state.fileStatusProvider,
                 gitDecorationManager: state.gitDecorationManager,
                 refreshInterval: config.git.refreshInterval,
-                invalidateRender: { [refreshSource] in refreshSource.invalidate() }
+                invalidateRender: { [refreshSource] in refreshSource.invalidate() },
+                taskProvider: taskProvider,
+                clock: clock
             )
             manager.refreshNow()
             manager.start()
@@ -169,7 +182,7 @@ struct KittyCodeEntry {
         }
 
         let connection = POSIXTerminalConnection()
-        let runtime = ApplicationRuntime(connection: connection)
+        let runtime = ApplicationRuntime(connection: connection, taskProvider: taskProvider)
         state.terminalWriter = { bytes in
             try? connection.write(Array(Data(bytes)))
         }

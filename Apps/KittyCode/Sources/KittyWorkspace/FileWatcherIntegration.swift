@@ -1,3 +1,4 @@
+public import AemiCore
 import AtelierText
 import Foundation
 public import KittyFileTree
@@ -15,22 +16,27 @@ public final class FileWatcherIntegration {
     private let watcher: FileWatcher
     private let workspace: WorkspaceSession
     private weak var delegate: (any FileWatcherDelegate)?
+    private let taskProvider: any TaskProvider
     private var watchTask: Task<Void, Never>?
 
-    public init(watcher: FileWatcher, workspace: WorkspaceSession, delegate: any FileWatcherDelegate) {
+    public init(
+        watcher: FileWatcher, workspace: WorkspaceSession, delegate: any FileWatcherDelegate,
+        taskProvider: any TaskProvider = .default
+    ) {
         self.watcher = watcher
         self.workspace = workspace
         self.delegate = delegate
+        self.taskProvider = taskProvider
     }
 
     public func start() {
-        Task { await watcher.watchDirectory(workspace.rootPath) }
+        taskProvider.task(role: .work) { await watcher.watchDirectory(workspace.rootPath) }
 
         for buffer in workspace.bufferManager.buffers {
-            Task { await watcher.watchFile(buffer.filePath) }
+            taskProvider.task(role: .work) { await watcher.watchFile(buffer.filePath) }
         }
 
-        watchTask = Task { [weak self] in
+        watchTask = taskProvider.task(role: .observation) { [weak self] in
             guard let self else { return }
             for await event in self.watcher.events {
                 await self.handleEvent(event)
@@ -41,19 +47,19 @@ public final class FileWatcherIntegration {
     public func stop() {
         watchTask?.cancel()
         watchTask = nil
-        Task { await watcher.stop() }
+        taskProvider.task(role: .work) { await watcher.stop() }
     }
 
     public func watchOpenedFile(_ path: String) {
-        Task { await watcher.watchFile(path) }
+        taskProvider.task(role: .work) { await watcher.watchFile(path) }
     }
 
     public func unwatchClosedFile(_ path: String) {
-        Task { await watcher.unwatchFile(path) }
+        taskProvider.task(role: .work) { await watcher.unwatchFile(path) }
     }
 
     public func suppressForSave(_ path: String) {
-        Task { await watcher.suppressNotifications(for: path) }
+        taskProvider.task(role: .work) { await watcher.suppressNotifications(for: path) }
     }
 
     private func handleEvent(_ event: FileWatcher.FileWatchEvent) async {
@@ -86,7 +92,8 @@ public final class FileWatcherIntegration {
                 delegate?.fileWatcherDidDetectExternalModification(bufferName: buffer.fileName)
             }
         } else {
-            guard let loadedFile = try? await WorkspaceFileLoading.readUTF8File(at: path) else {
+            guard let loadedFile = try? await WorkspaceFileLoading.readUTF8File(at: path, taskProvider: taskProvider)
+            else {
                 return
             }
             let content = loadedFile.content

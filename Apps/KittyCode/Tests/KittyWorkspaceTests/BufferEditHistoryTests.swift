@@ -116,12 +116,12 @@ import Testing
         let history = BufferEditHistory(initial: initial)
 
         let after1 = makeSnapshot("xab", cursor: TextCursor(col: 1))
-        history.recordChange(from: initial, to: after1, coalescingWindow: 10)
+        history.recordChange(from: initial, to: after1, coalescingWindow: .seconds(10))
 
         // Jump cursor to col 3 (simulating arrow key movement)
         let before2 = makeSnapshot("xab", cursor: TextCursor(col: 3))
         let after2 = makeSnapshot("xaby", cursor: TextCursor(col: 4))
-        history.recordChange(from: before2, to: after2, coalescingWindow: 10)
+        history.recordChange(from: before2, to: after2, coalescingWindow: .seconds(10))
 
         // Should be two undo steps
         guard case .applied(let step1) = history.undo(current: after2) else {
@@ -142,12 +142,12 @@ import Testing
         let history = BufferEditHistory(initial: initial)
 
         let after1 = makeSnapshot("a", cursor: TextCursor(col: 1))
-        history.recordChange(from: initial, to: after1, coalescingWindow: 10)
+        history.recordChange(from: initial, to: after1, coalescingWindow: .seconds(10))
 
         // Cursor at col 1 matches after1's cursor
         let before2 = makeSnapshot("a", cursor: TextCursor(col: 1))
         let after2 = makeSnapshot("ab", cursor: TextCursor(col: 2))
-        history.recordChange(from: before2, to: after2, coalescingWindow: 10)
+        history.recordChange(from: before2, to: after2, coalescingWindow: .seconds(10))
 
         // Should be one undo step (coalesced)
         guard case .applied(let undone) = history.undo(current: after2) else {
@@ -314,7 +314,7 @@ import Testing
         // Warm the final snapshot's caches, then coalesce.
         _ = final.textBuffer.text
         _ = final.textBuffer.lines
-        history.recordChange(from: mid, to: final, coalescingWindow: 10)
+        history.recordChange(from: mid, to: final, coalescingWindow: .seconds(10))
 
         guard let top = history._testTopOfUndoStack else {
             Issue.record("Expected a transition")
