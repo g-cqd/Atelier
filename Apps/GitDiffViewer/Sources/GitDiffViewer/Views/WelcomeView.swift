@@ -11,6 +11,7 @@ import SwiftUI
 /// greets with its projects. Every choice opens a comparison window of its own.
 struct WelcomeView: View {
     let recents: RecentComparisons
+    let reader: any SourceReading
     @Environment(\.openWindow) private var openWindow
     @State private var pendingRepository: PendingRepository?
     @State private var failure: String?
@@ -92,7 +93,7 @@ struct WelcomeView: View {
     private func openRepository() {
         guard let url = Self.choose(directories: true, message: "Choose a git repository") else { return }
         Task {
-            if let info = await SourceLoader().repositoryInfo(containing: url) {
+            if let info = await reader.repositoryInfo(containing: url) {
                 pendingRepository = PendingRepository(info: info)
             } else {
                 failure =

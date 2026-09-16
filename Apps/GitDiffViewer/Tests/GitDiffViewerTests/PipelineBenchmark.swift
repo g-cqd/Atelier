@@ -1,3 +1,4 @@
+import AtelierSwiftSyntax
 import Foundation
 import Testing
 
@@ -69,10 +70,10 @@ struct PipelineBenchmark {
                 )
             }
             _ = timings.time("model: word tier", name) {
-                DiffModel(oldText: old, newText: new, granularity: .word, language: language)
+                DiffModel(oldText: old, newText: new, granularity: .word, language: language, tokenRanges: tokenizer)
             }
             let model = timings.time("model: syntax tier", name) {
-                DiffModel(oldText: old, newText: new, granularity: .syntax, language: language, tokenizer: tokenizer)
+                DiffModel(oldText: old, newText: new, granularity: .syntax, language: language, tokenRanges: tokenizer)
             }
             _ = timings.time("highlight tokens", name) {
                 (

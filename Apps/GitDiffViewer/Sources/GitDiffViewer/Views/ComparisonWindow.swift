@@ -13,6 +13,7 @@ struct ComparisonWindow: View {
     let configuration: LaunchConfiguration
     let settings: ViewerSettings
     let recents: RecentComparisons
+    let reader: any SourceReading
     /// Created once the window appears: a state initialiser would run its git work on every re-creation of the view.
     @State private var model: DiffViewerModel?
     @Environment(\.dismissWindow) private var dismissWindow
@@ -31,7 +32,7 @@ struct ComparisonWindow: View {
         }
         .onAppear {
             guard model == nil else { return }
-            let model = DiffViewerModel(settings: settings)
+            let model = DiffViewerModel(settings: settings, reader: reader)
             model.start(configuration)
             self.model = model
             recents.record(configuration)

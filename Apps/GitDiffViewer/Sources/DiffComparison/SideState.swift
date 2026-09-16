@@ -72,7 +72,7 @@ package final class SideState {
         beginLoading()
         loadTask = taskProvider.task {
             do {
-                let resolved = try await GitClient(repository: repository.root).resolve(ref: ref)
+                let resolved = try await reader.resolve(ref: ref, in: repository.root)
                 guard !Task.isCancelled else { return }
                 load(.gitRef(repository: repository.root, ref: resolved), repository: repository)
             } catch is CancellationError {

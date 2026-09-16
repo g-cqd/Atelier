@@ -39,7 +39,7 @@ struct BlobHashingBenchmark {
         #expect(dataHashes == mappedHashes)
         print("BENCH blob hashing of \(files.count) files: Data \(dataDuration), mmap \(mappedDuration)")
 
-        let loader = SourceLoader()
+        let loader = TestProcesses.loader
         let start = clock.now
         let entries = try await loader.entries(of: .directory(root))
         let scanDuration = clock.now - start

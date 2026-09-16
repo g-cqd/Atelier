@@ -40,7 +40,7 @@ struct PatchSourceTests {
         """
         .write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
-        let loader = SourceLoader()
+        let loader = TestProcesses.loader
         let old = ComparisonSource.patch(url, side: .old)
         let new = ComparisonSource.patch(url, side: .new)
 
