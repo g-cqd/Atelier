@@ -14,7 +14,6 @@ import Testing
 
 @Suite
 struct CLIArgumentsActionParsingTests {
-
     @Test
     func `parse with no arguments returns run with current directory`() {
         let action = CLIArguments.parse(["kittycode"])

@@ -6,8 +6,7 @@ import Testing
 
 @Suite
 struct LexerCommentTokenizationTests {
-    private func makeLexTable(comments: [CommentPattern], keywords: [String: Int] = [:]) -> LexTable
-    {
+    private func makeLexTable(comments: [CommentPattern], keywords: [String: Int] = [:]) -> LexTable {
         var states: [LexState] = []
         if !keywords.isEmpty {
             states = buildTrieStates(keywords: keywords)
@@ -22,7 +21,8 @@ struct LexerCommentTokenizationTests {
                 name: "test",
                 rules: keywords.map { ($0.key, Rule.string($0.key)) }
             )
-        ).states
+        )
+        .states
     }
 
     @Test
@@ -59,9 +59,11 @@ struct LexerCommentTokenizationTests {
     @Test
     func `Keywords inside line comments are NOT tokenized separately`() {
         let lexTable = LexTable(
-            states: LexTableCompiler.compile(
-                GrammarDefinition(name: "t", rules: [("s", .string("if"))])
-            ).states,
+            states:
+                LexTableCompiler.compile(
+                    GrammarDefinition(name: "t", rules: [("s", .string("if"))])
+                )
+                .states,
             keywords: ["if": 0],
             commentPatterns: [.line(prefix: "//")]
         )
@@ -95,9 +97,11 @@ struct LexerCommentTokenizationTests {
     @Test
     func `Keywords inside block comments are NOT tokenized separately`() {
         let lexTable = LexTable(
-            states: LexTableCompiler.compile(
-                GrammarDefinition(name: "t", rules: [("s", .string("if"))])
-            ).states,
+            states:
+                LexTableCompiler.compile(
+                    GrammarDefinition(name: "t", rules: [("s", .string("if"))])
+                )
+                .states,
             keywords: ["if": 0],
             commentPatterns: [.block(open: "/*", close: "*/")]
         )
@@ -110,10 +114,12 @@ struct LexerCommentTokenizationTests {
     @Test
     func `Comment is matched before keyword when at same position`() {
         let lexTable = LexTable(
-            states: LexTableCompiler.compile(
-                GrammarDefinition(
-                    name: "t", rules: [("s", .choice([.string("if"), .string("//")]))])
-            ).states,
+            states:
+                LexTableCompiler.compile(
+                    GrammarDefinition(
+                        name: "t", rules: [("s", .choice([.string("if"), .string("//")]))])
+                )
+                .states,
             keywords: ["if": 0, "//": 1],
             commentPatterns: [.line(prefix: "//")]
         )
@@ -135,9 +141,11 @@ struct LexerCommentTokenizationTests {
     @Test
     func `Code after line comment on next line is tokenized normally`() {
         let lexTable = LexTable(
-            states: LexTableCompiler.compile(
-                GrammarDefinition(name: "t", rules: [("s", .string("if"))])
-            ).states,
+            states:
+                LexTableCompiler.compile(
+                    GrammarDefinition(name: "t", rules: [("s", .string("if"))])
+                )
+                .states,
             keywords: ["if": 0],
             commentPatterns: [.line(prefix: "//")]
         )

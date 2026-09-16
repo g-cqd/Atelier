@@ -11,7 +11,7 @@ struct ClipboardTests {
         // OSC 52 ; c ; <base64> ST
         #expect(bytes[0] == 0x1b)
         #expect(bytes[1] == 0x5d)  // ] (OSC)
-        let body = String(bytes: Array(bytes[2..<bytes.count - 2]), encoding: .utf8) ?? ""
+        let body = String(bytes: Array(bytes[2 ..< bytes.count - 2]), encoding: .utf8) ?? ""
         #expect(body == "52;c;SGVsbG8=")
         #expect(bytes[bytes.count - 2] == 0x1b)
         #expect(bytes[bytes.count - 1] == 0x5c)

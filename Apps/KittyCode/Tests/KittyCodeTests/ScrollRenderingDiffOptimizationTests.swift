@@ -15,7 +15,6 @@ import Testing
 @Suite
 @MainActor
 struct ScrollRenderingDiffOptimizationTests {
-
     private func makeSUT(
         lineCount: Int = 100,
         columns: Int = 40,
@@ -37,11 +36,9 @@ struct ScrollRenderingDiffOptimizationTests {
         // Count dirty cells in the content area (rows 0..<12, all columns)
         let cols = 40
         var dirtyCount = 0
-        for row in 0..<12 {
-            for col in 0..<cols {
-                if sut.pipeline.buffer.dirty.isDirty(row * cols + col) {
-                    dirtyCount += 1
-                }
+        for row in 0 ..< 12 {
+            for col in 0 ..< cols where sut.pipeline.buffer.dirty.isDirty(row * cols + col) {
+                dirtyCount += 1
             }
         }
 
@@ -69,11 +66,9 @@ struct ScrollRenderingDiffOptimizationTests {
 
         let cols = 40
         var dirtyCount = 0
-        for row in 0..<12 {
-            for col in 0..<cols {
-                if sut.pipeline.buffer.dirty.isDirty(row * cols + col) {
-                    dirtyCount += 1
-                }
+        for row in 0 ..< 12 {
+            for col in 0 ..< cols where sut.pipeline.buffer.dirty.isDirty(row * cols + col) {
+                dirtyCount += 1
             }
         }
 
@@ -96,7 +91,7 @@ struct ScrollRenderingDiffOptimizationTests {
         let state = EditorState(rootPath: ".", config: config)
         state.sidebarCollapsed = true
         state.mode = .editor
-        state.fileContent = (0..<100).map { "line \($0) content here" }
+        state.fileContent = (0 ..< 100).map { "line \($0) content here" }
         state.refreshHighlights()
 
         // Initial render

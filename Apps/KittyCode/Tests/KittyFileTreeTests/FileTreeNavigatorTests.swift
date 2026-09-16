@@ -5,7 +5,6 @@ import Testing
 
 @Suite(.tags(.navigator))
 struct FileTreeNavigatorTests {
-
     private func makeFileNode(_ name: String, path: String = "/r") -> FileNode {
         FileNode(name: name, path: path + "/\(name)", isDirectory: false)
     }

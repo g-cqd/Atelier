@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable function_parameter_count type_body_length
 // swiftlint:disable file_length
 import Foundation
 import KittyCodecs
@@ -7,7 +9,6 @@ import KittyText
 
 /// Renders a View hierarchy into a ScreenBuffer.
 public enum ViewRenderer {
-
     /// Render a view into a buffer region.
     public static func render<V: View>(
         _ view: V,
@@ -18,34 +19,34 @@ public enum ViewRenderer {
         guard !rect.isEmpty else { return }
 
         switch view {
-        case let text as Text:
-            renderText(text, into: &buffer, in: rect, context: context)
-        case let styled as StyledTextView:
-            renderStyledText(styled, into: &buffer, in: rect, context: context)
-        case let status as StatusBar:
-            renderStatusBar(status, into: &buffer, in: rect, context: context)
-        case let indicator as VerticalScrollIndicator:
-            renderVerticalScrollIndicator(indicator, into: &buffer, in: rect, context: context)
-        case let hIndicator as HorizontalScrollIndicator:
-            renderHorizontalScrollIndicator(hIndicator, into: &buffer, in: rect, context: context)
-        case let editor as TextEditor:
-            renderTextEditor(editor, into: &buffer, in: rect, context: context)
-        case let list as ListView:
-            renderListView(list, into: &buffer, in: rect, context: context)
-        case let centered as CenteredText:
-            renderCenteredText(centered, into: &buffer, in: rect, context: context)
-        case let activityBar as ActivityBar:
-            activityBar.render(to: &buffer, in: rect)
-        case let tabRibbon as TabRibbon:
-            tabRibbon.render(to: &buffer, in: rect)
-        case let spacer as Spacer:
-            _ = spacer  // no-op: spacer just occupies space
-        case let separator as Separator:
-            renderSeparator(separator, into: &buffer, in: rect, context: context)
-        case is EmptyView:
-            break
-        default:
-            renderGeneric(view, into: &buffer, in: rect, context: context)
+            case let text as Text:
+                renderText(text, into: &buffer, in: rect, context: context)
+            case let styled as StyledTextView:
+                renderStyledText(styled, into: &buffer, in: rect, context: context)
+            case let status as StatusBar:
+                renderStatusBar(status, into: &buffer, in: rect, context: context)
+            case let indicator as VerticalScrollIndicator:
+                renderVerticalScrollIndicator(indicator, into: &buffer, in: rect, context: context)
+            case let hIndicator as HorizontalScrollIndicator:
+                renderHorizontalScrollIndicator(hIndicator, into: &buffer, in: rect, context: context)
+            case let editor as TextEditor:
+                renderTextEditor(editor, into: &buffer, in: rect, context: context)
+            case let list as ListView:
+                renderListView(list, into: &buffer, in: rect, context: context)
+            case let centered as CenteredText:
+                renderCenteredText(centered, into: &buffer, in: rect, context: context)
+            case let activityBar as ActivityBar:
+                activityBar.render(to: &buffer, in: rect)
+            case let tabRibbon as TabRibbon:
+                tabRibbon.render(to: &buffer, in: rect)
+            case let spacer as Spacer:
+                _ = spacer  // no-op: spacer just occupies space
+            case let separator as Separator:
+                renderSeparator(separator, into: &buffer, in: rect, context: context)
+            case is EmptyView:
+                break
+            default:
+                renderGeneric(view, into: &buffer, in: rect, context: context)
         }
     }
 
@@ -111,14 +112,14 @@ public enum ViewRenderer {
         let style = context.applyTo(separator.style)
         let cell = Cell(character: separator.character, style: style)
         switch separator.axis {
-        case .vertical:
-            for row in rect.y..<rect.maxY {
-                buffer[row, rect.x] = cell
-            }
-        case .horizontal:
-            for col in rect.x..<rect.maxX {
-                buffer[rect.y, col] = cell
-            }
+            case .vertical:
+                for row in rect.y ..< rect.maxY {
+                    buffer[row, rect.x] = cell
+                }
+            case .horizontal:
+                for col in rect.x ..< rect.maxX {
+                    buffer[rect.y, col] = cell
+                }
         }
     }
 
@@ -140,8 +141,7 @@ public enum ViewRenderer {
             cell: Cell(character: indicator.style.trackCharacter, style: trackStyle)
         )
 
-        if let thumbRect = VerticalScrollIndicatorLayout.thumbRect(for: indicator.metrics, in: rect)
-        {
+        if let thumbRect = VerticalScrollIndicatorLayout.thumbRect(for: indicator.metrics, in: rect) {
             buffer.fill(
                 row: thumbRect.y,
                 col: thumbRect.x,
@@ -173,7 +173,7 @@ public enum ViewRenderer {
         if let thumbRect = HorizontalScrollIndicatorLayout.thumbRect(
             for: indicator.metrics, in: rect)
         {
-            for col in thumbRect.x..<thumbRect.maxX {
+            for col in thumbRect.x ..< thumbRect.maxX {
                 guard col >= rect.x, col < rect.maxX else { continue }
                 buffer[thumbRect.y, col] = Cell(
                     character: indicator.style.thumbCharacter, style: thumbStyle)
@@ -213,7 +213,8 @@ public enum ViewRenderer {
             VerticalScrollIndicator(
                 metrics: metrics,
                 style: scrollView.scrollViewStyle.indicatorStyle
-            ).render(to: &buffer, in: indicatorRect, context: context)
+            )
+            .render(to: &buffer, in: indicatorRect, context: context)
         } else {
             scrollView.contentView.render(to: &buffer, in: rect, context: context)
         }
@@ -246,7 +247,7 @@ public enum ViewRenderer {
         let visibleCount = min(rect.height, rows.count - start)
         let indentWidth = max(0, tree.indentWidth)
 
-        for offset in 0..<visibleCount {
+        for offset in 0 ..< visibleCount {
             let row = rows[start + offset]
             let baseStyle = row.index == tree.selectedIndex ? tree.selectedStyle : row.style
             let style = context.applyTo(baseStyle)
@@ -271,7 +272,7 @@ public enum ViewRenderer {
         }
 
         if visibleCount < rect.height {
-            for offset in visibleCount..<rect.height {
+            for offset in visibleCount ..< rect.height {
                 fillRow(
                     into: &buffer, row: rect.y + offset, col: rect.x, width: rect.width,
                     style: normalStyle)
@@ -282,7 +283,8 @@ public enum ViewRenderer {
             VerticalScrollIndicator(
                 metrics: metrics,
                 style: tree.scrollIndicatorStyle
-            ).render(
+            )
+            .render(
                 to: &buffer,
                 in: Rect(x: rect.maxX - 1, y: rect.y, width: 1, height: rect.height),
                 context: context
@@ -341,7 +343,7 @@ public enum ViewRenderer {
                 let firstWrapRow =
                     lineIndex == max(0, min(editor.scrollOffset, editor.lineCount))
                     ? editor.wrapRowOffset : 0
-                for wrapRow in firstWrapRow..<wrappedRows where screenRow < rect.height {
+                for wrapRow in firstWrapRow ..< wrappedRows where screenRow < rect.height {
                     let row = rect.y + screenRow
                     if isCurrentLine || lineOverlay != nil {
                         fillRow(
@@ -411,34 +413,34 @@ public enum ViewRenderer {
                                 let category = WhitespaceRenderer.classify(
                                     char, isLeading: wrapIsLeading)
                                 switch category {
-                                case .normal:
-                                    wrapIsLeading = false
-                                case .indentSpace, .indentTab:
-                                    if wsConfig.shouldShowIndentation(inSelection: inSelection),
-                                        let glyph = WhitespaceRenderer.replacementGlyph(
-                                            for: category)
-                                    {
-                                        displayChar = glyph
-                                        charStyle = wsConfig.indentationStyle
-                                        if width == 0 { width = 1 }
-                                    }
-                                case .space:
-                                    if wsConfig.shouldShowSpaces(inSelection: inSelection),
-                                        let glyph = WhitespaceRenderer.replacementGlyph(
-                                            for: category)
-                                    {
-                                        displayChar = glyph
-                                        charStyle = wsConfig.spaceStyle
-                                    }
-                                case .unexpectedInvisible:
-                                    if wsConfig.showUnexpected,
-                                        let glyph = WhitespaceRenderer.replacementGlyph(
-                                            for: category)
-                                    {
-                                        displayChar = glyph
-                                        charStyle = wsConfig.unexpectedStyle
-                                        if width == 0 { width = 1 }
-                                    }
+                                    case .normal:
+                                        wrapIsLeading = false
+                                    case .indentSpace, .indentTab:
+                                        if wsConfig.shouldShowIndentation(inSelection: inSelection),
+                                            let glyph = WhitespaceRenderer.replacementGlyph(
+                                                for: category)
+                                        {
+                                            displayChar = glyph
+                                            charStyle = wsConfig.indentationStyle
+                                            if width == 0 { width = 1 }
+                                        }
+                                    case .space:
+                                        if wsConfig.shouldShowSpaces(inSelection: inSelection),
+                                            let glyph = WhitespaceRenderer.replacementGlyph(
+                                                for: category)
+                                        {
+                                            displayChar = glyph
+                                            charStyle = wsConfig.spaceStyle
+                                        }
+                                    case .unexpectedInvisible:
+                                        if wsConfig.showUnexpected,
+                                            let glyph = WhitespaceRenderer.replacementGlyph(
+                                                for: category)
+                                        {
+                                            displayChar = glyph
+                                            charStyle = wsConfig.unexpectedStyle
+                                            if width == 0 { width = 1 }
+                                        }
                                 }
                             } else {
                                 if char != " " && char != "\t" { wrapIsLeading = false }
@@ -551,7 +553,8 @@ public enum ViewRenderer {
                 VerticalScrollIndicator(
                     metrics: TextEditorLayout.verticalScrollMetrics(for: editor, in: rect),
                     style: editor.verticalScrollIndicatorStyle
-                ).render(to: &buffer, in: indicatorRect, context: context)
+                )
+                .render(to: &buffer, in: indicatorRect, context: context)
             }
             return
         }
@@ -559,7 +562,7 @@ public enum ViewRenderer {
         let startLine = max(0, min(editor.scrollOffset, editor.lineCount))
         let endLine = min(editor.lineCount, startLine + rect.height)
 
-        for rowOffset in 0..<rect.height {
+        for rowOffset in 0 ..< rect.height {
             let row = rect.y + rowOffset
             let lineIndex = startLine + rowOffset
 
@@ -668,7 +671,8 @@ public enum ViewRenderer {
             VerticalScrollIndicator(
                 metrics: TextEditorLayout.verticalScrollMetrics(for: editor, in: rect),
                 style: editor.verticalScrollIndicatorStyle
-            ).render(to: &buffer, in: indicatorRect, context: context)
+            )
+            .render(to: &buffer, in: indicatorRect, context: context)
         }
 
         // Horizontal scroll indicator (only for non-wrapped mode)
@@ -682,7 +686,8 @@ public enum ViewRenderer {
                 HorizontalScrollIndicator(
                     metrics: hMetrics,
                     style: editor.horizontalScrollIndicatorStyle
-                ).render(to: &buffer, in: hRect, context: context)
+                )
+                .render(to: &buffer, in: hRect, context: context)
             }
         }
     }
@@ -700,7 +705,7 @@ public enum ViewRenderer {
         let showIndicator = list.showsVerticalScrollIndicator && list.items.count > rect.height
         let contentWidth = max(0, rect.width - (showIndicator ? 1 : 0))
 
-        for row in 0..<rect.height {
+        for row in 0 ..< rect.height {
             let itemIdx = list.scrollOffset + row
             let screenRow = rect.y + row
 
@@ -726,8 +731,9 @@ public enum ViewRenderer {
             if item.isDirty {
                 label += " \(list.style.dirtyIndicator)"
             }
-            let padded = String(label.prefix(contentWidth)).padding(
-                toLength: contentWidth, withPad: " ", startingAt: 0)
+            let padded = String(label.prefix(contentWidth))
+                .padding(
+                    toLength: contentWidth, withPad: " ", startingAt: 0)
 
             fillRow(into: &buffer, row: screenRow, col: rect.x, width: rect.width, style: rowStyle)
             buffer.write(padded, row: screenRow, col: rect.x, style: rowStyle)
@@ -749,7 +755,8 @@ public enum ViewRenderer {
             VerticalScrollIndicator(
                 metrics: metrics,
                 style: list.style.scrollIndicatorStyle
-            ).render(
+            )
+            .render(
                 to: &buffer,
                 in: Rect(x: rect.maxX - 1, y: rect.y, width: 1, height: rect.height),
                 context: context
@@ -769,7 +776,7 @@ public enum ViewRenderer {
         let textStyle = context.applyTo(centered.style)
         let messageRow = rect.height / 2
 
-        for row in 0..<rect.height {
+        for row in 0 ..< rect.height {
             let screenRow = rect.y + row
             if row == messageRow {
                 let leftPadding = max(0, (rect.width - centered.text.count) / 2)
@@ -850,8 +857,7 @@ public enum ViewRenderer {
     ) -> Style {
         guard let highlights, !highlights.isEmpty else { return base }
         var best: TextHighlight?
-        for highlight in highlights {
-            guard highlight.range.contains(charIndex) else { continue }
+        for highlight in highlights where highlight.range.contains(charIndex) {
             if let current = best {
                 if highlight.role > current.role { best = highlight }
             } else {
@@ -905,31 +911,31 @@ public enum ViewRenderer {
                     let inSelection = isInSelection(charIndex: charIndex, highlights: highlights)
                     category = WhitespaceRenderer.classify(char, isLeading: isLeading)
                     switch category {
-                    case .normal:
-                        isLeading = false
-                    case .indentSpace, .indentTab:
-                        if whitespaceConfig.shouldShowIndentation(inSelection: inSelection),
-                            let glyph = WhitespaceRenderer.replacementGlyph(for: category)
-                        {
-                            displayChar = glyph
-                            charStyle = whitespaceConfig.indentationStyle
-                            if width == 0 { width = 1 }
-                        }
-                    case .space:
-                        if whitespaceConfig.shouldShowSpaces(inSelection: inSelection),
-                            let glyph = WhitespaceRenderer.replacementGlyph(for: category)
-                        {
-                            displayChar = glyph
-                            charStyle = whitespaceConfig.spaceStyle
-                        }
-                    case .unexpectedInvisible:
-                        if whitespaceConfig.showUnexpected,
-                            let glyph = WhitespaceRenderer.replacementGlyph(for: category)
-                        {
-                            displayChar = glyph
-                            charStyle = whitespaceConfig.unexpectedStyle
-                            if width == 0 { width = 1 }
-                        }
+                        case .normal:
+                            isLeading = false
+                        case .indentSpace, .indentTab:
+                            if whitespaceConfig.shouldShowIndentation(inSelection: inSelection),
+                                let glyph = WhitespaceRenderer.replacementGlyph(for: category)
+                            {
+                                displayChar = glyph
+                                charStyle = whitespaceConfig.indentationStyle
+                                if width == 0 { width = 1 }
+                            }
+                        case .space:
+                            if whitespaceConfig.shouldShowSpaces(inSelection: inSelection),
+                                let glyph = WhitespaceRenderer.replacementGlyph(for: category)
+                            {
+                                displayChar = glyph
+                                charStyle = whitespaceConfig.spaceStyle
+                            }
+                        case .unexpectedInvisible:
+                            if whitespaceConfig.showUnexpected,
+                                let glyph = WhitespaceRenderer.replacementGlyph(for: category)
+                            {
+                                displayChar = glyph
+                                charStyle = whitespaceConfig.unexpectedStyle
+                                if width == 0 { width = 1 }
+                            }
                     }
                 } else {
                     if char != " " && char != "\t" {
@@ -1010,7 +1016,7 @@ public enum ViewRenderer {
         guard col < maxCol else { return }
 
         if isControl && width > 1 {
-            for _ in 0..<width where col < maxCol {
+            for _ in 0 ..< width where col < maxCol {
                 buffer[row, col] = Cell(character: " ", style: style)
                 col += 1
             }
@@ -1020,7 +1026,7 @@ public enum ViewRenderer {
         if width > 1 && UnicodeWidth.displayWidth(of: char) == 1 {
             buffer[row, col] = Cell(character: char, style: style)
             col += 1
-            for _ in 1..<width where col < maxCol {
+            for _ in 1 ..< width where col < maxCol {
                 buffer[row, col] = Cell(character: " ", style: style)
                 col += 1
             }
@@ -1168,7 +1174,8 @@ public enum ViewRenderer {
             if let region = _extractFocusRegion(from: view) {
                 context.focusMap?.register(region, rect: rect)
             }
-            let contentRect = (modified as? any _RectAdjustingModifierProtocol)
+            let contentRect =
+                (modified as? any _RectAdjustingModifierProtocol)
                 .map { $0.adjustedRect(from: rect) } ?? rect
             let mergedContext = modified.modifiedContext(from: context)
             modified.contentView.render(to: &buffer, in: contentRect, context: mergedContext)
@@ -1278,14 +1285,14 @@ public enum ViewRenderer {
         for (child, segment) in zip(children, segments) {
             let childRect: Rect
             switch stack.axis {
-            case .vertical:
-                childRect = Rect(
-                    x: rect.x, y: rect.y + segment.offset, width: rect.width, height: segment.length
-                )
-            case .horizontal:
-                childRect = Rect(
-                    x: rect.x + segment.offset, y: rect.y, width: segment.length,
-                    height: rect.height)
+                case .vertical:
+                    childRect = Rect(
+                        x: rect.x, y: rect.y + segment.offset, width: rect.width, height: segment.length
+                    )
+                case .horizontal:
+                    childRect = Rect(
+                        x: rect.x + segment.offset, y: rect.y, width: segment.length,
+                        height: rect.height)
             }
 
             guard !childRect.isEmpty else { continue }
@@ -1385,10 +1392,10 @@ private func _extractLayoutDimension(from view: any View, axis: Axis) -> LayoutD
     if let provider = view as? any _LayoutDimensionProvider {
         let dims = provider.layoutDimension
         switch axis {
-        case .horizontal:
-            if let w = dims.width { return w }
-        case .vertical:
-            if let h = dims.height { return h }
+            case .horizontal:
+                if let w = dims.width { return w }
+            case .vertical:
+                if let h = dims.height { return h }
         }
     }
     if let spacer = view as? Spacer {
@@ -1396,10 +1403,10 @@ private func _extractLayoutDimension(from view: any View, axis: Axis) -> LayoutD
     }
     if let sep = view as? Separator {
         switch axis {
-        case .horizontal:
-            return sep.axis == .vertical ? .fixed(1) : .flexible(min: 0)
-        case .vertical:
-            return sep.axis == .horizontal ? .fixed(1) : .flexible(min: 0)
+            case .horizontal:
+                return sep.axis == .vertical ? .fixed(1) : .flexible(min: 0)
+            case .vertical:
+                return sep.axis == .horizontal ? .fixed(1) : .flexible(min: 0)
         }
     }
     // Walk through non-frame modifiers to find inner frame/spacer/separator
@@ -1448,10 +1455,10 @@ extension ForEachArrayView: _ForEachArrayViewProtocol {
 extension ConditionalView: _ConditionalViewProtocol {
     fileprivate var activeView: any View {
         switch self {
-        case .first(let view):
-            view
-        case .second(let view):
-            view
+            case .first(let view):
+                view
+            case .second(let view):
+                view
         }
     }
 }
@@ -1480,26 +1487,27 @@ extension ZStack: _ZStackProtocol {
 
 extension TreeView: _TreeViewProtocol {
     fileprivate var rowsForRendering: [_TreeRow] {
-        visibleRows().map { row in
-            let icon: String
-            if row.node.isLeaf {
-                icon = style.leafIcon
-            } else if row.node.isExpanded {
-                icon = style.expandedIcon
-            } else {
-                icon = style.collapsedIcon
-            }
+        visibleRows()
+            .map { row in
+                let icon: String
+                if row.node.isLeaf {
+                    icon = style.leafIcon
+                } else if row.node.isExpanded {
+                    icon = style.expandedIcon
+                } else {
+                    icon = style.collapsedIcon
+                }
 
-            return _TreeRow(
-                depth: row.depth,
-                icon: icon,
-                label: label(row.node.value),
-                index: row.index,
-                style: rowStyle(row.node.value),
-                suffix: rowSuffix(row.node.value),
-                suffixStyle: rowSuffixStyle(row.node.value)
-            )
-        }
+                return _TreeRow(
+                    depth: row.depth,
+                    icon: icon,
+                    label: label(row.node.value),
+                    index: row.index,
+                    style: rowStyle(row.node.value),
+                    suffix: rowSuffix(row.node.value),
+                    suffixStyle: rowSuffixStyle(row.node.value)
+                )
+            }
     }
 
     fileprivate var rowCount: Int {

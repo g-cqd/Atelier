@@ -8,8 +8,8 @@ import Testing
 struct SyntaxTreeTests {
     @Test
     func `Walk visits all nodes`() {
-        let leaf = SyntaxNode(type: "leaf", byteRange: 0..<3)
-        let root = SyntaxNode(type: "root", children: [leaf], byteRange: 0..<3)
+        let leaf = SyntaxNode(type: "leaf", byteRange: 0 ..< 3)
+        let root = SyntaxNode(type: "root", children: [leaf], byteRange: 0 ..< 3)
         let tree = SyntaxTree(root: root, source: "abc")
 
         var visited: [String] = []
@@ -22,9 +22,9 @@ struct SyntaxTreeTests {
 
     @Test
     func `Node at byte offset`() {
-        let child1 = SyntaxNode(type: "a", byteRange: 0..<3)
-        let child2 = SyntaxNode(type: "b", byteRange: 3..<6)
-        let root = SyntaxNode(type: "root", children: [child1, child2], byteRange: 0..<6)
+        let child1 = SyntaxNode(type: "a", byteRange: 0 ..< 3)
+        let child2 = SyntaxNode(type: "b", byteRange: 3 ..< 6)
+        let root = SyntaxNode(type: "root", children: [child1, child2], byteRange: 0 ..< 6)
         let tree = SyntaxTree(root: root, source: "abcdef")
 
         let found = tree.nodeAt(byteOffset: 4)
@@ -62,9 +62,9 @@ struct SyntaxTreeTests {
     /// Constructs a `depth`-deep `SyntaxTree` whose root chains down
     /// through `children[0]` to a single leaf at the bottom.
     private static func makeDeepTree(depth: Int) -> SyntaxTree {
-        var node = SyntaxNode(type: "leaf", byteRange: 0..<1)
-        for level in 1...depth {
-            node = SyntaxNode(type: "branch-\(level)", children: [node], byteRange: 0..<1)
+        var node = SyntaxNode(type: "leaf", byteRange: 0 ..< 1)
+        for level in 1 ... depth {
+            node = SyntaxNode(type: "branch-\(level)", children: [node], byteRange: 0 ..< 1)
         }
         return SyntaxTree(root: node, source: "x")
     }

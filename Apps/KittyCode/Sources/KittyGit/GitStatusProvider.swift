@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable type_body_length
 import Foundation
 public import KittyFileTree
 import Synchronization
@@ -71,16 +73,16 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
 
         let baseContent = await readBaseContent(for: normalizedPath, relativePath: relativePath)
         switch baseContent {
-        case .missing:
-            guard status == .added else {
-                return .empty
-            }
-            return Self.addedLineDecorations(for: lines, color: .added)
-        case .text(let content):
-            let addedColor: FileStatusColor = status == .untracked ? .untracked : .added
-            let baseLines = Self.splitLines(content)
-            return makeLineDecorations(
-                baseLines: baseLines, currentLines: lines, addedColor: addedColor)
+            case .missing:
+                guard status == .added else {
+                    return .empty
+                }
+                return Self.addedLineDecorations(for: lines, color: .added)
+            case .text(let content):
+                let addedColor: FileStatusColor = status == .untracked ? .untracked : .added
+                let baseLines = Self.splitLines(content)
+                return makeLineDecorations(
+                    baseLines: baseLines, currentLines: lines, addedColor: addedColor)
         }
     }
 
@@ -144,8 +146,7 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         let normalizedRoot = Self.normalizePath(rootPath)
         let root = normalizedRoot.hasSuffix("/") ? normalizedRoot : normalizedRoot + "/"
 
-        for line in output.split(separator: "\n", omittingEmptySubsequences: true) {
-            guard line.count >= 4 else { continue }
+        for line in output.split(separator: "\n", omittingEmptySubsequences: true) where line.count >= 4 {
             let index = line.index(line.startIndex, offsetBy: 0)
             let worktree = line.index(line.startIndex, offsetBy: 1)
             let pathStart = line.index(line.startIndex, offsetBy: 3)
@@ -163,12 +164,12 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
             statuses[absolutePath] = status
 
             switch status {
-            case .modified, .renamed: summary.modified += 1
-            case .added: summary.added += 1
-            case .untracked: summary.untracked += 1
-            case .deleted: summary.deleted += 1
-            case .conflicted: summary.conflicted += 1
-            case .ignored, .clean: break
+                case .modified, .renamed: summary.modified += 1
+                case .added: summary.added += 1
+                case .untracked: summary.untracked += 1
+                case .deleted: summary.deleted += 1
+                case .conflicted: summary.conflicted += 1
+                case .ignored, .clean: break
             }
 
             // Propagate status to parent directories
@@ -228,12 +229,12 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
 
     private func severity(of status: FileStatus) -> Int {
         switch status {
-        case .conflicted: return 5
-        case .deleted: return 4
-        case .modified, .renamed: return 3
-        case .added: return 2
-        case .untracked: return 1
-        case .ignored, .clean: return 0
+            case .conflicted: return 5
+            case .deleted: return 4
+            case .modified, .renamed: return 3
+            case .added: return 2
+            case .untracked: return 1
+            case .ignored, .clean: return 0
         }
     }
 
@@ -266,8 +267,9 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
     }
 
     static func splitLines(_ content: String) -> [String] {
-        let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(
-            String.init)
+        let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
+            .map(
+                String.init)
         return lines.isEmpty ? [""] : lines
     }
 
@@ -290,14 +292,18 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         }
 
         let difference = currentLines.difference(from: baseLines)
-        let removalOffsets = difference.removals.compactMap { change -> Int? in
-            if case .remove(let offset, _, _) = change { return offset }
-            return nil
-        }.sorted()
-        let insertionOffsets = difference.insertions.compactMap { change -> Int? in
-            if case .insert(let offset, _, _) = change { return offset }
-            return nil
-        }.sorted()
+        let removalOffsets = difference.removals
+            .compactMap { change -> Int? in
+                if case .remove(let offset, _, _) = change { return offset }
+                return nil
+            }
+            .sorted()
+        let insertionOffsets = difference.insertions
+            .compactMap { change -> Int? in
+                if case .insert(let offset, _, _) = change { return offset }
+                return nil
+            }
+            .sorted()
 
         if removalOffsets.isEmpty, insertionOffsets.isEmpty {
             return .empty
@@ -332,12 +338,12 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
             }
 
             let modifiedCount = min(removalCount, insertionCount)
-            for offset in 0..<modifiedCount {
+            for offset in 0 ..< modifiedCount {
                 markers[currentIndex + offset] = .modified
             }
 
             if insertionCount > modifiedCount {
-                for offset in modifiedCount..<insertionCount {
+                for offset in modifiedCount ..< insertionCount {
                     Self.mergeMarker(addedColor, into: &markers, at: currentIndex + offset)
                 }
             }
@@ -389,12 +395,12 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
 
     private static func markerPriority(of color: FileStatusColor) -> Int {
         switch color {
-        case .deleted: return 4
-        case .modified: return 3
-        case .added: return 2
-        case .untracked: return 1
-        case .conflicted: return 5
-        case .clean: return 0
+            case .deleted: return 4
+            case .modified: return 3
+            case .added: return 2
+            case .untracked: return 1
+            case .conflicted: return 5
+            case .clean: return 0
         }
     }
 
@@ -431,7 +437,7 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
             "HOME": NSHomeDirectory(),
             "GIT_OPTIONAL_LOCKS": "0",
             "GIT_TERMINAL_PROMPT": "0",
-            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_NOSYSTEM": "1"
         ]
     }
 
@@ -444,7 +450,7 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         "-c", "protocol.file.allow=user",
         "-c", "core.fsmonitor=false",
         "-c", "core.sshCommand=/usr/bin/false",
-        "-c", "core.hooksPath=/dev/null",
+        "-c", "core.hooksPath=/dev/null"
     ]
 
     fileprivate static func runGit(

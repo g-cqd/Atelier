@@ -6,7 +6,6 @@ import Testing
 
 @Suite
 struct FrameModifierTests {
-
     @Test
     func hstackWithFixedWidthChild() {
         let view = HStack {

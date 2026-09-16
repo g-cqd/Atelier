@@ -6,7 +6,6 @@ import Testing
 
 @Suite
 struct KeyStrokeParserTests {
-
     @Test
     func ctrlPageDown() {
         let result = KeyStrokeParser.parse("ctrl+pagedown")

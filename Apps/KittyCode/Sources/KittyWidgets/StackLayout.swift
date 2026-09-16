@@ -1,7 +1,6 @@
 public enum Axis: Sendable { case horizontal, vertical }
 
 public enum StackLayout {
-
     public static func distribute(
         dimensions: [LayoutDimension],
         available: Int,
@@ -19,11 +18,11 @@ public enum StackLayout {
 
         for dim in dimensions {
             switch dim {
-            case .fixed(let n):
-                fixedTotal += max(0, n)
-            case .flexible(let minVal):
-                flexibleCount += 1
-                flexibleMinTotal += max(0, minVal)
+                case .fixed(let n):
+                    fixedTotal += max(0, n)
+                case .flexible(let minVal):
+                    flexibleCount += 1
+                    flexibleMinTotal += max(0, minVal)
             }
         }
 
@@ -36,7 +35,8 @@ public enum StackLayout {
             var assigned = 0
             for (i, dim) in dimensions.enumerated() {
                 if case .fixed(let n) = dim {
-                    let s = i == dimensions.count - 1
+                    let s =
+                        i == dimensions.count - 1
                         ? usable - assigned
                         : Int((Double(max(0, n)) * scale).rounded(.down))
                     sizes[i] = max(0, s)
@@ -83,7 +83,7 @@ public enum StackLayout {
         }
 
         // Build offset/length pairs
-        var result = [(offset: Int, length: Int)]()
+        var result: [(offset: Int, length: Int)] = []
         result.reserveCapacity(dimensions.count)
         var offset = 0
         for (i, size) in sizes.enumerated() {

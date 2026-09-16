@@ -31,7 +31,7 @@ struct DiffRendererTests {
         front.write("hello", row: 0, col: 0, style: .default)
 
         var back = front
-        back.dirty.markRange(0..<5)
+        back.dirty.markRange(0 ..< 5)
 
         let output = DiffRenderer.render(front: front, back: back)
         #expect(output.isEmpty)

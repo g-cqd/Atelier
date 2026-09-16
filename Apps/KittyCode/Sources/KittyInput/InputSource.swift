@@ -19,8 +19,9 @@ public final class InputSource: Sendable {
         // back-pressure cannot meaningfully constrain a human's typing speed,
         // and realistic queue depth during one main-actor hop is far below
         // any pathological growth.
-        let (stream, cont) = AsyncStream<InputEvent>.makeStream(
-            bufferingPolicy: .unbounded)
+        let (stream, cont) = AsyncStream<InputEvent>
+            .makeStream(
+                bufferingPolicy: .unbounded)
         self._events = stream
         self.continuation = cont
     }

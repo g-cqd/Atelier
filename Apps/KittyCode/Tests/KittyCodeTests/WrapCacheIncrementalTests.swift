@@ -30,9 +30,8 @@ private func deleteSelection(_ state: EditorState, _ selection: TextSelection) {
 @Suite
 @MainActor
 struct WrapCacheIncrementalTests {
-
     private func makeSUT(lineCount: Int) -> (state: EditorState, pipeline: RenderPipeline) {
-        let content = (0..<lineCount).map { "line \($0)" }
+        let content = (0 ..< lineCount).map { "line \($0)" }
         return makeKittyCodeNavigationContext(fileContent: content)
     }
 
@@ -54,7 +53,7 @@ struct WrapCacheIncrementalTests {
         #expect(sut.state.wrapCache.contentWidth == 80)
         // visualOffsets prefix-sum invariant still holds.
         let offsets = sut.state.wrapCache.visualOffsets
-        for index in 1..<offsets.count {
+        for index in 1 ..< offsets.count {
             #expect(offsets[index] == offsets[index - 1] + originalWrapCounts[index - 1])
         }
     }
@@ -70,7 +69,7 @@ struct WrapCacheIncrementalTests {
         // Insert enough characters at line 5 to push it across the wrap boundary.
         sut.state.cursorRow = 5
         sut.state.cursorCol = 0
-        for _ in 0..<15 {
+        for _ in 0 ..< 15 {
             insertText("A", into: sut.state)
         }
 
@@ -104,7 +103,7 @@ struct WrapCacheIncrementalTests {
 
         // Offsets remain a strictly non-decreasing prefix-sum.
         let offsets = sut.state.wrapCache.visualOffsets
-        for index in 1..<offsets.count {
+        for index in 1 ..< offsets.count {
             #expect(offsets[index] >= offsets[index - 1])
         }
         // Last offset + last line's wrap count == totalRowCount.
@@ -159,7 +158,7 @@ struct WrapCacheIncrementalTests {
         // Prefix-sum invariant restored.
         let offsets = sut.state.wrapCache.visualOffsets
         let counts = sut.state.wrapCache.lineWrapCounts
-        for index in 1..<offsets.count {
+        for index in 1 ..< offsets.count {
             #expect(offsets[index] == offsets[index - 1] + counts[index - 1])
         }
         // Total matches sum.
@@ -191,7 +190,7 @@ struct WrapCacheIncrementalTests {
 
         let counts = sut.state.wrapCache.lineWrapCounts
         let offsets = sut.state.wrapCache.visualOffsets
-        for index in 1..<offsets.count {
+        for index in 1 ..< offsets.count {
             #expect(offsets[index] == offsets[index - 1] + counts[index - 1])
         }
         #expect(sut.state.wrapCache.totalRowCount == counts.reduce(0, +))
@@ -219,7 +218,7 @@ struct WrapCacheIncrementalTests {
 
         let counts = sut.state.wrapCache.lineWrapCounts
         let offsets = sut.state.wrapCache.visualOffsets
-        for index in 1..<offsets.count {
+        for index in 1 ..< offsets.count {
             #expect(offsets[index] == offsets[index - 1] + counts[index - 1])
         }
         #expect(sut.state.wrapCache.totalRowCount == counts.reduce(0, +))
@@ -234,7 +233,7 @@ struct WrapCacheIncrementalTests {
         sut1.state.buildWrapCache(contentWidth: 12)
         sut1.state.cursorRow = 4
         sut1.state.cursorCol = 0
-        for _ in 0..<20 {
+        for _ in 0 ..< 20 {
             insertText("A", into: sut1.state)
         }
         sut1.state.buildWrapCache(contentWidth: 12)
@@ -243,7 +242,7 @@ struct WrapCacheIncrementalTests {
         let sut2 = makeSUT(lineCount: 10)
         sut2.state.cursorRow = 4
         sut2.state.cursorCol = 0
-        for _ in 0..<20 {
+        for _ in 0 ..< 20 {
             insertText("A", into: sut2.state)
         }
         sut2.state.buildWrapCache(contentWidth: 12)

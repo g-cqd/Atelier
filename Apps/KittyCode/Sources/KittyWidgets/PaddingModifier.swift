@@ -36,8 +36,7 @@ extension View {
         ModifiedView(content: self, modifier: PaddingModifier(insets: EdgeInsets(all: amount)))
     }
 
-    public func padding(top: Int = 0, bottom: Int = 0, left: Int = 0, right: Int = 0) -> some View
-    {
+    public func padding(top: Int = 0, bottom: Int = 0, left: Int = 0, right: Int = 0) -> some View {
         ModifiedView(
             content: self,
             modifier: PaddingModifier(

@@ -7,13 +7,11 @@ import Testing
 
 @Suite
 struct TextEditorRenderingTests {
-
     private func makeSUT(columns: Int = 20, rows: Int = 5) -> ScreenBuffer {
         makeTextRenderingBuffer(columns: columns, rows: rows)
     }
 
-    @Test func `render text editor applies current-line background to content and trailing cells`()
-    {
+    @Test func `render text editor applies current-line background to content and trailing cells`() {
         var buffer = makeSUT(columns: 6, rows: 1)
         let rect = Rect(x: 0, y: 0, width: 6, height: 1)
         let editorStyle = Style(bg: .rgb(r: 10, g: 20, b: 30))
@@ -117,8 +115,7 @@ struct TextEditorRenderingTests {
         #expect(buffer[2, 3].style.bg == editorStyle.bg)
     }
 
-    @Test func `render wrapped text editor moves tabs to the next visual row when they do not fit`()
-    {
+    @Test func `render wrapped text editor moves tabs to the next visual row when they do not fit`() {
         var buffer = makeSUT(columns: 5, rows: 2)
         let rect = Rect(x: 0, y: 0, width: 5, height: 2)
         let editor = TextEditor(
@@ -131,8 +128,8 @@ struct TextEditorRenderingTests {
 
         editor.render(to: &buffer, in: rect)
 
-        #expect(String((0..<5).map { buffer[0, $0].character }) == "1234 ")
-        #expect(String((0..<5).map { buffer[1, $0].character }) == "    X")
+        #expect(String((0 ..< 5).map { buffer[0, $0].character }) == "1234 ")
+        #expect(String((0 ..< 5).map { buffer[1, $0].character }) == "    X")
     }
 
     @Test func `cursor layout wraps at tab boundaries instead of splitting the tab`() {
@@ -160,7 +157,7 @@ struct TextEditorRenderingTests {
             lineSpans: [[StyledSpan(text: "\tab", style: .default)]],
             showLineNumbers: false,
             wrapLines: true,
-            highlights: [0: [TextHighlight(range: 0...0, role: .userSelection, style: .default)]],
+            highlights: [0: [TextHighlight(range: 0 ... 0, role: .userSelection, style: .default)]],
             tabSize: 4,
             whitespaceConfig: .init(
                 showIndentation: false,
@@ -177,7 +174,7 @@ struct TextEditorRenderingTests {
 
         editor.render(to: &buffer, in: rect)
 
-        #expect(String((0..<6).map { buffer[0, $0].character }) == "→   ab")
+        #expect(String((0 ..< 6).map { buffer[0, $0].character }) == "→   ab")
     }
 
     @Test func `wrapped emoji occupy two cells so following text stays aligned`() {

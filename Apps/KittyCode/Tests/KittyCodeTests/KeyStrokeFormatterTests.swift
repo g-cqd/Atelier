@@ -6,7 +6,6 @@ import Testing
 
 @Suite
 struct KeyStrokeFormatterTests {
-
     @Test
     func ctrlO() {
         let stroke = KeyStroke(keyCode: AsciiKey.o, modifiers: .ctrl)

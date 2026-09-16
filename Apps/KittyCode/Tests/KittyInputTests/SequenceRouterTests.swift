@@ -70,7 +70,7 @@ struct SequenceRouterTests {
         let bytes: [UInt8] = [
             0x1b, 0x5b, 0x32, 0x30, 0x30, 0x7e,
             0x68, 0x65, 0x6c, 0x6c, 0x6f,
-            0x1b, 0x5b, 0x32, 0x30, 0x31, 0x7e,
+            0x1b, 0x5b, 0x32, 0x30, 0x31, 0x7e
         ]
 
         let events = router.feedAll(bytes)
@@ -177,7 +177,7 @@ struct SequenceRouterTests {
 
         // Drag: CSI < 32 ; 10 ; 8 M (left drag to col 10, row 8)
         let drag = router.feedAll([
-            0x1b, 0x5b, 0x3c, 0x33, 0x32, 0x3b, 0x31, 0x30, 0x3b, 0x38, 0x4d,
+            0x1b, 0x5b, 0x3c, 0x33, 0x32, 0x3b, 0x31, 0x30, 0x3b, 0x38, 0x4d
         ])
         let dragEvent = try requireMouseEvent(drag)
         #expect(dragEvent.button == .left)
@@ -215,7 +215,7 @@ struct SequenceRouterTests {
         // digit/separator bytes. The cap fires before then.
         var events = router.feedAll([0x1b, 0x5b])  // ESC [
         let pattern: [UInt8] = [0x33, 0x3b]  // "3;" repeated
-        for _ in 0..<3000 {
+        for _ in 0 ..< 3000 {
             events.append(contentsOf: router.feed(pattern[0]))
             events.append(contentsOf: router.feed(pattern[1]))
         }
@@ -234,7 +234,7 @@ struct SequenceRouterTests {
     func `csiParam overflow recovers to accept fresh input`() throws {
         var router = makeSUT()
         _ = router.feedAll([0x1b, 0x5b])
-        for _ in 0..<3000 {
+        for _ in 0 ..< 3000 {
             _ = router.feed(0x33)
             _ = router.feed(0x3b)
         }
@@ -250,7 +250,7 @@ struct SequenceRouterTests {
     func `osc state is not subject to the smaller control-sequence cap`() throws {
         var router = makeSUT()
         _ = router.feedAll([0x1b, 0x5d])  // ESC ]
-        for _ in 0..<5000 {
+        for _ in 0 ..< 5000 {
             _ = router.feed(0x33)
         }
         // Now terminate. We don't care what type of event the OSC emits;

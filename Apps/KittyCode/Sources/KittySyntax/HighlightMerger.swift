@@ -8,7 +8,6 @@ public import KittyStyle
 /// 2. Within the same layer, higher priority wins
 /// 3. Within the same layer and priority, narrower range wins
 public enum HighlightMerger: Sendable {
-
     /// Merge tokens from multiple layers into non-overlapping tokens.
     /// The input tokens may overlap; the output tokens will not.
     public static func merge(
@@ -34,7 +33,7 @@ public enum HighlightMerger: Sendable {
         for (idx, token) in sorted.enumerated() {
             let start = max(token.byteRange.lowerBound, 0)
             let end = min(token.byteRange.upperBound, sourceByteCount)
-            for i in start..<end {
+            for i in start ..< end {
                 byteTokenIdx[i] = idx
             }
         }
@@ -56,13 +55,14 @@ public enum HighlightMerger: Sendable {
                 end += 1
             }
 
-            result.append(HighlightToken(
-                byteRange: pos..<end,
-                role: token.role,
-                modifiers: token.modifiers,
-                layer: token.layer,
-                priority: token.priority
-            ))
+            result.append(
+                HighlightToken(
+                    byteRange: pos ..< end,
+                    role: token.role,
+                    modifiers: token.modifiers,
+                    layer: token.layer,
+                    priority: token.priority
+                ))
             pos = end
         }
 
@@ -91,15 +91,17 @@ public enum HighlightMerger: Sendable {
 
             // Fill gap before this token with default style
             if pos < start {
-                let gapText = String(bytes: utf8[pos..<start], encoding: .utf8)
-                    ?? String(decoding: utf8[pos..<start], as: UTF8.self)
+                let gapText =
+                    String(bytes: utf8[pos ..< start], encoding: .utf8)
+                    ?? String(decoding: utf8[pos ..< start], as: UTF8.self)
                 if !gapText.isEmpty {
                     spans.append(StyledSpan(text: gapText, style: defaultStyle))
                 }
             }
 
-            let text = String(bytes: utf8[start..<end], encoding: .utf8)
-                ?? String(decoding: utf8[start..<end], as: UTF8.self)
+            let text =
+                String(bytes: utf8[start ..< end], encoding: .utf8)
+                ?? String(decoding: utf8[start ..< end], as: UTF8.self)
             if !text.isEmpty {
                 let style = resolver.resolve(role: token.role, modifiers: token.modifiers)
                 spans.append(StyledSpan(text: text, style: style))
@@ -109,7 +111,8 @@ public enum HighlightMerger: Sendable {
 
         // Trailing gap
         if pos < utf8.count {
-            let text = String(bytes: utf8[pos...], encoding: .utf8)
+            let text =
+                String(bytes: utf8[pos...], encoding: .utf8)
                 ?? String(decoding: utf8[pos...], as: UTF8.self)
             if !text.isEmpty {
                 spans.append(StyledSpan(text: text, style: defaultStyle))

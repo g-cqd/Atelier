@@ -12,21 +12,21 @@ public enum FileVisibility: Sendable {
 
     public var label: String {
         switch self {
-        case .defaultHidden: return "Default"
-        case .gitFiltered: return "Git"
-        case .showAll: return "All"
+            case .defaultHidden: return "Default"
+            case .gitFiltered: return "Git"
+            case .showAll: return "All"
         }
     }
 
     /// Returns `true` if the entry with the given name and full path should be included.
     func shouldInclude(name: String, path: String) -> Bool {
         switch self {
-        case .defaultHidden:
-            return !name.hasPrefix(".")
-        case .gitFiltered(let ignored):
-            return !ignored.contains(path)
-        case .showAll:
-            return true
+            case .defaultHidden:
+                return !name.hasPrefix(".")
+            case .gitFiltered(let ignored):
+                return !ignored.contains(path)
+            case .showAll:
+                return true
         }
     }
 }
@@ -36,7 +36,8 @@ public enum GitIgnoreChecker {
     public static func ignoredPaths(in rootPath: String) async -> Set<String> {
         await Task.detached(priority: .utility) {
             computeIgnoredPaths(in: rootPath)
-        }.value
+        }
+        .value
     }
 
     private static func computeIgnoredPaths(in rootPath: String) -> Set<String> {
@@ -45,7 +46,7 @@ public enum GitIgnoreChecker {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = [
             "git", "-C", rootPath, "ls-files", "--others", "--ignored", "--exclude-standard",
-            "--directory",
+            "--directory"
         ]
         let pipe = Pipe()
         process.standardOutput = pipe

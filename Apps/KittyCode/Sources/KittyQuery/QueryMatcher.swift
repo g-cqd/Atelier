@@ -2,7 +2,6 @@ public import KittyParser
 
 /// Walks a syntax tree and matches query patterns, returning captures.
 public enum QueryMatcher: Sendable {
-
     /// Execute a query against a syntax tree and return all matches.
     public static func execute(query: Query, tree: SyntaxTree) -> [QueryMatch] {
         var matches: [QueryMatch] = []
@@ -74,140 +73,141 @@ public enum QueryMatcher: Sendable {
         captures: inout [(node: SyntaxNode, name: String)]
     ) -> Bool {
         switch pattern {
-        case .nodeMatch(let type, let children, let capture):
-            guard node.type == type else { return false }
-            var localCaptures = captures
-            var childCursor = 0
-            for childPattern in children {
-                switch childPattern {
-                case .fieldMatch(let name, let fieldPattern):
-                    guard let fieldNode = node.child(forField: name) else { return false }
-                    var fieldCaptures = localCaptures
-                    if !matchPattern(
-                        fieldPattern, against: fieldNode, source: source, captures: &fieldCaptures)
-                    {
-                        return false
-                    }
-                    localCaptures = fieldCaptures
-                case .negatedField(let name):
-                    if node.fields[name] != nil { return false }
-                case .predicate(let pred):
-                    if !evaluatePredicate(pred, captures: localCaptures, source: source) {
-                        return false
-                    }
-                default:
-                    if case .quantified(let inner, let quantifier) = childPattern {
-                        var matchCount = 0
-                        while childCursor < node.children.count {
-                            var candidateCaptures = localCaptures
-                            if matchPattern(
-                                inner,
-                                against: node.children[childCursor],
-                                source: source,
-                                captures: &candidateCaptures
-                            ) {
-                                childCursor += 1
-                                localCaptures = candidateCaptures
-                                matchCount += 1
+            case .nodeMatch(let type, let children, let capture):
+                guard node.type == type else { return false }
+                var localCaptures = captures
+                var childCursor = 0
+                for childPattern in children {
+                    switch childPattern {
+                        case .fieldMatch(let name, let fieldPattern):
+                            guard let fieldNode = node.child(forField: name) else { return false }
+                            var fieldCaptures = localCaptures
+                            if !matchPattern(
+                                fieldPattern, against: fieldNode, source: source, captures: &fieldCaptures)
+                            {
+                                return false
+                            }
+                            localCaptures = fieldCaptures
+                        case .negatedField(let name):
+                            if node.fields[name] != nil { return false }
+                        case .predicate(let pred):
+                            if !evaluatePredicate(pred, captures: localCaptures, source: source) {
+                                return false
+                            }
+                        default:
+                            if case .quantified(let inner, let quantifier) = childPattern {
+                                var matchCount = 0
+                                while childCursor < node.children.count {
+                                    var candidateCaptures = localCaptures
+                                    guard
+                                        matchPattern(
+                                            inner,
+                                            against: node.children[childCursor],
+                                            source: source,
+                                            captures: &candidateCaptures
+                                        )
+                                    else {
+                                        break
+                                    }
+                                    childCursor += 1
+                                    localCaptures = candidateCaptures
+                                    matchCount += 1
+                                }
+                                switch quantifier {
+                                    case .oneOrMore:
+                                        if matchCount == 0 { return false }
+                                    case .zeroOrMore:
+                                        break  // always OK
+                                    case .optional:
+                                        break  // 0 or 1 match is fine; we stop after first non-match
+                                }
                             } else {
-                                break
+                                var matched = false
+                                while childCursor < node.children.count {
+                                    var candidateCaptures = localCaptures
+                                    if matchPattern(
+                                        childPattern,
+                                        against: node.children[childCursor],
+                                        source: source,
+                                        captures: &candidateCaptures
+                                    ) {
+                                        childCursor += 1
+                                        localCaptures = candidateCaptures
+                                        matched = true
+                                        break
+                                    }
+                                    childCursor += 1
+                                }
+                                if !matched { return false }
                             }
-                        }
-                        switch quantifier {
-                        case .oneOrMore:
-                            if matchCount == 0 { return false }
-                        case .zeroOrMore:
-                            break  // always OK
-                        case .optional:
-                            break  // 0 or 1 match is fine; we stop after first non-match
-                        }
-                    } else {
-                        var matched = false
-                        while childCursor < node.children.count {
-                            var candidateCaptures = localCaptures
-                            if matchPattern(
-                                childPattern,
-                                against: node.children[childCursor],
-                                source: source,
-                                captures: &candidateCaptures
-                            ) {
-                                childCursor += 1
-                                localCaptures = candidateCaptures
-                                matched = true
-                                break
-                            }
-                            childCursor += 1
-                        }
-                        if !matched { return false }
                     }
                 }
-            }
-            if let captureName = capture {
-                localCaptures.append((node: node, name: captureName))
-            }
-            captures = localCaptures
-            return true
-
-        case .literal(let value, let capture):
-            let nodeText = node.text(from: source)
-            guard nodeText == value else { return false }
-            if let captureName = capture {
-                captures.append((node: node, name: captureName))
-            }
-            return true
-
-        case .wildcard(let capture):
-            if let captureName = capture {
-                captures.append((node: node, name: captureName))
-            }
-            return true
-
-        case .alternation(let alternatives):
-            for alt in alternatives {
-                var altCaptures: [(node: SyntaxNode, name: String)] = []
-                if matchPattern(alt, against: node, source: source, captures: &altCaptures) {
-                    captures.append(contentsOf: altCaptures)
-                    return true
+                if let captureName = capture {
+                    localCaptures.append((node: node, name: captureName))
                 }
-            }
-            return false
-
-        case .fieldMatch(let name, let fieldPattern):
-            guard let fieldNode = node.child(forField: name) else { return false }
-            return matchPattern(
-                fieldPattern, against: fieldNode, source: source, captures: &captures)
-
-        case .negatedField(let name):
-            return node.fields[name] == nil
-
-        case .predicate(let pred):
-            return evaluatePredicate(pred, captures: captures, source: source)
-
-        case .sequence(let patterns):
-            var localCaptures = captures
-            for p in patterns where !matchPattern(p, against: node, source: source, captures: &localCaptures) {
-                return false
-            }
-            captures = localCaptures
-            return true
-
-        case .quantified(let inner, let quantifier):
-            // Quantified patterns are only meaningful as children of nodeMatch.
-            // At the top level, match the inner pattern according to quantifier rules.
-            switch quantifier {
-            case .optional, .zeroOrMore:
-                // Zero matches is acceptable — try matching but don't fail
-                var tryCaptures = captures
-                _ = matchPattern(inner, against: node, source: source, captures: &tryCaptures)
-                captures = tryCaptures
+                captures = localCaptures
                 return true
-            case .oneOrMore:
-                // Must match at least once
-                return matchPattern(inner, against: node, source: source, captures: &captures)
-            }
 
-        case .anchor:
-            return true
+            case .literal(let value, let capture):
+                let nodeText = node.text(from: source)
+                guard nodeText == value else { return false }
+                if let captureName = capture {
+                    captures.append((node: node, name: captureName))
+                }
+                return true
+
+            case .wildcard(let capture):
+                if let captureName = capture {
+                    captures.append((node: node, name: captureName))
+                }
+                return true
+
+            case .alternation(let alternatives):
+                for alt in alternatives {
+                    var altCaptures: [(node: SyntaxNode, name: String)] = []
+                    if matchPattern(alt, against: node, source: source, captures: &altCaptures) {
+                        captures.append(contentsOf: altCaptures)
+                        return true
+                    }
+                }
+                return false
+
+            case .fieldMatch(let name, let fieldPattern):
+                guard let fieldNode = node.child(forField: name) else { return false }
+                return matchPattern(
+                    fieldPattern, against: fieldNode, source: source, captures: &captures)
+
+            case .negatedField(let name):
+                return node.fields[name] == nil
+
+            case .predicate(let pred):
+                return evaluatePredicate(pred, captures: captures, source: source)
+
+            case .sequence(let patterns):
+                var localCaptures = captures
+                for p in patterns where !matchPattern(p, against: node, source: source, captures: &localCaptures) {
+                    return false
+                }
+                captures = localCaptures
+                return true
+
+            case .quantified(let inner, let quantifier):
+                // Quantified patterns are only meaningful as children of nodeMatch.
+                // At the top level, match the inner pattern according to quantifier rules.
+                switch quantifier {
+                    case .optional, .zeroOrMore:
+                        // Zero matches is acceptable — try matching but don't fail
+                        var tryCaptures = captures
+                        _ = matchPattern(inner, against: node, source: source, captures: &tryCaptures)
+                        captures = tryCaptures
+                        return true
+                    case .oneOrMore:
+                        // Must match at least once
+                        return matchPattern(inner, against: node, source: source, captures: &captures)
+                }
+
+            case .anchor:
+                return true
         }
     }
 

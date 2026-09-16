@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable file_length function_body_length type_body_length
 struct FlatProduction: Sendable, Equatable {
     var name: String
     var symbols: [String]
@@ -103,7 +105,6 @@ private struct FlattenContext: Sendable {
 /// 4. Fills action/goto tables
 /// 5. Marks unresolvable conflicts for GLR handling
 public enum ParseTableCompiler: Sendable {
-
     /// Compiled result containing parse table, lex table, and production rules.
     public struct CompilationResult: Sendable, Codable {
         public var parseTable: ParseTable
@@ -205,134 +206,135 @@ public enum ParseTableCompiler: Sendable {
         context: inout FlattenContext
     ) throws(GrammarError) -> [FlatSequence] {
         switch rule {
-        case .symbol(let name):
-            return [FlatSequence(symbols: [name], fields: [:])]
-        case .string(let value):
-            return [FlatSequence(symbols: ["\"" + value + "\""], fields: [:])]
-        case .pattern:
-            // Patterns become terminal tokens — use a placeholder
-            return [FlatSequence(symbols: ["_pattern"], fields: [:])]
-        case .seq(let members):
-            var result = [FlatSequence.empty]
-            for member in members {
-                let memberExpanded = try expandRule(member, ruleName: ruleName, context: &context)
-                let alternativeCount = try checkedAlternativeCount(
-                    lhs: result.count,
-                    rhs: memberExpanded.count,
-                    operation: { $0.multipliedReportingOverflow(by: $1) },
-                    construct: "Sequence",
-                    ruleName: ruleName,
-                    context: context
-                )
-                try context.ensureAlternativeCount(
-                    alternativeCount,
-                    construct: "Sequence",
-                    ruleName: ruleName
-                )
-                var newResult: [FlatSequence] = []
-                newResult.reserveCapacity(alternativeCount)
-                for existing in result {
-                    for expanded in memberExpanded {
-                        newResult.append(combine(existing, expanded))
+            case .symbol(let name):
+                return [FlatSequence(symbols: [name], fields: [:])]
+            case .string(let value):
+                return [FlatSequence(symbols: ["\"" + value + "\""], fields: [:])]
+            case .pattern:
+                // Patterns become terminal tokens — use a placeholder
+                return [FlatSequence(symbols: ["_pattern"], fields: [:])]
+            case .seq(let members):
+                var result = [FlatSequence.empty]
+                for member in members {
+                    let memberExpanded = try expandRule(member, ruleName: ruleName, context: &context)
+                    let alternativeCount = try checkedAlternativeCount(
+                        lhs: result.count,
+                        rhs: memberExpanded.count,
+                        operation: { $0.multipliedReportingOverflow(by: $1) },
+                        construct: "Sequence",
+                        ruleName: ruleName,
+                        context: context
+                    )
+                    try context.ensureAlternativeCount(
+                        alternativeCount,
+                        construct: "Sequence",
+                        ruleName: ruleName
+                    )
+                    var newResult: [FlatSequence] = []
+                    newResult.reserveCapacity(alternativeCount)
+                    for existing in result {
+                        for expanded in memberExpanded {
+                            newResult.append(combine(existing, expanded))
+                        }
                     }
+                    result = newResult
                 }
-                result = newResult
-            }
-            return result
-        case .choice(let members):
-            var productions: [FlatSequence] = []
-            for member in members {
-                let expanded = try expandRule(member, ruleName: ruleName, context: &context)
+                return result
+            case .choice(let members):
+                var productions: [FlatSequence] = []
+                for member in members {
+                    let expanded = try expandRule(member, ruleName: ruleName, context: &context)
+                    let alternativeCount = try checkedAlternativeCount(
+                        lhs: productions.count,
+                        rhs: expanded.count,
+                        operation: { $0.addingReportingOverflow($1) },
+                        construct: "Choice",
+                        ruleName: ruleName,
+                        context: context
+                    )
+                    try context.ensureAlternativeCount(
+                        alternativeCount,
+                        construct: "Choice",
+                        ruleName: ruleName
+                    )
+                    productions.append(contentsOf: expanded)
+                }
+                return productions
+            case .repeat(let content):
+                let helperName = context.freshName("_repeat")
+                let inner = try expandRule(content, ruleName: ruleName, context: &context)
+                let recursiveAlternatives = inner.filter { !$0.symbols.isEmpty }
+
+                try context.appendAuxiliary(FlatProduction(name: helperName, symbols: [], fields: [:]))
+                for alternative in recursiveAlternatives {
+                    try context.appendAuxiliary(
+                        FlatProduction(
+                            name: helperName,
+                            symbols: [helperName] + alternative.symbols,
+                            fields: shiftFields(alternative.fields, by: 1)
+                        ))
+                }
+
+                return [FlatSequence(symbols: [helperName], fields: [:])]
+            case .repeat1(let content):
+                let helperName = context.freshName("_repeat1")
+                let inner = try expandRule(content, ruleName: ruleName, context: &context)
+                let recursiveAlternatives = inner.filter { !$0.symbols.isEmpty }
+
+                for alternative in inner {
+                    try context.appendAuxiliary(
+                        FlatProduction(
+                            name: helperName,
+                            symbols: alternative.symbols,
+                            fields: alternative.fields
+                        ))
+                }
+                for alternative in recursiveAlternatives {
+                    try context.appendAuxiliary(
+                        FlatProduction(
+                            name: helperName,
+                            symbols: [helperName] + alternative.symbols,
+                            fields: shiftFields(alternative.fields, by: 1)
+                        ))
+                }
+
+                return [FlatSequence(symbols: [helperName], fields: [:])]
+            case .optional(let content):
+                let expanded = try expandRule(content, ruleName: ruleName, context: &context)
                 let alternativeCount = try checkedAlternativeCount(
-                    lhs: productions.count,
-                    rhs: expanded.count,
+                    lhs: expanded.count,
+                    rhs: 1,
                     operation: { $0.addingReportingOverflow($1) },
-                    construct: "Choice",
+                    construct: "Optional",
                     ruleName: ruleName,
                     context: context
                 )
                 try context.ensureAlternativeCount(
                     alternativeCount,
-                    construct: "Choice",
+                    construct: "Optional",
                     ruleName: ruleName
                 )
-                productions.append(contentsOf: expanded)
-            }
-            return productions
-        case .repeat(let content):
-            let helperName = context.freshName("_repeat")
-            let inner = try expandRule(content, ruleName: ruleName, context: &context)
-            let recursiveAlternatives = inner.filter { !$0.symbols.isEmpty }
+                return [FlatSequence.empty] + expanded
+            case .prec(_, let content), .precLeft(_, let content), .precRight(_, let content),
+                .precDynamic(_, let content):
+                return try expandRule(content, ruleName: ruleName, context: &context)
+            case .token(let content), .immediateToken(let content):
+                return try expandRule(content, ruleName: ruleName, context: &context)
+            case .field(let name, let content):
+                return try expandRule(content, ruleName: ruleName, context: &context)
+                    .map { production in
+                        guard !production.symbols.isEmpty else {
+                            return production
+                        }
 
-            try context.appendAuxiliary(FlatProduction(name: helperName, symbols: [], fields: [:]))
-            for alternative in recursiveAlternatives {
-                try context.appendAuxiliary(
-                    FlatProduction(
-                        name: helperName,
-                        symbols: [helperName] + alternative.symbols,
-                        fields: shiftFields(alternative.fields, by: 1)
-                    ))
-            }
-
-            return [FlatSequence(symbols: [helperName], fields: [:])]
-        case .repeat1(let content):
-            let helperName = context.freshName("_repeat1")
-            let inner = try expandRule(content, ruleName: ruleName, context: &context)
-            let recursiveAlternatives = inner.filter { !$0.symbols.isEmpty }
-
-            for alternative in inner {
-                try context.appendAuxiliary(
-                    FlatProduction(
-                        name: helperName,
-                        symbols: alternative.symbols,
-                        fields: alternative.fields
-                    ))
-            }
-            for alternative in recursiveAlternatives {
-                try context.appendAuxiliary(
-                    FlatProduction(
-                        name: helperName,
-                        symbols: [helperName] + alternative.symbols,
-                        fields: shiftFields(alternative.fields, by: 1)
-                    ))
-            }
-
-            return [FlatSequence(symbols: [helperName], fields: [:])]
-        case .optional(let content):
-            let expanded = try expandRule(content, ruleName: ruleName, context: &context)
-            let alternativeCount = try checkedAlternativeCount(
-                lhs: expanded.count,
-                rhs: 1,
-                operation: { $0.addingReportingOverflow($1) },
-                construct: "Optional",
-                ruleName: ruleName,
-                context: context
-            )
-            try context.ensureAlternativeCount(
-                alternativeCount,
-                construct: "Optional",
-                ruleName: ruleName
-            )
-            return [FlatSequence.empty] + expanded
-        case .prec(_, let content), .precLeft(_, let content), .precRight(_, let content),
-            .precDynamic(_, let content):
-            return try expandRule(content, ruleName: ruleName, context: &context)
-        case .token(let content), .immediateToken(let content):
-            return try expandRule(content, ruleName: ruleName, context: &context)
-        case .field(let name, let content):
-            return try expandRule(content, ruleName: ruleName, context: &context).map { production in
-                guard !production.symbols.isEmpty else {
-                    return production
-                }
-
-                var fields = production.fields
-                fields[0] = name
-                return FlatSequence(symbols: production.symbols, fields: fields)
-            }
-        case .alias(let content, _, _):
-            return try expandRule(content, ruleName: ruleName, context: &context)
-        case .blank:
-            return [FlatSequence.empty]
+                        var fields = production.fields
+                        fields[0] = name
+                        return FlatSequence(symbols: production.symbols, fields: fields)
+                    }
+            case .alias(let content, _, _):
+                return try expandRule(content, ruleName: ruleName, context: &context)
+            case .blank:
+                return [FlatSequence.empty]
         }
     }
 
@@ -412,18 +414,17 @@ public enum ParseTableCompiler: Sendable {
             for prod in productions {
                 var canDerive = true
                 for sym in prod.symbols {
-                    if let firsts = firstSets[sym] {
-                        let nonEmpty = firsts.filter { $0 != "" }
-                        var prodSet = firstSets[prod.name, default: []]
-                        let before = prodSet.count
-                        prodSet.formUnion(nonEmpty)
-                        if prodSet.count > before { changed = true }
-                        firstSets[prod.name] = prodSet
-                        if !firsts.contains("") {
-                            canDerive = false
-                            break
-                        }
-                    } else {
+                    guard let firsts = firstSets[sym] else {
+                        canDerive = false
+                        break
+                    }
+                    let nonEmpty = firsts.filter { $0 != "" }
+                    var prodSet = firstSets[prod.name, default: []]
+                    let before = prodSet.count
+                    prodSet.formUnion(nonEmpty)
+                    if prodSet.count > before { changed = true }
+                    firstSets[prod.name] = prodSet
+                    if !firsts.contains("") {
                         canDerive = false
                         break
                     }
@@ -460,12 +461,13 @@ public enum ParseTableCompiler: Sendable {
     ) throws(GrammarError) -> ([ItemSet], [Int: [(symbol: String, target: Int)]]) {
         // Initial item: S' → . startSymbol, $end
         let startItem = LRItem(ruleIndex: 0, dotPosition: 0, lookahead: "$end")
-        let startSet = try ItemSet(items: [startItem]).closure(
-            productions: productions,
-            firstSets: firstSets,
-            rulesByNonTerminal: rulesByNonTerminal,
-            limits: limits
-        )
+        let startSet = try ItemSet(items: [startItem])
+            .closure(
+                productions: productions,
+                firstSets: firstSets,
+                rulesByNonTerminal: rulesByNonTerminal,
+                limits: limits
+            )
 
         var itemSets = [startSet]
         var setIndex: [ItemSet: Int] = [startSet: 0]
@@ -579,19 +581,19 @@ public enum ParseTableCompiler: Sendable {
 
     private static func resolveConflict(existing: Action, new: Action) -> Action {
         switch existing {
-        case .error:
-            return new
-        case .accept:
-            return existing
-        case .shift, .reduce:
-            if existing == new { return existing }
-            // Unresolvable conflict — mark for GLR
-            return .conflict([existing, new])
-        case .conflict(var actions):
-            if !actions.contains(new) {
-                actions.append(new)
-            }
-            return .conflict(actions)
+            case .error:
+                return new
+            case .accept:
+                return existing
+            case .shift, .reduce:
+                if existing == new { return existing }
+                // Unresolvable conflict — mark for GLR
+                return .conflict([existing, new])
+            case .conflict(var actions):
+                if !actions.contains(new) {
+                    actions.append(new)
+                }
+                return .conflict(actions)
         }
     }
 }

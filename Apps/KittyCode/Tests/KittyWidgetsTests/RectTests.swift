@@ -45,7 +45,7 @@ struct RectTests {
         Rect(x: 9, y: 2, width: 3, height: 4),
         Rect(x: 1, y: 9, width: 3, height: 4),
         Rect(x: 1, y: 2, width: 9, height: 4),
-        Rect(x: 1, y: 2, width: 3, height: 9),
+        Rect(x: 1, y: 2, width: 3, height: 9)
     ]
 
     @Test(arguments: differentRects)

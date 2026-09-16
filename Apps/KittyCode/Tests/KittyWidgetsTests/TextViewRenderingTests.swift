@@ -7,7 +7,6 @@ import Testing
 
 @Suite
 struct TextViewRenderingTests {
-
     private func makeSUT(columns: Int = 20, rows: Int = 5) -> ScreenBuffer {
         makeTextRenderingBuffer(columns: columns, rows: rows)
     }
@@ -113,11 +112,13 @@ struct TextViewRenderingTests {
         StyledTextView([
             StyledTextView.StyledTextSpan(
                 text: "Longer", style: Style(fg: .rgb(r: 255, g: 0, b: 0)))
-        ]).render(to: &buffer, in: rect, context: context)
+        ])
+        .render(to: &buffer, in: rect, context: context)
 
         StyledTextView([
             StyledTextView.StyledTextSpan(text: "Hi", style: Style(fg: .rgb(r: 0, g: 255, b: 0)))
-        ]).render(to: &buffer, in: rect, context: context)
+        ])
+        .render(to: &buffer, in: rect, context: context)
 
         #expect(buffer[0, 0].character == "H")
         #expect(buffer[0, 1].character == "i")

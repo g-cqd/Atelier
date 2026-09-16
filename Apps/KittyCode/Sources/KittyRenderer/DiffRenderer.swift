@@ -1,8 +1,9 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable function_parameter_count
 import KittyCodecs
 
 /// Compares front and back buffers and emits minimal escape bytes for the diff.
 public enum DiffRenderer: Sendable {
-
     /// Produces the minimal escape sequence bytes needed to update `front` so that it matches `back`.
     ///
     /// Only cells marked dirty in `back` are included in the output. Cursor movement sequences are
@@ -36,7 +37,7 @@ public enum DiffRenderer: Sendable {
             let row = range.row
             var runStart: Int?
 
-            for col in range.colStart..<range.colEnd {
+            for col in range.colStart ..< range.colEnd {
                 if front[row, col] == back[row, col] {
                     if let start = runStart {
                         emitChangedRun(
@@ -95,13 +96,12 @@ public enum DiffRenderer: Sendable {
     }
 
     /// Renders the entire buffer into a caller-provided buffer.
-    public static func renderFull(_ buffer: ScreenBuffer, into bytes: inout ContiguousArray<UInt8>)
-    {
+    public static func renderFull(_ buffer: ScreenBuffer, into bytes: inout ContiguousArray<UInt8>) {
         var lastStyle = Style.default
 
-        for row in 0..<buffer.rows {
+        for row in 0 ..< buffer.rows {
             KittySequences.appendMoveCursor(row: row + 1, col: 1, to: &bytes)
-            for col in 0..<buffer.columns {
+            for col in 0 ..< buffer.columns {
                 let cell = buffer[row, col]
 
                 // Skip continuation cells
@@ -141,7 +141,7 @@ public enum DiffRenderer: Sendable {
 
         var emittedAnyCell = false
 
-        for col in colStart..<colEnd {
+        for col in colStart ..< colEnd {
             let cell = back[row, col]
             guard front[row, col] != cell else { continue }
             guard !cell.isContinuation else { continue }

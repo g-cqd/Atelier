@@ -10,14 +10,13 @@ import Testing
 /// payload at runtime so the test stays portable.
 @Suite
 struct LargeFileHighlightTests {
-
     /// Build a deeply-nested JSON payload that mirrors the structure that
     /// surfaced the SIGBUS — a long array of small objects, which the JSON
     /// grammar's right-recursive rules turn into an AST whose nesting depth
     /// approaches the array length.
     private func deeplyNestedJSON(elementCount: Int) -> String {
         var out = "["
-        for index in 0..<elementCount {
+        for index in 0 ..< elementCount {
             if index > 0 { out += "," }
             out += "{\"i\":\(index),\"v\":\"x\"}"
         }

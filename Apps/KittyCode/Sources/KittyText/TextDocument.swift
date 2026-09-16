@@ -19,23 +19,23 @@ public final class TextDocument {
 
         public var label: String {
             switch self {
-            case .lineFeed:
-                "LF"
-            case .carriageReturnLineFeed:
-                "CRLF"
-            case .carriageReturn:
-                "CR"
+                case .lineFeed:
+                    "LF"
+                case .carriageReturnLineFeed:
+                    "CRLF"
+                case .carriageReturn:
+                    "CR"
             }
         }
 
         public var sequence: String {
             switch self {
-            case .lineFeed:
-                "\n"
-            case .carriageReturnLineFeed:
-                "\r\n"
-            case .carriageReturn:
-                "\r"
+                case .lineFeed:
+                    "\n"
+                case .carriageReturnLineFeed:
+                    "\r\n"
+                case .carriageReturn:
+                    "\r"
             }
         }
     }
@@ -164,7 +164,8 @@ public final class TextDocument {
     }
 
     nonisolated public static func computeMaxLineWidth(in buffer: TextBuffer, tabSize: Int = 4)
-        -> Int {
+        -> Int
+    {
         computeMaxLineWidth(for: buffer.lines, tabSize: tabSize)
     }
 
@@ -186,7 +187,7 @@ public final class TextDocument {
         var total = 0
         let separatorBytes = lineEnding.sequence.lengthOfBytes(using: .utf8)
 
-        for lineIndex in 0..<buffer.lineCount {
+        for lineIndex in 0 ..< buffer.lineCount {
             total += buffer.line(at: lineIndex).lengthOfBytes(using: .utf8)
         }
 
@@ -194,7 +195,8 @@ public final class TextDocument {
     }
 
     nonisolated public static func serializedText(from text: String, lineEnding: LineEnding)
-        -> String {
+        -> String
+    {
         guard lineEnding != .lineFeed else { return text }
         return text.replacingOccurrences(of: "\n", with: lineEnding.sequence)
     }
@@ -210,19 +212,19 @@ public final class TextDocument {
 
             while index < bytes.count {
                 switch bytes[index] {
-                case 0x0D:
-                    if index + 1 < bytes.count, bytes[index + 1] == 0x0A {
-                        crlfCount += 1
-                        index += 2
-                    } else {
-                        crCount += 1
+                    case 0x0D:
+                        if index + 1 < bytes.count, bytes[index + 1] == 0x0A {
+                            crlfCount += 1
+                            index += 2
+                        } else {
+                            crCount += 1
+                            index += 1
+                        }
+                    case 0x0A:
+                        lfCount += 1
                         index += 1
-                    }
-                case 0x0A:
-                    lfCount += 1
-                    index += 1
-                default:
-                    index += 1
+                    default:
+                        index += 1
                 }
             }
         }

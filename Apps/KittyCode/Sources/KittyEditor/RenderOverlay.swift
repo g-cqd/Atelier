@@ -164,7 +164,8 @@ private func renderContextMenuOverlay(
         scrollOffset: 0,
         showsVerticalScrollIndicator: false,
         style: listStyle
-    ).render(to: &buffer, in: layout.contentRect)
+    )
+    .render(to: &buffer, in: layout.contentRect)
 }
 
 private func contextMenuOverlayLayout(

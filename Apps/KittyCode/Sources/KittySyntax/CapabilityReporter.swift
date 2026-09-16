@@ -8,7 +8,6 @@ import KittyQuery
 /// to determine whether a language has been successfully compiled. It does NOT trigger
 /// compilation itself (which can be expensive or hang on complex grammars).
 public enum CapabilityReporter: Sendable {
-
     /// Generate a capability report for a language.
     public static func report(
         for language: String,
@@ -42,10 +41,12 @@ public enum CapabilityReporter: Sendable {
         let bundle = KittySyntaxResources.bundle
         let subdirectory = "Grammars/\(entry.path)"
 
-        let hasGrammar = bundle.url(
-            forResource: "grammar", withExtension: "json", subdirectory: subdirectory) != nil
-        let hasQuery = bundle.url(
-            forResource: "highlights", withExtension: "scm", subdirectory: subdirectory) != nil
+        let hasGrammar =
+            bundle.url(
+                forResource: "grammar", withExtension: "json", subdirectory: subdirectory) != nil
+        let hasQuery =
+            bundle.url(
+                forResource: "highlights", withExtension: "scm", subdirectory: subdirectory) != nil
 
         guard hasGrammar, hasQuery else {
             let fallback: HighlightTier = hasFallback(for: language) ? .lexical : .plain
@@ -133,7 +134,7 @@ public enum CapabilityReporter: Sendable {
         var externalCount = 0
         if let grammarURL = bundle.url(
             forResource: "grammar", withExtension: "json", subdirectory: subdirectory),
-           let grammar = try? GrammarLoader.load(from: grammarURL.path)
+            let grammar = try? GrammarLoader.load(from: grammarURL.path)
         {
             needsExternals = !grammar.externals.isEmpty
             externalCount = grammar.externals.count
@@ -143,7 +144,7 @@ public enum CapabilityReporter: Sendable {
         var queryFeatures = Set<QueryFeature>()
         if let queryURL = bundle.url(
             forResource: "highlights", withExtension: "scm", subdirectory: subdirectory),
-           let querySource = try? String(contentsOf: queryURL, encoding: .utf8)
+            let querySource = try? String(contentsOf: queryURL, encoding: .utf8)
         {
             queryFeatures = analyzeQueryFeatures(querySource)
         }
@@ -195,12 +196,12 @@ public enum CapabilityReporter: Sendable {
 
     private static func hasFallback(for language: String) -> Bool {
         switch language {
-        case "python", "bash", "ruby", "lua", "toml", "yaml",
-             "javascript", "typescript", "c", "cpp", "css", "go",
-             "java", "kotlin", "rust", "swift", "json":
-            return true
-        default:
-            return false
+            case "python", "bash", "ruby", "lua", "toml", "yaml",
+                "javascript", "typescript", "c", "cpp", "css", "go",
+                "java", "kotlin", "rust", "swift", "json":
+                return true
+            default:
+                return false
         }
     }
 }

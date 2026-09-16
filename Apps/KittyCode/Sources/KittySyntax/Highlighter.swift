@@ -71,7 +71,8 @@ public final class Highlighter: Sendable {
     }
 
     private func buildSpans(source: String, matches: [QueryMatch], scratch: HighlightScratch)
-        -> [StyledSpan] {
+        -> [StyledSpan]
+    {
         if let spans = source.utf8.withContiguousStorageIfAvailable({ utf8 in
             buildSpans(source: source, utf8: utf8, matches: matches, scratch: scratch)
         }) {
@@ -142,7 +143,7 @@ public final class Highlighter: Sendable {
             let start = min(max(span.byteRange.lowerBound, 0), utf8.count)
             let end = min(max(span.byteRange.upperBound, start), utf8.count)
             let idx = span.styleIndex
-            for i in start..<end {
+            for i in start ..< end {
                 scratch.byteStyleIndices[i] = idx
             }
         }
@@ -159,7 +160,7 @@ public final class Highlighter: Sendable {
             while end < utf8.count && scratch.byteStyleIndices[end] == styleIdx {
                 end += 1
             }
-            let textBuf = UnsafeBufferPointer(rebasing: utf8[pos..<end])
+            let textBuf = UnsafeBufferPointer(rebasing: utf8[pos ..< end])
             let text = String(bytes: textBuf, encoding: .utf8) ?? String(decoding: textBuf, as: UTF8.self)
             if !text.isEmpty {
                 scratch.spans.append(StyledSpan(text: text, style: palette[Int(styleIdx)]))
@@ -188,13 +189,14 @@ public final class Highlighter: Sendable {
         for match in matches {
             for capture in match.captures {
                 let (role, modifiers) = CaptureRoleMapper.map(capture.name)
-                tokens.append(HighlightToken(
-                    byteRange: capture.node.byteRange,
-                    role: role,
-                    modifiers: modifiers,
-                    layer: layer,
-                    priority: maxPatternIndex - match.patternIndex
-                ))
+                tokens.append(
+                    HighlightToken(
+                        byteRange: capture.node.byteRange,
+                        role: role,
+                        modifiers: modifiers,
+                        layer: layer,
+                        priority: maxPatternIndex - match.patternIndex
+                    ))
             }
         }
 

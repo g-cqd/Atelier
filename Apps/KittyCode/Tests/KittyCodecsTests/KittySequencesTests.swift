@@ -28,7 +28,7 @@ struct KittySequencesTests {
     @Test(arguments: [
         (-5, 0, "\u{1B}[1;1H"),
         (65_535, 65_535, "\u{1B}[65535;65535H"),
-        (70_000, 80_000, "\u{1B}[65535;65535H"),
+        (70_000, 80_000, "\u{1B}[65535;65535H")
     ])
     func `Move cursor clamps edge values`(row: Int, col: Int, expectedSequence: String) {
         #expect(KittySequences.moveCursor(row: row, col: col) == Array(expectedSequence.utf8))

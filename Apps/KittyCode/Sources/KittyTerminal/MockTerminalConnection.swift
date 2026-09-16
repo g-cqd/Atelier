@@ -108,6 +108,7 @@ public final class MockTerminalConnection: TerminalConnection {
     /// Appends `bytes` to the in-memory output buffer.
     ///
     /// - Parameter bytes: The bytes to record as terminal output.
+    /// - Throws: Never; the signature matches the connection protocol.
     public func write(_ bytes: [UInt8]) throws(TerminalError) {
         withStateLock { $0.outputBuffer.append(contentsOf: bytes) }
     }

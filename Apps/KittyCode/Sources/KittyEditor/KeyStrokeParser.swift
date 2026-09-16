@@ -15,22 +15,22 @@ public enum KeyStrokeParser {
 
         for token in tokens {
             switch token {
-            case "ctrl", "control":
-                modifiers.insert(.ctrl)
-            case "cmd", "command", "super":
-                modifiers.insert(.super)
-            case "alt", "option":
-                modifiers.insert(.alt)
-            case "shift":
-                modifiers.insert(.shift)
-            case "meta":
-                modifiers.insert(.meta)
-            default:
-                // Last non-modifier token is the key
-                if keyToken != nil {
-                    return nil  // Multiple key tokens = invalid
-                }
-                keyToken = token
+                case "ctrl", "control":
+                    modifiers.insert(.ctrl)
+                case "cmd", "command", "super":
+                    modifiers.insert(.super)
+                case "alt", "option":
+                    modifiers.insert(.alt)
+                case "shift":
+                    modifiers.insert(.shift)
+                case "meta":
+                    modifiers.insert(.meta)
+                default:
+                    // Last non-modifier token is the key
+                    if keyToken != nil {
+                        return nil  // Multiple key tokens = invalid
+                    }
+                    keyToken = token
             }
         }
 
@@ -57,20 +57,20 @@ public enum KeyStrokeParser {
 
     private static func specialKeyCode(_ token: String) -> UInt32? {
         switch token {
-        case "pagedown": return Key.pageDown.rawValue
-        case "pageup": return Key.pageUp.rawValue
-        case "enter", "return": return Key.enter.rawValue
-        case "home": return Key.home.rawValue
-        case "end": return Key.end.rawValue
-        case "backspace": return Key.backspace.rawValue
-        case "esc", "escape": return AsciiKey.escape
-        case "tab": return Key.tab.rawValue
-        case "space": return UInt32(Character(" ").asciiValue!)
-        case "up": return Key.up.rawValue
-        case "down": return Key.down.rawValue
-        case "left": return Key.left.rawValue
-        case "right": return Key.right.rawValue
-        default: return nil
+            case "pagedown": return Key.pageDown.rawValue
+            case "pageup": return Key.pageUp.rawValue
+            case "enter", "return": return Key.enter.rawValue
+            case "home": return Key.home.rawValue
+            case "end": return Key.end.rawValue
+            case "backspace": return Key.backspace.rawValue
+            case "esc", "escape": return AsciiKey.escape
+            case "tab": return Key.tab.rawValue
+            case "space": return UInt32(Character(" ").asciiValue!)
+            case "up": return Key.up.rawValue
+            case "down": return Key.down.rawValue
+            case "left": return Key.left.rawValue
+            case "right": return Key.right.rawValue
+            default: return nil
         }
     }
 }

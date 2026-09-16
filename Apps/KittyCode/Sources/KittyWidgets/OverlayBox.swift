@@ -77,12 +77,12 @@ public enum OverlayBox {
         buffer[rect.maxY - 1, rect.x] = Cell(character: "└", style: style.borderStyle)
         buffer[rect.maxY - 1, rect.maxX - 1] = Cell(character: "┘", style: style.borderStyle)
 
-        for col in (rect.x + 1)..<(rect.maxX - 1) {
+        for col in (rect.x + 1) ..< (rect.maxX - 1) {
             buffer[rect.y, col] = Cell(character: "─", style: style.borderStyle)
             buffer[rect.maxY - 1, col] = Cell(character: "─", style: style.borderStyle)
         }
 
-        for row in (rect.y + 1)..<(rect.maxY - 1) {
+        for row in (rect.y + 1) ..< (rect.maxY - 1) {
             buffer[row, rect.x] = Cell(character: "│", style: style.borderStyle)
             buffer[row, rect.maxX - 1] = Cell(character: "│", style: style.borderStyle)
         }

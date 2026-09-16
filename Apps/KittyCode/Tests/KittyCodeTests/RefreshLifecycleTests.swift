@@ -13,7 +13,6 @@ import Testing
 @Suite
 @MainActor
 struct RefreshLifecycleTests {
-
     private func makeState() -> EditorState {
         var config = KittyConfig()
         config.activityBar.show = false
@@ -34,7 +33,7 @@ struct RefreshLifecycleTests {
         let state = makeState()
         #expect(state.fullHighlightTask != nil)
 
-        for _ in 0..<20 {
+        for _ in 0 ..< 20 {
             state.refreshHighlights()
         }
 
@@ -49,7 +48,7 @@ struct RefreshLifecycleTests {
         #expect(state.fullHighlightTask != nil)
         state.cursorRow = 1
         state.cursorCol = 0
-        for _ in 0..<10 {
+        for _ in 0 ..< 10 {
             insertText("X", into: state)
         }
         #expect(state.fullHighlightTask != nil)

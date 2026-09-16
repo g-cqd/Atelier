@@ -62,7 +62,7 @@ struct KeyboardDecoderTests {
         ("\u{1B}[1:42949672960u", "\u{1B}[1:4294967296"),
         ("\u{1B}[1;256u", "\u{1B}[1;256"),
         ("\u{1B}[1;1:256u", "\u{1B}[1;1:256"),
-        ("\u{1B}[1;1;42949672960u", "\u{1B}[1;1;4294967296"),
+        ("\u{1B}[1;1;42949672960u", "\u{1B}[1;1;4294967296")
     ])
     func `Numeric overflow returns invalid`(sequence: String, invalidPrefix: String) {
         var decoder = KeyboardDecoder()

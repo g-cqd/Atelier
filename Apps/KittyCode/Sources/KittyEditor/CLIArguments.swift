@@ -92,11 +92,10 @@ public struct CLIArguments: Sendable {
 
         var trailingNumbers: [Int] = []
         for component in components.dropFirst().reversed() {
-            if let n = Int(component), n > 0 {
-                trailingNumbers.insert(n, at: 0)
-            } else {
+            guard let n = Int(component), n > 0 else {
                 break
             }
+            trailingNumbers.insert(n, at: 0)
         }
 
         if trailingNumbers.count > 2 {
@@ -117,7 +116,7 @@ public struct CLIArguments: Sendable {
             if lastSepIndex == raw.startIndex {
                 dirPrefix = ""
             } else {
-                dirPrefix = String(raw[raw.startIndex..<lastSepIndex])
+                dirPrefix = String(raw[raw.startIndex ..< lastSepIndex])
             }
             pathString = dirPrefix + reconstructedFilePart
         }
@@ -128,7 +127,8 @@ public struct CLIArguments: Sendable {
         } else if pathString.hasPrefix("~") {
             resolvedPath = Self.expandingTilde(in: pathString)
         } else {
-            resolvedPath = FilePath(FileManager.default.currentDirectoryPath)
+            resolvedPath =
+                FilePath(FileManager.default.currentDirectoryPath)
                 .appending(pathString).string
         }
 

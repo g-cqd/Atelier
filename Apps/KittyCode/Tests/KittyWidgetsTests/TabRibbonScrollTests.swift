@@ -8,7 +8,7 @@ import Testing
 @Suite
 struct TabRibbonScrollTests {
     @Test func `tabIndex with non-zero scrollOffset skips earlier tabs`() {
-        let tabs = (0..<5).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
+        let tabs = (0 ..< 5).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
         let ribbon = TabRibbon(tabs: tabs, activeIndex: 3, scrollOffset: 2)
         // scrollOffset > 0 adds 1 col for the "<" overflow indicator
         // Tab 2 starts at ribbonX + 1, tab 0 and 1 are scrolled out
@@ -18,21 +18,21 @@ struct TabRibbonScrollTests {
     }
 
     @Test func `clampedScrollOffset scrolls active tab into view`() {
-        let tabs = (0..<10).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
+        let tabs = (0 ..< 10).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
         let ribbon = TabRibbon(tabs: tabs, activeIndex: 8, scrollOffset: 0)
         let offset = ribbon.clampedScrollOffset(activeIndex: 8, ribbonWidth: 30)
         #expect(offset > 0)
     }
 
     @Test func `clampedScrollOffset scrolls left when active tab is before window`() {
-        let tabs = (0..<10).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
+        let tabs = (0 ..< 10).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
         let ribbon = TabRibbon(tabs: tabs, activeIndex: 1, scrollOffset: 5)
         let offset = ribbon.clampedScrollOffset(activeIndex: 1, ribbonWidth: 40)
         #expect(offset <= 1)
     }
 
     @Test func `tabsExtendBeyond returns true when tabs overflow`() {
-        let tabs = (0..<10).map { TabRibbon.Tab(name: "long_tab_name_\($0)", isDirty: false) }
+        let tabs = (0 ..< 10).map { TabRibbon.Tab(name: "long_tab_name_\($0)", isDirty: false) }
         let ribbon = TabRibbon(tabs: tabs, activeIndex: 0, scrollOffset: 0)
         #expect(ribbon.tabsExtendBeyond(ribbonWidth: 30))
     }
@@ -47,7 +47,7 @@ struct TabRibbonScrollTests {
         let tabs = [
             TabRibbon.Tab(name: "one", isDirty: false),
             TabRibbon.Tab(name: "two", isDirty: false),
-            TabRibbon.Tab(name: "tri", isDirty: false),
+            TabRibbon.Tab(name: "tri", isDirty: false)
         ]
         let ribbon = TabRibbon(tabs: tabs, activeIndex: 1, scrollOffset: 1)
 
@@ -56,7 +56,7 @@ struct TabRibbonScrollTests {
 
     @Test func `overflow indicators rendered when tabs overflow`() {
         var buffer = ScreenBuffer(columns: 20, rows: 1)
-        let tabs = (0..<10).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
+        let tabs = (0 ..< 10).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
         let ribbon = TabRibbon(tabs: tabs, activeIndex: 3, scrollOffset: 2)
         ribbon.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 1))
         #expect(buffer[0, 0].character == "<")
@@ -64,7 +64,7 @@ struct TabRibbonScrollTests {
     }
 
     @Test func `tabIndex ignores the right overflow indicator`() {
-        let tabs = (0..<10).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
+        let tabs = (0 ..< 10).map { TabRibbon.Tab(name: "tab\($0)", isDirty: false) }
         let ribbon = TabRibbon(tabs: tabs, activeIndex: 3, scrollOffset: 2)
 
         #expect(ribbon.tabIndex(atColumn: 19, ribbonX: 0, ribbonWidth: 20) == nil)
@@ -83,7 +83,7 @@ struct TabRibbonScrollTests {
         var buffer = ScreenBuffer(columns: 12, rows: 1)
         let tabs = [
             TabRibbon.Tab(name: "你", isDirty: false),
-            TabRibbon.Tab(name: "b", isDirty: false),
+            TabRibbon.Tab(name: "b", isDirty: false)
         ]
         let ribbon = TabRibbon(tabs: tabs, activeIndex: 0, scrollOffset: 0)
         ribbon.render(to: &buffer, in: Rect(x: 0, y: 0, width: 12, height: 1))

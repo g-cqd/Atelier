@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable function_body_length
 import Foundation
 import KittyApp
 import KittyCodecs
@@ -14,19 +16,19 @@ struct KittyCodeEntry {
         let action = CLIArguments.parse()
 
         switch action {
-        case .printVersion:
-            print(CLIArguments.versionString)
-            return
-        case .printHelp:
-            print(CLIArguments.helpText)
-            return
-        case .run(let launchConfig):
-            do {
-                try await runEditor(launchConfig: launchConfig)
-            } catch {
-                writeCrashLog(error: error)
-                KittyLogger.stderr("CRASH: \(error)")
-            }
+            case .printVersion:
+                print(CLIArguments.versionString)
+                return
+            case .printHelp:
+                print(CLIArguments.helpText)
+                return
+            case .run(let launchConfig):
+                do {
+                    try await runEditor(launchConfig: launchConfig)
+                } catch {
+                    writeCrashLog(error: error)
+                    KittyLogger.stderr("CRASH: \(error)")
+                }
         }
     }
 

@@ -90,12 +90,13 @@ public struct ItemSet: Sendable, Equatable, Hashable {
                     ))
             }
         }
-        return try ItemSet(items: kernel).closure(
-            productions: productions,
-            firstSets: firstSets,
-            rulesByNonTerminal: rulesByNonTerminal,
-            limits: limits
-        )
+        return try ItemSet(items: kernel)
+            .closure(
+                productions: productions,
+                firstSets: firstSets,
+                rulesByNonTerminal: rulesByNonTerminal,
+                limits: limits
+            )
     }
 
     private func computeFirst(

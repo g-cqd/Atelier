@@ -7,10 +7,10 @@ public indirect enum FileSystemSnapshot: Sendable {
 
     public var path: String {
         switch self {
-        case .file(let path, _):
-            return path
-        case .directory(let path, _):
-            return path
+            case .file(let path, _):
+                return path
+            case .directory(let path, _):
+                return path
         }
     }
 }
@@ -25,25 +25,25 @@ public enum FileTreeOperation: Sendable {
 extension FileTreeOperation {
     public var affectedPaths: Set<String> {
         switch self {
-        case .create(let snapshot), .delete(let snapshot), .duplicate(let snapshot):
-            return snapshot.allPaths
-        case .move(let sourcePath, let destinationPath):
-            return [sourcePath, destinationPath]
+            case .create(let snapshot), .delete(let snapshot), .duplicate(let snapshot):
+                return snapshot.allPaths
+            case .move(let sourcePath, let destinationPath):
+                return [sourcePath, destinationPath]
         }
     }
 
     public var humanDescription: String {
         switch self {
-        case .create(let snapshot):
-            return "Create \(snapshot.displayName)"
-        case .delete(let snapshot):
-            return "Delete \(snapshot.displayName)"
-        case .move(let sourcePath, let destinationPath):
-            let from = URL(fileURLWithPath: sourcePath).lastPathComponent
-            let to = URL(fileURLWithPath: destinationPath).lastPathComponent
-            return from == to ? "Move \(to)" : "Rename \(from) → \(to)"
-        case .duplicate(let snapshot):
-            return "Duplicate \(snapshot.displayName)"
+            case .create(let snapshot):
+                return "Create \(snapshot.displayName)"
+            case .delete(let snapshot):
+                return "Delete \(snapshot.displayName)"
+            case .move(let sourcePath, let destinationPath):
+                let from = URL(fileURLWithPath: sourcePath).lastPathComponent
+                let to = URL(fileURLWithPath: destinationPath).lastPathComponent
+                return from == to ? "Move \(to)" : "Rename \(from) → \(to)"
+            case .duplicate(let snapshot):
+                return "Duplicate \(snapshot.displayName)"
         }
     }
 }

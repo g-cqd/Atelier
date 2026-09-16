@@ -94,7 +94,8 @@ struct ScrollViewTests {
 
         ScrollView(contentHeight: 2, scrollOffset: 0) {
             Text("Hello")
-        }.render(to: &buffer, in: rect)
+        }
+        .render(to: &buffer, in: rect)
 
         #expect(buffer[0, 0].character == "H")
         #expect(buffer[0, 4].character == "o")
@@ -113,7 +114,8 @@ struct ScrollViewTests {
 
         ScrollView(contentHeight: 16, scrollOffset: 0, style: style) {
             Text("Hi")
-        }.render(to: &buffer, in: rect)
+        }
+        .render(to: &buffer, in: rect)
 
         #expect(buffer[0, 9].character == "#")
         #expect(buffer[0, 9].style.fg == thumbStyle.fg)
@@ -127,10 +129,11 @@ struct ScrollViewTests {
 
         ScrollView(contentHeight: 3, scrollOffset: 0, style: style) {
             Text("Hi")
-        }.render(to: &buffer, in: rect)
+        }
+        .render(to: &buffer, in: rect)
 
         // Last column should not have scrollbar characters
-        for row in 0..<5 {
+        for row in 0 ..< 5 {
             #expect(buffer[row, 9].character != "#")
             #expect(buffer[row, 9].character != "|")
         }

@@ -17,7 +17,6 @@ public struct SemanticTokensLegend: Sendable, Equatable {
 /// This decoder converts them into absolute byte ranges using the source text
 /// and maps token types/modifiers through `CaptureRoleMapper`.
 public enum LSPSemanticTokenDecoder: Sendable {
-
     /// Decode LSP-encoded semantic tokens into `HighlightToken`s.
     ///
     /// - Parameters:
@@ -60,10 +59,14 @@ public enum LSPSemanticTokenDecoder: Sendable {
 
             let lineStartByte = lineStarts[Int(currentLine)]
             // Convert character offset to byte offset (UTF-16 to UTF-8)
-            let startByte = lineStartByte + charOffsetToByteOffset(
-                utf8: utf8, lineStart: lineStartByte, charOffset: Int(currentChar))
-            let endByte = startByte + charOffsetToByteOffset(
-                utf8: utf8, lineStart: startByte, charOffset: Int(length))
+            let startByte =
+                lineStartByte
+                + charOffsetToByteOffset(
+                    utf8: utf8, lineStart: lineStartByte, charOffset: Int(currentChar))
+            let endByte =
+                startByte
+                + charOffsetToByteOffset(
+                    utf8: utf8, lineStart: startByte, charOffset: Int(length))
 
             guard startByte < utf8.count, endByte <= utf8.count, startByte < endByte else {
                 continue
@@ -79,13 +82,14 @@ public enum LSPSemanticTokenDecoder: Sendable {
             let role = CaptureRoleMapper.mapLSPTokenType(tokenType)
             let modifiers = decodeLSPModifiers(tokenModifierBits, legend: legend)
 
-            tokens.append(HighlightToken(
-                byteRange: startByte..<endByte,
-                role: role,
-                modifiers: modifiers,
-                layer: .semantic,
-                priority: 0
-            ))
+            tokens.append(
+                HighlightToken(
+                    byteRange: startByte ..< endByte,
+                    role: role,
+                    modifiers: modifiers,
+                    layer: .semantic,
+                    priority: 0
+                ))
         }
 
         return tokens
@@ -115,7 +119,7 @@ public enum LSPSemanticTokenDecoder: Sendable {
         for edit in sorted {
             let start = min(edit.start, result.count)
             let end = min(start + edit.deleteCount, result.count)
-            result.replaceSubrange(start..<end, with: edit.data)
+            result.replaceSubrange(start ..< end, with: edit.data)
         }
         return result
     }
@@ -147,10 +151,8 @@ public enum LSPSemanticTokenDecoder: Sendable {
 
     private static func buildLineStarts(_ source: String) -> [Int] {
         var starts = [0]
-        for (i, byte) in source.utf8.enumerated() {
-            if byte == 0x0A {  // newline
-                starts.append(i + 1)
-            }
+        for (i, byte) in source.utf8.enumerated() where byte == 0x0A {
+            starts.append(i + 1)
         }
         return starts
     }
@@ -193,17 +195,16 @@ public enum LSPSemanticTokenDecoder: Sendable {
     ) -> HighlightModifierSet {
         var modifiers = HighlightModifierSet()
 
-        for (idx, name) in legend.tokenModifiers.enumerated() {
-            guard bits & (1 << idx) != 0 else { continue }
+        for (idx, name) in legend.tokenModifiers.enumerated() where bits & (1 << idx) != 0 {
             switch name {
-            case "declaration":   modifiers.insert(.declaration)
-            case "definition":    modifiers.insert(.definition)
-            case "readonly":      modifiers.insert(.readonly)
-            case "static":        modifiers.insert(.static)
-            case "deprecated":    modifiers.insert(.deprecated)
-            case "async":         modifiers.insert(.async)
-            case "documentation": modifiers.insert(.documentation)
-            default: break
+                case "declaration": modifiers.insert(.declaration)
+                case "definition": modifiers.insert(.definition)
+                case "readonly": modifiers.insert(.readonly)
+                case "static": modifiers.insert(.static)
+                case "deprecated": modifiers.insert(.deprecated)
+                case "async": modifiers.insert(.async)
+                case "documentation": modifiers.insert(.documentation)
+                default: break
             }
         }
 

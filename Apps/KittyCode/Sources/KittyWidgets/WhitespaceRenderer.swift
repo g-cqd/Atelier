@@ -110,30 +110,30 @@ public enum WhitespaceRenderer {
     @inline(__always)
     public static func classify(_ char: Character, isLeading: Bool) -> CharCategory {
         switch char {
-        case " ":
-            return isLeading ? .indentSpace : .space
-        case "\t":
-            return isLeading ? .indentTab : .space
-        case "\u{00A0}", "\u{200B}", "\u{200C}", "\u{200D}", "\u{2060}", "\u{FEFF}":
-            return .unexpectedInvisible
-        default:
-            return .normal
+            case " ":
+                return isLeading ? .indentSpace : .space
+            case "\t":
+                return isLeading ? .indentTab : .space
+            case "\u{00A0}", "\u{200B}", "\u{200C}", "\u{200D}", "\u{2060}", "\u{FEFF}":
+                return .unexpectedInvisible
+            default:
+                return .normal
         }
     }
 
     @inline(__always)
     public static func replacementGlyph(for category: CharCategory) -> Character? {
         switch category {
-        case .normal:
-            return nil
-        case .indentSpace:
-            return "\u{00B7}"  // ·
-        case .indentTab:
-            return "\u{2192}"  // →
-        case .space:
-            return "\u{00B7}"  // ·
-        case .unexpectedInvisible:
-            return "\u{2300}"  // ⌀
+            case .normal:
+                return nil
+            case .indentSpace:
+                return "\u{00B7}"  // ·
+            case .indentTab:
+                return "\u{2192}"  // →
+            case .space:
+                return "\u{00B7}"  // ·
+            case .unexpectedInvisible:
+                return "\u{2300}"  // ⌀
         }
     }
 
