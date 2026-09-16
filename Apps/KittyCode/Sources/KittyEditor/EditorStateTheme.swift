@@ -1,8 +1,10 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable function_body_length
 import KittyCodecs
 import KittyWidgets
 
-public extension EditorState {
-    static func makeColorScheme(config: KittyConfig) -> ColorScheme {
+extension EditorState {
+    public static func makeColorScheme(config: KittyConfig) -> ColorScheme {
         let theme = config.theme
         let whitespaceDefault = ColorRGB(r: 0x48, g: 0x4f, b: 0x58)
         let scrollTrack = Style(fg: .rgb(r: 60, g: 60, b: 60), dim: true)

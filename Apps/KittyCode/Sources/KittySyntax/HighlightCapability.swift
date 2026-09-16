@@ -1,10 +1,10 @@
 /// The tier of highlighting a language achieves.
 public enum HighlightTier: Int, Sendable, Comparable, Hashable {
-    case plain = 0       // no highlighting
-    case lexical = 1     // keyword/string/comment fallback only
+    case plain = 0  // no highlighting
+    case lexical = 1  // keyword/string/comment fallback only
     case structural = 2  // tree-sitter grammar, basic queries
-    case enhanced = 3    // external scanners, full queries
-    case semantic = 4    // LSP semantic tokens merged
+    case enhanced = 3  // external scanners, full queries
+    case semantic = 4  // LSP semantic tokens merged
 
     public static func < (lhs: HighlightTier, rhs: HighlightTier) -> Bool {
         lhs.rawValue < rhs.rawValue
@@ -47,7 +47,7 @@ public struct HostCapabilities: Sendable, Equatable {
         supportsExternalScanner: Bool = false,
         supportedQueryFeatures: Set<QueryFeature> = [
             .predicates, .fieldNames, .alternations, .anchors,
-            .quantifiers, .multipleCaptures,
+            .quantifiers, .multipleCaptures
         ]
     ) {
         self.supportsExternalScanner = supportsExternalScanner

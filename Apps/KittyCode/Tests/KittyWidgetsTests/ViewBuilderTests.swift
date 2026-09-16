@@ -6,7 +6,6 @@ import Testing
 
 @Suite
 struct ViewBuilderTests {
-
     @Test func `buildArray collects view loop items when wrapped in VStack`() {
         @ViewBuilder
         func make(items: [String]) -> some View {

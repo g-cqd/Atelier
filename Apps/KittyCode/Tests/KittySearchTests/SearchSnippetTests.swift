@@ -9,7 +9,7 @@ struct SearchSnippetTests {
         "line 1: second",
         "line 2: third",
         "line 3: fourth",
-        "line 4: fifth",
+        "line 4: fifth"
     ]
 
     @Test("Returns matched line with no context")

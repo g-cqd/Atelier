@@ -15,7 +15,6 @@ import Testing
 @Suite
 @MainActor
 struct ScrollRenderingContentTests {
-
     private func makeSUT(
         lineCount: Int = 100,
         columns: Int = 40,
@@ -38,7 +37,7 @@ struct ScrollRenderingContentTests {
         // Content area starts at row 0 (no title bar).
         // The first visible line should now be "line 3 ..."
         let contentRow = 0
-        let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
+        let rowChars = (0 ..< 40).map { sut.pipeline.buffer[contentRow, $0].character }
         let rowText = String(rowChars)
         #expect(
             rowText.contains("line 3"),
@@ -58,7 +57,7 @@ struct ScrollRenderingContentTests {
         renderFrame(pipeline: sut.pipeline, state: sut.state)
 
         let contentRow = 0
-        let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
+        let rowChars = (0 ..< 40).map { sut.pipeline.buffer[contentRow, $0].character }
         let rowText = String(rowChars)
         #expect(
             rowText.contains("line 7"),
@@ -76,7 +75,7 @@ struct ScrollRenderingContentTests {
         renderFrame(pipeline: sut.pipeline, state: sut.state)
 
         let contentRow = 0
-        let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
+        let rowChars = (0 ..< 40).map { sut.pipeline.buffer[contentRow, $0].character }
         let rowText = String(rowChars)
         #expect(
             rowText.contains("line 50"),
@@ -90,14 +89,14 @@ struct ScrollRenderingContentTests {
         try sut.pipeline.flush()
 
         // Scroll down 5 times by 1
-        for i in 1...5 {
+        for i in 1 ... 5 {
             sut.state.scrollOffset = i
             renderFrame(pipeline: sut.pipeline, state: sut.state)
             try sut.pipeline.flush()
         }
 
         let contentRow = 0
-        let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
+        let rowChars = (0 ..< 40).map { sut.pipeline.buffer[contentRow, $0].character }
         let rowText = String(rowChars)
         #expect(
             rowText.contains("line 5"),
@@ -120,7 +119,7 @@ struct ScrollRenderingContentTests {
         renderFrame(pipeline: sut.pipeline, state: sut.state)
 
         let contentRow = 0
-        let rowChars = (0..<40).map { sut.pipeline.buffer[contentRow, $0].character }
+        let rowChars = (0 ..< 40).map { sut.pipeline.buffer[contentRow, $0].character }
         let rowText = String(rowChars)
         #expect(
             rowText.contains("line 0"),

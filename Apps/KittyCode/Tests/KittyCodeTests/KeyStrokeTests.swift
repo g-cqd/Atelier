@@ -6,7 +6,6 @@ import Testing
 
 @Suite
 struct KeyStrokeTests {
-
     @Test
     func capsLockStrippedDuringNormalization() {
         let key = KeyEvent(keyCode: AsciiKey.c, modifiers: [.ctrl, .capsLock])

@@ -48,14 +48,14 @@ extension TextSelection {
             let startIndex = min(start.col, line.count)
             let lineIndex = line.index(line.startIndex, offsetBy: startIndex)
             let endIndexStr = line.index(line.startIndex, offsetBy: endIndex)
-            result = String(line[lineIndex..<endIndexStr])
+            result = String(line[lineIndex ..< endIndexStr])
         } else {
             let firstLine = lines(start.row)
             let startIndex = min(start.col, firstLine.count)
             let firstLineIndex = firstLine.index(firstLine.startIndex, offsetBy: startIndex)
             result += String(firstLine[firstLineIndex...])
 
-            for row in (start.row + 1)..<end.row {
+            for row in (start.row + 1) ..< end.row {
                 result += "\n" + lines(row)
             }
 

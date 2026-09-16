@@ -7,7 +7,7 @@ import Testing
 struct PredicatesTests {
     @Test
     func `eq predicate`() {
-        let node = SyntaxNode(type: "identifier", byteRange: 0..<4)
+        let node = SyntaxNode(type: "identifier", byteRange: 0 ..< 4)
         let captures: [(node: SyntaxNode, name: String)] = [(node: node, name: "var")]
         let result = Predicates.evaluate(
             .eq(capture: "@var", value: "self"),
@@ -19,7 +19,7 @@ struct PredicatesTests {
 
     @Test
     func `not-eq predicate`() {
-        let node = SyntaxNode(type: "identifier", byteRange: 0..<3)
+        let node = SyntaxNode(type: "identifier", byteRange: 0 ..< 3)
         let captures: [(node: SyntaxNode, name: String)] = [(node: node, name: "var")]
         let result = Predicates.evaluate(
             .notEq(capture: "@var", value: "self"),
@@ -31,7 +31,7 @@ struct PredicatesTests {
 
     @Test
     func `any-of predicate`() {
-        let node = SyntaxNode(type: "identifier", byteRange: 0..<2)
+        let node = SyntaxNode(type: "identifier", byteRange: 0 ..< 2)
         let captures: [(node: SyntaxNode, name: String)] = [(node: node, name: "kw")]
         let result = Predicates.evaluate(
             .anyOf(capture: "@kw", values: ["if", "for", "while"]),
@@ -43,7 +43,7 @@ struct PredicatesTests {
 
     @Test
     func `directive predicate is a no-op`() {
-        let node = SyntaxNode(type: "identifier", byteRange: 0..<2)
+        let node = SyntaxNode(type: "identifier", byteRange: 0 ..< 2)
         let captures: [(node: SyntaxNode, name: String)] = [(node: node, name: "kw")]
         let result = Predicates.evaluate(
             .directive(name: "#set!", arguments: ["scope", "demo"]),

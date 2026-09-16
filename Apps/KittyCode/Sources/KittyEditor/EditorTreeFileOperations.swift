@@ -4,9 +4,9 @@ import KittyFileTree
 import KittyWorkspace
 import System
 
-public extension EditorState {
+extension EditorState {
     @discardableResult
-    func createTreeFile(at destinationPath: String, suggestedDirectory _: String) async -> Bool {
+    public func createTreeFile(at destinationPath: String, suggestedDirectory _: String) async -> Bool {
         guard validateCreatablePath(destinationPath) else { return false }
 
         let destinationURL = URL(fileURLWithPath: destinationPath)
@@ -39,8 +39,7 @@ public extension EditorState {
     }
 
     @discardableResult
-    func createTreeDirectory(at destinationPath: String, suggestedDirectory _: String) async -> Bool
-    {
+    public func createTreeDirectory(at destinationPath: String, suggestedDirectory _: String) async -> Bool {
         guard validateCreatablePath(destinationPath) else { return false }
 
         let parentPath = URL(fileURLWithPath: destinationPath).deletingLastPathComponent().path
@@ -68,12 +67,12 @@ public extension EditorState {
     }
 
     @discardableResult
-    func renameTreeItem(from sourcePath: String, to destinationPath: String) async -> Bool {
+    public func renameTreeItem(from sourcePath: String, to destinationPath: String) async -> Bool {
         await moveTreeItem(from: sourcePath, to: destinationPath)
     }
 
     @discardableResult
-    func moveTreeItem(from sourcePath: String, to destinationPath: String) async -> Bool {
+    public func moveTreeItem(from sourcePath: String, to destinationPath: String) async -> Bool {
         guard validateMovablePath(sourcePath, destinationPath: destinationPath) else {
             return false
         }
@@ -105,7 +104,7 @@ public extension EditorState {
     }
 
     @discardableResult
-    func duplicateTreeItem(at sourcePath: String, to destinationPath: String) async -> Bool {
+    public func duplicateTreeItem(at sourcePath: String, to destinationPath: String) async -> Bool {
         guard validateCreatablePath(destinationPath) else { return false }
         guard FileManager.default.fileExists(atPath: sourcePath) else {
             statusMessage = "Missing source item"
@@ -146,7 +145,7 @@ public extension EditorState {
     }
 
     @discardableResult
-    func deleteTreeItem(at path: String) async -> Bool {
+    public func deleteTreeItem(at path: String) async -> Bool {
         guard validateDeletablePath(path) else { return false }
 
         let parentPath = URL(fileURLWithPath: path).deletingLastPathComponent().path
@@ -176,35 +175,35 @@ public extension EditorState {
         }
     }
 
-    func undoFileTreeOperation() async {
+    public func undoFileTreeOperation() async {
         switch fileTreeHistory.undo(currentNodes: treeNodes) {
-        case .applied(let record):
-            let success = await applyUndo(record)
-            if success {
-                statusMessage = "Undo: \(record.description)"
-            } else {
-                fileTreeHistory.clear(currentNodes: treeNodes)
-            }
-        case .unavailable:
-            statusMessage = "Nothing to undo"
-        case .invalidated:
-            statusMessage = "File history cleared after tree refresh"
+            case .applied(let record):
+                let success = await applyUndo(record)
+                if success {
+                    statusMessage = "Undo: \(record.description)"
+                } else {
+                    fileTreeHistory.clear(currentNodes: treeNodes)
+                }
+            case .unavailable:
+                statusMessage = "Nothing to undo"
+            case .invalidated:
+                statusMessage = "File history cleared after tree refresh"
         }
     }
 
-    func redoFileTreeOperation() async {
+    public func redoFileTreeOperation() async {
         switch fileTreeHistory.redo(currentNodes: treeNodes) {
-        case .applied(let record):
-            let success = await applyRedo(record)
-            if success {
-                statusMessage = "Redo: \(record.description)"
-            } else {
-                fileTreeHistory.clear(currentNodes: treeNodes)
-            }
-        case .unavailable:
-            statusMessage = "Nothing to redo"
-        case .invalidated:
-            statusMessage = "File history cleared after tree refresh"
+            case .applied(let record):
+                let success = await applyRedo(record)
+                if success {
+                    statusMessage = "Redo: \(record.description)"
+                } else {
+                    fileTreeHistory.clear(currentNodes: treeNodes)
+                }
+            case .unavailable:
+                statusMessage = "Nothing to redo"
+            case .invalidated:
+                statusMessage = "File history cleared after tree refresh"
         }
     }
 
@@ -222,14 +221,14 @@ public extension EditorState {
         }
         do {
             switch record.operation {
-            case .create(let snapshot):
-                try removeItemIfExists(at: snapshot.path)
-            case .delete(let snapshot):
-                try restore(snapshot: snapshot)
-            case .move(let sourcePath, let destinationPath):
-                try FileManager.default.moveItem(atPath: destinationPath, toPath: sourcePath)
-            case .duplicate(let snapshot):
-                try removeItemIfExists(at: snapshot.path)
+                case .create(let snapshot):
+                    try removeItemIfExists(at: snapshot.path)
+                case .delete(let snapshot):
+                    try restore(snapshot: snapshot)
+                case .move(let sourcePath, let destinationPath):
+                    try FileManager.default.moveItem(atPath: destinationPath, toPath: sourcePath)
+                case .duplicate(let snapshot):
+                    try removeItemIfExists(at: snapshot.path)
             }
 
             await loadInitialTree(validateHistory: false)
@@ -251,12 +250,12 @@ public extension EditorState {
         }
         do {
             switch record.operation {
-            case .create(let snapshot), .duplicate(let snapshot):
-                try restore(snapshot: snapshot)
-            case .delete(let snapshot):
-                try removeItemIfExists(at: snapshot.path)
-            case .move(let sourcePath, let destinationPath):
-                try FileManager.default.moveItem(atPath: sourcePath, toPath: destinationPath)
+                case .create(let snapshot), .duplicate(let snapshot):
+                    try restore(snapshot: snapshot)
+                case .delete(let snapshot):
+                    try removeItemIfExists(at: snapshot.path)
+                case .move(let sourcePath, let destinationPath):
+                    try FileManager.default.moveItem(atPath: sourcePath, toPath: destinationPath)
             }
 
             await loadInitialTree(validateHistory: false)
@@ -278,11 +277,11 @@ public extension EditorState {
     /// tree would silently leak content across workspaces.
     private func pathsAreInsideCurrentRoot(_ operation: FileTreeOperation) -> Bool {
         switch operation {
-        case .create(let snapshot), .delete(let snapshot), .duplicate(let snapshot):
-            return snapshot.allPaths.allSatisfy { SecurePath.isValid($0, root: rootPath) }
-        case .move(let sourcePath, let destinationPath):
-            return SecurePath.isValid(sourcePath, root: rootPath)
-                && SecurePath.isValid(destinationPath, root: rootPath)
+            case .create(let snapshot), .delete(let snapshot), .duplicate(let snapshot):
+                return snapshot.allPaths.allSatisfy { SecurePath.isValid($0, root: rootPath) }
+            case .move(let sourcePath, let destinationPath):
+                return SecurePath.isValid(sourcePath, root: rootPath)
+                    && SecurePath.isValid(destinationPath, root: rootPath)
         }
     }
 
@@ -418,9 +417,10 @@ public extension EditorState {
         }
 
         if isDirectory.boolValue {
-            let children = try fileManager.contentsOfDirectory(atPath: path).sorted().map { child in
-                try captureFileSystemSnapshot(at: FilePath(path).appending(child).string)
-            }
+            let children = try fileManager.contentsOfDirectory(atPath: path).sorted()
+                .map { child in
+                    try captureFileSystemSnapshot(at: FilePath(path).appending(child).string)
+                }
             return .directory(path: path, children: children)
         }
 
@@ -430,23 +430,23 @@ public extension EditorState {
 
     private func restore(snapshot: FileSystemSnapshot) throws {
         switch snapshot {
-        case .file(let path, let data):
-            let url = URL(fileURLWithPath: path)
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(),
-                withIntermediateDirectories: true,
-                attributes: nil
-            )
-            try data.write(to: url)
-        case .directory(let path, let children):
-            try FileManager.default.createDirectory(
-                at: URL(fileURLWithPath: path),
-                withIntermediateDirectories: true,
-                attributes: nil
-            )
-            for child in children {
-                try restore(snapshot: child)
-            }
+            case .file(let path, let data):
+                let url = URL(fileURLWithPath: path)
+                try FileManager.default.createDirectory(
+                    at: url.deletingLastPathComponent(),
+                    withIntermediateDirectories: true,
+                    attributes: nil
+                )
+                try data.write(to: url)
+            case .directory(let path, let children):
+                try FileManager.default.createDirectory(
+                    at: URL(fileURLWithPath: path),
+                    withIntermediateDirectories: true,
+                    attributes: nil
+                )
+                for child in children {
+                    try restore(snapshot: child)
+                }
         }
     }
 

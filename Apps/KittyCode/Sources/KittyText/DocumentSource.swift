@@ -34,7 +34,7 @@ public struct ArrayDocumentSource: DocumentSource, Sendable {
     }
 
     public func lines(in range: Range<Int>) -> [String] {
-        let clamped = range.clamped(to: 0..<storage.count)
+        let clamped = range.clamped(to: 0 ..< storage.count)
         return Array(storage[clamped])
     }
 
@@ -44,7 +44,7 @@ public struct ArrayDocumentSource: DocumentSource, Sendable {
     }
 
     public func maxLineWidth(in range: Range<Int>, tabSize: Int) -> Int {
-        let clamped = range.clamped(to: 0..<storage.count)
+        let clamped = range.clamped(to: 0 ..< storage.count)
         var maxWidth = 0
         for lineIndex in clamped {
             maxWidth = max(

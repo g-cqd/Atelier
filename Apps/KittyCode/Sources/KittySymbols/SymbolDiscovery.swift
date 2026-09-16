@@ -60,25 +60,26 @@ public struct SymbolDiscovery {
         metadata: SymbolMetadataLoader.Metadata,
         fontCodepoints: [UInt32]?
     ) -> [SymbolRecord] {
-        orderedNames.enumerated().map { index, name in
-            let codepoint: UInt32?
-            if let fontCodepoints, index < fontCodepoints.count {
-                codepoint = fontCodepoints[index]
-            } else {
-                codepoint = nil
+        orderedNames.enumerated()
+            .map { index, name in
+                let codepoint: UInt32?
+                if let fontCodepoints, index < fontCodepoints.count {
+                    codepoint = fontCodepoints[index]
+                } else {
+                    codepoint = nil
+                }
+                let glyph = codepoint.flatMap { UnicodeScalar($0) }.map { String(Character($0)) }
+                return SymbolRecord(
+                    name: name,
+                    visibility: visibility,
+                    assetGlyphIndex: index,
+                    codepoint: codepoint,
+                    glyph: glyph,
+                    availability: metadata.availabilityByName[name],
+                    categories: metadata.categoriesByName[name] ?? [],
+                    searchTerms: metadata.searchTermsByName[name] ?? []
+                )
             }
-            let glyph = codepoint.flatMap { UnicodeScalar($0) }.map { String(Character($0)) }
-            return SymbolRecord(
-                name: name,
-                visibility: visibility,
-                assetGlyphIndex: index,
-                codepoint: codepoint,
-                glyph: glyph,
-                availability: metadata.availabilityByName[name],
-                categories: metadata.categoriesByName[name] ?? [],
-                searchTerms: metadata.searchTermsByName[name] ?? []
-            )
-        }
     }
 
     private func extractFontPUACodepoints() -> [UInt32]? {
@@ -98,7 +99,7 @@ public struct SymbolDiscovery {
         let charset = CTFontCopyCharacterSet(font)
 
         var codepoints: [UInt32] = []
-        for cp: UInt32 in 0x100000...0x103FFF where CFCharacterSetIsLongCharacterMember(charset, cp) {
+        for cp: UInt32 in 0x100000 ... 0x103FFF where CFCharacterSetIsLongCharacterMember(charset, cp) {
             codepoints.append(cp)
         }
 
@@ -111,10 +112,12 @@ public struct SymbolDiscovery {
             isDirectory: true
         )
 
-        let volumes = try fileManager.contentsOfDirectory(
-            at: volumesDirectory,
-            includingPropertiesForKeys: [.isDirectoryKey]
-        ).filter { $0.lastPathComponent.hasPrefix("iOS_") }
+        let volumes =
+            try fileManager.contentsOfDirectory(
+                at: volumesDirectory,
+                includingPropertiesForKeys: [.isDirectoryKey]
+            )
+            .filter { $0.lastPathComponent.hasPrefix("iOS_") }
             .sorted { $0.lastPathComponent > $1.lastPathComponent }
 
         for volume in volumes {

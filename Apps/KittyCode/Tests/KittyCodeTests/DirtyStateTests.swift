@@ -37,7 +37,7 @@ struct DirtyStateTests {
     func `markLinesDirty records each affected line`() {
         let sut = makeSUT()
         _ = sut.state.drainDirtyState()
-        sut.state.markLinesDirty(2..<5)
+        sut.state.markLinesDirty(2 ..< 5)
         #expect(sut.state.dirtyContentLines == [2, 3, 4])
     }
 
@@ -46,7 +46,7 @@ struct DirtyStateTests {
         let sut = makeSUT()
         // markContentAllDirty supersedes per-line marks.
         sut.state.markContentAllDirty()
-        sut.state.markLinesDirty(2..<5)
+        sut.state.markLinesDirty(2 ..< 5)
         #expect(sut.state.dirtyContentLines.isEmpty)
         #expect(sut.state.dirtyContentAll)
     }
@@ -55,7 +55,7 @@ struct DirtyStateTests {
     func `markContentAllDirty clears any previous per-line marks`() {
         let sut = makeSUT()
         _ = sut.state.drainDirtyState()
-        sut.state.markLinesDirty(0..<2)
+        sut.state.markLinesDirty(0 ..< 2)
         sut.state.markContentAllDirty()
         #expect(sut.state.dirtyContentLines.isEmpty)
         #expect(sut.state.dirtyContentAll)
@@ -66,8 +66,8 @@ struct DirtyStateTests {
         let sut = makeSUT()
         _ = sut.state.drainDirtyState()
         let mutation = TextMutation(
-            originalLineRange: 1..<2,
-            updatedLineRange: 1..<2
+            originalLineRange: 1 ..< 2,
+            updatedLineRange: 1 ..< 2
         )
         sut.state.textDidChange(mutation)
         #expect(!sut.state.dirtyContentAll)
@@ -79,8 +79,8 @@ struct DirtyStateTests {
         let sut = makeSUT()
         _ = sut.state.drainDirtyState()
         let mutation = TextMutation(
-            originalLineRange: 1..<2,
-            updatedLineRange: 1..<3  // inserted a newline
+            originalLineRange: 1 ..< 2,
+            updatedLineRange: 1 ..< 3  // inserted a newline
         )
         sut.state.textDidChange(mutation)
         #expect(sut.state.dirtyContentAll)
@@ -96,7 +96,7 @@ struct DirtyStateTests {
 
     @Test
     func `small scroll marks only the newly exposed rows`() {
-        let sut = makeSUT(fileContent: (0..<100).map { "line \($0)" })
+        let sut = makeSUT(fileContent: (0 ..< 100).map { "line \($0)" })
         // makeKittyCodeNavigationContext uses 24 rows; visibleRows ~= 22.
         // Make sure we have a sensible row size so the delta is "small".
         sut.state.lastRenderRows = 24
@@ -110,7 +110,7 @@ struct DirtyStateTests {
 
     @Test
     func `large scroll falls back to all content dirty`() {
-        let sut = makeSUT(fileContent: (0..<200).map { "line \($0)" })
+        let sut = makeSUT(fileContent: (0 ..< 200).map { "line \($0)" })
         sut.state.lastRenderRows = 24
         _ = sut.state.drainDirtyState()
         sut.state.scrollOffset = 100  // way more than a screen

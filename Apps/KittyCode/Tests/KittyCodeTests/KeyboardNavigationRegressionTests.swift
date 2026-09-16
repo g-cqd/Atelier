@@ -15,7 +15,6 @@ import Testing
 @Suite
 @MainActor
 struct KeyboardNavigationRegressionTests {
-
     private func makeSUT(fileContent: [String], columns: Int = 80, rows: Int = 24) -> (
         state: EditorState, pipeline: RenderPipeline
     ) {
@@ -112,7 +111,7 @@ struct KeyboardNavigationRegressionTests {
 
     @Test
     func `modifier-only key presses do not scroll the editor to an offscreen cursor`() {
-        let sut = makeSUT(fileContent: (0..<80).map(String.init), rows: 12)
+        let sut = makeSUT(fileContent: (0 ..< 80).map(String.init), rows: 12)
         sut.state.cursorRow = 40
         sut.state.scrollOffset = 0
 
@@ -152,7 +151,7 @@ struct KeyboardNavigationRegressionTests {
 
     @Test
     func `handleEvent keeps page navigation working for repeated fn style keys`() {
-        let sut = makeSUT(fileContent: (0..<100).map(String.init), rows: 12)
+        let sut = makeSUT(fileContent: (0 ..< 100).map(String.init), rows: 12)
 
         let handled = handleEvent(
             event: .key(KeyEvent(keyCode: Key.pageDown.rawValue, eventType: .repeat)),
@@ -177,7 +176,7 @@ struct KeyboardNavigationRegressionTests {
         state.sidebarCollapsed = true
         state.fileContent = [
             "AAAABBBBCCCCDDDDEEEEFFFFGGGG",
-            "target",
+            "target"
         ]
 
         let pipeline = RenderPipeline(
@@ -193,9 +192,10 @@ struct KeyboardNavigationRegressionTests {
         )
 
         renderFrame(pipeline: pipeline, state: state)
-        let renderedRows = (0..<5).map { row in
-            String((0..<8).map { pipeline.buffer[row, $0].character })
-        }
+        let renderedRows = (0 ..< 5)
+            .map { row in
+                String((0 ..< 8).map { pipeline.buffer[row, $0].character })
+            }
 
         #expect(handled)
         #expect(state.cursorRow == 1)

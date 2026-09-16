@@ -15,7 +15,6 @@ import Testing
 @Suite
 @MainActor
 struct TreeRefreshRegressionTests {
-
     private func makeSUT(
         fileContent: [String] = [""],
         columns: Int = 80,
@@ -37,9 +36,10 @@ struct TreeRefreshRegressionTests {
         let sut = makeSUT(columns: 40, rows: 10)
         sut.state.treeScrollOffset = 5
         sut.state.selectedTreeIndex = 7
-        sut.state.treeNodes = (0..<20).map { i in
-            FileNode(name: "file\(i).txt", path: "/file\(i).txt", isDirectory: false)
-        }
+        sut.state.treeNodes = (0 ..< 20)
+            .map { i in
+                FileNode(name: "file\(i).txt", path: "/file\(i).txt", isDirectory: false)
+            }
         sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
 
         // Simulate a tree refresh — loadInitialTree rescans, but we can't do async I/O in tests
@@ -57,15 +57,17 @@ struct TreeRefreshRegressionTests {
         sut.state.treeScrollOffset = 15
         sut.state.selectedTreeIndex = 18
         // Start with 20 items
-        sut.state.treeNodes = (0..<20).map { i in
-            FileNode(name: "file\(i).txt", path: "/file\(i).txt", isDirectory: false)
-        }
+        sut.state.treeNodes = (0 ..< 20)
+            .map { i in
+                FileNode(name: "file\(i).txt", path: "/file\(i).txt", isDirectory: false)
+            }
         sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
 
         // Shrink to 10 items
-        sut.state.treeNodes = (0..<10).map { i in
-            FileNode(name: "file\(i).txt", path: "/file\(i).txt", isDirectory: false)
-        }
+        sut.state.treeNodes = (0 ..< 10)
+            .map { i in
+                FileNode(name: "file\(i).txt", path: "/file\(i).txt", isDirectory: false)
+            }
         sut.state.refreshFlatTree()
 
         // Scroll and selection should be clamped, not reset to 0

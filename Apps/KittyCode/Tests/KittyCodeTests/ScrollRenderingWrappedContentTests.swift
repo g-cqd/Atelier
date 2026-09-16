@@ -15,10 +15,8 @@ import Testing
 @Suite
 @MainActor
 struct ScrollRenderingWrappedContentTests {
-
     @Test
-    func `scrolling through an overheight wrapped line keeps later wrapped content visible`() throws
-    {
+    func `scrolling through an overheight wrapped line keeps later wrapped content visible`() throws {
         let mock = MockTerminalConnection(size: TerminalSize(columns: 8, rows: 6))
         let pipeline = RenderPipeline(connection: mock, columns: 8, rows: 6)
 
@@ -37,7 +35,7 @@ struct ScrollRenderingWrappedContentTests {
 
         renderFrame(pipeline: pipeline, state: state)
 
-        for _ in 0..<4 {
+        for _ in 0 ..< 4 {
             handleMouse(
                 MouseEvent(button: .scrollDown, row: 1, col: 8, kind: .press),
                 state: state,
@@ -50,12 +48,12 @@ struct ScrollRenderingWrappedContentTests {
 
         renderFrame(pipeline: pipeline, state: state)
 
-        let topRowText = String((0..<8).map { pipeline.buffer[0, $0].character })
+        let topRowText = String((0 ..< 8).map { pipeline.buffer[0, $0].character })
         #expect(
             topRowText.contains("EEEE"),
             "Expected wrapped continuation to remain visible after scrolling, got: \(topRowText)")
 
-        let lastContentRowText = String((0..<8).map { pipeline.buffer[4, $0].character })
+        let lastContentRowText = String((0 ..< 8).map { pipeline.buffer[4, $0].character })
         #expect(
             lastContentRowText.contains("afte"),
             "Expected following line to appear after wrapped continuation rows, got: \(lastContentRowText)"
@@ -87,7 +85,7 @@ struct ScrollRenderingWrappedContentTests {
 
         renderFrame(pipeline: pipeline, state: state)
 
-        for _ in 0..<12 {
+        for _ in 0 ..< 12 {
             handleMouse(
                 MouseEvent(button: .scrollDown, row: 1, col: 8, kind: .press),
                 state: state,
@@ -109,9 +107,10 @@ struct ScrollRenderingWrappedContentTests {
         #expect(state.pendingAcceleratedScrollLines == 0)
         #expect(state.scrollAccelerationTask == nil)
 
-        let contentRows = (0..<5).map { row in
-            String((0..<8).map { pipeline.buffer[row, $0].character })
-        }
+        let contentRows = (0 ..< 5)
+            .map { row in
+                String((0 ..< 8).map { pipeline.buffer[row, $0].character })
+            }
         let hasDone = contentRows.contains { $0.contains("done") || $0.contains("done".prefix(4)) }
         #expect(
             hasDone,

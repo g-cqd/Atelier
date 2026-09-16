@@ -6,7 +6,7 @@ private final class ParseStackIDGenerator: Sendable {
     private let counter = Mutex(0)
 
     func next() -> Int {
-        return counter.withLock { counter in
+        counter.withLock { counter in
             let current = counter
             counter += 1
             return current
@@ -46,7 +46,7 @@ struct ParseStack: Sendable {
         guard count > 0 else { return [] }
         let popped = Array(nodes.suffix(count))
         nodes.removeLast(min(count, nodes.count))
-        for _ in 0..<min(count, stateStack.count - 1) {
+        for _ in 0 ..< min(count, stateStack.count - 1) {
             stateStack.removeLast()
         }
         state = stateStack.last ?? 0

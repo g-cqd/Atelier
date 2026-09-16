@@ -16,7 +16,7 @@ enum RegexMatcher {
         let deadline = ContinuousClock.now.advanced(by: .milliseconds(50))
         regex.enumerateMatches(
             in: text, options: [.reportProgress, .reportCompletion],
-            range: NSRange(text.startIndex..<text.endIndex, in: text)
+            range: NSRange(text.startIndex ..< text.endIndex, in: text)
         ) { result, flags, stop in
             // Foundation owns this pointer for the synchronous callback; it never escapes.
             if Task.isCancelled {

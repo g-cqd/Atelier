@@ -4,7 +4,6 @@
 /// keywords that match the word pattern can be recognized by first matching the word
 /// pattern and then checking a keyword table, avoiding backtracking in the lexer.
 public enum KeywordExtractor: Sendable {
-
     /// Extracts keywords from the grammar that match the word pattern.
     public static func extract(from grammar: GrammarDefinition) -> [String: String] {
         guard grammar.word != nil else { return [:] }
@@ -28,25 +27,25 @@ public enum KeywordExtractor: Sendable {
         from rule: Rule, ruleName: String, into keywords: inout [String: String]
     ) {
         switch rule {
-        case .string(let value):
-            keywords[value] = ruleName
-        case .seq(let members):
-            for m in members { extractKeywords(from: m, ruleName: ruleName, into: &keywords) }
-        case .choice(let members):
-            for m in members { extractKeywords(from: m, ruleName: ruleName, into: &keywords) }
-        case .repeat(let content), .repeat1(let content), .optional(let content):
-            extractKeywords(from: content, ruleName: ruleName, into: &keywords)
-        case .prec(_, let content), .precLeft(_, let content), .precRight(_, let content),
-            .precDynamic(_, let content):
-            extractKeywords(from: content, ruleName: ruleName, into: &keywords)
-        case .token(let content), .immediateToken(let content):
-            extractKeywords(from: content, ruleName: ruleName, into: &keywords)
-        case .field(_, let content):
-            extractKeywords(from: content, ruleName: ruleName, into: &keywords)
-        case .alias(let content, _, _):
-            extractKeywords(from: content, ruleName: ruleName, into: &keywords)
-        case .symbol, .pattern, .blank:
-            break
+            case .string(let value):
+                keywords[value] = ruleName
+            case .seq(let members):
+                for m in members { extractKeywords(from: m, ruleName: ruleName, into: &keywords) }
+            case .choice(let members):
+                for m in members { extractKeywords(from: m, ruleName: ruleName, into: &keywords) }
+            case .repeat(let content), .repeat1(let content), .optional(let content):
+                extractKeywords(from: content, ruleName: ruleName, into: &keywords)
+            case .prec(_, let content), .precLeft(_, let content), .precRight(_, let content),
+                .precDynamic(_, let content):
+                extractKeywords(from: content, ruleName: ruleName, into: &keywords)
+            case .token(let content), .immediateToken(let content):
+                extractKeywords(from: content, ruleName: ruleName, into: &keywords)
+            case .field(_, let content):
+                extractKeywords(from: content, ruleName: ruleName, into: &keywords)
+            case .alias(let content, _, _):
+                extractKeywords(from: content, ruleName: ruleName, into: &keywords)
+            case .symbol, .pattern, .blank:
+                break
         }
     }
 

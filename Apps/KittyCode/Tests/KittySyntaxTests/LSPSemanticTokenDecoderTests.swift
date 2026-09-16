@@ -17,7 +17,7 @@ struct LSPSemanticTokenDecoderTests {
 
         let tokens = LSPSemanticTokenDecoder.decode(data: data, legend: legend, source: source)
         #expect(tokens.count == 1)
-        #expect(tokens[0].byteRange == 0..<3)
+        #expect(tokens[0].byteRange == 0 ..< 3)
         #expect(tokens[0].role == .keyword)
         #expect(tokens[0].layer == .semantic)
     }
@@ -35,8 +35,8 @@ struct LSPSemanticTokenDecoderTests {
 
         let tokens = LSPSemanticTokenDecoder.decode(data: data, legend: legend, source: source)
         #expect(tokens.count == 2)
-        #expect(tokens[0].byteRange == 0..<3)  // "let"
-        #expect(tokens[1].byteRange == 6..<9)  // "var"
+        #expect(tokens[0].byteRange == 0 ..< 3)  // "let"
+        #expect(tokens[1].byteRange == 6 ..< 9)  // "var"
     }
 
     @Test
@@ -65,11 +65,11 @@ struct LSPSemanticTokenDecoderTests {
     @Test
     func `Semantic tokens merge with structural tokens`() {
         let structuralTokens = [
-            HighlightToken(byteRange: 0..<3, role: .variable, layer: .structural),
-            HighlightToken(byteRange: 4..<9, role: .string, layer: .structural),
+            HighlightToken(byteRange: 0 ..< 3, role: .variable, layer: .structural),
+            HighlightToken(byteRange: 4 ..< 9, role: .string, layer: .structural)
         ]
         let semanticTokens = [
-            HighlightToken(byteRange: 0..<3, role: .function, layer: .semantic),
+            HighlightToken(byteRange: 0 ..< 3, role: .function, layer: .semantic)
         ]
 
         let all = structuralTokens + semanticTokens
@@ -87,7 +87,7 @@ struct LSPSemanticTokenDecoderTests {
     @Test
     func `No provider produces identical output to structural-only`() {
         let tokens = [
-            HighlightToken(byteRange: 0..<3, role: .keyword, layer: .structural),
+            HighlightToken(byteRange: 0 ..< 3, role: .keyword, layer: .structural)
         ]
         let merged = HighlightMerger.merge(tokens, sourceByteCount: 3)
         #expect(merged.count == 1)
@@ -99,8 +99,8 @@ struct LSPSemanticTokenDecoderTests {
         // When structural tokens are empty, lexical tokens should still provide
         // styling for known keywords. This tests the three-layer model.
         let lexicalTokens = [
-            HighlightToken(byteRange: 0..<3, role: .keyword, layer: .lexical),
-            HighlightToken(byteRange: 4..<9, role: .string, layer: .lexical),
+            HighlightToken(byteRange: 0 ..< 3, role: .keyword, layer: .lexical),
+            HighlightToken(byteRange: 4 ..< 9, role: .string, layer: .lexical)
         ]
         let merged = HighlightMerger.merge(lexicalTokens, sourceByteCount: 10)
         #expect(merged.count == 2)
@@ -111,8 +111,8 @@ struct LSPSemanticTokenDecoderTests {
     @Test
     func `Structural tokens override lexical baseline`() {
         let tokens = [
-            HighlightToken(byteRange: 0..<3, role: .keyword, layer: .lexical),
-            HighlightToken(byteRange: 0..<3, role: .keywordFunction, layer: .structural),
+            HighlightToken(byteRange: 0 ..< 3, role: .keyword, layer: .lexical),
+            HighlightToken(byteRange: 0 ..< 3, role: .keywordFunction, layer: .structural)
         ]
         let merged = HighlightMerger.merge(tokens, sourceByteCount: 3)
         #expect(merged.count == 1)
@@ -122,9 +122,11 @@ struct LSPSemanticTokenDecoderTests {
     @Test
     func `Delta insert appends data`() {
         let previous: [UInt32] = [0, 0, 3, 0, 0]
-        let edits = [LSPSemanticTokenDecoder.SemanticTokenEdit(
-            start: 5, deleteCount: 0, data: [1, 0, 3, 1, 0]
-        )]
+        let edits = [
+            LSPSemanticTokenDecoder.SemanticTokenEdit(
+                start: 5, deleteCount: 0, data: [1, 0, 3, 1, 0]
+            )
+        ]
         let result = LSPSemanticTokenDecoder.applyDelta(previous: previous, edits: edits)
         #expect(result == [0, 0, 3, 0, 0, 1, 0, 3, 1, 0])
     }
@@ -132,9 +134,11 @@ struct LSPSemanticTokenDecoderTests {
     @Test
     func `Delta delete removes data`() {
         let previous: [UInt32] = [0, 0, 3, 0, 0, 1, 0, 3, 1, 0]
-        let edits = [LSPSemanticTokenDecoder.SemanticTokenEdit(
-            start: 5, deleteCount: 5, data: []
-        )]
+        let edits = [
+            LSPSemanticTokenDecoder.SemanticTokenEdit(
+                start: 5, deleteCount: 5, data: []
+            )
+        ]
         let result = LSPSemanticTokenDecoder.applyDelta(previous: previous, edits: edits)
         #expect(result == [0, 0, 3, 0, 0])
     }
@@ -142,9 +146,11 @@ struct LSPSemanticTokenDecoderTests {
     @Test
     func `Delta replace modifies data`() {
         let previous: [UInt32] = [0, 0, 3, 0, 0]
-        let edits = [LSPSemanticTokenDecoder.SemanticTokenEdit(
-            start: 2, deleteCount: 1, data: [5]
-        )]
+        let edits = [
+            LSPSemanticTokenDecoder.SemanticTokenEdit(
+                start: 2, deleteCount: 1, data: [5]
+            )
+        ]
         let result = LSPSemanticTokenDecoder.applyDelta(previous: previous, edits: edits)
         #expect(result == [0, 0, 5, 0, 0])
     }
@@ -159,9 +165,11 @@ struct LSPSemanticTokenDecoderTests {
         #expect(state.data.count == 10)
 
         // Apply delta: replace second token's length (index 7) from 5 to 8
-        state.applyDelta(resultId: "2", edits: [
-            LSPSemanticTokenDecoder.SemanticTokenEdit(start: 7, deleteCount: 1, data: [8])
-        ])
+        state.applyDelta(
+            resultId: "2",
+            edits: [
+                LSPSemanticTokenDecoder.SemanticTokenEdit(start: 7, deleteCount: 1, data: [8])
+            ])
         #expect(state.resultId == "2")
         #expect(state.data == [0, 0, 3, 0, 0, 1, 0, 8, 1, 0])
     }
@@ -171,7 +179,7 @@ struct LSPSemanticTokenDecoderTests {
         let previous: [UInt32] = [0, 0, 3, 0, 0, 1, 0, 5, 1, 0]
         let edits = [
             LSPSemanticTokenDecoder.SemanticTokenEdit(start: 2, deleteCount: 1, data: [4]),
-            LSPSemanticTokenDecoder.SemanticTokenEdit(start: 7, deleteCount: 1, data: [8]),
+            LSPSemanticTokenDecoder.SemanticTokenEdit(start: 7, deleteCount: 1, data: [8])
         ]
         let result = LSPSemanticTokenDecoder.applyDelta(previous: previous, edits: edits)
         #expect(result == [0, 0, 4, 0, 0, 1, 0, 8, 1, 0])

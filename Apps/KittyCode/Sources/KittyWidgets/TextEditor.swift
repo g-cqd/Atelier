@@ -117,8 +117,9 @@ public struct TextEditor: View, Sendable {
         whitespaceConfig: WhitespaceRenderer.Config = .disabled,
         wrapLayoutCache: WrapLayoutCache? = nil
     ) {
-        let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(
-            String.init)
+        let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
+            .map(
+                String.init)
         self.source = ArrayDocumentSource(lines)
         self.lineSpans = lines.map { _ in spans }
         self.scrollOffset = scrollOffset
@@ -259,7 +260,7 @@ public struct TextEditor: View, Sendable {
     public var body: Never { fatalError() }
 
     public var lines: [String] {
-        source.lines(in: 0..<source.lineCount)
+        source.lines(in: 0 ..< source.lineCount)
     }
 
     public var lineCount: Int {

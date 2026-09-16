@@ -15,7 +15,6 @@ import Testing
 @Suite
 @MainActor
 struct MouseAndContextMenuRegressionTests {
-
     private func makeSUT(
         fileContent: [String] = [""],
         columns: Int = 80,
@@ -57,9 +56,10 @@ struct MouseAndContextMenuRegressionTests {
         let sut = makeSUT(columns: 40, rows: 10)
         sut.state.treePanelWidth = 10
         sut.state.mode = .tree
-        sut.state.treeNodes = (0..<5).map { i in
-            FileNode(name: "file\(i).txt", path: "/file\(i).txt", isDirectory: false)
-        }
+        sut.state.treeNodes = (0 ..< 5)
+            .map { i in
+                FileNode(name: "file\(i).txt", path: "/file\(i).txt", isDirectory: false)
+            }
         sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
 
         // Mouse row 1 (1-based) = screen row 0 = contentStartRow
@@ -99,7 +99,7 @@ struct MouseAndContextMenuRegressionTests {
                 "Duplicate…",
                 "Move…",
                 "Delete…",
-                "Save Here…",
+                "Save Here…"
             ])
         #expect(sut.state.bufferManager.count == 0)
     }
@@ -118,13 +118,17 @@ struct MouseAndContextMenuRegressionTests {
         )
 
         let click = try #require(
-            (1...10).lazy.compactMap { row in
-                (1...40).lazy.compactMap { col in
-                    let mouse = MouseEvent(button: .left, row: row, col: col, kind: .press)
-                    return contextMenuItemIndex(at: mouse, state: sut.state, columns: 40, rows: 10)
-                        == 0 ? mouse : nil
-                }.first
-            }.first
+            (1 ... 10).lazy
+                .compactMap { row in
+                    (1 ... 40).lazy
+                        .compactMap { col in
+                            let mouse = MouseEvent(button: .left, row: row, col: col, kind: .press)
+                            return contextMenuItemIndex(at: mouse, state: sut.state, columns: 40, rows: 10)
+                                == 0 ? mouse : nil
+                        }
+                        .first
+                }
+                .first
         )
 
         handleMouse(

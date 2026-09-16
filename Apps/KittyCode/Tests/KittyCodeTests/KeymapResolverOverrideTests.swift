@@ -6,7 +6,6 @@ import Testing
 
 @Suite
 struct KeymapResolverOverrideTests {
-
     private func stroke(_ keyCode: UInt32, _ modifiers: KeyModifiers = []) -> KeyStroke {
         KeyStroke(keyCode: keyCode, modifiers: modifiers)
     }

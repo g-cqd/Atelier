@@ -77,7 +77,7 @@ struct KittyCodeSyntaxWiringTests {
         state.highlightedLines = [
             [StyledSpan(text: "stale-first", style: .default)],
             [StyledSpan(text: "stale-second", style: .default)],
-            [StyledSpan(text: "tail-sentinel", style: .default)],
+            [StyledSpan(text: "tail-sentinel", style: .default)]
         ]
         state.cursorRow = 1
         state.cursorCol = 0

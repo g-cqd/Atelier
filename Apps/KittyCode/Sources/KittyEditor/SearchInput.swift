@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable file_length
 import KittyApp
 public import KittyCodecs
 import KittyInput
@@ -21,7 +23,7 @@ public func openInFileSearch(state: EditorState) {
             let startIdx = line.index(line.startIndex, offsetBy: min(start.col, line.count))
             let endIdx = line.index(line.startIndex, offsetBy: min(end.col, line.count))
             if startIdx < endIdx {
-                prefill = String(line[startIdx..<endIdx])
+                prefill = String(line[startIdx ..< endIdx])
             }
         }
     }
@@ -50,32 +52,46 @@ public func handleSearchKey(
     _ key: KeyEvent, state: EditorState, pipeline: RenderPipeline
 ) -> Bool {
     switch key.keyCode {
-    case AsciiKey.escape:
-        state.inFileSearch = nil
-        return true
-
-    case Key.enter.rawValue, Key.enterAlt.rawValue:
-        if key.modifiers.contains(.shift) {
-            stepSearchMatch(direction: .previous, state: state, pipeline: pipeline)
-        } else {
-            stepSearchMatch(direction: .next, state: state, pipeline: pipeline)
-        }
-        return true
-
-    case Key.up.rawValue:
-        stepSearchMatch(direction: .previous, state: state, pipeline: pipeline)
-        return true
-
-    case Key.down.rawValue:
-        stepSearchMatch(direction: .next, state: state, pipeline: pipeline)
-        return true
-
-    case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
-        guard var search = state.inFileSearch else { return true }
-        if search.query.isEmpty {
+        case AsciiKey.escape:
             state.inFileSearch = nil
-        } else {
-            search.query.removeLast()
+            return true
+
+        case Key.enter.rawValue, Key.enterAlt.rawValue:
+            if key.modifiers.contains(.shift) {
+                stepSearchMatch(direction: .previous, state: state, pipeline: pipeline)
+            } else {
+                stepSearchMatch(direction: .next, state: state, pipeline: pipeline)
+            }
+            return true
+
+        case Key.up.rawValue:
+            stepSearchMatch(direction: .previous, state: state, pipeline: pipeline)
+            return true
+
+        case Key.down.rawValue:
+            stepSearchMatch(direction: .next, state: state, pipeline: pipeline)
+            return true
+
+        case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
+            guard var search = state.inFileSearch else { return true }
+            if search.query.isEmpty {
+                state.inFileSearch = nil
+            } else {
+                search.query.removeLast()
+                executeSearch(&search, lines: state.fileContent)
+                search.activeMatchIndex = nearestMatchIndex(
+                    from: state.cursorRow, col: state.cursorCol, in: search.matches)
+                state.inFileSearch = search
+                if let match = search.activeMatch {
+                    jumpToMatch(match, state: state, pipeline: pipeline)
+                }
+            }
+            return true
+
+        default:
+            guard let text = textInsertion(for: key, allowTab: false) else { return true }
+            guard var search = state.inFileSearch else { return true }
+            search.query.append(text)
             executeSearch(&search, lines: state.fileContent)
             search.activeMatchIndex = nearestMatchIndex(
                 from: state.cursorRow, col: state.cursorCol, in: search.matches)
@@ -83,21 +99,7 @@ public func handleSearchKey(
             if let match = search.activeMatch {
                 jumpToMatch(match, state: state, pipeline: pipeline)
             }
-        }
-        return true
-
-    default:
-        guard let text = textInsertion(for: key, allowTab: false) else { return true }
-        guard var search = state.inFileSearch else { return true }
-        search.query.append(text)
-        executeSearch(&search, lines: state.fileContent)
-        search.activeMatchIndex = nearestMatchIndex(
-            from: state.cursorRow, col: state.cursorCol, in: search.matches)
-        state.inFileSearch = search
-        if let match = search.activeMatch {
-            jumpToMatch(match, state: state, pipeline: pipeline)
-        }
-        return true
+            return true
     }
 }
 
@@ -108,11 +110,11 @@ public func stepSearchMatch(
     guard var search = state.inFileSearch, !search.matches.isEmpty else { return }
 
     switch direction {
-    case .next:
-        search.activeMatchIndex = (search.activeMatchIndex + 1) % search.matches.count
-    case .previous:
-        search.activeMatchIndex =
-            (search.activeMatchIndex - 1 + search.matches.count) % search.matches.count
+        case .next:
+            search.activeMatchIndex = (search.activeMatchIndex + 1) % search.matches.count
+        case .previous:
+            search.activeMatchIndex =
+                (search.activeMatchIndex - 1 + search.matches.count) % search.matches.count
     }
 
     state.inFileSearch = search
@@ -183,38 +185,38 @@ public func handleSearchPanelKey(
         } else {
             // Tab: cycle focus between findField → replaceField (if visible) → resultsList
             switch state.searchPanelFocus {
-            case .findField:
-                if state.inFileSearch?.showReplace == true {
-                    state.searchPanelFocus = .replaceField
-                } else if let search = state.inFileSearch, !search.matches.isEmpty {
-                    state.searchPanelFocus = .resultsList
-                    state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
-                    ensureSearchResultVisible(state: state)
-                }
-            case .replaceField:
-                if let search = state.inFileSearch, !search.matches.isEmpty {
-                    state.searchPanelFocus = .resultsList
-                    state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
-                    ensureSearchResultVisible(state: state)
-                } else {
+                case .findField:
+                    if state.inFileSearch?.showReplace == true {
+                        state.searchPanelFocus = .replaceField
+                    } else if let search = state.inFileSearch, !search.matches.isEmpty {
+                        state.searchPanelFocus = .resultsList
+                        state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
+                        ensureSearchResultVisible(state: state)
+                    }
+                case .replaceField:
+                    if let search = state.inFileSearch, !search.matches.isEmpty {
+                        state.searchPanelFocus = .resultsList
+                        state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
+                        ensureSearchResultVisible(state: state)
+                    } else {
+                        state.searchPanelFocus = .findField
+                        state.searchPanelSelectedIndex = -1
+                    }
+                case .resultsList:
                     state.searchPanelFocus = .findField
                     state.searchPanelSelectedIndex = -1
-                }
-            case .resultsList:
-                state.searchPanelFocus = .findField
-                state.searchPanelSelectedIndex = -1
             }
         }
         return true
     }
 
     switch state.searchPanelFocus {
-    case .findField:
-        return handleSearchPanelFindFieldKey(key, state: state, pipeline: pipeline)
-    case .replaceField:
-        return handleSearchPanelReplaceFieldKey(key, state: state, pipeline: pipeline)
-    case .resultsList:
-        return handleSearchPanelResultsListKey(key, state: state, pipeline: pipeline)
+        case .findField:
+            return handleSearchPanelFindFieldKey(key, state: state, pipeline: pipeline)
+        case .replaceField:
+            return handleSearchPanelReplaceFieldKey(key, state: state, pipeline: pipeline)
+        case .resultsList:
+            return handleSearchPanelResultsListKey(key, state: state, pipeline: pipeline)
     }
 }
 
@@ -223,56 +225,74 @@ private func handleSearchPanelFindFieldKey(
     _ key: KeyEvent, state: EditorState, pipeline: RenderPipeline
 ) -> Bool {
     switch key.keyCode {
-    case AsciiKey.escape:
-        state.inFileSearch = nil
-        state.workspaceSearchTask?.cancel()
-        state.workspaceSearchTask = nil
-        state.workspaceSearchResults = []
-        state.isSearchingWorkspace = false
-        state.mode = .editor
-        return true
+        case AsciiKey.escape:
+            state.inFileSearch = nil
+            state.workspaceSearchTask?.cancel()
+            state.workspaceSearchTask = nil
+            state.workspaceSearchResults = []
+            state.isSearchingWorkspace = false
+            state.mode = .editor
+            return true
 
-    case Key.enter.rawValue, Key.enterAlt.rawValue:
-        if state.searchTarget == .currentFile {
-            if let search = state.inFileSearch, !search.matches.isEmpty {
-                state.searchPanelFocus = .resultsList
-                state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
-                state.searchPanelScrollOffset = 0
-                ensureSearchResultVisible(state: state)
+        case Key.enter.rawValue, Key.enterAlt.rawValue:
+            if state.searchTarget == .currentFile {
+                if let search = state.inFileSearch, !search.matches.isEmpty {
+                    state.searchPanelFocus = .resultsList
+                    state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
+                    state.searchPanelScrollOffset = 0
+                    ensureSearchResultVisible(state: state)
+                }
+            } else {
+                if !state.workspaceSearchResults.isEmpty {
+                    state.searchPanelFocus = .resultsList
+                    state.searchPanelSelectedIndex = 0
+                    state.searchPanelScrollOffset = 0
+                }
             }
-        } else {
-            if !state.workspaceSearchResults.isEmpty {
-                state.searchPanelFocus = .resultsList
-                state.searchPanelSelectedIndex = 0
-                state.searchPanelScrollOffset = 0
-            }
-        }
-        return true
+            return true
 
-    case Key.down.rawValue:
-        if state.searchTarget == .currentFile {
-            if let search = state.inFileSearch, !search.matches.isEmpty {
-                state.searchPanelFocus = .resultsList
-                state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
-                state.searchPanelScrollOffset = 0
-                ensureSearchResultVisible(state: state)
+        case Key.down.rawValue:
+            if state.searchTarget == .currentFile {
+                if let search = state.inFileSearch, !search.matches.isEmpty {
+                    state.searchPanelFocus = .resultsList
+                    state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
+                    state.searchPanelScrollOffset = 0
+                    ensureSearchResultVisible(state: state)
+                }
+            } else {
+                if !state.workspaceSearchResults.isEmpty {
+                    state.searchPanelFocus = .resultsList
+                    state.searchPanelSelectedIndex = 0
+                    state.searchPanelScrollOffset = 0
+                }
             }
-        } else {
-            if !state.workspaceSearchResults.isEmpty {
-                state.searchPanelFocus = .resultsList
-                state.searchPanelSelectedIndex = 0
+            return true
+
+        case Key.up.rawValue:
+            return true
+
+        case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
+            guard var search = state.inFileSearch else { return true }
+            if !search.query.isEmpty {
+                search.query.removeLast()
+                executeSearch(&search, lines: state.fileContent)
+                search.activeMatchIndex = nearestMatchIndex(
+                    from: state.cursorRow, col: state.cursorCol, in: search.matches)
+                state.inFileSearch = search
                 state.searchPanelScrollOffset = 0
+                if let match = search.activeMatch {
+                    jumpToMatch(match, state: state, pipeline: pipeline)
+                }
+                if state.searchTarget == .workspace {
+                    triggerWorkspaceSearchDebounced(state: state)
+                }
             }
-        }
-        return true
+            return true
 
-    case Key.up.rawValue:
-        return true
-
-    case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
-        guard var search = state.inFileSearch else { return true }
-        if !search.query.isEmpty {
-            search.query.removeLast()
+        default:
+            guard let text = textInsertion(for: key, allowTab: false) else { return true }
+            guard var search = state.inFileSearch else { return true }
+            search.query.append(text)
             executeSearch(&search, lines: state.fileContent)
             search.activeMatchIndex = nearestMatchIndex(
                 from: state.cursorRow, col: state.cursorCol, in: search.matches)
@@ -284,25 +304,7 @@ private func handleSearchPanelFindFieldKey(
             if state.searchTarget == .workspace {
                 triggerWorkspaceSearchDebounced(state: state)
             }
-        }
-        return true
-
-    default:
-        guard let text = textInsertion(for: key, allowTab: false) else { return true }
-        guard var search = state.inFileSearch else { return true }
-        search.query.append(text)
-        executeSearch(&search, lines: state.fileContent)
-        search.activeMatchIndex = nearestMatchIndex(
-            from: state.cursorRow, col: state.cursorCol, in: search.matches)
-        state.inFileSearch = search
-        state.searchPanelScrollOffset = 0
-        if let match = search.activeMatch {
-            jumpToMatch(match, state: state, pipeline: pipeline)
-        }
-        if state.searchTarget == .workspace {
-            triggerWorkspaceSearchDebounced(state: state)
-        }
-        return true
+            return true
     }
 }
 
@@ -311,39 +313,39 @@ private func handleSearchPanelReplaceFieldKey(
     _ key: KeyEvent, state: EditorState, pipeline: RenderPipeline
 ) -> Bool {
     switch key.keyCode {
-    case AsciiKey.escape:
-        state.searchPanelFocus = .findField
-        state.searchPanelSelectedIndex = -1
-        return true
+        case AsciiKey.escape:
+            state.searchPanelFocus = .findField
+            state.searchPanelSelectedIndex = -1
+            return true
 
-    case Key.enter.rawValue, Key.enterAlt.rawValue:
-        // Enter in replace field: replace current match
-        replaceCurrentMatch(state: state, pipeline: pipeline)
-        return true
+        case Key.enter.rawValue, Key.enterAlt.rawValue:
+            // Enter in replace field: replace current match
+            replaceCurrentMatch(state: state, pipeline: pipeline)
+            return true
 
-    case Key.up.rawValue:
-        state.searchPanelFocus = .findField
-        state.searchPanelSelectedIndex = -1
-        return true
+        case Key.up.rawValue:
+            state.searchPanelFocus = .findField
+            state.searchPanelSelectedIndex = -1
+            return true
 
-    case Key.down.rawValue:
-        if let search = state.inFileSearch, !search.matches.isEmpty {
-            state.searchPanelFocus = .resultsList
-            state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
-            ensureSearchResultVisible(state: state)
-        }
-        return true
+        case Key.down.rawValue:
+            if let search = state.inFileSearch, !search.matches.isEmpty {
+                state.searchPanelFocus = .resultsList
+                state.searchPanelSelectedIndex = max(0, search.activeMatchIndex)
+                ensureSearchResultVisible(state: state)
+            }
+            return true
 
-    case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
-        if state.inFileSearch != nil, !(state.inFileSearch?.replaceText.isEmpty ?? true) {
-            state.inFileSearch?.replaceText.removeLast()
-        }
-        return true
+        case Key.backspace.rawValue, Key.backspaceAlt.rawValue:
+            if state.inFileSearch != nil, !(state.inFileSearch?.replaceText.isEmpty ?? true) {
+                state.inFileSearch?.replaceText.removeLast()
+            }
+            return true
 
-    default:
-        guard let text = textInsertion(for: key, allowTab: false) else { return true }
-        state.inFileSearch?.replaceText.append(text)
-        return true
+        default:
+            guard let text = textInsertion(for: key, allowTab: false) else { return true }
+            state.inFileSearch?.replaceText.append(text)
+            return true
     }
 }
 
@@ -356,69 +358,69 @@ private func handleSearchPanelResultsListKey(
     }
 
     switch key.keyCode {
-    case AsciiKey.escape:
-        state.searchPanelFocus = .findField
-        state.searchPanelSelectedIndex = -1
-        return true
-
-    case Key.up.rawValue:
-        if state.searchPanelSelectedIndex <= 0 {
+        case AsciiKey.escape:
             state.searchPanelFocus = .findField
             state.searchPanelSelectedIndex = -1
-        } else {
-            state.searchPanelSelectedIndex -= 1
-            state.inFileSearch?.activeMatchIndex = state.searchPanelSelectedIndex
-            ensureSearchResultVisible(state: state)
-            if let match = state.inFileSearch?.activeMatch {
+            return true
+
+        case Key.up.rawValue:
+            if state.searchPanelSelectedIndex <= 0 {
+                state.searchPanelFocus = .findField
+                state.searchPanelSelectedIndex = -1
+            } else {
+                state.searchPanelSelectedIndex -= 1
+                state.inFileSearch?.activeMatchIndex = state.searchPanelSelectedIndex
+                ensureSearchResultVisible(state: state)
+                if let match = state.inFileSearch?.activeMatch {
+                    jumpToMatch(match, state: state, pipeline: pipeline)
+                }
+            }
+            return true
+
+        case Key.down.rawValue:
+            let maxIdx = (state.inFileSearch?.matches.count ?? 1) - 1
+            if state.searchPanelSelectedIndex < maxIdx {
+                state.searchPanelSelectedIndex += 1
+                state.inFileSearch?.activeMatchIndex = state.searchPanelSelectedIndex
+                ensureSearchResultVisible(state: state)
+                if let match = state.inFileSearch?.activeMatch {
+                    jumpToMatch(match, state: state, pipeline: pipeline)
+                }
+            }
+            return true
+
+        case Key.enter.rawValue, Key.enterAlt.rawValue:
+            if let search = state.inFileSearch,
+                state.searchPanelSelectedIndex >= 0,
+                state.searchPanelSelectedIndex < search.matches.count
+            {
+                let match = search.matches[state.searchPanelSelectedIndex]
+                state.cursorRow = match.row
+                state.cursorCol = match.colStart
+                state.mode = .editor
+                ensureEditorVisibleFull(state: state, pipeline: pipeline)
+            }
+            return true
+
+        default:
+            // Printable chars: return to query field and append
+            guard let text = textInsertion(for: key, allowTab: false) else { return true }
+            state.searchPanelFocus = .findField
+            state.searchPanelSelectedIndex = -1
+            guard var search = state.inFileSearch else { return true }
+            search.query.append(text)
+            executeSearch(&search, lines: state.fileContent)
+            search.activeMatchIndex = nearestMatchIndex(
+                from: state.cursorRow, col: state.cursorCol, in: search.matches)
+            state.inFileSearch = search
+            state.searchPanelScrollOffset = 0
+            if let match = search.activeMatch {
                 jumpToMatch(match, state: state, pipeline: pipeline)
             }
-        }
-        return true
-
-    case Key.down.rawValue:
-        let maxIdx = (state.inFileSearch?.matches.count ?? 1) - 1
-        if state.searchPanelSelectedIndex < maxIdx {
-            state.searchPanelSelectedIndex += 1
-            state.inFileSearch?.activeMatchIndex = state.searchPanelSelectedIndex
-            ensureSearchResultVisible(state: state)
-            if let match = state.inFileSearch?.activeMatch {
-                jumpToMatch(match, state: state, pipeline: pipeline)
+            if state.searchTarget == .workspace {
+                triggerWorkspaceSearchDebounced(state: state)
             }
-        }
-        return true
-
-    case Key.enter.rawValue, Key.enterAlt.rawValue:
-        if let search = state.inFileSearch,
-            state.searchPanelSelectedIndex >= 0,
-            state.searchPanelSelectedIndex < search.matches.count
-        {
-            let match = search.matches[state.searchPanelSelectedIndex]
-            state.cursorRow = match.row
-            state.cursorCol = match.colStart
-            state.mode = .editor
-            ensureEditorVisibleFull(state: state, pipeline: pipeline)
-        }
-        return true
-
-    default:
-        // Printable chars: return to query field and append
-        guard let text = textInsertion(for: key, allowTab: false) else { return true }
-        state.searchPanelFocus = .findField
-        state.searchPanelSelectedIndex = -1
-        guard var search = state.inFileSearch else { return true }
-        search.query.append(text)
-        executeSearch(&search, lines: state.fileContent)
-        search.activeMatchIndex = nearestMatchIndex(
-            from: state.cursorRow, col: state.cursorCol, in: search.matches)
-        state.inFileSearch = search
-        state.searchPanelScrollOffset = 0
-        if let match = search.activeMatch {
-            jumpToMatch(match, state: state, pipeline: pipeline)
-        }
-        if state.searchTarget == .workspace {
-            triggerWorkspaceSearchDebounced(state: state)
-        }
-        return true
+            return true
     }
 }
 
@@ -429,48 +431,48 @@ private func handleWorkspaceResultsListKey(
     let flatCount = workspaceFlatResultCount(state: state)
 
     switch key.keyCode {
-    case AsciiKey.escape:
-        state.searchPanelFocus = .findField
-        state.searchPanelSelectedIndex = -1
-        return true
-
-    case Key.up.rawValue:
-        if state.searchPanelSelectedIndex <= 0 {
+        case AsciiKey.escape:
             state.searchPanelFocus = .findField
             state.searchPanelSelectedIndex = -1
-        } else {
-            state.searchPanelSelectedIndex -= 1
-            ensureSearchResultVisible(state: state)
-        }
-        return true
+            return true
 
-    case Key.down.rawValue:
-        if state.searchPanelSelectedIndex < flatCount - 1 {
-            state.searchPanelSelectedIndex += 1
-            ensureSearchResultVisible(state: state)
-        }
-        return true
+        case Key.up.rawValue:
+            if state.searchPanelSelectedIndex <= 0 {
+                state.searchPanelFocus = .findField
+                state.searchPanelSelectedIndex = -1
+            } else {
+                state.searchPanelSelectedIndex -= 1
+                ensureSearchResultVisible(state: state)
+            }
+            return true
 
-    case Key.enter.rawValue, Key.enterAlt.rawValue:
-        if let (filePath, match) = workspaceFlatResult(
-            at: state.searchPanelSelectedIndex, state: state)
-        {
-            openWorkspaceSearchResult(
-                filePath: filePath, match: match, state: state, pipeline: pipeline)
-        }
-        return true
+        case Key.down.rawValue:
+            if state.searchPanelSelectedIndex < flatCount - 1 {
+                state.searchPanelSelectedIndex += 1
+                ensureSearchResultVisible(state: state)
+            }
+            return true
 
-    default:
-        guard let text = textInsertion(for: key, allowTab: false) else { return true }
-        state.searchPanelFocus = .findField
-        state.searchPanelSelectedIndex = -1
-        guard var search = state.inFileSearch else { return true }
-        search.query.append(text)
-        executeSearch(&search, lines: state.fileContent)
-        state.inFileSearch = search
-        state.searchPanelScrollOffset = 0
-        triggerWorkspaceSearchDebounced(state: state)
-        return true
+        case Key.enter.rawValue, Key.enterAlt.rawValue:
+            if let (filePath, match) = workspaceFlatResult(
+                at: state.searchPanelSelectedIndex, state: state)
+            {
+                openWorkspaceSearchResult(
+                    filePath: filePath, match: match, state: state, pipeline: pipeline)
+            }
+            return true
+
+        default:
+            guard let text = textInsertion(for: key, allowTab: false) else { return true }
+            state.searchPanelFocus = .findField
+            state.searchPanelSelectedIndex = -1
+            guard var search = state.inFileSearch else { return true }
+            search.query.append(text)
+            executeSearch(&search, lines: state.fileContent)
+            state.inFileSearch = search
+            state.searchPanelScrollOffset = 0
+            triggerWorkspaceSearchDebounced(state: state)
+            return true
     }
 }
 
@@ -574,10 +576,8 @@ public func triggerWorkspaceSearch(state: EditorState) {
 
     // Build open buffers dict
     var openBuffers: [String: [String]] = [:]
-    for buffer in state.bufferManager.buffers {
-        if !buffer.filePath.isEmpty {
-            openBuffers[buffer.filePath] = buffer.textBuffer.lines
-        }
+    for buffer in state.bufferManager.buffers where !buffer.filePath.isEmpty {
+        openBuffers[buffer.filePath] = buffer.textBuffer.lines
     }
 
     let rootPath = state.rootPath
@@ -585,9 +585,11 @@ public func triggerWorkspaceSearch(state: EditorState) {
 
     state.workspaceSearchTask = Task { @MainActor in
         // Enumerate files off the main actor
-        let files = await Task.detached {
-            enumerateSearchableFiles(rootPath: rootPath)
-        }.value
+        let files =
+            await Task.detached {
+                enumerateSearchableFiles(rootPath: rootPath)
+            }
+            .value
 
         guard !Task.isCancelled else { return }
 
@@ -598,15 +600,17 @@ public func triggerWorkspaceSearch(state: EditorState) {
             return
         }
 
-        let result = await Task.detached { [openBuffers] in
-            await searchWorkspace(
-                pattern: pattern,
-                files: files,
-                openBuffers: openBuffers,
-                maxResults: maxResults,
-                onProgress: { _ in }
-            )
-        }.value
+        let result =
+            await Task.detached { [openBuffers] in
+                await searchWorkspace(
+                    pattern: pattern,
+                    files: files,
+                    openBuffers: openBuffers,
+                    maxResults: maxResults,
+                    onProgress: { _ in }
+                )
+            }
+            .value
 
         guard !Task.isCancelled else { return }
 

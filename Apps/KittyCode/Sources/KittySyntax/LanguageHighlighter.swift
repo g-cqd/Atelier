@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable file_length function_body_length type_body_length
 import Foundation
 import KittyGrammar
 import KittyParser
@@ -120,37 +122,37 @@ public enum LanguageHighlighter: Sendable {
             let interval = highlighterSignposter.beginInterval("highlightDocument")
             defer { highlighterSignposter.endInterval("highlightDocument", interval) }
             switch strategy {
-            case .grammar(let grammarSession):
-                guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
-                    return fallbackHighlightDocument(
-                        source: source, language: language, theme: theme)
-                }
-                do {
-                    let tree = try grammarSession.parseTree(for: source)
-                    guard tree.root.type != "_start" else {
-                        strategy = .fallback
+                case .grammar(let grammarSession):
+                    guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
                         return fallbackHighlightDocument(
                             source: source, language: language, theme: theme)
                     }
-                    let spans = grammarSession.highlighter.highlight(
-                        source: source,
-                        tree: tree,
-                        query: grammarSession.query,
-                        scratch: grammarSession.scratch
-                    )
-                    return splitDocumentSpans(
-                        spans,
-                        source: source,
-                        defaultStyle: theme.defaultStyle,
-                        scratch: &splitScratch
-                    )
-                } catch {
-                    return fallbackHighlightDocument(
-                        source: source, language: language, theme: theme)
-                }
+                    do {
+                        let tree = try grammarSession.parseTree(for: source)
+                        guard tree.root.type != "_start" else {
+                            strategy = .fallback
+                            return fallbackHighlightDocument(
+                                source: source, language: language, theme: theme)
+                        }
+                        let spans = grammarSession.highlighter.highlight(
+                            source: source,
+                            tree: tree,
+                            query: grammarSession.query,
+                            scratch: grammarSession.scratch
+                        )
+                        return splitDocumentSpans(
+                            spans,
+                            source: source,
+                            defaultStyle: theme.defaultStyle,
+                            scratch: &splitScratch
+                        )
+                    } catch {
+                        return fallbackHighlightDocument(
+                            source: source, language: language, theme: theme)
+                    }
 
-            case .fallback:
-                return fallbackHighlightDocument(source: source, language: language, theme: theme)
+                case .fallback:
+                    return fallbackHighlightDocument(source: source, language: language, theme: theme)
             }
         }
 
@@ -158,22 +160,22 @@ public enum LanguageHighlighter: Sendable {
         /// Tokens can later be merged with semantic tokens and resolved to styles.
         public func highlightDocumentTokens(source: String) -> [HighlightToken] {
             switch strategy {
-            case .grammar(let gs):
-                guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
-                    return []
-                }
-                do {
-                    let tree = try gs.parseTree(for: source)
-                    guard tree.root.type != "_start" else {
+                case .grammar(let gs):
+                    guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
                         return []
                     }
-                    let matches = QueryMatcher.execute(query: gs.query, tree: tree)
-                    return gs.highlighter.buildTokens(matches: matches, layer: .structural)
-                } catch {
+                    do {
+                        let tree = try gs.parseTree(for: source)
+                        guard tree.root.type != "_start" else {
+                            return []
+                        }
+                        let matches = QueryMatcher.execute(query: gs.query, tree: tree)
+                        return gs.highlighter.buildTokens(matches: matches, layer: .structural)
+                    } catch {
+                        return []
+                    }
+                case .fallback:
                     return []
-                }
-            case .fallback:
-                return []
             }
         }
 
@@ -227,17 +229,18 @@ public enum LanguageHighlighter: Sendable {
                 for span in lineSpans {
                     let byteLen = span.text.utf8.count
                     guard byteLen > 0 else { continue }
-                    let range = byteOffset..<(byteOffset + byteLen)
+                    let range = byteOffset ..< (byteOffset + byteLen)
 
                     // Only emit tokens for non-default-styled spans
                     if span.style != theme.defaultStyle {
                         let role = inferRoleFromStyle(span.style)
-                        tokens.append(HighlightToken(
-                            byteRange: range,
-                            role: role,
-                            layer: .lexical,
-                            priority: 0
-                        ))
+                        tokens.append(
+                            HighlightToken(
+                                byteRange: range,
+                                role: role,
+                                layer: .lexical,
+                                priority: 0
+                            ))
                     }
                     byteOffset += byteLen
                 }
@@ -278,61 +281,61 @@ public enum LanguageHighlighter: Sendable {
             }
 
             switch strategy {
-            case .grammar(let gs):
-                guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
-                    return viewportFallback(source: source, visibleLineRange: visibleLineRange)
-                }
-                do {
-                    let tree = try gs.parseTree(for: source)
-                    guard tree.root.type != "_start" else {
+                case .grammar(let gs):
+                    guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
                         return viewportFallback(source: source, visibleLineRange: visibleLineRange)
                     }
+                    do {
+                        let tree = try gs.parseTree(for: source)
+                        guard tree.root.type != "_start" else {
+                            return viewportFallback(source: source, visibleLineRange: visibleLineRange)
+                        }
 
-                    let byteRange = lineRangeToByteRange(source: source, lineRange: visibleLineRange)
-                    let matches = QueryMatcher.execute(
-                        query: gs.query, tree: tree, byteRange: byteRange)
-                    let tokens = gs.highlighter.buildTokens(matches: matches, layer: .structural)
+                        let byteRange = lineRangeToByteRange(source: source, lineRange: visibleLineRange)
+                        let matches = QueryMatcher.execute(
+                            query: gs.query, tree: tree, byteRange: byteRange)
+                        let tokens = gs.highlighter.buildTokens(matches: matches, layer: .structural)
 
-                    guard !tokens.isEmpty else {
-                        return viewportFallback(source: source, visibleLineRange: visibleLineRange)
-                    }
+                        guard !tokens.isEmpty else {
+                            return viewportFallback(source: source, visibleLineRange: visibleLineRange)
+                        }
 
-                    let resolver = RoleBasedThemeResolver(theme: theme)
-                    let viewportSource = extractViewportSource(
-                        source: source, byteRange: byteRange)
-                    let vpByteCount = viewportSource.utf8.count
-                    let localTokens = tokens.compactMap { token -> HighlightToken? in
-                        let start = token.byteRange.lowerBound - byteRange.lowerBound
-                        let end = token.byteRange.upperBound - byteRange.lowerBound
-                        guard start >= 0, end <= vpByteCount, start < end else { return nil }
-                        return HighlightToken(
-                            byteRange: start..<end,
-                            role: token.role,
-                            modifiers: token.modifiers,
-                            layer: token.layer,
-                            priority: token.priority
+                        let resolver = RoleBasedThemeResolver(theme: theme)
+                        let viewportSource = extractViewportSource(
+                            source: source, byteRange: byteRange)
+                        let vpByteCount = viewportSource.utf8.count
+                        let localTokens = tokens.compactMap { token -> HighlightToken? in
+                            let start = token.byteRange.lowerBound - byteRange.lowerBound
+                            let end = token.byteRange.upperBound - byteRange.lowerBound
+                            guard start >= 0, end <= vpByteCount, start < end else { return nil }
+                            return HighlightToken(
+                                byteRange: start ..< end,
+                                role: token.role,
+                                modifiers: token.modifiers,
+                                layer: token.layer,
+                                priority: token.priority
+                            )
+                        }
+
+                        let merged = HighlightMerger.merge(
+                            localTokens, sourceByteCount: viewportSource.utf8.count)
+                        let spans = HighlightMerger.resolveToSpans(
+                            tokens: merged,
+                            source: viewportSource,
+                            resolver: resolver,
+                            defaultStyle: theme.defaultStyle
                         )
+
+                        var scratch = splitScratch
+                        return splitDocumentSpans(
+                            spans, source: viewportSource, defaultStyle: theme.defaultStyle,
+                            scratch: &scratch)
+                    } catch {
+                        return viewportFallback(source: source, visibleLineRange: visibleLineRange)
                     }
 
-                    let merged = HighlightMerger.merge(
-                        localTokens, sourceByteCount: viewportSource.utf8.count)
-                    let spans = HighlightMerger.resolveToSpans(
-                        tokens: merged,
-                        source: viewportSource,
-                        resolver: resolver,
-                        defaultStyle: theme.defaultStyle
-                    )
-
-                    var scratch = splitScratch
-                    return splitDocumentSpans(
-                        spans, source: viewportSource, defaultStyle: theme.defaultStyle,
-                        scratch: &scratch)
-                } catch {
+                case .fallback:
                     return viewportFallback(source: source, visibleLineRange: visibleLineRange)
-                }
-
-            case .fallback:
-                return viewportFallback(source: source, visibleLineRange: visibleLineRange)
             }
         }
 
@@ -363,9 +366,10 @@ public enum LanguageHighlighter: Sendable {
                     guard byteLen > 0 else { continue }
                     if span.style != theme.defaultStyle {
                         let role = inferRoleFromStyle(span.style)
-                        lexicalTokens.append(HighlightToken(
-                            byteRange: byteOffset..<(byteOffset + byteLen),
-                            role: role, layer: .lexical, priority: 0))
+                        lexicalTokens.append(
+                            HighlightToken(
+                                byteRange: byteOffset ..< (byteOffset + byteLen),
+                                role: role, layer: .lexical, priority: 0))
                     }
                     byteOffset += byteLen
                 }
@@ -381,17 +385,19 @@ public enum LanguageHighlighter: Sendable {
                             let matches = QueryMatcher.execute(
                                 query: gs.query, tree: tree, byteRange: byteRange)
                             let vpCount = viewportSource.utf8.count
-                            structuralTokens = gs.highlighter.buildTokens(
-                                matches: matches, layer: .structural
-                            ).compactMap { token -> HighlightToken? in
-                                let start = token.byteRange.lowerBound - byteRange.lowerBound
-                                let end = token.byteRange.upperBound - byteRange.lowerBound
-                                guard start >= 0, end <= vpCount, start < end else { return nil }
-                                return HighlightToken(
-                                    byteRange: start..<end,
-                                    role: token.role, modifiers: token.modifiers,
-                                    layer: token.layer, priority: token.priority)
-                            }
+                            structuralTokens = gs.highlighter
+                                .buildTokens(
+                                    matches: matches, layer: .structural
+                                )
+                                .compactMap { token -> HighlightToken? in
+                                    let start = token.byteRange.lowerBound - byteRange.lowerBound
+                                    let end = token.byteRange.upperBound - byteRange.lowerBound
+                                    guard start >= 0, end <= vpCount, start < end else { return nil }
+                                    return HighlightToken(
+                                        byteRange: start ..< end,
+                                        role: token.role, modifiers: token.modifiers,
+                                        layer: token.layer, priority: token.priority)
+                                }
                         }
                     }
                 }
@@ -408,7 +414,7 @@ public enum LanguageHighlighter: Sendable {
                         return nil
                     }
                     return HighlightToken(
-                        byteRange: start..<end, role: token.role,
+                        byteRange: start ..< end, role: token.role,
                         modifiers: token.modifiers, layer: token.layer, priority: token.priority)
                 }
             }
@@ -450,7 +456,7 @@ public enum LanguageHighlighter: Sendable {
                 endByte = utf8.count
             }
 
-            return startByte..<endByte
+            return startByte ..< endByte
         }
 
         private func extractViewportSource(source: String, byteRange: Range<Int>) -> String {
@@ -458,7 +464,7 @@ public enum LanguageHighlighter: Sendable {
             let start = max(byteRange.lowerBound, 0)
             let end = min(byteRange.upperBound, utf8.count)
             guard start < end else { return "" }
-            return String(decoding: utf8[start..<end], as: UTF8.self)
+            return String(decoding: utf8[start ..< end], as: UTF8.self)
         }
 
         private func extractVisibleLines(source: String, visibleLineRange: Range<Int>) -> [String] {
@@ -467,7 +473,7 @@ public enum LanguageHighlighter: Sendable {
             let start = max(visibleLineRange.lowerBound, 0)
             let end = min(visibleLineRange.upperBound, allLines.count)
             guard start < end else { return [""] }
-            return Array(allLines[start..<end])
+            return Array(allLines[start ..< end])
         }
 
         private func viewportFallback(
@@ -480,14 +486,14 @@ public enum LanguageHighlighter: Sendable {
         public func highlightLines<C: Collection>(_ lines: C) -> [[StyledSpan]]
         where C.Element == String {
             switch strategy {
-            case .fallback:
-                if lines.isEmpty {
-                    return [fallbackHighlightLine("", language: language, theme: theme)]
-                }
-                return lines.map { fallbackHighlightLine($0, language: language, theme: theme) }
-            case .grammar:
-                let source = lines.isEmpty ? "" : lines.joined(separator: "\n")
-                return highlightDocument(source: source)
+                case .fallback:
+                    if lines.isEmpty {
+                        return [fallbackHighlightLine("", language: language, theme: theme)]
+                    }
+                    return lines.map { fallbackHighlightLine($0, language: language, theme: theme) }
+                case .grammar:
+                    let source = lines.isEmpty ? "" : lines.joined(separator: "\n")
+                    return highlightDocument(source: source)
             }
         }
     }
@@ -567,7 +573,8 @@ public enum LanguageHighlighter: Sendable {
         await Task.detached(priority: .userInitiated) {
             SyntaxArtifactsCache.loadIfNeeded(for: language)
             return SyntaxArtifactsCache.artifacts(for: language) != nil
-        }.value
+        }
+        .value
     }
 
     @discardableResult
@@ -748,20 +755,21 @@ private func splitDocumentSpans(
         let text = span.text
         var searchStart = text.startIndex
         while searchStart < text.endIndex {
-            if let nlIndex = text[searchStart...].firstIndex(of: "\n") {
-                if nlIndex > searchStart {
-                    scratch.lines[scratch.lines.count - 1].append(
-                        StyledSpan(text: String(text[searchStart..<nlIndex]), style: span.style)
+            guard let nlIndex = text[searchStart...].firstIndex(of: "\n") else {
+                scratch.lines[scratch.lines.count - 1]
+                    .append(
+                        StyledSpan(text: String(text[searchStart...]), style: span.style)
                     )
-                }
-                scratch.lines.append([])
-                searchStart = text.index(after: nlIndex)
-            } else {
-                scratch.lines[scratch.lines.count - 1].append(
-                    StyledSpan(text: String(text[searchStart...]), style: span.style)
-                )
                 break
             }
+            if nlIndex > searchStart {
+                scratch.lines[scratch.lines.count - 1]
+                    .append(
+                        StyledSpan(text: String(text[searchStart ..< nlIndex]), style: span.style)
+                    )
+            }
+            scratch.lines.append([])
+            searchStart = text.index(after: nlIndex)
         }
     }
 
@@ -781,11 +789,11 @@ private enum HighlightLexicon {
         "del", "True", "False", "None", "true", "false", "null", "nil",
         "async", "await", "self", "then", "fi", "done", "esac", "function",
         "local", "export", "source", "end", "elsif", "unless", "module",
-        "begin", "rescue", "alias", "undef", "repeat", "until",
+        "begin", "rescue", "alias", "undef", "repeat", "until"
     ]
     static let pythonTypes: Set<String> = [
         "int", "float", "str", "bool", "list", "dict", "tuple",
-        "set", "bytes", "type", "object", "range", "table",
+        "set", "bytes", "type", "object", "range", "table"
     ]
     static let javaScriptKeywords: Set<String> = [
         "function", "const", "let", "var", "if", "else", "for", "while",
@@ -799,14 +807,14 @@ private enum HighlightLexicon {
         "package", "func", "go", "defer", "select", "chan", "range",
         "map", "trait", "impl", "match", "mut", "pub", "crate", "where",
         "macro_rules", "unsafe", "extern", "sealed", "record", "when",
-        "companion", "object", "val",
+        "companion", "object", "val"
     ]
     static let javaScriptTypes: Set<String> = [
         "string", "number", "boolean", "any", "void", "never",
         "unknown", "undefined", "null", "Array", "Promise", "Map", "Set",
         "int", "char", "float", "double", "long", "short", "byte",
         "bool", "usize", "isize", "u8", "u16", "u32", "u64", "i8", "i16",
-        "i32", "i64", "String", "Vec", "Result", "Option",
+        "i32", "i64", "String", "Vec", "Result", "Option"
     ]
     static let swiftKeywords: Set<String> = [
         "import", "struct", "class", "enum", "func", "var", "let", "guard", "if", "else", "switch",
@@ -820,7 +828,7 @@ private enum HighlightLexicon {
         "fallthrough", "repeat", "super", "inout", "convenience", "required", "dynamic", "optional",
         "indirect", "nonisolated",
         "consuming", "borrowing", "@MainActor", "@Sendable", "@escaping", "@autoclosure",
-        "@discardableResult",
+        "@discardableResult"
     ]
     static let swiftTypes: Set<String> = [
         "String", "Int", "Bool", "Double", "Float", "Any", "Array", "Dictionary", "Optional",
@@ -830,12 +838,13 @@ private enum HighlightLexicon {
         "Substring", "Set", "ClosedRange", "Range", "Comparable", "Equatable", "Hashable",
         "Codable", "Decodable", "Encodable",
         "Sendable", "Identifiable", "CustomStringConvertible", "View", "Task", "AsyncStream",
-        "MainActor",
+        "MainActor"
     ]
 }
 
 private func fallbackHighlightDocument(source: String, language: String?, theme: Theme)
-    -> [[StyledSpan]] {
+    -> [[StyledSpan]]
+{
     let lines =
         source.isEmpty
         ? [""] : source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
@@ -844,16 +853,16 @@ private func fallbackHighlightDocument(source: String, language: String?, theme:
 
 private func fallbackHighlightLine(_ line: String, language: String?, theme: Theme) -> [StyledSpan] {
     switch language {
-    case "json":
-        return fallbackHighlightJSON(line, theme: theme)
-    case "python", "bash", "ruby", "lua", "toml", "yaml":
-        return fallbackHighlightPython(line, theme: theme)
-    case "javascript", "typescript", "c", "cpp", "css", "go", "java", "kotlin", "rust":
-        return fallbackHighlightJavaScript(line, theme: theme)
-    case "swift":
-        return fallbackHighlightSwift(line, theme: theme)
-    default:
-        return fallbackHighlightGeneric(line, theme: theme)
+        case "json":
+            return fallbackHighlightJSON(line, theme: theme)
+        case "python", "bash", "ruby", "lua", "toml", "yaml":
+            return fallbackHighlightPython(line, theme: theme)
+        case "javascript", "typescript", "c", "cpp", "css", "go", "java", "kotlin", "rust":
+            return fallbackHighlightJavaScript(line, theme: theme)
+        case "swift":
+            return fallbackHighlightSwift(line, theme: theme)
+        default:
+            return fallbackHighlightGeneric(line, theme: theme)
     }
 }
 
@@ -899,14 +908,16 @@ private func fallbackHighlightJSON(_ line: String, theme: Theme) -> [StyledSpan]
             index += 1
             while index < chars.count
                 && (chars[index].isNumber || chars[index] == "." || chars[index] == "e"
-                    || chars[index] == "E" || chars[index] == "+" || chars[index] == "-") {
+                    || chars[index] == "E" || chars[index] == "+" || chars[index] == "-")
+            {
                 token.append(chars[index])
                 index += 1
             }
             spans.append(StyledSpan(text: token, style: numberStyle))
         } else if chars[index...].starts(with: "true".unicodeScalars.map(Character.init))
             || chars[index...].starts(with: "false".unicodeScalars.map(Character.init))
-            || chars[index...].starts(with: "null".unicodeScalars.map(Character.init)) {
+            || chars[index...].starts(with: "null".unicodeScalars.map(Character.init))
+        {
             let keyword = chars[index...].prefix(while: { $0.isLetter })
             let token = String(keyword)
             spans.append(StyledSpan(text: token, style: constantStyle))
@@ -941,7 +952,8 @@ private func fallbackHighlightPython(_ line: String, theme: Theme) -> [StyledSpa
         } else if HighlightLexicon.pythonTypes.contains(current) {
             style = typeStyle
         } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
-            let first = current.first, first.isNumber {
+            let first = current.first, first.isNumber
+        {
             style = numberStyle
         } else {
             style = defaultStyle
@@ -984,7 +996,8 @@ private func fallbackHighlightPython(_ line: String, theme: Theme) -> [StyledSpa
             var token = String(char)
             index += 1
             while index < chars.count
-                && (chars[index].isNumber || chars[index] == "." || chars[index] == "_") {
+                && (chars[index].isNumber || chars[index] == "." || chars[index] == "_")
+            {
                 token.append(chars[index])
                 index += 1
             }
@@ -1025,7 +1038,8 @@ private func fallbackHighlightJavaScript(_ line: String, theme: Theme) -> [Style
         } else if HighlightLexicon.javaScriptTypes.contains(current) {
             style = typeStyle
         } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
-            let first = current.first, first.isNumber {
+            let first = current.first, first.isNumber
+        {
             style = numberStyle
         } else {
             style = defaultStyle
@@ -1072,7 +1086,8 @@ private func fallbackHighlightJavaScript(_ line: String, theme: Theme) -> [Style
             var token = String(char)
             index += 1
             while index < chars.count
-                && (chars[index].isNumber || chars[index] == "." || chars[index] == "_") {
+                && (chars[index].isNumber || chars[index] == "." || chars[index] == "_")
+            {
                 token.append(chars[index])
                 index += 1
             }
@@ -1171,7 +1186,8 @@ private func fallbackHighlightSwift(_ line: String, theme: Theme) -> [StyledSpan
         } else if HighlightLexicon.swiftTypes.contains(current) {
             style = typeStyle
         } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
-            let first = current.first, first.isNumber {
+            let first = current.first, first.isNumber
+        {
             style = numberStyle
         } else {
             style = defaultStyle
@@ -1210,7 +1226,8 @@ private func fallbackHighlightSwift(_ line: String, theme: Theme) -> [StyledSpan
             current = "@"
             index += 1
             while index < chars.count
-                && (chars[index].isLetter || chars[index].isNumber || chars[index] == "_") {
+                && (chars[index].isLetter || chars[index].isNumber || chars[index] == "_")
+            {
                 current.append(chars[index])
                 index += 1
             }

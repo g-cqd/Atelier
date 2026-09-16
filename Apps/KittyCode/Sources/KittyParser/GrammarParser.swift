@@ -62,7 +62,7 @@ extension SyntaxTree {
         // If node is entirely after the edit, shift offsets
         if n.byteRange.lowerBound >= edit.oldEndByte {
             let delta = edit.newEndByte - edit.oldEndByte
-            n.byteRange = (n.byteRange.lowerBound + delta)..<(n.byteRange.upperBound + delta)
+            n.byteRange = (n.byteRange.lowerBound + delta) ..< (n.byteRange.upperBound + delta)
             n.pointRange = shift(n.pointRange, by: edit)
             n.children = n.children.map { applyEdit(to: $0, edit: edit) }
             n.fields = applyEdit(to: n.fields, edit: edit)
@@ -82,7 +82,7 @@ extension SyntaxTree {
                 let delta = edit.newEndByte - edit.oldEndByte
                 newEnd = n.byteRange.upperBound + delta
             }
-            n.byteRange = n.byteRange.lowerBound..<max(n.byteRange.lowerBound, newEnd)
+            n.byteRange = n.byteRange.lowerBound ..< max(n.byteRange.lowerBound, newEnd)
         }
 
         if n.pointRange.upperBound > edit.startPoint {
@@ -92,7 +92,7 @@ extension SyntaxTree {
             } else {
                 newEnd = shift(n.pointRange.upperBound, by: edit)
             }
-            n.pointRange = n.pointRange.lowerBound..<max(n.pointRange.lowerBound, newEnd)
+            n.pointRange = n.pointRange.lowerBound ..< max(n.pointRange.lowerBound, newEnd)
         }
 
         return n
@@ -108,7 +108,7 @@ extension SyntaxTree {
     }
 
     private func shift(_ range: Range<Point>, by edit: TextEdit) -> Range<Point> {
-        shift(range.lowerBound, by: edit)..<shift(range.upperBound, by: edit)
+        shift(range.lowerBound, by: edit) ..< shift(range.upperBound, by: edit)
     }
 
     private func shift(_ point: Point, by edit: TextEdit) -> Point {

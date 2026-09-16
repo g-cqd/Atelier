@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable file_length function_body_length type_body_length
 public import Foundation
 public import KittyCodecs
 import KittyTerminal
@@ -659,8 +661,8 @@ public struct KittyConfig: Codable, Sendable {
     }
 }
 
-public extension KittyConfig.Theme {
-    func resolvedStyle(_ color: ColorRGB?, bold: Bool = false) -> Style? {
+extension KittyConfig.Theme {
+    public func resolvedStyle(_ color: ColorRGB?, bold: Bool = false) -> Style? {
         guard let color else { return nil }
         return Style(fg: color.color, bold: bold)
     }

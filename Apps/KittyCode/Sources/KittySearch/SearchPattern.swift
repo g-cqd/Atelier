@@ -72,17 +72,7 @@ private final class SearchPatternCache: Sendable {
     }
 
     private static func compile(_ query: SearchQuery) -> SearchPattern? {
-
-        if query.isRegex {
-            // Wrap user pattern in a non-capturing group so whole-word
-            // anchoring applies to the entire alternation.
-            let patternText = query.wholeWord ? "\\b(?:\(query.text))\\b" : query.text
-            guard
-                let regex = try? SearchRegex(
-                    pattern: patternText, caseSensitive: query.isCaseSensitive)
-            else { return nil }
-            return .regex(regex)
-        } else {
+        guard query.isRegex else {
             if query.wholeWord {
                 let escaped = NSRegularExpression.escapedPattern(for: query.text)
                 guard
@@ -93,5 +83,13 @@ private final class SearchPatternCache: Sendable {
             }
             return .literal(text: query.text, caseSensitive: query.isCaseSensitive)
         }
+        // Wrap user pattern in a non-capturing group so whole-word
+        // anchoring applies to the entire alternation.
+        let patternText = query.wholeWord ? "\\b(?:\(query.text))\\b" : query.text
+        guard
+            let regex = try? SearchRegex(
+                pattern: patternText, caseSensitive: query.isCaseSensitive)
+        else { return nil }
+        return .regex(regex)
     }
 }

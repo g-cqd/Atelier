@@ -34,8 +34,8 @@ public struct SyntaxNode: Sendable, Equatable {
     public init(
         type: String,
         children: [SyntaxNode] = [],
-        byteRange: Range<Int> = 0..<0,
-        pointRange: Range<Point> = Point.zero..<Point.zero,
+        byteRange: Range<Int> = 0 ..< 0,
+        pointRange: Range<Point> = Point.zero ..< Point.zero,
         fields: [String: [SyntaxNode]] = [:],
         isError: Bool = false,
         isExtra: Bool = false,
@@ -79,7 +79,7 @@ public struct SyntaxNode: Sendable, Equatable {
         let lower = min(max(byteRange.lowerBound, 0), utf8.count)
         let upper = min(max(byteRange.upperBound, 0), utf8.count)
         guard lower < upper else { return "" }
-        let buf = UnsafeBufferPointer(rebasing: utf8[lower..<upper])
+        let buf = UnsafeBufferPointer(rebasing: utf8[lower ..< upper])
         return String(bytes: buf, encoding: .utf8) ?? String(decoding: buf, as: UTF8.self)
     }
 }

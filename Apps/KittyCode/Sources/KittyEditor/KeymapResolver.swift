@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable function_body_length type_body_length
 import KittyCodecs
 import KittyInput
 
@@ -17,10 +19,10 @@ public struct KeymapResolver: Sendable {
         var context: [KeyContext: [KeyStroke: CommandID]] = [:]
 
         switch config.keybindingMode {
-        case .nano, .vim:
-            Self.buildNanoVimDefaults(config: config, global: &global)
-        case .kittycode:
-            Self.buildKittyCodeDefaults(config: config, global: &global)
+            case .nano, .vim:
+                Self.buildNanoVimDefaults(config: config, global: &global)
+            case .kittycode:
+                Self.buildKittyCodeDefaults(config: config, global: &global)
         }
 
         // Editor context bindings
@@ -175,10 +177,8 @@ public struct KeymapResolver: Sendable {
             return .command(command)
         }
 
-        for seq in contextSeqs.keys {
-            if seq.count > strokes.count && Array(seq.prefix(strokes.count)) == strokes {
-                return .partial
-            }
+        for seq in contextSeqs.keys where seq.count > strokes.count && Array(seq.prefix(strokes.count)) == strokes {
+            return .partial
         }
 
         return .none
@@ -206,9 +206,11 @@ public struct KeymapResolver: Sendable {
     ) -> KeyStroke? {
         let matches = bindings.filter { $0.value == command }.map(\.key)
         guard !matches.isEmpty else { return nil }
-        return matches.sorted { a, b in
-            modifierPriority(a.modifiers) < modifierPriority(b.modifiers)
-        }.first
+        return
+            matches.sorted { a, b in
+                modifierPriority(a.modifiers) < modifierPriority(b.modifiers)
+            }
+            .first
     }
 
     private static func modifierPriority(_ mods: KeyModifiers) -> Int {
@@ -418,12 +420,12 @@ public struct KeymapResolver: Sendable {
         _ modifier: KittyConfig.KeybindingsConfig.ShortcutModifier
     ) -> [KeyModifiers] {
         switch modifier {
-        case .command:
-            return [.super, .meta]
-        case .control:
-            return [.ctrl]
-        case .both:
-            return [.super, .meta, .ctrl]
+            case .command:
+                return [.super, .meta]
+            case .control:
+                return [.ctrl]
+            case .both:
+                return [.super, .meta, .ctrl]
         }
     }
 }

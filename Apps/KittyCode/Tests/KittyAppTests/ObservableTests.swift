@@ -5,7 +5,6 @@ import Testing
 @MainActor
 @Suite
 struct ObservableTests {
-
     @MainActor
     final class Counter: ViewModel {
         @Published var value: Int = 0
@@ -31,7 +30,7 @@ struct ObservableTests {
         var invalidations = 0
         sut.invalidate = { invalidations += 1 }
 
-        for _ in 0..<5 {
+        for _ in 0 ..< 5 {
             _ = sut.value
             _ = sut.label
         }

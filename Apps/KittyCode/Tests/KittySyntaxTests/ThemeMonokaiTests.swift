@@ -9,7 +9,6 @@ import Testing
 
 @Suite
 struct ThemeMonokaiTests {
-
     @Test
     func `Monokai returns non-default style for keyword`() {
         let style = Theme.monokai.style(for: "keyword")

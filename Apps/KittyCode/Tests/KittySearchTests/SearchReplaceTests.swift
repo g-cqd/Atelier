@@ -31,7 +31,7 @@ struct SearchReplaceTests {
         let pattern = SearchPattern.literal(text: "hello", caseSensitive: true)
         let matches = [
             SearchMatch(row: 0, colStart: 0, colEnd: 5),
-            SearchMatch(row: 0, colStart: 6, colEnd: 11),
+            SearchMatch(row: 0, colStart: 6, colEnd: 11)
         ]
 
         let (newLines, count) = applyReplacements(
@@ -60,7 +60,7 @@ struct SearchReplaceTests {
         let pattern = SearchPattern.literal(text: "hello", caseSensitive: true)
         let matches = [
             SearchMatch(row: 0, colStart: 0, colEnd: 5),
-            SearchMatch(row: 1, colStart: 0, colEnd: 5),
+            SearchMatch(row: 1, colStart: 0, colEnd: 5)
         ]
 
         let (newLines, count) = applyReplacements(

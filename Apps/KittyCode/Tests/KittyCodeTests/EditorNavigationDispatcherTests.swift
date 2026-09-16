@@ -10,7 +10,6 @@ import Testing
 @Suite
 @MainActor
 struct EditorNavigationDispatcherTests {
-
     private func makeSUT(
         columns: Int = 80,
         rows: Int = 24
@@ -100,7 +99,7 @@ struct EditorNavigationDispatcherTests {
     @Test
     func moveDownPageJumpsByContentRows() {
         let sut = makeSUT(rows: 10)
-        sut.state.fileContent = (0..<50).map { "line \($0)" }
+        sut.state.fileContent = (0 ..< 50).map { "line \($0)" }
         sut.state.cursorRow = 0
         _ = dispatchCommand(.editorMoveDownPage, state: sut.state, pipeline: sut.pipeline)
         #expect(sut.state.cursorRow > 1)
@@ -109,7 +108,7 @@ struct EditorNavigationDispatcherTests {
     @Test
     func moveUpPageJumpsBackward() {
         let sut = makeSUT(rows: 10)
-        sut.state.fileContent = (0..<50).map { "line \($0)" }
+        sut.state.fileContent = (0 ..< 50).map { "line \($0)" }
         sut.state.cursorRow = 20
         _ = dispatchCommand(.editorMoveUpPage, state: sut.state, pipeline: sut.pipeline)
         #expect(sut.state.cursorRow < 20)
@@ -177,7 +176,7 @@ struct EditorNavigationDispatcherTests {
         sut.state.cursorCol = 3
         let commands: [CommandID] = [
             .editorMoveDown, .editorMoveUp, .editorMoveLeft, .editorMoveRight,
-            .editorHome, .editorEnd, .editorInsertNewline, .editorDeleteBackward,
+            .editorHome, .editorEnd, .editorInsertNewline, .editorDeleteBackward
         ]
         for command in commands {
             let result = dispatchCommand(command, state: sut.state, pipeline: sut.pipeline)

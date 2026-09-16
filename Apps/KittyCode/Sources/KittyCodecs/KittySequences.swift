@@ -1,17 +1,18 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable large_tuple
 /// Static builders for Kitty terminal-specific escape sequences.
 ///
 /// Covers synchronized output (mode 2026), the Kitty keyboard protocol (CSI u),
 /// SGR and pixel mouse modes, cursor control, alternate screen, clipboard (OSC 52),
 /// desktop notifications (OSC 99), focus events, and bracketed paste.
 public enum KittySequences: Sendable {
-
     // MARK: - Lookup table for decimal encoding
 
     /// Pre-computed decimal digits for values 0-65535.
     private static let decimalTable: [(UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)] = {
         var table = [(UInt8, UInt8, UInt8, UInt8, UInt8, UInt8)](
             repeating: (0, 0, 0, 0, 0, 0), count: 65536)
-        for i in 0..<65536 {
+        for i in 0 ..< 65536 {
             let d5 = UInt8(i / 10_000)
             let d4 = UInt8((i / 1_000) % 10)
             let d3 = UInt8((i / 100) % 10)
@@ -69,14 +70,14 @@ public enum KittySequences: Sendable {
     public static let enableMouseSGR: [UInt8] = [
         0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x30, 0x68,  // CSI ? 1000 h (basic mouse)
         0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x32, 0x68,  // CSI ? 1002 h (button-event / drag)
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x36, 0x68,  // CSI ? 1006 h (SGR extended)
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x36, 0x68  // CSI ? 1006 h (SGR extended)
     ]
 
     /// Disable SGR mouse mode.
     public static let disableMouseSGR: [UInt8] = [
         0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x36, 0x6c,  // CSI ? 1006 l
         0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x32, 0x6c,  // CSI ? 1002 l
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x30, 0x6c,  // CSI ? 1000 l
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x30, 0x6c  // CSI ? 1000 l
     ]
 
     /// Enable SGR pixel mouse mode (1016).
@@ -84,7 +85,7 @@ public enum KittySequences: Sendable {
         0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x30, 0x68,  // CSI ? 1000 h
         0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x32, 0x68,  // CSI ? 1002 h
         0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x33, 0x68,  // CSI ? 1003 h
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x31, 0x36, 0x68,  // CSI ? 1016 h
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x31, 0x36, 0x68  // CSI ? 1016 h
     ]
 
     /// Disable SGR pixel mouse mode.
@@ -92,7 +93,7 @@ public enum KittySequences: Sendable {
         0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x31, 0x36, 0x6c,  // CSI ? 1016 l
         0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x33, 0x6c,  // CSI ? 1003 l
         0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x32, 0x6c,  // CSI ? 1002 l
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x30, 0x6c,  // CSI ? 1000 l
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x30, 0x6c  // CSI ? 1000 l
     ]
 
     // MARK: - Cursor
@@ -117,8 +118,7 @@ public enum KittySequences: Sendable {
 
     /// Appends a cursor movement sequence directly into a ContiguousArray buffer (zero-allocation).
     @inline(__always)
-    public static func appendMoveCursor(row: Int, col: Int, to bytes: inout ContiguousArray<UInt8>)
-    {
+    public static func appendMoveCursor(row: Int, col: Int, to bytes: inout ContiguousArray<UInt8>) {
         bytes.append(0x1b)  // ESC
         bytes.append(0x5b)  // [
         appendDecimal(&bytes, clampedCursorCoordinate(row))
@@ -163,13 +163,13 @@ public enum KittySequences: Sendable {
 
     /// Enter alternate screen buffer.
     public static let enterAlternateScreen: [UInt8] = [
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x34, 0x39, 0x68,
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x34, 0x39, 0x68
     ]
     // CSI ? 1049 h
 
     /// Leave alternate screen buffer.
     public static let leaveAlternateScreen: [UInt8] = [
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x34, 0x39, 0x6c,
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x34, 0x39, 0x6c
     ]
     // CSI ? 1049 l
 
@@ -195,7 +195,7 @@ public enum KittySequences: Sendable {
 
     /// Request clipboard content.
     public static let requestClipboard: [UInt8] = [
-        0x1b, 0x5d, 0x35, 0x32, 0x3b, 0x63, 0x3b, 0x3f, 0x1b, 0x5c,
+        0x1b, 0x5d, 0x35, 0x32, 0x3b, 0x63, 0x3b, 0x3f, 0x1b, 0x5c
     ]
     // OSC 52 ; c ; ? ST
 
@@ -235,7 +235,7 @@ public enum KittySequences: Sendable {
 
     /// Disable focus event reporting.
     public static let disableFocusEvents: [UInt8] = [
-        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x34, 0x6c,
+        0x1b, 0x5b, 0x3f, 0x31, 0x30, 0x30, 0x34, 0x6c
     ]
     // CSI ? 1004 l
 
@@ -243,13 +243,13 @@ public enum KittySequences: Sendable {
 
     /// Enable bracketed paste mode.
     public static let enableBracketedPaste: [UInt8] = [
-        0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x68,
+        0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x68
     ]
     // CSI ? 2004 h
 
     /// Disable bracketed paste mode.
     public static let disableBracketedPaste: [UInt8] = [
-        0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x6c,
+        0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x6c
     ]
     // CSI ? 2004 l
 
@@ -312,26 +312,26 @@ public enum KittySequences: Sendable {
     private static func appendDecimal(_ bytes: inout ContiguousArray<UInt8>, _ value: UInt16) {
         let entry = decimalTable[Int(value)]
         switch entry.5 {
-        case 5:
-            bytes.append(entry.0)
-            bytes.append(entry.1)
-            bytes.append(entry.2)
-            bytes.append(entry.3)
-            bytes.append(entry.4)
-        case 4:
-            bytes.append(entry.1)
-            bytes.append(entry.2)
-            bytes.append(entry.3)
-            bytes.append(entry.4)
-        case 3:
-            bytes.append(entry.2)
-            bytes.append(entry.3)
-            bytes.append(entry.4)
-        case 2:
-            bytes.append(entry.3)
-            bytes.append(entry.4)
-        default:
-            bytes.append(entry.4)
+            case 5:
+                bytes.append(entry.0)
+                bytes.append(entry.1)
+                bytes.append(entry.2)
+                bytes.append(entry.3)
+                bytes.append(entry.4)
+            case 4:
+                bytes.append(entry.1)
+                bytes.append(entry.2)
+                bytes.append(entry.3)
+                bytes.append(entry.4)
+            case 3:
+                bytes.append(entry.2)
+                bytes.append(entry.3)
+                bytes.append(entry.4)
+            case 2:
+                bytes.append(entry.3)
+                bytes.append(entry.4)
+            default:
+                bytes.append(entry.4)
         }
     }
 

@@ -75,8 +75,8 @@ public enum MouseButton: UInt8, Sendable, Equatable {
 
     public var isScroll: Bool {
         switch self {
-        case .scrollUp, .scrollDown, .scrollLeft, .scrollRight: true
-        default: false
+            case .scrollUp, .scrollDown, .scrollLeft, .scrollRight: true
+            default: false
         }
     }
 }

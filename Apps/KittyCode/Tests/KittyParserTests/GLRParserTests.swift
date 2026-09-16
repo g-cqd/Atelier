@@ -40,7 +40,7 @@ struct GLRParserTests {
                 ProductionRule(name: "Bad", symbolCount: 2, symbols: ["a", "ERROR"]),
                 ProductionRule(name: "BadSingle", symbolCount: 1, symbols: ["ERROR"]),
                 ProductionRule(
-                    name: "Good", symbolCount: 2, symbols: ["a", "b"], fields: [1: "rhs"]),
+                    name: "Good", symbolCount: 2, symbols: ["a", "b"], fields: [1: "rhs"])
             ]
         )
 

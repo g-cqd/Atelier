@@ -3,12 +3,12 @@ public import KittyCodecs
 import KittyFileTree
 import KittyWorkspace
 
-public extension EditorState {
-    var activeFileDisplayName: String {
+extension EditorState {
+    public var activeFileDisplayName: String {
         fileName.isEmpty ? "Untitled" : fileName
     }
 
-    var contextHintText: String? {
+    public var contextHintText: String? {
         guard config.statusBar.showContextHints else { return nil }
 
         if let contextMenu {
@@ -39,11 +39,11 @@ public extension EditorState {
         return nil
     }
 
-    func dismissContextMenu() {
+    public func dismissContextMenu() {
         contextMenu = nil
     }
 
-    func showTreeContextMenu(at index: Int) {
+    public func showTreeContextMenu(at index: Int) {
         guard index >= 0, index < cachedFlatTree.count else { return }
 
         selectedTreeIndex = index
@@ -74,7 +74,7 @@ public extension EditorState {
                     title: "Delete…", shortcut: "", action: .beginDelete(path: entry.path)),
                 ContextMenuItem(
                     title: "Save Here…", shortcut: saveLabel,
-                    action: .beginSavePrompt(inDirectory: entry.path)),
+                    action: .beginSavePrompt(inDirectory: entry.path))
             ]
         } else {
             let directory = URL(fileURLWithPath: entry.path).deletingLastPathComponent().path
@@ -90,7 +90,7 @@ public extension EditorState {
                     title: "Delete…", shortcut: "", action: .beginDelete(path: entry.path)),
                 ContextMenuItem(
                     title: "Save Here…", shortcut: saveLabel,
-                    action: .beginSavePrompt(inDirectory: directory)),
+                    action: .beginSavePrompt(inDirectory: directory))
             ]
         }
 
@@ -102,7 +102,7 @@ public extension EditorState {
         )
     }
 
-    func showEditorContextMenu() {
+    public func showEditorContextMenu() {
         let saveDirectory = lastSelectedDirectoryPath ?? rootPath
         let resolver = KeymapResolver(config: config)
         var items: [ContextMenuItem] = []
@@ -130,7 +130,7 @@ public extension EditorState {
                 shortcut: resolver.shortcutLabel(for: .escapeEditor) ?? "", action: .focusTree),
             ContextMenuItem(
                 title: "Close Tab", shortcut: resolver.shortcutLabel(for: .closeTab) ?? "",
-                action: .closeTab),
+                action: .closeTab)
         ]
         contextMenu = ContextMenuState(
             title: activeFileDisplayName,
@@ -140,31 +140,31 @@ public extension EditorState {
         )
     }
 
-    func handleContextMenuKey(_ key: KeyEvent) -> Bool {
+    public func handleContextMenuKey(_ key: KeyEvent) -> Bool {
         guard var contextMenu else { return false }
 
         switch key.keyCode {
-        case Key.up.rawValue:
-            contextMenu.selectedIndex = max(0, contextMenu.selectedIndex - 1)
-            self.contextMenu = contextMenu
-            return true
-        case Key.down.rawValue:
-            contextMenu.selectedIndex = min(
-                contextMenu.items.count - 1, contextMenu.selectedIndex + 1)
-            self.contextMenu = contextMenu
-            return true
-        case Key.enter.rawValue, Key.enterAlt.rawValue:
-            performContextMenuAction(contextMenu.items[contextMenu.selectedIndex].action)
-            return true
-        case AsciiKey.escape:
-            dismissContextMenu()
-            return true
-        default:
-            return true
+            case Key.up.rawValue:
+                contextMenu.selectedIndex = max(0, contextMenu.selectedIndex - 1)
+                self.contextMenu = contextMenu
+                return true
+            case Key.down.rawValue:
+                contextMenu.selectedIndex = min(
+                    contextMenu.items.count - 1, contextMenu.selectedIndex + 1)
+                self.contextMenu = contextMenu
+                return true
+            case Key.enter.rawValue, Key.enterAlt.rawValue:
+                performContextMenuAction(contextMenu.items[contextMenu.selectedIndex].action)
+                return true
+            case AsciiKey.escape:
+                dismissContextMenu()
+                return true
+            default:
+                return true
         }
     }
 
-    func performContextMenuSelection(at index: Int) {
+    public func performContextMenuSelection(at index: Int) {
         guard var contextMenu else { return }
         guard index >= 0, index < contextMenu.items.count else { return }
         contextMenu.selectedIndex = index
@@ -172,70 +172,70 @@ public extension EditorState {
         performContextMenuAction(contextMenu.items[index].action)
     }
 
-    func contextMenuMoveUp() {
+    public func contextMenuMoveUp() {
         guard var contextMenu else { return }
         contextMenu.selectedIndex = max(0, contextMenu.selectedIndex - 1)
         self.contextMenu = contextMenu
     }
 
-    func contextMenuMoveDown() {
+    public func contextMenuMoveDown() {
         guard var contextMenu else { return }
         contextMenu.selectedIndex = min(contextMenu.items.count - 1, contextMenu.selectedIndex + 1)
         self.contextMenu = contextMenu
     }
 
-    func contextMenuConfirm() {
+    public func contextMenuConfirm() {
         guard let contextMenu else { return }
         performContextMenuAction(contextMenu.items[contextMenu.selectedIndex].action)
     }
 
-    func performContextMenuAction(_ action: ContextMenuAction) {
+    public func performContextMenuAction(_ action: ContextMenuAction) {
         dismissContextMenu()
 
         switch action {
-        case .undo:
-            performUndo()
-        case .redo:
-            performRedo()
-        case .openSelected:
-            guard selectedTreeIndex >= 0, selectedTreeIndex < cachedFlatTree.count else { return }
-            openFile(at: selectedTreeIndex)
-            cursorCol = 0
-            mode = .editor
-        case .openSelectedPinned:
-            guard selectedTreeIndex >= 0, selectedTreeIndex < cachedFlatTree.count else { return }
-            openFile(at: selectedTreeIndex)
-            cursorCol = 0
-            if let buffer = bufferManager.activeBuffer, buffer.isPreview {
-                buffer.isPreview = false
-            }
-            mode = .editor
-        case .toggleSelectedDirectory:
-            guard selectedTreeIndex >= 0, selectedTreeIndex < cachedFlatTree.count else { return }
-            toggleExpand(at: selectedTreeIndex)
-        case .beginCreateFile(let directory):
-            lastSelectedDirectoryPath = directory
-            beginCreateFilePrompt(in: directory)
-        case .beginCreateDirectory(let directory):
-            lastSelectedDirectoryPath = directory
-            beginCreateDirectoryPrompt(in: directory)
-        case .beginSavePrompt(let directory):
-            lastSelectedDirectoryPath = directory
-            beginSavePrompt(suggestedPath: directorySuggestion(for: directory))
-        case .beginRename(let path):
-            beginRenamePrompt(for: path)
-        case .beginDuplicate(let path):
-            beginDuplicatePrompt(for: path)
-        case .beginMove(let path):
-            beginMovePrompt(for: path)
-        case .beginDelete(let path):
-            beginDeletePrompt(for: path)
-        case .saveFile:
-            saveFile()
-        case .focusTree:
-            mode = .tree
-        case .closeTab:
-            closeCurrentTab()
+            case .undo:
+                performUndo()
+            case .redo:
+                performRedo()
+            case .openSelected:
+                guard selectedTreeIndex >= 0, selectedTreeIndex < cachedFlatTree.count else { return }
+                openFile(at: selectedTreeIndex)
+                cursorCol = 0
+                mode = .editor
+            case .openSelectedPinned:
+                guard selectedTreeIndex >= 0, selectedTreeIndex < cachedFlatTree.count else { return }
+                openFile(at: selectedTreeIndex)
+                cursorCol = 0
+                if let buffer = bufferManager.activeBuffer, buffer.isPreview {
+                    buffer.isPreview = false
+                }
+                mode = .editor
+            case .toggleSelectedDirectory:
+                guard selectedTreeIndex >= 0, selectedTreeIndex < cachedFlatTree.count else { return }
+                toggleExpand(at: selectedTreeIndex)
+            case .beginCreateFile(let directory):
+                lastSelectedDirectoryPath = directory
+                beginCreateFilePrompt(in: directory)
+            case .beginCreateDirectory(let directory):
+                lastSelectedDirectoryPath = directory
+                beginCreateDirectoryPrompt(in: directory)
+            case .beginSavePrompt(let directory):
+                lastSelectedDirectoryPath = directory
+                beginSavePrompt(suggestedPath: directorySuggestion(for: directory))
+            case .beginRename(let path):
+                beginRenamePrompt(for: path)
+            case .beginDuplicate(let path):
+                beginDuplicatePrompt(for: path)
+            case .beginMove(let path):
+                beginMovePrompt(for: path)
+            case .beginDelete(let path):
+                beginDeletePrompt(for: path)
+            case .saveFile:
+                saveFile()
+            case .focusTree:
+                mode = .tree
+            case .closeTab:
+                closeCurrentTab()
         }
     }
 

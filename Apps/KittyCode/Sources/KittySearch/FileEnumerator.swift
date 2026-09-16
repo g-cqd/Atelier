@@ -9,11 +9,13 @@ public func enumerateSearchableFiles(
     let rootURL = URL(fileURLWithPath: rootPath, isDirectory: true).resolvingSymlinksInPath()
     let fm = FileManager.default
 
-    guard let enumerator = fm.enumerator(
-        at: rootURL,
-        includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
-        options: includeHidden ? [] : [.skipsHiddenFiles]
-    ) else {
+    guard
+        let enumerator = fm.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
+            options: includeHidden ? [] : [.skipsHiddenFiles]
+        )
+    else {
         return []
     }
 

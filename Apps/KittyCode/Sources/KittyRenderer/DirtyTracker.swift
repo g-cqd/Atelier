@@ -32,7 +32,7 @@ public struct DirtyTracker: Sendable, Equatable {
             bits[firstWord] |= mask
         } else {
             bits[firstWord] |= (UInt64.max << firstBit)
-            for w in (firstWord + 1)..<lastWord {
+            for w in (firstWord + 1) ..< lastWord {
                 bits[w] = UInt64.max
             }
             bits[lastWord] |= (UInt64.max >> (63 - lastBit))
@@ -74,7 +74,7 @@ public struct DirtyTracker: Sendable, Equatable {
         var ranges: [(row: Int, colStart: Int, colEnd: Int)] = []
         let rows = capacity / columns
 
-        for row in 0..<rows {
+        for row in 0 ..< rows {
             let rowStart = row * columns
             var col = 0
             while col < columns {

@@ -6,11 +6,11 @@ public struct HighlightModifierSet: OptionSet, Sendable, Hashable {
         self.rawValue = rawValue
     }
 
-    public static let declaration    = HighlightModifierSet(rawValue: 1 << 0)
-    public static let definition     = HighlightModifierSet(rawValue: 1 << 1)
-    public static let readonly       = HighlightModifierSet(rawValue: 1 << 2)
-    public static let `static`       = HighlightModifierSet(rawValue: 1 << 3)
-    public static let deprecated     = HighlightModifierSet(rawValue: 1 << 4)
-    public static let async          = HighlightModifierSet(rawValue: 1 << 5)
-    public static let documentation  = HighlightModifierSet(rawValue: 1 << 6)
+    public static let declaration = HighlightModifierSet(rawValue: 1 << 0)
+    public static let definition = HighlightModifierSet(rawValue: 1 << 1)
+    public static let readonly = HighlightModifierSet(rawValue: 1 << 2)
+    public static let `static` = HighlightModifierSet(rawValue: 1 << 3)
+    public static let deprecated = HighlightModifierSet(rawValue: 1 << 4)
+    public static let async = HighlightModifierSet(rawValue: 1 << 5)
+    public static let documentation = HighlightModifierSet(rawValue: 1 << 6)
 }

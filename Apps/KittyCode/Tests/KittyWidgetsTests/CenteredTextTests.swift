@@ -18,7 +18,7 @@ struct CenteredTextTests {
         centered.render(to: &buffer, in: Rect(x: 0, y: 0, width: 20, height: 5))
         // Text should be on the middle row (row 2 for height 5)
         let midRow = 2
-        let rowChars = (0..<20).map { buffer[midRow, $0].character }
+        let rowChars = (0 ..< 20).map { buffer[midRow, $0].character }
         let rowText = String(rowChars).trimmingCharacters(in: .whitespaces)
         #expect(rowText == "Hi")
     }

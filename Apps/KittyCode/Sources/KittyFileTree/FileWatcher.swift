@@ -53,7 +53,7 @@ public actor FileWatcher {
                         as? [String]
                 else { return }
                 let box = Unmanaged<SendableContinuationBox>.fromOpaque(info).takeUnretainedValue()
-                for i in 0..<numEvents {
+                for i in 0 ..< numEvents {
                     box.continuation?.yield(.directoryChanged(cfPaths[i]))
                 }
             },

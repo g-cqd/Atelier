@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable cyclomatic_complexity function_body_length
 import Foundation
 import KittyCodecs
 public import KittyInput
@@ -14,132 +16,134 @@ public func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderP
     let contentRows = layout.contentRows
 
     switch event {
-    case .key(let key):
-        guard key.eventType != .release else { return true }
-        cancelPendingAcceleratedScroll(state: state, resetBurst: true)
-        state.isScrolling = false
+        case .key(let key):
+            guard key.eventType != .release else { return true }
+            cancelPendingAcceleratedScroll(state: state, resetBurst: true)
+            state.isScrolling = false
 
-        if state.vimCommandLine != nil {
-            return state.handleVimCommandLineKey(key)
-        }
+            if state.vimCommandLine != nil {
+                return state.handleVimCommandLineKey(key)
+            }
 
-        if state.inFileSearch != nil && state.mode != .searchPanel {
-            return handleSearchKey(key, state: state, pipeline: pipeline)
-        }
+            if state.inFileSearch != nil && state.mode != .searchPanel {
+                return handleSearchKey(key, state: state, pipeline: pipeline)
+            }
 
-        if key.eventType == .press || key.eventType == .repeat {
-            let stroke = KeyStroke(from: key)
-            let context = KeyContext.from(state: state)
-            let isRepeat = key.eventType == .repeat
-            let resolver = KeymapResolver(config: state.config)
+            if key.eventType == .press || key.eventType == .repeat {
+                let stroke = KeyStroke(from: key)
+                let context = KeyContext.from(state: state)
+                let isRepeat = key.eventType == .repeat
+                let resolver = KeymapResolver(config: state.config)
 
-            // Multi-key sequence handling (press only, not repeat)
-            if !isRepeat {
-                let sequenceTimeout = Duration.milliseconds(
-                    state.config.keybindings.sequenceTimeoutMilliseconds)
-                if !state.pendingKeySequence.isEmpty,
-                    let pendingTime = state.pendingKeySequenceTime,
-                    pendingTime.duration(to: .now) > sequenceTimeout
-                {
-                    state.pendingKeySequence = []
-                    state.pendingKeySequenceTime = nil
-                }
-
-                let candidate = state.pendingKeySequence + [stroke]
-                switch resolver.resolveSequence(candidate, context: context) {
-                case .command(let command):
-                    state.pendingKeySequence = []
-                    state.pendingKeySequenceTime = nil
-                    let seqLabel = candidate.map { KeyStrokeFormatter.label(for: $0) }.joined(
-                        separator: " ")
-                    state.commandFeedback = "\(seqLabel) → \(command.rawValue)"
-                    state.commandFeedbackExpiry = .now.advanced(by: commandFeedbackDuration)
-                    return dispatchEditorAwareCommand(command, key: key, state: state, pipeline: pipeline)
-                case .partial:
-                    state.pendingKeySequence = candidate
-                    state.pendingKeySequenceTime = .now
-                    let seqLabel = candidate.map { KeyStrokeFormatter.label(for: $0) }.joined(
-                        separator: " ")
-                    state.commandFeedback = "\(seqLabel)..."
-                    state.commandFeedbackExpiry = .now.advanced(by: commandFeedbackDuration)
-                    return true
-                case .none:
-                    if !state.pendingKeySequence.isEmpty {
+                // Multi-key sequence handling (press only, not repeat)
+                if !isRepeat {
+                    let sequenceTimeout = Duration.milliseconds(
+                        state.config.keybindings.sequenceTimeoutMilliseconds)
+                    if !state.pendingKeySequence.isEmpty,
+                        let pendingTime = state.pendingKeySequenceTime,
+                        pendingTime.duration(to: .now) > sequenceTimeout
+                    {
                         state.pendingKeySequence = []
                         state.pendingKeySequenceTime = nil
                     }
-                }
-            }
 
-            if let command = resolver.resolve(stroke, context: context, isRepeat: isRepeat) {
-                // Throttle repeat events for navigation commands
-                if isRepeat, command.isEditorNavigation || command.isTreeNavigation {
-                    let interval = state.config.editor.keyRepeatIntervalMilliseconds
-                    if interval > 0 {
-                        let now = ContinuousClock.now
-                        let threshold = Duration.milliseconds(interval)
-                        if let last = state.lastKeyRepeatProcessedAt,
-                            last.duration(to: now) < threshold
-                        {
-                            return true  // Skip this repeat, too soon
-                        }
-                        state.lastKeyRepeatProcessedAt = now
+                    let candidate = state.pendingKeySequence + [stroke]
+                    switch resolver.resolveSequence(candidate, context: context) {
+                        case .command(let command):
+                            state.pendingKeySequence = []
+                            state.pendingKeySequenceTime = nil
+                            let seqLabel = candidate.map { KeyStrokeFormatter.label(for: $0) }
+                                .joined(
+                                    separator: " ")
+                            state.commandFeedback = "\(seqLabel) → \(command.rawValue)"
+                            state.commandFeedbackExpiry = .now.advanced(by: commandFeedbackDuration)
+                            return dispatchEditorAwareCommand(command, key: key, state: state, pipeline: pipeline)
+                        case .partial:
+                            state.pendingKeySequence = candidate
+                            state.pendingKeySequenceTime = .now
+                            let seqLabel = candidate.map { KeyStrokeFormatter.label(for: $0) }
+                                .joined(
+                                    separator: " ")
+                            state.commandFeedback = "\(seqLabel)..."
+                            state.commandFeedbackExpiry = .now.advanced(by: commandFeedbackDuration)
+                            return true
+                        case .none:
+                            if !state.pendingKeySequence.isEmpty {
+                                state.pendingKeySequence = []
+                                state.pendingKeySequenceTime = nil
+                            }
                     }
                 }
-                if key.eventType == .press {
-                    state.lastKeyRepeatProcessedAt = nil
-                }
-                // Set command feedback
-                let feedbackLabel = KeyStrokeFormatter.label(for: stroke)
-                state.commandFeedback = "\(feedbackLabel) → \(command.rawValue)"
-                state.commandFeedbackExpiry = .now.advanced(by: commandFeedbackDuration)
-                return dispatchEditorAwareCommand(
-                    command, key: key, state: state, pipeline: pipeline)
-            }
-            // Shift+navigation: try resolving without shift so selection tracking can wrap it
-            if key.modifiers.contains(.shift) {
-                let strippedStroke = KeyStroke(
-                    keyCode: stroke.keyCode, modifiers: stroke.modifiers.subtracting(.shift))
-                if let command = resolver.resolve(
-                    strippedStroke, context: context, isRepeat: isRepeat),
-                    command.isEditorNavigation
-                {
+
+                if let command = resolver.resolve(stroke, context: context, isRepeat: isRepeat) {
+                    // Throttle repeat events for navigation commands
+                    if isRepeat, command.isEditorNavigation || command.isTreeNavigation {
+                        let interval = state.config.editor.keyRepeatIntervalMilliseconds
+                        if interval > 0 {
+                            let now = ContinuousClock.now
+                            let threshold = Duration.milliseconds(interval)
+                            if let last = state.lastKeyRepeatProcessedAt,
+                                last.duration(to: now) < threshold
+                            {
+                                return true  // Skip this repeat, too soon
+                            }
+                            state.lastKeyRepeatProcessedAt = now
+                        }
+                    }
+                    if key.eventType == .press {
+                        state.lastKeyRepeatProcessedAt = nil
+                    }
+                    // Set command feedback
+                    let feedbackLabel = KeyStrokeFormatter.label(for: stroke)
+                    state.commandFeedback = "\(feedbackLabel) → \(command.rawValue)"
+                    state.commandFeedbackExpiry = .now.advanced(by: commandFeedbackDuration)
                     return dispatchEditorAwareCommand(
                         command, key: key, state: state, pipeline: pipeline)
                 }
+                // Shift+navigation: try resolving without shift so selection tracking can wrap it
+                if key.modifiers.contains(.shift) {
+                    let strippedStroke = KeyStroke(
+                        keyCode: stroke.keyCode, modifiers: stroke.modifiers.subtracting(.shift))
+                    if let command = resolver.resolve(
+                        strippedStroke, context: context, isRepeat: isRepeat),
+                        command.isEditorNavigation
+                    {
+                        return dispatchEditorAwareCommand(
+                            command, key: key, state: state, pipeline: pipeline)
+                    }
+                }
             }
-        }
 
-        // Fallback for overlay contexts: text insertion in prompts, eat input in context menus
-        if state.contextMenu != nil {
+            // Fallback for overlay contexts: text insertion in prompts, eat input in context menus
+            if state.contextMenu != nil {
+                return true
+            }
+            if state.prompt != nil {
+                return state.handlePromptKey(key)
+            }
+
+            switch state.mode {
+                case .tree:
+                    return handleTreeKey(key, state: state, contentRows: contentRows)
+                case .editor:
+                    return handleEditorKey(key, state: state, contentRows: contentRows, pipeline: pipeline)
+                case .searchPanel:
+                    return handleSearchPanelKey(key, state: state, pipeline: pipeline)
+            }
+
+        case .paste(let text):
+            handlePaste(text, state: state)
             return true
-        }
-        if state.prompt != nil {
-            return state.handlePromptKey(key)
-        }
 
-        switch state.mode {
-        case .tree:
-            return handleTreeKey(key, state: state, contentRows: contentRows)
-        case .editor:
-            return handleEditorKey(key, state: state, contentRows: contentRows, pipeline: pipeline)
-        case .searchPanel:
-            return handleSearchPanelKey(key, state: state, pipeline: pipeline)
-        }
-
-    case .paste(let text):
-        handlePaste(text, state: state)
-        return true
-
-    case .mouse(let mouse):
-        if state.prompt != nil {
+        case .mouse(let mouse):
+            if state.prompt != nil {
+                return true
+            }
+            handleMouse(mouse, state: state, pipeline: pipeline)
             return true
-        }
-        handleMouse(mouse, state: state, pipeline: pipeline)
-        return true
 
-    default:
-        return true
+        default:
+            return true
     }
 }
 
@@ -158,13 +162,13 @@ private func dispatchEditorAwareCommand(
             }
             let (start, end) = selection.ordered
             switch command {
-            case .editorMoveLeft, .editorMoveUp, .editorMoveUpPage, .editorHome,
-                .editorWordBackward:
-                state.cursorRow = start.row
-                state.cursorCol = start.col
-            default:
-                state.cursorRow = end.row
-                state.cursorCol = end.col
+                case .editorMoveLeft, .editorMoveUp, .editorMoveUpPage, .editorHome,
+                    .editorWordBackward:
+                    state.cursorRow = start.row
+                    state.cursorCol = start.col
+                default:
+                    state.cursorRow = end.row
+                    state.cursorCol = end.col
             }
             state.clearSelection()
             ensureEditorVisibleFull(state: state, pipeline: pipeline)
