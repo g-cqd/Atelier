@@ -3,4 +3,4 @@
 @_exported public import AtelierProcess
 
 /// A file inside a source: the same record git's tree listing produces, which the other sources fill in themselves.
-package typealias SourceEntry = GitTreeEntry
+public typealias SourceEntry = GitTreeEntry
