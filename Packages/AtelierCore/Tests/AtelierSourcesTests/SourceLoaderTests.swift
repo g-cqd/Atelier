@@ -1,10 +1,11 @@
+import AemiRuntime
+import AtelierGit
+import AtelierProcess
+import AtelierSyntaxModel
 import Foundation
 import Testing
 
-@testable import DiffComparison
-@testable import DiffGit
-@testable import DiffRendering
-@testable import DiffTextKit
+@testable import AtelierSources
 
 struct SourceLoaderTests {
     @Test
