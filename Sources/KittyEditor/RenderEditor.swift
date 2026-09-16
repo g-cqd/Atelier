@@ -1,9 +1,11 @@
 import KittyCodecs
 import KittyFileTree
-import KittyRenderer
+import KittyGit
+public import KittyRenderer
 import KittySearch
 import KittyText
 import KittyWidgets
+import KittyWorkspace
 
 @MainActor
 public func renderEditorPanel(

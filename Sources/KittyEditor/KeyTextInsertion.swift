@@ -1,4 +1,4 @@
-import KittyCodecs
+public import KittyCodecs
 import KittyText
 
 private let blockedTextInsertionModifiers: KeyModifiers = [.ctrl, .super, .hyper, .meta]

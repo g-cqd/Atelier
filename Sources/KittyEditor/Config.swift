@@ -1,5 +1,5 @@
-import Foundation
-import KittyCodecs
+public import Foundation
+public import KittyCodecs
 import KittyTerminal
 
 /// Errors surfaced while loading or decoding the user's `~/.kittycode.json`.
@@ -37,7 +37,7 @@ public struct KittyConfig: Codable, Sendable {
 
         public init() {}
 
-        public init(from decoder: Decoder) throws {
+        public init(from decoder: any Decoder) throws {
             let d = ActivityBarConfig()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             show = try c.decodeIfPresent(Bool.self, forKey: .show) ?? d.show
@@ -64,7 +64,7 @@ public struct KittyConfig: Codable, Sendable {
 
         public init() {}
 
-        public init(from decoder: Decoder) throws {
+        public init(from decoder: any Decoder) throws {
             let d = KeybindingsConfig()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             tabNext = try c.decodeIfPresent(String.self, forKey: .tabNext) ?? d.tabNext
@@ -108,7 +108,7 @@ public struct KittyConfig: Codable, Sendable {
 
         public init() {}
 
-        public init(from decoder: Decoder) throws {
+        public init(from decoder: any Decoder) throws {
             let d = EditorConfig()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             highlightCurrentLine =
@@ -179,7 +179,7 @@ public struct KittyConfig: Codable, Sendable {
 
         public init() {}
 
-        public init(from decoder: Decoder) throws {
+        public init(from decoder: any Decoder) throws {
             let d = StatusBarConfig()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             show = try c.decodeIfPresent(Bool.self, forKey: .show) ?? d.show
@@ -201,7 +201,7 @@ public struct KittyConfig: Codable, Sendable {
 
         public init() {}
 
-        public init(from decoder: Decoder) throws {
+        public init(from decoder: any Decoder) throws {
             let d = GitDecorationsConfig()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             showLineChanges =
@@ -233,7 +233,7 @@ public struct KittyConfig: Codable, Sendable {
 
         public init() {}
 
-        public init(from decoder: Decoder) throws {
+        public init(from decoder: any Decoder) throws {
             let d = GitConfig()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? d.enabled
@@ -252,7 +252,7 @@ public struct KittyConfig: Codable, Sendable {
 
         public init() {}
 
-        public init(from decoder: Decoder) throws {
+        public init(from decoder: any Decoder) throws {
             let d = TabRibbonConfig()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             position =
@@ -268,7 +268,7 @@ public struct KittyConfig: Codable, Sendable {
 
         public init() {}
 
-        public init(from decoder: Decoder) throws {
+        public init(from decoder: any Decoder) throws {
             let d = SyntaxConfig()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? d.enabled
@@ -284,7 +284,7 @@ public struct KittyConfig: Codable, Sendable {
 
         public init() {}
 
-        public init(from decoder: Decoder) throws {
+        public init(from decoder: any Decoder) throws {
             let d = AutoSaveConfig()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? d.enabled
@@ -316,7 +316,7 @@ public struct KittyConfig: Codable, Sendable {
 
         public init() {}
 
-        public init(from decoder: Decoder) throws {
+        public init(from decoder: any Decoder) throws {
             let d = SearchConfig()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             defaultTarget =
@@ -354,7 +354,7 @@ public struct KittyConfig: Codable, Sendable {
 
         public init() {}
 
-        public init(from decoder: Decoder) throws {
+        public init(from decoder: any Decoder) throws {
             let d = WhitespaceConfig()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             showIndentation =
@@ -449,7 +449,7 @@ public struct KittyConfig: Codable, Sendable {
 
         public init() {}
 
-        public init(from decoder: Decoder) throws {
+        public init(from decoder: any Decoder) throws {
             let d = Theme()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             treePanelForeground =
@@ -597,7 +597,7 @@ public struct KittyConfig: Codable, Sendable {
 
     public init() {}
 
-    public init(from decoder: Decoder) throws {
+    public init(from decoder: any Decoder) throws {
         let d = KittyConfig()
         let c = try decoder.container(keyedBy: CodingKeys.self)
         sidebarOverflowMode =
@@ -660,7 +660,7 @@ public struct KittyConfig: Codable, Sendable {
 }
 
 public extension KittyConfig.Theme {
-    public func resolvedStyle(_ color: ColorRGB?, bold: Bool = false) -> Style? {
+    func resolvedStyle(_ color: ColorRGB?, bold: Bool = false) -> Style? {
         guard let color else { return nil }
         return Style(fg: color.color, bold: bold)
     }

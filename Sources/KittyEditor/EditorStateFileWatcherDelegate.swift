@@ -1,4 +1,5 @@
-import KittyWorkspace
+import KittyApp
+public import KittyWorkspace
 
 extension EditorState: FileWatcherDelegate {
     public func fileWatcherDidDetectDirectoryChange() async {

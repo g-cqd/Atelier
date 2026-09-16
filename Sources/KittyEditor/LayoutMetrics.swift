@@ -1,4 +1,5 @@
 import KittyWidgets
+import KittyWorkspace
 
 public struct LayoutMetrics {
     public let activityBarWidth: Int
