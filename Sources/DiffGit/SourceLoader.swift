@@ -1,8 +1,8 @@
+import AemiRuntime
+import AemiIO
 import CryptoKit
-import DiffConcurrency
-import DiffCore
-import DiffIO
-import Foundation
+package import DiffCore
+package import Foundation
 import Synchronization
 
 /// Reads comparison targets through one provider per kind of source; renames need both sides so they stay here.
@@ -103,10 +103,14 @@ package struct SourceLoader: SourceReading {
         var hasher = Insecure.SHA1()
         hasher.update(data: Data("blob \(size)\0".utf8))
         if size > 0 {
-            let file = try PosixFile(path: path)
+            let file = try PosixFile(path: path, mode: .readOnly)
             defer { file.close() }
             let map = try RawFileMap(fileDescriptor: file.fileDescriptor, capacity: size)
-            hasher.update(bufferPointer: map.region(offset: 0, count: size))
+            // The whole file is read once, front to back: let the kernel page it in ahead of the hash.
+            map.prefetch(offset: 0, length: size)
+            map.withRegion(offset: 0, count: size) { region in
+                region.withUnsafeBytes { hasher.update(bufferPointer: $0) }
+            }
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }

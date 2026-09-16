@@ -1,4 +1,4 @@
-import Foundation
+package import Foundation
 
 /// A tab over a file or a folder of the comparison.
 package struct DiffTab: Identifiable, Equatable, Sendable {

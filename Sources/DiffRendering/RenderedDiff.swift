@@ -1,7 +1,7 @@
-import AppKit
-import DiffCore
+package import AppKit
+package import DiffCore
 import DiffGit
-import Foundation
+package import Foundation
 
 /// Identifies a gap between two hunks of one file in a rendered document.
 package struct GapKey: Hashable, Sendable {

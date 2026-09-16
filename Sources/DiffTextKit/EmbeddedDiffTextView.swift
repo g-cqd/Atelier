@@ -1,8 +1,8 @@
-import AppKit
-import DiffCore
-import DiffRendering
-import Foundation
-import SwiftUI
+package import AppKit
+package import DiffCore
+package import DiffRendering
+package import Foundation
+package import SwiftUI
 
 /// A selectable pane that shows its whole document at the height it needs, for file cards inside a SwiftUI
 /// scroll view. Measuring and row alignment use the card's detached text system; the card passes its width in,

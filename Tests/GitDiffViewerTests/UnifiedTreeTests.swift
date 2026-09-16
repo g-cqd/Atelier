@@ -1,4 +1,5 @@
-import DiffTestSupport
+import AemiTesting
+import AemiCore
 import Foundation
 @testable import DiffComparison
 @testable import DiffGit

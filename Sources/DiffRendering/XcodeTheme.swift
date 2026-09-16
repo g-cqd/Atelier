@@ -1,7 +1,7 @@
-import AppKit
+package import AppKit
 import DiffCore
 import DiffGit
-import Foundation
+package import Foundation
 
 /// The parts of an Xcode `.xccolortheme` file the viewer uses.
 /// Fonts and colors are immutable, which keeps the value safe to share.
