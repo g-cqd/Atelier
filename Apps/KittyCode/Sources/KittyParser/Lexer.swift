@@ -91,8 +91,8 @@ public struct Lexer: Sendable {
                 tokens.append(
                     Token(
                         type: "_whitespace",
-                        byteRange: start..<pos,
-                        pointRange: startPoint..<point,
+                        byteRange: start ..< pos,
+                        pointRange: startPoint ..< point,
                         text: "",
                         isExtra: true
                     ))
@@ -103,17 +103,17 @@ public struct Lexer: Sendable {
             if let scanner = externalScanner {
                 let validSymbols = Set(scanner.validSymbols)
                 if !validSymbols.isEmpty,
-                   let result = scanner.scan(source: utf8, position: pos, validSymbols: validSymbols)
+                    let result = scanner.scan(source: utf8, position: pos, validSymbols: validSymbols)
                 {
                     let endPos = pos + result.length
                     let endPoint = advancePoint(point, over: utf8, from: pos, to: endPos)
-                    let textBuf = UnsafeBufferPointer(rebasing: utf8[pos..<endPos])
+                    let textBuf = UnsafeBufferPointer(rebasing: utf8[pos ..< endPos])
                     let text = String(bytes: textBuf, encoding: .utf8) ?? ""
                     tokens.append(
                         Token(
                             type: result.type,
-                            byteRange: pos..<endPos,
-                            pointRange: point..<endPoint,
+                            byteRange: pos ..< endPos,
+                            pointRange: point ..< endPoint,
                             text: text
                         ))
                     point = endPoint
@@ -135,8 +135,8 @@ public struct Lexer: Sendable {
             tokens.append(
                 Token(
                     type: text,
-                    byteRange: (pos - 1)..<pos,
-                    pointRange: startPoint..<point,
+                    byteRange: (pos - 1) ..< pos,
+                    pointRange: startPoint ..< point,
                     text: text
                 ))
         }
@@ -147,56 +147,56 @@ public struct Lexer: Sendable {
     private func matchComment(utf8: UnsafeBufferPointer<UInt8>, pos: Int, point: Point) -> Token? {
         for pattern in lexTable.commentPatterns {
             switch pattern {
-            case .line(let prefix):
-                let prefixBytes = Array(prefix.utf8)
-                guard pos + prefixBytes.count <= utf8.count else { continue }
-                var matches = true
-                for (j, b) in prefixBytes.enumerated() where utf8[pos + j] != b {
-                    matches = false
-                    break
-                }
-                guard matches else { continue }
-                // Scan to end of line
-                var end = pos + prefixBytes.count
-                while end < utf8.count && utf8[end] != 0x0a { end += 1 }
-                let textBuf = UnsafeBufferPointer(rebasing: utf8[pos..<end])
-                let text = String(bytes: textBuf, encoding: .utf8) ?? ""
-                let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
-                return Token(
-                    type: "comment", byteRange: pos..<end, pointRange: point..<endPoint, text: text,
-                    isExtra: true)
+                case .line(let prefix):
+                    let prefixBytes = Array(prefix.utf8)
+                    guard pos + prefixBytes.count <= utf8.count else { continue }
+                    var matches = true
+                    for (j, b) in prefixBytes.enumerated() where utf8[pos + j] != b {
+                        matches = false
+                        break
+                    }
+                    guard matches else { continue }
+                    // Scan to end of line
+                    var end = pos + prefixBytes.count
+                    while end < utf8.count && utf8[end] != 0x0a { end += 1 }
+                    let textBuf = UnsafeBufferPointer(rebasing: utf8[pos ..< end])
+                    let text = String(bytes: textBuf, encoding: .utf8) ?? ""
+                    let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
+                    return Token(
+                        type: "comment", byteRange: pos ..< end, pointRange: point ..< endPoint, text: text,
+                        isExtra: true)
 
-            case .block(let open, let close):
-                let openBytes = Array(open.utf8)
-                let closeBytes = Array(close.utf8)
-                guard pos + openBytes.count <= utf8.count else { continue }
-                var matches = true
-                for (j, b) in openBytes.enumerated() where utf8[pos + j] != b {
-                    matches = false
-                    break
-                }
-                guard matches else { continue }
-                // Scan for close delimiter
-                var end = pos + openBytes.count
-                while end + closeBytes.count <= utf8.count {
-                    var found = true
-                    for (j, b) in closeBytes.enumerated() where utf8[end + j] != b {
-                        found = false
+                case .block(let open, let close):
+                    let openBytes = Array(open.utf8)
+                    let closeBytes = Array(close.utf8)
+                    guard pos + openBytes.count <= utf8.count else { continue }
+                    var matches = true
+                    for (j, b) in openBytes.enumerated() where utf8[pos + j] != b {
+                        matches = false
                         break
                     }
-                    if found {
-                        end += closeBytes.count
-                        break
+                    guard matches else { continue }
+                    // Scan for close delimiter
+                    var end = pos + openBytes.count
+                    while end + closeBytes.count <= utf8.count {
+                        var found = true
+                        for (j, b) in closeBytes.enumerated() where utf8[end + j] != b {
+                            found = false
+                            break
+                        }
+                        if found {
+                            end += closeBytes.count
+                            break
+                        }
+                        end += 1
                     }
-                    end += 1
-                }
-                if end > utf8.count { end = utf8.count }
-                let textBuf2 = UnsafeBufferPointer(rebasing: utf8[pos..<end])
-                let text = String(bytes: textBuf2, encoding: .utf8) ?? ""
-                let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
-                return Token(
-                    type: "comment", byteRange: pos..<end, pointRange: point..<endPoint, text: text,
-                    isExtra: true)
+                    if end > utf8.count { end = utf8.count }
+                    let textBuf2 = UnsafeBufferPointer(rebasing: utf8[pos ..< end])
+                    let text = String(bytes: textBuf2, encoding: .utf8) ?? ""
+                    let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
+                    return Token(
+                        type: "comment", byteRange: pos ..< end, pointRange: point ..< endPoint, text: text,
+                        isExtra: true)
             }
         }
         return nil
@@ -232,7 +232,7 @@ public struct Lexer: Sendable {
         }
 
         guard let (_, end) = lastAccepting, end > pos else { return nil }
-        let textBuf = UnsafeBufferPointer(rebasing: utf8[pos..<end])
+        let textBuf = UnsafeBufferPointer(rebasing: utf8[pos ..< end])
         let text = String(bytes: textBuf, encoding: .utf8) ?? ""
 
         // Find the keyword string that matched
@@ -246,8 +246,8 @@ public struct Lexer: Sendable {
         let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
         return Token(
             type: tokenType,
-            byteRange: pos..<end,
-            pointRange: point..<endPoint,
+            byteRange: pos ..< end,
+            pointRange: point ..< endPoint,
             text: text
         )
     }
@@ -255,7 +255,7 @@ public struct Lexer: Sendable {
     private func pointAt(utf8: UnsafeBufferPointer<UInt8>, byte: Int) -> Point {
         var row = 0
         var col = 0
-        for i in 0..<min(byte, utf8.count) {
+        for i in 0 ..< min(byte, utf8.count) {
             if utf8[i] == 0x0a {
                 row += 1
                 col = 0
@@ -270,7 +270,7 @@ public struct Lexer: Sendable {
         _ point: Point, over utf8: UnsafeBufferPointer<UInt8>, from: Int, to: Int
     ) -> Point {
         var p = point
-        for i in from..<min(to, utf8.count) {
+        for i in from ..< min(to, utf8.count) {
             if utf8[i] == 0x0a {
                 p = Point(row: p.row + 1, column: 0)
             } else {

@@ -9,7 +9,6 @@ import Testing
 
 @Suite
 struct GrammarLoaderBundledGrammarTests {
-
     private func jsonGrammarPath() throws -> String {
         let resourcePath = try #require(KittySyntaxResources.bundle.resourcePath)
         return "\(resourcePath)/Grammars/json/grammar.json"
@@ -29,7 +28,7 @@ struct GrammarLoaderBundledGrammarTests {
         let ruleNames = grammar.rules.map(\.name)
         let expectedNames = [
             "document", "_value", "object", "pair", "array", "string", "number", "true", "false",
-            "null",
+            "null"
         ]
         for name in expectedNames {
             #expect(ruleNames.contains(name), "Expected rule '\(name)' in grammar")

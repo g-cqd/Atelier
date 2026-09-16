@@ -126,7 +126,7 @@ struct MultiBufferIntegrationTests {
         let state = EditorState(rootPath: rootURL.path, config: config)
 
         func waitUntil(_ condition: @escaping () -> Bool) async {
-            for _ in 0..<200 {
+            for _ in 0 ..< 200 {
                 if condition() {
                     return
                 }

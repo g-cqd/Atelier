@@ -6,7 +6,6 @@ import Testing
 
 @Suite
 struct KeymapResolverPhase2Tests {
-
     private func stroke(_ keyCode: UInt32, _ modifiers: KeyModifiers = []) -> KeyStroke {
         KeyStroke(keyCode: keyCode, modifiers: modifiers)
     }

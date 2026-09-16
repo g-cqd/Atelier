@@ -26,6 +26,7 @@ public enum WorkspaceFileLoading {
                 throw CocoaError(.fileReadInapplicableStringEncoding)
             }
             return LoadedFile(content: content, lineEnding: lineEnding)
-        }.value
+        }
+        .value
     }
 }

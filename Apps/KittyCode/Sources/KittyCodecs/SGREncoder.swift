@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable cyclomatic_complexity function_body_length large_tuple
 import KittyStyle
 
 // MARK: - SGR Encoder
@@ -6,14 +8,13 @@ import KittyStyle
 ///
 /// All methods produce raw UTF-8 byte arrays ready to be written directly to a terminal output stream.
 public enum SGREncoder: Sendable {
-
     // MARK: - Lookup table for decimal encoding (0-255 -> ASCII digits)
 
     /// Pre-computed decimal digits for values 0-999.
     /// Each entry is (hundreds, tens, ones, digitCount).
     private static let decimalTable: [(UInt8, UInt8, UInt8, UInt8)] = {
         var table = [(UInt8, UInt8, UInt8, UInt8)](repeating: (0, 0, 0, 0), count: 1000)
-        for i in 0..<1000 {
+        for i in 0 ..< 1000 {
             let h = UInt8(i / 100)
             let t = UInt8((i / 10) % 10)
             let o = UInt8(i % 10)
@@ -238,47 +239,47 @@ public enum SGREncoder: Sendable {
         _ bytes: inout ContiguousArray<UInt8>, _ color: Color, foreground: Bool, first: inout Bool
     ) {
         switch color {
-        case .default:
-            appendSep(&bytes, &first)
-            // 39 = default fg, 49 = default bg
-            if foreground {
-                bytes.append(0x33)
-                bytes.append(0x39)
-            } else {
-                bytes.append(0x34)
-                bytes.append(0x39)
-            }
-        case .indexed(let idx):
-            appendSep(&bytes, &first)
-            if idx < 8 {
-                // 30-37 fg, 40-47 bg
-                let base: UInt8 = foreground ? 30 : 40
-                appendDecimal(&bytes, base + idx)
-            } else if idx < 16 {
-                // 90-97 fg, 100-107 bg
-                let base: UInt8 = foreground ? 90 : 100
-                appendDecimal(&bytes, base + idx - 8)
-            } else {
-                // 38;5;N fg, 48;5;N bg
+            case .default:
+                appendSep(&bytes, &first)
+                // 39 = default fg, 49 = default bg
+                if foreground {
+                    bytes.append(0x33)
+                    bytes.append(0x39)
+                } else {
+                    bytes.append(0x34)
+                    bytes.append(0x39)
+                }
+            case .indexed(let idx):
+                appendSep(&bytes, &first)
+                if idx < 8 {
+                    // 30-37 fg, 40-47 bg
+                    let base: UInt8 = foreground ? 30 : 40
+                    appendDecimal(&bytes, base + idx)
+                } else if idx < 16 {
+                    // 90-97 fg, 100-107 bg
+                    let base: UInt8 = foreground ? 90 : 100
+                    appendDecimal(&bytes, base + idx - 8)
+                } else {
+                    // 38;5;N fg, 48;5;N bg
+                    let prefix: UInt8 = foreground ? 38 : 48
+                    appendDecimal(&bytes, prefix)
+                    bytes.append(0x3b)
+                    bytes.append(0x35)  // 5
+                    bytes.append(0x3b)
+                    appendDecimal(&bytes, UInt16(idx))
+                }
+            case .rgb(let r, let g, let b):
+                appendSep(&bytes, &first)
                 let prefix: UInt8 = foreground ? 38 : 48
                 appendDecimal(&bytes, prefix)
                 bytes.append(0x3b)
-                bytes.append(0x35)  // 5
+                bytes.append(0x32)  // 2
                 bytes.append(0x3b)
-                appendDecimal(&bytes, UInt16(idx))
-            }
-        case .rgb(let r, let g, let b):
-            appendSep(&bytes, &first)
-            let prefix: UInt8 = foreground ? 38 : 48
-            appendDecimal(&bytes, prefix)
-            bytes.append(0x3b)
-            bytes.append(0x32)  // 2
-            bytes.append(0x3b)
-            appendDecimal(&bytes, UInt16(r))
-            bytes.append(0x3b)
-            appendDecimal(&bytes, UInt16(g))
-            bytes.append(0x3b)
-            appendDecimal(&bytes, UInt16(b))
+                appendDecimal(&bytes, UInt16(r))
+                bytes.append(0x3b)
+                appendDecimal(&bytes, UInt16(g))
+                bytes.append(0x3b)
+                appendDecimal(&bytes, UInt16(b))
         }
     }
 
@@ -287,27 +288,27 @@ public enum SGREncoder: Sendable {
     ) {
         appendSep(&bytes, &first)
         switch color {
-        case .default:
-            bytes.append(0x35)
-            bytes.append(0x39)  // 59
-        case .indexed(let idx):
-            bytes.append(0x35)
-            bytes.append(0x38)  // 58
-            bytes.append(0x3b)
-            bytes.append(0x35)  // 5
-            bytes.append(0x3b)
-            appendDecimal(&bytes, UInt16(idx))
-        case .rgb(let r, let g, let b):
-            bytes.append(0x35)
-            bytes.append(0x38)  // 58
-            bytes.append(0x3b)
-            bytes.append(0x32)  // 2
-            bytes.append(0x3b)
-            appendDecimal(&bytes, UInt16(r))
-            bytes.append(0x3b)
-            appendDecimal(&bytes, UInt16(g))
-            bytes.append(0x3b)
-            appendDecimal(&bytes, UInt16(b))
+            case .default:
+                bytes.append(0x35)
+                bytes.append(0x39)  // 59
+            case .indexed(let idx):
+                bytes.append(0x35)
+                bytes.append(0x38)  // 58
+                bytes.append(0x3b)
+                bytes.append(0x35)  // 5
+                bytes.append(0x3b)
+                appendDecimal(&bytes, UInt16(idx))
+            case .rgb(let r, let g, let b):
+                bytes.append(0x35)
+                bytes.append(0x38)  // 58
+                bytes.append(0x3b)
+                bytes.append(0x32)  // 2
+                bytes.append(0x3b)
+                appendDecimal(&bytes, UInt16(r))
+                bytes.append(0x3b)
+                appendDecimal(&bytes, UInt16(g))
+                bytes.append(0x3b)
+                appendDecimal(&bytes, UInt16(b))
         }
     }
 
@@ -320,15 +321,15 @@ public enum SGREncoder: Sendable {
     private static func appendDecimal(_ bytes: inout ContiguousArray<UInt8>, _ value: UInt16) {
         let entry = decimalTable[Int(value)]
         switch entry.3 {
-        case 3:
-            bytes.append(entry.0)
-            bytes.append(entry.1)
-            bytes.append(entry.2)
-        case 2:
-            bytes.append(entry.1)
-            bytes.append(entry.2)
-        default:
-            bytes.append(entry.2)
+            case 3:
+                bytes.append(entry.0)
+                bytes.append(entry.1)
+                bytes.append(entry.2)
+            case 2:
+                bytes.append(entry.1)
+                bytes.append(entry.2)
+            default:
+                bytes.append(entry.2)
         }
     }
 }

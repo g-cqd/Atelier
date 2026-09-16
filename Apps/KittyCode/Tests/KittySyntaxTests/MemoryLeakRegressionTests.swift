@@ -15,7 +15,6 @@ import Testing
 @Suite
 @MainActor
 struct MemoryLeakRegressionTests {
-
     /// Wall-clock budget per stress test. Long enough to detect real leaks
     /// (~MB-scale drift over many calls) but short enough not to stall the
     /// default `swift test` invocation.
@@ -86,7 +85,7 @@ struct MemoryLeakRegressionTests {
         // load allocates fresh tables and the per-open cost compounds.
         _ = await LanguageHighlighter.ensureArtifacts(for: "bash")
         let baseline = residentBytes()
-        for _ in 0..<50 {
+        for _ in 0 ..< 50 {
             _ = await LanguageHighlighter.ensureArtifacts(for: "bash")
         }
         let after = residentBytes()

@@ -15,7 +15,6 @@ import Testing
 @Suite
 @MainActor
 struct SidebarDecorationRegressionTests {
-
     private func makeSUT(
         fileContent: [String] = [""],
         columns: Int = 80,
@@ -62,7 +61,7 @@ struct SidebarDecorationRegressionTests {
 
         renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
-        let mCol = (0..<cols).first { sut.pipeline.buffer[0, $0].character == "M" }
+        let mCol = (0 ..< cols).first { sut.pipeline.buffer[0, $0].character == "M" }
         #expect(mCol != nil, "Expected 'M' indicator in tab ribbon row")
         if let col = mCol {
             let cell = sut.pipeline.buffer[0, col]
@@ -85,7 +84,7 @@ struct SidebarDecorationRegressionTests {
 
         renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
-        let mCol = (0..<16).first { sut.pipeline.buffer[0, $0].character == "M" }
+        let mCol = (0 ..< 16).first { sut.pipeline.buffer[0, $0].character == "M" }
         #expect(mCol != nil, "Expected 'M' indicator in open files panel")
         if let col = mCol {
             let cell = sut.pipeline.buffer[0, col]
@@ -100,10 +99,11 @@ struct SidebarDecorationRegressionTests {
         let sut = makeSUT(columns: 40, rows: 10)
         sut.state.sidebarCollapsed = false
         sut.state.treePanelWidth = 18
-        sut.state.treeNodes = (0..<20).map { i in
-            FileNode(
-                name: String(format: "file%02d.txt", i), path: "/file\(i).txt", isDirectory: false)
-        }
+        sut.state.treeNodes = (0 ..< 20)
+            .map { i in
+                FileNode(
+                    name: String(format: "file%02d.txt", i), path: "/file\(i).txt", isDirectory: false)
+            }
         sut.state.cachedFlatTree = FileTreeNavigator.flatten(sut.state.treeNodes)
 
         renderFrame(pipeline: sut.pipeline, state: sut.state)
@@ -118,9 +118,10 @@ struct SidebarDecorationRegressionTests {
         let treeStartCol = layout.activityBarWidth
         let treeEndCol = treeStartCol + layout.sidebarWidth
 
-        let topRowHasDirtyTreeCell = (treeStartCol..<treeEndCol).contains { col in
-            sut.pipeline.buffer.dirty.isDirty(topRow * sut.pipeline.columns + col)
-        }
+        let topRowHasDirtyTreeCell = (treeStartCol ..< treeEndCol)
+            .contains { col in
+                sut.pipeline.buffer.dirty.isDirty(topRow * sut.pipeline.columns + col)
+            }
 
         #expect(topRowHasDirtyTreeCell, "Top visible tree row should be repainted after scrolling")
     }

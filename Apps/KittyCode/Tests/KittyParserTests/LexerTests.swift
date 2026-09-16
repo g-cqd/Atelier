@@ -12,13 +12,13 @@ struct LexerTests {
             states: [
                 LexState(transitions: [
                     // swiftlint:disable:next force_unwrapping
-                    (UInt32(Character("i").asciiValue!)...UInt32(Character("i").asciiValue!), 1)
+                    (UInt32(Character("i").asciiValue!) ... UInt32(Character("i").asciiValue!), 1)
                 ]),
                 LexState(transitions: [
                     // swiftlint:disable:next force_unwrapping
-                    (UInt32(Character("f").asciiValue!)...UInt32(Character("f").asciiValue!), 2)
+                    (UInt32(Character("f").asciiValue!) ... UInt32(Character("f").asciiValue!), 2)
                 ]),
-                LexState(accepting: 0),
+                LexState(accepting: 0)
             ],
             keywords: ["if": 0]
         )

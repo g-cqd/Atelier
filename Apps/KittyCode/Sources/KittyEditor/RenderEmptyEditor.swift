@@ -15,7 +15,8 @@ public func renderEmptyEditor(
         text: "Open a file from the tree (Enter) or create one (^N)",
         style: colorScheme.emptyEditorMessage,
         backgroundStyle: colorScheme.editorText
-    ).render(
+    )
+    .render(
         to: &pipeline.buffer,
         in: Rect(x: editorStart, y: contentStartRow, width: editorWidth, height: contentRows)
     )

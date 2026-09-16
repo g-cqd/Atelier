@@ -4,7 +4,6 @@
 /// widget-specific metrics on top, delegating to `VerticalScrollIndicatorLayout`
 /// for universal proportional math.
 public enum ScrollViewLayout {
-
     /// Scroll metrics for the scroll view.
     public static func verticalScrollMetrics<Content>(
         for scrollView: ScrollView<Content>,

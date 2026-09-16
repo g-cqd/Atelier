@@ -15,7 +15,6 @@ import Testing
 @Suite
 @MainActor
 struct WordAndViewportNavigationTests {
-
     private func makeSUT(fileContent: [String], columns: Int = 80, rows: Int = 24) -> (
         state: EditorState, pipeline: RenderPipeline
     ) {
@@ -62,9 +61,10 @@ struct WordAndViewportNavigationTests {
     func `ensureTreeVisible scrolls selected row into viewport`() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         // Populate the underlying FileNode tree and flatten it
-        state.treeNodes = (0..<40).map { i in
-            FileNode(name: "f\(i)", path: "p\(i)", isDirectory: false)
-        }
+        state.treeNodes = (0 ..< 40)
+            .map { i in
+                FileNode(name: "f\(i)", path: "p\(i)", isDirectory: false)
+            }
         state.cachedFlatTree = FileTreeNavigator.flatten(state.treeNodes)
         state.selectedTreeIndex = 25
         state.treeScrollOffset = 0
@@ -121,7 +121,7 @@ struct WordAndViewportNavigationTests {
         let sut = makeSUT(
             fileContent: [
                 "0123456789abcdefghijklmnopqrstuvwxyz",
-                "short",
+                "short"
             ],
             columns: 18,
             rows: 8

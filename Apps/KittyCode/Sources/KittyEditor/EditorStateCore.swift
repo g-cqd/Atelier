@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable file_length type_body_length
 import Foundation
 public import KittyApp
 public import KittyCodecs
@@ -45,8 +47,7 @@ public final class EditorState {
             visualOffsets.removeAll(keepingCapacity: true)
         }
 
-        public func isValid(contentWidth: Int, tabSize: Int, documentVersion: Int, lineCount: Int) -> Bool
-        {
+        public func isValid(contentWidth: Int, tabSize: Int, documentVersion: Int, lineCount: Int) -> Bool {
             self.contentWidth == contentWidth && self.tabSize == tabSize
                 && self.documentVersion == documentVersion && lineWrapCounts.count == lineCount
         }
@@ -169,35 +170,35 @@ public final class EditorState {
 
         public func gitStatusStyle(for color: FileStatusColor) -> Style {
             switch color {
-            case .modified:
-                return gitModified
-            case .added:
-                return gitAdded
-            case .untracked:
-                return gitUntracked
-            case .deleted:
-                return gitDeleted
-            case .conflicted:
-                return gitConflicted
-            case .clean:
-                return treeBg
+                case .modified:
+                    return gitModified
+                case .added:
+                    return gitAdded
+                case .untracked:
+                    return gitUntracked
+                case .deleted:
+                    return gitDeleted
+                case .conflicted:
+                    return gitConflicted
+                case .clean:
+                    return treeBg
             }
         }
 
         public func gitLineOverlay(for color: FileStatusColor) -> TextStyleOverlay {
             switch color {
-            case .modified:
-                return gitModifiedLine
-            case .added:
-                return gitAddedLine
-            case .untracked:
-                return gitUntrackedLine
-            case .deleted:
-                return gitDeletedLine
-            case .conflicted:
-                return gitConflictedLine
-            case .clean:
-                return TextStyleOverlay()
+                case .modified:
+                    return gitModifiedLine
+                case .added:
+                    return gitAddedLine
+                case .untracked:
+                    return gitUntrackedLine
+                case .deleted:
+                    return gitDeletedLine
+                case .conflicted:
+                    return gitConflictedLine
+                case .clean:
+                    return TextStyleOverlay()
             }
         }
     }
@@ -490,8 +491,7 @@ public final class EditorState {
     /// (audit NF12 / A9).
     @ObservationIgnored public var workspaceSearchDebounceTask: Task<Void, Never>?
     @ObservationIgnored public let workspaceSearchDebounceSignal: AsyncStream<Void>
-    @ObservationIgnored public let workspaceSearchDebounceContinuation:
-        AsyncStream<Void>.Continuation
+    @ObservationIgnored public let workspaceSearchDebounceContinuation: AsyncStream<Void>.Continuation
     public var workspaceSearchSummary: String = "" {
         didSet { if workspaceSearchSummary != oldValue { markChromeDirty() } }
     }
@@ -587,7 +587,7 @@ public final class EditorState {
         // Viewport-first: highlight only visible lines, then schedule full in background
         let visibleStart = max(0, scrollOffset)
         let visibleEnd = min(lineCount, visibleStart + lastRenderRows + 20)
-        let visibleRange = visibleStart..<visibleEnd
+        let visibleRange = visibleStart ..< visibleEnd
 
         // Start with plain text for all lines
         let defaultStyle = colorScheme.editorText
@@ -658,9 +658,10 @@ public final class EditorState {
             return
         }
         let style = colorScheme.editorText
-        let replacement = lines[mutation.updatedLineRange].map { line in
-            [StyledSpan(text: line, style: style)]
-        }
+        let replacement = lines[mutation.updatedLineRange]
+            .map { line in
+                [StyledSpan(text: line, style: style)]
+            }
         highlightedLines.replaceSubrange(mutation.originalLineRange, with: replacement)
     }
 
@@ -768,7 +769,7 @@ public final class EditorState {
                 buf.isDirty = true
             }
         }
-        widenCachedMaxLineWidth(for: textCursor.row..<(textCursor.row + 1))
+        widenCachedMaxLineWidth(for: textCursor.row ..< (textCursor.row + 1))
         refreshHighlights()
         gitDecorationManager?.scheduleRefreshForActiveBuffer()
         wrapCache.invalidate()
@@ -876,10 +877,10 @@ public final class EditorState {
         let exposed: Range<Int>
         if delta > 0 {
             // Scrolling down: the new bottom strip exposes [old+visible, new+visible).
-            exposed = (oldOffset + visibleRows)..<(newOffset + visibleRows)
+            exposed = (oldOffset + visibleRows) ..< (newOffset + visibleRows)
         } else {
             // Scrolling up: the new top strip exposes [new, old).
-            exposed = newOffset..<oldOffset
+            exposed = newOffset ..< oldOffset
         }
         markLinesDirty(exposed)
     }
@@ -943,15 +944,16 @@ public final class EditorState {
         wrapCache.contentWidth = contentWidth
         wrapCache.tabSize = tabSize
         wrapCache.documentVersion = docVersion
-        wrapCache.lineWrapCounts = (0..<lineCount).map { lineIndex in
-            WrapCache.wrapCount(
-                of: fileLine(at: lineIndex), contentWidth: contentWidth, tabSize: tabSize)
-        }
+        wrapCache.lineWrapCounts = (0 ..< lineCount)
+            .map { lineIndex in
+                WrapCache.wrapCount(
+                    of: fileLine(at: lineIndex), contentWidth: contentWidth, tabSize: tabSize)
+            }
         wrapCache.totalRowCount = wrapCache.lineWrapCounts.reduce(0, +)
 
         var offset = 0
         wrapCache.visualOffsets = [0]
-        for i in 1..<lineCount {
+        for i in 1 ..< lineCount {
             offset += wrapCache.lineWrapCounts[i - 1]
             wrapCache.visualOffsets.append(offset)
         }
@@ -1241,8 +1243,9 @@ public final class EditorState {
         let (stream, cont) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         self.fullHighlightSignal = stream
         self.fullHighlightContinuation = cont
-        let (searchStream, searchCont) = AsyncStream<Void>.makeStream(
-            bufferingPolicy: .bufferingNewest(1))
+        let (searchStream, searchCont) = AsyncStream<Void>
+            .makeStream(
+                bufferingPolicy: .bufferingNewest(1))
         self.workspaceSearchDebounceSignal = searchStream
         self.workspaceSearchDebounceContinuation = searchCont
         self.fileTreeHistory.maxOperationSteps = config.editor.maxTreeUndoSteps
@@ -1361,9 +1364,10 @@ public final class EditorState {
         let upperBound = min(fileLineCount, range.upperBound)
         guard lowerBound < upperBound else { return }
 
-        let widenedWidth = (lowerBound..<upperBound).reduce(0) { partial, lineIndex in
-            max(partial, UnicodeWidth.displayWidth(of: textBuffer.line(at: lineIndex)))
-        }
+        let widenedWidth = (lowerBound ..< upperBound)
+            .reduce(0) { partial, lineIndex in
+                max(partial, UnicodeWidth.displayWidth(of: textBuffer.line(at: lineIndex)))
+            }
 
         cachedMaxLineWidth = max(cachedWidth, widenedWidth)
     }
@@ -1417,20 +1421,20 @@ public final class EditorState {
         }
 
         switch buffer.editHistory.undo(current: currentSnapshot) {
-        case .applied(let snapshot):
-            applyActiveBufferSnapshot(snapshot)
-            statusMessage = "Undo \(activeFileDisplayName)"
-        case .unavailable:
-            statusMessage = "Nothing to undo"
-        case .invalidated:
-            switch buffer.editHistory.lastInvalidationReason {
-            case .externalFileChange:
-                statusMessage = "Undo history cleared after external file change"
-            case .fingerprintMismatch:
-                statusMessage = "Undo history cleared (buffer content diverged)"
-            case nil:
-                statusMessage = "Undo history cleared"
-            }
+            case .applied(let snapshot):
+                applyActiveBufferSnapshot(snapshot)
+                statusMessage = "Undo \(activeFileDisplayName)"
+            case .unavailable:
+                statusMessage = "Nothing to undo"
+            case .invalidated:
+                switch buffer.editHistory.lastInvalidationReason {
+                    case .externalFileChange:
+                        statusMessage = "Undo history cleared after external file change"
+                    case .fingerprintMismatch:
+                        statusMessage = "Undo history cleared (buffer content diverged)"
+                    case nil:
+                        statusMessage = "Undo history cleared"
+                }
         }
     }
 
@@ -1443,20 +1447,20 @@ public final class EditorState {
         }
 
         switch buffer.editHistory.redo(current: currentSnapshot) {
-        case .applied(let snapshot):
-            applyActiveBufferSnapshot(snapshot)
-            statusMessage = "Redo \(activeFileDisplayName)"
-        case .unavailable:
-            statusMessage = "Nothing to redo"
-        case .invalidated:
-            switch buffer.editHistory.lastInvalidationReason {
-            case .externalFileChange:
-                statusMessage = "Redo history cleared after external file change"
-            case .fingerprintMismatch:
-                statusMessage = "Redo history cleared (buffer content diverged)"
-            case nil:
-                statusMessage = "Redo history cleared"
-            }
+            case .applied(let snapshot):
+                applyActiveBufferSnapshot(snapshot)
+                statusMessage = "Redo \(activeFileDisplayName)"
+            case .unavailable:
+                statusMessage = "Nothing to redo"
+            case .invalidated:
+                switch buffer.editHistory.lastInvalidationReason {
+                    case .externalFileChange:
+                        statusMessage = "Redo history cleared after external file change"
+                    case .fingerprintMismatch:
+                        statusMessage = "Redo history cleared (buffer content diverged)"
+                    case nil:
+                        statusMessage = "Redo history cleared"
+                }
         }
     }
 
@@ -1468,17 +1472,17 @@ public final class EditorState {
 
     public func cycleFileVisibility() async {
         switch fileVisibility {
-        case .defaultHidden:
-            if isGitIgnoreFilterAvailable {
-                let ignored = await GitIgnoreChecker.ignoredPaths(in: rootPath)
-                fileVisibility = .gitFiltered(ignoredPaths: ignored)
-            } else {
+            case .defaultHidden:
+                if isGitIgnoreFilterAvailable {
+                    let ignored = await GitIgnoreChecker.ignoredPaths(in: rootPath)
+                    fileVisibility = .gitFiltered(ignoredPaths: ignored)
+                } else {
+                    fileVisibility = .showAll
+                }
+            case .gitFiltered:
                 fileVisibility = .showAll
-            }
-        case .gitFiltered:
-            fileVisibility = .showAll
-        case .showAll:
-            fileVisibility = .defaultHidden
+            case .showAll:
+                fileVisibility = .defaultHidden
         }
         await loadInitialTree()
     }

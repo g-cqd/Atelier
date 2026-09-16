@@ -14,7 +14,6 @@ import Testing
 
 @Suite
 struct CLIArgumentsPositionalParsingTests {
-
     @Test
     func `parsePositional with plain path returns path unchanged`() {
         let (path, line, col) = CLIArguments.parsePositional("/tmp/foo.swift")

@@ -5,7 +5,6 @@ import Foundation
 /// Format: `ESC_G <control>;...;<payload> ESC\`
 /// Payload is base64-encoded, chunked at 4096 bytes.
 public enum GraphicsEncoder: Sendable {
-
     private static let chunkSize = 4096
 
     /// Encodes a graphics command into one or more Kitty APC chunks.
@@ -34,7 +33,7 @@ public enum GraphicsEncoder: Sendable {
             let end =
                 base64Payload.index(offset, offsetBy: chunkSize, limitedBy: base64Payload.endIndex)
                 ?? base64Payload.endIndex
-            let chunk = String(base64Payload[offset..<end])
+            let chunk = String(base64Payload[offset ..< end])
             let hasMore = end < base64Payload.endIndex
 
             if isFirst {

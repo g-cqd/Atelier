@@ -7,22 +7,22 @@ public func buildReplacement(
     replacement: String
 ) -> String {
     switch pattern {
-    case .literal:
-        return replacement
+        case .literal:
+            return replacement
 
-    case .regex(let regex):
-        // Support capture group substitution ($0..$N) with proper handling
-        // for multi-digit indices and a literal `$$` escape.
-        let chars = Array(line)
-        guard match.colStart >= 0, match.colEnd <= chars.count else { return replacement }
-        let matchStr = String(chars[match.colStart..<match.colEnd])
+        case .regex(let regex):
+            // Support capture group substitution ($0..$N) with proper handling
+            // for multi-digit indices and a literal `$$` escape.
+            let chars = Array(line)
+            guard match.colStart >= 0, match.colEnd <= chars.count else { return replacement }
+            let matchStr = String(chars[match.colStart ..< match.colEnd])
 
-        var result = replacement
-        RegexMatcher.enumerate(regex.wholeExpression, in: matchStr) { regexMatch in
-            result = expandReplacementTemplate(replacement, using: regexMatch, in: matchStr)
-            return false
-        }
-        return result
+            var result = replacement
+            RegexMatcher.enumerate(regex.wholeExpression, in: matchStr) { regexMatch in
+                result = expandReplacementTemplate(replacement, using: regexMatch, in: matchStr)
+                return false
+            }
+            return result
     }
 }
 

@@ -18,7 +18,7 @@ struct AsyncGrammarGuardTests {
     @Test
     func `scroll position unchanged after refreshHighlights`() {
         let state = EditorState(rootPath: ".", config: KittyConfig())
-        state.fileContent = (0..<50).map { "line \($0)" }
+        state.fileContent = (0 ..< 50).map { "line \($0)" }
         state.scrollOffset = 20
         state.hScrollOffset = 5
         state.currentLanguage = "json"

@@ -6,7 +6,6 @@ import Testing
 
 @Suite
 struct KeymapResolverLabelTests {
-
     @Test
     func defaultSaveFile() {
         let resolver = KeymapResolver(config: KittyConfig())

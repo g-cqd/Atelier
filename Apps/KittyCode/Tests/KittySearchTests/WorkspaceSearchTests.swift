@@ -72,11 +72,11 @@ struct WorkspaceSearchTests {
         defer { cleanup(tmp) }
 
         // Create many files
-        for i in 0..<50 {
+        for i in 0 ..< 50 {
             try writeFile(tmp + "/file\(i).txt", content: "hello world line \(i)")
         }
 
-        let files = (0..<50).map { tmp + "/file\($0).txt" }
+        let files = (0 ..< 50).map { tmp + "/file\($0).txt" }
         let pattern = compilePattern(SearchQuery(text: "hello"))!
 
         let task = Task {
@@ -103,7 +103,7 @@ struct WorkspaceSearchTests {
 
         // Create file with many matches
         var content = ""
-        for i in 0..<100 {
+        for i in 0 ..< 100 {
             content += "hello \(i)\n"
         }
         try writeFile(tmp + "/many.txt", content: content)

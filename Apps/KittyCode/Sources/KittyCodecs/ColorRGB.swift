@@ -25,20 +25,20 @@ public struct ColorRGB: Sendable, Equatable {
         }
 
         switch value.count {
-        case 6:
-            guard let rgb = UInt32(value, radix: 16) else { return nil }
-            self.r = UInt8((rgb >> 16) & 0xFF)
-            self.g = UInt8((rgb >> 8) & 0xFF)
-            self.b = UInt8(rgb & 0xFF)
-            self.alpha = 1
-        case 8:
-            guard let rgba = UInt32(value, radix: 16) else { return nil }
-            self.r = UInt8((rgba >> 24) & 0xFF)
-            self.g = UInt8((rgba >> 16) & 0xFF)
-            self.b = UInt8((rgba >> 8) & 0xFF)
-            self.alpha = Double(rgba & 0xFF) / 255.0
-        default:
-            return nil
+            case 6:
+                guard let rgb = UInt32(value, radix: 16) else { return nil }
+                self.r = UInt8((rgb >> 16) & 0xFF)
+                self.g = UInt8((rgb >> 8) & 0xFF)
+                self.b = UInt8(rgb & 0xFF)
+                self.alpha = 1
+            case 8:
+                guard let rgba = UInt32(value, radix: 16) else { return nil }
+                self.r = UInt8((rgba >> 24) & 0xFF)
+                self.g = UInt8((rgba >> 16) & 0xFF)
+                self.b = UInt8((rgba >> 8) & 0xFF)
+                self.alpha = Double(rgba & 0xFF) / 255.0
+            default:
+                return nil
         }
     }
 
@@ -57,12 +57,12 @@ public struct ColorRGB: Sendable, Equatable {
 
         let (rd, gd, bd): (Double, Double, Double)
         switch i {
-        case 0: (rd, gd, bd) = (v, t, p)
-        case 1: (rd, gd, bd) = (q, v, p)
-        case 2: (rd, gd, bd) = (p, v, t)
-        case 3: (rd, gd, bd) = (p, q, v)
-        case 4: (rd, gd, bd) = (t, p, v)
-        default: (rd, gd, bd) = (v, p, q)
+            case 0: (rd, gd, bd) = (v, t, p)
+            case 1: (rd, gd, bd) = (q, v, p)
+            case 2: (rd, gd, bd) = (p, v, t)
+            case 3: (rd, gd, bd) = (p, q, v)
+            case 4: (rd, gd, bd) = (t, p, v)
+            default: (rd, gd, bd) = (v, p, q)
         }
 
         self.r = UInt8(min(255, max(0, rd * 255)).rounded())

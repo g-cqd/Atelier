@@ -1,3 +1,5 @@
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable cyclomatic_complexity file_length function_body_length
 import Foundation
 import KittyApp
 public import KittyCodecs
@@ -40,8 +42,7 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
             return
         }
 
-        if isWithinContextMenu(mouse, state: state, columns: pipeline.columns, rows: pipeline.rows)
-        {
+        if isWithinContextMenu(mouse, state: state, columns: pipeline.columns, rows: pipeline.rows) {
             return
         }
 
@@ -106,7 +107,8 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
 
         if handlesVerticalMomentum {
             if let blockedDirection = state.blockedMomentumDirection,
-                let deadline = state.blockedMomentumDeadline {
+                let deadline = state.blockedMomentumDeadline
+            {
                 if now < deadline, mouse.button == blockedDirection {
                     state.blockedMomentumDirection = nil
                     state.blockedMomentumDeadline = nil
@@ -221,19 +223,19 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
         let relativeRow = mouse.row - 1 - layout.contentStartRow
         if relativeRow >= 0, relativeRow < items.count {
             switch items[relativeRow] {
-            case "explorer":
-                state.activeSidebarPanel = .explorer
-            case "openDocuments":
-                state.activeSidebarPanel = .openDocuments
-            case "search":
-                state.activeSidebarPanel = .search
-                if state.inFileSearch == nil {
-                    openInFileSearch(state: state)
-                }
-                state.mode = .searchPanel
-                state.searchPanelSelectedIndex = -1
-            default:
-                break
+                case "explorer":
+                    state.activeSidebarPanel = .explorer
+                case "openDocuments":
+                    state.activeSidebarPanel = .openDocuments
+                case "search":
+                    state.activeSidebarPanel = .search
+                    if state.inFileSearch == nil {
+                        openInFileSearch(state: state)
+                    }
+                    state.mode = .searchPanel
+                    state.searchPanelSelectedIndex = -1
+                default:
+                    break
             }
             state.sidebarCollapsed = false
         }
@@ -316,7 +318,8 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
             } else if relativeRow >= resultsStartRow {
                 if state.searchTarget == .currentFile {
                     if let search = state.inFileSearch {
-                        let resultIndex = state.searchPanelScrollOffset
+                        let resultIndex =
+                            state.searchPanelScrollOffset
                             + (relativeRow - resultsStartRow)
                         if resultIndex >= 0, resultIndex < search.matches.count {
                             state.searchPanelSelectedIndex = resultIndex
@@ -328,7 +331,8 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
                         }
                     }
                 } else {
-                    let flatIdx = state.searchPanelScrollOffset
+                    let flatIdx =
+                        state.searchPanelScrollOffset
                         + (relativeRow - resultsStartRow)
                     if let (filePath, match) = workspaceFlatResult(at: flatIdx, state: state) {
                         openWorkspaceSearchResult(
@@ -469,24 +473,24 @@ private func applyVerticalScrollDelta(
     state: EditorState
 ) -> Bool {
     switch target {
-    case .tree:
-        let nextOffset = min(
-            max(0, state.cachedFlatTree.count - 1),
-            max(0, state.treeScrollOffset + delta)
-        )
-        guard nextOffset != state.treeScrollOffset else { return false }
-        state.treeScrollOffset = nextOffset
-    case .editor:
-        if state.config.editor.wrapLines {
-            guard applyWrapModeScrollDelta(delta, state: state) else { return false }
-        } else {
+        case .tree:
             let nextOffset = min(
-                max(0, state.fileLineCount - 1),
-                max(0, state.scrollOffset + delta)
+                max(0, state.cachedFlatTree.count - 1),
+                max(0, state.treeScrollOffset + delta)
             )
-            guard nextOffset != state.scrollOffset else { return false }
-            state.scrollOffset = nextOffset
-        }
+            guard nextOffset != state.treeScrollOffset else { return false }
+            state.treeScrollOffset = nextOffset
+        case .editor:
+            if state.config.editor.wrapLines {
+                guard applyWrapModeScrollDelta(delta, state: state) else { return false }
+            } else {
+                let nextOffset = min(
+                    max(0, state.fileLineCount - 1),
+                    max(0, state.scrollOffset + delta)
+                )
+                guard nextOffset != state.scrollOffset else { return false }
+                state.scrollOffset = nextOffset
+            }
     }
     return true
 }
@@ -502,7 +506,7 @@ private func applyWrapModeScrollDelta(_ delta: Int, state: EditorState) -> Bool 
     state.buildWrapCache(contentWidth: contentWidth)
 
     if delta > 0 {
-        for _ in 0..<delta {
+        for _ in 0 ..< delta {
             let lineCount =
                 state.wrapCache.lineWrapCounts.indices.contains(lineIndex)
                 ? state.wrapCache.lineWrapCounts[lineIndex]
@@ -518,7 +522,7 @@ private func applyWrapModeScrollDelta(_ delta: Int, state: EditorState) -> Bool 
             }
         }
     } else {
-        for _ in 0..<(-delta) {
+        for _ in 0 ..< (-delta) {
             wrapRow -= 1
             if wrapRow < 0 {
                 if lineIndex <= 0 {
@@ -921,36 +925,36 @@ private func updateScrollDrag(
     let pointerRow = mouse.row - 1
 
     switch dragState.target {
-    case .tree:
-        state.treeScrollOffset = TreePanelLayout.scrollOffset(
-            rowCount: state.cachedFlatTree.count,
-            currentOffset: state.treeScrollOffset,
-            in: treeRect,
-            pointerRow: pointerRow,
-            gripOffset: dragState.gripOffset
-        )
-        state.mode = .tree
-    case .editor:
-        let editor = makeEditorView(state: state)
-        let pos = TextEditorLayout.scrollPosition(
-            for: editor, in: editorRect, pointerRow: pointerRow, gripOffset: dragState.gripOffset)
-        state.scrollOffset = pos.lineOffset
-        state.wrapRowOffset = pos.wrapRowOffset
-        state.mode = .editor
-    case .editorHorizontal:
-        let editor = makeEditorView(state: state)
-        let pointerCol = mouse.col - 1
-        if let hRect = TextEditorLayout.horizontalScrollIndicatorRect(
-            for: editor, in: editorRect, maxLineWidth: state.maxLineWidth
-        ) {
-            let hMetrics = TextEditorLayout.horizontalScrollMetrics(
+        case .tree:
+            state.treeScrollOffset = TreePanelLayout.scrollOffset(
+                rowCount: state.cachedFlatTree.count,
+                currentOffset: state.treeScrollOffset,
+                in: treeRect,
+                pointerRow: pointerRow,
+                gripOffset: dragState.gripOffset
+            )
+            state.mode = .tree
+        case .editor:
+            let editor = makeEditorView(state: state)
+            let pos = TextEditorLayout.scrollPosition(
+                for: editor, in: editorRect, pointerRow: pointerRow, gripOffset: dragState.gripOffset)
+            state.scrollOffset = pos.lineOffset
+            state.wrapRowOffset = pos.wrapRowOffset
+            state.mode = .editor
+        case .editorHorizontal:
+            let editor = makeEditorView(state: state)
+            let pointerCol = mouse.col - 1
+            if let hRect = TextEditorLayout.horizontalScrollIndicatorRect(
                 for: editor, in: editorRect, maxLineWidth: state.maxLineWidth
-            )
-            state.hScrollOffset = HorizontalScrollIndicatorLayout.offset(
-                for: hMetrics, in: hRect, pointerCol: pointerCol, gripOffset: dragState.gripOffset
-            )
-        }
-        state.mode = .editor
+            ) {
+                let hMetrics = TextEditorLayout.horizontalScrollMetrics(
+                    for: editor, in: editorRect, maxLineWidth: state.maxLineWidth
+                )
+                state.hScrollOffset = HorizontalScrollIndicatorLayout.offset(
+                    for: hMetrics, in: hRect, pointerCol: pointerCol, gripOffset: dragState.gripOffset
+                )
+            }
+            state.mode = .editor
     }
 
     state.isScrolling = true

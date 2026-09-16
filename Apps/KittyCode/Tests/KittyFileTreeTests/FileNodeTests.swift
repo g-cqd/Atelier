@@ -5,7 +5,6 @@ import Testing
 
 @Suite(.tags(.fileNode))
 struct FileNodeTests {
-
     // MARK: Initialisation
 
     @Test func `init stores all provided values`() {

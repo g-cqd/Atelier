@@ -25,7 +25,7 @@ func makeScrollRenderingContext(
     let state = EditorState(rootPath: ".", config: config)
     state.sidebarCollapsed = true
     state.mode = .editor
-    state.fileContent = (0..<lineCount).map { "line \($0) content here" }
+    state.fileContent = (0 ..< lineCount).map { "line \($0) content here" }
     state.refreshHighlights()
     let pipeline = RenderPipeline(
         connection: MockTerminalConnection(size: TerminalSize(columns: columns, rows: rows)),

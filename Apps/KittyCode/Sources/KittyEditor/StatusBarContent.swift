@@ -4,10 +4,10 @@ import KittyText
 import KittyWorkspace
 import System
 
-public extension EditorState {
+extension EditorState {
     private static let statusBarSeparator = " │ "
 
-    func statusBarSegments(columns: Int, rows: Int) -> (left: String, right: String) {
+    public func statusBarSegments(columns: Int, rows: Int) -> (left: String, right: String) {
         let left = joinStatusBarSegments(config.statusBar.leftItems.compactMap(statusBarText(for:)))
         var rightSegments = config.statusBar.rightItems.compactMap(statusBarText(for:))
         if let contextHintText {
@@ -23,32 +23,32 @@ public extension EditorState {
 
     private func statusBarText(for item: KittyConfig.StatusBarConfig.Item) -> String? {
         switch item {
-        case .path:
-            return statusBarPath
-        case .file:
-            var label = activeFileDisplayName
-            if bufferManager.activeBuffer?.isDirty == true {
-                label += " *"
-            }
-            return label
-        case .status:
-            return condensedStatusMessage
-        case .language:
-            return currentLanguage ?? "plain text"
-        case .size:
-            return ByteCountFormatter.string(
-                fromByteCount: Int64(serializedByteCount), countStyle: .file)
-        case .lineEnding:
-            return currentLineEnding.label
-        case .git:
-            return gitDiffStatText
-        case .position:
-            guard mode == .editor else { return nil }
-            return "Ln \(cursorRow + 1), Col \(cursorCol + 1)"
-        case .visibility:
-            return fileVisibility.label
-        case .undo:
-            return undoRedoIndicator
+            case .path:
+                return statusBarPath
+            case .file:
+                var label = activeFileDisplayName
+                if bufferManager.activeBuffer?.isDirty == true {
+                    label += " *"
+                }
+                return label
+            case .status:
+                return condensedStatusMessage
+            case .language:
+                return currentLanguage ?? "plain text"
+            case .size:
+                return ByteCountFormatter.string(
+                    fromByteCount: Int64(serializedByteCount), countStyle: .file)
+            case .lineEnding:
+                return currentLineEnding.label
+            case .git:
+                return gitDiffStatText
+            case .position:
+                guard mode == .editor else { return nil }
+                return "Ln \(cursorRow + 1), Col \(cursorCol + 1)"
+            case .visibility:
+                return fileVisibility.label
+            case .undo:
+                return undoRedoIndicator
         }
     }
 
@@ -79,7 +79,7 @@ public extension EditorState {
         let hiddenPrefixes = [
             "Opened ",
             "Ready |",
-            "New file |",
+            "New file |"
         ]
 
         // Show vim mode indicators when in vim keybinding mode
@@ -102,12 +102,7 @@ public extension EditorState {
     }
 
     private var undoRedoIndicator: String? {
-        if mode == .editor {
-            let hasUndo = bufferManager.activeBuffer?.editHistory.hasUndo ?? false
-            let hasRedo = bufferManager.activeBuffer?.editHistory.hasRedo ?? false
-            guard hasUndo || hasRedo else { return nil }
-            return "U:\(hasUndo ? "yes" : "no") R:\(hasRedo ? "yes" : "no")"
-        } else {
+        guard mode == .editor else {
             let hasUndo = fileTreeHistory.hasUndo
             let hasRedo = fileTreeHistory.hasRedo
             guard hasUndo || hasRedo else { return nil }
@@ -117,6 +112,10 @@ public extension EditorState {
             }
             return indicator
         }
+        let hasUndo = bufferManager.activeBuffer?.editHistory.hasUndo ?? false
+        let hasRedo = bufferManager.activeBuffer?.editHistory.hasRedo ?? false
+        guard hasUndo || hasRedo else { return nil }
+        return "U:\(hasUndo ? "yes" : "no") R:\(hasRedo ? "yes" : "no")"
     }
 
     private var statusBarPath: String {
@@ -146,7 +145,7 @@ public extension EditorState {
     /// Examples (maxComponents: 3):
     ///   "a/b/c/d/e.swift" → "…/c/d/e.swift"
     ///   "a/b.swift"       → "a/b.swift"
-    static func truncatePath(_ path: String, maxComponents: Int) -> String {
+    public static func truncatePath(_ path: String, maxComponents: Int) -> String {
         let components = path.split(separator: "/")
         guard components.count > maxComponents else { return path }
         let kept = components.suffix(maxComponents)

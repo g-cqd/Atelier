@@ -6,7 +6,6 @@ import Testing
 
 @Suite
 struct FocusMapTests {
-
     @Test
     func hitTestNonOverlapping() {
         var map = FocusMap()

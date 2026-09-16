@@ -11,7 +11,6 @@ import Testing
 @Suite
 @MainActor
 struct VimCommandLineTests {
-
     private func makeSUT(
         columns: Int = 80,
         rows: Int = 24

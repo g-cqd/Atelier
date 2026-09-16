@@ -105,8 +105,8 @@ public struct TextBuffer: Sendable {
 
 extension TextBuffer: DocumentSource {
     public func lines(in range: Range<Int>) -> [String] {
-        let clamped = range.clamped(to: 0..<lineCount)
-        var result = [String]()
+        let clamped = range.clamped(to: 0 ..< lineCount)
+        var result: [String] = []
         result.reserveCapacity(clamped.count)
         for lineIndex in clamped {
             result.append(line(at: lineIndex))
@@ -116,14 +116,14 @@ extension TextBuffer: DocumentSource {
 
     public func serializedByteCount(lineEndingSize: Int) -> Int {
         var total = 0
-        for lineIndex in 0..<lineCount {
+        for lineIndex in 0 ..< lineCount {
             total += line(at: lineIndex).lengthOfBytes(using: .utf8)
         }
         return total + max(0, lineCount - 1) * lineEndingSize
     }
 
     public func maxLineWidth(in range: Range<Int>, tabSize: Int) -> Int {
-        let clamped = range.clamped(to: 0..<lineCount)
+        let clamped = range.clamped(to: 0 ..< lineCount)
         var maxWidth = 0
         for lineIndex in clamped {
             maxWidth = max(

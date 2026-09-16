@@ -5,7 +5,6 @@ import Testing
 
 @Suite(.tags(.securePath))
 struct SecurePathTests {
-
     // MARK: validate — passes
 
     @Test func `validate does not throw for path equal to root`() throws {

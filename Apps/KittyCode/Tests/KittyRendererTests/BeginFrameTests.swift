@@ -68,11 +68,11 @@ struct BeginFrameTests {
         pipeline.buffer.write("cccccccccc", row: 1, col: 0, style: .default)
 
         // Row 0: no dirty cells
-        for col in 0..<10 {
+        for col in 0 ..< 10 {
             #expect(!pipeline.buffer.dirty.isDirty(col), "Row 0, col \(col) should not be dirty")
         }
         // Row 1: all cells dirty
-        for col in 0..<10 {
+        for col in 0 ..< 10 {
             #expect(pipeline.buffer.dirty.isDirty(10 + col), "Row 1, col \(col) should be dirty")
         }
     }
@@ -101,7 +101,7 @@ struct BeginFrameTests {
         pipeline.buffer.write("EEEEE", row: 3, col: 0, style: .default)
 
         // Only row 3 should be dirty (rows 0-2 match the shifted content)
-        for col in 0..<5 {
+        for col in 0 ..< 5 {
             #expect(
                 !pipeline.buffer.dirty.isDirty(0 * 5 + col), "Row 0 col \(col) should not be dirty")
             #expect(

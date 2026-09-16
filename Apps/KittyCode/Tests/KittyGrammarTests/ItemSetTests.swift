@@ -11,14 +11,14 @@ struct ItemSetTests {
         let productions: [(name: String, symbols: [String])] = [
             ("S'", ["S"]),
             ("S", ["E"]),
-            ("E", ["\"a\""]),
+            ("E", ["\"a\""])
         ]
         let firstSets: [String: Set<String>] = [
             "S'": ["\"a\""],
             "S": ["\"a\""],
             "E": ["\"a\""],
             "\"a\"": ["\"a\""],
-            "$end": ["$end"],
+            "$end": ["$end"]
         ]
         let rulesByNT: [String: [Int]] = ["S'": [0], "S": [1], "E": [2]]
 

@@ -15,7 +15,6 @@ import Testing
 @Suite
 @MainActor
 struct ClipboardAndHistoryShortcutTests {
-
     private func makeSUT(fileContent: [String], columns: Int = 80, rows: Int = 24) -> (
         state: EditorState, pipeline: RenderPipeline
     ) {

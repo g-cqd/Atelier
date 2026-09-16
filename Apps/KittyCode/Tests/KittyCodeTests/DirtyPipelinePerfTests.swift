@@ -17,9 +17,8 @@ import Testing
 @Suite
 @MainActor
 struct DirtyPipelinePerfTests {
-
     private func makeSUT(lineCount: Int) -> (state: EditorState, pipeline: RenderPipeline) {
-        let content = (0..<lineCount).map { "line \($0)" }
+        let content = (0 ..< lineCount).map { "line \($0)" }
         return makeKittyCodeNavigationContext(fileContent: content)
     }
 
@@ -95,11 +94,12 @@ struct DirtyPipelinePerfTests {
 
         let iterations = 100
         let start = ContinuousClock.now
-        for _ in 0..<iterations {
+        for _ in 0 ..< iterations {
             insertText("X", into: sut.state)
         }
         let elapsed = start.duration(to: .now)
-        let elapsedMs = Double(elapsed.components.seconds) * 1000
+        let elapsedMs =
+            Double(elapsed.components.seconds) * 1000
             + Double(elapsed.components.attoseconds) / 1e15
         let perKeystrokeMs = elapsedMs / Double(iterations)
         // 15 ms covers debug-mode noise on slower local machines. Release builds

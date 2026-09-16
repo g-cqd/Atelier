@@ -9,11 +9,10 @@ import Testing
 
 @Suite
 struct HighlighterAdditionalTests {
-
     @Test
     func `Highlighting empty source returns single default-styled span`() {
         let highlighter = Highlighter(theme: .monokai)
-        let root = SyntaxNode(type: "source", byteRange: 0..<0)
+        let root = SyntaxNode(type: "source", byteRange: 0 ..< 0)
         let tree = SyntaxTree(root: root, source: "")
         let query = Query(patterns: [])
         let spans = highlighter.highlight(source: "", tree: tree, query: query)
@@ -24,7 +23,7 @@ struct HighlighterAdditionalTests {
     func `Highlighting with no query matches returns single default-styled span`() {
         let highlighter = Highlighter(theme: .monokai)
         let source = "hello"
-        let root = SyntaxNode(type: "source", byteRange: 0..<5)
+        let root = SyntaxNode(type: "source", byteRange: 0 ..< 5)
         let tree = SyntaxTree(root: root, source: source)
         // Pattern that matches "unknown_type" — will never match
         let query = Query(patterns: [
@@ -41,8 +40,8 @@ struct HighlighterAdditionalTests {
         theme.setStyle(stringStyle, for: "string")
 
         let source = "\"hello\""  // 7 UTF-8 bytes
-        let stringNode = SyntaxNode(type: "string", byteRange: 0..<7, isNamed: true)
-        let root = SyntaxNode(type: "source", children: [stringNode], byteRange: 0..<7)
+        let stringNode = SyntaxNode(type: "string", byteRange: 0 ..< 7, isNamed: true)
+        let root = SyntaxNode(type: "source", children: [stringNode], byteRange: 0 ..< 7)
         let tree = SyntaxTree(root: root, source: source)
         let query = Query(patterns: [
             .nodeMatch(type: "string", children: [], capture: "string")
@@ -61,20 +60,20 @@ struct HighlighterAdditionalTests {
         theme.setStyle(numberStyle, for: "number")
 
         // source: "if42" — 4 bytes
-        let kwNode = SyntaxNode(type: "keyword", byteRange: 0..<2, isNamed: true)
-        let numNode = SyntaxNode(type: "number", byteRange: 2..<4, isNamed: true)
-        let root = SyntaxNode(type: "source", children: [kwNode, numNode], byteRange: 0..<4)
+        let kwNode = SyntaxNode(type: "keyword", byteRange: 0 ..< 2, isNamed: true)
+        let numNode = SyntaxNode(type: "number", byteRange: 2 ..< 4, isNamed: true)
+        let root = SyntaxNode(type: "source", children: [kwNode, numNode], byteRange: 0 ..< 4)
         let tree = SyntaxTree(root: root, source: "if42")
         let query = Query(patterns: [
             .nodeMatch(type: "keyword", children: [], capture: "keyword"),
-            .nodeMatch(type: "number", children: [], capture: "number"),
+            .nodeMatch(type: "number", children: [], capture: "number")
         ])
 
         let spans = Highlighter(theme: theme).highlight(source: "if42", tree: tree, query: query)
         #expect(
             spans == [
                 StyledSpan(text: "if", style: keywordStyle),
-                StyledSpan(text: "42", style: numberStyle),
+                StyledSpan(text: "42", style: numberStyle)
             ])
     }
 }

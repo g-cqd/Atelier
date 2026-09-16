@@ -64,9 +64,10 @@ public struct QueryMatch: Sendable, Equatable {
 
     public static func == (lhs: QueryMatch, rhs: QueryMatch) -> Bool {
         lhs.patternIndex == rhs.patternIndex && lhs.captures.count == rhs.captures.count
-            && zip(lhs.captures, rhs.captures).allSatisfy {
-                $0.node == $1.node && $0.name == $1.name
-            }
+            && zip(lhs.captures, rhs.captures)
+                .allSatisfy {
+                    $0.node == $1.node && $0.name == $1.name
+                }
     }
 }
 

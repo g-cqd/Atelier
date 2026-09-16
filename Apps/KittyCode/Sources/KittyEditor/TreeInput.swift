@@ -5,7 +5,7 @@ import KittyFileTree
 public func handleTreeKey(_ key: KeyEvent, state: EditorState, contentRows: Int) -> Bool {
     // Navigation keys are now handled by KeymapResolver + CommandDispatcher.
     // This function remains as a fallback for any future tree-specific keys.
-    return true
+    true
 }
 
 @MainActor

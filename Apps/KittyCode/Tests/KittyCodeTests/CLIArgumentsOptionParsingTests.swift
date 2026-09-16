@@ -14,7 +14,6 @@ import Testing
 
 @Suite
 struct CLIArgumentsOptionParsingTests {
-
     @Test
     func `parse --read-only sets readOnly true`() {
         let action = CLIArguments.parse(["kittycode", "--read-only"])
@@ -158,7 +157,7 @@ struct CLIArgumentsOptionParsingTests {
     @Test
     func `parse multiple flags combines all overrides`() {
         let action = CLIArguments.parse([
-            "kittycode", "--read-only", "--no-git", "--tab-size", "4", "--wrap",
+            "kittycode", "--read-only", "--no-git", "--tab-size", "4", "--wrap"
         ])
         guard case .run(let config) = action else {
             Issue.record("Expected .run action")

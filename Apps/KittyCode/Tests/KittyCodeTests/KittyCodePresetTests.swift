@@ -6,7 +6,6 @@ import Testing
 
 @Suite
 struct KittyCodePresetTests {
-
     private func stroke(_ keyCode: UInt32, _ modifiers: KeyModifiers = []) -> KeyStroke {
         KeyStroke(keyCode: keyCode, modifiers: modifiers)
     }

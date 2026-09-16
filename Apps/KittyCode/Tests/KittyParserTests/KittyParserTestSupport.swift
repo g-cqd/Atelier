@@ -18,32 +18,32 @@ func makeConflictParseTable() -> ParseTable {
             [
                 .conflict([.shift(1), .shift(2)]),
                 .error,
-                .error,
+                .error
             ],
             [
                 .error,
                 .error,
                 .conflict([
                     .reduce(ruleIndex: 1, count: 2, nonTerminal: "Bad"),
-                    .reduce(ruleIndex: 2, count: 1, nonTerminal: "BadSingle"),
-                ]),
+                    .reduce(ruleIndex: 2, count: 1, nonTerminal: "BadSingle")
+                ])
             ],
             [
                 .error,
                 .shift(3),
-                .error,
+                .error
             ],
             [
                 .error,
                 .error,
-                .reduce(ruleIndex: 3, count: 2, nonTerminal: "Good"),
+                .reduce(ruleIndex: 3, count: 2, nonTerminal: "Good")
             ],
             errorRow,
             [
                 .error,
                 .error,
-                .accept,
-            ],
+                .accept
+            ]
         ],
         gotos: [
             [4, 4, 5],
@@ -51,7 +51,7 @@ func makeConflictParseTable() -> ParseTable {
             [nil, nil, nil],
             [nil, nil, nil],
             [nil, nil, nil],
-            [nil, nil, nil],
+            [nil, nil, nil]
         ]
     )
 }

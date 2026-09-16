@@ -57,7 +57,7 @@ public func renderFrame(pipeline: RenderPipeline, state: EditorState) {
     let signature = RenderSignature(state: state, pipeline: pipeline)
     let nothingDirty =
         !dirty.contentAll && !dirty.chrome && dirty.contentLines.isEmpty
-            && pipeline.scrollHint == nil
+        && pipeline.scrollHint == nil
     if nothingDirty, let last = lastRenderedSignature, last == signature {
         // No state mutation marked dirty and the inter-frame signature has not
         // drifted (cursor / scroll / viewport unchanged). The previous frame is

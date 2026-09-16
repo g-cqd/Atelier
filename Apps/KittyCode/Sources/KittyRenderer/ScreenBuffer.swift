@@ -103,8 +103,8 @@ public struct ScreenBuffer: Sendable {
     ///   - cell: The cell value to write into every position in the rectangle.
     public mutating func fill(row: Int, col: Int, width: Int, height: Int, cell: Cell) {
         guard row >= 0, row < rows, col >= 0, col < columns, width > 0, height > 0 else { return }
-        for r in row..<min(row + height, rows) {
-            for c in col..<min(col + width, columns) {
+        for r in row ..< min(row + height, rows) {
+            for c in col ..< min(col + width, columns) {
                 self[r, c] = cell
             }
         }
@@ -134,10 +134,10 @@ public struct ScreenBuffer: Sendable {
 
         if delta > 0 {
             // Scroll down: content moves up
-            for row in regionY..<(regionY + regionHeight - delta) {
+            for row in regionY ..< (regionY + regionHeight - delta) {
                 let dstBase = row &* columns
                 let srcBase = (row &+ delta) &* columns
-                for col in regionX..<(regionX + regionWidth) {
+                for col in regionX ..< (regionX + regionWidth) {
                     cells[dstBase &+ col] = cells[srcBase &+ col]
                 }
             }
@@ -146,7 +146,7 @@ public struct ScreenBuffer: Sendable {
             for row in stride(from: regionY + regionHeight - 1, through: regionY + absDelta, by: -1) {
                 let dstBase = row &* columns
                 let srcBase = (row &- absDelta) &* columns
-                for col in regionX..<(regionX + regionWidth) {
+                for col in regionX ..< (regionX + regionWidth) {
                     cells[dstBase &+ col] = cells[srcBase &+ col]
                 }
             }
@@ -169,8 +169,8 @@ public struct ScreenBuffer: Sendable {
         var newCells = ContiguousArray<Cell>(repeating: .empty, count: capacity)
         let copyRows = min(rows, safeRows)
         let copyCols = min(columns, safeCols)
-        for r in 0..<copyRows {
-            for c in 0..<copyCols {
+        for r in 0 ..< copyRows {
+            for c in 0 ..< copyCols {
                 newCells[r * safeCols + c] = cells[r * columns + c]
             }
         }

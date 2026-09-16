@@ -3,7 +3,6 @@ import Testing
 @testable import KittyRenderer
 
 @Suite struct DirtyRegionsTests {
-
     @Test func `empty regions report isEmpty`() {
         let sut = DirtyRegions()
         #expect(sut.isEmpty)
@@ -28,10 +27,10 @@ import Testing
     @Test func `contains returns false for cells outside any marked rect`() {
         var sut = DirtyRegions()
         sut.mark(DirtyRect(row: 5, col: 10, height: 3, width: 20))
-        #expect(!sut.contains(row: 4, col: 10))   // row before
-        #expect(!sut.contains(row: 8, col: 10))   // row after (height=3 → maxRow=8 exclusive)
-        #expect(!sut.contains(row: 5, col: 9))    // col before
-        #expect(!sut.contains(row: 5, col: 30))   // col after
+        #expect(!sut.contains(row: 4, col: 10))  // row before
+        #expect(!sut.contains(row: 8, col: 10))  // row after (height=3 → maxRow=8 exclusive)
+        #expect(!sut.contains(row: 5, col: 9))  // col before
+        #expect(!sut.contains(row: 5, col: 30))  // col after
     }
 
     @Test func `union of multiple rects is contained`() {
@@ -42,7 +41,7 @@ import Testing
         #expect(sut.contains(row: 0, col: 4))
         #expect(sut.contains(row: 10, col: 5))
         #expect(sut.contains(row: 11, col: 7))
-        #expect(!sut.contains(row: 5, col: 5))    // gap between rects
+        #expect(!sut.contains(row: 5, col: 5))  // gap between rects
     }
 
     @Test func `clear removes all rects`() {
@@ -60,8 +59,8 @@ import Testing
         #expect(!sut.isEmpty)
         #expect(sut.contains(row: 0, col: 0))
         #expect(sut.contains(row: 23, col: 79))
-        #expect(!sut.contains(row: 24, col: 0))   // out of bounds row
-        #expect(!sut.contains(row: 0, col: 80))   // out of bounds col
+        #expect(!sut.contains(row: 24, col: 0))  // out of bounds row
+        #expect(!sut.contains(row: 0, col: 80))  // out of bounds col
     }
 
     @Test func `formUnion merges another DirtyRegions in place`() {

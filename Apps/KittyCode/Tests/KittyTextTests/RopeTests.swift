@@ -4,7 +4,6 @@ import Testing
 @testable import KittyText
 
 @Suite struct RopeTests {
-
     // MARK: - Construction
 
     @Test func `empty rope has zero bytes and one line`() {
@@ -56,15 +55,15 @@ import Testing
 
     @Test func `lineRange(forLine:) excludes terminating newline`() {
         let sut = Rope("foo\nbar\nbaz")
-        #expect(sut.lineRange(forLine: 0) == 0..<3)
-        #expect(sut.lineRange(forLine: 1) == 4..<7)
-        #expect(sut.lineRange(forLine: 2) == 8..<11)
+        #expect(sut.lineRange(forLine: 0) == 0 ..< 3)
+        #expect(sut.lineRange(forLine: 1) == 4 ..< 7)
+        #expect(sut.lineRange(forLine: 2) == 8 ..< 11)
     }
 
     @Test func `lineRange for trailing empty line is empty range at end`() {
         let sut = Rope("foo\n")
         #expect(sut.lineCount == 2)
-        #expect(sut.lineRange(forLine: 1) == 4..<4)
+        #expect(sut.lineRange(forLine: 1) == 4 ..< 4)
     }
 
     @Test func `line(at:) returns each line content`() {
@@ -132,26 +131,26 @@ import Testing
 
     @Test func `remove at start shrinks rope`() {
         var sut = Rope("hello world")
-        sut.remove(0..<6)
+        sut.remove(0 ..< 6)
         #expect(sut.text == "world")
     }
 
     @Test func `remove at end shrinks rope`() {
         var sut = Rope("hello world")
-        sut.remove(5..<11)
+        sut.remove(5 ..< 11)
         #expect(sut.text == "hello")
     }
 
     @Test func `remove crossing newline reduces line count`() {
         var sut = Rope("foo\nbar\nbaz")
-        sut.remove(3..<8)
+        sut.remove(3 ..< 8)
         #expect(sut.text == "foobaz")
         #expect(sut.lineCount == 1)
     }
 
     @Test func `remove of entire content yields empty rope`() {
         var sut = Rope("hello")
-        sut.remove(0..<5)
+        sut.remove(0 ..< 5)
         #expect(sut.byteCount == 0)
         #expect(sut.lineCount == 1)
         #expect(sut.text == "")
@@ -159,7 +158,7 @@ import Testing
 
     @Test func `remove out-of-range upper bound is clamped`() {
         var sut = Rope("hello")
-        sut.remove(2..<999)
+        sut.remove(2 ..< 999)
         #expect(sut.text == "he")
     }
 
@@ -167,26 +166,26 @@ import Testing
 
     @Test func `replace whole content`() {
         var sut = Rope("hello")
-        sut.replace(0..<5, with: "world!")
+        sut.replace(0 ..< 5, with: "world!")
         #expect(sut.text == "world!")
     }
 
     @Test func `replace first of three lines`() {
         var sut = Rope("abc\ndef\nghi")
-        sut.replace(0..<3, with: "xyz")
+        sut.replace(0 ..< 3, with: "xyz")
         #expect(sut.text == "xyz\ndef\nghi")
         #expect(sut.lineCount == 3)
     }
 
     @Test func `replace last line content`() {
         var sut = Rope("abc\ndef")
-        sut.replace(4..<7, with: "xyz")
+        sut.replace(4 ..< 7, with: "xyz")
         #expect(sut.text == "abc\nxyz")
     }
 
     @Test func `replace single line with multi-line content`() {
         var sut = Rope("middle")
-        sut.replace(0..<6, with: "a\nb\nc")
+        sut.replace(0 ..< 6, with: "a\nb\nc")
         #expect(sut.text == "a\nb\nc")
         #expect(sut.lineCount == 3)
     }
@@ -195,13 +194,13 @@ import Testing
 
     @Test func `bytes(in:) returns slice content`() {
         let sut = Rope("hello world")
-        let slice = sut.bytes(in: 6..<11)
+        let slice = sut.bytes(in: 6 ..< 11)
         #expect(String(decoding: slice, as: UTF8.self) == "world")
     }
 
     @Test func `bytes(in:) clamps over-large range`() {
         let sut = Rope("abc")
-        let slice = sut.bytes(in: 1..<999)
+        let slice = sut.bytes(in: 1 ..< 999)
         #expect(String(decoding: slice, as: UTF8.self) == "bc")
     }
 
@@ -232,7 +231,7 @@ import Testing
     @Test func `large insert still produces correct content`() {
         var sut = Rope("")
         let chunk = String(repeating: "abcdefghij", count: 100)  // 1_000 bytes
-        for _ in 0..<10 {
+        for _ in 0 ..< 10 {
             sut.insert(chunk, atByteOffset: sut.byteCount)
         }
         #expect(sut.byteCount == 10_000)
@@ -242,14 +241,14 @@ import Testing
 
     @Test func `many small inserts at start preserve order`() {
         var sut = Rope("")
-        for index in 0..<200 {
+        for index in 0 ..< 200 {
             sut.insert("\(index % 10)", atByteOffset: 0)
         }
         #expect(sut.byteCount == 200)
     }
 
     @Test func `line count is preserved across 1000 line document`() {
-        let lines = (0..<1_000).map { "line \($0)" }
+        let lines = (0 ..< 1_000).map { "line \($0)" }
         let sut = Rope(lines.joined(separator: "\n"))
         #expect(sut.lineCount == 1_000)
         #expect(sut.line(at: 0) == "line 0")

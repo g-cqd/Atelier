@@ -131,7 +131,7 @@ public enum DirectoryScanner {
 
         /// Attempts to increment the counter. Returns `true` if under the limit.
         func tryIncrement() -> Bool {
-            return counterValue.withLock { count in
+            counterValue.withLock { count in
                 guard count < _limit else { return false }
                 count += 1
                 return true
@@ -140,7 +140,7 @@ public enum DirectoryScanner {
 
         /// Returns the current count.
         var count: Int {
-            return counterValue.withLock { $0 }
+            counterValue.withLock { $0 }
         }
     }
 
@@ -221,5 +221,4 @@ public enum DirectoryScanner {
             return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
         }
     }
-
 }

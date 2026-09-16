@@ -16,9 +16,10 @@ public func searchWorkspace(
 
     let workerCount = min(files.count, max(1, ProcessInfo.processInfo.activeProcessorCount))
     let chunkSize = max(1, (files.count + workerCount - 1) / workerCount)
-    let chunks = stride(from: 0, to: files.count, by: chunkSize).map { start in
-        Array(files[start..<min(start + chunkSize, files.count)])
-    }
+    let chunks = stride(from: 0, to: files.count, by: chunkSize)
+        .map { start in
+            Array(files[start ..< min(start + chunkSize, files.count)])
+        }
 
     await withTaskGroup(of: Void.self) { group in
         for chunk in chunks {
@@ -49,10 +50,11 @@ public func searchWorkspace(
                     if didHitCap { return }
 
                     let fileName = FilePath(filePath).lastComponent?.string ?? filePath
-                    let snippets = matches.prefix(20).map { match -> String in
-                        guard match.row >= 0, match.row < lines.count else { return "" }
-                        return lines[match.row].trimmingCharacters(in: .whitespaces)
-                    }
+                    let snippets = matches.prefix(20)
+                        .map { match -> String in
+                            guard match.row >= 0, match.row < lines.count else { return "" }
+                            return lines[match.row].trimmingCharacters(in: .whitespaces)
+                        }
 
                     let result = SearchFileResult(
                         filePath: filePath,
@@ -108,9 +110,9 @@ private func readFileLines(at path: String) -> [String]? {
         var cursor = chunk.startIndex
         while let newlineIndex = chunk[cursor...].firstIndex(of: 0x0A) {
             if pending.isEmpty {
-                lines.append(decodeLine(chunk[cursor..<newlineIndex]))
+                lines.append(decodeLine(chunk[cursor ..< newlineIndex]))
             } else {
-                pending.append(chunk[cursor..<newlineIndex])
+                pending.append(chunk[cursor ..< newlineIndex])
                 lines.append(decodeLine(pending))
                 pending.removeAll(keepingCapacity: true)
             }

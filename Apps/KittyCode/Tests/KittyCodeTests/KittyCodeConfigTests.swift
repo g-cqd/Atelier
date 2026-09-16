@@ -150,14 +150,16 @@ struct KittyCodeConfigTests {
 
     @Test
     func `Color overlay config decodes shorthand and alpha object`() throws {
-        let shorthand = try JSONDecoder().decode(
-            ColorOverlayConfig.self,
-            from: Data("\"#abcdef\"".utf8)
-        )
-        let alphaOverlay = try JSONDecoder().decode(
-            ColorOverlayConfig.self,
-            from: Data("{\"color\":\"#112233\",\"alpha\":0.25}".utf8)
-        )
+        let shorthand = try JSONDecoder()
+            .decode(
+                ColorOverlayConfig.self,
+                from: Data("\"#abcdef\"".utf8)
+            )
+        let alphaOverlay = try JSONDecoder()
+            .decode(
+                ColorOverlayConfig.self,
+                from: Data("{\"color\":\"#112233\",\"alpha\":0.25}".utf8)
+            )
 
         #expect(shorthand.color == ColorRGB(r: 0xab, g: 0xcd, b: 0xef))
         #expect(shorthand.alpha == 1)
@@ -167,10 +169,11 @@ struct KittyCodeConfigTests {
 
     @Test
     func `Color overlay config decodes 8 digit hex shorthand`() throws {
-        let overlay = try JSONDecoder().decode(
-            ColorOverlayConfig.self,
-            from: Data("\"#FF000080\"".utf8)
-        )
+        let overlay = try JSONDecoder()
+            .decode(
+                ColorOverlayConfig.self,
+                from: Data("\"#FF000080\"".utf8)
+            )
         #expect(overlay.color == ColorRGB(r: 0xFF, g: 0x00, b: 0x00))
         #expect(abs(overlay.alpha - Double(0x80) / 255.0) < 0.01)
     }

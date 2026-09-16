@@ -9,14 +9,14 @@ struct SyntaxNodeTests {
     @Test
     func `Node text extraction`() {
         let source = "hello world"
-        let node = SyntaxNode(type: "word", byteRange: 0..<5)
+        let node = SyntaxNode(type: "word", byteRange: 0 ..< 5)
         #expect(node.text(from: source) == "hello")
     }
 
     @Test
     func `Node text extraction returns empty string for out-of-bounds lower bound`() {
         let source = "hello"
-        let node = SyntaxNode(type: "word", byteRange: 20..<25)
+        let node = SyntaxNode(type: "word", byteRange: 20 ..< 25)
         #expect(node.text(from: source).isEmpty)
     }
 

@@ -15,7 +15,6 @@ import Testing
 @Suite
 @MainActor
 struct EditorContentLayoutRegressionTests {
-
     private func makeSUT(
         fileContent: [String] = [""],
         columns: Int = 80,
@@ -42,7 +41,7 @@ struct EditorContentLayoutRegressionTests {
         renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         // Without title bar, row 0 should have editor content (line numbers + text)
-        let row1Chars = (0..<40).map { sut.pipeline.buffer[0, $0].character }
+        let row1Chars = (0 ..< 40).map { sut.pipeline.buffer[0, $0].character }
         let row1Text = String(row1Chars)
         #expect(
             row1Text.contains("hello"), "Editor content should appear at row 0 (contentStartRow)")
@@ -62,13 +61,13 @@ struct EditorContentLayoutRegressionTests {
         renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         // Row 0: tab ribbon, Row 1: editor content
-        let row2Chars = (0..<cols).map { sut.pipeline.buffer[1, $0].character }
+        let row2Chars = (0 ..< cols).map { sut.pipeline.buffer[1, $0].character }
         let row2Text = String(row2Chars)
         #expect(
             row2Text.contains("world"), "Editor content should appear at row 1 below tab ribbon")
 
         // Row 0 should NOT contain editor content (it's the tab ribbon)
-        let row1Chars = (0..<cols).map { sut.pipeline.buffer[0, $0].character }
+        let row1Chars = (0 ..< cols).map { sut.pipeline.buffer[0, $0].character }
         let row1Text = String(row1Chars)
         #expect(!row1Text.contains("world"), "Tab ribbon row should not contain editor text")
     }
@@ -84,7 +83,7 @@ struct EditorContentLayoutRegressionTests {
         renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         // Row 1 is the tab ribbon — every column should be non-null (filled with background)
-        for col in 0..<cols {
+        for col in 0 ..< cols {
             let cell = sut.pipeline.buffer[1, col]
             #expect(cell.character != "\0", "Tab ribbon row should be filled at col \(col)")
         }
@@ -102,7 +101,7 @@ struct EditorContentLayoutRegressionTests {
         // No tab ribbon (no buffers), content starts at row 0
         // The empty editor message should be somewhere in the middle rows
         let midRow = 0 + (10 - 1) / 2  // contentStartRow + contentRows/2
-        let rowChars = (0..<60).map { sut.pipeline.buffer[midRow, $0].character }
+        let rowChars = (0 ..< 60).map { sut.pipeline.buffer[midRow, $0].character }
         let rowText = String(rowChars).trimmingCharacters(in: .whitespaces)
         #expect(rowText.contains("Open a file"))
     }
@@ -114,7 +113,7 @@ struct EditorContentLayoutRegressionTests {
         sut.state.mode = .editor
         renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
-        let lastRowChars = (0..<40).map { sut.pipeline.buffer[rows - 1, $0].character }
+        let lastRowChars = (0 ..< 40).map { sut.pipeline.buffer[rows - 1, $0].character }
         let lastRowText = String(lastRowChars)
         // Status bar should contain file name or language
         #expect(lastRowText.contains("Untitled") || lastRowText.contains("plain text"))
@@ -123,12 +122,12 @@ struct EditorContentLayoutRegressionTests {
     @Test
     func `no empty blank row between content and status bar`() {
         let rows = 10
-        let sut = makeSUT(fileContent: (0..<20).map { "line \($0)" }, columns: 40, rows: rows)
+        let sut = makeSUT(fileContent: (0 ..< 20).map { "line \($0)" }, columns: 40, rows: rows)
         sut.state.mode = .editor
         renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
         // Row rows-2 (second to last) should have editor content, not be blank
-        let penultimateChars = (0..<40).map { sut.pipeline.buffer[rows - 2, $0].character }
+        let penultimateChars = (0 ..< 40).map { sut.pipeline.buffer[rows - 2, $0].character }
         let penultimateText = String(penultimateChars).trimmingCharacters(in: .whitespaces)
         #expect(!penultimateText.isEmpty, "Second-to-last row should have content, not be blank")
     }
@@ -159,14 +158,14 @@ struct EditorContentLayoutRegressionTests {
         #expect(tabChar != "\0", "Tab ribbon should fill from column 0")
 
         // Editor content at row 1 (contentStartRow=1)
-        let editorArea = (19..<60).map { sut.pipeline.buffer[1, $0].character }
+        let editorArea = (19 ..< 60).map { sut.pipeline.buffer[1, $0].character }
         let editorText = String(editorArea).trimmingCharacters(in: .whitespaces)
         #expect(
             editorText.contains("hello") || editorText.contains("1"),
             "Editor area should have content at row 1")
 
         // Status bar at last row
-        let statusChars = (0..<60).map { sut.pipeline.buffer[11, $0].character }
+        let statusChars = (0 ..< 60).map { sut.pipeline.buffer[11, $0].character }
         let statusText = String(statusChars)
         #expect(statusText.contains("a.txt") || statusText.contains("plain text"))
     }
@@ -187,7 +186,7 @@ struct EditorContentLayoutRegressionTests {
 
         // The separator column from the previous render should not persist
         // Editor should now start at column 0 (no sidebar)
-        let row1Chars = (0..<40).map { sut.pipeline.buffer[0, $0].character }
+        let row1Chars = (0 ..< 40).map { sut.pipeline.buffer[0, $0].character }
         let row1Text = String(row1Chars).trimmingCharacters(in: .whitespaces)
         #expect(
             row1Text.contains("content") || row1Text.contains("1"),

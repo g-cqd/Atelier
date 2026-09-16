@@ -53,7 +53,8 @@ public struct TerminalSymbolTheme: Sendable {
                 let fallback = fallbackText(for: role)
                 if useSymbols,
                     let name = symbolName(for: role),
-                    let glyph = resolveGlyph(name: name, catalog: catalog) {
+                    let glyph = resolveGlyph(name: name, catalog: catalog)
+                {
                     result[role] = Glyph(text: glyph, prefersSymbol: true)
                 } else {
                     result[role] = Glyph(text: fallback, prefersSymbol: false)
@@ -91,106 +92,106 @@ public struct TerminalSymbolTheme: Sendable {
         "questionmark.circle": 0x10005C,
         "minus.circle": 0x10004E,
         "circle": 0x100000,
-        "xmark": 0x100184,
+        "xmark": 0x100184
     ]
 
     // swiftlint:disable:next cyclomatic_complexity
     private static func symbolName(for role: Role) -> String? {
         switch role {
-        case .project:
-            return "sidebar.left"
-        case .panel:
-            return "line.3.horizontal"
-        case .folderClosed:
-            return "folder"
-        case .folderOpen:
-            return "folder.badge.minus"
-        case .file:
-            return "document"
-        case .modeTree:
-            return "list.bullet.indent"
-        case .modeEdit:
-            return "pencil"
-        case .search:
-            return "magnifyingglass"
-        case .status:
-            return "location"
-        case .warning:
-            return "exclamationmark.triangle"
-        case .position:
-            return "cursorarrow.rays"
-        case .dimensions:
-            return "arrow.up.left.and.arrow.down.right"
-        case .gitBranch:
-            return "arrow.trianglehead.branch"
-        case .gitModified:
-            return "pencil.circle"
-        case .gitAdded:
-            return "plus.circle"
-        case .gitUntracked:
-            return "questionmark.circle"
-        case .gitDeleted:
-            return "minus.circle"
-        case .gitConflicted:
-            return "exclamationmark.triangle"
-        case .dirty:
-            return "circle"
-        case .close:
-            return "xmark"
-        case .explorer:
-            return "folder"
-        case .openDocuments:
-            return "document.on.document"
+            case .project:
+                return "sidebar.left"
+            case .panel:
+                return "line.3.horizontal"
+            case .folderClosed:
+                return "folder"
+            case .folderOpen:
+                return "folder.badge.minus"
+            case .file:
+                return "document"
+            case .modeTree:
+                return "list.bullet.indent"
+            case .modeEdit:
+                return "pencil"
+            case .search:
+                return "magnifyingglass"
+            case .status:
+                return "location"
+            case .warning:
+                return "exclamationmark.triangle"
+            case .position:
+                return "cursorarrow.rays"
+            case .dimensions:
+                return "arrow.up.left.and.arrow.down.right"
+            case .gitBranch:
+                return "arrow.trianglehead.branch"
+            case .gitModified:
+                return "pencil.circle"
+            case .gitAdded:
+                return "plus.circle"
+            case .gitUntracked:
+                return "questionmark.circle"
+            case .gitDeleted:
+                return "minus.circle"
+            case .gitConflicted:
+                return "exclamationmark.triangle"
+            case .dirty:
+                return "circle"
+            case .close:
+                return "xmark"
+            case .explorer:
+                return "folder"
+            case .openDocuments:
+                return "document.on.document"
         }
     }
 
     // swiftlint:disable:next cyclomatic_complexity
     private static func fallbackText(for role: Role) -> String {
         switch role {
-        case .project:
-            return "[root]"
-        case .panel:
-            return "[tree]"
-        case .folderClosed:
-            return ">"
-        case .folderOpen:
-            return "v"
-        case .file:
-            return "-"
-        case .modeTree:
-            return "TREE"
-        case .modeEdit:
-            return "EDIT"
-        case .search:
-            return "/"
-        case .status:
-            return "i"
-        case .warning:
-            return "!"
-        case .position:
-            return "@"
-        case .dimensions:
-            return "#"
-        case .gitBranch:
-            return "\u{e0a0}"
-        case .gitModified:
-            return "M"
-        case .gitAdded:
-            return "A"
-        case .gitUntracked:
-            return "?"
-        case .gitDeleted:
-            return "D"
-        case .gitConflicted:
-            return "!"
-        case .dirty:
-            return "●"
-        case .close:
-            return "×"
-        case .explorer:
-            return "F"
-        case .openDocuments:
-            return "O"
+            case .project:
+                return "[root]"
+            case .panel:
+                return "[tree]"
+            case .folderClosed:
+                return ">"
+            case .folderOpen:
+                return "v"
+            case .file:
+                return "-"
+            case .modeTree:
+                return "TREE"
+            case .modeEdit:
+                return "EDIT"
+            case .search:
+                return "/"
+            case .status:
+                return "i"
+            case .warning:
+                return "!"
+            case .position:
+                return "@"
+            case .dimensions:
+                return "#"
+            case .gitBranch:
+                return "\u{e0a0}"
+            case .gitModified:
+                return "M"
+            case .gitAdded:
+                return "A"
+            case .gitUntracked:
+                return "?"
+            case .gitDeleted:
+                return "D"
+            case .gitConflicted:
+                return "!"
+            case .dirty:
+                return "●"
+            case .close:
+                return "×"
+            case .explorer:
+                return "F"
+            case .openDocuments:
+                return "O"
         }
     }
 }

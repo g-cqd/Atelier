@@ -4,7 +4,6 @@ import Testing
 
 @Suite
 struct StackLayoutTests {
-
     @Test
     func allFlexibleEqualDivision() {
         let result = StackLayout.distribute(

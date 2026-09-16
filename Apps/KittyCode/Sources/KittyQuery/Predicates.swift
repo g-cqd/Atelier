@@ -4,7 +4,6 @@ import Synchronization
 
 /// Evaluates query predicates against captured nodes.
 public enum Predicates: Sendable {
-
     /// Thread-safe regex cache to avoid recompiling patterns.
     private static let regexCache = RegexCache()
 
@@ -14,50 +13,50 @@ public enum Predicates: Sendable {
         source: String
     ) -> Bool {
         switch predicate {
-        case .eq(let capture, let value):
-            guard let text = captureText(capture, captures: captures, source: source) else {
-                return false
-            }
-            return text == value
+            case .eq(let capture, let value):
+                guard let text = captureText(capture, captures: captures, source: source) else {
+                    return false
+                }
+                return text == value
 
-        case .notEq(let capture, let value):
-            guard let text = captureText(capture, captures: captures, source: source) else {
-                return false
-            }
-            return text != value
+            case .notEq(let capture, let value):
+                guard let text = captureText(capture, captures: captures, source: source) else {
+                    return false
+                }
+                return text != value
 
-        case .match(let capture, let pattern):
-            guard let text = captureText(capture, captures: captures, source: source) else {
-                return false
-            }
-            return matchRegex(text: text, pattern: pattern)
+            case .match(let capture, let pattern):
+                guard let text = captureText(capture, captures: captures, source: source) else {
+                    return false
+                }
+                return matchRegex(text: text, pattern: pattern)
 
-        case .notMatch(let capture, let pattern):
-            guard let text = captureText(capture, captures: captures, source: source) else {
-                return false
-            }
-            return !matchRegex(text: text, pattern: pattern)
+            case .notMatch(let capture, let pattern):
+                guard let text = captureText(capture, captures: captures, source: source) else {
+                    return false
+                }
+                return !matchRegex(text: text, pattern: pattern)
 
-        case .anyOf(let capture, let values):
-            guard let text = captureText(capture, captures: captures, source: source) else {
-                return false
-            }
-            return values.contains(text)
+            case .anyOf(let capture, let values):
+                guard let text = captureText(capture, captures: captures, source: source) else {
+                    return false
+                }
+                return values.contains(text)
 
-        case .contains(let capture, let value):
-            guard let text = captureText(capture, captures: captures, source: source) else {
-                return false
-            }
-            return text.contains(value)
+            case .contains(let capture, let value):
+                guard let text = captureText(capture, captures: captures, source: source) else {
+                    return false
+                }
+                return text.contains(value)
 
-        case .is(let capture, let property):
-            return checkProperty(capture, property: property, expected: true, captures: captures)
+            case .is(let capture, let property):
+                return checkProperty(capture, property: property, expected: true, captures: captures)
 
-        case .isNot(let capture, let property):
-            return checkProperty(capture, property: property, expected: false, captures: captures)
+            case .isNot(let capture, let property):
+                return checkProperty(capture, property: property, expected: false, captures: captures)
 
-        case .directive:
-            return true
+            case .directive:
+                return true
         }
     }
 
@@ -89,14 +88,14 @@ public enum Predicates: Sendable {
         guard let capture = captures.first(where: { $0.name == name }) else { return !expected }
 
         switch property {
-        case "named":
-            return capture.node.isNamed == expected
-        case "error":
-            return capture.node.isError == expected
-        case "extra":
-            return capture.node.isExtra == expected
-        default:
-            return !expected
+            case "named":
+                return capture.node.isNamed == expected
+            case "error":
+                return capture.node.isError == expected
+            case "extra":
+                return capture.node.isExtra == expected
+            default:
+                return !expected
         }
     }
 }
@@ -122,7 +121,7 @@ private final class RegexCache: Sendable {
     private let storage = Mutex(CacheState())
 
     func regex(for pattern: String) -> NSRegularExpression? {
-        return storage.withLock { cache in
+        storage.withLock { cache in
             if let existing = cache.regexes[pattern] { return existing }
             guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
             if cache.regexes.count >= Self.maxEntries, !cache.insertionOrder.isEmpty {
