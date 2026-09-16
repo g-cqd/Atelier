@@ -1,7 +1,5 @@
-import DiffConcurrency
 import DiffCore
-import DiffIO
-import Foundation
+package import Foundation
 
 /// One side of a comparison.
 package enum ComparisonSource: Hashable, Sendable {

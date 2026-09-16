@@ -1,4 +1,4 @@
-import DiffConcurrency
+import AemiRuntime
 import DiffCore
 @testable import DiffComparison
 @testable import DiffGit

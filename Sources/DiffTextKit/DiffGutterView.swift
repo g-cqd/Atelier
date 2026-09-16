@@ -1,7 +1,7 @@
-import AppKit
-import DiffCore
-import DiffRendering
-import Foundation
+package import AppKit
+package import DiffCore
+package import DiffRendering
+package import Foundation
 import SwiftUI
 
 package enum GutterStyle {

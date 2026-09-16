@@ -1,6 +1,6 @@
-import DiffConcurrency
+import AemiTesting
+import AemiCore
 import DiffCore
-import DiffTestSupport
 import Foundation
 @testable import DiffComparison
 @testable import DiffGit
@@ -654,8 +654,7 @@ struct DiffViewerModelTests {
         let suite = "GitDiffViewerTests.model.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite) ?? .standard
         defaults.removePersistentDomain(forName: suite)
-        let uptime = uptime
-        return DiffViewerModel(settings: ViewerSettings(defaults: defaults), reader: reader, taskProvider: taskProvider, uptime: { uptime.now })
+        return DiffViewerModel(settings: ViewerSettings(defaults: defaults), reader: reader, taskProvider: taskProvider, uptime: uptime.provider)
     }
 
     private func entry(_ path: String, _ blob: String) -> SourceEntry {
@@ -670,9 +669,22 @@ struct DiffViewerModelTests {
     }
 }
 
-/// A monotonic time the test advances by hand.
-final class FakeUptime: @unchecked Sendable {
-    nonisolated(unsafe) var now: Duration = .zero
+/// A monotonic time the test advances by hand, read by the model as nanoseconds.
+final class FakeUptime: Sendable {
+    private let nanoseconds = Mutex<Int64>(0)
+
+    var now: Duration {
+        get { .nanoseconds(nanoseconds.withLock { $0 }) }
+        set {
+            let components = newValue.components
+            nanoseconds.withLock { $0 = components.seconds * 1_000_000_000 + components.attoseconds / 1_000_000_000 }
+        }
+    }
+
+    /// The provider shape the model takes.
+    var provider: @Sendable () -> Int64 {
+        { [self] in nanoseconds.withLock { $0 } }
+    }
 }
 
 /// In-memory source reader; records the paths whose content was requested and can hold a read until released.

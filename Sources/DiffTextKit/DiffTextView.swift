@@ -1,8 +1,8 @@
-import AppKit
-import DiffCore
-import DiffRendering
-import Foundation
-import SwiftUI
+package import AppKit
+package import DiffCore
+package import DiffRendering
+package import Foundation
+package import SwiftUI
 
 /// A read-only TextKit 2 pane showing one rendered side of a diff.
 package struct DiffTextView: NSViewRepresentable {

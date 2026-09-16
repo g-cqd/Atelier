@@ -1,7 +1,8 @@
-import DiffConcurrency
-import DiffCore
-import DiffGit
-import DiffRendering
+import func AemiRuntime.mapConcurrently
+package import AemiCore
+package import DiffCore
+package import DiffGit
+package import DiffRendering
 import Foundation
 import Observation
 

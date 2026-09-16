@@ -1,10 +1,11 @@
+import AemiTesting
+import AemiCore
 import Foundation
 @testable import DiffComparison
 @testable import DiffGit
 @testable import DiffRendering
 @testable import DiffTextKit
 import Testing
-import DiffConcurrency
 
 /// Opt-in timing of the model against the real loader: loading a repository comparison, then selecting files.
 /// Run with GDV_BENCH=1 and GDV_BENCH_REPO=path; GDV_BENCH_LEFT and GDV_BENCH_RIGHT pick the refs.

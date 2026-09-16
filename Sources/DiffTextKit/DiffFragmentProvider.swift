@@ -1,6 +1,6 @@
-import AppKit
+package import AppKit
 import DiffCore
-import DiffRendering
+package import DiffRendering
 import Foundation
 import SwiftUI
 
