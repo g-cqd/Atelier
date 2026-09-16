@@ -1,5 +1,5 @@
 import Foundation
-import KittyFileTree
+public import KittyFileTree
 
 @MainActor
 public final class GitRefreshManager {
