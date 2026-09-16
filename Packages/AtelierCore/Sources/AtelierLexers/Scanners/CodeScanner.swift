@@ -1,3 +1,5 @@
+import AtelierSyntaxModel
+
 /// Scans C-like and script languages over UTF-16 units, driven by a `LanguageSyntax`.
 struct CodeScanner {
     let units: [UInt16]

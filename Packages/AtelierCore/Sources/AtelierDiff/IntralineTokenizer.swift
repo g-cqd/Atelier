@@ -10,10 +10,11 @@ public enum IntralineGranularity: String, CaseIterable, Sendable, Identifiable {
     public var id: String { rawValue }
 }
 
-enum IntralineTokenizer {
+/// Splits a line into the units the word and syntax tiers compare.
+public enum IntralineTokenizer {
     /// Splits UTF-16 units into words: identifier runs, whitespace runs, and single punctuation units.
     /// - Complexity: O(units)
-    static func words(_ units: [UInt16]) -> [Range<Int>] {
+    public static func words(_ units: [UInt16]) -> [Range<Int>] {
         var ranges: [Range<Int>] = []
         var index = 0
         while index < units.count {
@@ -33,7 +34,7 @@ enum IntralineTokenizer {
 
     /// Words, plus string literals kept whole and `@`/`#`-prefixed directives glued to their name.
     /// - Complexity: O(units)
-    static func codeTokens(_ units: [UInt16]) -> [Range<Int>] {
+    public static func codeTokens(_ units: [UInt16]) -> [Range<Int>] {
         var ranges: [Range<Int>] = []
         var index = 0
         while index < units.count {

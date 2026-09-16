@@ -1,6 +1,7 @@
+import AtelierSyntaxModel
 import Testing
 
-@testable import DiffCore
+@testable import AtelierLexers
 
 struct SyntaxHighlighterTests {
     @Test
