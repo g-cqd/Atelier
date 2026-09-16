@@ -63,14 +63,14 @@ public struct DiffModel: Sendable {
     ///   - granularity: Unit of change for the emphasis inside paired lines.
     ///   - language: Drives the syntax tier's tokenizer; ignored by the other tiers.
     ///   - pipeline: The stages the diff goes through; the default wires every heuristic in.
-    ///   - tokenizer: Token boundaries for the syntax tier; the default is the code-aware lexer for every language.
+    ///   - tokenRanges: Token boundaries for the syntax tier; ``CodeTokenRanges`` when no parser is wanted.
     public init(
         oldText: String,
         newText: String,
         granularity: IntralineGranularity = .character,
         language: Language = .plain,
         pipeline: DiffPipeline = DiffPipeline(),
-        tokenizer: any SyntaxTokenRanging = CodeTokenRanges()
+        tokenRanges: any SyntaxTokenRanging
     ) {
         self.oldText = oldText
         self.newText = newText
@@ -81,8 +81,8 @@ public struct DiffModel: Sendable {
 
         var layout = Layout(oldLines: oldLines, newLines: newLines, granularity: granularity, pipeline: pipeline)
         if granularity == .syntax {
-            layout.oldTokens = tokenizer.tokenRangesByLine(text: oldText, language: language)
-            layout.newTokens = tokenizer.tokenRangesByLine(text: newText, language: language)
+            layout.oldTokens = tokenRanges.tokenRangesByLine(text: oldText, language: language)
+            layout.newTokens = tokenRanges.tokenRangesByLine(text: newText, language: language)
         }
         let edits = LineDiff.diffLines(oldLines, newLines, pipeline: pipeline)
         for edit in edits {
