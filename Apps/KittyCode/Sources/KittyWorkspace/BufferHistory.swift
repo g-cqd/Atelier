@@ -1,5 +1,5 @@
 public import AtelierText
-public import Foundation
+import KittyFileTree
 
 public struct BufferEditSnapshot: Sendable {
     public var textBuffer: TextBuffer
@@ -45,9 +45,10 @@ public final class BufferEditHistory {
     private struct Transition {
         var before: BufferEditSnapshot
         var after: BufferEditSnapshot
-        var recordedAt: Date
+        var recordedAt: ClockInstant
     }
 
+    private let clock: any Clock<Duration>
     private var undoStack: [Transition] = []
     private var redoStack: [Transition] = []
     private var currentFingerprint: Int
@@ -63,10 +64,11 @@ public final class BufferEditHistory {
     public var maxUndoBytes: Int = 32 * 1024 * 1024
     public private(set) var lastInvalidationReason: InvalidationReason?
 
-    public init(initial snapshot: BufferEditSnapshot) {
+    public init(initial snapshot: BufferEditSnapshot, clock: any Clock<Duration> = ContinuousClock()) {
         let fingerprint = snapshot.contentFingerprint
         self.currentFingerprint = fingerprint
         self.savedFingerprint = fingerprint
+        self.clock = clock
     }
 
     public var hasUndo: Bool {
@@ -85,7 +87,7 @@ public final class BufferEditHistory {
     public func recordChange(
         from before: BufferEditSnapshot,
         to after: BufferEditSnapshot,
-        coalescingWindow: TimeInterval?
+        coalescingWindow: Duration?
     ) {
         let beforeFingerprint = before.contentFingerprint
         let afterFingerprint = after.contentFingerprint
@@ -103,12 +105,12 @@ public final class BufferEditHistory {
         let recordedBefore = Self.snapshotForStorage(before)
         let recordedAfter = Self.snapshotForStorage(after)
 
-        let recordedAt = Date()
+        let recordedAt = clock.erasedNow()
         if let coalescingWindow,
-            coalescingWindow > 0,
+            coalescingWindow > .zero,
             redoStack.isEmpty,
             let lastIndex = undoStack.indices.last,
-            recordedAt.timeIntervalSince(undoStack[lastIndex].recordedAt) <= coalescingWindow,
+            undoStack[lastIndex].recordedAt.duration(to: recordedAt) <= coalescingWindow,
             before.textCursor.row == undoStack[lastIndex].after.textCursor.row,
             before.textCursor.col == undoStack[lastIndex].after.textCursor.col
         {

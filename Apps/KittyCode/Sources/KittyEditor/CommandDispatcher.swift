@@ -1,3 +1,4 @@
+import AemiCore
 import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable cyclomatic_complexity file_length function_body_length
@@ -36,7 +37,7 @@ public func dispatchCommand(
             return true
 
         case .cycleFileVisibility:
-            Task { @MainActor in
+            state.taskProvider.task(role: .work) { @MainActor in
                 await state.cycleFileVisibility()
                 state.renderRefreshSource?.invalidate()
             }

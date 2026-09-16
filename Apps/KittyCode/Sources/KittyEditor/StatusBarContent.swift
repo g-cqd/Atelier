@@ -59,7 +59,7 @@ extension EditorState {
 
         // Command feedback takes priority when not expired
         if let feedback = commandFeedback, let expiry = commandFeedbackExpiry {
-            if ContinuousClock.now < expiry {
+            if clock.erasedNow() < expiry {
                 return feedback
             }
             // Otherwise will be cleared on next render cycle.
