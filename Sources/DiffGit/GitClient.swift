@@ -1,7 +1,6 @@
-import DiffConcurrency
+package import AemiRuntime
 import DiffCore
-import DiffIO
-import Foundation
+package import Foundation
 import Synchronization
 
 package enum GitError: Error, LocalizedError {
@@ -166,24 +165,28 @@ package struct GitClient: Sendable {
         return URL(filePath: candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? "/usr/bin/git")
     }()
 
-    /// Runs git on dedicated threads: pipe reads block, and blocking inside a task would hold one of the few
-    /// cooperative threads for the whole process lifetime. Standard error is drained on its own thread so git
-    /// filling that pipe cannot stall its standard output, and cancelling the task terminates git.
+    /// Threads for the blocking parts of a git run: a pipe read blocks, and blocking inside a task would hold one
+    /// of the few cooperative threads for the whole process lifetime. Four is enough for the batch reads a large
+    /// selection runs side by side; further runs queue behind them rather than spawning a thread each.
+    package static let blockingPool = BlockingOffloadPool(width: 4)
+
+    /// Runs git and returns its standard output. Its standard error and, when given, its standard input go through
+    /// temporary files, so one blocking job per run is enough: nothing waits on another job for a thread, whatever
+    /// the pool width, and a full standard error can never stall the standard output. Cancelling the task
+    /// terminates git.
     private static func run(_ arguments: [String], input: Data? = nil, in directory: URL) async throws -> Data {
         PhaseTrace.log("git \(arguments.prefix(2).joined(separator: " "))")
         defer { PhaseTrace.log("git done \(arguments.prefix(2).joined(separator: " "))") }
         let running = RunningProcess()
-        let output = Pipe()
-        let error = Pipe()
+        let scratch = try ScratchFiles(input: input)
+        defer { scratch.remove() }
         return try await withTaskCancellationHandler {
-            async let errorData = onThread { error.fileHandleForReading.readDataToEndOfFile() }
-            let (status, data) = try await onThread {
-                try launch(arguments, input: input, in: directory, output: output, error: error, tracking: running)
+            let (status, data) = try await blockingPool.run {
+                try launch(arguments, in: directory, scratch: scratch, tracking: running)
             }
-            let errors = try await errorData
             guard status == 0 else {
                 if running.isCancelled { throw CancellationError() }
-                throw GitError.commandFailed(String(decoding: errors, as: UTF8.self))
+                throw GitError.commandFailed(String(decoding: scratch.errorOutput(), as: UTF8.self))
             }
             return data
         } onCancel: {
@@ -191,50 +194,67 @@ package struct GitClient: Sendable {
         }
     }
 
-    private static func onThread<Value: Sendable>(_ work: @escaping @Sendable () throws -> Value) async throws -> Value {
-        try await withCheckedThrowingContinuation { continuation in
-            let thread = Thread {
-                continuation.resume(with: Result { try work() })
-            }
-            thread.qualityOfService = .userInitiated
-            thread.start()
-        }
-    }
-
-    /// Starts git, feeds it `input`, reads its standard output to the end and waits for it to exit.
+    /// Starts git, reads its standard output to the end and waits for it to exit. Blocks: run it on the pool.
     private static func launch(
-        _ arguments: [String], input: Data?, in directory: URL, output: Pipe, error: Pipe, tracking running: RunningProcess
+        _ arguments: [String], in directory: URL, scratch: ScratchFiles, tracking running: RunningProcess
     ) throws -> (status: Int32, output: Data) {
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
         process.currentDirectoryURL = directory
+        let output = Pipe()
         process.standardOutput = output
-        process.standardError = error
-        let inputPipe = Pipe()
-        process.standardInput = inputPipe
+        process.standardError = try scratch.errorHandle()
+        process.standardInput = try scratch.inputHandle()
         do {
             try running.start(process)
         } catch let failure {
-            // With no child holding the write ends, the readers would wait for an end of file that never comes.
+            // With no child holding the write end, the reader would wait for an end of file that never comes.
             try? output.fileHandleForWriting.close()
-            try? error.fileHandleForWriting.close()
             throw failure
-        }
-        if let input {
-            // Written from its own thread: a large input would block before the child gets to drain its output.
-            let writer = Thread {
-                try? inputPipe.fileHandleForWriting.write(contentsOf: input)
-                try? inputPipe.fileHandleForWriting.close()
-            }
-            writer.qualityOfService = .userInitiated
-            writer.start()
-        } else {
-            try? inputPipe.fileHandleForWriting.close()
         }
         let data = output.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         return (process.terminationStatus, data)
+    }
+}
+
+/// The temporary files one git run reads its input from and writes its errors to.
+private struct ScratchFiles: Sendable {
+    private let errorFile: URL
+    private let inputFile: URL?
+
+    init(input: Data?) throws {
+        let directory = FileManager.default.temporaryDirectory
+        let stem = "gdv-git-\(UUID().uuidString)"
+        errorFile = directory.appending(path: stem + ".stderr")
+        try Data().write(to: errorFile)
+        if let input {
+            let url = directory.appending(path: stem + ".stdin")
+            try input.write(to: url)
+            inputFile = url
+        } else {
+            inputFile = nil
+        }
+    }
+
+    func errorHandle() throws -> FileHandle {
+        try FileHandle(forWritingTo: errorFile)
+    }
+
+    /// The input file, or the null device so git sees an end of file at once.
+    func inputHandle() throws -> FileHandle {
+        guard let inputFile else { return FileHandle.nullDevice }
+        return try FileHandle(forReadingFrom: inputFile)
+    }
+
+    func errorOutput() -> Data {
+        (try? Data(contentsOf: errorFile)) ?? Data()
+    }
+
+    func remove() {
+        try? FileManager.default.removeItem(at: errorFile)
+        if let inputFile { try? FileManager.default.removeItem(at: inputFile) }
     }
 }
 

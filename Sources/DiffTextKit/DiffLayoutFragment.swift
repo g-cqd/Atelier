@@ -1,4 +1,4 @@
-import AppKit
+package import AppKit
 import DiffCore
 import DiffRendering
 import Foundation

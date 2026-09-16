@@ -1,6 +1,7 @@
-import AppKit
+package import AemiCore
+package import AppKit
 import DiffCore
-import DiffRendering
+package import DiffRendering
 import Foundation
 import SwiftUI
 
@@ -16,14 +17,17 @@ package final class SplitPaneController: NSObject {
     private var members: [Member] = []
     private var isSyncing = false
     private let clock: any Clock<Duration>
+    private let taskProvider: any TaskProvider
     /// The debounced alignment pass in flight, if any; awaiting it observes the pass it will run.
     package private(set) var pendingAlignment: Task<Void, Never>?
     /// Long enough for a resize and both panes applying text to land in one alignment pass.
     package static let alignmentDebounce: Duration = .milliseconds(40)
 
-    /// Takes the clock the debounce sleeps on, so tests can drive it with a virtual one.
-    package init(clock: any Clock<Duration> = ContinuousClock()) {
+    /// Takes the clock the debounce sleeps on and the provider its task is spawned through, so tests can drive
+    /// the one with a virtual clock and await the other.
+    package init(clock: any Clock<Duration> = ContinuousClock(), taskProvider: any TaskProvider = .default) {
         self.clock = clock
+        self.taskProvider = taskProvider
         super.init()
     }
 
@@ -63,7 +67,7 @@ package final class SplitPaneController: NSObject {
     /// Coalesces bursts of layout changes (a resize, two panes applying text) into one alignment pass.
     package func scheduleAlignment() {
         pendingAlignment?.cancel()
-        pendingAlignment = Task { [weak self, clock] in
+        pendingAlignment = taskProvider.task { [weak self, clock] in
             guard (try? await clock.sleep(for: Self.alignmentDebounce)) != nil else { return }
             self?.alignRows()
         }

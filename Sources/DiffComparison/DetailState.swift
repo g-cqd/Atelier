@@ -1,7 +1,6 @@
-import DiffConcurrency
 import DiffCore
 import DiffGit
-import DiffRendering
+package import DiffRendering
 import Foundation
 import Observation
 

@@ -1,5 +1,5 @@
-import AppKit
-import DiffCore
+package import AppKit
+package import DiffCore
 import DiffGit
 import Foundation
 

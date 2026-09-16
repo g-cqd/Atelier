@@ -1,4 +1,4 @@
-import DiffConcurrency
+import AemiCore
 import Foundation
 @testable import DiffComparison
 @testable import DiffGit

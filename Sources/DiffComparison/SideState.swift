@@ -1,8 +1,8 @@
-import DiffConcurrency
+package import AemiCore
 import DiffCore
-import DiffGit
+package import DiffGit
 import DiffRendering
-import Foundation
+package import Foundation
 import Observation
 
 /// One comparison target: what it points at, and the files it contains.

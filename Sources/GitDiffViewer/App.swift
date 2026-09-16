@@ -95,7 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard remaining.isEmpty else { return }
         // Through the menu item, which outlives every window, and on the next turn: opened while the close is
         // still under way, SwiftUI presents the closing window again.
-        DispatchQueue.main.async { Self.performWelcomeCommand() }
+        Task { Self.performWelcomeCommand() }
     }
 
     private static func performWelcomeCommand() {
