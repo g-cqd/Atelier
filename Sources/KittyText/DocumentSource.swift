@@ -1,3 +1,5 @@
+import Foundation
+
 /// Abstraction over line-based text storage.
 ///
 /// Consumers (rendering, layout, saving) use this protocol instead of

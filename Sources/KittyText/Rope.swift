@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// A persistent, value-typed UTF-8 byte rope.
 ///

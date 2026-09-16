@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 public enum SymbolJSONWriter {
     public static func writeCollection(_ collection: SymbolCollection, to url: URL) throws {

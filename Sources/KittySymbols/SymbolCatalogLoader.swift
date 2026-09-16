@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 public enum SymbolCatalogLoader {
     public typealias Discover = @Sendable () throws -> SymbolCollection
