@@ -1,3 +1,4 @@
+import AtelierSyntaxModel
 import Testing
 
 @testable import KittyCodecs
