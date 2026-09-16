@@ -6,7 +6,7 @@ One workshop for two source tools that share a core:
 |---|---|
 | `Apps/GitDiffViewer` | macOS diff viewer on SwiftUI and TextKit 2 |
 | `Apps/KittyCode` | terminal code editor |
-| `Packages/AtelierCore` | the building blocks both apps are made of: text storage, diffing, syntax highlighting, themes, git, file trees, search, test support |
+| `Packages/AtelierCore` | the building blocks both apps are made of, one product per target: `AtelierText` (rope, cursors, display metrics), `AtelierDiff` (line and intraline diffing, moved blocks, hunks, unified patches, byte-level `DiffSource`), `AtelierSyntaxModel` (languages, roles, tokens, the `HighlightEngine` interface), `AtelierLexers` (allocation-light scanners over UTF-8 or UTF-16, the lexical engine), `AtelierGrammar` / `AtelierParser` / `AtelierQuery` (tree-sitter grammars, GLR parsing, queries), `AtelierSwiftSyntax` (swift-syntax token ranges), `AtelierTheme` (role-keyed themes, Xcode theme import), `AtelierProcess` (subprocess runner on aemi's blocking pool), `AtelierGit` (git client, pure parsers, status vocabulary), `AtelierSources` (files, folders, refs and patches as comparison sources), `AtelierTestSupport` (scripted process runner) |
 
 Every package builds on [aemi](https://github.com/Aemi-Studio/aemi) for its runtime seams (task providers,
 clocks, blocking pools), byte kernels, POSIX file access and deterministic test kits.
