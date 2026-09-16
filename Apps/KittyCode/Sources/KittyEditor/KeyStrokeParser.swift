@@ -1,3 +1,4 @@
+import AemiKernel
 import Foundation
 import KittyCodecs
 import KittyInput
@@ -41,15 +42,13 @@ public enum KeyStrokeParser {
         }
 
         // Single letter a-z
-        if key.count == 1, let char = key.first, char >= "a" && char <= "z" {
-            let keyCode = UInt32(char.asciiValue!)
-            return KeyStroke(keyCode: keyCode, modifiers: modifiers)
+        if key.count == 1, let char = key.first, let byte = char.asciiValue, ASCII.isLowercase(byte) {
+            return KeyStroke(keyCode: UInt32(byte), modifiers: modifiers)
         }
 
         // Single digit 0-9
-        if key.count == 1, let char = key.first, char >= "0" && char <= "9" {
-            let keyCode = UInt32(char.asciiValue!)
-            return KeyStroke(keyCode: keyCode, modifiers: modifiers)
+        if key.count == 1, let char = key.first, let byte = char.asciiValue, ASCII.isDigit(byte) {
+            return KeyStroke(keyCode: UInt32(byte), modifiers: modifiers)
         }
 
         return nil
