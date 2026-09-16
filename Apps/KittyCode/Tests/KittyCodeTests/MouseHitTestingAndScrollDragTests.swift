@@ -53,7 +53,7 @@ struct MouseHitTestingAndScrollDragTests {
             language: nil
         )
         sut.state.restoreStateFromActiveBuffer()
-        sut.state.lastClickTime = .now
+        sut.state.lastClickTime = sut.state.clock.erasedNow()
 
         handleMouse(
             MouseEvent(button: .left, row: 3, col: 9, kind: .press),

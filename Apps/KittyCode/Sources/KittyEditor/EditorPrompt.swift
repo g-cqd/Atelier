@@ -1,3 +1,4 @@
+import AemiCore
 import AtelierText
 import Foundation
 public import KittyCodecs
@@ -262,7 +263,7 @@ extension EditorState {
                     await self.moveTreeItem(from: path, to: self.resolvePromptPath(trimmedPath))
                 }
             case .confirmDelete(let path):
-                Task { @MainActor in
+                taskProvider.task(role: .work) { @MainActor in
                     if !(await deleteTreeItem(at: path)) {
                         self.prompt = EditorPrompt(
                             kind: prompt.kind,
@@ -298,7 +299,7 @@ extension EditorState {
             return false
         }
 
-        Task { @MainActor in
+        taskProvider.task(role: .work) { @MainActor in
             if !(await operation()) {
                 self.prompt = EditorPrompt(
                     kind: prompt.kind,

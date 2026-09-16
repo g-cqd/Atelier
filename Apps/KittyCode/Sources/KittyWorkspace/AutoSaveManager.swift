@@ -1,3 +1,4 @@
+public import AemiCore
 import AtelierText
 import Foundation
 
@@ -7,27 +8,34 @@ public final class AutoSaveManager {
     private let fileWatcherIntegration: FileWatcherIntegration?
     private let autoSaveInterval: Double
     private let saveActiveBuffer: @MainActor () -> Void
+    private let taskProvider: any TaskProvider
+    private let clock: any Clock<Duration>
     private var task: Task<Void, Never>?
 
     public init(
         workspace: WorkspaceSession,
         fileWatcherIntegration: FileWatcherIntegration?,
         autoSaveInterval: Double,
-        saveActiveBuffer: @MainActor @escaping () -> Void
+        saveActiveBuffer: @MainActor @escaping () -> Void,
+        taskProvider: any TaskProvider = .default,
+        clock: any Clock<Duration> = ContinuousClock()
     ) {
         self.workspace = workspace
         self.fileWatcherIntegration = fileWatcherIntegration
         self.autoSaveInterval = autoSaveInterval
         self.saveActiveBuffer = saveActiveBuffer
+        self.taskProvider = taskProvider
+        self.clock = clock
     }
 
     public func start() {
         guard task == nil else { return }
         let interval = autoSaveInterval
+        let clock = clock
 
-        task = Task { [weak self] in
+        task = taskProvider.task(role: .observation) { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(interval))
+                try? await clock.sleep(for: .seconds(interval))
                 guard !Task.isCancelled else { break }
                 self?.saveAllDirtyBuffers()
             }
@@ -55,7 +63,7 @@ public final class AutoSaveManager {
                 // snapshot we serialize is value-typed and safe to send.
                 let path = buffer.filePath
                 let data = Data(buffer.textBuffer.text.utf8)
-                Task.detached(priority: .utility) { [weak buffer] in
+                taskProvider.detachedTask(role: .work, priority: .utility) { [weak buffer] in
                     let url = URL(fileURLWithPath: path)
                     do {
                         try data.write(to: url, options: [.atomic])
