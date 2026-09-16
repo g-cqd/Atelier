@@ -1,6 +1,6 @@
 import Foundation
-import KittyParser
-import KittySync
+public import KittyParser
+import Synchronization
 
 /// Evaluates query predicates against captured nodes.
 public enum Predicates: Sendable {
@@ -119,7 +119,7 @@ private final class RegexCache: Sendable {
         var insertionOrder: [String] = []
     }
 
-    private let storage = StateLock(initialState: CacheState())
+    private let storage = Mutex(CacheState())
 
     func regex(for pattern: String) -> NSRegularExpression? {
         return storage.withLock { cache in

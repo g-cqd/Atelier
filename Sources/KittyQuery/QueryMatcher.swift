@@ -1,4 +1,4 @@
-import KittyParser
+public import KittyParser
 
 /// Walks a syntax tree and matches query patterns, returning captures.
 public enum QueryMatcher: Sendable {

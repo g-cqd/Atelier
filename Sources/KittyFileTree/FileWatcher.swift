@@ -6,7 +6,7 @@ public actor FileWatcher {
         case directoryChanged(String)
     }
 
-    private var fileSources: [String: DispatchSourceFileSystemObject] = [:]
+    private var fileSources: [String: any DispatchSourceFileSystemObject] = [:]
     private var directoryStream: FSEventStreamRef?
     private var streamQueue: DispatchQueue?
     private var continuation: AsyncStream<FileWatchEvent>.Continuation?

@@ -1,6 +1,5 @@
 import Foundation
-import KittyFileTree
-import KittySync
+public import KittyFileTree
 import Synchronization
 import System
 
@@ -20,12 +19,12 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
     }
 
     private let rootPath: String
-    private let lock: StateLock<State>
-    private let inFlightLock = StateLock(initialState: [String: Task<BaseContent, Never>]())
+    private let lock: Mutex<State>
+    private let inFlightLock = Mutex([String: Task<BaseContent, Never>]())
 
     public init(rootPath: String) {
         self.rootPath = Self.normalizePath(rootPath)
-        self.lock = StateLock(initialState: State())
+        self.lock = Mutex(State())
     }
 
     public func status(for path: String) -> FileStatus? {

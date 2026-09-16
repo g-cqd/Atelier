@@ -111,7 +111,7 @@ public struct ColorRGB: Sendable, Equatable {
 // MARK: - Codable
 
 extension ColorRGB: Codable {
-    public init(from decoder: Decoder) throws {
+    public init(from decoder: any Decoder) throws {
         if let container = try? decoder.singleValueContainer(),
             let hex = try? container.decode(String.self),
             let color = ColorRGB(hex: hex)
@@ -127,7 +127,7 @@ extension ColorRGB: Codable {
         self.alpha = try container.decodeIfPresent(Double.self, forKey: .alpha) ?? 1
     }
 
-    public func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: any Encoder) throws {
         var container = encoder.singleValueContainer()
         if alpha < 1 {
             let alphaInt = UInt8(min(255, max(0, alpha * 255)).rounded())

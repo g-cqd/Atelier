@@ -1,5 +1,5 @@
-import KittyCodecs
-import KittyTerminal
+public import KittyCodecs
+public import KittyTerminal
 
 public enum InputEvent: Sendable {
     case key(KeyEvent)
