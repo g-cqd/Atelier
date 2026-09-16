@@ -1,4 +1,5 @@
 public import AemiRuntime
+import Darwin
 public import Foundation
 import Synchronization
 
@@ -8,8 +9,13 @@ import Synchronization
 /// reads standard output and waits for the exit: no job ever waits on another job for a pool thread, whatever the
 /// pool width, and a full standard error can never stall the standard output. Cancelling the calling task
 /// terminates the child, whether or not it has been launched yet. A spec with a timeout races the job against the
-/// runner's clock, so a test drives the deadline with a virtual clock.
+/// runner's clock, so a test drives the deadline with a virtual clock. A child that ignores the termination a
+/// timeout sends is killed after ``killGracePeriod``; a cancellation only sends the termination, since a
+/// cancellation handler has no clock to wait on.
 public struct HardenedProcessRunner: ProcessRunner {
+    /// How long a timed-out child gets to exit after `SIGTERM` before `SIGKILL`.
+    public static let killGracePeriod: Duration = .seconds(2)
+
     private let pool: BlockingOffloadPool
     private let clock: any Clock<Duration>
 
@@ -51,8 +57,17 @@ public struct HardenedProcessRunner: ProcessRunner {
             defer { group.cancelAll() }
             while let result = try await group.next() {
                 if let result { return result }
-                // The deadline came first: the child has to go, and its job returns once it is gone.
+                // The deadline came first: the child has to go, and its job returns once it is gone. A child that
+                // ignores the termination is killed after the grace period, so the job cannot hold its thread.
                 running.terminate()
+                group.addTask {
+                    try await clock.sleep(for: Self.killGracePeriod)
+                    running.kill()
+                    return nil
+                }
+                while let late = try await group.next() {
+                    if late != nil { break }
+                }
                 throw ProcessError.timedOut(timeout)
             }
             throw ProcessError.launchFailed("the run produced no result")
@@ -67,7 +82,7 @@ public struct HardenedProcessRunner: ProcessRunner {
         process.executableURL = spec.executable
         process.arguments = spec.arguments
         process.currentDirectoryURL = spec.currentDirectory
-        if case .exactly(let variables) = spec.environment { process.environment = variables }
+        if let variables = spec.environment.variables { process.environment = variables }
         let output = Pipe()
         process.standardOutput = output
         process.standardError = try scratch.errorHandle()
@@ -111,6 +126,12 @@ private final class LaunchedProcess: Sendable {
         }
         if let process, process.isRunning { process.terminate() }
     }
+
+    /// `SIGKILL`, for a child that ignored ``terminate()``.
+    func kill() {
+        let process = state.withLock(\.process)
+        if let process, process.isRunning { Darwin.kill(process.processIdentifier, SIGKILL) }
+    }
 }
 
 /// The temporary files one run reads its input from and writes its errors to.
@@ -121,15 +142,22 @@ private struct ScratchFiles: Sendable {
     init(input: Data?) throws {
         let directory = FileManager.default.temporaryDirectory
         let stem = "atelier-process-\(UUID().uuidString)"
-        errorFile = directory.appending(path: stem + ".stderr")
+        let errorFile = directory.appending(path: stem + ".stderr")
         try Data().write(to: errorFile)
-        if let input {
-            let url = directory.appending(path: stem + ".stdin")
-            try input.write(to: url)
-            inputFile = url
-        } else {
+        self.errorFile = errorFile
+        guard let input else {
             inputFile = nil
+            return
         }
+        let url = directory.appending(path: stem + ".stdin")
+        do {
+            try input.write(to: url)
+        } catch {
+            // Nothing will `remove()` a value that never returned, so the error file goes now.
+            try? FileManager.default.removeItem(at: errorFile)
+            throw error
+        }
+        inputFile = url
     }
 
     func errorHandle() throws -> FileHandle {
