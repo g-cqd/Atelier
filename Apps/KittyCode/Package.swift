@@ -97,7 +97,9 @@ let package = Package(
         // Layer 2g — Search engine primitives
         .target(
             name: "KittySearch",
-            dependencies: [.product(name: "AemiKernels", package: "aemi")],
+            dependencies: [
+                .product(name: "AemiKernels", package: "aemi"), .product(name: "AemiKernel", package: "aemi")
+            ],
             swiftSettings: strict),
 
         // Layers 3a–3c (grammar tables, GLR parser, queries) and 2c (text storage) live in AtelierCore.
@@ -110,7 +112,8 @@ let package = Package(
                 .product(name: "AtelierParser", package: "AtelierCore"),
                 .product(name: "AtelierQuery", package: "AtelierCore"), "KittyStyle",
                 .product(name: "AtelierSyntaxModel", package: "AtelierCore"),
-                .product(name: "AemiCore", package: "aemi")
+                .product(name: "AemiCore", package: "aemi"),
+                .product(name: "AemiKernel", package: "aemi")
             ],
             resources: [.copy("Grammars")],
             swiftSettings: strict
@@ -152,7 +155,8 @@ let package = Package(
                 "KittyRenderer", "KittySyntax", "KittySymbols", "KittyGit", "KittySearch",
                 "KittyStyle", "KittyTerminal",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                .product(name: "AemiCore", package: "aemi")
+                .product(name: "AemiCore", package: "aemi"),
+                .product(name: "AemiKernel", package: "aemi")
             ],
             swiftSettings: strict),
 
