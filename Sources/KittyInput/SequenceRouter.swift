@@ -1,3 +1,4 @@
+import Foundation
 import KittyCodecs
 
 /// Routes incoming byte sequences to appropriate decoders based on prefix.

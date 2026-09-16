@@ -1,9 +1,9 @@
-import KittySync
+import Synchronization
 
 private let parseStackIDs = ParseStackIDGenerator()
 
 private final class ParseStackIDGenerator: Sendable {
-    private let counter = StateLock(initialState: 0)
+    private let counter = Mutex(0)
 
     func next() -> Int {
         return counter.withLock { counter in

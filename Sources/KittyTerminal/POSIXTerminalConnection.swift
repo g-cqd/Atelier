@@ -1,5 +1,5 @@
-import Darwin
-import KittySync
+public import Darwin
+import Synchronization
 import System
 
 // SAFETY: `fd` and `writeFd` are immutable (let). `originalTermios` is guarded
@@ -7,14 +7,14 @@ import System
 // kernel level.
 /// A `TerminalConnection` backed by real POSIX file descriptors.
 ///
-/// This type uses Darwin syscalls and `KittySync.StateLock` for termios state protection.
+/// This type uses Darwin syscalls and `Synchronization.Mutex` for termios state protection.
 /// Typically the read descriptor is `STDIN_FILENO` and the write descriptor is
 /// `STDOUT_FILENO`, but PTY descriptors are also supported by supplying a single
 /// file descriptor for both directions.
 public final class POSIXTerminalConnection: TerminalConnection, @unchecked Sendable {
     private let fd: Int32
     private let writeFd: Int32
-    private let termiosState = StateLock<termios?>(initialState: nil)
+    private let termiosState = Mutex<termios?>(nil)
 
     /// Creates a connection using the given POSIX file descriptors.
     ///
@@ -184,6 +184,8 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
     }
 
     private func withTermiosLock<T: Sendable>(_ body: @Sendable (inout termios?) -> T) -> T {
-        termiosState.withLock(body)
+        termiosState.withLock { state in
+            body(&state)
+        }
     }
 }

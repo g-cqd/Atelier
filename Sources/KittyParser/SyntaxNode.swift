@@ -1,3 +1,5 @@
+import Foundation
+
 // MARK: - Point
 
 public struct Point: Sendable, Equatable, Hashable, Comparable {

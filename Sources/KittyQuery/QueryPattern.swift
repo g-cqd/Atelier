@@ -1,4 +1,4 @@
-import KittyParser
+public import KittyParser
 
 // MARK: - Query
 
