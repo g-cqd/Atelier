@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 public struct SymbolCollection: Sendable, Codable, Equatable {
     public let generatedAt: Date
