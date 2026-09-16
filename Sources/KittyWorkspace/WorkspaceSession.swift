@@ -1,7 +1,8 @@
 import Foundation
 import KittyGit
-import KittySyntax
-import KittyText
+import KittyStyle
+public import KittySyntax
+public import KittyText
 
 @MainActor
 public final class WorkspaceSession: ActiveDocumentView, WorkspaceCommands {

@@ -1,5 +1,5 @@
 import Foundation
-import KittyFileTree
+public import KittyFileTree
 import System
 
 @MainActor

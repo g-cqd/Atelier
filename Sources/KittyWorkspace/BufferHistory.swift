@@ -1,5 +1,5 @@
-import Foundation
-import KittyText
+public import Foundation
+public import KittyText
 
 public struct BufferEditSnapshot: Sendable {
     public var textBuffer: TextBuffer

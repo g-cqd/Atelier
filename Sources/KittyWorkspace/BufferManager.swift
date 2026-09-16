@@ -1,4 +1,4 @@
-import KittyText
+public import KittyText
 
 @MainActor
 public final class BufferManager {
