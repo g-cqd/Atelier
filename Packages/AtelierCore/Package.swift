@@ -130,7 +130,9 @@ let package = Package(
             swiftSettings: strict
         ),
         .testTarget(
-            name: "AtelierLexersTests", dependencies: ["AtelierLexers", "AtelierSyntaxModel"], swiftSettings: strict),
+            name: "AtelierLexersTests",
+            dependencies: ["AtelierLexers", "AtelierSyntaxModel", .product(name: "AemiTestKit", package: "aemi")],
+            swiftSettings: strict),
         .testTarget(
             name: "AtelierSwiftSyntaxTests", dependencies: ["AtelierSwiftSyntax", "AtelierDiff", "AtelierSyntaxModel"],
             swiftSettings: strict)
