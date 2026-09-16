@@ -1,4 +1,4 @@
-import KittyStyle
+public import KittyStyle
 
 /// Resolves `(HighlightRole, HighlightModifierSet)` to a visual `Style`
 /// using the existing `Theme` with role-hierarchy fallback and modifier overrides.
