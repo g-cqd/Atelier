@@ -1,3 +1,4 @@
+import AemiKernel
 import Foundation
 
 public func buildReplacement(
@@ -98,7 +99,7 @@ private func expandReplacementTemplate(
             continue
         }
 
-        guard next.isASCII, next.isNumber else {
+        guard let nextByte = next.asciiValue, ASCII.isDigit(nextByte) else {
             result.append("$")
             index = afterDollar
             continue
@@ -109,7 +110,7 @@ private func expandReplacementTemplate(
         var scan = afterDollar
         var digits = ""
         while scan < template.endIndex, let digit = template[scan].asciiValue,
-            digit >= 0x30, digit <= 0x39
+            ASCII.isDigit(digit)
         {
             digits.append(template[scan])
             scan = template.index(after: scan)
