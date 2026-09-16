@@ -3,7 +3,7 @@ import KittyGrammar
 import KittyParser
 import KittyQuery
 import KittyStyle
-import KittySync
+import Synchronization
 import os
 
 /// Signpost emitter for syntax-highlighter hot paths. Audit D10 —
@@ -590,7 +590,7 @@ private struct SplitLinesScratch {
 }
 
 private enum SyntaxArtifactsCache {
-    private static let storage = StateLock(initialState: [String: SyntaxArtifacts?]())
+    private static let storage = Mutex([String: SyntaxArtifacts?]())
 
     static func artifacts(for language: String) -> SyntaxArtifacts? {
         storage.withLock { $0[language] } ?? nil

@@ -1,4 +1,5 @@
 import KittyCodecs
+public import KittyStyle
 
 /// A single cell in the terminal screen buffer.
 public struct Cell: Sendable, Equatable {
