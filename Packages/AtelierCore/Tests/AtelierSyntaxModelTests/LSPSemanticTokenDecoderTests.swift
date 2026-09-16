@@ -1,7 +1,6 @@
 import Testing
 
-@testable import KittyCodecs
-@testable import KittySyntax
+@testable import AtelierSyntaxModel
 
 @Suite
 struct LSPSemanticTokenDecoderTests {

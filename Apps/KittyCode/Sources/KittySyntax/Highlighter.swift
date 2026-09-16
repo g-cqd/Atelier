@@ -1,6 +1,7 @@
 import AtelierGrammar
 public import AtelierParser
 public import AtelierQuery
+public import AtelierSyntaxModel
 import Foundation
 public import KittyStyle
 

@@ -1,5 +1,6 @@
 import AtelierGrammar
 import AtelierQuery
+public import AtelierSyntaxModel
 import Foundation
 
 /// Analyzes a language's grammar and query setup to determine what highlighting tier it achieves.
