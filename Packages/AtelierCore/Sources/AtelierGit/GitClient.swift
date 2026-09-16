@@ -62,6 +62,14 @@ public struct GitClient: Sendable {
         GitParsers.tree(try await run(["ls-tree", "-r", "-l", "-z", ref]), isSupported: isSupported)
     }
 
+    /// The branch and every path that is not clean, ignored files included, untracked files listed one by one.
+    public func status() async throws -> GitStatusSnapshot {
+        GitParsers.porcelainV2(
+            try await run([
+                "status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all", "--ignored=matching"
+            ]))
+    }
+
     /// Files of the working tree as git sees it: tracked files plus untracked ones that are not ignored. Index
     /// entries whose file is gone are listed too; the caller drops what it cannot stat.
     public func workingTreePaths() async throws -> [String] {
