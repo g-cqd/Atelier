@@ -1,4 +1,5 @@
 import Foundation
+import KittyText
 
 @MainActor
 public final class AutoSaveManager {

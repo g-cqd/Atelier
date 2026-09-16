@@ -1,4 +1,4 @@
-import KittyGit
+public import KittyGit
 import KittyText
 
 public struct GitDecorationConfig: Sendable {
