@@ -25,7 +25,8 @@ let package = Package(
         .library(name: "AtelierSyntaxModel", targets: ["AtelierSyntaxModel"]),
         .library(name: "AtelierDiff", targets: ["AtelierDiff"]),
         .library(name: "AtelierLexers", targets: ["AtelierLexers"]),
-        .library(name: "AtelierSwiftSyntax", targets: ["AtelierSwiftSyntax"])
+        .library(name: "AtelierSwiftSyntax", targets: ["AtelierSwiftSyntax"]),
+        .library(name: "AtelierProcess", targets: ["AtelierProcess"])
     ],
     dependencies: [
         .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
@@ -48,7 +49,21 @@ let package = Package(
             ],
             swiftSettings: strict
         ),
+        // Subprocesses: one blocking job per run on aemi's pool, temp-file input and errors, clock-driven timeouts.
+        .target(
+            name: "AtelierProcess",
+            dependencies: [.product(name: "AemiRuntime", package: "aemi")],
+            swiftSettings: strict
+        ),
         .testTarget(name: "AtelierDiffTests", dependencies: ["AtelierDiff"], swiftSettings: strict),
+        .testTarget(
+            name: "AtelierProcessTests",
+            dependencies: [
+                "AtelierProcess", .product(name: "AemiRuntime", package: "aemi"),
+                .product(name: "AemiTestKit", package: "aemi")
+            ],
+            swiftSettings: strict
+        ),
         .testTarget(
             name: "AtelierLexersTests", dependencies: ["AtelierLexers", "AtelierSyntaxModel"], swiftSettings: strict),
         .testTarget(
