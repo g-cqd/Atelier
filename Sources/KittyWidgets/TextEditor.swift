@@ -1,6 +1,6 @@
-import KittyCodecs
-import KittySyntax
-import KittyText
+public import KittyCodecs
+public import KittySyntax
+public import KittyText
 
 /// A highlighted range within a single line, carrying its own style.
 public struct TextHighlight: Sendable, Equatable {

@@ -1,4 +1,4 @@
-import KittyCodecs
+public import KittyCodecs
 import KittyRenderer
 
 public struct HorizontalScrollIndicatorStyle: Sendable, Equatable {

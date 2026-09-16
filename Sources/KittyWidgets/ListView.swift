@@ -1,4 +1,4 @@
-import KittyCodecs
+public import KittyCodecs
 
 public struct ListView: View, Sendable {
     public struct Item: Sendable {

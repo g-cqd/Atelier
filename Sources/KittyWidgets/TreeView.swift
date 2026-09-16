@@ -1,4 +1,4 @@
-import KittyCodecs
+public import KittyCodecs
 
 // MARK: - Tree Node
 
