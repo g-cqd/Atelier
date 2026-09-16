@@ -1,4 +1,4 @@
-import KittyCodecs
+public import KittyCodecs
 import KittyInput
 
 public struct VimCommandLine: Sendable, Equatable {
@@ -9,7 +9,7 @@ public struct VimCommandLine: Sendable, Equatable {
 
 public extension EditorState {
     @MainActor
-    public func handleVimCommandLineKey(_ key: KeyEvent) -> Bool {
+    func handleVimCommandLineKey(_ key: KeyEvent) -> Bool {
         switch key.keyCode {
         case Key.enter.rawValue, Key.enterAlt.rawValue:
             let command = vimCommandLine?.buffer ?? ""
@@ -41,7 +41,7 @@ public extension EditorState {
     }
 
     @MainActor
-    public func executeVimExCommand(_ command: String) -> Bool {
+    func executeVimExCommand(_ command: String) -> Bool {
         switch command {
         case "w":
             saveFile()

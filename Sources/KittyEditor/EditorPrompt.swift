@@ -1,7 +1,8 @@
 import Foundation
-import KittyCodecs
+public import KittyCodecs
 import KittySearch
 import KittyText
+import KittyWorkspace
 
 public struct EditorPrompt: Sendable, Equatable {
     public enum Kind: Sendable, Equatable {
@@ -57,7 +58,7 @@ public struct EditorPrompt: Sendable, Equatable {
 }
 
 public extension EditorState {
-    public var displayedStatusMessage: String {
+    var displayedStatusMessage: String {
         if let prompt {
             return prompt.displayText
         }
@@ -67,7 +68,7 @@ public extension EditorState {
         return statusMessage
     }
 
-    public var promptCursorOffset: Int? {
+    var promptCursorOffset: Int? {
         if let prompt {
             return prompt.isEditable ? prompt.displayText.count : nil
         }
@@ -77,7 +78,7 @@ public extension EditorState {
         return nil
     }
 
-    public func beginNewFile() {
+    func beginNewFile() {
         prompt = nil
         contextMenu = nil
         saveStateToActiveBuffer()
@@ -99,7 +100,7 @@ public extension EditorState {
         statusMessage = "New file | \(resolver.openedStatusHints())"
     }
 
-    public func beginSavePrompt(suggestedPath: String? = nil) {
+    func beginSavePrompt(suggestedPath: String? = nil) {
         if bufferManager.activeBuffer == nil {
             beginNewFile()
         }
@@ -112,7 +113,7 @@ public extension EditorState {
         )
     }
 
-    public func beginCreateFilePrompt(in directory: String) {
+    func beginCreateFilePrompt(in directory: String) {
         contextMenu = nil
         prompt = EditorPrompt(
             kind: .createFile(inDirectory: directory),
@@ -121,7 +122,7 @@ public extension EditorState {
         )
     }
 
-    public func beginCreateDirectoryPrompt(in directory: String) {
+    func beginCreateDirectoryPrompt(in directory: String) {
         contextMenu = nil
         prompt = EditorPrompt(
             kind: .createDirectory(inDirectory: directory),
@@ -130,7 +131,7 @@ public extension EditorState {
         )
     }
 
-    public func beginRenamePrompt(for path: String) {
+    func beginRenamePrompt(for path: String) {
         contextMenu = nil
         prompt = EditorPrompt(
             kind: .rename(path: path),
@@ -139,7 +140,7 @@ public extension EditorState {
         )
     }
 
-    public func beginDuplicatePrompt(for path: String) {
+    func beginDuplicatePrompt(for path: String) {
         contextMenu = nil
         prompt = EditorPrompt(
             kind: .duplicate(path: path),
@@ -148,7 +149,7 @@ public extension EditorState {
         )
     }
 
-    public func beginMovePrompt(for path: String) {
+    func beginMovePrompt(for path: String) {
         contextMenu = nil
         prompt = EditorPrompt(
             kind: .move(path: path),
@@ -157,7 +158,7 @@ public extension EditorState {
         )
     }
 
-    public func beginDeletePrompt(for path: String) {
+    func beginDeletePrompt(for path: String) {
         contextMenu = nil
         prompt = EditorPrompt(
             kind: .confirmDelete(path: path),
@@ -166,19 +167,19 @@ public extension EditorState {
         )
     }
 
-    public func confirmPrompt() {
+    func confirmPrompt() {
         guard let prompt else { return }
         if commit(prompt: prompt) {
             self.prompt = nil
         }
     }
 
-    public func cancelPrompt() {
+    func cancelPrompt() {
         prompt = nil
         statusMessage = "Canceled"
     }
 
-    public func handlePromptKey(_ key: KeyEvent) -> Bool {
+    func handlePromptKey(_ key: KeyEvent) -> Bool {
         guard var prompt else { return false }
 
         switch key.keyCode {
@@ -325,7 +326,7 @@ public extension EditorState {
         return relativePath.hasSuffix("/") ? relativePath : relativePath + "/"
     }
 
-    public func relativePathForPrompt(_ path: String) -> String {
+    func relativePathForPrompt(_ path: String) -> String {
         let rootPrefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
         if path.hasPrefix(rootPrefix) {
             return String(path.dropFirst(rootPrefix.count))
@@ -369,7 +370,7 @@ public extension EditorState {
         return relativePath.hasSuffix("/") ? relativePath : relativePath + "/"
     }
 
-    public func performWorkspaceReplaceAll() {
+    func performWorkspaceReplaceAll() {
         guard let search = inFileSearch,
             let pattern = search.pattern,
             !workspaceSearchResults.isEmpty

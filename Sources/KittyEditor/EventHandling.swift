@@ -1,7 +1,7 @@
 import Foundation
 import KittyCodecs
-import KittyInput
-import KittyRenderer
+public import KittyInput
+public import KittyRenderer
 import KittyText
 
 /// Duration that command-feedback overlays stay on screen after the key

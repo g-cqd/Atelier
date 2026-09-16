@@ -1,13 +1,15 @@
 import Foundation
+import KittyApp
 import KittyFileTree
+import KittyStyle
 import KittySyntax
 import KittyText
-import KittyWorkspace
+public import KittyWorkspace
 import System
 
 public extension EditorState {
 
-    public func loadInitialTree(validateHistory: Bool = true) async {
+    func loadInitialTree(validateHistory: Bool = true) async {
         let expandedPaths = collectExpandedPaths(treeNodes)
         treeNodes = await DirectoryScanner.scanAsync(
             rootPath, maxDepth: 1, visibility: fileVisibility, withinRoot: rootPath)
@@ -51,7 +53,7 @@ public extension EditorState {
         }
     }
 
-    public func refreshFlatTree() {
+    func refreshFlatTree() {
         cachedFlatTree = FileTreeNavigator.flatten(treeNodes)
         // Clamp scroll/selection to valid range
         let maxIndex = max(0, cachedFlatTree.count - 1)
@@ -60,7 +62,7 @@ public extension EditorState {
         prewarmVisibleSyntaxArtifacts()
     }
 
-    public func toggleExpand(at index: Int) {
+    func toggleExpand(at index: Int) {
         let flat = cachedFlatTree
         guard index < flat.count else { return }
         let node = flat[index].node
@@ -70,7 +72,7 @@ public extension EditorState {
         refreshFlatTree()
     }
 
-    public func openFile(at index: Int) {
+    func openFile(at index: Int) {
         let flat = cachedFlatTree
         guard index < flat.count else { return }
         let node = flat[index].node
@@ -80,12 +82,12 @@ public extension EditorState {
         openFilePath(node.path, name: node.name)
     }
 
-    public func openFileByPath(_ path: String) {
+    func openFileByPath(_ path: String) {
         let name = FilePath(path).lastComponent?.string ?? path
         openFilePath(path, name: name)
     }
 
-    public func openFilePath(_ path: String, name: String) {
+    func openFilePath(_ path: String, name: String) {
         // Path traversal protection
         guard SecurePath.isValid(path, root: rootPath) else {
             statusMessage = "Access denied: path outside project root"
@@ -156,11 +158,11 @@ public extension EditorState {
     }
 
     /// Detect language name from file extension.
-    public static func detectLanguage(for filename: String) -> String? {
+    static func detectLanguage(for filename: String) -> String? {
         LanguageHighlighter.detectLanguage(for: filename)
     }
 
-    public func saveFile() {
+    func saveFile() {
         if bufferManager.activeBuffer == nil {
             beginNewFile()
         }
@@ -174,7 +176,7 @@ public extension EditorState {
     }
 
     @discardableResult
-    public func writeBufferToDisk(at destinationPath: String) -> Bool {
+    func writeBufferToDisk(at destinationPath: String) -> Bool {
         guard !readOnly else {
             statusMessage = "Read-only mode"
             return false
@@ -272,12 +274,12 @@ public extension EditorState {
         }
     }
 
-    public func writeBufferToDisk() {
+    func writeBufferToDisk() {
         guard !filePath.isEmpty else { return }
         _ = writeBufferToDisk(at: filePath)
     }
 
-    public func closeCurrentTab() {
+    func closeCurrentTab() {
         guard bufferManager.count > 0 else { return }
         let index = bufferManager.activeIndex
         let closedPath = bufferManager.buffers[index].filePath
@@ -424,7 +426,7 @@ public extension EditorState {
         schedulePostLoadProcessing(for: buffer, content: content)
     }
 
-    public func schedulePostLoadProcessing(for buffer: DocumentBuffer, content: String) {
+    func schedulePostLoadProcessing(for buffer: DocumentBuffer, content: String) {
         buffer.postOpenProcessingTask?.cancel()
 
         let version = buffer.documentVersion

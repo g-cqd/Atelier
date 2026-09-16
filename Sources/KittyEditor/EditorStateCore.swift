@@ -1,15 +1,15 @@
 import Foundation
-import KittyApp
-import KittyCodecs
-import KittyFileTree
-import KittyGit
-import KittySearch
-import KittySymbols
-import KittySyntax
-import KittyText
-import KittyWidgets
-import KittyWorkspace
-import Observation
+public import KittyApp
+public import KittyCodecs
+public import KittyFileTree
+public import KittyGit
+public import KittySearch
+public import KittySymbols
+public import KittySyntax
+public import KittyText
+public import KittyWidgets
+public import KittyWorkspace
+public import Observation
 import System
 import os
 

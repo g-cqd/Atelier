@@ -1,4 +1,4 @@
-import KittyCodecs
+public import KittyCodecs
 import KittyFileTree
 
 @MainActor

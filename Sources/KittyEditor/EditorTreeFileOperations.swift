@@ -1,10 +1,12 @@
 import Foundation
+import KittyApp
 import KittyFileTree
+import KittyWorkspace
 import System
 
 public extension EditorState {
     @discardableResult
-    public func createTreeFile(at destinationPath: String, suggestedDirectory _: String) async -> Bool {
+    func createTreeFile(at destinationPath: String, suggestedDirectory _: String) async -> Bool {
         guard validateCreatablePath(destinationPath) else { return false }
 
         let destinationURL = URL(fileURLWithPath: destinationPath)
@@ -37,7 +39,7 @@ public extension EditorState {
     }
 
     @discardableResult
-    public func createTreeDirectory(at destinationPath: String, suggestedDirectory _: String) async -> Bool
+    func createTreeDirectory(at destinationPath: String, suggestedDirectory _: String) async -> Bool
     {
         guard validateCreatablePath(destinationPath) else { return false }
 
@@ -66,12 +68,12 @@ public extension EditorState {
     }
 
     @discardableResult
-    public func renameTreeItem(from sourcePath: String, to destinationPath: String) async -> Bool {
+    func renameTreeItem(from sourcePath: String, to destinationPath: String) async -> Bool {
         await moveTreeItem(from: sourcePath, to: destinationPath)
     }
 
     @discardableResult
-    public func moveTreeItem(from sourcePath: String, to destinationPath: String) async -> Bool {
+    func moveTreeItem(from sourcePath: String, to destinationPath: String) async -> Bool {
         guard validateMovablePath(sourcePath, destinationPath: destinationPath) else {
             return false
         }
@@ -103,7 +105,7 @@ public extension EditorState {
     }
 
     @discardableResult
-    public func duplicateTreeItem(at sourcePath: String, to destinationPath: String) async -> Bool {
+    func duplicateTreeItem(at sourcePath: String, to destinationPath: String) async -> Bool {
         guard validateCreatablePath(destinationPath) else { return false }
         guard FileManager.default.fileExists(atPath: sourcePath) else {
             statusMessage = "Missing source item"
@@ -144,7 +146,7 @@ public extension EditorState {
     }
 
     @discardableResult
-    public func deleteTreeItem(at path: String) async -> Bool {
+    func deleteTreeItem(at path: String) async -> Bool {
         guard validateDeletablePath(path) else { return false }
 
         let parentPath = URL(fileURLWithPath: path).deletingLastPathComponent().path
@@ -174,7 +176,7 @@ public extension EditorState {
         }
     }
 
-    public func undoFileTreeOperation() async {
+    func undoFileTreeOperation() async {
         switch fileTreeHistory.undo(currentNodes: treeNodes) {
         case .applied(let record):
             let success = await applyUndo(record)
@@ -190,7 +192,7 @@ public extension EditorState {
         }
     }
 
-    public func redoFileTreeOperation() async {
+    func redoFileTreeOperation() async {
         switch fileTreeHistory.redo(currentNodes: treeNodes) {
         case .applied(let record):
             let success = await applyRedo(record)
