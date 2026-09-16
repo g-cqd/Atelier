@@ -43,6 +43,7 @@ let package = Package(
             name: "DiffGit",
             dependencies: [
                 "DiffCore", .product(name: "AtelierGit", package: "AtelierCore"),
+                .product(name: "AtelierSources", package: "AtelierCore"),
                 .product(name: "AtelierProcess", package: "AtelierCore"),
                 .product(name: "AemiIO", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
             ],
@@ -78,6 +79,7 @@ let package = Package(
             name: "GitDiffViewerTests",
             dependencies: [
                 "DiffComparison", "DiffGit", "DiffRendering", "DiffTextKit",
+                .product(name: "AtelierSources", package: "AtelierCore"),
                 .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),
                 .product(name: "AtelierTestSupport", package: "AtelierCore"),
                 .product(name: "AemiCore", package: "aemi"), .product(name: "AemiTesting", package: "aemi")

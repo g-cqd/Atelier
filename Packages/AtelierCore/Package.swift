@@ -28,7 +28,8 @@ let package = Package(
         .library(name: "AtelierSwiftSyntax", targets: ["AtelierSwiftSyntax"]),
         .library(name: "AtelierProcess", targets: ["AtelierProcess"]),
         .library(name: "AtelierGit", targets: ["AtelierGit"]),
-        .library(name: "AtelierTestSupport", targets: ["AtelierTestSupport"])
+        .library(name: "AtelierTestSupport", targets: ["AtelierTestSupport"]),
+        .library(name: "AtelierSources", targets: ["AtelierSources"])
     ],
     dependencies: [
         .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
@@ -63,7 +64,25 @@ let package = Package(
             dependencies: ["AtelierProcess", .product(name: "AemiRuntime", package: "aemi")],
             swiftSettings: strict
         ),
+        // What a comparison reads from: files, folders, git refs and patches, each behind one provider, plus the
+        // blob hashing that decides whether two files differ.
+        .target(
+            name: "AtelierSources",
+            dependencies: [
+                "AtelierGit", "AtelierProcess", "AtelierDiff", "AtelierSyntaxModel",
+                .product(name: "AemiIO", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
+            ],
+            swiftSettings: strict
+        ),
         .testTarget(name: "AtelierDiffTests", dependencies: ["AtelierDiff"], swiftSettings: strict),
+        .testTarget(
+            name: "AtelierSourcesTests",
+            dependencies: [
+                "AtelierSources", "AtelierGit", "AtelierProcess", "AtelierSyntaxModel",
+                .product(name: "AemiRuntime", package: "aemi")
+            ],
+            swiftSettings: strict
+        ),
         // Test doubles both apps' suites and the core's share; family-neutral so either test kit can sit next to it.
         .target(name: "AtelierTestSupport", dependencies: ["AtelierProcess"], swiftSettings: strict),
         .testTarget(

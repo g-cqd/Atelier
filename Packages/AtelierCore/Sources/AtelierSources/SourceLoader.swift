@@ -1,6 +1,9 @@
 import AemiIO
+public import AtelierDiff
+public import AtelierGit
+public import AtelierProcess
+import AtelierSyntaxModel
 import CryptoKit
-public import DiffCore
 public import Foundation
 import Synchronization
 
@@ -53,19 +56,19 @@ public struct SourceLoader: SourceReading {
         return try? await GitClient(repository: root, runner: runner).info()
     }
 
-    public func entries(of source: ComparisonSource) async throws -> [SourceEntry] {
+    public func entries(of source: ComparisonSource) async throws -> [GitTreeEntry] {
         try await provider(for: source).entries()
     }
 
-    public func ignoredEntries(of source: ComparisonSource) async throws -> [SourceEntry] {
+    public func ignoredEntries(of source: ComparisonSource) async throws -> [GitTreeEntry] {
         try await provider(for: source).ignoredEntries()
     }
 
-    public func content(of entry: SourceEntry, in source: ComparisonSource) async throws -> String {
+    public func content(of entry: GitTreeEntry, in source: ComparisonSource) async throws -> String {
         try await provider(for: source).content(of: entry)
     }
 
-    public func contents(of entries: [SourceEntry], in source: ComparisonSource) async throws -> [String: String] {
+    public func contents(of entries: [GitTreeEntry], in source: ComparisonSource) async throws -> [String: String] {
         try await provider(for: source).contents(of: entries)
     }
 
@@ -150,19 +153,19 @@ public struct SourceLoader: SourceReading {
 
 /// One kind of comparison target: how its files are listed and read.
 public protocol SourceProvider: Sendable {
-    func entries() async throws -> [SourceEntry]
+    func entries() async throws -> [GitTreeEntry]
     /// Files the source leaves out of `entries()` because they are ignored; empty unless the source knows the notion.
-    func ignoredEntries() async throws -> [SourceEntry]
-    func content(of entry: SourceEntry) async throws -> String
-    func contents(of entries: [SourceEntry]) async throws -> [String: String]
+    func ignoredEntries() async throws -> [GitTreeEntry]
+    func content(of entry: GitTreeEntry) async throws -> String
+    func contents(of entries: [GitTreeEntry]) async throws -> [String: String]
 }
 
 extension SourceProvider {
-    public func ignoredEntries() async throws -> [SourceEntry] {
+    public func ignoredEntries() async throws -> [GitTreeEntry] {
         []
     }
 
-    public func contents(of entries: [SourceEntry]) async throws -> [String: String] {
+    public func contents(of entries: [GitTreeEntry]) async throws -> [String: String] {
         let pairs = try await mapConcurrently(entries, limit: SourceLoader.hashingConcurrency) { entry in
             (entry.relativePath, try await content(of: entry))
         }
@@ -173,15 +176,15 @@ extension SourceProvider {
 public struct FileSource: SourceProvider {
     public let url: URL
 
-    public func entries() async throws -> [SourceEntry] {
+    public func entries() async throws -> [GitTreeEntry] {
         let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
         let blobID =
             size <= SourceLoader.maximumHashedSize
             ? try await Self.blobID(atPath: url.path(percentEncoded: false), size: size) : nil
-        return [SourceEntry(relativePath: url.lastPathComponent, blobID: blobID, size: size)]
+        return [GitTreeEntry(relativePath: url.lastPathComponent, blobID: blobID, size: size)]
     }
 
-    public func content(of entry: SourceEntry) async throws -> String {
+    public func content(of entry: GitTreeEntry) async throws -> String {
         SourceLoader.text(from: try await Self.read(url))
     }
 
@@ -203,7 +206,7 @@ public struct DirectorySource: SourceProvider {
     /// Inside a repository, the folder as git sees it: tracked and untracked files, dotfiles included, nothing
     /// git ignores. Elsewhere, a folder scan that leaves hidden files out.
     @concurrent
-    public func entries() async throws -> [SourceEntry] {
+    public func entries() async throws -> [GitTreeEntry] {
         let files =
             if let git = await gitClient() {
                 try Self.stat(try await git.workingTreePaths(), under: root)
@@ -214,21 +217,21 @@ public struct DirectorySource: SourceProvider {
             let blobID =
                 file.size <= SourceLoader.maximumHashedSize
                 ? try SourceLoader.blobID(atPath: file.fullPath, size: file.size) : nil
-            return SourceEntry(relativePath: file.relativePath, blobID: blobID, size: file.size)
+            return GitTreeEntry(relativePath: file.relativePath, blobID: blobID, size: file.size)
         }
     }
 
     /// Files git ignores, listed but neither hashed nor sized: they exist on this side alone, so there is nothing
     /// to compare them with, and a tree full of build output holds tens of thousands of them.
     @concurrent
-    public func ignoredEntries() async throws -> [SourceEntry] {
+    public func ignoredEntries() async throws -> [GitTreeEntry] {
         guard let git = await gitClient() else { return [] }
         return try await git.ignoredPaths()
             .filter { SourceLoader.isSupported(path: $0) && !Self.liesUnderSkippedDirectory($0) }
-            .map { SourceEntry(relativePath: $0, blobID: nil, size: 0) }
+            .map { GitTreeEntry(relativePath: $0, blobID: nil, size: 0) }
     }
 
-    public func content(of entry: SourceEntry) async throws -> String {
+    public func content(of entry: GitTreeEntry) async throws -> String {
         SourceLoader.text(from: try await FileSource.read(root.appending(path: entry.relativePath)))
     }
 
@@ -302,17 +305,17 @@ public struct GitRefSource: SourceProvider {
     public let ref: String
     public let runner: any ProcessRunner
 
-    public func entries() async throws -> [SourceEntry] {
+    public func entries() async throws -> [GitTreeEntry] {
         try await GitClient(repository: repository, runner: runner)
             .tree(at: ref, isSupported: SourceLoader.isSupported(path:))
     }
 
-    public func content(of entry: SourceEntry) async throws -> String {
+    public func content(of entry: GitTreeEntry) async throws -> String {
         SourceLoader.text(from: try await GitClient(repository: repository, runner: runner).blob(entry.blobID ?? ""))
     }
 
     /// Blobs are fetched through one `cat-file --batch` process per batch instead of one process per file.
-    public func contents(of entries: [SourceEntry]) async throws -> [String: String] {
+    public func contents(of entries: [GitTreeEntry]) async throws -> [String: String] {
         let client = GitClient(repository: repository, runner: runner)
         let ids = Array(Set(entries.compactMap(\.blobID)))
         let batches = stride(from: 0, to: ids.count, by: SourceLoader.blobBatchSize)
@@ -331,17 +334,17 @@ public struct PatchSource: SourceProvider {
     public let side: ComparisonSource.PatchSide
     public let cache: PatchCache
 
-    public func entries() async throws -> [SourceEntry] {
+    public func entries() async throws -> [GitTreeEntry] {
         try await cache.patch(at: url).files
             .compactMap { file in
                 guard !file.isBinary, let path = path(of: file) else { return nil }
                 let text = text(of: file)
-                return SourceEntry(
+                return GitTreeEntry(
                     relativePath: path, blobID: SourceLoader.patchBlobID(path: path, text: text), size: text.utf8.count)
             }
     }
 
-    public func content(of entry: SourceEntry) async throws -> String {
+    public func content(of entry: GitTreeEntry) async throws -> String {
         try await cache.patch(at: url).files.first { path(of: $0) == entry.relativePath }.map(text(of:)) ?? ""
     }
 
