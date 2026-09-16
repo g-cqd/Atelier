@@ -1,38 +1,44 @@
+/// ASCII code points as bytes; every predicate and comparison also accepts a wider code unit, so one table
+/// serves the UTF-8 and the UTF-16 scanners.
 enum ASCII {
-    static let newline = UInt16(10)
-    static let carriageReturn = UInt16(13)
-    static let quote = UInt16(34)
-    static let hash = UInt16(35)
-    static let ampersand = UInt16(38)
-    static let apostrophe = UInt16(39)
-    static let asterisk = UInt16(42)
-    static let hyphen = UInt16(45)
-    static let dot = UInt16(46)
-    static let slash = UInt16(47)
-    static let colon = UInt16(58)
-    static let semicolon = UInt16(59)
-    static let lessThan = UInt16(60)
-    static let equals = UInt16(61)
-    static let greaterThan = UInt16(62)
-    static let at = UInt16(64)
-    static let backslash = UInt16(92)
-    static let underscore = UInt16(95)
-    static let exclamation = UInt16(33)
-    static let dollar = UInt16(36)
-    static let percent = UInt16(37)
-    static let openBrace = UInt16(123)
-    static let closeBrace = UInt16(125)
-    static let openBracket = UInt16(91)
-    static let closeBracket = UInt16(93)
-    static let backtick = UInt16(96)
-    static let comma = UInt16(44)
-    static let plus = UInt16(43)
+    static let newline: UInt8 = 10
+    static let carriageReturn: UInt8 = 13
+    static let quote: UInt8 = 34
+    static let hash: UInt8 = 35
+    static let ampersand: UInt8 = 38
+    static let apostrophe: UInt8 = 39
+    static let asterisk: UInt8 = 42
+    static let hyphen: UInt8 = 45
+    static let dot: UInt8 = 46
+    static let slash: UInt8 = 47
+    static let colon: UInt8 = 58
+    static let semicolon: UInt8 = 59
+    static let lessThan: UInt8 = 60
+    static let equals: UInt8 = 61
+    static let greaterThan: UInt8 = 62
+    static let at: UInt8 = 64
+    static let backslash: UInt8 = 92
+    static let underscore: UInt8 = 95
+    static let exclamation: UInt8 = 33
+    static let dollar: UInt8 = 36
+    static let percent: UInt8 = 37
+    static let openBrace: UInt8 = 123
+    static let closeBrace: UInt8 = 125
+    static let openBracket: UInt8 = 91
+    static let closeBracket: UInt8 = 93
+    static let backtick: UInt8 = 96
+    static let comma: UInt8 = 44
+    static let plus: UInt8 = 43
 
-    static func isDigit(_ unit: UInt16) -> Bool { unit >= 48 && unit <= 57 }
-    static func isUpper(_ unit: UInt16) -> Bool { unit >= 65 && unit <= 90 }
-    static func isLower(_ unit: UInt16) -> Bool { unit >= 97 && unit <= 122 }
-    static func isAlpha(_ unit: UInt16) -> Bool { isUpper(unit) || isLower(unit) }
-    static func isIdentifierStart(_ unit: UInt16) -> Bool { isAlpha(unit) || unit == underscore || unit >= 128 }
-    static func isIdentifier(_ unit: UInt16) -> Bool { isIdentifierStart(unit) || isDigit(unit) }
-    static func isSpace(_ unit: UInt16) -> Bool { unit == 32 || unit == 9 || unit == newline || unit == carriageReturn }
+    static func isDigit<Unit: BinaryInteger>(_ unit: Unit) -> Bool { unit >= 48 && unit <= 57 }
+    static func isUpper<Unit: BinaryInteger>(_ unit: Unit) -> Bool { unit >= 65 && unit <= 90 }
+    static func isLower<Unit: BinaryInteger>(_ unit: Unit) -> Bool { unit >= 97 && unit <= 122 }
+    static func isAlpha<Unit: BinaryInteger>(_ unit: Unit) -> Bool { isUpper(unit) || isLower(unit) }
+    static func isIdentifierStart<Unit: BinaryInteger>(_ unit: Unit) -> Bool {
+        isAlpha(unit) || unit == underscore || unit >= 128
+    }
+    static func isIdentifier<Unit: BinaryInteger>(_ unit: Unit) -> Bool { isIdentifierStart(unit) || isDigit(unit) }
+    static func isSpace<Unit: BinaryInteger>(_ unit: Unit) -> Bool {
+        unit == 32 || unit == 9 || unit == newline || unit == carriageReturn
+    }
 }

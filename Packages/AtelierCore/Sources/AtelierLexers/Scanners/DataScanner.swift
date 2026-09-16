@@ -1,12 +1,12 @@
 import AtelierSyntaxModel
 
 /// Scans JSON, YAML and TOML: keys, strings, numbers, the few literal keywords, comments, tables and anchors.
-struct DataScanner {
-    let units: [UInt16]
+struct DataScanner<Unit: LexerUnit> {
+    let units: [Unit]
     let format: Language
     private var tokens: [Token] = []
 
-    init(units: [UInt16], format: Language) {
+    init(units: [Unit], format: Language) {
         self.units = units
         self.format = format
     }
@@ -79,7 +79,7 @@ struct DataScanner {
         return index
     }
 
-    private mutating func scanQuoted(from start: Int, quote: UInt16) -> Int {
+    private mutating func scanQuoted(from start: Int, quote: Unit) -> Int {
         let isTriple =
             format == .toml && start + 2 < units.count && units[start + 1] == quote && units[start + 2] == quote
         var index = start + (isTriple ? 3 : 1)
@@ -136,7 +136,7 @@ struct DataScanner {
         if isKey(endingAt: index) {
             tokens.append(Token(kind: .attributeName, range: start ..< index))
         } else {
-            let word = String(decoding: units[start ..< index], as: UTF16.self)
+            let word = Unit.text(units[start ..< index])
             if [
                 "true", "false", "null", "yes", "no", "on", "off", "inf", "nan", "True", "False", "Null", "TRUE",
                 "FALSE", "NULL"

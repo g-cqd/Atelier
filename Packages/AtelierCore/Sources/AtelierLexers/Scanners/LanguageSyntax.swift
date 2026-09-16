@@ -5,14 +5,14 @@ import AtelierSyntaxModel
 struct LanguageSyntax: Sendable {
     var keywords: Set<String>
     /// Sequences that start a comment running to the end of the line.
-    var lineComments: [[UInt16]] = [Array("//".utf16)]
-    var blockComment: (start: [UInt16], end: [UInt16])? = (Array("/*".utf16), Array("*/".utf16))
+    var lineComments: [[UInt8]] = [Array("//".utf8)]
+    var blockComment: (start: [UInt8], end: [UInt8])? = (Array("/*".utf8), Array("*/".utf8))
     var nestsBlockComments = false
     /// Quote units that delimit strings; a tripled quote from `tripleQuotes` spans lines.
-    var quotes: Set<UInt16> = [ASCII.quote]
-    var tripleQuotes: Set<UInt16> = []
+    var quotes: Set<UInt8> = [ASCII.quote]
+    var tripleQuotes: Set<UInt8> = []
     /// Quotes whose strings span lines without tripling, such as JavaScript template literals.
-    var multilineQuotes: Set<UInt16> = []
+    var multilineQuotes: Set<UInt8> = []
     /// `#word` at the start of a directive is an attribute (C family).
     var hasPreprocessor = false
     /// `@word` is an attribute: annotations, decorators, Swift attributes, Objective-C literals.
@@ -139,7 +139,7 @@ struct LanguageSyntax: Sendable {
             "elif", "else", "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda",
             "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield", "match", "case", "self"
         ],
-        lineComments: [Array("#".utf16)], blockComment: nil, quotes: [ASCII.quote, ASCII.apostrophe],
+        lineComments: [Array("#".utf8)], blockComment: nil, quotes: [ASCII.quote, ASCII.apostrophe],
         tripleQuotes: [ASCII.quote, ASCII.apostrophe], hasAnnotations: true
     )
 
@@ -150,7 +150,7 @@ struct LanguageSyntax: Sendable {
             "alias", "eval", "exec", "set", "trap", "true", "false", "break", "continue", "echo", "printf", "read",
             "test"
         ],
-        lineComments: [Array("#".utf16)], blockComment: nil, quotes: [ASCII.quote, ASCII.apostrophe], hasVariables: true
+        lineComments: [Array("#".utf8)], blockComment: nil, quotes: [ASCII.quote, ASCII.apostrophe], hasVariables: true
     )
 
     static let fish = LanguageSyntax(
@@ -160,6 +160,6 @@ struct LanguageSyntax: Sendable {
             "printf", "read", "string", "math", "argparse", "status", "exit", "abbr", "alias", "block", "contains",
             "count", "functions", "type", "eval", "exec"
         ],
-        lineComments: [Array("#".utf16)], blockComment: nil, quotes: [ASCII.quote, ASCII.apostrophe], hasVariables: true
+        lineComments: [Array("#".utf8)], blockComment: nil, quotes: [ASCII.quote, ASCII.apostrophe], hasVariables: true
     )
 }

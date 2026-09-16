@@ -1,12 +1,12 @@
 import AtelierSyntaxModel
 
 /// Scans C-like and script languages over UTF-16 units, driven by a `LanguageSyntax`.
-struct CodeScanner {
-    let units: [UInt16]
+struct CodeScanner<Unit: LexerUnit> {
+    let units: [Unit]
     let syntax: LanguageSyntax
     private var tokens: [Token] = []
 
-    init(units: [UInt16], syntax: LanguageSyntax) {
+    init(units: [Unit], syntax: LanguageSyntax) {
         self.units = units
         self.syntax = syntax
     }
@@ -19,13 +19,13 @@ struct CodeScanner {
             let next = index + 1 < count ? units[index + 1] : 0
             if syntax.hasPreprocessor, unit == ASCII.hash, ASCII.isIdentifierStart(next) {
                 index = scanWord(from: index, kind: .attribute)
-            } else if unit == ASCII.at, syntax.quotes.contains(next), syntax.hasPreprocessor {
+            } else if unit == ASCII.at, syntax.quotes.contains(unit: next), syntax.hasPreprocessor {
                 index = scanString(from: index + 1, quote: next, prefixLength: 1)
             } else if let comment = syntax.lineComments.first(where: { matches($0, at: index) }) {
                 index = scanLineComment(from: index, length: comment.count)
             } else if let block = syntax.blockComment, matches(block.start, at: index) {
                 index = scanBlockComment(from: index, block: block)
-            } else if syntax.quotes.contains(unit) {
+            } else if syntax.quotes.contains(unit: unit) {
                 index = scanString(from: index, quote: unit)
             } else if syntax.hasAnnotations, unit == ASCII.at, ASCII.isIdentifierStart(next) {
                 index = scanWord(from: index, kind: .attribute)
@@ -44,7 +44,7 @@ struct CodeScanner {
         return tokens
     }
 
-    private func matches(_ pattern: [UInt16], at index: Int) -> Bool {
+    private func matches(_ pattern: [UInt8], at index: Int) -> Bool {
         guard index + pattern.count <= units.count else { return false }
         for (offset, unit) in pattern.enumerated() where units[index + offset] != unit { return false }
         return true
@@ -57,7 +57,7 @@ struct CodeScanner {
         return index
     }
 
-    private mutating func scanBlockComment(from start: Int, block: (start: [UInt16], end: [UInt16])) -> Int {
+    private mutating func scanBlockComment(from start: Int, block: (start: [UInt8], end: [UInt8])) -> Int {
         var index = start + block.start.count
         var depth = 1
         while index < units.count, depth > 0 {
@@ -75,11 +75,11 @@ struct CodeScanner {
         return index
     }
 
-    private mutating func scanString(from start: Int, quote: UInt16, prefixLength: Int = 0) -> Int {
+    private mutating func scanString(from start: Int, quote: Unit, prefixLength: Int = 0) -> Int {
         let isTriple =
-            syntax.tripleQuotes.contains(quote) && start + 2 < units.count
+            syntax.tripleQuotes.contains(unit: quote) && start + 2 < units.count
             && units[start + 1] == quote && units[start + 2] == quote
-        let spansLines = isTriple || syntax.multilineQuotes.contains(quote)
+        let spansLines = isTriple || syntax.multilineQuotes.contains(unit: quote)
         var index = start + (isTriple ? 3 : 1)
         while index < units.count {
             let unit = units[index]
@@ -137,7 +137,7 @@ struct CodeScanner {
     private mutating func scanIdentifier(from start: Int) -> Int {
         var index = start
         while index < units.count, ASCII.isIdentifier(units[index]) { index += 1 }
-        let word = String(decoding: units[start ..< index], as: UTF16.self)
+        let word = Unit.text(units[start ..< index])
         if syntax.keywords.contains(word) {
             tokens.append(Token(kind: .keyword, range: start ..< index))
         } else if ASCII.isUpper(units[start]) {

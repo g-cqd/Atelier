@@ -23,10 +23,25 @@ public struct Token: Sendable, Equatable {
     }
 }
 
-/// Hand-rolled scanners over UTF-16 units, so token offsets map directly onto NSRange without conversion.
+/// Hand-rolled, allocation-light scanners over UTF-8 bytes or UTF-16 units; the offsets come out in whichever
+/// unit was scanned, so neither side of the umbrella converts.
 public enum SyntaxHighlighter {
+    /// Tokens over the UTF-16 units of `text`, with ranges in UTF-16 offsets.
     public static func tokens(in text: String, language: Language) -> [Token] {
-        let units = Array(text.utf16)
+        tokens(utf16: Array(text.utf16), language: language)
+    }
+
+    /// Tokens over UTF-16 units, with ranges in UTF-16 offsets: what a TextKit store maps onto `NSRange`.
+    public static func tokens(utf16 units: [UInt16], language: Language) -> [Token] {
+        scan(units, language: language)
+    }
+
+    /// Tokens over UTF-8 bytes, with ranges in byte offsets: what a byte rope indexes by.
+    public static func tokens(utf8 bytes: [UInt8], language: Language) -> [Token] {
+        scan(bytes, language: language)
+    }
+
+    private static func scan<Unit: LexerUnit>(_ units: [Unit], language: Language) -> [Token] {
         switch language {
             case .swift, .objectiveC, .kotlin, .java, .javascript, .typescript, .c, .cpp, .python, .shell, .fish:
                 var scanner = CodeScanner(units: units, syntax: LanguageSyntax.syntax(for: language))
