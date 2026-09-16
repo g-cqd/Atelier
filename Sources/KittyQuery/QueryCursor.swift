@@ -1,4 +1,4 @@
-import KittyParser
+public import KittyParser
 
 /// Stateful iterator for query matches within a byte/point range.
 public struct QueryCursor: Sendable {

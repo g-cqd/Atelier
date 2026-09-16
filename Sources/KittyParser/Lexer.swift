@@ -1,4 +1,5 @@
-import KittyGrammar
+import Foundation
+public import KittyGrammar
 
 /// Context-aware lexer that tokenizes source text using a LexTable.
 public struct Lexer: Sendable {
