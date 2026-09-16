@@ -3,6 +3,7 @@ import Testing
 @testable import AtelierGrammar
 @testable import AtelierParser
 @testable import AtelierQuery
+@testable import AtelierSyntaxModel
 @testable import KittyCodecs
 @testable import KittySyntax
 

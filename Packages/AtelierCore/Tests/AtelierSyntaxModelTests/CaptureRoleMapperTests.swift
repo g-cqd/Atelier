@@ -1,6 +1,6 @@
 import Testing
 
-@testable import KittySyntax
+@testable import AtelierSyntaxModel
 
 @Suite
 struct CaptureRoleMapperTests {

@@ -87,6 +87,7 @@ let package = Package(
         // tree-sitter .scm query parsing and matching over syntax trees.
         .target(name: "AtelierQuery", dependencies: ["AtelierParser"], swiftSettings: strict),
         .testTarget(name: "AtelierDiffTests", dependencies: ["AtelierDiff"], swiftSettings: strict),
+        .testTarget(name: "AtelierSyntaxModelTests", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
         .testTarget(name: "AtelierTextTests", dependencies: ["AtelierText"], swiftSettings: strict),
         .testTarget(name: "AtelierGrammarTests", dependencies: ["AtelierGrammar"], swiftSettings: strict),
         .testTarget(name: "AtelierParserTests", dependencies: ["AtelierParser"], swiftSettings: strict),

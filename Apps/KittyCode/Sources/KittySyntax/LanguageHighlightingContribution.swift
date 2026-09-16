@@ -1,3 +1,5 @@
+public import AtelierSyntaxModel
+
 /// How a language detects its files.
 public struct DetectionContribution: Sendable, Equatable {
     public let extensions: [String]
