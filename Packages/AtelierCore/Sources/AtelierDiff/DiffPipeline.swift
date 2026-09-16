@@ -67,7 +67,7 @@ public enum WhitespaceMode: String, Sendable, CaseIterable, Codable, Identifiabl
         }
     }
 
-    private static func isSpace(_ byte: UInt8) -> Bool {
+    static func isSpace(_ byte: UInt8) -> Bool {
         byte == UInt8(ascii: " ") || byte == UInt8(ascii: "\t") || byte == UInt8(ascii: "\r")
     }
 }

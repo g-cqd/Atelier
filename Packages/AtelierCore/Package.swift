@@ -43,7 +43,11 @@ let package = Package(
         // The vocabulary highlighting is expressed in: languages, and later roles and tokens.
         .target(name: "AtelierSyntaxModel", swiftSettings: strict),
         // Line and intraline diffing, moved blocks, hunk layout and unified patches. Pure value code.
-        .target(name: "AtelierDiff", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
+        .target(
+            name: "AtelierDiff",
+            dependencies: ["AtelierSyntaxModel", .product(name: "AemiKernel", package: "aemi")],
+            swiftSettings: strict
+        ),
         // Hand-written, allocation-free scanners over UTF-16 units for the lexical tier.
         .target(name: "AtelierLexers", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
         // The swift-syntax backed token provider for the syntax tier; the one target that links swift-syntax.
@@ -86,7 +90,9 @@ let package = Package(
         .target(name: "AtelierParser", dependencies: ["AtelierGrammar"], swiftSettings: strict),
         // tree-sitter .scm query parsing and matching over syntax trees.
         .target(name: "AtelierQuery", dependencies: ["AtelierParser"], swiftSettings: strict),
-        .testTarget(name: "AtelierDiffTests", dependencies: ["AtelierDiff"], swiftSettings: strict),
+        .testTarget(
+            name: "AtelierDiffTests", dependencies: ["AtelierDiff", .product(name: "AemiTestKit", package: "aemi")],
+            swiftSettings: strict),
         .testTarget(name: "AtelierSyntaxModelTests", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
         .testTarget(name: "AtelierTextTests", dependencies: ["AtelierText"], swiftSettings: strict),
         .testTarget(name: "AtelierGrammarTests", dependencies: ["AtelierGrammar"], swiftSettings: strict),
