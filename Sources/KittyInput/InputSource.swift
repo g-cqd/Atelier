@@ -1,6 +1,6 @@
 import Darwin
 import KittyCodecs
-import KittyTerminal
+public import KittyTerminal
 
 /// Async stream of input events from a terminal connection.
 public final class InputSource: Sendable {

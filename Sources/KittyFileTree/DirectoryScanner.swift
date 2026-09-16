@@ -1,5 +1,5 @@
 import Foundation
-import KittySync
+import Synchronization
 import System
 
 /// Recursively scans a directory tree into an array of ``FileNode`` values.
@@ -120,7 +120,7 @@ public enum DirectoryScanner {
 
     /// Thread-safe atomic counter for bounding total entries across tasks.
     private final class EntryCounter: Sendable {
-        private let counterValue = StateLock(initialState: 0)
+        private let counterValue = Mutex(0)
         private let _limit: Int
 
         var limit: Int { _limit }

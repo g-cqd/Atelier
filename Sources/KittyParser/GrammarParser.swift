@@ -1,4 +1,4 @@
-import KittyGrammar
+public import KittyGrammar
 
 /// Wraps ``GLRParser`` with the per-language tables fixed at construction.
 ///

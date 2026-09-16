@@ -1,4 +1,4 @@
-import KittyGrammar
+public import KittyGrammar
 
 /// GLR parser: handles ambiguous grammars by forking on conflict and merging on reduce.
 public final class GLRParser: Sendable {

@@ -1,5 +1,5 @@
 import Foundation
-import KittySync
+import Synchronization
 
 /// An in-memory `TerminalConnection` for use in tests.
 ///
@@ -7,7 +7,7 @@ import KittySync
 /// buffers, allowing tests to feed input programmatically and inspect what was written
 /// without touching any file descriptor.
 ///
-/// Mutable state is held inside a `StateLock` (Sendable), so the class needs no
+/// Mutable state is held inside a `Mutex` (Sendable), so the class needs no
 /// `@unchecked` escape hatch.
 public final class MockTerminalConnection: TerminalConnection {
     private struct State: Sendable {
@@ -20,13 +20,13 @@ public final class MockTerminalConnection: TerminalConnection {
         var restoreModeCallCount = 0
     }
 
-    private let state: StateLock<State>
+    private let state: Mutex<State>
 
     /// Creates a mock connection with the given initial terminal size.
     ///
     /// - Parameter size: The terminal size returned by `getSize()`. Defaults to 80 × 24.
     public init(size: TerminalSize = TerminalSize(columns: 80, rows: 24)) {
-        state = StateLock(initialState: State(size: size))
+        state = Mutex(State(size: size))
     }
 
     // MARK: - Test Helpers
@@ -140,6 +140,8 @@ public final class MockTerminalConnection: TerminalConnection {
     }
 
     private func withStateLock<T: Sendable>(_ body: @Sendable (inout State) -> T) -> T {
-        state.withLock(body)
+        state.withLock { currentState in
+            body(&currentState)
+        }
     }
 }

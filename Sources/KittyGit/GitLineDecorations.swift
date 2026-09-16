@@ -1,4 +1,4 @@
-import KittyFileTree
+public import KittyFileTree
 
 public struct GitLineDecorations: Sendable, Equatable {
     public static let empty = Self()
