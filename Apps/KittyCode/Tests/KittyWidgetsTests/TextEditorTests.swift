@@ -1,9 +1,9 @@
 import Testing
 
+@testable import AtelierText
 @testable import KittyCodecs
 @testable import KittyRenderer
 @testable import KittySyntax
-@testable import KittyText
 @testable import KittyWidgets
 
 @Suite

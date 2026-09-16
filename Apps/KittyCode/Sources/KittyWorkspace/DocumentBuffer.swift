@@ -1,8 +1,8 @@
+public import AtelierText
 public import Foundation
 public import KittyGit
 import KittyStyle
 public import KittySyntax
-public import KittyText
 
 @MainActor
 public final class DocumentBuffer {

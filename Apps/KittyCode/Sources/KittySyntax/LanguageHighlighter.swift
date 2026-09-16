@@ -1,9 +1,9 @@
+import AtelierGrammar
+import AtelierParser
+import AtelierQuery
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable file_length function_body_length type_body_length
 import Foundation
-import KittyGrammar
-import KittyParser
-import KittyQuery
 import KittyStyle
 import Synchronization
 import os

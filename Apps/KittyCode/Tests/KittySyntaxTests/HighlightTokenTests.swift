@@ -1,9 +1,9 @@
 import Testing
 
+@testable import AtelierGrammar
+@testable import AtelierParser
+@testable import AtelierQuery
 @testable import KittyCodecs
-@testable import KittyGrammar
-@testable import KittyParser
-@testable import KittyQuery
 @testable import KittySyntax
 
 @Suite

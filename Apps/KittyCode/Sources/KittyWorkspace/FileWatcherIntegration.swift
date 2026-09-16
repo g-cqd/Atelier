@@ -1,6 +1,6 @@
+import AtelierText
 import Foundation
 public import KittyFileTree
-import KittyText
 
 @MainActor
 public protocol FileWatcherDelegate: AnyObject {

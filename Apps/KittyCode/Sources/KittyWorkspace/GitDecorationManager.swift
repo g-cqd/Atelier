@@ -1,5 +1,5 @@
+import AtelierText
 public import KittyGit
-import KittyText
 
 public struct GitDecorationConfig: Sendable {
     public var showGitStatus: Bool

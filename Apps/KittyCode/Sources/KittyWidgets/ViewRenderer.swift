@@ -1,3 +1,4 @@
+import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable function_parameter_count type_body_length
 // swiftlint:disable file_length
@@ -5,7 +6,6 @@ import Foundation
 import KittyCodecs
 public import KittyRenderer
 import KittySyntax
-import KittyText
 
 /// Renders a View hierarchy into a ScreenBuffer.
 public enum ViewRenderer {
