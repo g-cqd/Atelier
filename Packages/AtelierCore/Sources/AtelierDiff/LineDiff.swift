@@ -95,21 +95,21 @@ public enum LineDiff {
     public static func diffLines(_ old: [Substring], _ new: [Substring], pipeline: DiffPipeline = DiffPipeline())
         -> [DiffEdit]
     {
-        var identifiers: [Substring: Int] = [:]
-        identifiers.reserveCapacity(old.count + new.count)
+        diffLines(old: SubstringLines(old), new: SubstringLines(new), pipeline: pipeline)
+    }
 
-        func intern(_ lines: [Substring]) -> [Int] {
-            lines.map { line in
-                let key = pipeline.whitespace.normalized(line)
-                if let identifier = identifiers[key] { return identifier }
-                let identifier = identifiers.count
-                identifiers[key] = identifier
-                return identifier
-            }
-        }
-
+    /// The edit script between two line sources: lines are interned under the pipeline's whitespace mode, the
+    /// line diff runs over the identifiers, and the refiners see the indents measured on the bytes.
+    /// - Complexity: O(bytes) to intern, plus the line diff's own cost.
+    public static func diffLines(old: some DiffSource, new: some DiffSource, pipeline: DiffPipeline = DiffPipeline())
+        -> [DiffEdit]
+    {
+        var interner = LineInterner(whitespace: pipeline.whitespace)
+        let oldLines = interner.intern(old)
+        let newLines = interner.intern(new)
         let context = LineDiffContext(
-            old: intern(old), new: intern(new), oldIndents: old.map(indent(of:)), newIndents: new.map(indent(of:)))
+            old: oldLines.identifiers, new: newLines.identifiers, oldIndents: oldLines.indents,
+            newIndents: newLines.indents)
         var edits = pipeline.lineDiff.diff(context.old, context.new)
         for refiner in pipeline.refiners {
             edits = refiner.refine(edits, lines: context)
@@ -119,8 +119,14 @@ public enum LineDiff {
 
     /// Leading whitespace width with tabs to the next multiple of eight, or nil for a blank line; git's `get_indent`.
     static func indent(of line: Substring) -> Int? {
+        line.utf8.withContiguousStorageIfAvailable { unsafe indent(of: Span(_unsafeElements: $0)) }
+            ?? indent(of: Array(line.utf8).span)
+    }
+
+    static func indent(of line: Span<UInt8>) -> Int? {
         var width = 0
-        for byte in line.utf8 {
+        for index in 0 ..< line.count {
+            let byte = line[index]
             switch byte {
                 case UInt8(ascii: " "): width += 1
                 case UInt8(ascii: "\t"): width += 8 - width % 8
