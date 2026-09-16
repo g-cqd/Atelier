@@ -14,6 +14,18 @@ app-tier file that needs a runtime helper imports it scoped: `import func AemiRu
 
 One `BlockingOffloadPool` per app, created in the composition root and injected; the core never creates a global one.
 
+## Shared building blocks
+
+- Diffing goes through `AtelierDiff`: `LineDiff.diffLines(old:new:pipeline:)` over any `DiffSource` (a rope, a
+  mapped file, `SubstringLines`, `ByteLines`); `LineChangeMarkers` turns an edit script into gutter marks. No other
+  diff code lives in the umbrella.
+- Highlighting goes through `HighlightEngine` (`AtelierSyntaxModel`): the scanners are `LexicalHighlightEngine`
+  (`AtelierLexers`, UTF-8 or UTF-16 units, `.lexical` layer), the grammar stack is the `.structural` layer. Tokens
+  are `HighlightToken`s with `HighlightRole`s; `HighlightToken.byLine` splits them per line; themes are
+  `SyntaxTheme`s keyed by role (`AtelierTheme`), bridged to `NSColor`/`Style` only in the apps.
+- Subprocesses go through `AtelierProcess.ProcessRunner`; git through `AtelierGit.GitClient` and the pure
+  `GitParsers`; tests script them with `AtelierTestSupport.FakeProcessRunner`.
+
 ## Tests
 
 - Swift Testing only. One behaviour per test; names in backticks read as sentences.
