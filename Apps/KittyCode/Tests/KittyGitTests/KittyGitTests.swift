@@ -1,14 +1,21 @@
+import AemiRuntime
+import AtelierProcess
+import AtelierTestSupport
 import Foundation
 import Testing
 
 @testable import KittyFileTree
 @testable import KittyGit
 
+/// A runner never invoked by the pure-parsing tests below; standing in for a real `ProcessRunner`
+/// so `GitStatusProvider`'s init can be satisfied without spawning anything.
+private let unusedRunner = FakeProcessRunner { _ in .failure(1, error: "not expected to run") }
+
 @Suite
 struct KittyGitTests {
     @Test
     func `Parse porcelain output produces correct statuses`() {
-        let provider = GitStatusProvider(rootPath: "/project")
+        let provider = GitStatusProvider(rootPath: "/project", runner: unusedRunner)
         let output = """
              M src/main.swift
             A  src/new.swift
@@ -35,7 +42,7 @@ struct KittyGitTests {
 
     @Test
     func `Directory status propagates from children`() {
-        let provider = GitStatusProvider(rootPath: "/project")
+        let provider = GitStatusProvider(rootPath: "/project", runner: unusedRunner)
         let output = " M src/lib/file.swift\n"
         let (statuses, _) = provider.parseGitStatus(output, rootPath: "/project")
 
@@ -64,7 +71,7 @@ struct KittyGitTests {
 
     @Test
     func `Empty porcelain output produces empty statuses`() {
-        let provider = GitStatusProvider(rootPath: "/project")
+        let provider = GitStatusProvider(rootPath: "/project", runner: unusedRunner)
         let (statuses, summary) = provider.parseGitStatus("", rootPath: "/project")
         #expect(statuses.isEmpty)
         #expect(summary.isEmpty)
@@ -101,13 +108,20 @@ struct KittyGitTests {
         process.waitUntilExit()
 
         #expect(process.terminationStatus == 0)
-        await #expect(GitStatusProvider.isGitRepository(nestedDirectory.path))
-        await #expect(GitStatusProvider.repositoryRoot(for: nestedDirectory.path) == tempRoot.path)
+
+        let pool = BlockingOffloadPool(width: 2)
+        defer { pool.shutdown() }
+        let runner = HardenedProcessRunner(pool: pool)
+
+        let isRepository = await GitStatusProvider.isGitRepository(nestedDirectory.path, runner: runner)
+        #expect(isRepository)
+        let root = await GitStatusProvider.repositoryRoot(for: nestedDirectory.path, runner: runner)
+        #expect(root == tempRoot.path)
     }
 
     @Test
     func `Line decorations distinguish modified and added lines`() {
-        let provider = GitStatusProvider(rootPath: "/project")
+        let provider = GitStatusProvider(rootPath: "/project", runner: unusedRunner)
         let decorations = provider.makeLineDecorations(
             baseLines: ["alpha", "beta", "gamma"],
             currentLines: ["alpha", "delta", "epsilon", "gamma"],
@@ -119,7 +133,7 @@ struct KittyGitTests {
 
     @Test
     func `Line decorations anchor deletions to the next surviving line`() {
-        let provider = GitStatusProvider(rootPath: "/project")
+        let provider = GitStatusProvider(rootPath: "/project", runner: unusedRunner)
         let decorations = provider.makeLineDecorations(
             baseLines: ["alpha", "beta", "gamma"],
             currentLines: ["alpha", "gamma"],
@@ -147,7 +161,7 @@ struct KittyGitTests {
 
     @Test
     func `Line decorations for empty base and current returns empty`() {
-        let provider = GitStatusProvider(rootPath: "/project")
+        let provider = GitStatusProvider(rootPath: "/project", runner: unusedRunner)
         let decorations = provider.makeLineDecorations(
             baseLines: [],
             currentLines: [],
@@ -158,7 +172,7 @@ struct KittyGitTests {
 
     @Test
     func `Line decorations handle deletion at end of file`() {
-        let provider = GitStatusProvider(rootPath: "/project")
+        let provider = GitStatusProvider(rootPath: "/project", runner: unusedRunner)
         let decorations = provider.makeLineDecorations(
             baseLines: ["a", "b"],
             currentLines: ["a"],

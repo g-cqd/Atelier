@@ -1,4 +1,5 @@
 public import AemiCore
+public import AtelierProcess
 public import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable file_length type_body_length
@@ -303,6 +304,9 @@ public final class EditorState {
     public var config: KittyConfig
     @ObservationIgnored public var fileStatusProvider: (any FileStatusProvider)?
     @ObservationIgnored public var gitLineDecorationProvider: (any GitLineDecorationProvider)?
+    /// How git is spawned for one-off queries such as the gitignore filter; nil when git
+    /// integration is disabled. Set by the composition root alongside `fileStatusProvider`.
+    @ObservationIgnored public var processRunner: (any ProcessRunner)?
     @ObservationIgnored public var gitDecorationManager: GitDecorationManager?
     @ObservationIgnored public var renderRefreshSource: RenderRefreshSource?
     /// Observation-aware tick source. When non-nil, every `mark*Dirty` call
@@ -1483,8 +1487,8 @@ public final class EditorState {
     public func cycleFileVisibility() async {
         switch fileVisibility {
             case .defaultHidden:
-                if isGitIgnoreFilterAvailable {
-                    let ignored = await GitIgnoreChecker.ignoredPaths(in: rootPath)
+                if isGitIgnoreFilterAvailable, let processRunner {
+                    let ignored = await GitIgnoreChecker.ignoredPaths(in: rootPath, runner: processRunner)
                     fileVisibility = .gitFiltered(ignoredPaths: ignored)
                 } else {
                     fileVisibility = .showAll

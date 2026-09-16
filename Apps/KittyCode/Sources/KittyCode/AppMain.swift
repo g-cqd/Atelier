@@ -1,6 +1,7 @@
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable function_body_length
 import AemiCore
+import AtelierProcess
 import Foundation
 import KittyApp
 import KittyCodecs
@@ -10,6 +11,8 @@ import KittyGit
 import KittyRenderer
 import KittyTerminal
 import KittyWorkspace
+
+import class AemiRuntime.BlockingOffloadPool
 
 @main
 struct KittyCodeEntry {
@@ -75,10 +78,14 @@ struct KittyCodeEntry {
         var config = loadConfig(launchConfig: launchConfig)
         applyOverrides(from: launchConfig, to: &config)
 
-        // Composition root: one task provider and one clock for the whole process, threaded
-        // explicitly into every type below instead of letting each default separately.
+        // Composition root: one task provider, one clock, one blocking-offload pool and the
+        // hardened process runner built on it for the whole process, threaded explicitly into
+        // every type below instead of letting each default separately.
         let taskProvider: any TaskProvider = .default
         let clock: any Clock<Duration> = ContinuousClock()
+        let offloadPool = BlockingOffloadPool(width: 4)
+        defer { offloadPool.shutdown() }
+        let processRunner = HardenedProcessRunner(pool: offloadPool, clock: clock)
 
         let state = EditorState(
             rootPath: launchConfig.rootPath, config: config, taskProvider: taskProvider, clock: clock)
@@ -91,11 +98,13 @@ struct KittyCodeEntry {
         state.renderClock = renderClock
 
         if config.git.enabled,
-            let repositoryRoot = await GitStatusProvider.repositoryRoot(for: launchConfig.rootPath)
+            let repositoryRoot = await GitStatusProvider.repositoryRoot(
+                for: launchConfig.rootPath, runner: processRunner)
         {
-            let gitProvider = GitStatusProvider(rootPath: repositoryRoot)
+            let gitProvider = GitStatusProvider(rootPath: repositoryRoot, runner: processRunner)
             state.fileStatusProvider = gitProvider
             state.gitLineDecorationProvider = gitProvider
+            state.processRunner = processRunner
             state.gitDecorationManager = GitDecorationManager(
                 workspace: state.workspace,
                 gitConfig: GitDecorationConfig(
