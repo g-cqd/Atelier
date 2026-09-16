@@ -1,3 +1,5 @@
+public import AtelierSyntaxModel
+
 public enum RowKind: Sendable {
     case context
     case added
@@ -61,12 +63,14 @@ public struct DiffModel: Sendable {
     ///   - granularity: Unit of change for the emphasis inside paired lines.
     ///   - language: Drives the syntax tier's tokenizer; ignored by the other tiers.
     ///   - pipeline: The stages the diff goes through; the default wires every heuristic in.
+    ///   - tokenizer: Token boundaries for the syntax tier; the default is the code-aware lexer for every language.
     public init(
         oldText: String,
         newText: String,
         granularity: IntralineGranularity = .character,
         language: Language = .plain,
-        pipeline: DiffPipeline = DiffPipeline()
+        pipeline: DiffPipeline = DiffPipeline(),
+        tokenizer: any SyntaxTokenRanging = CodeTokenRanges()
     ) {
         self.oldText = oldText
         self.newText = newText
@@ -77,8 +81,8 @@ public struct DiffModel: Sendable {
 
         var layout = Layout(oldLines: oldLines, newLines: newLines, granularity: granularity, pipeline: pipeline)
         if granularity == .syntax {
-            layout.oldTokens = SyntaxTokenizer.tokenRangesByLine(text: oldText, language: language)
-            layout.newTokens = SyntaxTokenizer.tokenRangesByLine(text: newText, language: language)
+            layout.oldTokens = tokenizer.tokenRangesByLine(text: oldText, language: language)
+            layout.newTokens = tokenizer.tokenRangesByLine(text: newText, language: language)
         }
         let edits = LineDiff.diffLines(oldLines, newLines, pipeline: pipeline)
         for edit in edits {
@@ -224,7 +228,7 @@ public struct DiffModel: Sendable {
 
     /// Splits on "\n" bytes, since Swift folds "\r\n" into one Character, drops a trailing "\r" per line so CRLF files
     /// align, and ignores the empty tail after a final newline.
-    static func lines(of text: String) -> [Substring] {
+    public static func lines(of text: String) -> [Substring] {
         var lines = text.utf8.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false)
             .map { line in
                 line.last == UInt8(ascii: "\r") ? Substring(line.dropLast()) : Substring(line)

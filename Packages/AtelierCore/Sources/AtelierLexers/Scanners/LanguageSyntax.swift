@@ -1,3 +1,5 @@
+import AtelierSyntaxModel
+
 /// What a code scanner needs to know about a language: its keywords and how comments, strings, annotations
 /// and preprocessor lines are spelled. Everything else (numbers, capitalized types) is common.
 struct LanguageSyntax: Sendable {
