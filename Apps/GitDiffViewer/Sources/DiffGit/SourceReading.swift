@@ -1,9 +1,9 @@
 import AemiRuntime
 import DiffCore
-package import Foundation
+public import Foundation
 
 /// Everything the model needs to know about a comparison target, behind one seam so tests can substitute it.
-package protocol SourceReading: Sendable {
+public protocol SourceReading: Sendable {
     func repositoryInfo(containing url: URL) async -> RepositoryInfo?
     func entries(of source: ComparisonSource) async throws -> [SourceEntry]
     /// Files git ignores in a working tree, which `entries(of:)` leaves out; empty for every other kind of source.
@@ -22,16 +22,16 @@ package protocol SourceReading: Sendable {
 private let fileReadConcurrency = 6
 
 extension SourceReading {
-    package func ignoredEntries(of source: ComparisonSource) async throws -> [SourceEntry] {
+    public func ignoredEntries(of source: ComparisonSource) async throws -> [SourceEntry] {
         []
     }
 
     /// A source with no git behind it names every ref by itself.
-    package func resolve(ref: String, in repository: URL) async throws -> String {
+    public func resolve(ref: String, in repository: URL) async throws -> String {
         ref
     }
 
-    package func contents(of entries: [SourceEntry], in source: ComparisonSource) async throws -> [String: String] {
+    public func contents(of entries: [SourceEntry], in source: ComparisonSource) async throws -> [String: String] {
         let pairs = try await mapConcurrently(entries, limit: fileReadConcurrency) { entry in
             (entry.relativePath, try await content(of: entry, in: source))
         }
