@@ -1,7 +1,7 @@
 package import AemiRuntime
+import AtelierProcess
 import DiffCore
 package import Foundation
-import Synchronization
 
 package enum GitError: Error, LocalizedError {
     case commandFailed(String)
@@ -153,139 +153,34 @@ package struct GitClient: Sendable {
         try await Self.run(arguments, input: input, in: repository)
     }
 
-    /// The git binary to spawn: `GDV_GIT` if set, else the first `git` found on `PATH` or in the usual toolchain
-    /// locations. `/usr/bin/git` comes last: it is a shim that re-resolves the developer directory on every spawn.
-    package static let executable: URL = {
-        let environment = ProcessInfo.processInfo.environment
-        if let override = environment["GDV_GIT"], FileManager.default.isExecutableFile(atPath: override) {
-            return URL(filePath: override)
-        }
-        let pathDirectories = (environment["PATH"] ?? "").split(separator: ":").map(String.init)
-        let knownDirectories = [
+    /// Where git lives: `GDV_GIT` when it names an executable, else the first `git` on `PATH` or in the usual
+    /// toolchain locations, `/usr/bin/git` last because that one is a shim that re-resolves the developer directory
+    /// on every launch.
+    package static let executable: URL = ExecutableResolver(
+        overrideVariable: "GDV_GIT",
+        searchPaths: [
             "/Applications/Xcode.app/Contents/Developer/usr/bin", "/Library/Developer/CommandLineTools/usr/bin",
             "/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"
-        ]
-        let candidates = (pathDirectories + knownDirectories).filter { $0 != "/usr/bin" }.map { $0 + "/git" }
-        return URL(filePath: candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? "/usr/bin/git")
-    }()
+        ],
+        excludedPaths: ["/usr/bin"]
+    )
+    .resolve("git")
 
-    /// Threads for the blocking parts of a git run: a pipe read blocks, and blocking inside a task would hold one
-    /// of the few cooperative threads for the whole process lifetime. Four is enough for the batch reads a large
-    /// selection runs side by side; further runs queue behind them rather than spawning a thread each.
+    /// Threads for the blocking parts of a git run. Four is enough for the batch reads a large selection runs side
+    /// by side; further runs queue behind them rather than spawning a thread each.
     package static let blockingPool = BlockingOffloadPool(width: 4)
+    private static let runner = HardenedProcessRunner(pool: blockingPool)
 
-    /// Runs git and returns its standard output. Its standard error and, when given, its standard input go through
-    /// temporary files, so one blocking job per run is enough: nothing waits on another job for a thread, whatever
-    /// the pool width, and a full standard error can never stall the standard output. Cancelling the task
-    /// terminates git.
+    /// Runs git and returns its standard output; a non-zero exit becomes a ``GitError`` carrying its standard error,
+    /// and cancelling the task terminates git.
     private static func run(_ arguments: [String], input: Data? = nil, in directory: URL) async throws -> Data {
         PhaseTrace.log("git \(arguments.prefix(2).joined(separator: " "))")
         defer { PhaseTrace.log("git done \(arguments.prefix(2).joined(separator: " "))") }
-        let running = RunningProcess()
-        let scratch = try ScratchFiles(input: input)
-        defer { scratch.remove() }
-        return try await withTaskCancellationHandler {
-            let (status, data) = try await blockingPool.run {
-                try launch(arguments, in: directory, scratch: scratch, tracking: running)
-            }
-            guard status == 0 else {
-                if running.isCancelled { throw CancellationError() }
-                throw GitError.commandFailed(String(decoding: scratch.errorOutput(), as: UTF8.self))
-            }
-            return data
-        } onCancel: {
-            running.terminate()
-        }
-    }
-
-    /// Starts git, reads its standard output to the end and waits for it to exit. Blocks: run it on the pool.
-    private static func launch(
-        _ arguments: [String], in directory: URL, scratch: ScratchFiles, tracking running: RunningProcess
-    ) throws -> (status: Int32, output: Data) {
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = arguments
-        process.currentDirectoryURL = directory
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = try scratch.errorHandle()
-        process.standardInput = try scratch.inputHandle()
-        do {
-            try running.start(process)
-        } catch let failure {
-            // With no child holding the write end, the reader would wait for an end of file that never comes.
-            try? output.fileHandleForWriting.close()
-            throw failure
-        }
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        return (process.terminationStatus, data)
-    }
-}
-
-/// The temporary files one git run reads its input from and writes its errors to.
-private struct ScratchFiles: Sendable {
-    private let errorFile: URL
-    private let inputFile: URL?
-
-    init(input: Data?) throws {
-        let directory = FileManager.default.temporaryDirectory
-        let stem = "gdv-git-\(UUID().uuidString)"
-        errorFile = directory.appending(path: stem + ".stderr")
-        try Data().write(to: errorFile)
-        if let input {
-            let url = directory.appending(path: stem + ".stdin")
-            try input.write(to: url)
-            inputFile = url
-        } else {
-            inputFile = nil
-        }
-    }
-
-    func errorHandle() throws -> FileHandle {
-        try FileHandle(forWritingTo: errorFile)
-    }
-
-    /// The input file, or the null device so git sees an end of file at once.
-    func inputHandle() throws -> FileHandle {
-        guard let inputFile else { return FileHandle.nullDevice }
-        return try FileHandle(forReadingFrom: inputFile)
-    }
-
-    func errorOutput() -> Data {
-        (try? Data(contentsOf: errorFile)) ?? Data()
-    }
-
-    func remove() {
-        try? FileManager.default.removeItem(at: errorFile)
-        if let inputFile { try? FileManager.default.removeItem(at: inputFile) }
-    }
-}
-
-/// The git process of one run, so a cancellation arriving on any thread can terminate it, including one that
-/// arrives before the process has been launched.
-private final class RunningProcess: Sendable {
-    private let state = Mutex<(process: Process?, cancelled: Bool)>((nil, false))
-
-    var isCancelled: Bool {
-        state.withLock(\.cancelled)
-    }
-
-    func start(_ process: Process) throws {
-        try process.run()
-        let cancelled = state.withLock { state in
-            state.process = process
-            return state.cancelled
-        }
-        if cancelled, process.isRunning { process.terminate() }
-    }
-
-    func terminate() {
-        let process = state.withLock { state in
-            state.cancelled = true
-            return state.process
-        }
-        if let process, process.isRunning { process.terminate() }
+        let spec = ProcessSpec(
+            executable: executable, arguments: arguments, currentDirectory: directory, standardInput: input)
+        let output = try await runner.run(spec)
+        guard output.succeeded else { throw GitError.commandFailed(output.errorText) }
+        return output.standardOutput
     }
 }
 
