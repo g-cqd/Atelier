@@ -1,3 +1,4 @@
+import AemiCore
 import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable file_length
@@ -582,11 +583,12 @@ public func triggerWorkspaceSearch(state: EditorState) {
 
     let rootPath = state.rootPath
     let maxResults = state.config.search.maxResults
+    let taskProvider = state.taskProvider
 
-    state.workspaceSearchTask = Task { @MainActor in
+    state.workspaceSearchTask = taskProvider.task(role: .work) { @MainActor in
         // Enumerate files off the main actor
         let files =
-            await Task.detached {
+            await taskProvider.detachedTask(role: .work) {
                 enumerateSearchableFiles(rootPath: rootPath)
             }
             .value
@@ -601,7 +603,7 @@ public func triggerWorkspaceSearch(state: EditorState) {
         }
 
         let result =
-            await Task.detached { [openBuffers] in
+            await taskProvider.detachedTask(role: .work) { [openBuffers] in
                 await searchWorkspace(
                     pattern: pattern,
                     files: files,

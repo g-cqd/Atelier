@@ -1,4 +1,5 @@
 import Foundation
+import KittyFileTree
 public import KittyRenderer
 import KittyWidgets
 
@@ -47,7 +48,7 @@ public func renderFrame(pipeline: RenderPipeline, state: EditorState) {
 
     // Clear expired command feedback (mark chrome dirty if we actually changed
     // anything — otherwise an idle frame stays idle).
-    if let expiry = state.commandFeedbackExpiry, ContinuousClock.now >= expiry {
+    if let expiry = state.commandFeedbackExpiry, state.clock.erasedNow() >= expiry {
         state.commandFeedback = nil
         state.commandFeedbackExpiry = nil
         state.markChromeDirty()

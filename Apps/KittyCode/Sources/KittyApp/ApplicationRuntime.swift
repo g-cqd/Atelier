@@ -1,5 +1,6 @@
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable function_body_length
+public import AemiCore
 import KittyCodecs
 public import KittyInput
 public import KittyRenderer
@@ -11,9 +12,11 @@ import Observation
 @MainActor
 public final class ApplicationRuntime {
     private let connection: any TerminalConnection
+    private let taskProvider: any TaskProvider
 
-    public init(connection: any TerminalConnection) {
+    public init(connection: any TerminalConnection, taskProvider: any TaskProvider = .default) {
         self.connection = connection
+        self.taskProvider = taskProvider
     }
 
     /// Run with explicit render and event callbacks.
@@ -97,7 +100,7 @@ public final class ApplicationRuntime {
         // into a single resume + a single `.refresh` injection.
         let observationTask: Task<Void, Never>?
         if let renderClock {
-            observationTask = Task { @MainActor [weak inputSource] in
+            observationTask = taskProvider.task(role: .observation) { @MainActor [weak inputSource] in
                 while !Task.isCancelled {
                     await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
                         withObservationTracking {

@@ -1,3 +1,4 @@
+public import AemiCore
 public import AtelierText
 import Foundation
 
@@ -14,8 +15,10 @@ public struct LoadedFile: Sendable {
 public enum WorkspaceFileLoading {
     public static let maxFileSize = 50_000_000  // 50MB
 
-    public static func readUTF8File(at path: String) async throws -> LoadedFile {
-        try await Task.detached(priority: .userInitiated) {
+    public static func readUTF8File(
+        at path: String, taskProvider: any TaskProvider = .default
+    ) async throws -> LoadedFile {
+        try await taskProvider.detachedTask(role: .work, priority: .userInitiated) {
             try Task.checkCancellation()
             let url = URL(fileURLWithPath: path)
             let data = try Data(contentsOf: url, options: [.mappedIfSafe])

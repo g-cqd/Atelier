@@ -1,3 +1,4 @@
+import AemiCore
 import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable function_body_length function_parameter_count
@@ -128,11 +129,12 @@ extension EditorState {
         statusMessage = "Opening \(name)..."
         renderRefreshSource?.invalidate()
 
-        let task = Task { [weak self] in
+        let task = taskProvider.task(role: .work) { [weak self, taskProvider] in
             guard let self else { return }
 
             do {
-                let loadedFile = try await WorkspaceFileLoading.readUTF8File(at: path)
+                let loadedFile = try await WorkspaceFileLoading.readUTF8File(
+                    at: path, taskProvider: taskProvider)
                 guard !Task.isCancelled else { return }
                 guard self.isCurrentOpenRequest(requestID) else { return }
 
@@ -250,7 +252,7 @@ extension EditorState {
             fileWatcherIntegration?.watchOpenedFile(destinationPath)
 
             if previousPath != destinationPath {
-                Task { [weak self] in
+                taskProvider.task(role: .work) { [weak self] in
                     await self?.loadInitialTree()
                     await MainActor.run {
                         self?.renderRefreshSource?.invalidate()
@@ -344,7 +346,7 @@ extension EditorState {
     private func refreshGitStatusAfterSave() {
         guard let provider = fileStatusProvider else { return }
 
-        Task { [weak self] in
+        taskProvider.task(role: .work) { [weak self] in
             await provider.refresh()
             await MainActor.run {
                 self?.gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
@@ -435,12 +437,13 @@ extension EditorState {
             && !(language.map(config.syntax.disabledLanguages.contains) ?? false)
         let showGrammarLoading = shouldHighlight && language != nil
         let tabSize = config.editor.tabSize
+        let taskProvider = self.taskProvider
 
         if bufferManager.activeBuffer === buffer {
             isLoadingGrammar = showGrammarLoading
         }
 
-        buffer.postOpenProcessingTask = Task { [weak self, weak buffer] in
+        buffer.postOpenProcessingTask = taskProvider.task(role: .work) { [weak self, weak buffer] in
             enum PostLoadResult {
                 case maxLineWidth(Int)
                 case highlightedLines([[StyledSpan]])
@@ -458,7 +461,8 @@ extension EditorState {
                 if shouldHighlight {
                     group.addTask(priority: .userInitiated) {
                         if let language {
-                            _ = await LanguageHighlighter.ensureArtifacts(for: language)
+                            _ = await LanguageHighlighter.ensureArtifacts(
+                                for: language, taskProvider: taskProvider)
                         }
                         return .highlightedLines(
                             LanguageHighlighter.highlightDocument(

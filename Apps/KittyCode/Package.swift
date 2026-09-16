@@ -73,7 +73,10 @@ let package = Package(
         // Layer 2c — Text buffer primitives
 
         // Layer 2d — File system browsing
-        .target(name: "KittyFileTree", swiftSettings: strict),
+        .target(
+            name: "KittyFileTree",
+            dependencies: [.product(name: "AemiCore", package: "aemi")],
+            swiftSettings: strict),
 
         // Layer 2e — SF Symbols discovery + terminal glyph helpers
         .target(name: "KittySymbols", swiftSettings: strict),
@@ -95,7 +98,8 @@ let package = Package(
                 .product(name: "AtelierGrammar", package: "AtelierCore"),
                 .product(name: "AtelierParser", package: "AtelierCore"),
                 .product(name: "AtelierQuery", package: "AtelierCore"), "KittyStyle",
-                .product(name: "AtelierSyntaxModel", package: "AtelierCore")
+                .product(name: "AtelierSyntaxModel", package: "AtelierCore"),
+                .product(name: "AemiCore", package: "aemi")
             ],
             resources: [.copy("Grammars")],
             swiftSettings: strict
@@ -112,13 +116,15 @@ let package = Package(
         .target(
             name: "KittyWorkspace",
             dependencies: [
-                .product(name: "AtelierText", package: "AtelierCore"), "KittySyntax", "KittyFileTree", "KittyGit"
+                .product(name: "AtelierText", package: "AtelierCore"), "KittySyntax", "KittyFileTree", "KittyGit",
+                .product(name: "AemiCore", package: "aemi")
             ],
             swiftSettings: strict),
 
         // Layer 5 — App lifecycle, event loop, signals
         .target(
-            name: "KittyApp", dependencies: ["KittyWidgets", "KittyInput"],
+            name: "KittyApp",
+            dependencies: ["KittyWidgets", "KittyInput", .product(name: "AemiCore", package: "aemi")],
             swiftSettings: strict),
 
         // Layer 6 — Editor logic library. Holds every editor file except
@@ -134,7 +140,8 @@ let package = Package(
                 "KittyFileTree",
                 "KittyRenderer", "KittySyntax", "KittySymbols", "KittyGit", "KittySearch",
                 "KittyStyle", "KittyTerminal",
-                .product(name: "ArgumentParser", package: "swift-argument-parser")
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "AemiCore", package: "aemi")
             ],
             swiftSettings: strict),
 
@@ -146,7 +153,8 @@ let package = Package(
             name: "KittyCode",
             dependencies: [
                 "KittyEditor", "KittyApp", "KittyTerminal", "KittyCodecs",
-                "KittyFileTree", "KittyGit", "KittyRenderer", "KittyWorkspace"
+                "KittyFileTree", "KittyGit", "KittyRenderer", "KittyWorkspace",
+                .product(name: "AemiCore", package: "aemi")
             ], swiftSettings: strict),
 
         // KittySymbols CLI
@@ -175,18 +183,25 @@ let package = Package(
             name: "KittyWidgetsTests", dependencies: ["KittyWidgets"],
             swiftSettings: strict),
         .testTarget(
-            name: "KittyAppTests", dependencies: ["KittyApp"], swiftSettings: strict),
-        .testTarget(
-            name: "KittyCodeTests", dependencies: ["KittyEditor", "KittyFileTree", "KittyWorkspace"],
+            name: "KittyAppTests",
+            dependencies: ["KittyApp", .product(name: "AemiTesting", package: "aemi")],
             swiftSettings: strict),
         .testTarget(
-            name: "KittyFileTreeTests", dependencies: ["KittyFileTree"],
+            name: "KittyCodeTests",
+            dependencies: [
+                "KittyEditor", "KittyFileTree", "KittyWorkspace", .product(name: "AemiTesting", package: "aemi")
+            ],
+            swiftSettings: strict),
+        .testTarget(
+            name: "KittyFileTreeTests",
+            dependencies: ["KittyFileTree", .product(name: "AemiTesting", package: "aemi")],
             swiftSettings: strict),
         .testTarget(
             name: "KittySymbolsTests", dependencies: ["KittySymbols"],
             swiftSettings: strict),
         .testTarget(
-            name: "KittyWorkspaceTests", dependencies: ["KittyWorkspace"],
+            name: "KittyWorkspaceTests",
+            dependencies: ["KittyWorkspace", .product(name: "AemiTesting", package: "aemi")],
             swiftSettings: strict),
         .testTarget(
             name: "KittyGitTests", dependencies: ["KittyGit"], swiftSettings: strict),

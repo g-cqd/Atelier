@@ -1,3 +1,4 @@
+public import AemiCore
 import Foundation
 
 public actor FileWatcher {
@@ -10,18 +11,22 @@ public actor FileWatcher {
     private var directoryStream: FSEventStreamRef?
     private var streamQueue: DispatchQueue?
     private var continuation: AsyncStream<FileWatchEvent>.Continuation?
-    private var suppressTimestamps: [String: Date] = [:]
+    private var suppressTimestamps: [String: ClockInstant] = [:]
     /// Strong reference to the box passed to `FSEventStreamCreate` so the
     /// callback's `info` pointer stays valid for the stream's lifetime.
     /// Cleared in `stop()` after the stream has been invalidated.
     private var directoryStreamBox: SendableContinuationBox?
+    private let taskProvider: any TaskProvider
+    private let clock: any Clock<Duration>
 
     private static let debounceInterval: TimeInterval = 0.1
-    private static let suppressWindow: TimeInterval = 1.0
+    private static let suppressWindow: Duration = .seconds(1)
 
     nonisolated public let events: AsyncStream<FileWatchEvent>
 
-    public init() {
+    public init(taskProvider: any TaskProvider = .default, clock: any Clock<Duration> = ContinuousClock()) {
+        self.taskProvider = taskProvider
+        self.clock = clock
         var captured: AsyncStream<FileWatchEvent>.Continuation?
         self.events = AsyncStream { continuation in
             captured = continuation
@@ -89,9 +94,10 @@ public actor FileWatcher {
         let capturedContinuation = continuation
         let capturedPath = path
         let capturedSelf = self
+        let capturedTaskProvider = taskProvider
 
         source.setEventHandler {
-            Task {
+            capturedTaskProvider.task(role: .work) {
                 let suppressed = await capturedSelf.isSuppressed(capturedPath)
                 if !suppressed {
                     capturedContinuation?.yield(.fileChanged(capturedPath))
@@ -118,11 +124,11 @@ public actor FileWatcher {
         // suppression record never sees a matching fsevent stays in the
         // dictionary forever — over a long session of rename/delete ops,
         // memory grows linearly with the count of suppressed paths.
-        let now = Date()
+        let now = clock.erasedNow()
         suppressTimestamps[path] = now
         if suppressTimestamps.count > 1 {
             suppressTimestamps = suppressTimestamps.filter {
-                now.timeIntervalSince($0.value) < Self.suppressWindow
+                $0.value.duration(to: now) < Self.suppressWindow
             }
         }
     }
@@ -149,7 +155,7 @@ public actor FileWatcher {
 
     private func isSuppressed(_ path: String) -> Bool {
         guard let timestamp = suppressTimestamps[path] else { return false }
-        if Date().timeIntervalSince(timestamp) < Self.suppressWindow {
+        if timestamp.duration(to: clock.erasedNow()) < Self.suppressWindow {
             return true
         }
         suppressTimestamps.removeValue(forKey: path)

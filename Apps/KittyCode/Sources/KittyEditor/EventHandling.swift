@@ -3,6 +3,7 @@ import AtelierText
 // swiftlint:disable cyclomatic_complexity function_body_length
 import Foundation
 import KittyCodecs
+import KittyFileTree
 public import KittyInput
 public import KittyRenderer
 
@@ -41,7 +42,7 @@ public func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderP
                         state.config.keybindings.sequenceTimeoutMilliseconds)
                     if !state.pendingKeySequence.isEmpty,
                         let pendingTime = state.pendingKeySequenceTime,
-                        pendingTime.duration(to: .now) > sequenceTimeout
+                        pendingTime.duration(to: state.clock.erasedNow()) > sequenceTimeout
                     {
                         state.pendingKeySequence = []
                         state.pendingKeySequenceTime = nil
@@ -56,16 +57,20 @@ public func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderP
                                 .joined(
                                     separator: " ")
                             state.commandFeedback = "\(seqLabel) → \(command.rawValue)"
-                            state.commandFeedbackExpiry = .now.advanced(by: commandFeedbackDuration)
+                            state.commandFeedbackExpiry = state.clock.erasedNow()
+                                .advanced(
+                                    by: commandFeedbackDuration)
                             return dispatchEditorAwareCommand(command, key: key, state: state, pipeline: pipeline)
                         case .partial:
                             state.pendingKeySequence = candidate
-                            state.pendingKeySequenceTime = .now
+                            state.pendingKeySequenceTime = state.clock.erasedNow()
                             let seqLabel = candidate.map { KeyStrokeFormatter.label(for: $0) }
                                 .joined(
                                     separator: " ")
                             state.commandFeedback = "\(seqLabel)..."
-                            state.commandFeedbackExpiry = .now.advanced(by: commandFeedbackDuration)
+                            state.commandFeedbackExpiry = state.clock.erasedNow()
+                                .advanced(
+                                    by: commandFeedbackDuration)
                             return true
                         case .none:
                             if !state.pendingKeySequence.isEmpty {
@@ -80,7 +85,7 @@ public func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderP
                     if isRepeat, command.isEditorNavigation || command.isTreeNavigation {
                         let interval = state.config.editor.keyRepeatIntervalMilliseconds
                         if interval > 0 {
-                            let now = ContinuousClock.now
+                            let now = state.clock.erasedNow()
                             let threshold = Duration.milliseconds(interval)
                             if let last = state.lastKeyRepeatProcessedAt,
                                 last.duration(to: now) < threshold
@@ -96,7 +101,7 @@ public func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderP
                     // Set command feedback
                     let feedbackLabel = KeyStrokeFormatter.label(for: stroke)
                     state.commandFeedback = "\(feedbackLabel) → \(command.rawValue)"
-                    state.commandFeedbackExpiry = .now.advanced(by: commandFeedbackDuration)
+                    state.commandFeedbackExpiry = state.clock.erasedNow().advanced(by: commandFeedbackDuration)
                     return dispatchEditorAwareCommand(
                         command, key: key, state: state, pipeline: pipeline)
                 }

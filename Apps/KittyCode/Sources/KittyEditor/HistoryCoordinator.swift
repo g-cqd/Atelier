@@ -1,3 +1,4 @@
+import AemiCore
 import Foundation
 import KittyCodecs
 import KittyWorkspace
@@ -49,7 +50,7 @@ extension EditorState {
                     statusMessage += " (at saved state)"
                 }
             case .fileTree:
-                Task { @MainActor in
+                taskProvider.task(role: .work) { @MainActor in
                     await undoFileTreeOperation()
                 }
         }
@@ -60,7 +61,7 @@ extension EditorState {
             case .buffer:
                 redoActiveBuffer()
             case .fileTree:
-                Task { @MainActor in
+                taskProvider.task(role: .work) { @MainActor in
                     await redoFileTreeOperation()
                 }
         }

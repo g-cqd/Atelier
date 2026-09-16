@@ -1,3 +1,4 @@
+public import AemiCore
 import AtelierText
 public import KittyGit
 
@@ -26,6 +27,8 @@ public final class GitDecorationManager {
     private let gitConfig: GitDecorationConfig
     private let gitLineDecorationProvider: (any GitLineDecorationProvider)?
     private let invalidateRender: @MainActor () -> Void
+    private let taskProvider: any TaskProvider
+    private let clock: any Clock<Duration>
 
     /// Long-lived consumer that handles the debounced refresh path. The
     /// producer (`scheduleRefreshForActiveBuffer(debounced: true)`) just
@@ -48,21 +51,25 @@ public final class GitDecorationManager {
         workspace: WorkspaceSession,
         gitConfig: GitDecorationConfig,
         gitLineDecorationProvider: (any GitLineDecorationProvider)?,
-        invalidateRender: @MainActor @escaping () -> Void
+        invalidateRender: @MainActor @escaping () -> Void,
+        taskProvider: any TaskProvider = .default,
+        clock: any Clock<Duration> = ContinuousClock()
     ) {
         self.workspace = workspace
         self.gitConfig = gitConfig
         self.gitLineDecorationProvider = gitLineDecorationProvider
         self.invalidateRender = invalidateRender
+        self.taskProvider = taskProvider
+        self.clock = clock
 
         let (stream, cont) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         self.debouncedSignal = stream
         self.debouncedContinuation = cont
 
         let debounceMs = gitConfig.lineChangeDebounceMilliseconds
-        self.debouncedConsumer = Task { [weak self, stream] in
+        self.debouncedConsumer = taskProvider.task(role: .observation) { [weak self, stream, clock] in
             for await _ in stream {
-                try? await Task.sleep(for: .milliseconds(debounceMs))
+                try? await clock.sleep(for: .milliseconds(debounceMs))
                 guard let self else { return }
                 await self.performRefresh()
             }
@@ -85,7 +92,7 @@ public final class GitDecorationManager {
             debouncedContinuation.yield(())
         } else {
             immediateTask?.cancel()
-            immediateTask = Task { [weak self] in
+            immediateTask = taskProvider.task(role: .work) { [weak self] in
                 guard let self else { return }
                 await self.performRefresh()
             }
