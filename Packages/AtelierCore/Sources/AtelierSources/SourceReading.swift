@@ -1,16 +1,18 @@
 import AemiRuntime
-import DiffCore
+import AtelierDiff
+public import AtelierGit
+import AtelierSyntaxModel
 public import Foundation
 
 /// Everything the model needs to know about a comparison target, behind one seam so tests can substitute it.
 public protocol SourceReading: Sendable {
     func repositoryInfo(containing url: URL) async -> RepositoryInfo?
-    func entries(of source: ComparisonSource) async throws -> [SourceEntry]
+    func entries(of source: ComparisonSource) async throws -> [GitTreeEntry]
     /// Files git ignores in a working tree, which `entries(of:)` leaves out; empty for every other kind of source.
-    func ignoredEntries(of source: ComparisonSource) async throws -> [SourceEntry]
-    func content(of entry: SourceEntry, in source: ComparisonSource) async throws -> String
+    func ignoredEntries(of source: ComparisonSource) async throws -> [GitTreeEntry]
+    func content(of entry: GitTreeEntry, in source: ComparisonSource) async throws -> String
     /// Contents of many files at once, keyed by relative path; sources that can batch reads override this.
-    func contents(of entries: [SourceEntry], in source: ComparisonSource) async throws -> [String: String]
+    func contents(of entries: [GitTreeEntry], in source: ComparisonSource) async throws -> [String: String]
     /// Renames git detects between the two sources, old path to new path, when both are trees of one repository.
     func renames(from left: ComparisonSource, to right: ComparisonSource) async -> [String: String]
     /// The commit hash `ref` names in `repository`.
@@ -22,7 +24,7 @@ public protocol SourceReading: Sendable {
 private let fileReadConcurrency = 6
 
 extension SourceReading {
-    public func ignoredEntries(of source: ComparisonSource) async throws -> [SourceEntry] {
+    public func ignoredEntries(of source: ComparisonSource) async throws -> [GitTreeEntry] {
         []
     }
 
@@ -31,7 +33,7 @@ extension SourceReading {
         ref
     }
 
-    public func contents(of entries: [SourceEntry], in source: ComparisonSource) async throws -> [String: String] {
+    public func contents(of entries: [GitTreeEntry], in source: ComparisonSource) async throws -> [String: String] {
         let pairs = try await mapConcurrently(entries, limit: fileReadConcurrency) { entry in
             (entry.relativePath, try await content(of: entry, in: source))
         }

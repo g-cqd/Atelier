@@ -1,4 +1,6 @@
-import DiffCore
+import AtelierDiff
+import AtelierGit
+import AtelierSyntaxModel
 public import Foundation
 
 /// One side of a comparison.
