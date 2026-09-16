@@ -1,9 +1,14 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.4
 
 import PackageDescription
 
-let defaultSwiftSettings: [SwiftSetting] = [
-    .enableUpcomingFeature("StrictConcurrency")
+let strict: [SwiftSetting] = [
+    .swiftLanguageMode(.v6),
+    .treatAllWarnings(as: .error),
+    .enableUpcomingFeature("ExistentialAny"),
+    .enableUpcomingFeature("InferIsolatedConformances"),
+    .enableUpcomingFeature("InternalImportsByDefault"),
+    .enableUpcomingFeature("MemberImportVisibility"),
 ]
 
 let package = Package(
@@ -39,74 +44,71 @@ let package = Package(
         .executable(name: "KittySymbolsCLI", targets: ["KittySymbolsCLI"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.6.0")
+        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
     ],
     targets: [
-        .target(name: "KittySync", swiftSettings: defaultSwiftSettings),
-
         // Layer 0 — Raw mode, FD I/O, terminal queries
-        .target(
-            name: "KittyTerminal", dependencies: ["KittySync"], swiftSettings: defaultSwiftSettings),
+        .target(name: "KittyTerminal", swiftSettings: strict),
 
         // Layer 0b — Pure visual-style value types (Color, UnderlineStyle,
         // Style). No dependencies. KittySyntax depends on this directly
         // so it doesn't transitively pull in the terminal-codec layer
         // just to reference `Style`. Audit D2.
-        .target(name: "KittyStyle", swiftSettings: defaultSwiftSettings),
+        .target(name: "KittyStyle", swiftSettings: strict),
 
         // Layer 1 — Escape sequence encoders/decoders
         .target(
             name: "KittyCodecs", dependencies: ["KittyTerminal", "KittyStyle"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
 
         // Layer 2a — Async InputEvent stream
         .target(
-            name: "KittyInput", dependencies: ["KittyCodecs"], swiftSettings: defaultSwiftSettings),
+            name: "KittyInput", dependencies: ["KittyCodecs"], swiftSettings: strict),
 
         // Layer 2b — Screen buffer, diff renderer
         .target(
-            name: "KittyRenderer", dependencies: ["KittyCodecs", "KittyText"],
-            swiftSettings: defaultSwiftSettings),
+            name: "KittyRenderer", dependencies: ["KittyCodecs", "KittyText", "KittyStyle"],
+            swiftSettings: strict),
 
         // Layer 2c — Text buffer primitives
-        .target(name: "KittyText", swiftSettings: defaultSwiftSettings),
+        .target(name: "KittyText", swiftSettings: strict),
 
         // Layer 2d — File system browsing
-        .target(
-            name: "KittyFileTree", dependencies: ["KittySync"], swiftSettings: defaultSwiftSettings),
+        .target(name: "KittyFileTree", swiftSettings: strict),
 
         // Layer 2e — SF Symbols discovery + terminal glyph helpers
-        .target(name: "KittySymbols", swiftSettings: defaultSwiftSettings),
+        .target(name: "KittySymbols", swiftSettings: strict),
 
         // Layer 2f — Git integration (pluggable)
         .target(
-            name: "KittyGit", dependencies: ["KittyFileTree", "KittySync"],
-            swiftSettings: defaultSwiftSettings),
+            name: "KittyGit", dependencies: ["KittyFileTree"],
+            swiftSettings: strict),
 
         // Layer 2g — Search engine primitives
-        .target(name: "KittySearch", swiftSettings: defaultSwiftSettings),
+        .target(name: "KittySearch", swiftSettings: strict),
 
         // Layer 3a — grammar.json loader + LR table compiler
-        .target(name: "KittyGrammar", swiftSettings: defaultSwiftSettings),
+        .target(name: "KittyGrammar", swiftSettings: strict),
 
         // Layer 3b — GLR incremental parser engine
         .target(
-            name: "KittyParser", dependencies: ["KittyGrammar", "KittySync"],
-            swiftSettings: defaultSwiftSettings),
+            name: "KittyParser", dependencies: ["KittyGrammar"],
+            swiftSettings: strict),
 
         // Layer 3c — .scm query parser + pattern matcher
         .target(
-            name: "KittyQuery", dependencies: ["KittyParser", "KittySync"],
-            swiftSettings: defaultSwiftSettings),
+            name: "KittyQuery", dependencies: ["KittyParser"],
+            swiftSettings: strict),
 
         // Layer 3d — Themes + styled text producer
         .target(
             name: "KittySyntax",
             dependencies: [
-                "KittyGrammar", "KittyParser", "KittyQuery", "KittyStyle", "KittySync",
+                "KittyGrammar", "KittyParser", "KittyQuery", "KittyStyle",
             ],
             resources: [.copy("Grammars")],
-            swiftSettings: defaultSwiftSettings
+            swiftSettings: strict
         ),
 
         // Layer 4 — View protocol, layout, tree/text widgets.
@@ -114,18 +116,18 @@ let package = Package(
         // `KittySyntax` before audit D2 cleaned up that layering reach).
         .target(
             name: "KittyWidgets", dependencies: ["KittySyntax", "KittyInput", "KittyRenderer"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
 
         // Layer 4b — Workspace domain: document, tab, file lifecycle, git coordination
         .target(
             name: "KittyWorkspace",
-            dependencies: ["KittyText", "KittySyntax", "KittyFileTree", "KittyGit", "KittySync"],
-            swiftSettings: defaultSwiftSettings),
+            dependencies: ["KittyText", "KittySyntax", "KittyFileTree", "KittyGit"],
+            swiftSettings: strict),
 
         // Layer 5 — App lifecycle, event loop, signals
         .target(
-            name: "KittyApp", dependencies: ["KittyWidgets", "KittyInput", "KittySync"],
-            swiftSettings: defaultSwiftSettings),
+            name: "KittyApp", dependencies: ["KittyWidgets", "KittyInput"],
+            swiftSettings: strict),
 
         // Layer 6 — Editor logic library. Holds every editor file except
         // the executable shell (`AppMain`, `CLIArguments`, `Version`). The
@@ -141,7 +143,7 @@ let package = Package(
                 "KittyStyle", "KittyTerminal",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
 
         // KittyCode — Terminal code editor executable. Thin shell over
         // `KittyEditor`: parses argv via `KittyEditor.CLIArguments`,
@@ -152,62 +154,62 @@ let package = Package(
             dependencies: [
                 "KittyEditor", "KittyApp", "KittyTerminal", "KittyCodecs",
                 "KittyFileTree", "KittyGit", "KittyRenderer", "KittyWorkspace",
-            ], swiftSettings: defaultSwiftSettings),
+            ], swiftSettings: strict),
 
         // KittySymbols CLI
         .executableTarget(
             name: "KittySymbolsCLI", dependencies: ["KittySymbols"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
 
         // Tests
         .testTarget(
             name: "KittyTerminalTests", dependencies: ["KittyTerminal"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
         .testTarget(
             name: "KittyCodecsTests", dependencies: ["KittyCodecs"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
         .testTarget(
             name: "KittyInputTests", dependencies: ["KittyInput"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
         .testTarget(
             name: "KittyRendererTests", dependencies: ["KittyRenderer", "KittyTerminal"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
         .testTarget(
             name: "KittyGrammarTests", dependencies: ["KittyGrammar"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
         .testTarget(
             name: "KittyParserTests", dependencies: ["KittyParser"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
         .testTarget(
             name: "KittyQueryTests", dependencies: ["KittyQuery"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
         .testTarget(
-            name: "KittySyntaxTests", dependencies: ["KittySyntax"],
-            swiftSettings: defaultSwiftSettings),
+            name: "KittySyntaxTests", dependencies: ["KittySyntax", "KittyCodecs"],
+            swiftSettings: strict),
         .testTarget(
             name: "KittyWidgetsTests", dependencies: ["KittyWidgets"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
         .testTarget(
-            name: "KittyAppTests", dependencies: ["KittyApp"], swiftSettings: defaultSwiftSettings),
+            name: "KittyAppTests", dependencies: ["KittyApp"], swiftSettings: strict),
         .testTarget(
             name: "KittyCodeTests", dependencies: ["KittyEditor", "KittyFileTree", "KittyWorkspace"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
         .testTarget(
-            name: "KittyTextTests", dependencies: ["KittyText"], swiftSettings: defaultSwiftSettings
+            name: "KittyTextTests", dependencies: ["KittyText"], swiftSettings: strict
         ),
         .testTarget(
             name: "KittyFileTreeTests", dependencies: ["KittyFileTree"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
         .testTarget(
             name: "KittySymbolsTests", dependencies: ["KittySymbols"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
         .testTarget(
             name: "KittyWorkspaceTests", dependencies: ["KittyWorkspace"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
         .testTarget(
-            name: "KittyGitTests", dependencies: ["KittyGit"], swiftSettings: defaultSwiftSettings),
+            name: "KittyGitTests", dependencies: ["KittyGit"], swiftSettings: strict),
         .testTarget(
             name: "KittySearchTests", dependencies: ["KittySearch"],
-            swiftSettings: defaultSwiftSettings),
+            swiftSettings: strict),
     ]
 )
