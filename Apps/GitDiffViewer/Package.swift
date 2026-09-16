@@ -52,7 +52,10 @@ let package = Package(
         // The one target that links swift-syntax, for the syntax tier of the intraline emphasis.
         .target(
             name: "DiffRendering",
-            dependencies: ["DiffCore", "DiffGit", .product(name: "AtelierSwiftSyntax", package: "AtelierCore")],
+            dependencies: [
+                "DiffCore", "DiffGit", .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),
+                .product(name: "AtelierTheme", package: "AtelierCore")
+            ],
             swiftSettings: strict
         ),
         .target(
@@ -82,6 +85,7 @@ let package = Package(
                 .product(name: "AtelierSources", package: "AtelierCore"),
                 .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),
                 .product(name: "AtelierTestSupport", package: "AtelierCore"),
+                .product(name: "AtelierTheme", package: "AtelierCore"),
                 .product(name: "AemiCore", package: "aemi"), .product(name: "AemiTesting", package: "aemi")
             ],
             swiftSettings: strict

@@ -1,4 +1,6 @@
 import AppKit
+import AtelierSyntaxModel
+import AtelierTheme
 import DiffCore
 import Testing
 
@@ -27,33 +29,24 @@ struct XcodeThemeTests {
         """
 
     @Test
-    func `theme colors fonts and background are parsed`() throws {
-        let theme = try XcodeTheme(data: Data(Self.plist.utf8))
-        #expect(theme.background?.redComponent == 0.1)
-        #expect(theme.color(for: "xcode.syntax.keyword")?.greenComponent == 0)
-        #expect(theme.color(for: "xcode.syntax.comment")?.alphaComponent == 0.5)
-        #expect(theme.color(for: "xcode.syntax.missing") == nil)
-        #expect(theme.plainFont?.fontName == "Menlo-Regular")
-        #expect(theme.plainFont?.pointSize == 13)
-        #expect(theme.lineHeightMultiple == 1.25)
-    }
-
-    @Test(arguments: ["0.5 0.5", "a b c d", ""])
-    func `malformed colors are ignored`(value: String) {
-        #expect(XcodeTheme.color(from: value) == nil)
-    }
-
-    @Test
-    func `a palette built from a theme maps the diff colors and falls back for missing keys`() throws {
-        let theme = try XcodeTheme(data: Data(Self.plist.utf8))
+    func `a palette built from an xcode theme maps the roles and falls back for missing keys`() throws {
+        let theme = try XcodeThemeDocument(data: Data(Self.plist.utf8)).syntaxTheme()
         let palette = DiffPalette(theme: theme)
         #expect(palette.textColor.redComponent == 0.9)
         #expect(palette.background.blueComponent == 0.3)
         #expect(palette.font.fontName == "Menlo-Regular")
         #expect(palette.color(for: .keyword).redComponent == 1)
+        #expect(palette.color(for: .keywordFunction).redComponent == 1)
         #expect(palette.color(for: .type).greenComponent == 1)
         #expect(palette.color(for: .string) == palette.textColor)
         #expect(palette.lineHeightMultiple == 1.25)
+    }
+
+    @Test
+    func `the system palette colours a role through its parent`() {
+        let palette = DiffPalette.system
+        #expect(palette.color(for: .stringEscape) == palette.color(for: .string))
+        #expect(palette.color(for: .variable) == palette.textColor)
     }
 
     @Test
