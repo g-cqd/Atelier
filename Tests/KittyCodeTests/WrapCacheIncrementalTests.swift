@@ -1,5 +1,6 @@
 import KittyRenderer
 import KittyText
+import KittyWorkspace
 import Testing
 
 @testable import KittyEditor
