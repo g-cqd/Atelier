@@ -1,8 +1,7 @@
-import DiffConcurrency
 import DiffCore
 import DiffGit
 import DiffRendering
-import Foundation
+package import Foundation
 import Observation
 
 /// The comparisons opened lately, newest first, persisted in user defaults for the welcome window. One entry per

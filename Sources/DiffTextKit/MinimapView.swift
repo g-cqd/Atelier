@@ -1,7 +1,7 @@
-import AppKit
+package import AppKit
 import DiffCore
-import DiffRendering
-import Foundation
+package import DiffRendering
+package import Foundation
 import SwiftUI
 
 /// Overview strip of one pane: every row is a bar whose length follows the line and whose color follows the change

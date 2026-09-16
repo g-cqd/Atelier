@@ -1,8 +1,7 @@
-import DiffConcurrency
-import DiffCore
+package import DiffCore
 import DiffGit
 import DiffRendering
-import Foundation
+package import Foundation
 import Observation
 
 /// How the two sides of a diff are laid out.

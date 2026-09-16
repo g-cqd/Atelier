@@ -1,7 +1,7 @@
-import AppKit
+package import AppKit
 import DiffCore
-import DiffRendering
-import Foundation
+package import DiffRendering
+package import Foundation
 import SwiftUI
 
 /// How a pane breaks lines.

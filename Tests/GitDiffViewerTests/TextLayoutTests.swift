@@ -1,6 +1,7 @@
+import AemiTesting
+import AemiCore
 import AppKit
 import DiffCore
-import DiffTestSupport
 @testable import DiffComparison
 @testable import DiffGit
 @testable import DiffRendering

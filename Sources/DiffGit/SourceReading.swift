@@ -1,7 +1,6 @@
-import DiffConcurrency
+import AemiRuntime
 import DiffCore
-import DiffIO
-import Foundation
+package import Foundation
 
 /// Everything the model needs to know about a comparison target, behind one seam so tests can substitute it.
 package protocol SourceReading: Sendable {

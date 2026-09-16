@@ -1,7 +1,7 @@
 import AppKit
-import DiffCore
+package import DiffCore
 import DiffGit
-import Foundation
+package import Foundation
 
 package enum DiffRenderer {
     package struct Options: Sendable {

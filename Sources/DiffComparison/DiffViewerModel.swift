@@ -1,8 +1,10 @@
-import DiffConcurrency
-import DiffCore
-import DiffGit
-import DiffRendering
-import Foundation
+package import typealias AemiRuntime.MonotonicNanosecondsProvider
+package import enum AemiRuntime.LiveClock
+package import AemiCore
+package import DiffCore
+package import DiffGit
+package import DiffRendering
+package import Foundation
 import Observation
 
 /// The window's state: what is compared, what is selected, and what the detail area shows. Composes the pure
@@ -41,12 +43,12 @@ package final class DiffViewerModel {
         settings: ViewerSettings = ViewerSettings(),
         reader: any SourceReading = SourceLoader(),
         taskProvider: any TaskProvider = .default,
-        uptime: @escaping @Sendable () -> Duration = { .nanoseconds(DispatchTime.now().uptimeNanoseconds) }
+        uptime: @escaping MonotonicNanosecondsProvider = LiveClock.monotonicNanoseconds
     ) {
         self.settings = settings
         self.reader = reader
         self.taskProvider = taskProvider
-        timer = OperationTimer(uptime: uptime)
+        timer = OperationTimer(uptime: { .nanoseconds(uptime()) })
         let palette = Self.palette(for: settings.themePath)
         self.palette = palette
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider)
