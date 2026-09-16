@@ -1,5 +1,5 @@
-import KittyCodecs
-import KittyRenderer
+public import KittyCodecs
+public import KittyRenderer
 import KittyText
 
 public struct TabRibbon: View, Sendable {

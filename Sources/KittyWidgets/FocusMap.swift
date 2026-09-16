@@ -1,4 +1,4 @@
-import os
+import Synchronization
 
 public struct FocusMap: Sendable {
     public struct Entry: Sendable {
@@ -27,7 +27,7 @@ public struct FocusMap: Sendable {
 }
 
 public final class FocusMapCollector: Sendable {
-    private let _lock = OSAllocatedUnfairLock(initialState: [FocusMap.Entry]())
+    private let _lock = Mutex([FocusMap.Entry]())
 
     public init() {}
 
