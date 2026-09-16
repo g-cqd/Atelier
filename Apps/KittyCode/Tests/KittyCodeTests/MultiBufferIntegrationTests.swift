@@ -1,3 +1,4 @@
+import AemiTesting
 import AtelierText
 import Foundation
 import KittyCodecs
@@ -123,25 +124,22 @@ struct MultiBufferIntegrationTests {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
-        let state = EditorState(rootPath: rootURL.path, config: config)
-
-        func waitUntil(_ condition: @escaping () -> Bool) async {
-            for _ in 0 ..< 200 {
-                if condition() {
-                    return
-                }
-                try? await Task.sleep(for: .milliseconds(5))
-            }
-            Issue.record("Timed out waiting for asynchronous file open")
-        }
+        // Grammar loading is irrelevant to this test and its registry is process-wide shared
+        // state; disabling it keeps the wait below independent of unrelated syntax-highlighting
+        // tests contending for the same lock elsewhere in the suite.
+        config.syntax.enabled = false
+        let taskProvider = TaskProviderSpy()
+        let state = EditorState(rootPath: rootURL.path, config: config, taskProvider: taskProvider)
 
         state.openFilePath(firstFileURL.path, name: "first.txt")
-        await waitUntil { state.fileName == "first.txt" }
+        try await taskProvider.waitForAllTasks(timeout: .seconds(30))
+        #expect(state.fileName == "first.txt")
         #expect(state.fileContent == ["alpha", "beta", ""])
         #expect(state.documentText == "alpha\nbeta\n")
 
         state.openFilePath(secondFileURL.path, name: "second.txt")
-        await waitUntil { state.fileName == "second.txt" }
+        try await taskProvider.waitForAllTasks(timeout: .seconds(30))
+        #expect(state.fileName == "second.txt")
         state.switchToTab(0)
 
         #expect(state.fileName == "first.txt")
