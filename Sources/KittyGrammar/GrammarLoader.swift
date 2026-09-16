@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Loads and validates tree-sitter grammar.json files.
 public enum GrammarLoader: Sendable {

@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// `TextDocument` was previously `@MainActor` even though it holds only
 /// data (`TextBuffer`, `TextCursor`, cached lines, file path, line
