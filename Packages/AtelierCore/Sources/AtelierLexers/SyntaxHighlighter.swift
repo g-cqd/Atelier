@@ -59,33 +59,4 @@ public enum SyntaxHighlighter {
                 return []
         }
     }
-
-    /// Splits tokens at line boundaries and rebases them on their line.
-    /// - Parameters:
-    ///   - tokens: Tokens over the whole text, ascending and disjoint.
-    ///   - lineStarts: UTF-16 offset of each line's first unit, ascending.
-    ///   - textLength: UTF-16 length of the whole text, which ends the last line.
-    /// - Returns: One token array per line, with ranges relative to the line start.
-    /// - Complexity: O(tokens + lines)
-    public static func tokensByLine(_ tokens: [Token], lineStarts: [Int], textLength: Int) -> [[Token]] {
-        var result = [[Token]](repeating: [], count: lineStarts.count)
-        var line = 0
-        for token in tokens {
-            while line + 1 < lineStarts.count, lineStarts[line + 1] <= token.range.lowerBound {
-                line += 1
-            }
-            var current = line
-            while current < lineStarts.count, lineStarts[current] < token.range.upperBound {
-                let base = lineStarts[current]
-                let lineEnd = current + 1 < lineStarts.count ? lineStarts[current + 1] - 1 : textLength
-                let start = max(token.range.lowerBound, base)
-                let end = min(token.range.upperBound, lineEnd)
-                if end > start {
-                    result[current].append(Token(kind: token.kind, range: (start - base) ..< (end - base)))
-                }
-                current += 1
-            }
-        }
-        return result
-    }
 }

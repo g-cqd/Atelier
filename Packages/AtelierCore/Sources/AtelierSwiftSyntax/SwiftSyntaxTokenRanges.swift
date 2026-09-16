@@ -1,5 +1,4 @@
 public import AtelierDiff
-import AtelierLexers
 public import AtelierSyntaxModel
 import SwiftParser
 import SwiftSyntax
@@ -100,8 +99,8 @@ public struct SwiftSyntaxTokenRanges: SyntaxTokenRanging {
             lineStarts.append(offset + 1)
         }
         if lineStarts.count > lineCount { lineStarts.removeLast(lineStarts.count - max(lineCount, 1)) }
-        let tokens = ranges.map { Token(kind: .keyword, range: $0) }
-        return SyntaxHighlighter.tokensByLine(tokens, lineStarts: lineStarts, textLength: text.utf16.count)
-            .map { $0.map(\.range) }
+        let tokens = ranges.map { HighlightToken(byteRange: $0, role: .keyword) }
+        return HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: text.utf16.count)
+            .map { $0.map(\.byteRange) }
     }
 }
