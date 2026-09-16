@@ -1,12 +1,13 @@
-import AemiTesting
 import AemiCore
+import AemiTesting
 import AppKit
 import DiffCore
+import Testing
+
 @testable import DiffComparison
 @testable import DiffGit
 @testable import DiffRendering
 @testable import DiffTextKit
-import Testing
 
 /// Forwards to a `TestClock` and counts the sleeps that ran to completion, which is how many debounced passes
 /// a controller let through.

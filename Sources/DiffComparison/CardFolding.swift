@@ -3,6 +3,7 @@ package import DiffGit
 import DiffRendering
 import Foundation
 import Observation
+
 /// Which cards are folded: the user's choices, plus wholly added and deleted files folded by default when a list
 /// first appears.
 package struct CardFolding: Equatable {

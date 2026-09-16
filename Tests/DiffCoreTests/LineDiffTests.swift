@@ -1,5 +1,6 @@
-@testable import DiffCore
 import Testing
+
+@testable import DiffCore
 
 struct LineDiffTests {
     /// Typed up front: an untyped literal of tuples this long is more than the Swift 6.4 type checker
@@ -16,7 +17,7 @@ struct LineDiffTests {
         ([1, 2, 2, 2, 3], [1, 2, 3]),
         ([3, 1, 2], [1, 2, 3]),
         ([1, 1, 1, 1], [1, 1]),
-        (Array(1...200), Array(1...200).filter { $0 % 7 != 0 } + [999, 1000]),
+        (Array(1 ... 200), Array(1 ... 200).filter { $0 % 7 != 0 } + [999, 1000])
     ]
 
     @Test(arguments: editScriptCases)
@@ -28,20 +29,20 @@ struct LineDiffTests {
         var newCursor = 0
         for edit in edits {
             switch edit {
-            case .equal(let oldIndex, let newIndex):
-                #expect(oldIndex == oldCursor)
-                #expect(newIndex == newCursor)
-                #expect(old[oldIndex] == new[newIndex])
-                rebuilt.append(old[oldIndex])
-                oldCursor += 1
-                newCursor += 1
-            case .delete(let oldIndex):
-                #expect(oldIndex == oldCursor)
-                oldCursor += 1
-            case .insert(let newIndex):
-                #expect(newIndex == newCursor)
-                rebuilt.append(new[newIndex])
-                newCursor += 1
+                case .equal(let oldIndex, let newIndex):
+                    #expect(oldIndex == oldCursor)
+                    #expect(newIndex == newCursor)
+                    #expect(old[oldIndex] == new[newIndex])
+                    rebuilt.append(old[oldIndex])
+                    oldCursor += 1
+                    newCursor += 1
+                case .delete(let oldIndex):
+                    #expect(oldIndex == oldCursor)
+                    oldCursor += 1
+                case .insert(let newIndex):
+                    #expect(newIndex == newCursor)
+                    rebuilt.append(new[newIndex])
+                    newCursor += 1
             }
         }
         #expect(oldCursor == old.count)
@@ -57,7 +58,8 @@ struct LineDiffTests {
 
     @Test
     func `the shortest edit script prefers the common subsequence over rewriting everything`() {
-        let edits = LineDiff.diff(["a", "b", "c", "a", "b", "b", "a"], ["c", "b", "a", "b", "a", "c"], anchoringRareLines: false)
+        let edits = LineDiff.diff(
+            ["a", "b", "c", "a", "b", "b", "a"], ["c", "b", "a", "b", "a", "c"], anchoringRareLines: false)
         let equalCount = edits.filter { if case .equal = $0 { true } else { false } }.count
         #expect(equalCount == 4)
     }
@@ -77,7 +79,7 @@ struct LineDiffTests {
         let model = DiffModel(oldText: "one\ntwo\nthree", newText: "one\ntwo!\nthree\nfour\nfive")
         #expect(model.splitRows.map(\.kind) == [.context, .modified, .context, .added, .added])
         #expect(model.splitRows[1].old?.emphasis == [])
-        #expect(model.splitRows[1].new?.emphasis == [3..<4])
+        #expect(model.splitRows[1].new?.emphasis == [3 ..< 4])
         #expect(model.splitRows[3].old == nil)
         #expect(model.unifiedRows.map(\.kind) == [.context, .removed, .added, .context, .added, .added])
     }
@@ -87,7 +89,7 @@ struct LineDiffTests {
         #expect(IntralineDiff.emphasis(old: "let value = 1", new: "print(\"hello\")") == nil)
         let emphasis = IntralineDiff.emphasis(old: "let value = 1", new: "let value = 12")
         #expect(emphasis?.old == [])
-        #expect(emphasis?.new == [13..<14])
+        #expect(emphasis?.new == [13 ..< 14])
     }
 
     @Test
@@ -108,7 +110,8 @@ struct LineDiffTests {
     }
 
     @Test
-    func `the indent heuristic starts an inserted function on its declaration rather than on the closing brace above`() {
+    func `the indent heuristic starts an inserted function on its declaration rather than on the closing brace above`()
+    {
         let old: [Substring] = ["func a() {", "    one", "}", ""]
         let new: [Substring] = ["func a() {", "    one", "}", "", "func b() {", "    two", "}", ""]
         var heuristics = DiffHeuristics.none
@@ -126,21 +129,23 @@ struct LineDiffTests {
         (WhitespaceMode.exact, false),
         (.ignoreTrailing, false),
         (.ignoreLeadingAndTrailing, true),
-        (.ignoreAll, true),
+        (.ignoreAll, true)
     ])
     func `whitespace modes decide whether a re-indented line changed`(mode: WhitespaceMode, isSame: Bool) {
         var heuristics = DiffHeuristics.none
         heuristics.whitespace = mode
-        let edits = LineDiff.diffLines(["  let a = 1"], ["    let a = 1"], pipeline: DiffPipeline(heuristics: heuristics))
+        let edits = LineDiff.diffLines(
+            ["  let a = 1"], ["    let a = 1"], pipeline: DiffPipeline(heuristics: heuristics))
         #expect(edits.allSatisfy { if case .equal = $0 { true } else { false } } == isSame)
     }
 
     @Test
     func `similar lines pair across an inserted line and leftovers still zip by position`() {
-        let pairs = SimilarityPairing().pairs(
-            removed: ["let total = price * quantity", "return total"],
-            added: ["let subtotal = price * quantity", "let total = subtotal + tax", "return total"]
-        )
+        let pairs = SimilarityPairing()
+            .pairs(
+                removed: ["let total = price * quantity", "return total"],
+                added: ["let subtotal = price * quantity", "let total = subtotal + tax", "return total"]
+            )
         #expect(pairs == [LinePair(old: 0, new: 0), LinePair(old: nil, new: 1), LinePair(old: 1, new: 2)])
 
         let unrelated = SimilarityPairing().pairs(removed: ["b"], added: ["x"])
@@ -150,17 +155,20 @@ struct LineDiffTests {
     @Test
     func `semantic cleanup folds coincidental common letters into the replacement`() {
         let raw = IntralineDiff.emphasis(old: "foo(bar)", new: "boo(baz)", granularity: .character)
-        let cleaned = IntralineDiff.emphasis(old: "foo(bar)", new: "boo(baz)", granularity: .character, refiners: [SemanticCleanup()])
+        let cleaned = IntralineDiff.emphasis(
+            old: "foo(bar)", new: "boo(baz)", granularity: .character, refiners: [SemanticCleanup()])
         #expect(raw?.old.count == 2)
-        #expect(cleaned?.old == [0..<1, 6..<7])
-        #expect(cleaned?.new == [0..<1, 6..<7])
+        #expect(cleaned?.old == [0 ..< 1, 6 ..< 7])
+        #expect(cleaned?.new == [0 ..< 1, 6 ..< 7])
 
-        let word = IntralineDiff.emphasis(old: "self.count = items.count", new: "self.total = items.total", granularity: .word, refiners: [SemanticCleanup()])
-        #expect(word?.old == [5..<10, 19..<24])
+        let word = IntralineDiff.emphasis(
+            old: "self.count = items.count", new: "self.total = items.total", granularity: .word,
+            refiners: [SemanticCleanup()])
+        #expect(word?.old == [5 ..< 10, 19 ..< 24])
 
         let reindented = IntralineDiff.emphasis(old: "    let a = 1", new: "        let a = 2", granularity: .word)
-        #expect(reindented?.old == [12..<13])
-        #expect(reindented?.new == [16..<17])
+        #expect(reindented?.old == [12 ..< 13])
+        #expect(reindented?.new == [16 ..< 17])
     }
 
     @Test
@@ -178,4 +186,3 @@ struct LineDiffTests {
         #expect(off.unifiedRows.allSatisfy { !$0.isMoved })
     }
 }
-

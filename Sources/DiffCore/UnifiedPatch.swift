@@ -65,13 +65,13 @@ public struct UnifiedPatch: Sendable, Equatable {
                 while new.count < hunk.newStart - 1 { new.append("") }
                 for line in hunk.lines {
                     switch line.kind {
-                    case .context:
-                        old.append(line.text)
-                        new.append(line.text)
-                    case .removed:
-                        old.append(line.text)
-                    case .added:
-                        new.append(line.text)
+                        case .context:
+                            old.append(line.text)
+                            new.append(line.text)
+                        case .removed:
+                            old.append(line.text)
+                        case .added:
+                            new.append(line.text)
                     }
                 }
             }
@@ -107,27 +107,27 @@ public struct UnifiedPatch: Sendable, Equatable {
             seenHeaderPaths = false
         }
 
-        for slice in text.utf8.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false) {
-            let line = Substring(slice.last == UInt8(ascii: "\r") ? slice.dropLast() : slice)
-            if hunk != nil, remainingOld > 0 || remainingNew > 0 {
-                if line.hasPrefix("\\ ") { continue }
-                let first = line.utf8.first
-                let kind: Hunk.LineKind? = switch first {
-                case UInt8(ascii: " "): .context
-                case UInt8(ascii: "-"): .removed
-                case UInt8(ascii: "+"): .added
-                case nil: .context
-                default: nil
+        /// Consumes one line of the open hunk's body; false once the hunk is complete or the line is not body.
+        func consumeHunkLine(_ line: Substring) -> Bool {
+            guard hunk != nil, remainingOld > 0 || remainingNew > 0 else { return false }
+            if line.hasPrefix("\\ ") { return true }
+            let first = line.utf8.first
+            let kind: Hunk.LineKind? =
+                switch first {
+                    case UInt8(ascii: " "): .context
+                    case UInt8(ascii: "-"): .removed
+                    case UInt8(ascii: "+"): .added
+                    case nil: .context
+                    default: nil
                 }
-                if let kind {
-                    hunk?.lines.append(Hunk.Line(kind: kind, text: first == nil ? "" : String(line.dropFirst())))
-                    if kind != .added { remainingOld -= 1 }
-                    if kind != .removed { remainingNew -= 1 }
-                    continue
-                }
-            }
-            if hunk != nil, line.isEmpty || line.hasPrefix("\\ ") { continue }
-
+            guard let kind else { return false }
+            hunk?.lines.append(Hunk.Line(kind: kind, text: first == nil ? "" : String(line.dropFirst())))
+            if kind != .added { remainingOld -= 1 }
+            if kind != .removed { remainingNew -= 1 }
+            return true
+        }
+        /// Applies a file or hunk header line; anything else is skipped.
+        func applyHeader(_ line: Substring) {
             if line.hasPrefix("diff --git ") {
                 closeFile()
                 let (old, new) = Self.gitHeaderPaths(String(line.dropFirst("diff --git ".count)))
@@ -141,7 +141,10 @@ public struct UnifiedPatch: Sendable, Equatable {
                 remainingNew = header.newCount
             } else if line.hasPrefix("--- ") {
                 closeHunk()
-                if current == nil || seenHeaderPaths { closeFile(); current = FileChange(oldPath: nil, newPath: nil) }
+                if current == nil || seenHeaderPaths {
+                    closeFile()
+                    current = FileChange(oldPath: nil, newPath: nil)
+                }
                 current?.oldPath = Self.headerPath(line.dropFirst(4), stripping: "a/")
                 seenHeaderPaths = true
             } else if line.hasPrefix("+++ ") {
@@ -149,9 +152,9 @@ public struct UnifiedPatch: Sendable, Equatable {
                 if current == nil { current = FileChange(oldPath: nil, newPath: nil) }
                 current?.newPath = Self.headerPath(line.dropFirst(4), stripping: "b/")
             } else if line.hasPrefix("rename from ") || line.hasPrefix("copy from ") {
-                current?.oldPath = String(line.drop(while: { $0 != " " }).dropFirst().drop(while: { $0 != " " }).dropFirst())
+                current?.oldPath = Self.renamePath(line)
             } else if line.hasPrefix("rename to ") || line.hasPrefix("copy to ") {
-                current?.newPath = String(line.drop(while: { $0 != " " }).dropFirst().drop(while: { $0 != " " }).dropFirst())
+                current?.newPath = Self.renamePath(line)
             } else if line.hasPrefix("new file mode") {
                 current?.oldPath = nil
             } else if line.hasPrefix("deleted file mode") {
@@ -159,6 +162,13 @@ public struct UnifiedPatch: Sendable, Equatable {
             } else if line.hasPrefix("Binary files ") || line.hasPrefix("GIT binary patch") {
                 current?.isBinary = true
             }
+        }
+
+        for slice in text.utf8.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false) {
+            let line = Substring(slice.last == UInt8(ascii: "\r") ? slice.dropLast() : slice)
+            if consumeHunkLine(line) { continue }
+            if hunk != nil, line.isEmpty || line.hasPrefix("\\ ") { continue }
+            applyHeader(line)
         }
         closeFile()
         self.files = files.filter { $0.oldPath != nil || $0.newPath != nil }
@@ -168,7 +178,7 @@ public struct UnifiedPatch: Sendable, Equatable {
     private static func gitHeaderPaths(_ rest: String) -> (String?, String?) {
         let unquoted = rest.trimmingCharacters(in: .whitespaces)
         if let range = unquoted.range(of: " b/", options: .backwards) {
-            let old = String(unquoted[unquoted.startIndex..<range.lowerBound])
+            let old = String(unquoted[unquoted.startIndex ..< range.lowerBound])
             let new = String(unquoted[range.upperBound...])
             return (old.hasPrefix("a/") ? String(old.dropFirst(2)) : old, new)
         }
@@ -176,9 +186,16 @@ public struct UnifiedPatch: Sendable, Equatable {
         return (parts.first, parts.count > 1 ? parts[1] : parts.first)
     }
 
+    /// The path after the two-word verb of a `rename from`, `rename to`, `copy from` or `copy to` line.
+    private static func renamePath(_ line: Substring) -> String {
+        String(line.drop(while: { $0 != " " }).dropFirst().drop(while: { $0 != " " }).dropFirst())
+    }
+
     private static func headerPath(_ rest: Substring, stripping prefix: String) -> String? {
         var path = rest.split(separator: "\t", maxSplits: 1).first.map(String.init) ?? ""
-        if path.hasPrefix("\"") && path.hasSuffix("\"") && path.count >= 2 { path = String(path.dropFirst().dropLast()) }
+        if path.hasPrefix("\"") && path.hasSuffix("\"") && path.count >= 2 {
+            path = String(path.dropFirst().dropLast())
+        }
         if path == "/dev/null" { return nil }
         if path.hasPrefix(prefix) { path.removeFirst(prefix.count) }
         return path

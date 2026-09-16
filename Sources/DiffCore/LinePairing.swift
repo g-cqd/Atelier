@@ -20,9 +20,10 @@ public struct PositionalPairing: LinePairing {
     public init() {}
 
     public func pairs(removed: [Substring], added: [Substring]) -> [LinePair] {
-        (0..<max(removed.count, added.count)).map { index in
-            LinePair(old: index < removed.count ? index : nil, new: index < added.count ? index : nil)
-        }
+        (0 ..< max(removed.count, added.count))
+            .map { index in
+                LinePair(old: index < removed.count ? index : nil, new: index < added.count ? index : nil)
+            }
     }
 }
 
@@ -50,8 +51,8 @@ public struct SimilarityPairing: LinePairing {
         let rows = removed.count + 1
         let columns = added.count + 1
         var weight = [Double](repeating: 0, count: rows * columns)
-        for i in 1..<rows {
-            for j in 1..<columns {
+        for i in 1 ..< rows {
+            for j in 1 ..< columns {
                 let similarity = Self.similarity(removedGrams[i - 1], addedGrams[j - 1])
                 var best = max(weight[(i - 1) * columns + j], weight[i * columns + j - 1])
                 if similarity >= threshold {
@@ -80,7 +81,8 @@ public struct SimilarityPairing: LinePairing {
         var oldCursor = 0
         var newCursor = 0
         for match in matches.reversed() + [(removed.count, added.count)] {
-            pairs += PositionalPairing().pairs(removed: Array(removed[oldCursor..<match.old]), added: Array(added[newCursor..<match.new]))
+            pairs += PositionalPairing()
+                .pairs(removed: Array(removed[oldCursor ..< match.old]), added: Array(added[newCursor ..< match.new]))
                 .map { LinePair(old: $0.old.map { $0 + oldCursor }, new: $0.new.map { $0 + newCursor }) }
             if match.old < removed.count { pairs.append(LinePair(old: match.old, new: match.new)) }
             oldCursor = match.old + 1
@@ -95,7 +97,7 @@ public struct SimilarityPairing: LinePairing {
         guard units.count > 1 else { return units.map(UInt32.init) }
         var grams: [UInt32] = []
         grams.reserveCapacity(units.count - 1)
-        for index in 0..<(units.count - 1) {
+        for index in 0 ..< (units.count - 1) {
             grams.append(UInt32(units[index]) << 16 | UInt32(units[index + 1]))
         }
         return grams.sorted()

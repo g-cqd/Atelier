@@ -1,10 +1,11 @@
 import DiffCore
 import Foundation
+import Testing
+
 @testable import DiffComparison
 @testable import DiffGit
 @testable import DiffRendering
 @testable import DiffTextKit
-import Testing
 
 @MainActor
 struct ViewerSettingsTests {

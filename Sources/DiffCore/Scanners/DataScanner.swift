@@ -20,14 +20,20 @@ struct DataScanner {
                 index = scanUntilNewline(from: index, kind: .tag)
             } else if format == .yaml, atLineStart, matches("---", at: index) || matches("...", at: index) {
                 index = scanUntilNewline(from: index, kind: .keyword)
-            } else if format == .yaml, unit == ASCII.ampersand || unit == ASCII.asterisk || unit == ASCII.exclamation, index + 1 < units.count, !ASCII.isSpace(units[index + 1]) {
+            } else if format == .yaml, unit == ASCII.ampersand || unit == ASCII.asterisk || unit == ASCII.exclamation,
+                index + 1 < units.count, !ASCII.isSpace(units[index + 1])
+            {
                 var end = index + 1
-                while end < units.count, !ASCII.isSpace(units[end]), units[end] != ASCII.comma, units[end] != ASCII.closeBracket, units[end] != ASCII.closeBrace { end += 1 }
-                tokens.append(Token(kind: .attribute, range: index..<end))
+                while end < units.count, !ASCII.isSpace(units[end]), units[end] != ASCII.comma,
+                    units[end] != ASCII.closeBracket, units[end] != ASCII.closeBrace
+                { end += 1 }
+                tokens.append(Token(kind: .attribute, range: index ..< end))
                 index = end
             } else if unit == ASCII.quote || unit == ASCII.apostrophe && format != .json {
                 index = scanQuoted(from: index, quote: unit)
-            } else if ASCII.isDigit(unit) || unit == ASCII.hyphen && index + 1 < units.count && ASCII.isDigit(units[index + 1]) {
+            } else if ASCII.isDigit(unit)
+                || unit == ASCII.hyphen && index + 1 < units.count && ASCII.isDigit(units[index + 1])
+            {
                 index = scanNumber(from: index)
             } else if ASCII.isIdentifierStart(unit) {
                 index = scanBareWord(from: index)
@@ -57,21 +63,23 @@ struct DataScanner {
         while cursor < units.count, units[cursor] == 32 || units[cursor] == 9 { cursor += 1 }
         guard cursor < units.count else { return false }
         switch format {
-        case .json: return units[cursor] == ASCII.colon
-        case .toml: return units[cursor] == ASCII.equals || units[cursor] == ASCII.dot
-        default: return units[cursor] == ASCII.colon && (cursor + 1 >= units.count || ASCII.isSpace(units[cursor + 1]))
+            case .json: return units[cursor] == ASCII.colon
+            case .toml: return units[cursor] == ASCII.equals || units[cursor] == ASCII.dot
+            default:
+                return units[cursor] == ASCII.colon && (cursor + 1 >= units.count || ASCII.isSpace(units[cursor + 1]))
         }
     }
 
     private mutating func scanUntilNewline(from start: Int, kind: TokenKind) -> Int {
         var index = start
         while index < units.count, units[index] != ASCII.newline { index += 1 }
-        tokens.append(Token(kind: kind, range: start..<index))
+        tokens.append(Token(kind: kind, range: start ..< index))
         return index
     }
 
     private mutating func scanQuoted(from start: Int, quote: UInt16) -> Int {
-        let isTriple = format == .toml && start + 2 < units.count && units[start + 1] == quote && units[start + 2] == quote
+        let isTriple =
+            format == .toml && start + 2 < units.count && units[start + 1] == quote && units[start + 2] == quote
         var index = start + (isTriple ? 3 : 1)
         while index < units.count {
             let unit = units[index]
@@ -93,35 +101,46 @@ struct DataScanner {
             index += 1
         }
         index = min(index, units.count)
-        tokens.append(Token(kind: isKey(endingAt: index) ? .attributeName : .string, range: start..<index))
+        tokens.append(Token(kind: isKey(endingAt: index) ? .attributeName : .string, range: start ..< index))
         return index
     }
 
     private mutating func scanNumber(from start: Int) -> Int {
         var index = start + 1
-        while index < units.count, ASCII.isIdentifier(units[index]) || units[index] == ASCII.dot || units[index] == ASCII.hyphen || units[index] == ASCII.colon || units[index] == ASCII.plus {
+        while index < units.count,
+            ASCII.isIdentifier(units[index]) || units[index] == ASCII.dot || units[index] == ASCII.hyphen
+                || units[index] == ASCII.colon || units[index] == ASCII.plus
+        {
             if units[index] == ASCII.colon, format != .toml { break }
             index += 1
         }
         if isKey(endingAt: index) {
-            tokens.append(Token(kind: .attributeName, range: start..<index))
+            tokens.append(Token(kind: .attributeName, range: start ..< index))
         } else {
-            tokens.append(Token(kind: .number, range: start..<index))
+            tokens.append(Token(kind: .number, range: start ..< index))
         }
         return index
     }
 
     private mutating func scanBareWord(from start: Int) -> Int {
         var index = start
-        while index < units.count, ASCII.isIdentifier(units[index]) || units[index] == ASCII.hyphen || (format == .yaml && units[index] == 32 && index + 1 < units.count && ASCII.isIdentifier(units[index + 1]) && isBareKeyLine(start)) {
+        while index < units.count,
+            ASCII.isIdentifier(units[index]) || units[index] == ASCII.hyphen
+                || (format == .yaml && units[index] == 32 && index + 1 < units.count
+                    && ASCII.isIdentifier(units[index + 1]) && isBareKeyLine(start))
+        {
             index += 1
         }
         if isKey(endingAt: index) {
-            tokens.append(Token(kind: .attributeName, range: start..<index))
+            tokens.append(Token(kind: .attributeName, range: start ..< index))
         } else {
-            let word = String(decoding: units[start..<index], as: UTF16.self)
-            if ["true", "false", "null", "yes", "no", "on", "off", "inf", "nan", "True", "False", "Null", "TRUE", "FALSE", "NULL"].contains(word) {
-                tokens.append(Token(kind: .keyword, range: start..<index))
+            let word = String(decoding: units[start ..< index], as: UTF16.self)
+            if [
+                "true", "false", "null", "yes", "no", "on", "off", "inf", "nan", "True", "False", "Null", "TRUE",
+                "FALSE", "NULL"
+            ]
+            .contains(word) {
+                tokens.append(Token(kind: .keyword, range: start ..< index))
             }
         }
         return index

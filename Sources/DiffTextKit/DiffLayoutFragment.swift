@@ -56,7 +56,10 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
                 guard end > start else { return }
                 context.saveGState()
                 context.setFillColor(color.cgColor)
-                context.fill(CGRect(x: point.x + bounds.minX + start, y: point.y + bounds.minY, width: end - start, height: bounds.height))
+                context.fill(
+                    CGRect(
+                        x: point.x + bounds.minX + start, y: point.y + bounds.minY, width: end - start,
+                        height: bounds.height))
                 context.restoreGState()
             }
         }

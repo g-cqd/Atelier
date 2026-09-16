@@ -82,9 +82,15 @@ package final class ViewerSettings {
         }
     }
 
-    package var mode: ViewMode { didSet { store(mode.rawValue, Key.mode, (oldValue == .inline) != (mode == .inline) ? .layout : .appearance) } }
-    package var explorerPlacement: ExplorerPlacement { didSet { store(explorerPlacement.rawValue, Key.explorerPlacement, .appearance) } }
-    package var sidebarVisibility: SidebarVisibility { didSet { store(sidebarVisibility.rawValue, Key.sidebarVisibility, .appearance) } }
+    package var mode: ViewMode {
+        didSet { store(mode.rawValue, Key.mode, (oldValue == .inline) != (mode == .inline) ? .layout : .appearance) }
+    }
+    package var explorerPlacement: ExplorerPlacement {
+        didSet { store(explorerPlacement.rawValue, Key.explorerPlacement, .appearance) }
+    }
+    package var sidebarVisibility: SidebarVisibility {
+        didSet { store(sidebarVisibility.rawValue, Key.sidebarVisibility, .appearance) }
+    }
     package var wrapsLines: Bool { didSet { store(wrapsLines, Key.wrapsLines, .appearance) } }
     /// Keep the two panes of a split layout at the same vertical position.
     package var syncsScrolling: Bool { didSet { store(syncsScrolling, Key.syncsScrolling, .appearance) } }
@@ -93,7 +99,9 @@ package final class ViewerSettings {
     package var showsIgnoredFiles: Bool { didSet { store(showsIgnoredFiles, Key.showsIgnoredFiles, .trees) } }
     package var granularity: IntralineGranularity { didSet { store(granularity.rawValue, Key.granularity, .diff) } }
     /// Which diff heuristics are wired in; any change re-diffs the selection.
-    package var diffHeuristics: DiffHeuristics { didSet { store(try? JSONEncoder().encode(diffHeuristics), Key.diffHeuristics, .diff) } }
+    package var diffHeuristics: DiffHeuristics {
+        didSet { store(try? JSONEncoder().encode(diffHeuristics), Key.diffHeuristics, .diff) }
+    }
     package var showsMinimap: Bool { didSet { store(showsMinimap, Key.showsMinimap, .appearance) } }
     package var showsStatusBar: Bool { didSet { store(showsStatusBar, Key.showsStatusBar, .appearance) } }
     package var treeStyle: FileTreeStyle { didSet { store(treeStyle.rawValue, Key.treeStyle, .trees) } }
@@ -119,17 +127,22 @@ package final class ViewerSettings {
     package init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         mode = defaults.string(forKey: Key.mode).flatMap(ViewMode.init(rawValue:)) ?? .split
-        explorerPlacement = defaults.string(forKey: Key.explorerPlacement).flatMap(ExplorerPlacement.init(rawValue:)) ?? .top
-        sidebarVisibility = defaults.string(forKey: Key.sidebarVisibility).flatMap(SidebarVisibility.init(rawValue:)) ?? .all
+        explorerPlacement =
+            defaults.string(forKey: Key.explorerPlacement).flatMap(ExplorerPlacement.init(rawValue:)) ?? .top
+        sidebarVisibility =
+            defaults.string(forKey: Key.sidebarVisibility).flatMap(SidebarVisibility.init(rawValue:)) ?? .all
         wrapsLines = defaults.object(forKey: Key.wrapsLines) as? Bool ?? true
         syncsScrolling = defaults.object(forKey: Key.syncsScrolling) as? Bool ?? true
         showsChangesOnly = defaults.bool(forKey: Key.showsChangesOnly)
         showsIgnoredFiles = defaults.bool(forKey: Key.showsIgnoredFiles)
         granularity = defaults.string(forKey: Key.granularity).flatMap(IntralineGranularity.init(rawValue:)) ?? .word
-        diffHeuristics = defaults.data(forKey: Key.diffHeuristics).flatMap { try? JSONDecoder().decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()
+        diffHeuristics =
+            defaults.data(forKey: Key.diffHeuristics)
+            .flatMap { try? JSONDecoder().decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()
         showsMinimap = defaults.object(forKey: Key.showsMinimap) as? Bool ?? true
         showsStatusBar = defaults.object(forKey: Key.showsStatusBar) as? Bool ?? true
-        treeStyle = defaults.string(forKey: Key.treeStyle).flatMap(FileTreeStyle.init(rawValue:))
+        treeStyle =
+            defaults.string(forKey: Key.treeStyle).flatMap(FileTreeStyle.init(rawValue:))
             ?? (defaults.bool(forKey: Key.compactsFolders) ? .compact : .hierarchy)
         wrapColumn = defaults.integer(forKey: Key.wrapColumn)
         themePath = defaults.string(forKey: Key.themePath)

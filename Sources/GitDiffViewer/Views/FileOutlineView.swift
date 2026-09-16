@@ -129,7 +129,11 @@ struct FileOutlineView: NSViewRepresentable {
         /// - Complexity: O(nodes)
         func rebuild(in outline: NSOutlineView, selecting path: String?) {
             let started = ContinuousClock.now
-            defer { PhaseTrace.log("explorer rebuilt: \(itemsByKey.count) items, \(outline.numberOfRows) rows in \((ContinuousClock.now - started).formatted(.units(allowed: [.milliseconds], fractionalPart: .show(length: 1))))") }
+            defer {
+                PhaseTrace.log(
+                    "explorer rebuilt: \(itemsByKey.count) items, \(outline.numberOfRows) rows in \((ContinuousClock.now - started).formatted(.units(allowed: [.milliseconds], fractionalPart: .show(length: 1))))"
+                )
+            }
             var reused: [String: OutlineItem] = [:]
             func build(_ node: FileNode, parent: OutlineItem?, continuesChain: Bool) -> OutlineItem {
                 let item = itemsByKey[node.id] ?? OutlineItem(node: node)
@@ -148,7 +152,9 @@ struct FileOutlineView: NSViewRepresentable {
                 roots = only.nodes.map { build($0, parent: nil, continuesChain: false) }
             } else {
                 roots = sections.map { section in
-                    let node = FileNode(id: Self.sectionPrefix + section.id, name: section.title, isDirectory: true, children: section.nodes)
+                    let node = FileNode(
+                        id: Self.sectionPrefix + section.id, name: section.title, isDirectory: true,
+                        children: section.nodes)
                     let item = itemsByKey[node.id] ?? OutlineItem(node: node)
                     item.node = node
                     item.parent = nil
@@ -193,7 +199,9 @@ struct FileOutlineView: NSViewRepresentable {
         /// Statuses changed: the visible cells take the new values, nothing is reloaded or scrolled.
         func reconfigureVisibleRows(in outline: NSOutlineView) {
             outline.enumerateAvailableRowViews { rowView, row in
-                guard let item = outline.item(atRow: row) as? OutlineItem, let cell = rowView.view(atColumn: 0) as? FileCellView else { return }
+                guard let item = outline.item(atRow: row) as? OutlineItem,
+                    let cell = rowView.view(atColumn: 0) as? FileCellView
+                else { return }
                 self.configure(cell, for: item)
             }
         }
@@ -274,7 +282,9 @@ struct FileOutlineView: NSViewRepresentable {
 
         /// Whether a folder was selected to toggle; otherwise the key goes to type-select.
         func toggleSelectedDisclosure() -> Bool {
-            guard let outline = outlineView, let item = selectedItem(in: outline), item.node.isDirectory else { return false }
+            guard let outline = outlineView, let item = selectedItem(in: outline), item.node.isDirectory else {
+                return false
+            }
             if outline.isItemExpanded(item) { outline.collapseItem(item) } else { outline.expandItem(item) }
             return true
         }
@@ -282,7 +292,9 @@ struct FileOutlineView: NSViewRepresentable {
         // MARK: Expansion
 
         func outlineViewItemDidExpand(_ notification: Notification) {
-            guard let item = notification.userInfo?["NSObject"] as? OutlineItem, let outline = outlineView else { return }
+            guard let item = notification.userInfo?["NSObject"] as? OutlineItem, let outline = outlineView else {
+                return
+            }
             uiState.setCollapsed(false, item.chainKey)
             guard !isRestoringExpansion else { return }
             // Folders that appeared while this one was folded come up in their remembered state.
@@ -319,7 +331,9 @@ struct FileOutlineView: NSViewRepresentable {
             (item as? OutlineItem)?.node.isDirectory == true
         }
 
-        func outlineView(_ outlineView: NSOutlineView, objectValueFor tableColumn: NSTableColumn?, byItem item: Any?) -> Any? {
+        func outlineView(_ outlineView: NSOutlineView, objectValueFor tableColumn: NSTableColumn?, byItem item: Any?)
+            -> Any?
+        {
             item
         }
 
@@ -328,11 +342,15 @@ struct FileOutlineView: NSViewRepresentable {
         func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
             guard let item = item as? OutlineItem else { return nil }
             if item.isSection {
-                let header = outlineView.makeView(withIdentifier: SectionCellView.identifier, owner: nil) as? SectionCellView ?? SectionCellView()
+                let header =
+                    outlineView.makeView(withIdentifier: SectionCellView.identifier, owner: nil) as? SectionCellView
+                    ?? SectionCellView()
                 header.textField?.stringValue = item.node.name
                 return header
             }
-            let cell = outlineView.makeView(withIdentifier: FileCellView.identifier, owner: nil) as? FileCellView ?? FileCellView()
+            let cell =
+                outlineView.makeView(withIdentifier: FileCellView.identifier, owner: nil) as? FileCellView
+                ?? FileCellView()
             configure(cell, for: item)
             return cell
         }
@@ -345,7 +363,9 @@ struct FileOutlineView: NSViewRepresentable {
             (item as? OutlineItem)?.isSection == false
         }
 
-        func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
+        func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any)
+            -> String?
+        {
             guard let item = item as? OutlineItem, !item.isSection else { return nil }
             return item.node.name
         }
@@ -382,12 +402,12 @@ final class KeyboardOutlineView: NSOutlineView {
 
     override func keyDown(with event: NSEvent) {
         switch event.charactersIgnoringModifiers {
-        case "\r", "\u{3}":
-            onReturn?()
-        case " " where onSpace?() == true:
-            return
-        default:
-            super.keyDown(with: event)
+            case "\r", "\u{3}":
+                onReturn?()
+            case " " where onSpace?() == true:
+                return
+            default:
+                super.keyDown(with: event)
         }
     }
 
@@ -420,7 +440,7 @@ final class SectionCellView: NSTableCellView {
         NSLayoutConstraint.activate([
             text.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
             text.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
-            text.centerYAnchor.constraint(equalTo: centerYAnchor),
+            text.centerYAnchor.constraint(equalTo: centerYAnchor)
         ])
     }
 
@@ -464,7 +484,7 @@ final class FileCellView: NSTableCellView {
             badge.heightAnchor.constraint(equalToConstant: ChangeGlyph.size),
             // As far from the row's edge as from its top and bottom, so the badge sits square in its corner.
             badge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -(24 - ChangeGlyph.size) / 2),
-            badge.centerYAnchor.constraint(equalTo: centerYAnchor),
+            badge.centerYAnchor.constraint(equalTo: centerYAnchor)
         ])
     }
 
@@ -474,7 +494,9 @@ final class FileCellView: NSTableCellView {
     }
 
     func configure(node: FileNode, glyph: ChangeGlyph?) {
-        imageView?.image = NSImage(systemSymbolName: node.isDirectory ? "folder" : "doc.text", accessibilityDescription: node.isDirectory ? "Folder" : "File")
+        imageView?.image = NSImage(
+            systemSymbolName: node.isDirectory ? "folder" : "doc.text",
+            accessibilityDescription: node.isDirectory ? "Folder" : "File")
         textField?.stringValue = node.name
         badge.glyph = glyph
         badge.isDimmed = node.isDirectory

@@ -35,13 +35,13 @@ struct ContentView: View {
                 StatusBarView(model: model)
             }
         }
-            .dropDestination(for: URL.self) { urls, _ in
-                guard let url = urls.first(where: PatchOpenPanel.isPatch) else { return false }
-                model.openPatch(url)
-                return true
-            }
-            .onAppear { PhaseTrace.log("window content appeared") }
-            .background { shortcuts }
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let url = urls.first(where: PatchOpenPanel.isPatch) else { return false }
+            model.openPatch(url)
+            return true
+        }
+        .onAppear { PhaseTrace.log("window content appeared") }
+        .background { shortcuts }
     }
 
     /// The top placement keeps the column hidden; the others persist what the user chose.
@@ -58,40 +58,40 @@ struct ContentView: View {
 
     @ViewBuilder private var sidebar: some View {
         switch settings.explorerPlacement {
-        case .top:
-            Color.clear
-        case .sidebar:
-            VSplitView {
-                leftExplorerView(isSidebar: true)
-                    .frame(minHeight: 120)
-                rightExplorerView(isSidebar: true)
-                    .frame(minHeight: 120)
-            }
-        case .unifiedSidebar:
-            UnifiedExplorerView(model: model, uiState: unifiedExplorer)
+            case .top:
+                Color.clear
+            case .sidebar:
+                VSplitView {
+                    leftExplorerView(isSidebar: true)
+                        .frame(minHeight: 120)
+                    rightExplorerView(isSidebar: true)
+                        .frame(minHeight: 120)
+                }
+            case .unifiedSidebar:
+                UnifiedExplorerView(model: model, uiState: unifiedExplorer)
         }
     }
 
     @ViewBuilder private var detail: some View {
         switch settings.explorerPlacement {
-        case .top:
-            VSplitView {
-                HStack(spacing: 0) {
-                    leftExplorerView(isSidebar: false)
-                        .frame(maxWidth: .infinity)
-                    Divider()
-                    rightExplorerView(isSidebar: false)
-                        .frame(maxWidth: .infinity)
+            case .top:
+                VSplitView {
+                    HStack(spacing: 0) {
+                        leftExplorerView(isSidebar: false)
+                            .frame(maxWidth: .infinity)
+                        Divider()
+                        rightExplorerView(isSidebar: false)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .frame(minHeight: 200, idealHeight: 280)
+                    DiffDetailView(model: model)
+                        .frame(minHeight: 240)
+                        .layoutPriority(1)
                 }
-                .frame(minHeight: 200, idealHeight: 280)
+            case .sidebar, .unifiedSidebar:
                 DiffDetailView(model: model)
-                    .frame(minHeight: 240)
+                    .frame(minWidth: 500)
                     .layoutPriority(1)
-            }
-        case .sidebar, .unifiedSidebar:
-            DiffDetailView(model: model)
-                .frame(minWidth: 500)
-                .layoutPriority(1)
         }
     }
 
@@ -100,7 +100,8 @@ struct ContentView: View {
     }
 
     private func rightExplorerView(isSidebar: Bool) -> some View {
-        FileExplorerView(side: model.right, model: model, position: .right, isSidebar: isSidebar, uiState: rightExplorer)
+        FileExplorerView(
+            side: model.right, model: model, position: .right, isSidebar: isSidebar, uiState: rightExplorer)
     }
 
     /// The window's toolbar, customizable: every item has an identity of its own, so View ▸ Customize Toolbar
@@ -135,7 +136,6 @@ struct ContentView: View {
                 .help("Read both sides again")
         }
         .defaultCustomization(.hidden)
-
     }
 
     /// The two sides. Separate items, so each gets a capsule of its own around a control of its own height.
@@ -153,7 +153,6 @@ struct ContentView: View {
         ToolbarItem(id: ToolbarID.rightSource, placement: .principal) {
             SourceToolbarControl(side: model.right, position: .right).toolbarItemPadding()
         }
-
     }
 
     /// What the diff shows and how to move through it.
@@ -246,9 +245,9 @@ struct ContentView: View {
 extension SidebarVisibility {
     var columnVisibility: NavigationSplitViewVisibility {
         switch self {
-        case .automatic: .automatic
-        case .all: .all
-        case .detailOnly: .detailOnly
+            case .automatic: .automatic
+            case .all: .all
+            case .detailOnly: .detailOnly
         }
     }
 

@@ -50,11 +50,14 @@ package struct Comparison: Sendable, Equatable {
         left: [SourceEntry], right: [SourceEntry], leftSource: ComparisonSource?, rightSource: ComparisonSource?,
         leftIgnored: [SourceEntry] = [], rightIgnored: [SourceEntry] = [], gitRenames: [String: String] = [:]
     ) {
-        leftEntries = Dictionary((left + leftIgnored).map { ($0.relativePath, $0) }, uniquingKeysWith: { first, _ in first })
-        rightEntries = Dictionary((right + rightIgnored).map { ($0.relativePath, $0) }, uniquingKeysWith: { first, _ in first })
+        leftEntries = Dictionary(
+            (left + leftIgnored).map { ($0.relativePath, $0) }, uniquingKeysWith: { first, _ in first })
+        rightEntries = Dictionary(
+            (right + rightIgnored).map { ($0.relativePath, $0) }, uniquingKeysWith: { first, _ in first })
         ignoredPaths = Set(leftIgnored.map(\.relativePath)).union(rightIgnored.map(\.relativePath))
         if leftSource?.isSingleFile == true, rightSource?.isSingleFile == true,
-           let leftPath = left.first?.relativePath, let rightPath = right.first?.relativePath {
+            let leftPath = left.first?.relativePath, let rightPath = right.first?.relativePath
+        {
             singleFiles = (leftPath, rightPath)
         } else {
             singleFiles = nil
@@ -113,11 +116,12 @@ package struct Comparison: Sendable, Equatable {
         statuses.reserveCapacity(left.count + right.count)
         for entry in left {
             let counterpart = rightEntries[counterpartPath(of: entry.relativePath, in: .left)]
-            statuses[entry.relativePath] = if renames.byLeft[entry.relativePath] != nil {
-                .renamed
-            } else {
-                counterpart.map { Self.isSame(entry, $0) ? .same : .different } ?? .onlyLeft
-            }
+            statuses[entry.relativePath] =
+                if renames.byLeft[entry.relativePath] != nil {
+                    .renamed
+                } else {
+                    counterpart.map { Self.isSame(entry, $0) ? .same : .different } ?? .onlyLeft
+                }
         }
         for entry in right where statuses[counterpartPath(of: entry.relativePath, in: .right)] == nil {
             statuses[entry.relativePath] = .onlyRight
@@ -129,12 +133,12 @@ package struct Comparison: Sendable, Equatable {
     /// otherwise paths match one-to-one.
     package func counterpartPath(of path: String, in side: Side) -> String {
         switch side {
-        case .left:
-            if let renamed = renames.byLeft[path] { return renamed }
-            if let singleFiles, path == singleFiles.left { return singleFiles.right }
-        case .right:
-            if let original = renames.byRight[path] { return original }
-            if let singleFiles, path == singleFiles.right { return singleFiles.left }
+            case .left:
+                if let renamed = renames.byLeft[path] { return renamed }
+                if let singleFiles, path == singleFiles.left { return singleFiles.right }
+            case .right:
+                if let original = renames.byRight[path] { return original }
+                if let singleFiles, path == singleFiles.right { return singleFiles.left }
         }
         return path
     }
@@ -146,7 +150,8 @@ package struct Comparison: Sendable, Equatable {
 
     /// Whether `leftPath` still names a file or a folder holding files.
     package func contains(_ leftPath: String) -> Bool {
-        isFile(leftPath) || statuses.keys.contains { $0.hasPrefix(leftPath + "/") } || ignoredPaths.contains { $0.hasPrefix(leftPath + "/") }
+        isFile(leftPath) || statuses.keys.contains { $0.hasPrefix(leftPath + "/") }
+            || ignoredPaths.contains { $0.hasPrefix(leftPath + "/") }
     }
 
     /// Whether `leftPath` names a file git ignores.
@@ -170,7 +175,8 @@ package struct Comparison: Sendable, Equatable {
     }
 
     package func pair(for leftPath: String) -> FilePair {
-        FilePair(path: leftPath, old: leftEntries[leftPath], new: rightEntries[counterpartPath(of: leftPath, in: .left)])
+        FilePair(
+            path: leftPath, old: leftEntries[leftPath], new: rightEntries[counterpartPath(of: leftPath, in: .left)])
     }
 
     /// The path a file is shown under: its destination when it was renamed.
@@ -180,7 +186,9 @@ package struct Comparison: Sendable, Equatable {
 
     /// Whether a renamed file's content changed as well.
     package func isRenamedWithChanges(_ leftPath: String) -> Bool {
-        guard let rightPath = renames.byLeft[leftPath], let old = leftEntries[leftPath], let new = rightEntries[rightPath] else { return false }
+        guard let rightPath = renames.byLeft[leftPath], let old = leftEntries[leftPath],
+            let new = rightEntries[rightPath]
+        else { return false }
         return !Self.isSame(old, new)
     }
 
@@ -189,10 +197,10 @@ package struct Comparison: Sendable, Equatable {
             return leftEntries[leftPath] != nil ? .deleted : .added
         }
         return switch directoryStatus ?? statuses[leftPath] {
-        case .onlyLeft: .deleted
-        case .onlyRight: .added
-        case .renamed: .renamed(to: renames.byLeft[leftPath] ?? leftPath)
-        default: .modified
+            case .onlyLeft: .deleted
+            case .onlyRight: .added
+            case .renamed: .renamed(to: renames.byLeft[leftPath] ?? leftPath)
+            default: .modified
         }
     }
 

@@ -39,7 +39,7 @@ public enum Language: Sendable, Equatable, CaseIterable {
         "json": .json, "jsonc": .json,
         "yaml": .yaml, "yml": .yaml,
         "toml": .toml,
-        "txt": .plain, "md": .plain, "markdown": .plain, "strings": .plain, "gitignore": .plain, "env": .plain,
+        "txt": .plain, "md": .plain, "markdown": .plain, "strings": .plain, "gitignore": .plain, "env": .plain
     ]
 }
 
@@ -71,25 +71,29 @@ public enum SyntaxHighlighter {
     public static func tokens(in text: String, language: Language) -> [Token] {
         let units = Array(text.utf16)
         switch language {
-        case .swift, .objectiveC, .kotlin, .java, .javascript, .typescript, .c, .cpp, .python, .shell, .fish:
-            var scanner = CodeScanner(units: units, syntax: LanguageSyntax.syntax(for: language))
-            return scanner.scan()
-        case .html:
-            var scanner = HTMLScanner(units: units)
-            return scanner.scan()
-        case .css:
-            var scanner = CSSScanner(units: units)
-            return scanner.scan()
-        case .json, .yaml, .toml:
-            var scanner = DataScanner(units: units, format: language)
-            return scanner.scan()
-        case .plain:
-            return []
+            case .swift, .objectiveC, .kotlin, .java, .javascript, .typescript, .c, .cpp, .python, .shell, .fish:
+                var scanner = CodeScanner(units: units, syntax: LanguageSyntax.syntax(for: language))
+                return scanner.scan()
+            case .html:
+                var scanner = HTMLScanner(units: units)
+                return scanner.scan()
+            case .css:
+                var scanner = CSSScanner(units: units)
+                return scanner.scan()
+            case .json, .yaml, .toml:
+                var scanner = DataScanner(units: units, format: language)
+                return scanner.scan()
+            case .plain:
+                return []
         }
     }
 
     /// Splits tokens at line boundaries and rebases them on their line.
-    /// - Parameter lineStarts: UTF-16 offset of each line's first unit, ascending.
+    /// - Parameters:
+    ///   - tokens: Tokens over the whole text, ascending and disjoint.
+    ///   - lineStarts: UTF-16 offset of each line's first unit, ascending.
+    ///   - textLength: UTF-16 length of the whole text, which ends the last line.
+    /// - Returns: One token array per line, with ranges relative to the line start.
     /// - Complexity: O(tokens + lines)
     public static func tokensByLine(_ tokens: [Token], lineStarts: [Int], textLength: Int) -> [[Token]] {
         var result = [[Token]](repeating: [], count: lineStarts.count)
@@ -105,7 +109,7 @@ public enum SyntaxHighlighter {
                 let start = max(token.range.lowerBound, base)
                 let end = min(token.range.upperBound, lineEnd)
                 if end > start {
-                    result[current].append(Token(kind: token.kind, range: (start - base)..<(end - base)))
+                    result[current].append(Token(kind: token.kind, range: (start - base) ..< (end - base)))
                 }
                 current += 1
             }
@@ -113,4 +117,3 @@ public enum SyntaxHighlighter {
         return result
     }
 }
-

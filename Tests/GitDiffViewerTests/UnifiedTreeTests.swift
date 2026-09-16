@@ -1,11 +1,12 @@
-import AemiTesting
 import AemiCore
+import AemiTesting
 import Foundation
+import Testing
+
 @testable import DiffComparison
 @testable import DiffGit
 @testable import DiffRendering
 @testable import DiffTextKit
-import Testing
 
 @MainActor
 struct UnifiedTreeTests {
@@ -15,8 +16,13 @@ struct UnifiedTreeTests {
     @Test
     func `the unified tree merges both sides and folders take the aggregate status of their files`() async throws {
         let sut = makeSUT()
-        reader.entries[.directory(Self.leftURL)] = [entry("same/a.swift", "1"), entry("gone/b.swift", "2"), entry("mixed/c.swift", "3")]
-        reader.entries[.directory(Self.rightURL)] = [entry("same/a.swift", "1"), entry("new/d.swift", "4"), entry("mixed/c.swift", "9"), entry("mixed/e.swift", "5")]
+        reader.entries[.directory(Self.leftURL)] = [
+            entry("same/a.swift", "1"), entry("gone/b.swift", "2"), entry("mixed/c.swift", "3")
+        ]
+        reader.entries[.directory(Self.rightURL)] = [
+            entry("same/a.swift", "1"), entry("new/d.swift", "4"), entry("mixed/c.swift", "9"),
+            entry("mixed/e.swift", "5")
+        ]
 
         try await load(sut)
 

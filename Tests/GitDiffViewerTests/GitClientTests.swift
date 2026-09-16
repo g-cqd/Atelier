@@ -1,14 +1,16 @@
 import Foundation
+import Testing
+
 @testable import DiffComparison
 @testable import DiffGit
 @testable import DiffRendering
 @testable import DiffTextKit
-import Testing
 
 struct GitClientTests {
     @Test
     func `many blobs are read through one batch process`() async throws {
-        let root = FileManager.default.temporaryDirectory.appending(path: "gdv-git-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let root = FileManager.default.temporaryDirectory.appending(
+            path: "gdv-git-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         func git(_ arguments: String...) throws {
@@ -23,7 +25,8 @@ struct GitClientTests {
         }
         try git("init", "-q")
         try "let a = 1\n".write(to: root.appending(path: "a.swift"), atomically: true, encoding: .utf8)
-        try String(repeating: "line\n", count: 40_000).write(to: root.appending(path: "big.swift"), atomically: true, encoding: .utf8)
+        try String(repeating: "line\n", count: 40_000)
+            .write(to: root.appending(path: "big.swift"), atomically: true, encoding: .utf8)
         try git("add", ".")
         try git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init")
         let client = GitClient(repository: root)
@@ -54,7 +57,7 @@ struct GitClientTests {
             "100644 blob 8e8ea3c1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7      12\tSources/a.swift",
             "040000 tree 1e8ea3c1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7       -\tSources",
             "100644 blob 2e8ea3c1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7 1048576\timage.png",
-            "120000 blob 3e8ea3c1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7      20\tlink with space.swift",
+            "120000 blob 3e8ea3c1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7      20\tlink with space.swift"
         ]
         let output = Data((records.joined(separator: "\0") + "\0").utf8)
 
@@ -89,7 +92,9 @@ struct GitClientTests {
         let commits = GitClient.parseCommits(output)
 
         #expect(commits.count == 1)
-        #expect(commits.first == GitCommit(hash: hash, shortHash: "aaaaaaa", subject: "Add a feature\u{1f}with a stray separator"))
+        #expect(
+            commits.first
+                == GitCommit(hash: hash, shortHash: "aaaaaaa", subject: "Add a feature\u{1f}with a stray separator"))
     }
 
     @Test
@@ -100,13 +105,16 @@ struct GitClientTests {
         #expect(GitCommit.abbreviated(sha1) == "0123456")
         #expect(GitCommit.abbreviated(sha256) == "abcdef0")
         #expect(GitCommit.abbreviated("main") == "main")
-        #expect(GitCommit.abbreviated("feature/a-branch-name-that-happens-to-be-forty") == "feature/a-branch-name-that-happens-to-be-forty")
+        #expect(
+            GitCommit.abbreviated("feature/a-branch-name-that-happens-to-be-forty")
+                == "feature/a-branch-name-that-happens-to-be-forty")
         #expect(GitCommit.abbreviated(String(repeating: "g", count: 40)) == String(repeating: "g", count: 40))
     }
 
     @Test
     func `a failing command reports git's message`() async throws {
-        let root = FileManager.default.temporaryDirectory.appending(path: "gdv-git-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let root = FileManager.default.temporaryDirectory.appending(
+            path: "gdv-git-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 

@@ -73,7 +73,8 @@ package enum XcodeThemeLibrary {
     package static func entries() -> [Entry] {
         let user = URL.libraryDirectory.appending(path: "Developer/Xcode/UserData/FontAndColorThemes")
         let bundled = developerDirectory.map {
-            $0.appending(path: "../SharedFrameworks/DVTUserInterfaceKit.framework/Versions/A/Resources/FontAndColorThemes")
+            $0.appending(
+                path: "../SharedFrameworks/DVTUserInterfaceKit.framework/Versions/A/Resources/FontAndColorThemes")
         }
         return ([user] + (bundled.map { [$0] } ?? [])).flatMap(entries(in:))
     }
@@ -84,7 +85,8 @@ package enum XcodeThemeLibrary {
 
     private static func entries(in directory: URL) -> [Entry] {
         let urls = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
-        return urls
+        return
+            urls
             .filter { $0.pathExtension == "xccolortheme" }
             .map { Entry(name: $0.deletingPathExtension().lastPathComponent, url: $0.standardizedFileURL) }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }

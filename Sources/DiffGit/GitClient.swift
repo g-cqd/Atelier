@@ -9,8 +9,8 @@ package enum GitError: Error, LocalizedError {
 
     package var errorDescription: String? {
         switch self {
-        case .commandFailed(let message): message.trimmingCharacters(in: .whitespacesAndNewlines)
-        case .notARepository: "Not a git repository"
+            case .commandFailed(let message): message.trimmingCharacters(in: .whitespacesAndNewlines)
+            case .notARepository: "Not a git repository"
         }
     }
 }
@@ -52,7 +52,7 @@ package struct GitClient: Sendable {
         var entries: [SourceEntry] = []
         for record in data.split(separator: 0) {
             guard let tab = record.firstIndex(of: 9) else { continue }
-            let header = String(decoding: record[record.startIndex..<tab], as: UTF8.self)
+            let header = String(decoding: record[record.startIndex ..< tab], as: UTF8.self)
             let path = String(decoding: record[record.index(after: tab)...], as: UTF8.self)
             guard isSupported(path) else { continue }
             let fields = header.split(separator: " ", omittingEmptySubsequences: true)
@@ -95,11 +95,11 @@ package struct GitClient: Sendable {
         var blobs: [String: Data] = [:]
         var cursor = output.startIndex
         while cursor < output.endIndex, let newline = output[cursor...].firstIndex(of: 10) {
-            let fields = String(decoding: output[cursor..<newline], as: UTF8.self).split(separator: " ")
+            let fields = String(decoding: output[cursor ..< newline], as: UTF8.self).split(separator: " ")
             cursor = output.index(after: newline)
             guard fields.count == 3, let size = Int(fields[2]) else { continue }
             let end = min(cursor + size, output.endIndex)
-            blobs[String(fields[0])] = output.subdata(in: cursor..<end)
+            blobs[String(fields[0])] = output.subdata(in: cursor ..< end)
             cursor = min(end + 1, output.endIndex)
         }
         return blobs
@@ -107,13 +107,15 @@ package struct GitClient: Sendable {
 
     /// Renames between two refs, or between a ref and the working tree when `to` is nil, old path to new path.
     package func renames(from: String, to: String?) async throws -> [String: String] {
-        Self.parseRenames(try await run(["diff", "--name-status", "-M", "-z", "--diff-filter=R", from] + (to.map { [$0] } ?? [])))
+        Self.parseRenames(
+            try await run(["diff", "--name-status", "-M", "-z", "--diff-filter=R", from] + (to.map { [$0] } ?? [])))
     }
 
     /// Splits `diff --name-status -z` output: `R<score>\0<old>\0<new>\0` per rename.
     package static func parseRenames(_ data: Data) -> [String: String] {
         var renames: [String: String] = [:]
-        let fields = data.split(separator: 0, omittingEmptySubsequences: true).map { String(decoding: $0, as: UTF8.self) }
+        let fields = data.split(separator: 0, omittingEmptySubsequences: true)
+            .map { String(decoding: $0, as: UTF8.self) }
         var index = 0
         while index + 2 < fields.count {
             if fields[index].hasPrefix("R") { renames[fields[index + 1]] = fields[index + 2] }
@@ -123,7 +125,8 @@ package struct GitClient: Sendable {
     }
 
     private func references(pattern: String...) async throws -> [String] {
-        Self.parseReferences(try await run(["for-each-ref", "--format=%(refname:short)", "--sort=-committerdate"] + pattern))
+        Self.parseReferences(
+            try await run(["for-each-ref", "--format=%(refname:short)", "--sort=-committerdate"] + pattern))
     }
 
     /// One short ref name per line; a remote's `HEAD` pointer is left out because it duplicates a branch.
@@ -138,11 +141,12 @@ package struct GitClient: Sendable {
     /// One `<hash>\u{1f}<short hash>\u{1f}<subject>` line per commit; the unit separator keeps subjects with
     /// spaces intact.
     package static func parseCommits(_ data: Data) -> [GitCommit] {
-        String(decoding: data, as: UTF8.self).split(separator: "\n").compactMap { line in
-            let fields = line.split(separator: "\u{1f}", maxSplits: 2, omittingEmptySubsequences: false)
-            guard fields.count == 3 else { return nil }
-            return GitCommit(hash: String(fields[0]), shortHash: String(fields[1]), subject: String(fields[2]))
-        }
+        String(decoding: data, as: UTF8.self).split(separator: "\n")
+            .compactMap { line in
+                let fields = line.split(separator: "\u{1f}", maxSplits: 2, omittingEmptySubsequences: false)
+                guard fields.count == 3 else { return nil }
+                return GitCommit(hash: String(fields[0]), shortHash: String(fields[1]), subject: String(fields[2]))
+            }
     }
 
     private func run(_ arguments: [String], input: Data? = nil) async throws -> Data {
@@ -159,7 +163,7 @@ package struct GitClient: Sendable {
         let pathDirectories = (environment["PATH"] ?? "").split(separator: ":").map(String.init)
         let knownDirectories = [
             "/Applications/Xcode.app/Contents/Developer/usr/bin", "/Library/Developer/CommandLineTools/usr/bin",
-            "/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin",
+            "/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"
         ]
         let candidates = (pathDirectories + knownDirectories).filter { $0 != "/usr/bin" }.map { $0 + "/git" }
         return URL(filePath: candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? "/usr/bin/git")
@@ -285,9 +289,9 @@ private final class RunningProcess: Sendable {
     }
 }
 
-package extension GitCommit {
+extension GitCommit {
     /// The short form of a full SHA-1 or SHA-256 hash, for labels; anything else is shown as typed.
-    static func abbreviated(_ ref: String) -> String {
+    package static func abbreviated(_ ref: String) -> String {
         guard ref.count == 40 || ref.count == 64, ref.allSatisfy(\.isHexDigit) else { return ref }
         return String(ref.prefix(7))
     }

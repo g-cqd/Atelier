@@ -1,5 +1,3 @@
-package import typealias AemiRuntime.MonotonicNanosecondsProvider
-package import enum AemiRuntime.LiveClock
 package import AemiCore
 package import DiffCore
 package import DiffGit
@@ -7,10 +5,16 @@ package import DiffRendering
 package import Foundation
 import Observation
 
+package import enum AemiRuntime.LiveClock
+package import typealias AemiRuntime.MonotonicNanosecondsProvider
+
 /// The window's state: what is compared, what is selected, and what the detail area shows. Composes the pure
 /// comparison, the explorer trees, the render pipeline and the small navigation pieces behind one API.
+// The window's composition root is one class on purpose: every collaborator below is private to it. It is split
+// along the shared-core extraction (git and file-tree state leave it first). Reviewed opt-out; g-cqd.
 @Observable
 @MainActor
+// swiftlint:disable:next type_body_length
 package final class DiffViewerModel {
     package let left: SideState
     package let right: SideState
@@ -53,7 +57,8 @@ package final class DiffViewerModel {
         self.palette = palette
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider)
         self.preparer = preparer
-        pipeline = RenderPipeline(preparer: preparer, taskProvider: taskProvider, options: Self.options(settings, palette: palette))
+        pipeline = RenderPipeline(
+            preparer: preparer, taskProvider: taskProvider, options: Self.options(settings, palette: palette))
         left = SideState(label: "Left", reader: reader, taskProvider: taskProvider)
         right = SideState(label: "Right", reader: reader, taskProvider: taskProvider)
         left.onReload = { [weak self] in self?.timer.begin() }
@@ -62,7 +67,9 @@ package final class DiffViewerModel {
         right.onEntriesChanged = { [weak self] in self?.sourcesChanged() }
         left.onIgnoredEntriesChanged = { [weak self] in self?.ignoredEntriesChanged() }
         right.onIgnoredEntriesChanged = { [weak self] in self?.ignoredEntriesChanged() }
-        pipeline.configure(options: Self.options(settings, palette: palette), context: settings.contextLines, isolatesChanges: settings.isolatesChanges)
+        pipeline.configure(
+            options: Self.options(settings, palette: palette), context: settings.contextLines,
+            isolatesChanges: settings.isolatesChanges)
         pipeline.onEvent = { [weak self] event in self?.handle(event) }
         settings.addObserver(self) { [weak self] change in self?.settingsChanged(change) }
     }
@@ -81,7 +88,8 @@ package final class DiffViewerModel {
     package var unifiedSections: [ExplorerSection] { sections(changes: trees.unified, ignored: trees.unifiedIgnored) }
 
     private func sections(changes: [FileNode], ignored: [FileNode]) -> [ExplorerSection] {
-        let compared = ExplorerSection(kind: .changes, title: settings.showsChangesOnly ? "Changes" : "Files", nodes: changes)
+        let compared = ExplorerSection(
+            kind: .changes, title: settings.showsChangesOnly ? "Changes" : "Files", nodes: changes)
         guard settings.showsIgnoredFiles else { return [compared] }
         return [compared, ExplorerSection(kind: .ignored, title: "Ignored Files", nodes: ignored)]
     }
@@ -99,53 +107,6 @@ package final class DiffViewerModel {
     /// How long the current operation has taken so far.
     package var timing: RenderTiming { timer.timing }
     package var changedPathCount: Int { comparison.changedPathCount }
-
-    /// Lines added and removed, over the file list when it is showing and over the selected file otherwise.
-    package var totals: DiffTotals {
-        if isShowingCombinedFiles {
-            DiffTotals(
-                files: changedPathCount,
-                added: renderedFiles.reduce(0) { $0 + $1.rendered.addedLines },
-                removed: renderedFiles.reduce(0) { $0 + $1.rendered.removedLines },
-                coversEveryFile: renderedFiles.count == changedPathCount
-            )
-        } else {
-            DiffTotals(files: changedPathCount, added: rendered?.addedLines ?? 0, removed: rendered?.removedLines ?? 0, coversEveryFile: false)
-        }
-    }
-
-    /// The comparison the sides make up, when they form one a window could be opened with again; nil while a side
-    /// is empty or the two sides do not belong together.
-    package var currentConfiguration: LaunchConfiguration? {
-        switch (left.source, right.source) {
-        case (.gitRef(let repository, let leftRef), .directory(let folder)) where repository.standardizedFileURL == folder.standardizedFileURL:
-            .repository(repository, leftRef: leftRef, rightRef: nil)
-        case (.gitRef(let repository, let leftRef), .gitRef(let other, let rightRef)) where repository == other:
-            .repository(repository, leftRef: leftRef, rightRef: rightRef)
-        case (.file(let left), .file(let right)), (.directory(let left), .directory(let right)):
-            .files(left: left, right: right)
-        case (.patch(let url, .old), .patch(let other, .new)) where url == other:
-            .patch(url)
-        default:
-            nil
-        }
-    }
-
-    /// What the window compares, for its title.
-    package var windowTitle: String {
-        switch (left.source, right.source) {
-        case (nil, nil):
-            "Git Diff Viewer"
-        case (.gitRef(let repository, let leftRef), .directory(let folder)) where repository.standardizedFileURL == folder.standardizedFileURL:
-            "\(repository.lastPathComponent): \(GitCommit.abbreviated(leftRef)) ↔ working tree"
-        case (.gitRef(let repository, let leftRef), .gitRef(let other, let rightRef)) where repository == other:
-            "\(repository.lastPathComponent): \(GitCommit.abbreviated(leftRef)) ↔ \(GitCommit.abbreviated(rightRef))"
-        case (.patch(let url, _), _), (_, .patch(let url, _)):
-            url.lastPathComponent
-        default:
-            [left.source?.displayName, right.source?.displayName].compactMap { $0 }.joined(separator: " ↔ ")
-        }
-    }
 
     package var changeCount: Int {
         isShowingCombinedFiles ? renderedFiles.count : rendered?.changeCount ?? 0
@@ -177,13 +138,13 @@ package final class DiffViewerModel {
     package func start(_ launch: LaunchConfiguration) {
         PhaseTrace.log("start")
         switch launch {
-        case .patch(let url):
-            openPatch(url)
-        case .files(let left, let right):
-            self.left.choose(left)
-            self.right.choose(right)
-        case .repository(let url, let leftRef, let rightRef):
-            compareGitChanges(in: url, leftRef: leftRef, rightRef: rightRef)
+            case .patch(let url):
+                openPatch(url)
+            case .files(let left, let right):
+                self.left.choose(left)
+                self.right.choose(right)
+            case .repository(let url, let leftRef, let rightRef):
+                compareGitChanges(in: url, leftRef: leftRef, rightRef: rightRef)
         }
     }
 
@@ -213,8 +174,16 @@ package final class DiffViewerModel {
                 return
             }
             PhaseTrace.log("prologue done")
-            if let entries = loaded.leftEntries { left.load(loaded.left, repository: loaded.info, entries: entries) } else { left.load(loaded.left, repository: loaded.info) }
-            if let entries = loaded.rightEntries { right.load(loaded.right, repository: loaded.info, entries: entries) } else { right.load(loaded.right, repository: loaded.info) }
+            if let entries = loaded.leftEntries {
+                left.load(loaded.left, repository: loaded.info, entries: entries)
+            } else {
+                left.load(loaded.left, repository: loaded.info)
+            }
+            if let entries = loaded.rightEntries {
+                right.load(loaded.right, repository: loaded.info, entries: entries)
+            } else {
+                right.load(loaded.right, repository: loaded.info)
+            }
             sourcesChanged()
         }
     }
@@ -227,13 +196,18 @@ package final class DiffViewerModel {
         let rightEntries: [SourceEntry]?
     }
 
-    private static func loadSides(in url: URL, leftRef: String, rightRef: String?, reader: any SourceReading) async -> LoadedSides? {
+    private static func loadSides(in url: URL, leftRef: String, rightRef: String?, reader: any SourceReading) async
+        -> LoadedSides?
+    {
         guard let info = await reader.repositoryInfo(containing: url) else { return nil }
         let leftSource = ComparisonSource.gitRef(repository: info.root, ref: leftRef)
-        let rightSource = rightRef.map { ComparisonSource.gitRef(repository: info.root, ref: $0) } ?? .directory(info.root)
+        let rightSource =
+            rightRef.map { ComparisonSource.gitRef(repository: info.root, ref: $0) } ?? .directory(info.root)
         async let leftEntries = reader.entries(of: leftSource)
         async let rightEntries = reader.entries(of: rightSource)
-        let loaded = LoadedSides(info: info, left: leftSource, right: rightSource, leftEntries: try? await leftEntries, rightEntries: try? await rightEntries)
+        let loaded = LoadedSides(
+            info: info, left: leftSource, right: rightSource, leftEntries: try? await leftEntries,
+            rightEntries: try? await rightEntries)
         PhaseTrace.log("prologue loaded")
         return loaded
     }
@@ -292,7 +266,9 @@ package final class DiffViewerModel {
     /// A folder chosen for one side while the other side is empty puts that side on the same repository, so its
     /// menu offers the branches to compare the folder with; the comparison waits for that choice.
     private func offerRepository(from side: SideState, to other: SideState) {
-        guard other.source == nil, other.repository == nil, case .directory = side.source, let repository = side.repository else { return }
+        guard other.source == nil, other.repository == nil, case .directory = side.source,
+            let repository = side.repository
+        else { return }
         other.adopt(repository: repository)
     }
 
@@ -303,7 +279,9 @@ package final class DiffViewerModel {
         let reader = reader
         renamesTask = taskProvider.task {
             let detected = await reader.renames(from: leftSource, to: rightSource)
-            guard !detected.isEmpty, !Task.isCancelled, left.source == leftSource, right.source == rightSource else { return }
+            guard !detected.isEmpty, !Task.isCancelled, left.source == leftSource, right.source == rightSource else {
+                return
+            }
             comparison.merge(gitRenames: detected)
             rebuildTrees()
             render()
@@ -315,7 +293,8 @@ package final class DiffViewerModel {
     package func rebuildTrees() {
         trees = ExplorerTrees.build(
             comparison: comparison, leftTree: left.tree, rightTree: right.tree,
-            showsChangesOnly: settings.showsChangesOnly, showsIgnoredFiles: settings.showsIgnoredFiles, style: settings.treeStyle
+            showsChangesOnly: settings.showsChangesOnly, showsIgnoredFiles: settings.showsIgnoredFiles,
+            style: settings.treeStyle
         )
         guard settings.showsIgnoredFiles, !left.isLoading, !right.isLoading else { return }
         left.loadIgnoredEntries()
@@ -474,11 +453,15 @@ package final class DiffViewerModel {
             return
         }
         PhaseTrace.log("render \(target.pairs.count) files")
-        pipeline.render(target, left: leftSource, right: rightSource, granularity: settings.granularity, heuristics: settings.diffHeuristics)
+        pipeline.render(
+            target, left: leftSource, right: rightSource, granularity: settings.granularity,
+            heuristics: settings.diffHeuristics)
     }
 
     private func configurePipeline() {
-        pipeline.configure(options: Self.options(settings, palette: palette), context: settings.contextLines, isolatesChanges: settings.isolatesChanges)
+        pipeline.configure(
+            options: Self.options(settings, palette: palette), context: settings.contextLines,
+            isolatesChanges: settings.isolatesChanges)
     }
 
     private static func options(_ settings: ViewerSettings, palette: DiffPalette) -> DiffRenderer.Options {
@@ -496,41 +479,45 @@ package final class DiffViewerModel {
 
     private func handle(_ event: RenderPipeline.Event) {
         switch event {
-        case .published(let id, let isFirst):
-            if isFirst { timer.awaitDisplay(of: id) }
-            if isShowingCombinedFiles {
-                folding.applyDefaults(to: renderedFiles.map(\.path), status: status(ofPath:))
-            } else if isFirst, let rendered, rendered.changeCount > 0, !rendered.keepsScrollPosition {
-                navigator.focusFirst()
-                requestScrollToCurrentChange()
-            }
-        case .finished:
-            folding.listCompleted()
-            timer.finish()
-            prefetch()
-        case .failed:
-            timer.finish()
+            case .published(let id, let isFirst):
+                if isFirst { timer.awaitDisplay(of: id) }
+                if isShowingCombinedFiles {
+                    folding.applyDefaults(to: renderedFiles.map(\.path), status: status(ofPath:))
+                } else if isFirst, let rendered, rendered.changeCount > 0, !rendered.keepsScrollPosition {
+                    navigator.focusFirst()
+                    requestScrollToCurrentChange()
+                }
+            case .finished:
+                folding.listCompleted()
+                timer.finish()
+                prefetch()
+            case .failed:
+                timer.finish()
         }
     }
 
     /// Prepares every changed file of the sources in the background, so any later selection is served from the cache.
     private func prefetch() {
-        guard let leftSource = left.source, let rightSource = right.source, !left.isLoading, !right.isLoading else { return }
+        guard let leftSource = left.source, let rightSource = right.source, !left.isLoading, !right.isLoading else {
+            return
+        }
         let pairs = comparison.changedPaths(under: nil, limit: Self.combinedFileLimit).map(comparison.pair(for:))
-        preparer.prefetch(pairs, left: leftSource, right: rightSource, granularity: settings.granularity, heuristics: settings.diffHeuristics)
+        preparer.prefetch(
+            pairs, left: leftSource, right: rightSource, granularity: settings.granularity,
+            heuristics: settings.diffHeuristics)
     }
 
     // MARK: Settings
 
     private func settingsChanged(_ change: ViewerSettings.Change) {
         switch change {
-        case .trees: rebuildTrees()
-        case .diff: renderSelection()
-        case .layout: relayout()
-        case .palette:
-            palette = Self.palette(for: settings.themePath)
-            relayout()
-        case .appearance: break
+            case .trees: rebuildTrees()
+            case .diff: renderSelection()
+            case .layout: relayout()
+            case .palette:
+                palette = Self.palette(for: settings.themePath)
+                relayout()
+            case .appearance: break
         }
     }
 

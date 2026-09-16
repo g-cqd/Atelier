@@ -27,7 +27,8 @@ public struct DiffHeuristics: Sendable, Equatable, Hashable, Codable {
 
     /// Every heuristic off: the plain shortest edit script with positional pairing.
     public static let none = DiffHeuristics(
-        anchorsRareLines: false, slidesToIndentation: false, pairsSimilarLines: false, cleansUpEmphasis: false, detectsMovedBlocks: false
+        anchorsRareLines: false, slidesToIndentation: false, pairsSimilarLines: false, cleansUpEmphasis: false,
+        detectsMovedBlocks: false
     )
 }
 
@@ -47,20 +48,22 @@ public enum WhitespaceMode: String, Sendable, CaseIterable, Codable, Identifiabl
     public func normalized(_ line: Substring) -> Substring {
         let utf8 = line.utf8
         switch self {
-        case .exact:
-            return line
-        case .ignoreTrailing:
-            var end = utf8.endIndex
-            while end > utf8.startIndex, Self.isSpace(utf8[utf8.index(before: end)]) { end = utf8.index(before: end) }
-            return Substring(utf8[utf8.startIndex..<end])
-        case .ignoreLeadingAndTrailing:
-            var start = utf8.startIndex
-            while start < utf8.endIndex, Self.isSpace(utf8[start]) { start = utf8.index(after: start) }
-            var end = utf8.endIndex
-            while end > start, Self.isSpace(utf8[utf8.index(before: end)]) { end = utf8.index(before: end) }
-            return Substring(utf8[start..<end])
-        case .ignoreAll:
-            return Substring(String(decoding: utf8.filter { !Self.isSpace($0) }, as: UTF8.self))
+            case .exact:
+                return line
+            case .ignoreTrailing:
+                var end = utf8.endIndex
+                while end > utf8.startIndex, Self.isSpace(utf8[utf8.index(before: end)]) {
+                    end = utf8.index(before: end)
+                }
+                return Substring(utf8[utf8.startIndex ..< end])
+            case .ignoreLeadingAndTrailing:
+                var start = utf8.startIndex
+                while start < utf8.endIndex, Self.isSpace(utf8[start]) { start = utf8.index(after: start) }
+                var end = utf8.endIndex
+                while end > start, Self.isSpace(utf8[utf8.index(before: end)]) { end = utf8.index(before: end) }
+                return Substring(utf8[start ..< end])
+            case .ignoreAll:
+                return Substring(String(decoding: utf8.filter { !Self.isSpace($0) }, as: UTF8.self))
         }
     }
 

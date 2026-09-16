@@ -98,23 +98,33 @@ private struct FileCard: View {
         let wrapMode = WrapMode(wrapsLines: model.settings.wrapsLines, column: model.settings.wrapColumn)
         let displayed = { model.noteDisplayed(file.rendered.id) }
         switch model.settings.mode {
-        case .inline:
-            if layouts.unified != nil {
-                EmbeddedDiffTextView(layouts: layouts, side: .unified, gutter: .dual, width: contentWidth, wrapMode: wrapMode, onGapDrag: drag, currentExpansion: expansion, onDisplayed: displayed)
-            }
-        case .split, .stacked:
-            if layouts.old != nil, layouts.new != nil {
-                let isStacked = model.settings.mode == .stacked
-                let paneWidth = isStacked ? contentWidth : max((contentWidth - 1) / 2, 0)
-                let stack = isStacked ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(alignment: .top, spacing: 0))
-                stack {
-                    EmbeddedDiffTextView(layouts: layouts, side: .old, gutter: .old, width: paneWidth, wrapMode: wrapMode, onGapDrag: drag, currentExpansion: expansion, onDisplayed: displayed)
-                        .frame(maxWidth: .infinity)
-                    Divider()
-                    EmbeddedDiffTextView(layouts: layouts, side: .new, gutter: .new, width: paneWidth, wrapMode: wrapMode, onGapDrag: drag, currentExpansion: expansion, onDisplayed: displayed)
-                        .frame(maxWidth: .infinity)
+            case .inline:
+                if layouts.unified != nil {
+                    EmbeddedDiffTextView(
+                        layouts: layouts, side: .unified, gutter: .dual, width: contentWidth, wrapMode: wrapMode,
+                        onGapDrag: drag, currentExpansion: expansion, onDisplayed: displayed)
                 }
-            }
+            case .split, .stacked:
+                if layouts.old != nil, layouts.new != nil {
+                    let isStacked = model.settings.mode == .stacked
+                    let paneWidth = isStacked ? contentWidth : max((contentWidth - 1) / 2, 0)
+                    let stack =
+                        isStacked
+                        ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(alignment: .top, spacing: 0))
+                    stack {
+                        EmbeddedDiffTextView(
+                            layouts: layouts, side: .old, gutter: .old, width: paneWidth, wrapMode: wrapMode,
+                            onGapDrag: drag, currentExpansion: expansion, onDisplayed: displayed
+                        )
+                        .frame(maxWidth: .infinity)
+                        Divider()
+                        EmbeddedDiffTextView(
+                            layouts: layouts, side: .new, gutter: .new, width: paneWidth, wrapMode: wrapMode,
+                            onGapDrag: drag, currentExpansion: expansion, onDisplayed: displayed
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                }
         }
     }
 

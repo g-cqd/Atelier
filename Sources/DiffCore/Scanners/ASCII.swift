@@ -36,4 +36,3 @@ enum ASCII {
     static func isIdentifier(_ unit: UInt16) -> Bool { isIdentifierStart(unit) || isDigit(unit) }
     static func isSpace(_ unit: UInt16) -> Bool { unit == 32 || unit == 9 || unit == newline || unit == carriageReturn }
 }
-
