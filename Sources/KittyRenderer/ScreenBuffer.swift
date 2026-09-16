@@ -1,4 +1,5 @@
 import KittyCodecs
+public import KittyStyle
 import KittyText
 
 /// A flat grid of cells representing the terminal screen.

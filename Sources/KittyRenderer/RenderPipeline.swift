@@ -1,5 +1,5 @@
 import KittyCodecs
-import KittyTerminal
+public import KittyTerminal
 import os
 
 /// Describes a terminal-level scroll operation to apply before diffing.
