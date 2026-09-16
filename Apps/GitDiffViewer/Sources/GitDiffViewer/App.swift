@@ -47,7 +47,7 @@ struct GitDiffViewerApp: App {
         .restorationBehavior(.disabled)
 
         Settings {
-            SettingsView(settings: settings)
+            SettingsView(settings: settings, runner: appDelegate.services.runner)
         }
     }
 }
@@ -87,10 +87,12 @@ enum LaunchOptions {
 final class AppServices {
     /// Four threads: enough for the batch reads a large selection runs side by side, further runs queue.
     let pool = BlockingOffloadPool(width: 4)
+    let runner: HardenedProcessRunner
     let loader: SourceLoader
 
     init() {
-        loader = SourceLoader(runner: HardenedProcessRunner(pool: pool))
+        runner = HardenedProcessRunner(pool: pool)
+        loader = SourceLoader(runner: runner)
     }
 
     func shutdown() {
