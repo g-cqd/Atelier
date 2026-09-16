@@ -1,8 +1,8 @@
 import DiffCore
-package import Foundation
+public import Foundation
 
 /// One side of a comparison.
-package enum ComparisonSource: Hashable, Sendable {
+public enum ComparisonSource: Hashable, Sendable {
     case file(URL)
     case directory(URL)
     /// A branch, tag or commit of a repository, rooted at the repository root.
@@ -10,11 +10,11 @@ package enum ComparisonSource: Hashable, Sendable {
     /// One side of a unified diff or git patch file.
     case patch(URL, side: PatchSide)
 
-    package enum PatchSide: Hashable, Sendable {
+    public enum PatchSide: Hashable, Sendable {
         case old, new
     }
 
-    package var displayName: String {
+    public var displayName: String {
         switch self {
             case .file(let url), .directory(let url):
                 url.lastPathComponent
@@ -25,7 +25,7 @@ package enum ComparisonSource: Hashable, Sendable {
         }
     }
 
-    package var detail: String {
+    public var detail: String {
         switch self {
             case .file(let url), .directory(let url), .patch(let url, _):
                 url.path(percentEncoded: false)
@@ -34,14 +34,14 @@ package enum ComparisonSource: Hashable, Sendable {
         }
     }
 
-    package var isSingleFile: Bool {
+    public var isSingleFile: Bool {
         if case .file = self { return true }
         return false
     }
 }
 
 /// How a path on one side relates to the same path on the other side.
-package enum PathStatus: Sendable {
+public enum PathStatus: Sendable {
     case same
     case different
     case onlyLeft

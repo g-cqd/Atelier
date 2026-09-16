@@ -1,31 +1,31 @@
 import AemiIO
 import CryptoKit
-package import DiffCore
-package import Foundation
+public import DiffCore
+public import Foundation
 import Synchronization
 
 import func AemiRuntime.mapConcurrently
 
 /// Reads comparison targets through one provider per kind of source; renames need both sides so they stay here.
-package struct SourceLoader: SourceReading {
+public struct SourceLoader: SourceReading {
     /// How git is spawned; the app owns the pool behind it.
-    package let runner: any ProcessRunner
+    public let runner: any ProcessRunner
 
-    package init(runner: any ProcessRunner) {
+    public init(runner: any ProcessRunner) {
         self.runner = runner
     }
 
     /// Files above this size are listed but not hashed, so they always count as different.
-    package static let maximumHashedSize = 8 * 1024 * 1024
-    package static let skippedDirectories: Set<String> = ["node_modules", "DerivedData", "Pods", "Carthage"]
+    public static let maximumHashedSize = 8 * 1024 * 1024
+    public static let skippedDirectories: Set<String> = ["node_modules", "DerivedData", "Pods", "Carthage"]
     /// Files hashed at once during a folder scan; hashing is I/O bound so it scales past the core count.
-    package static let hashingConcurrency = 16
+    public static let hashingConcurrency = 16
     /// Blobs per `cat-file --batch` process; a few processes run side by side for very large selections.
-    package static let blobBatchSize = 256
+    public static let blobBatchSize = 256
 
     /// Extensions that are never text; everything else is listed and shown, as code when the language is known
     /// and as plain text otherwise. Binary content slipping through is caught when it is read.
-    package static let binaryExtensions: Set<String> = [
+    public static let binaryExtensions: Set<String> = [
         "png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "bmp", "tiff", "tif", "ico", "icns", "pdf", "psd", "ai",
         "zip", "gz", "tgz", "bz2", "xz", "7z", "tar", "jar", "dmg", "pkg", "ipa", "apk", "car", "nib", "mlmodel",
         "mlmodelc", "realm", "sqlite", "sqlite3", "db", "bin", "dat", "exe", "dll", "dylib", "so", "a", "o", "class",
@@ -35,37 +35,37 @@ package struct SourceLoader: SourceReading {
 
     private let patches = PatchCache()
 
-    package static func isSupported(path: String) -> Bool {
+    public static func isSupported(path: String) -> Bool {
         !binaryExtensions.contains(URL(filePath: path).pathExtension.lowercased())
     }
 
     /// Text of a file's bytes; a binary file, recognised by a NUL among its first bytes, becomes one line
     /// naming its size so the diff still shows that it changed.
-    package static func text(from data: Data) -> String {
+    public static func text(from data: Data) -> String {
         if data.prefix(8192).contains(0) {
             return "(binary file, \(data.count.formatted(.byteCount(style: .file))))\n"
         }
         return String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
     }
 
-    package func repositoryInfo(containing url: URL) async -> RepositoryInfo? {
+    public func repositoryInfo(containing url: URL) async -> RepositoryInfo? {
         guard let root = await GitClient.repositoryRoot(containing: url, runner: runner) else { return nil }
         return try? await GitClient(repository: root, runner: runner).info()
     }
 
-    package func entries(of source: ComparisonSource) async throws -> [SourceEntry] {
+    public func entries(of source: ComparisonSource) async throws -> [SourceEntry] {
         try await provider(for: source).entries()
     }
 
-    package func ignoredEntries(of source: ComparisonSource) async throws -> [SourceEntry] {
+    public func ignoredEntries(of source: ComparisonSource) async throws -> [SourceEntry] {
         try await provider(for: source).ignoredEntries()
     }
 
-    package func content(of entry: SourceEntry, in source: ComparisonSource) async throws -> String {
+    public func content(of entry: SourceEntry, in source: ComparisonSource) async throws -> String {
         try await provider(for: source).content(of: entry)
     }
 
-    package func contents(of entries: [SourceEntry], in source: ComparisonSource) async throws -> [String: String] {
+    public func contents(of entries: [SourceEntry], in source: ComparisonSource) async throws -> [String: String] {
         try await provider(for: source).contents(of: entries)
     }
 
@@ -78,11 +78,11 @@ package struct SourceLoader: SourceReading {
         }
     }
 
-    package func resolve(ref: String, in repository: URL) async throws -> String {
+    public func resolve(ref: String, in repository: URL) async throws -> String {
         try await GitClient(repository: repository, runner: runner).resolve(ref: ref)
     }
 
-    package func renames(from left: ComparisonSource, to right: ComparisonSource) async -> [String: String] {
+    public func renames(from left: ComparisonSource, to right: ComparisonSource) async -> [String: String] {
         switch (left, right) {
             case (.gitRef(let repository, let from), .gitRef(let other, let to)) where repository == other:
                 (try? await GitClient(repository: repository, runner: runner).renames(from: from, to: to)) ?? [:]
@@ -103,7 +103,7 @@ package struct SourceLoader: SourceReading {
     // MARK: Hashing
 
     /// The object id git would assign to `data` as a blob, so filesystem files compare against `git ls-tree` output.
-    package static func blobID(of data: Data) -> String {
+    public static func blobID(of data: Data) -> String {
         var hasher = Insecure.SHA1()
         hasher.update(data: Data("blob \(data.count)\0".utf8))
         hasher.update(data: data)
@@ -120,7 +120,7 @@ package struct SourceLoader: SourceReading {
     ///   - size: The size the scan saw; only used to skip the mapping of an empty file.
     /// - Returns: The hex git blob id of the file's current contents.
     /// - Throws: `IOError` when the file cannot be opened, measured or mapped.
-    package static func blobID(atPath path: String, size: Int) throws -> String {
+    public static func blobID(atPath path: String, size: Int) throws -> String {
         var hasher = Insecure.SHA1()
         guard size > 0 else {
             hasher.update(data: Data("blob 0\0".utf8))
@@ -143,13 +143,13 @@ package struct SourceLoader: SourceReading {
 
     /// Salted with the path: files a patch carries without content, such as pure renames or mode changes, would
     /// otherwise all share one blob id and be paired as renames of each other.
-    package static func patchBlobID(path: String, text: String) -> String {
+    public static func patchBlobID(path: String, text: String) -> String {
         blobID(of: Data((path + "\0" + text).utf8))
     }
 }
 
 /// One kind of comparison target: how its files are listed and read.
-package protocol SourceProvider: Sendable {
+public protocol SourceProvider: Sendable {
     func entries() async throws -> [SourceEntry]
     /// Files the source leaves out of `entries()` because they are ignored; empty unless the source knows the notion.
     func ignoredEntries() async throws -> [SourceEntry]
@@ -158,11 +158,11 @@ package protocol SourceProvider: Sendable {
 }
 
 extension SourceProvider {
-    package func ignoredEntries() async throws -> [SourceEntry] {
+    public func ignoredEntries() async throws -> [SourceEntry] {
         []
     }
 
-    package func contents(of entries: [SourceEntry]) async throws -> [String: String] {
+    public func contents(of entries: [SourceEntry]) async throws -> [String: String] {
         let pairs = try await mapConcurrently(entries, limit: SourceLoader.hashingConcurrency) { entry in
             (entry.relativePath, try await content(of: entry))
         }
@@ -170,10 +170,10 @@ extension SourceProvider {
     }
 }
 
-package struct FileSource: SourceProvider {
-    package let url: URL
+public struct FileSource: SourceProvider {
+    public let url: URL
 
-    package func entries() async throws -> [SourceEntry] {
+    public func entries() async throws -> [SourceEntry] {
         let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
         let blobID =
             size <= SourceLoader.maximumHashedSize
@@ -181,29 +181,29 @@ package struct FileSource: SourceProvider {
         return [SourceEntry(relativePath: url.lastPathComponent, blobID: blobID, size: size)]
     }
 
-    package func content(of entry: SourceEntry) async throws -> String {
+    public func content(of entry: SourceEntry) async throws -> String {
         SourceLoader.text(from: try await Self.read(url))
     }
 
     @concurrent
-    package static func blobID(atPath path: String, size: Int) async throws -> String {
+    public static func blobID(atPath path: String, size: Int) async throws -> String {
         try SourceLoader.blobID(atPath: path, size: size)
     }
 
     @concurrent
-    package static func read(_ url: URL) async throws -> Data {
+    public static func read(_ url: URL) async throws -> Data {
         try Data(contentsOf: url)
     }
 }
 
-package struct DirectorySource: SourceProvider {
-    package let root: URL
-    package let runner: any ProcessRunner
+public struct DirectorySource: SourceProvider {
+    public let root: URL
+    public let runner: any ProcessRunner
 
     /// Inside a repository, the folder as git sees it: tracked and untracked files, dotfiles included, nothing
     /// git ignores. Elsewhere, a folder scan that leaves hidden files out.
     @concurrent
-    package func entries() async throws -> [SourceEntry] {
+    public func entries() async throws -> [SourceEntry] {
         let files =
             if let git = await gitClient() {
                 try Self.stat(try await git.workingTreePaths(), under: root)
@@ -221,14 +221,14 @@ package struct DirectorySource: SourceProvider {
     /// Files git ignores, listed but neither hashed nor sized: they exist on this side alone, so there is nothing
     /// to compare them with, and a tree full of build output holds tens of thousands of them.
     @concurrent
-    package func ignoredEntries() async throws -> [SourceEntry] {
+    public func ignoredEntries() async throws -> [SourceEntry] {
         guard let git = await gitClient() else { return [] }
         return try await git.ignoredPaths()
             .filter { SourceLoader.isSupported(path: $0) && !Self.liesUnderSkippedDirectory($0) }
             .map { SourceEntry(relativePath: $0, blobID: nil, size: 0) }
     }
 
-    package func content(of entry: SourceEntry) async throws -> String {
+    public func content(of entry: SourceEntry) async throws -> String {
         SourceLoader.text(from: try await FileSource.read(root.appending(path: entry.relativePath)))
     }
 
@@ -297,22 +297,22 @@ package struct DirectorySource: SourceProvider {
     }
 }
 
-package struct GitRefSource: SourceProvider {
-    package let repository: URL
-    package let ref: String
-    package let runner: any ProcessRunner
+public struct GitRefSource: SourceProvider {
+    public let repository: URL
+    public let ref: String
+    public let runner: any ProcessRunner
 
-    package func entries() async throws -> [SourceEntry] {
+    public func entries() async throws -> [SourceEntry] {
         try await GitClient(repository: repository, runner: runner)
             .tree(at: ref, isSupported: SourceLoader.isSupported(path:))
     }
 
-    package func content(of entry: SourceEntry) async throws -> String {
+    public func content(of entry: SourceEntry) async throws -> String {
         SourceLoader.text(from: try await GitClient(repository: repository, runner: runner).blob(entry.blobID ?? ""))
     }
 
     /// Blobs are fetched through one `cat-file --batch` process per batch instead of one process per file.
-    package func contents(of entries: [SourceEntry]) async throws -> [String: String] {
+    public func contents(of entries: [SourceEntry]) async throws -> [String: String] {
         let client = GitClient(repository: repository, runner: runner)
         let ids = Array(Set(entries.compactMap(\.blobID)))
         let batches = stride(from: 0, to: ids.count, by: SourceLoader.blobBatchSize)
@@ -326,12 +326,12 @@ package struct GitRefSource: SourceProvider {
     }
 }
 
-package struct PatchSource: SourceProvider {
-    package let url: URL
-    package let side: ComparisonSource.PatchSide
-    package let cache: PatchCache
+public struct PatchSource: SourceProvider {
+    public let url: URL
+    public let side: ComparisonSource.PatchSide
+    public let cache: PatchCache
 
-    package func entries() async throws -> [SourceEntry] {
+    public func entries() async throws -> [SourceEntry] {
         try await cache.patch(at: url).files
             .compactMap { file in
                 guard !file.isBinary, let path = path(of: file) else { return nil }
@@ -341,7 +341,7 @@ package struct PatchSource: SourceProvider {
             }
     }
 
-    package func content(of entry: SourceEntry) async throws -> String {
+    public func content(of entry: SourceEntry) async throws -> String {
         try await cache.patch(at: url).files.first { path(of: $0) == entry.relativePath }.map(text(of:)) ?? ""
     }
 
@@ -355,10 +355,10 @@ package struct PatchSource: SourceProvider {
 }
 
 /// Parsed patches by file, kept as long as the file's modification date is unchanged.
-package final class PatchCache: Sendable {
+public final class PatchCache: Sendable {
     private let patches = Mutex<[URL: (modified: Date?, patch: UnifiedPatch)]>([:])
 
-    package func patch(at url: URL) async throws -> UnifiedPatch {
+    public func patch(at url: URL) async throws -> UnifiedPatch {
         let modified = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
         if let cached = patches.withLock({ $0[url] }), cached.modified == modified { return cached.patch }
         let parsed = try await Self.parse(at: url)
