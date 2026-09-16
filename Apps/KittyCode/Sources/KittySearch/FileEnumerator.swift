@@ -1,3 +1,4 @@
+import AemiKernels
 import Foundation
 
 public func enumerateSearchableFiles(
@@ -52,5 +53,5 @@ private func isBinaryFile(at path: String) -> Bool {
     guard let handle = FileHandle(forReadingAtPath: path) else { return false }
     defer { try? handle.close() }
     guard let data = try? handle.read(upToCount: 8192) else { return false }
-    return data.contains(0)
+    return AemiKernels.firstIndexOfByte(0, in: [UInt8](data)) != nil
 }
