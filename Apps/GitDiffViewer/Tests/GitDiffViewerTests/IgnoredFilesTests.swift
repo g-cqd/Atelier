@@ -18,8 +18,8 @@ struct IgnoredFilesTests {
 
     @Test
     func `ls-files records are NUL separated paths`() {
-        #expect(GitClient.parsePaths(Data("a.swift\u{0}dir/b c.swift\u{0}\u{0}".utf8)) == ["a.swift", "dir/b c.swift"])
-        #expect(GitClient.parsePaths(Data()).isEmpty)
+        #expect(GitParsers.paths(Data("a.swift\u{0}dir/b c.swift\u{0}\u{0}".utf8)) == ["a.swift", "dir/b c.swift"])
+        #expect(GitParsers.paths(Data()).isEmpty)
     }
 
     @Test

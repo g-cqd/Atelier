@@ -42,7 +42,8 @@ let package = Package(
         .target(
             name: "DiffGit",
             dependencies: [
-                "DiffCore", .product(name: "AtelierProcess", package: "AtelierCore"),
+                "DiffCore", .product(name: "AtelierGit", package: "AtelierCore"),
+                .product(name: "AtelierProcess", package: "AtelierCore"),
                 .product(name: "AemiIO", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
             ],
             swiftSettings: strict
