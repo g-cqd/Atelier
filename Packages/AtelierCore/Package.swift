@@ -27,7 +27,8 @@ let package = Package(
         .library(name: "AtelierLexers", targets: ["AtelierLexers"]),
         .library(name: "AtelierSwiftSyntax", targets: ["AtelierSwiftSyntax"]),
         .library(name: "AtelierProcess", targets: ["AtelierProcess"]),
-        .library(name: "AtelierGit", targets: ["AtelierGit"])
+        .library(name: "AtelierGit", targets: ["AtelierGit"]),
+        .library(name: "AtelierTestSupport", targets: ["AtelierTestSupport"])
     ],
     dependencies: [
         .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
@@ -63,7 +64,16 @@ let package = Package(
             swiftSettings: strict
         ),
         .testTarget(name: "AtelierDiffTests", dependencies: ["AtelierDiff"], swiftSettings: strict),
-        .testTarget(name: "AtelierGitTests", dependencies: ["AtelierGit", "AtelierProcess"], swiftSettings: strict),
+        // Test doubles both apps' suites and the core's share; family-neutral so either test kit can sit next to it.
+        .target(name: "AtelierTestSupport", dependencies: ["AtelierProcess"], swiftSettings: strict),
+        .testTarget(
+            name: "AtelierGitTests",
+            dependencies: [
+                "AtelierGit", "AtelierProcess", "AtelierTestSupport", .product(name: "AemiRuntime", package: "aemi"),
+                .product(name: "AemiTestKit", package: "aemi")
+            ],
+            swiftSettings: strict
+        ),
         .testTarget(
             name: "AtelierProcessTests",
             dependencies: [

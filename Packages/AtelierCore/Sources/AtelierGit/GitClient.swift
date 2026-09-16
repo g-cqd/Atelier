@@ -1,8 +1,9 @@
-public import AemiRuntime
 public import AtelierProcess
 public import Foundation
 
-public enum GitError: Error, LocalizedError {
+import func AemiRuntime.mapConcurrently
+
+public enum GitError: Error, Equatable, LocalizedError {
     case commandFailed(String)
     case notARepository
 
@@ -14,21 +15,32 @@ public enum GitError: Error, LocalizedError {
     }
 }
 
+/// Git as a set of async methods over one repository, each parsed by the matching ``GitParsers`` function. Every
+/// run inherits the parent's environment with ``hardeningEnvironment`` on top, so git never waits on a terminal
+/// prompt or an optional lock.
 public struct GitClient: Sendable {
+    /// Variables set on every git run: no credential prompt on a closed standard input, no optional index locks.
+    public static let hardeningEnvironment = ["GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"]
+
     public let repository: URL
     private let runner: any ProcessRunner
+    private let timeout: Duration?
 
     /// - Parameters:
     ///   - repository: The repository root every command runs in.
-    ///   - runner: How git is spawned; the default shares one blocking pool across the process. Tests inject a fake.
-    public init(repository: URL, runner: any ProcessRunner = GitClient.defaultRunner) {
+    ///   - runner: How git is spawned; the app owns the pool behind it, tests inject a fake.
+    ///   - timeout: The budget of one git run on the runner's clock; nil lets a run take as long as it needs.
+    public init(repository: URL, runner: any ProcessRunner, timeout: Duration? = nil) {
         self.repository = repository
         self.runner = runner
+        self.timeout = timeout
     }
 
-    public static func repositoryRoot(containing url: URL) async -> URL? {
+    /// The root of the repository `url` lies in, or nil when it lies in none.
+    public static func repositoryRoot(containing url: URL, runner: any ProcessRunner) async -> URL? {
         let directory = url.hasDirectoryPath ? url : url.deletingLastPathComponent()
-        guard let data = try? await run(["rev-parse", "--show-toplevel"], in: directory) else { return nil }
+        guard let data = try? await run(["rev-parse", "--show-toplevel"], in: directory, runner: runner)
+        else { return nil }
         let path = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         return path.isEmpty ? nil : URL(filePath: path, directoryHint: .isDirectory)
     }
@@ -89,7 +101,7 @@ public struct GitClient: Sendable {
     }
 
     private func run(_ arguments: [String], input: Data? = nil) async throws -> Data {
-        try await Self.run(arguments, input: input, in: repository, runner: runner)
+        try await Self.run(arguments, input: input, in: repository, runner: runner, timeout: timeout)
     }
 
     /// Where git lives: `GDV_GIT` when it names an executable, else the first `git` on `PATH` or in the usual
@@ -105,22 +117,25 @@ public struct GitClient: Sendable {
     )
     .resolve("git")
 
-    /// Threads for the blocking parts of a git run. Four is enough for the batch reads a large selection runs side
-    /// by side; further runs queue behind them rather than spawning a thread each.
-    public static let blockingPool = BlockingOffloadPool(width: 4)
-    /// The runner a client uses when none is injected.
-    public static let defaultRunner = HardenedProcessRunner(pool: blockingPool)
-
     /// Runs git and returns its standard output; a non-zero exit becomes a ``GitError`` carrying its standard error,
-    /// and cancelling the task terminates git.
+    /// a runner failure becomes a ``GitError`` naming it, and cancelling the task terminates git.
     private static func run(
-        _ arguments: [String], input: Data? = nil, in directory: URL, runner: any ProcessRunner = defaultRunner
+        _ arguments: [String], input: Data? = nil, in directory: URL, runner: any ProcessRunner,
+        timeout: Duration? = nil
     ) async throws -> Data {
         PhaseTrace.log("git \(arguments.prefix(2).joined(separator: " "))")
         defer { PhaseTrace.log("git done \(arguments.prefix(2).joined(separator: " "))") }
         let spec = ProcessSpec(
-            executable: executable, arguments: arguments, currentDirectory: directory, standardInput: input)
-        let output = try await runner.run(spec)
+            executable: executable, arguments: arguments, currentDirectory: directory,
+            environment: .inherited(overriding: hardeningEnvironment), standardInput: input, timeout: timeout)
+        let output: ProcessOutput
+        do {
+            output = try await runner.run(spec)
+        } catch let cancellation as CancellationError {
+            throw cancellation
+        } catch {
+            throw GitError.commandFailed("could not run git: \(error)")
+        }
         guard output.succeeded else { throw GitError.commandFailed(output.errorText) }
         return output.standardOutput
     }
