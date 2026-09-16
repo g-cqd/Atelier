@@ -1,7 +1,8 @@
+import Foundation
 import KittyCodecs
-import KittyRenderer
+public import KittyRenderer
 import KittySearch
-import KittyWidgets
+public import KittyWidgets
 
 @MainActor
 public func renderSearchPanel(

@@ -1,12 +1,14 @@
 import Foundation
-import KittyCodecs
+public import KittyCodecs
+import KittyFileTree
+import KittyWorkspace
 
 public extension EditorState {
-    public var activeFileDisplayName: String {
+    var activeFileDisplayName: String {
         fileName.isEmpty ? "Untitled" : fileName
     }
 
-    public var contextHintText: String? {
+    var contextHintText: String? {
         guard config.statusBar.showContextHints else { return nil }
 
         if let contextMenu {
@@ -37,11 +39,11 @@ public extension EditorState {
         return nil
     }
 
-    public func dismissContextMenu() {
+    func dismissContextMenu() {
         contextMenu = nil
     }
 
-    public func showTreeContextMenu(at index: Int) {
+    func showTreeContextMenu(at index: Int) {
         guard index >= 0, index < cachedFlatTree.count else { return }
 
         selectedTreeIndex = index
@@ -100,7 +102,7 @@ public extension EditorState {
         )
     }
 
-    public func showEditorContextMenu() {
+    func showEditorContextMenu() {
         let saveDirectory = lastSelectedDirectoryPath ?? rootPath
         let resolver = KeymapResolver(config: config)
         var items: [ContextMenuItem] = []
@@ -138,7 +140,7 @@ public extension EditorState {
         )
     }
 
-    public func handleContextMenuKey(_ key: KeyEvent) -> Bool {
+    func handleContextMenuKey(_ key: KeyEvent) -> Bool {
         guard var contextMenu else { return false }
 
         switch key.keyCode {
@@ -162,7 +164,7 @@ public extension EditorState {
         }
     }
 
-    public func performContextMenuSelection(at index: Int) {
+    func performContextMenuSelection(at index: Int) {
         guard var contextMenu else { return }
         guard index >= 0, index < contextMenu.items.count else { return }
         contextMenu.selectedIndex = index
@@ -170,24 +172,24 @@ public extension EditorState {
         performContextMenuAction(contextMenu.items[index].action)
     }
 
-    public func contextMenuMoveUp() {
+    func contextMenuMoveUp() {
         guard var contextMenu else { return }
         contextMenu.selectedIndex = max(0, contextMenu.selectedIndex - 1)
         self.contextMenu = contextMenu
     }
 
-    public func contextMenuMoveDown() {
+    func contextMenuMoveDown() {
         guard var contextMenu else { return }
         contextMenu.selectedIndex = min(contextMenu.items.count - 1, contextMenu.selectedIndex + 1)
         self.contextMenu = contextMenu
     }
 
-    public func contextMenuConfirm() {
+    func contextMenuConfirm() {
         guard let contextMenu else { return }
         performContextMenuAction(contextMenu.items[contextMenu.selectedIndex].action)
     }
 
-    public func performContextMenuAction(_ action: ContextMenuAction) {
+    func performContextMenuAction(_ action: ContextMenuAction) {
         dismissContextMenu()
 
         switch action {

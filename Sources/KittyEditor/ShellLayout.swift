@@ -1,6 +1,7 @@
 import KittyCodecs
-import KittyRenderer
-import KittyWidgets
+public import KittyRenderer
+public import KittyWidgets
+import KittyWorkspace
 
 public struct ShellLayoutRects {
     public var tabRibbon: Rect?

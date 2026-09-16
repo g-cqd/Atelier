@@ -1,8 +1,10 @@
 import KittyCodecs
-import KittyRenderer
+import KittyFileTree
+public import KittyRenderer
 import KittySymbols
 import KittyText
-import KittyWidgets
+public import KittyWidgets
+import KittyWorkspace
 
 @MainActor
 public func renderOpenFilesPanel(

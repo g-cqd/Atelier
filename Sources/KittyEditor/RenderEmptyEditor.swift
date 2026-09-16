@@ -1,5 +1,5 @@
 import KittyCodecs
-import KittyRenderer
+public import KittyRenderer
 import KittyWidgets
 
 @MainActor

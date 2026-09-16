@@ -1,5 +1,5 @@
 import Foundation
-import KittyRenderer
+public import KittyRenderer
 import KittyWidgets
 
 /// Tracks the previous frame's visual scroll offset for terminal scroll optimization.

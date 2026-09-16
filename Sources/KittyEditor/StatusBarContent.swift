@@ -1,10 +1,13 @@
 import Foundation
+import KittyFileTree
+import KittyText
+import KittyWorkspace
 import System
 
 public extension EditorState {
     private static let statusBarSeparator = " │ "
 
-    public func statusBarSegments(columns: Int, rows: Int) -> (left: String, right: String) {
+    func statusBarSegments(columns: Int, rows: Int) -> (left: String, right: String) {
         let left = joinStatusBarSegments(config.statusBar.leftItems.compactMap(statusBarText(for:)))
         var rightSegments = config.statusBar.rightItems.compactMap(statusBarText(for:))
         if let contextHintText {
@@ -143,7 +146,7 @@ public extension EditorState {
     /// Examples (maxComponents: 3):
     ///   "a/b/c/d/e.swift" → "…/c/d/e.swift"
     ///   "a/b.swift"       → "a/b.swift"
-    public static func truncatePath(_ path: String, maxComponents: Int) -> String {
+    static func truncatePath(_ path: String, maxComponents: Int) -> String {
         let components = path.split(separator: "/")
         guard components.count > maxComponents else { return path }
         let kept = components.suffix(maxComponents)
