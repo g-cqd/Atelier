@@ -1,3 +1,4 @@
+public import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable file_length type_body_length
 import Foundation
@@ -8,7 +9,6 @@ public import KittyGit
 public import KittySearch
 public import KittySymbols
 public import KittySyntax
-public import KittyText
 public import KittyWidgets
 public import KittyWorkspace
 public import Observation

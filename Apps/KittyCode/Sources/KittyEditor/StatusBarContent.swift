@@ -1,6 +1,6 @@
+import AtelierText
 import Foundation
 import KittyFileTree
-import KittyText
 import KittyWorkspace
 import System
 

@@ -1,3 +1,4 @@
+import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable file_length
 import KittyApp
@@ -5,7 +6,6 @@ public import KittyCodecs
 import KittyInput
 public import KittyRenderer
 public import KittySearch
-import KittyText
 import KittyWorkspace
 
 public enum SearchStepDirection {

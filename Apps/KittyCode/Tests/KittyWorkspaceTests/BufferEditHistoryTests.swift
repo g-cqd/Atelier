@@ -1,6 +1,6 @@
 import Testing
 
-@testable import KittyText
+@testable import AtelierText
 @testable import KittyWorkspace
 
 @Suite struct BufferEditHistoryTests {

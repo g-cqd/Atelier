@@ -1,3 +1,4 @@
+import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable function_parameter_count
 import KittyCodecs
@@ -5,7 +6,6 @@ import KittyFileTree
 import KittyGit
 public import KittyRenderer
 import KittySearch
-import KittyText
 import KittyWidgets
 import KittyWorkspace
 
