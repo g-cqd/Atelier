@@ -1,6 +1,8 @@
 import KittyCodecs
 import KittyRenderer
 import KittyTerminal
+import KittyText
+import KittyWorkspace
 import Testing
 
 @testable import KittyEditor

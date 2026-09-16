@@ -12,22 +12,22 @@ struct GrammarRegistryTests {
     @Test
     func `Register and lookup by extension`() async {
         let registry = GrammarRegistry()
-        await registry.register(
+        registry.register(
             GrammarRegistry.LanguageEntry(
                 name: "swift", extensions: [".swift"], path: "swift"
             ))
-        let entry = await registry.entry(forExtension: ".swift")
+        let entry = registry.entry(forExtension: ".swift")
         #expect(entry?.name == "swift")
     }
 
     @Test
     func `Language names are sorted`() async {
         let registry = GrammarRegistry()
-        await registry.register(
+        registry.register(
             GrammarRegistry.LanguageEntry(name: "swift", extensions: [".swift"], path: "swift"))
-        await registry.register(
+        registry.register(
             GrammarRegistry.LanguageEntry(name: "python", extensions: [".py"], path: "python"))
-        let names = await registry.languageNames
+        let names = registry.languageNames
         #expect(names == ["python", "swift"])
     }
 
@@ -36,16 +36,16 @@ struct GrammarRegistryTests {
     @Test
     func `entry forExtension returns nil for unregistered extension`() async {
         let registry = GrammarRegistry()
-        let entry = await registry.entry(forExtension: ".xyz")
+        let entry = registry.entry(forExtension: ".xyz")
         #expect(entry == nil)
     }
 
     @Test
     func `entry forExtension normalises extension without leading dot`() async {
         let registry = GrammarRegistry()
-        await registry.register(
+        registry.register(
             GrammarRegistry.LanguageEntry(name: "json", extensions: [".json"], path: "json"))
-        let entry = await registry.entry(forExtension: "json")
+        let entry = registry.entry(forExtension: "json")
         #expect(entry?.name == "json")
     }
 
@@ -54,8 +54,8 @@ struct GrammarRegistryTests {
         let grammarsPath = try #require(KittySyntaxResources.bundle.resourcePath)
         let manifestPath = "\(grammarsPath)/Grammars/languages.json"
         let registry = GrammarRegistry()
-        try await registry.loadManifest(from: manifestPath)
-        let names = await registry.languageNames
+        try registry.loadManifest(from: manifestPath)
+        let names = registry.languageNames
         #expect(names.count == 19)
     }
 
