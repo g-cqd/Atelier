@@ -126,4 +126,17 @@ struct SearchEngineTests {
         #expect(matches[0] == SearchMatch(row: 0, colStart: 0, colEnd: 2))
         #expect(matches[1] == SearchMatch(row: 0, colStart: 2, colEnd: 4))
     }
+
+    @Test
+    func `regex progress callbacks interrupt catastrophic backtracking`() throws {
+        let lines = [String(repeating: "a", count: 30)]
+        let pattern = try #require(compilePattern(SearchQuery(text: "(a+)+b", isRegex: true)))
+        let start = ContinuousClock.now
+        _ = findMatches(in: lines, pattern: pattern)
+        let elapsed = start.duration(to: .now)
+        #expect(
+            elapsed < .seconds(2),
+            "expected pattern to complete within 2 s, took \(elapsed)"
+        )
+    }
 }
