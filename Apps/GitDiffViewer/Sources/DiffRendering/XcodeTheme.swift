@@ -1,6 +1,6 @@
 package import AtelierTheme
 import DiffCore
-import DiffGit
+package import DiffGit
 package import Foundation
 
 /// Themes installed for Xcode: the user's own, then the ones bundled with the selected Xcode.
@@ -12,12 +12,15 @@ package enum XcodeThemeLibrary {
         package var id: String { url.path(percentEncoded: false) }
     }
 
-    package static func entries() -> [Entry] {
+    /// The user's themes, then the ones bundled with the Xcode `xcode-select` points at; `xcode-select` runs
+    /// through `runner`, so the listing never blocks a thread and a test can script it.
+    package static func entries(runner: any ProcessRunner) async -> [Entry] {
         let user = URL.libraryDirectory.appending(path: "Developer/Xcode/UserData/FontAndColorThemes")
-        let bundled = developerDirectory.map {
-            $0.appending(
-                path: "../SharedFrameworks/DVTUserInterfaceKit.framework/Versions/A/Resources/FontAndColorThemes")
-        }
+        let bundled = await developerDirectory(runner: runner)
+            .map {
+                $0.appending(
+                    path: "../SharedFrameworks/DVTUserInterfaceKit.framework/Versions/A/Resources/FontAndColorThemes")
+            }
         return ([user] + (bundled.map { [$0] } ?? [])).flatMap(entries(in:))
     }
 
@@ -35,18 +38,12 @@ package enum XcodeThemeLibrary {
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
-    /// Resolved once: `xcode-select` is a process launch.
-    private static let developerDirectory: URL? = {
-        let process = Process()
-        process.executableURL = URL(filePath: "/usr/bin/xcode-select")
-        process.arguments = ["-p"]
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = Pipe()
-        guard (try? process.run()) != nil else { return nil }
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        let path = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+    /// The selected developer directory, or nil when `xcode-select` fails or names nothing.
+    private static func developerDirectory(runner: any ProcessRunner) async -> URL? {
+        let spec = ProcessSpec(executable: URL(filePath: "/usr/bin/xcode-select"), arguments: ["-p"])
+        guard let output = try? await runner.run(spec), output.succeeded else { return nil }
+        let path = String(decoding: output.standardOutput, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         return path.isEmpty ? nil : URL(filePath: path, directoryHint: .isDirectory)
-    }()
+    }
 }
