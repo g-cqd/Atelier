@@ -1,4 +1,5 @@
-import KittyStyle
+import Foundation
+public import KittyStyle
 
 /// Merges highlight tokens from multiple layers into a single non-overlapping sequence.
 ///

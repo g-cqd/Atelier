@@ -1,6 +1,6 @@
 import Foundation
-import KittyGrammar
-import KittySync
+public import KittyGrammar
+import Synchronization
 
 /// Runtime registry of language-grammar bindings.
 ///
@@ -8,7 +8,7 @@ import KittySync
 /// memory and a backing disk cache, and dispatches `entry(for*: …)`
 /// lookups for `SyntaxArtifactsCache` and (eventually) ADR 8
 /// extensions. Previously an `actor` — now a `Sendable final class`
-/// over `StateLock<State>` so callers in synchronous contexts
+/// over `Mutex<State>` so callers in synchronous contexts
 /// (`SyntaxArtifactsCache.loadArtifacts`, `LanguageHighlighter.Session.
 /// init`) can consult it without an `await` and without paying the
 /// actor's reentrancy budget. The lock guards mutation; reads are
@@ -35,7 +35,7 @@ public final class GrammarRegistry: Sendable {
         var compiledTables: [String: ParseTableCompiler.CompilationResult] = [:]
     }
 
-    private let state = StateLock(initialState: State())
+    private let state = Mutex(State())
 
     public struct LanguageEntry: Sendable, Equatable {
         public var name: String

@@ -1,5 +1,5 @@
 import Foundation
-import KittySync
+import Synchronization
 import System
 import os
 
@@ -21,7 +21,7 @@ enum BundledLanguageManifest {
         var manifest: Manifest?
     }
 
-    private static let storage = StateLock(initialState: Storage())
+    private static let storage = Mutex(Storage())
 
     static var entries: [BundledLanguageEntry] {
         loadedManifest()?.entries ?? []
