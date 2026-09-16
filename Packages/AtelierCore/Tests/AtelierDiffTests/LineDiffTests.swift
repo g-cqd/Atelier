@@ -66,7 +66,7 @@ struct LineDiffTests {
 
     @Test
     func `line diff ignores carriage returns and a trailing newline`() {
-        let model = DiffModel(oldText: "a\r\nb\r\n", newText: "a\nb\nc")
+        let model = DiffModel(oldText: "a\r\nb\r\n", newText: "a\nb\nc", tokenRanges: CodeTokenRanges())
         #expect(model.oldLines == ["a", "b"])
         #expect(model.newLines == ["a", "b", "c"])
         #expect(model.unifiedRows.map(\.kind) == [.context, .context, .added])
@@ -76,7 +76,8 @@ struct LineDiffTests {
 
     @Test
     func `split rows pair changed lines and pad the shorter side`() {
-        let model = DiffModel(oldText: "one\ntwo\nthree", newText: "one\ntwo!\nthree\nfour\nfive")
+        let model = DiffModel(
+            oldText: "one\ntwo\nthree", newText: "one\ntwo!\nthree\nfour\nfive", tokenRanges: CodeTokenRanges())
         #expect(model.splitRows.map(\.kind) == [.context, .modified, .context, .added, .added])
         #expect(model.splitRows[1].old?.emphasis == [])
         #expect(model.splitRows[1].new?.emphasis == [3 ..< 4])
@@ -175,14 +176,15 @@ struct LineDiffTests {
     func `blocks that only moved are flagged on both sides`() {
         let old = "one\ntwo\nthree\nalpha\nbeta\ngamma\ndelta\n"
         let new = "alpha\nbeta\ngamma\ndelta\none\ntwo\nthree\n"
-        let model = DiffModel(oldText: old, newText: new)
+        let model = DiffModel(oldText: old, newText: new, tokenRanges: CodeTokenRanges())
 
         let movedOld = model.unifiedRows.filter { $0.isMoved && $0.kind == .removed }.compactMap { $0.old?.index }
         let movedNew = model.unifiedRows.filter { $0.isMoved && $0.kind == .added }.compactMap { $0.new?.index }
         #expect(movedOld == [0, 1, 2])
         #expect(movedNew == [4, 5, 6])
 
-        let off = DiffModel(oldText: old, newText: new, pipeline: DiffPipeline(heuristics: .none))
+        let off = DiffModel(
+            oldText: old, newText: new, pipeline: DiffPipeline(heuristics: .none), tokenRanges: CodeTokenRanges())
         #expect(off.unifiedRows.allSatisfy { !$0.isMoved })
     }
 }
