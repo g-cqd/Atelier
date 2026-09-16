@@ -1,8 +1,8 @@
-import KittyInput
-import KittySync
+public import KittyInput
+import Synchronization
 
 public final class RenderRefreshSource: Sendable {
-    private let lock = StateLock<(@Sendable () -> Void)?>(initialState: nil)
+    private let lock = Mutex<(@Sendable () -> Void)?>(nil)
 
     public init() {}
 
