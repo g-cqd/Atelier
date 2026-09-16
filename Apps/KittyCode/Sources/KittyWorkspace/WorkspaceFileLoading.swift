@@ -1,5 +1,5 @@
+public import AtelierText
 import Foundation
-public import KittyText
 
 public struct LoadedFile: Sendable {
     public let content: String

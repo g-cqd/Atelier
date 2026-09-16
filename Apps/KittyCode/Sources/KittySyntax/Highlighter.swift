@@ -1,7 +1,7 @@
+import AtelierGrammar
+public import AtelierParser
+public import AtelierQuery
 import Foundation
-import KittyGrammar
-public import KittyParser
-public import KittyQuery
 public import KittyStyle
 
 final class HighlightScratch {

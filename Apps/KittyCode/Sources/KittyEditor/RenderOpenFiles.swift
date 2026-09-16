@@ -1,8 +1,8 @@
+import AtelierText
 import KittyCodecs
 import KittyFileTree
 public import KittyRenderer
 import KittySymbols
-import KittyText
 public import KittyWidgets
 import KittyWorkspace
 

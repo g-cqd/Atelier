@@ -1,6 +1,6 @@
+import AtelierText
 import Foundation
 import KittyRenderer
-import KittyText
 import KittyWorkspace
 import Testing
 

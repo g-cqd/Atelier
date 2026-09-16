@@ -1,8 +1,8 @@
+import AtelierText
 import KittyCodecs
 import KittyInput
 import KittyRenderer
 import KittyTerminal
-import KittyText
 import KittyWorkspace
 import Testing
 

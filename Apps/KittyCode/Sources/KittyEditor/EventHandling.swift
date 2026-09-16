@@ -1,10 +1,10 @@
+import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable cyclomatic_complexity function_body_length
 import Foundation
 import KittyCodecs
 public import KittyInput
 public import KittyRenderer
-import KittyText
 
 /// Duration that command-feedback overlays stay on screen after the key
 /// sequence that produced them. Matches the previous wall-clock 1.5 s window.

@@ -1,4 +1,4 @@
-import KittyText
+import AtelierText
 
 @MainActor
 public func insertText(_ text: String, into state: EditorState) {

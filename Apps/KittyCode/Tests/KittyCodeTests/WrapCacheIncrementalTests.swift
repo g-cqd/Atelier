@@ -1,5 +1,5 @@
+import AtelierText
 import KittyRenderer
-import KittyText
 import KittyWorkspace
 import Testing
 

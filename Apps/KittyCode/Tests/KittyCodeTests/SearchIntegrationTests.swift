@@ -1,9 +1,9 @@
+import AtelierText
 import Foundation
 import KittyCodecs
 import KittyRenderer
 import KittySearch
 import KittyTerminal
-import KittyText
 import KittyWidgets
 import KittyWorkspace
 import Testing
