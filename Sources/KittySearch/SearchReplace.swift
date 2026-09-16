@@ -17,11 +17,12 @@ public func buildReplacement(
         guard match.colStart >= 0, match.colEnd <= chars.count else { return replacement }
         let matchStr = String(chars[match.colStart..<match.colEnd])
 
-        guard let regexMatch = matchStr.wholeMatch(of: regex) else {
-            return replacement
+        var result = replacement
+        RegexMatcher.enumerate(regex.wholeExpression, in: matchStr) { regexMatch in
+            result = expandReplacementTemplate(replacement, using: regexMatch, in: matchStr)
+            return false
         }
-
-        return expandReplacementTemplate(replacement, using: regexMatch)
+        return result
     }
 }
 
@@ -44,7 +45,8 @@ public func applyReplacements(
         let chars = Array(line)
         guard match.colStart >= 0, match.colEnd <= chars.count else { continue }
         let before = String(chars.prefix(match.colStart))
-        let after = String(chars.suffix(from: chars.index(chars.startIndex, offsetBy: match.colEnd)))
+        let after = String(
+            chars.suffix(from: chars.index(chars.startIndex, offsetBy: match.colEnd)))
         result[match.row] = before + replacementText + after
         count += 1
     }
@@ -52,11 +54,11 @@ public func applyReplacements(
     return (result, count)
 }
 
-private func captureGroup(at index: Int, in match: Regex<AnyRegexOutput>.Match) -> String? {
-    let output = match.output
-    guard index < output.count else { return nil }
-    guard let substring = output[index].substring else { return nil }
-    return String(substring)
+private func captureGroup(at index: Int, in match: NSTextCheckingResult, text: String) -> String? {
+    guard index < match.numberOfRanges, let range = Range(match.range(at: index), in: text) else {
+        return nil
+    }
+    return String(text[range])
 }
 
 /// Expands `$N` references and `$$` escapes in a replacement template.
@@ -67,9 +69,9 @@ private func captureGroup(at index: Int, in match: Regex<AnyRegexOutput>.Match) 
 ///   given `$12` with 5 capture groups, the result is `<group 1>` followed by `"2"`.
 /// - A trailing `$` or `$` followed by a non-digit, non-`$` character is emitted literally.
 private func expandReplacementTemplate(
-    _ template: String, using match: Regex<AnyRegexOutput>.Match
+    _ template: String, using match: NSTextCheckingResult, in text: String
 ) -> String {
-    let groupCount = match.output.count
+    let groupCount = match.numberOfRanges
     var result = ""
     result.reserveCapacity(template.count)
 
@@ -107,7 +109,8 @@ private func expandReplacementTemplate(
         var scan = afterDollar
         var digits = ""
         while scan < template.endIndex, let digit = template[scan].asciiValue,
-            digit >= 0x30, digit <= 0x39 {
+            digit >= 0x30, digit <= 0x39
+        {
             digits.append(template[scan])
             scan = template.index(after: scan)
         }
@@ -117,7 +120,7 @@ private func expandReplacementTemplate(
         while consumed > 0 {
             let candidate = String(digits.prefix(consumed))
             if let groupIndex = Int(candidate), groupIndex < groupCount {
-                resolved = captureGroup(at: groupIndex, in: match) ?? ""
+                resolved = captureGroup(at: groupIndex, in: match, text: text) ?? ""
                 break
             }
             consumed -= 1
