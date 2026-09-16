@@ -48,7 +48,12 @@ let package = Package(
             ],
             swiftSettings: strict
         ),
-        .target(name: "DiffRendering", dependencies: ["DiffCore", "DiffGit"], swiftSettings: strict),
+        // The one target that links swift-syntax, for the syntax tier of the intraline emphasis.
+        .target(
+            name: "DiffRendering",
+            dependencies: ["DiffCore", "DiffGit", .product(name: "AtelierSwiftSyntax", package: "AtelierCore")],
+            swiftSettings: strict
+        ),
         .target(
             name: "DiffTextKit",
             dependencies: ["DiffCore", "DiffRendering", .product(name: "AemiCore", package: "aemi")],
@@ -73,6 +78,8 @@ let package = Package(
             name: "GitDiffViewerTests",
             dependencies: [
                 "DiffComparison", "DiffGit", "DiffRendering", "DiffTextKit",
+                .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),
+                .product(name: "AtelierTestSupport", package: "AtelierCore"),
                 .product(name: "AemiCore", package: "aemi"), .product(name: "AemiTesting", package: "aemi")
             ],
             swiftSettings: strict

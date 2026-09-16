@@ -13,6 +13,9 @@ package protocol SourceReading: Sendable {
     func contents(of entries: [SourceEntry], in source: ComparisonSource) async throws -> [String: String]
     /// Renames git detects between the two sources, old path to new path, when both are trees of one repository.
     func renames(from left: ComparisonSource, to right: ComparisonSource) async -> [String: String]
+    /// The commit hash `ref` names in `repository`.
+    /// - Throws: When the ref names nothing, or git cannot run.
+    func resolve(ref: String, in repository: URL) async throws -> String
 }
 
 /// Concurrent file reads for sources without batch reads; bounded so a large folder does not open a file storm.
@@ -21,6 +24,11 @@ private let fileReadConcurrency = 6
 extension SourceReading {
     package func ignoredEntries(of source: ComparisonSource) async throws -> [SourceEntry] {
         []
+    }
+
+    /// A source with no git behind it names every ref by itself.
+    package func resolve(ref: String, in repository: URL) async throws -> String {
+        ref
     }
 
     package func contents(of entries: [SourceEntry], in source: ComparisonSource) async throws -> [String: String] {

@@ -100,7 +100,7 @@ struct IgnoredFilesTests {
         try "let b = 2\n".write(to: root.appending(path: "src/untracked.swift"), atomically: true, encoding: .utf8)
         try "out\n".write(to: root.appending(path: "build/out.txt"), atomically: true, encoding: .utf8)
         try FileManager.default.removeItem(at: root.appending(path: "src/gone.swift"))
-        let loader = SourceLoader()
+        let loader = TestProcesses.loader
 
         let listed = try await loader.entries(of: .directory(root))
         let ignored = try await loader.ignoredEntries(of: .directory(root))
@@ -120,7 +120,7 @@ struct IgnoredFilesTests {
         defer { try? FileManager.default.removeItem(at: root) }
         try "hidden\n".write(to: root.appending(path: ".hidden.txt"), atomically: true, encoding: .utf8)
         try "a\n".write(to: root.appending(path: "a.txt"), atomically: true, encoding: .utf8)
-        let loader = SourceLoader()
+        let loader = TestProcesses.loader
 
         #expect(try await loader.entries(of: .directory(root)).map(\.relativePath) == ["a.txt"])
         #expect(try await loader.ignoredEntries(of: .directory(root)).isEmpty)

@@ -1,5 +1,7 @@
 import AemiCore
+import AemiRuntime
 import AemiTesting
+import AtelierProcess
 import Foundation
 import Observation
 import Testing
@@ -17,6 +19,7 @@ import Testing
 @MainActor
 struct ModelTimelineBenchmark {
     @Test(
+        .timeLimit(.minutes(5)),
         .enabled(
             if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil
                 && ProcessInfo.processInfo.environment["GDV_BENCH_REPO"] != nil))
@@ -27,15 +30,23 @@ struct ModelTimelineBenchmark {
         let rightRef = environment["GDV_BENCH_RIGHT"] ?? "HEAD"
         let defaults = UserDefaults(suiteName: "gdv-bench-\(UUID().uuidString)") ?? .standard
         let spy = TaskProviderSpy(label: "benchmark", defaultTimeout: .seconds(120))
-        let model = DiffViewerModel(
-            settings: ViewerSettings(defaults: defaults), reader: SourceLoader(), taskProvider: spy)
+        let pool = BlockingOffloadPool(width: 4)
+        defer { pool.shutdown() }
+        let loader = SourceLoader(runner: HardenedProcessRunner(pool: pool))
+        let model = DiffViewerModel(settings: ViewerSettings(defaults: defaults), reader: loader, taskProvider: spy)
         let clock = ContinuousClock()
 
         var start = clock.now
         model.compareGitChanges(in: repo, leftRef: leftRef, rightRef: rightRef)
-        while model.renderedFiles.isEmpty {
-            await Self.nextChange { _ = model.renderedFiles }
+        while model.renderedFiles.isEmpty, model.isRendering || model.left.isLoading || model.right.isLoading {
+            await Self.nextChange {
+                _ = model.renderedFiles
+                _ = model.isRendering
+                _ = model.left.isLoading
+                _ = model.right.isLoading
+            }
         }
+        try #require(!model.renderedFiles.isEmpty, "\(leftRef) and \(rightRef) compare equal; nothing to time")
         let firstCard = clock.now - start
         try await spy.waitForAllTasks()
         print(
@@ -68,7 +79,7 @@ struct ModelTimelineBenchmark {
     }
 
     /// Suspends until one of the observable properties `read` touches changes.
-    private static func nextChange(_ read: @escaping @MainActor () -> Void) async {
+    private static func nextChange(_ read: @MainActor () -> Void) async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             withObservationTracking(read) { continuation.resume() }
         }

@@ -48,7 +48,10 @@ package final class RenderPipeline {
 
     /// Bumped by every fresh render; work from an older generation is dropped when it lands.
     @ObservationIgnored private var generation = 0
-    private var completedGeneration = 0
+    @ObservationIgnored private var completedGeneration = 0
+    /// Whether a render is in flight: `completedGeneration < generation`, mirrored into an observed store so an
+    /// observer sees both edges, since `generation` is bumped inside update passes and cannot be observed itself.
+    package private(set) var isRendering = false
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var options: DiffRenderer.Options
     @ObservationIgnored private var layout: (context: Int, isolates: Bool) = (3, false)
@@ -62,8 +65,6 @@ package final class RenderPipeline {
         self.options = options
     }
 
-    package var isRendering: Bool { completedGeneration < generation }
-
     /// Options for the next renders; re-renders of prepared diffs happen through `relayout`.
     package func configure(options: DiffRenderer.Options, context: Int, isolatesChanges: Bool) {
         self.options = options
@@ -74,6 +75,8 @@ package final class RenderPipeline {
         task?.cancel()
         generation += 1
         completedGeneration = generation
+        isRendering = false
+        isRendering = false
         file = nil
         cards = []
         prepared = []
@@ -88,6 +91,7 @@ package final class RenderPipeline {
     ) {
         task?.cancel()
         generation += 1
+        isRendering = true
         let generation = generation
         self.target = target
         file = nil
@@ -140,6 +144,8 @@ package final class RenderPipeline {
                 guard generation == self.generation else { return }
                 self.error = error.localizedDescription
                 completedGeneration = generation
+                isRendering = false
+                isRendering = false
                 onEvent?(.failed(error.localizedDescription))
             }
         }
@@ -212,6 +218,7 @@ package final class RenderPipeline {
         guard generation == self.generation else { return }
         PhaseTrace.log("finish")
         completedGeneration = generation
+        isRendering = false
         onEvent?(.finished)
     }
 
