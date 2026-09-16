@@ -1,4 +1,4 @@
-import Observation
+public import Observation
 
 /// Observation-aware tick source for the render loop.
 ///
