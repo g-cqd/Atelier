@@ -1,4 +1,4 @@
-import KittyCodecs
+public import KittyCodecs
 
 public struct ScrollMetrics: Sendable, Equatable {
     public var contentLength: Int

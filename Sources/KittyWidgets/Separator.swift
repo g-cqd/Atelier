@@ -1,4 +1,4 @@
-import KittyCodecs
+public import KittyCodecs
 
 public struct Separator: View, Sendable {
     public let character: Character

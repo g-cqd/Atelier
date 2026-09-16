@@ -1,4 +1,4 @@
-import KittyCodecs
+public import KittyCodecs
 
 public struct ColorOverlay: Sendable, Equatable {
     public var color: Color

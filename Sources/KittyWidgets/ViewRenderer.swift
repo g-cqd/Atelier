@@ -1,6 +1,7 @@
 // swiftlint:disable file_length
+import Foundation
 import KittyCodecs
-import KittyRenderer
+public import KittyRenderer
 import KittySyntax
 import KittyText
 

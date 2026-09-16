@@ -1,5 +1,5 @@
-import KittyCodecs
-import KittyRenderer
+public import KittyCodecs
+public import KittyRenderer
 
 public struct OverlayBoxStyle {
     public var borderStyle: Style

@@ -1,6 +1,6 @@
-import KittyCodecs
-import KittyInput
-import KittyRenderer
+public import KittyCodecs
+public import KittyInput
+public import KittyRenderer
 
 // MARK: - Size
 
