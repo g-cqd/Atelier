@@ -1,9 +1,9 @@
 import KittyCodecs
-import KittyInput
-import KittyRenderer
-import KittyTerminal
-import KittyWidgets
+public import KittyInput
 import Observation
+public import KittyRenderer
+public import KittyTerminal
+import KittyWidgets
 
 /// Orchestrates the application lifecycle.
 @MainActor
