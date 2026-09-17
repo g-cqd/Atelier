@@ -125,3 +125,34 @@ extension String.UTF16View {
         return String(decoding: Array(self[start ..< end]), as: UTF16.self)
     }
 }
+
+/// The languages added for the terminal editor's manifest: comment spelling, keywords and string quoting.
+struct AddedLanguageScannerTests {
+    private func kinds(_ source: String, _ language: Language) -> [TokenKind] {
+        SyntaxHighlighter.tokens(utf8: Array(source.utf8), language: language).map(\.kind)
+    }
+
+    @Test
+    func `rust knows fn and nested block comments`() {
+        #expect(kinds("fn main() { let x = 1; } // c", .rust) == [.keyword, .keyword, .number, .comment])
+        #expect(kinds("/* a /* b */ c */ fn", .rust) == [.comment, .keyword])
+    }
+
+    @Test
+    func `go raw strings span lines`() {
+        #expect(kinds("s := `a\nb` // c", .go) == [.string, .comment])
+        #expect(kinds("func f() {}", .go) == [.keyword])
+    }
+
+    @Test
+    func `ruby comments start with a hash and variables are attributes`() {
+        #expect(kinds("def f # c", .ruby) == [.keyword, .comment])
+        #expect(kinds("puts $stdout", .ruby) == [.keyword, .attribute])
+    }
+
+    @Test
+    func `lua comments are double dashes and block comments are bracketed`() {
+        #expect(kinds("local x = 1 -- c", .lua) == [.keyword, .number, .comment])
+        #expect(kinds("--[[ a\nb ]] return", .lua) == [.comment, .keyword])
+    }
+}

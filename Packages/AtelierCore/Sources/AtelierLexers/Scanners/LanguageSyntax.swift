@@ -33,6 +33,10 @@ struct LanguageSyntax: Sendable {
             case .python: python
             case .shell: shell
             case .fish: fish
+            case .rust: rust
+            case .go: go
+            case .ruby: ruby
+            case .lua: lua
             default: LanguageSyntax(keywords: [])
         }
     }
@@ -161,5 +165,47 @@ struct LanguageSyntax: Sendable {
             "count", "functions", "type", "eval", "exec"
         ],
         lineComments: [Array("#".utf8)], blockComment: nil, quotes: [ASCII.quote, ASCII.apostrophe], hasVariables: true
+    )
+
+    static let rust = LanguageSyntax(
+        keywords: [
+            "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern", "false",
+            "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return",
+            "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe", "use", "where", "while",
+            "union", "macro_rules"
+        ],
+        nestsBlockComments: true
+    )
+
+    static let go = LanguageSyntax(
+        keywords: [
+            "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func",
+            "go", "goto", "if", "import", "interface", "map", "package", "range", "return", "select", "struct",
+            "switch", "type", "var", "true", "false", "nil", "iota", "make", "new", "len", "cap", "append", "panic",
+            "recover"
+        ],
+        quotes: [ASCII.quote, ASCII.apostrophe, ASCII.backtick], multilineQuotes: [ASCII.backtick]
+    )
+
+    static let ruby = LanguageSyntax(
+        keywords: [
+            "alias", "and", "begin", "break", "case", "class", "def", "defined?", "do", "else", "elsif", "end",
+            "ensure", "false", "for", "if", "in", "module", "next", "nil", "not", "or", "redo", "rescue", "retry",
+            "return", "self", "super", "then", "true", "undef", "unless", "until", "when", "while", "yield",
+            "require", "require_relative", "include", "extend", "attr_reader", "attr_writer", "attr_accessor",
+            "private", "protected", "public", "raise", "lambda", "proc", "puts", "print"
+        ],
+        lineComments: [Array("#".utf8)], blockComment: (Array("=begin".utf8), Array("=end".utf8)),
+        quotes: [ASCII.quote, ASCII.apostrophe], hasVariables: true
+    )
+
+    static let lua = LanguageSyntax(
+        keywords: [
+            "and", "break", "do", "else", "elseif", "end", "false", "for", "function", "goto", "if", "in", "local",
+            "nil", "not", "or", "repeat", "return", "then", "true", "until", "while", "self", "require", "print",
+            "pairs", "ipairs", "type", "tostring", "tonumber", "setmetatable", "getmetatable", "error", "pcall"
+        ],
+        lineComments: [Array("--".utf8)], blockComment: (Array("--[[".utf8), Array("]]".utf8)),
+        quotes: [ASCII.quote, ASCII.apostrophe]
     )
 }
