@@ -1,6 +1,9 @@
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable function_body_length
+import AtelierTheme
+import Foundation
 import KittyCodecs
+import KittySyntax
 import KittyWidgets
 
 extension EditorState {
@@ -121,5 +124,14 @@ extension EditorState {
             foreground: ColorOverlay(color: foreground.color.color, alpha: foreground.alpha),
             background: ColorOverlay(color: background.color.color, alpha: background.alpha)
         )
+    }
+
+    /// The syntax theme `config.syntax.xcodeTheme` names, resolved to terminal styles; nil when none is set.
+    /// - Throws: The read or parse error of the `.xccolortheme` file.
+    static func loadXcodeTheme(config: KittyConfig) throws -> Theme? {
+        guard let path = config.syntax.xcodeTheme, !path.isEmpty else { return nil }
+        let url = URL(filePath: PathUtilities.expandingTilde(in: path))
+        let document = try XcodeThemeDocument(contentsOf: url)
+        return Theme(document.syntaxTheme(named: url.deletingPathExtension().lastPathComponent))
     }
 }

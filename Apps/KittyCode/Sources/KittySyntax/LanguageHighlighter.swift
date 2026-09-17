@@ -1,5 +1,6 @@
 public import AemiCore
 import AtelierGrammar
+import AtelierLexers
 import AtelierParser
 import AtelierQuery
 public import AtelierSyntaxModel
@@ -77,6 +78,8 @@ public enum LanguageHighlighter: Sendable {
         }
 
         private let language: String?
+        /// The language the shared lexical engine scans for `language`; plain text yields no lexical tokens.
+        private let lexicalLanguage: Language
         private let theme: Theme
         private var strategy: Strategy
         private var splitScratch = SplitLinesScratch()
@@ -107,6 +110,7 @@ public enum LanguageHighlighter: Sendable {
             preferGrammar: Bool = true
         ) {
             self.language = language
+            self.lexicalLanguage = language.flatMap(Language.init(name:)) ?? .plain
             self.theme = theme
 
             if preferGrammar,
@@ -126,15 +130,13 @@ public enum LanguageHighlighter: Sendable {
             switch strategy {
                 case .grammar(let grammarSession):
                     guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
-                        return fallbackHighlightDocument(
-                            source: source, language: language, theme: theme)
+                        return lexicalLines(source: source)
                     }
                     do {
                         let tree = try grammarSession.parseTree(for: source)
                         guard tree.root.type != "_start" else {
                             strategy = .fallback
-                            return fallbackHighlightDocument(
-                                source: source, language: language, theme: theme)
+                            return lexicalLines(source: source)
                         }
                         let spans = grammarSession.highlighter.highlight(
                             source: source,
@@ -149,12 +151,11 @@ public enum LanguageHighlighter: Sendable {
                             scratch: &splitScratch
                         )
                     } catch {
-                        return fallbackHighlightDocument(
-                            source: source, language: language, theme: theme)
+                        return lexicalLines(source: source)
                     }
 
                 case .fallback:
-                    return fallbackHighlightDocument(source: source, language: language, theme: theme)
+                    return lexicalLines(source: source)
             }
         }
 
@@ -218,60 +219,18 @@ public enum LanguageHighlighter: Sendable {
             return result
         }
 
-        /// Build lexical-layer tokens from the fallback highlighter.
-        /// These provide Tier 1 (keyword/string/comment) highlighting as a baseline
-        /// that structural and semantic layers can refine.
+        /// The lexical layer: the shared scanners' keyword, string, comment, number, type and attribute tokens,
+        /// the baseline the structural and semantic layers refine.
         private func buildLexicalTokens(source: String) -> [HighlightToken] {
-            let fallbackSpans = fallbackHighlightDocument(
-                source: source, language: language, theme: theme)
-            var tokens: [HighlightToken] = []
-            var byteOffset = 0
-
-            for lineSpans in fallbackSpans {
-                for span in lineSpans {
-                    let byteLen = span.text.utf8.count
-                    guard byteLen > 0 else { continue }
-                    let range = byteOffset ..< (byteOffset + byteLen)
-
-                    // Only emit tokens for non-default-styled spans
-                    if span.style != theme.defaultStyle {
-                        let role = inferRoleFromStyle(span.style)
-                        tokens.append(
-                            HighlightToken(
-                                byteRange: range,
-                                role: role,
-                                layer: .lexical,
-                                priority: 0
-                            ))
-                    }
-                    byteOffset += byteLen
-                }
-                // Account for newline between lines (except after last line)
-                byteOffset += 1  // \n
-            }
-
-            // Correct for the extra newline added after the last line
-            if !fallbackSpans.isEmpty {
-                // We added one too many newlines; doesn't affect token ranges since
-                // we only emitted tokens for actual span text.
-            }
-
-            return tokens
+            LexicalHighlightEngine().highlight(utf8: Array(source.utf8), language: lexicalLanguage)
         }
 
-        /// Best-effort role inference from a lexical fallback style by matching
-        /// against known theme styles. This is intentionally coarse — lexical
-        /// tokens carry less information than structural ones.
-        private func inferRoleFromStyle(_ style: Style) -> HighlightRole {
-            if style == theme.style(for: "keyword") { return .keyword }
-            if style == theme.style(for: "string") { return .string }
-            if style == theme.style(for: "comment") { return .comment }
-            if style == theme.style(for: "number") { return .number }
-            if style == theme.style(for: "type") { return .type }
-            if style == theme.style(for: "attribute") { return .attribute }
-            if style == theme.style(for: "constant.builtin") { return .constantBuiltin }
-            if style == theme.style(for: "string.special.key") { return .stringSpecial }
-            return .variable
+        /// The lexical layer alone, resolved to one span array per line.
+        private func lexicalLines(source: String) -> [[StyledSpan]] {
+            let utf8 = Array(source.utf8)
+            return HighlightMerger.resolveToLines(
+                tokens: LexicalHighlightEngine().highlight(utf8: utf8, language: lexicalLanguage),
+                utf8: utf8, resolver: RoleBasedThemeResolver(theme: theme), defaultStyle: theme.defaultStyle)
         }
 
         /// Highlight only the visible viewport lines for fast initial render.
@@ -354,29 +313,10 @@ public enum LanguageHighlighter: Sendable {
             let byteRange = lineRangeToByteRange(source: source, lineRange: visibleLineRange)
             let viewportSource = extractViewportSource(source: source, byteRange: byteRange)
 
-            // Layer 0: lexical baseline for visible lines only
-            let visibleLines = extractVisibleLines(
-                source: source, visibleLineRange: visibleLineRange)
-            let lexicalSpans = visibleLines.map {
-                fallbackHighlightLine($0, language: language, theme: theme)
-            }
-            var lexicalTokens: [HighlightToken] = []
-            var byteOffset = 0
-            for lineSpans in lexicalSpans {
-                for span in lineSpans {
-                    let byteLen = span.text.utf8.count
-                    guard byteLen > 0 else { continue }
-                    if span.style != theme.defaultStyle {
-                        let role = inferRoleFromStyle(span.style)
-                        lexicalTokens.append(
-                            HighlightToken(
-                                byteRange: byteOffset ..< (byteOffset + byteLen),
-                                role: role, layer: .lexical, priority: 0))
-                    }
-                    byteOffset += byteLen
-                }
-                byteOffset += 1  // \n
-            }
+            // Layer 0: lexical baseline over the visible bytes only
+            let lexicalTokens = LexicalHighlightEngine()
+                .highlight(
+                    utf8: Array(viewportSource.utf8), language: lexicalLanguage)
 
             // Layer 1: structural tokens scoped to viewport
             var structuralTokens: [HighlightToken] = []
@@ -423,7 +363,7 @@ public enum LanguageHighlighter: Sendable {
 
             let allTokens = lexicalTokens + structuralTokens + semanticTokens
             guard !allTokens.isEmpty else {
-                return lexicalSpans
+                return lexicalLines(source: viewportSource)
             }
 
             let merged = HighlightMerger.merge(
@@ -478,21 +418,20 @@ public enum LanguageHighlighter: Sendable {
             return Array(allLines[start ..< end])
         }
 
+        /// The visible lines through the lexical engine, scanned together so a string or comment that opens
+        /// on one visible line and closes on another is styled as one.
         private func viewportFallback(
             source: String, visibleLineRange: Range<Int>
         ) -> [[StyledSpan]] {
             let lines = extractVisibleLines(source: source, visibleLineRange: visibleLineRange)
-            return lines.map { fallbackHighlightLine($0, language: language, theme: theme) }
+            return lexicalLines(source: lines.joined(separator: "\n"))
         }
 
         public func highlightLines<C: Collection>(_ lines: C) -> [[StyledSpan]]
         where C.Element == String {
             switch strategy {
                 case .fallback:
-                    if lines.isEmpty {
-                        return [fallbackHighlightLine("", language: language, theme: theme)]
-                    }
-                    return lines.map { fallbackHighlightLine($0, language: language, theme: theme) }
+                    return lexicalLines(source: lines.joined(separator: "\n"))
                 case .grammar:
                     let source = lines.isEmpty ? "" : lines.joined(separator: "\n")
                     return highlightDocument(source: source)
@@ -510,12 +449,17 @@ public enum LanguageHighlighter: Sendable {
             .highlightDocument(source: source)
     }
 
+    /// One line through the lexical engine alone, with no grammar and no context from neighbouring lines.
     public static func highlightLine(
         _ line: String,
         language: String?,
         theme: Theme = .monokai
     ) -> [StyledSpan] {
-        fallbackHighlightLine(line, language: language, theme: theme)
+        let utf8 = Array(line.utf8)
+        let lexicalLanguage = language.flatMap(Language.init(name:)) ?? .plain
+        return HighlightMerger.resolveToSpans(
+            tokens: LexicalHighlightEngine().highlight(utf8: utf8, language: lexicalLanguage),
+            utf8: utf8[...], resolver: RoleBasedThemeResolver(theme: theme), defaultStyle: theme.defaultStyle)
     }
 
     public static func makeSession(
@@ -782,489 +726,4 @@ private func splitDocumentSpans(
     }
 
     return scratch.lines.isEmpty ? [[StyledSpan(text: "", style: defaultStyle)]] : scratch.lines
-}
-
-private enum HighlightLexicon {
-    static let pythonKeywords: Set<String> = [
-        "def", "class", "if", "elif", "else", "for", "while", "return",
-        "import", "from", "as", "is", "in", "not", "and", "or",
-        "with", "try", "except", "finally", "raise", "pass", "break",
-        "continue", "yield", "lambda", "global", "nonlocal", "assert",
-        "del", "True", "False", "None", "true", "false", "null", "nil",
-        "async", "await", "self", "then", "fi", "done", "esac", "function",
-        "local", "export", "source", "end", "elsif", "unless", "module",
-        "begin", "rescue", "alias", "undef", "repeat", "until"
-    ]
-    static let pythonTypes: Set<String> = [
-        "int", "float", "str", "bool", "list", "dict", "tuple",
-        "set", "bytes", "type", "object", "range", "table"
-    ]
-    static let javaScriptKeywords: Set<String> = [
-        "function", "const", "let", "var", "if", "else", "for", "while",
-        "return", "class", "new", "this", "import", "export", "from",
-        "default", "switch", "case", "break", "continue", "try", "catch",
-        "finally", "throw", "typeof", "instanceof", "in", "of", "async",
-        "await", "yield", "void", "delete", "extends", "implements",
-        "interface", "type", "enum", "abstract", "static", "public",
-        "private", "protected", "readonly", "override", "struct",
-        "typedef", "union", "goto", "sizeof", "volatile", "inline",
-        "package", "func", "go", "defer", "select", "chan", "range",
-        "map", "trait", "impl", "match", "mut", "pub", "crate", "where",
-        "macro_rules", "unsafe", "extern", "sealed", "record", "when",
-        "companion", "object", "val"
-    ]
-    static let javaScriptTypes: Set<String> = [
-        "string", "number", "boolean", "any", "void", "never",
-        "unknown", "undefined", "null", "Array", "Promise", "Map", "Set",
-        "int", "char", "float", "double", "long", "short", "byte",
-        "bool", "usize", "isize", "u8", "u16", "u32", "u64", "i8", "i16",
-        "i32", "i64", "String", "Vec", "Result", "Option"
-    ]
-    static let swiftKeywords: Set<String> = [
-        "import", "struct", "class", "enum", "func", "var", "let", "guard", "if", "else", "switch",
-        "case", "return", "default",
-        "final", "extension", "public", "private", "static", "mutating", "override", "init",
-        "deinit", "typealias", "where", "while", "for",
-        "in", "do", "catch", "try", "throw", "throws", "as", "is", "self", "nil", "true", "false",
-        "protocol", "associatedtype",
-        "internal", "fileprivate", "open", "weak", "unowned", "lazy", "async", "await", "some",
-        "any", "defer", "break", "continue",
-        "fallthrough", "repeat", "super", "inout", "convenience", "required", "dynamic", "optional",
-        "indirect", "nonisolated",
-        "consuming", "borrowing", "@MainActor", "@Sendable", "@escaping", "@autoclosure",
-        "@discardableResult"
-    ]
-    static let swiftTypes: Set<String> = [
-        "String", "Int", "Bool", "Double", "Float", "Any", "Array", "Dictionary", "Optional",
-        "UInt32", "UInt8", "UInt16", "UInt64",
-        "UInt", "Int8", "Int16", "Int32", "Int64", "Date", "Data", "URL", "Error", "Result", "Void",
-        "Never", "Character",
-        "Substring", "Set", "ClosedRange", "Range", "Comparable", "Equatable", "Hashable",
-        "Codable", "Decodable", "Encodable",
-        "Sendable", "Identifiable", "CustomStringConvertible", "View", "Task", "AsyncStream",
-        "MainActor"
-    ]
-}
-
-private func fallbackHighlightDocument(source: String, language: String?, theme: Theme)
-    -> [[StyledSpan]]
-{
-    let lines =
-        source.isEmpty
-        ? [""] : source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-    return lines.map { fallbackHighlightLine($0, language: language, theme: theme) }
-}
-
-private func fallbackHighlightLine(_ line: String, language: String?, theme: Theme) -> [StyledSpan] {
-    switch language {
-        case "json":
-            return fallbackHighlightJSON(line, theme: theme)
-        case "python", "bash", "ruby", "lua", "toml", "yaml":
-            return fallbackHighlightPython(line, theme: theme)
-        case "javascript", "typescript", "c", "cpp", "css", "go", "java", "kotlin", "rust":
-            return fallbackHighlightJavaScript(line, theme: theme)
-        case "swift":
-            return fallbackHighlightSwift(line, theme: theme)
-        default:
-            return fallbackHighlightGeneric(line, theme: theme)
-    }
-}
-
-private func fallbackHighlightJSON(_ line: String, theme: Theme) -> [StyledSpan] {
-    let defaultStyle = theme.defaultStyle
-    let keyStyle = theme.style(for: "string.special.key")
-    let stringStyle = theme.style(for: "string")
-    let numberStyle = theme.style(for: "number")
-    let constantStyle = theme.style(for: "constant.builtin")
-
-    var spans: [StyledSpan] = []
-    let chars = Array(line)
-    var index = 0
-
-    while index < chars.count {
-        let char = chars[index]
-
-        if char == "\"" {
-            var token = "\""
-            index += 1
-            while index < chars.count && chars[index] != "\"" {
-                if chars[index] == "\\" && index + 1 < chars.count {
-                    token.append(chars[index])
-                    token.append(chars[index + 1])
-                    index += 2
-                } else {
-                    token.append(chars[index])
-                    index += 1
-                }
-            }
-            if index < chars.count {
-                token.append("\"")
-                index += 1
-            }
-            var peek = index
-            while peek < chars.count && chars[peek] == " " { peek += 1 }
-            let isKey = peek < chars.count && chars[peek] == ":"
-            spans.append(StyledSpan(text: token, style: isKey ? keyStyle : stringStyle))
-        } else if char.isNumber
-            || (char == "-" && index + 1 < chars.count && chars[index + 1].isNumber)
-        {
-            var token = String(char)
-            index += 1
-            while index < chars.count
-                && (chars[index].isNumber || chars[index] == "." || chars[index] == "e"
-                    || chars[index] == "E" || chars[index] == "+" || chars[index] == "-")
-            {
-                token.append(chars[index])
-                index += 1
-            }
-            spans.append(StyledSpan(text: token, style: numberStyle))
-        } else if chars[index...].starts(with: "true".unicodeScalars.map(Character.init))
-            || chars[index...].starts(with: "false".unicodeScalars.map(Character.init))
-            || chars[index...].starts(with: "null".unicodeScalars.map(Character.init))
-        {
-            let keyword = chars[index...].prefix(while: { $0.isLetter })
-            let token = String(keyword)
-            spans.append(StyledSpan(text: token, style: constantStyle))
-            index += token.count
-        } else {
-            spans.append(StyledSpan(text: String(char), style: defaultStyle))
-            index += 1
-        }
-    }
-
-    return spans
-}
-
-private func fallbackHighlightPython(_ line: String, theme: Theme) -> [StyledSpan] {
-    let defaultStyle = theme.defaultStyle
-    let keywordStyle = theme.style(for: "keyword")
-    let typeStyle = theme.style(for: "type")
-    let commentStyle = theme.style(for: "comment")
-    let stringStyle = theme.style(for: "string")
-    let numberStyle = theme.style(for: "number")
-
-    var spans: [StyledSpan] = []
-    let chars = Array(line)
-    var index = 0
-    var current = ""
-
-    func flushCurrent() {
-        guard !current.isEmpty else { return }
-        let style: Style
-        if HighlightLexicon.pythonKeywords.contains(current) {
-            style = keywordStyle
-        } else if HighlightLexicon.pythonTypes.contains(current) {
-            style = typeStyle
-        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
-            let first = current.first, first.isNumber
-        {
-            style = numberStyle
-        } else {
-            style = defaultStyle
-        }
-        spans.append(StyledSpan(text: current, style: style))
-        current = ""
-    }
-
-    while index < chars.count {
-        let char = chars[index]
-
-        if char == "#" {
-            flushCurrent()
-            spans.append(StyledSpan(text: String(chars[index...]), style: commentStyle))
-            return spans
-        } else if char == "\"" || char == "'" {
-            flushCurrent()
-            let quote = char
-            var token = String(char)
-            index += 1
-            while index < chars.count && chars[index] != quote {
-                if chars[index] == "\\" && index + 1 < chars.count {
-                    token.append(chars[index])
-                    token.append(chars[index + 1])
-                    index += 2
-                } else {
-                    token.append(chars[index])
-                    index += 1
-                }
-            }
-            if index < chars.count {
-                token.append(chars[index])
-                index += 1
-            }
-            spans.append(StyledSpan(text: token, style: stringStyle))
-        } else if char.isLetter || char == "_" {
-            current.append(char)
-            index += 1
-        } else if char.isNumber && current.isEmpty {
-            var token = String(char)
-            index += 1
-            while index < chars.count
-                && (chars[index].isNumber || chars[index] == "." || chars[index] == "_")
-            {
-                token.append(chars[index])
-                index += 1
-            }
-            spans.append(StyledSpan(text: token, style: numberStyle))
-        } else if char.isWhitespace || "(){}[],.+-*/=<>!&|;:?".contains(char) {
-            flushCurrent()
-            spans.append(StyledSpan(text: String(char), style: defaultStyle))
-            index += 1
-        } else {
-            flushCurrent()
-            spans.append(StyledSpan(text: String(char), style: defaultStyle))
-            index += 1
-        }
-    }
-
-    flushCurrent()
-    return spans
-}
-
-private func fallbackHighlightJavaScript(_ line: String, theme: Theme) -> [StyledSpan] {
-    let defaultStyle = theme.defaultStyle
-    let keywordStyle = theme.style(for: "keyword")
-    let typeStyle = theme.style(for: "type")
-    let commentStyle = theme.style(for: "comment")
-    let stringStyle = theme.style(for: "string")
-    let numberStyle = theme.style(for: "number")
-
-    var spans: [StyledSpan] = []
-    let chars = Array(line)
-    var index = 0
-    var current = ""
-
-    func flushCurrent() {
-        guard !current.isEmpty else { return }
-        let style: Style
-        if HighlightLexicon.javaScriptKeywords.contains(current) {
-            style = keywordStyle
-        } else if HighlightLexicon.javaScriptTypes.contains(current) {
-            style = typeStyle
-        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
-            let first = current.first, first.isNumber
-        {
-            style = numberStyle
-        } else {
-            style = defaultStyle
-        }
-        spans.append(StyledSpan(text: current, style: style))
-        current = ""
-    }
-
-    while index < chars.count {
-        let char = chars[index]
-
-        if char == "/" && index + 1 < chars.count && chars[index + 1] == "/" {
-            flushCurrent()
-            spans.append(StyledSpan(text: String(chars[index...]), style: commentStyle))
-            return spans
-        } else if char == "/" && index + 1 < chars.count && chars[index + 1] == "*" {
-            flushCurrent()
-            spans.append(StyledSpan(text: String(chars[index...]), style: commentStyle))
-            return spans
-        } else if char == "\"" || char == "'" || char == "`" {
-            flushCurrent()
-            let quote = char
-            var token = String(char)
-            index += 1
-            while index < chars.count && chars[index] != quote {
-                if chars[index] == "\\" && index + 1 < chars.count {
-                    token.append(chars[index])
-                    token.append(chars[index + 1])
-                    index += 2
-                } else {
-                    token.append(chars[index])
-                    index += 1
-                }
-            }
-            if index < chars.count {
-                token.append(chars[index])
-                index += 1
-            }
-            spans.append(StyledSpan(text: token, style: stringStyle))
-        } else if char.isLetter || char == "_" || char == "$" {
-            current.append(char)
-            index += 1
-        } else if char.isNumber && current.isEmpty {
-            var token = String(char)
-            index += 1
-            while index < chars.count
-                && (chars[index].isNumber || chars[index] == "." || chars[index] == "_")
-            {
-                token.append(chars[index])
-                index += 1
-            }
-            spans.append(StyledSpan(text: token, style: numberStyle))
-        } else if char.isWhitespace || "(){}[],.+-*/=<>!&|;:?".contains(char) {
-            flushCurrent()
-            spans.append(StyledSpan(text: String(char), style: defaultStyle))
-            index += 1
-        } else {
-            flushCurrent()
-            spans.append(StyledSpan(text: String(char), style: defaultStyle))
-            index += 1
-        }
-    }
-
-    flushCurrent()
-    return spans
-}
-
-private func fallbackHighlightGeneric(_ line: String, theme: Theme) -> [StyledSpan] {
-    let defaultStyle = theme.defaultStyle
-    let commentStyle = theme.style(for: "comment")
-    let stringStyle = theme.style(for: "string")
-    let numberStyle = theme.style(for: "number")
-
-    var spans: [StyledSpan] = []
-    let chars = Array(line)
-    var index = 0
-
-    while index < chars.count {
-        let char = chars[index]
-
-        if char == "/" && index + 1 < chars.count && chars[index + 1] == "/" {
-            spans.append(StyledSpan(text: String(chars[index...]), style: commentStyle))
-            return spans
-        } else if char == "#" {
-            spans.append(StyledSpan(text: String(chars[index...]), style: commentStyle))
-            return spans
-        } else if char == "\"" || char == "'" {
-            let quote = char
-            var token = String(char)
-            index += 1
-            while index < chars.count && chars[index] != quote {
-                if chars[index] == "\\" && index + 1 < chars.count {
-                    token.append(chars[index])
-                    token.append(chars[index + 1])
-                    index += 2
-                } else {
-                    token.append(chars[index])
-                    index += 1
-                }
-            }
-            if index < chars.count {
-                token.append(chars[index])
-                index += 1
-            }
-            spans.append(StyledSpan(text: token, style: stringStyle))
-        } else if char.isNumber {
-            var token = String(char)
-            index += 1
-            while index < chars.count && (chars[index].isNumber || chars[index] == ".") {
-                token.append(chars[index])
-                index += 1
-            }
-            spans.append(StyledSpan(text: token, style: numberStyle))
-        } else {
-            spans.append(StyledSpan(text: String(char), style: defaultStyle))
-            index += 1
-        }
-    }
-
-    return spans
-}
-
-private func fallbackHighlightSwift(_ line: String, theme: Theme) -> [StyledSpan] {
-    let defaultStyle = theme.defaultStyle
-    let keywordStyle = theme.style(for: "keyword")
-    let typeStyle = theme.style(for: "type")
-    let commentStyle = theme.style(for: "comment")
-    let stringStyle = theme.style(for: "string")
-    let numberStyle = theme.style(for: "number")
-    let attrStyle = theme.style(for: "attribute")
-
-    var spans: [StyledSpan] = []
-    var current = ""
-    let chars = Array(line)
-    var index = 0
-
-    func flushCurrent() {
-        guard !current.isEmpty else { return }
-        let style: Style
-        if current.hasPrefix("@") && HighlightLexicon.swiftKeywords.contains(current) {
-            style = attrStyle
-        } else if HighlightLexicon.swiftKeywords.contains(current) {
-            style = keywordStyle
-        } else if HighlightLexicon.swiftTypes.contains(current) {
-            style = typeStyle
-        } else if current.allSatisfy({ $0.isNumber || $0 == "." || $0 == "_" }),
-            let first = current.first, first.isNumber
-        {
-            style = numberStyle
-        } else {
-            style = defaultStyle
-        }
-        spans.append(StyledSpan(text: current, style: style))
-        current = ""
-    }
-
-    while index < chars.count {
-        let char = chars[index]
-
-        if char == "/" && index + 1 < chars.count && chars[index + 1] == "/" {
-            flushCurrent()
-            spans.append(StyledSpan(text: String(chars[index...]), style: commentStyle))
-            return spans
-        } else if char == "/" && index + 1 < chars.count && chars[index + 1] == "*" {
-            flushCurrent()
-            var token = "/*"
-            index += 2
-            while index + 1 < chars.count {
-                if chars[index] == "*" && chars[index + 1] == "/" {
-                    token.append("*/")
-                    index += 2
-                    break
-                }
-                token.append(chars[index])
-                index += 1
-            }
-            if index < chars.count && !token.hasSuffix("*/") {
-                token.append(contentsOf: chars[index...])
-                index = chars.count
-            }
-            spans.append(StyledSpan(text: token, style: commentStyle))
-        } else if char == "@" {
-            flushCurrent()
-            current = "@"
-            index += 1
-            while index < chars.count
-                && (chars[index].isLetter || chars[index].isNumber || chars[index] == "_")
-            {
-                current.append(chars[index])
-                index += 1
-            }
-            flushCurrent()
-        } else if char.isWhitespace || "(){}[],.+-*/=<>!&|;:?".contains(char) {
-            flushCurrent()
-            spans.append(StyledSpan(text: String(char), style: defaultStyle))
-            index += 1
-        } else if char == "\"" {
-            flushCurrent()
-            var token = "\""
-            index += 1
-            while index < chars.count && chars[index] != "\"" {
-                if chars[index] == "\\" && index + 1 < chars.count {
-                    token.append(chars[index])
-                    token.append(chars[index + 1])
-                    index += 2
-                } else {
-                    token.append(chars[index])
-                    index += 1
-                }
-            }
-            if index < chars.count {
-                token.append("\"")
-                index += 1
-            }
-            spans.append(StyledSpan(text: token, style: stringStyle))
-        } else {
-            current.append(char)
-            index += 1
-        }
-    }
-
-    flushCurrent()
-    return spans
 }
