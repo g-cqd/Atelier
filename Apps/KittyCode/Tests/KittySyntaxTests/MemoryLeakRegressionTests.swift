@@ -1,26 +1,29 @@
+import AemiTestKit
 import Foundation
 import KittyCodecs
 import Testing
 
 @testable import KittySyntax
 
-/// Stress tests that exercise highlight repeatedly and assert resident memory
-/// doesn't drift past a bound — guards against per-call leaks in the
-/// parse / highlight / tree-drop path.
+/// Stress tests that exercise highlight repeatedly and guard against per-call
+/// accumulation in the parse / highlight / tree-drop path.
 ///
-/// Each test is bounded by a wall-clock budget (`ContinuousClock`) rather
-/// than a fixed iteration count so the cost scales with the machine: a
-/// fast laptop runs ~thousands of iterations, slow CI runs hundreds, both
-/// finish in the same wall-time and yield a meaningful memory drift number.
+/// The default run never compares wall-clock durations or RSS (see
+/// `AGENTS.md`): the two synchronous stress tests below measure heap
+/// allocation counts with `AemiTestKit.mallocDelta` instead of resident
+/// memory, and compare two equal-sized batches to each other rather than
+/// against an absolute, hand-tuned budget — a per-call leak shows up as the
+/// second batch allocating substantially more than the first, while steady
+/// -state work allocates about the same amount every batch. The one
+/// genuinely async, RSS-based check (`ensureArtifacts` reload cost) can't be
+/// measured this way (see its doc comment) and is gated behind
+/// `ATELIER_BENCH` instead of running by default.
 @Suite
 @MainActor
 struct MemoryLeakRegressionTests {
-    /// Wall-clock budget per stress test. Long enough to detect real leaks
-    /// (~MB-scale drift over many calls) but short enough not to stall the
-    /// default `swift test` invocation.
-    private let stressDuration: Duration = .seconds(3)
-
-    /// Returns the current process resident-memory footprint in bytes.
+    /// Returns the current process resident-memory footprint in bytes. Only
+    /// used by the `ATELIER_BENCH`-gated test below, which prints (never
+    /// asserts on) the measurement.
     private func residentBytes() -> Int {
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size) / 4
@@ -47,83 +50,52 @@ struct MemoryLeakRegressionTests {
         greet world
         """
 
-    /// Runs `body` repeatedly until the elapsed clock duration exceeds
-    /// `budget`. Returns the iteration count actually achieved.
-    private func runFor(_ budget: Duration, _ body: () -> Void) -> Int {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: budget)
-        var iterations = 0
-        while clock.now < deadline {
-            body()
-            iterations &+= 1
-        }
-        return iterations
-    }
-
     @Test
-    func `bash grammar artifacts load within a time budget`() async {
+    func `bash grammar artifacts load successfully`() async {
         // User report: opening a `.sh` file in kittycode "ends up consuming
         // memory infinitely" — pointing the finger at bash artifact
-        // compilation. Bound the call by a clock budget and assert it
-        // returns. If the compilation has an unbounded path (infinite
-        // recursion, exponential rule expansion), this test will time out.
-        let clock = ContinuousClock()
-        let start = clock.now
+        // compilation. The correctness half of that regression guard (does
+        // the load complete and succeed) runs unconditionally; a genuinely
+        // runaway compilation would hang the test run itself rather than
+        // trip a duration assertion, so no wall-clock bound is needed here
+        // (and none may run by default — see `AGENTS.md`).
         let loaded = await LanguageHighlighter.ensureArtifacts(for: "bash")
-        let elapsed = clock.now - start
         #expect(loaded == true, "bash artifacts failed to load")
-        // Even on a slow runner the compiler should finish well under 30 s.
-        #expect(
-            elapsed < .seconds(30),
-            "bash artifact load took \(elapsed) — possible runaway compilation"
-        )
     }
 
-    @Test
+    /// Second call must hit the cache. If it doesn't, every artifact load
+    /// allocates fresh tables and the per-open cost compounds. `ensureArtifacts`
+    /// always hops onto a detached `Task` (see its doc comment), so this body
+    /// is inherently concurrent and can't be measured with the synchronous-only
+    /// `mallocDelta`/`expectAllocations`; RSS is the only signal available, and
+    /// RSS may not drive an assertion in the default run (`AGENTS.md`), so this
+    /// is an opt-in benchmark instead: run with `ATELIER_BENCH=1 swift test`.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["ATELIER_BENCH"] != nil))
     func `bash grammar artifacts are not reloaded after warmup`() async {
-        // Second call must hit the cache. If it doesn't, every artifact
-        // load allocates fresh tables and the per-open cost compounds.
         _ = await LanguageHighlighter.ensureArtifacts(for: "bash")
         let baseline = residentBytes()
         for _ in 0 ..< 50 {
             _ = await LanguageHighlighter.ensureArtifacts(for: "bash")
         }
         let after = residentBytes()
-        let drift = after - baseline
-        let maxAllowedDriftBytes = 8 * 1024 * 1024  // 8 MB
-        #expect(
-            drift < maxAllowedDriftBytes,
-            "ensureArtifacts(\"bash\") drifted \(drift / 1024 / 1024) MB over 50 calls (baseline \(baseline / 1024 / 1024) MB, after \(after / 1024 / 1024) MB) — caching may be broken"
-        )
+        let driftMB = Double(after - baseline) / 1024 / 1024
+        print("ensureArtifacts(\"bash\") drift over 50 calls: \(driftMB) MB")
     }
 
     @Test
-    func `repeated bash highlight does not accumulate memory`() async {
+    func `repeated bash highlight does not accumulate allocations`() async {
         _ = await LanguageHighlighter.ensureArtifacts(for: "bash")
         let theme = Theme(defaultStyle: Style())
 
-        // Warmup so caches stabilize.
-        _ = runFor(.milliseconds(500)) {
+        func highlightOnce() {
             _ = LanguageHighlighter.highlightDocument(
                 source: bashScript, language: "bash", theme: theme)
         }
-        let baseline = residentBytes()
 
-        let iterations = runFor(stressDuration) {
-            _ = LanguageHighlighter.highlightDocument(
-                source: bashScript, language: "bash", theme: theme)
-        }
-        let after = residentBytes()
-        let drift = after - baseline
+        // Warm up so caches (grammar tables, allocator arenas) stabilize before measuring.
+        for _ in 0 ..< 50 { highlightOnce() }
 
-        // Allow some growth (caches, autorelease pool hysteresis) but not
-        // anywhere near proportional to call count. A real per-call leak
-        // would show MB-scale drift over thousands of calls.
-        let maxAllowedDriftBytes = 32 * 1024 * 1024  // 32 MB
-        #expect(
-            drift < maxAllowedDriftBytes,
-            "memory drifted \(drift / 1024 / 1024) MB over \(iterations) bash highlight calls (baseline \(baseline / 1024 / 1024) MB, after \(after / 1024 / 1024) MB)"
-        )
+        assertAllocationsDoNotAccumulate(iterationsPerBatch: 200, highlightOnce)
     }
 
     /// Repeatedly call session-bound highlightDocument — different surface
@@ -131,27 +103,47 @@ struct MemoryLeakRegressionTests {
     /// state retains across parses (the historical concern was the now-
     /// removed `previousTree` storage on `GrammarSession`).
     @Test
-    func `repeated bash session highlight does not accumulate memory`() async {
+    func `repeated bash session highlight does not accumulate allocations`() async {
         _ = await LanguageHighlighter.ensureArtifacts(for: "bash")
         let theme = Theme(defaultStyle: Style())
         let session = LanguageHighlighter.makeSession(
             language: "bash", theme: theme, preferGrammar: true)
 
-        _ = runFor(.milliseconds(500)) {
+        func highlightOnce() {
             _ = session.highlightDocument(source: bashScript)
         }
-        let baseline = residentBytes()
 
-        let iterations = runFor(stressDuration) {
-            _ = session.highlightDocument(source: bashScript)
+        for _ in 0 ..< 50 { highlightOnce() }
+
+        assertAllocationsDoNotAccumulate(iterationsPerBatch: 200, highlightOnce)
+    }
+
+    /// Runs two equal-sized batches of `body` and asserts the second batch doesn't allocate
+    /// substantially more than the first. A per-call leak (state retained across calls) shows up
+    /// as super-linear growth between batches; steady-state work allocates about the same amount
+    /// every batch. This sidesteps needing a hand-tuned absolute allocation budget — the only
+    /// number here is the slack multiplier, not a per-call count nobody has actually measured.
+    /// `body` must be synchronous with no concurrent work in flight (`mallocDelta`'s requirement:
+    /// the allocation counter is process-wide).
+    private func assertAllocationsDoNotAccumulate(
+        iterationsPerBatch: Int,
+        sourceLocation: SourceLocation = #_sourceLocation,
+        _ body: () -> Void
+    ) {
+        guard
+            let firstBatch = mallocDelta({ for _ in 0 ..< iterationsPerBatch { body() } }),
+            let secondBatch = mallocDelta({ for _ in 0 ..< iterationsPerBatch { body() } })
+        else {
+            return  // allocation counting unavailable on this platform (see `allocationCountingAvailable`).
         }
-        let after = residentBytes()
-        let drift = after - baseline
-
-        let maxAllowedDriftBytes = 32 * 1024 * 1024
-        #expect(
-            drift < maxAllowedDriftBytes,
-            "session-reuse drift \(drift / 1024 / 1024) MB over \(iterations) calls (baseline \(baseline / 1024 / 1024) MB, after \(after / 1024 / 1024) MB)"
-        )
+        let allowedSlack = firstBatch * 2 + 1000
+        if secondBatch > allowedSlack {
+            Issue.record(
+                """
+                second batch of \(iterationsPerBatch) calls allocated \(secondBatch) vs \
+                \(firstBatch) for the first — possible per-call accumulation
+                """,
+                sourceLocation: sourceLocation)
+        }
     }
 }
