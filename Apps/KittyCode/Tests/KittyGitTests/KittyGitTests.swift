@@ -1,4 +1,5 @@
 import AemiRuntime
+import AtelierGit
 import AtelierProcess
 import AtelierTestSupport
 import Foundation
@@ -7,48 +8,53 @@ import Testing
 @testable import KittyFileTree
 @testable import KittyGit
 
-/// A runner never invoked by the pure-parsing tests below; standing in for a real `ProcessRunner`
-/// so `GitStatusProvider`'s init can be satisfied without spawning anything.
-private let unusedRunner = FakeProcessRunner { _ in .failure(1, error: "not expected to run") }
+/// Joins NUL-terminated `status --porcelain=v2 -z` records the way git emits them.
+private func porcelain(_ records: [String]) -> ProcessOutput {
+    ProcessOutput(
+        terminationStatus: 0, standardOutput: Data((records.joined(separator: "\u{0}") + "\u{0}").utf8),
+        standardError: Data())
+}
 
 @Suite
 struct KittyGitTests {
     @Test
-    func `Parse porcelain output produces correct statuses`() {
-        let provider = GitStatusProvider(rootPath: "/project", runner: unusedRunner)
-        let output = """
-             M src/main.swift
-            A  src/new.swift
-            ?? src/untracked.txt
-            D  src/deleted.swift
-            R  src/old.swift -> src/renamed.swift
-            UU src/conflict.swift
-            """
-        let (statuses, summary) = provider.parseGitStatus(output, rootPath: "/project")
-
-        #expect(statuses["/project/src/main.swift"] == .modified)
-        #expect(statuses["/project/src/new.swift"] == .added)
-        #expect(statuses["/project/src/untracked.txt"] == .untracked)
-        #expect(statuses["/project/src/deleted.swift"] == .deleted)
-        #expect(statuses["/project/src/renamed.swift"] == .renamed)
-        #expect(statuses["/project/src/conflict.swift"] == .conflicted)
-
-        #expect(summary.modified == 2)
-        #expect(summary.added == 1)
-        #expect(summary.untracked == 1)
-        #expect(summary.deleted == 1)
-        #expect(summary.conflicted == 1)
+    func `a refresh reads the branch, every status and the summary from one porcelain v2 status`() async {
+        let runner = FakeProcessRunner { spec in
+            #expect(spec.arguments.contains("--porcelain=v2"))
+            return porcelain([
+                "# branch.head main", "1 .M N... 100644 100644 100644 aaaa bbbb Sources/a.swift",
+                "1 A. N... 000000 100644 100644 0000 bbbb Sources/deep/new.swift", "? notes.txt",
+                "u UU N... 100644 100644 100644 100644 aaaa bbbb cccc c.swift"
+            ])
+        }
+        let provider = GitStatusProvider(rootPath: "/project", runner: runner)
+        await provider.refresh()
+        #expect(provider.branchName == "main")
+        #expect(provider.status(for: "/project/Sources/a.swift") == .modified)
+        #expect(provider.status(for: "/project/Sources/deep/new.swift") == .added)
+        #expect(provider.status(for: "/project/Sources/deep") == .added)
+        #expect(provider.status(for: "/project/Sources") == .modified)
+        #expect(provider.status(for: "/project/notes.txt") == .untracked)
+        #expect(provider.status(for: "/project/c.swift") == .conflicted)
+        #expect(provider.status(for: "/project/other.swift") == nil)
+        #expect(provider.summary == FileStatusSummary(modified: 1, added: 1, untracked: 1, deleted: 0, conflicted: 1))
+        #expect(runner.specs.count == 1)
+        guard case .exactly(let environment) = runner.specs[0].environment else {
+            Issue.record("git must run under the strict environment")
+            return
+        }
+        #expect(environment["GIT_CONFIG_NOSYSTEM"] == "1")
+        #expect(runner.specs[0].timeout == GitStatusProvider.gitTimeout)
     }
 
     @Test
-    func `Directory status propagates from children`() {
-        let provider = GitStatusProvider(rootPath: "/project", runner: unusedRunner)
-        let output = " M src/lib/file.swift\n"
-        let (statuses, _) = provider.parseGitStatus(output, rootPath: "/project")
-
-        #expect(statuses["/project/src/lib/file.swift"] == .modified)
-        #expect(statuses["/project/src/lib"] == .modified)
-        #expect(statuses["/project/src"] == .modified)
+    func `a failing git leaves everything clean`() async {
+        let runner = FakeProcessRunner(always: .failure(128, error: "fatal: not a git repository"))
+        let provider = GitStatusProvider(rootPath: "/project", runner: runner)
+        await provider.refresh()
+        #expect(provider.branchName == nil)
+        #expect(provider.summary.isEmpty)
+        #expect(provider.status(for: "/project/a.swift") == nil)
     }
 
     @Test
@@ -57,24 +63,8 @@ struct KittyGitTests {
         #expect(FileStatus.added.indicator == "A")
         #expect(FileStatus.untracked.indicator == "?")
         #expect(FileStatus.deleted.indicator == "D")
-        #expect(FileStatus.renamed.indicator == "R")
         #expect(FileStatus.conflicted.indicator == "!")
-        #expect(FileStatus.ignored.indicator == "I")
         #expect(FileStatus.clean.indicator == "")
-    }
-
-    @Test
-    func `FileStatusSummary isEmpty`() {
-        #expect(FileStatusSummary().isEmpty)
-        #expect(!FileStatusSummary(modified: 1).isEmpty)
-    }
-
-    @Test
-    func `Empty porcelain output produces empty statuses`() {
-        let provider = GitStatusProvider(rootPath: "/project", runner: unusedRunner)
-        let (statuses, summary) = provider.parseGitStatus("", rootPath: "/project")
-        #expect(statuses.isEmpty)
-        #expect(summary.isEmpty)
     }
 
     @Test
@@ -85,7 +75,6 @@ struct KittyGitTests {
         #expect(FileStatus.untracked.statusColor == .untracked)
         #expect(FileStatus.deleted.statusColor == .deleted)
         #expect(FileStatus.conflicted.statusColor == .conflicted)
-        #expect(FileStatus.clean.statusColor == .clean)
         #expect(FileStatus.ignored.statusColor == .clean)
     }
 
@@ -120,65 +109,54 @@ struct KittyGitTests {
     }
 
     @Test
-    func `Line decorations distinguish modified and added lines`() {
-        let provider = GitStatusProvider(rootPath: "/project", runner: unusedRunner)
-        let decorations = provider.makeLineDecorations(
-            baseLines: ["alpha", "beta", "gamma"],
-            currentLines: ["alpha", "delta", "epsilon", "gamma"],
-            addedColor: .added
-        )
-
-        #expect(decorations.markers == [1: .modified, 2: .added])
+    func `line decorations come from the shared diff: modified, added, and deletions anchored below`() {
+        #expect(
+            GitStatusProvider.lineDecorations(
+                base: ["alpha", "beta", "gamma"], current: ["alpha", "delta", "epsilon", "gamma"], addedColor: .added
+            )
+            .markers == [1: .modified, 2: .added])
+        #expect(
+            GitStatusProvider.lineDecorations(
+                base: ["alpha", "beta", "gamma"], current: ["alpha", "gamma"], addedColor: .added
+            )
+            .markers == [1: .deleted])
+        #expect(
+            GitStatusProvider.lineDecorations(
+                base: ["alpha", "beta", "gamma"], current: ["alpha", "beta"], addedColor: .added
+            )
+            .markers == [1: .deleted])
+        #expect(GitStatusProvider.lineDecorations(base: [], current: [], addedColor: .added).isEmpty)
+        #expect(GitStatusProvider.lineDecorations(base: ["a"], current: ["a"], addedColor: .added).isEmpty)
     }
 
     @Test
-    func `Line decorations anchor deletions to the next surviving line`() {
-        let provider = GitStatusProvider(rootPath: "/project", runner: unusedRunner)
-        let decorations = provider.makeLineDecorations(
-            baseLines: ["alpha", "beta", "gamma"],
-            currentLines: ["alpha", "gamma"],
-            addedColor: .added
-        )
-
-        #expect(decorations.markers == [1: .deleted])
+    func `an untracked file is marked on every line and a committed file's base comes from git show`() async {
+        let runner = FakeProcessRunner { spec in
+            if spec.arguments.contains("--porcelain=v2") {
+                return porcelain(["? loose.txt", "1 .M N... 100644 100644 100644 aaaa bbbb tracked.txt"])
+            }
+            #expect(
+                spec.arguments == ["show", "HEAD:tracked.txt"]
+                    || spec.arguments.suffix(2) == ["show", "HEAD:tracked.txt"])
+            return .success("one\ntwo\n")
+        }
+        let provider = GitStatusProvider(rootPath: "/project", runner: runner)
+        await provider.refresh()
+        let untracked = await provider.lineDecorations(for: "/project/loose.txt", lines: ["x", "y"])
+        #expect(untracked.markers == [0: .untracked, 1: .untracked])
+        let tracked = await provider.lineDecorations(for: "/project/tracked.txt", lines: ["one", "TWO", ""])
+        #expect(tracked.markers == [1: .modified])
+        // The base is cached: a second request spawns no further git.
+        let specs = runner.specs.count
+        _ = await provider.lineDecorations(for: "/project/tracked.txt", lines: ["one", "two", ""])
+        #expect(runner.specs.count == specs)
     }
 
     @Test
-    func `Added line decorations mark every visible line`() {
-        let decorations = GitStatusProvider.addedLineDecorations(
-            for: ["alpha", "beta", ""],
-            color: .untracked
-        )
-
-        #expect(decorations.markers == [0: .untracked, 1: .untracked, 2: .untracked])
-    }
-
-    @Test
-    func `Added line decorations for empty input returns empty`() {
-        let decorations = GitStatusProvider.addedLineDecorations(for: [], color: .added)
-        #expect(decorations.isEmpty)
-    }
-
-    @Test
-    func `Line decorations for empty base and current returns empty`() {
-        let provider = GitStatusProvider(rootPath: "/project", runner: unusedRunner)
-        let decorations = provider.makeLineDecorations(
-            baseLines: [],
-            currentLines: [],
-            addedColor: .added
-        )
-        #expect(decorations.isEmpty)
-    }
-
-    @Test
-    func `Line decorations handle deletion at end of file`() {
-        let provider = GitStatusProvider(rootPath: "/project", runner: unusedRunner)
-        let decorations = provider.makeLineDecorations(
-            baseLines: ["a", "b"],
-            currentLines: ["a"],
-            addedColor: .added
-        )
-        // Deletion anchored to last surviving line
-        #expect(decorations.markers[0] == .deleted)
+    func `Added line decorations mark every visible line and empty input yields none`() {
+        #expect(
+            GitStatusProvider.addedLineDecorations(for: ["alpha", "beta", ""], color: .untracked).markers
+                == [0: .untracked, 1: .untracked, 2: .untracked])
+        #expect(GitStatusProvider.addedLineDecorations(for: [], color: .added).isEmpty)
     }
 }
