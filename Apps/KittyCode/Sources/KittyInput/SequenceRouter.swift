@@ -1,5 +1,6 @@
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable cyclomatic_complexity function_body_length type_body_length
+import AemiKernel
 import Foundation
 import KittyCodecs
 
@@ -168,7 +169,7 @@ public struct SequenceRouter: Sendable {
             case .csiParam:
                 buffer.append(byte)
 
-                if Self.isDigit(byte) || byte == 0x3a || byte == 0x3b {
+                if ASCII.isDigit(byte) || byte == 0x3a || byte == 0x3b {
                     break
                 }
 
@@ -488,10 +489,6 @@ public struct SequenceRouter: Sendable {
 
         let eventType = KeyEventType(rawValue: UInt8(clamping: eventTypeValue)) ?? .press
         return (firstParam, modifier, eventType)
-    }
-
-    private static func isDigit(_ byte: UInt8) -> Bool {
-        byte >= 0x30 && byte <= 0x39
     }
 
     private static func appendDigit<T: FixedWidthInteger>(

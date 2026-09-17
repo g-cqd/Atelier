@@ -46,4 +46,17 @@ struct LineChangeMarkersTests {
         let markers = LineChangeMarkers(edits: edits, newLineCount: 4)
         #expect(markers.byLine == [1: .modified, 2: .added, 3: .deleted])
     }
+
+    @Test
+    func `modified pairs are the removed and inserted lines of one run, matched in order`() {
+        let edits: [DiffEdit] = [
+            .equal(old: 0, new: 0), .delete(old: 1), .delete(old: 2), .insert(new: 1), .equal(old: 3, new: 2),
+            .insert(new: 3), .delete(old: 4), .insert(new: 4), .insert(new: 5)
+        ]
+        let pairs = LineChangeMarkers.modifiedPairs(edits: edits)
+        #expect(pairs.map { [$0.old, $0.new] } == [[1, 1], [4, 3]])
+        let marks = LineChangeMarkers(edits: edits, newLineCount: 6).byLine
+        #expect(pairs.allSatisfy { marks[$0.new] == .modified })
+        #expect(LineChangeMarkers.modifiedPairs(edits: [.equal(old: 0, new: 0)]).isEmpty)
+    }
 }

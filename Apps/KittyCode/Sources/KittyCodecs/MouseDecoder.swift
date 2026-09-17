@@ -1,3 +1,5 @@
+import AemiKernel
+
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable function_body_length
 /// Decodes SGR mouse events (mode 1006 and 1016).
@@ -66,7 +68,7 @@ public struct MouseDecoder: Sendable {
                 return .invalid(invalid)
 
             case .lt:
-                if isDigit(byte) {
+                if ASCII.isDigit(byte) {
                     state = .button
                     buttonBits = UInt16(byte - 0x30)
                     return .pending
@@ -76,7 +78,7 @@ public struct MouseDecoder: Sendable {
                 return .invalid(invalid)
 
             case .button:
-                if isDigit(byte) {
+                if ASCII.isDigit(byte) {
                     guard Self.appendDigit(byte - 0x30, to: &buttonBits, maximum: UInt16.max) else {
                         return invalidResult()
                     }
@@ -91,7 +93,7 @@ public struct MouseDecoder: Sendable {
                 return .invalid(invalid)
 
             case .coordX:
-                if isDigit(byte) {
+                if ASCII.isDigit(byte) {
                     guard Self.appendDigit(byte - 0x30, to: &coordX, maximum: 65_535) else {
                         return invalidResult()
                     }
@@ -106,7 +108,7 @@ public struct MouseDecoder: Sendable {
                 return .invalid(invalid)
 
             case .coordY:
-                if isDigit(byte) {
+                if ASCII.isDigit(byte) {
                     guard Self.appendDigit(byte - 0x30, to: &coordY, maximum: 65_535) else {
                         return invalidResult()
                     }
@@ -174,10 +176,6 @@ public struct MouseDecoder: Sendable {
         buttonBits = 0
         coordX = 0
         coordY = 0
-    }
-
-    private func isDigit(_ byte: UInt8) -> Bool {
-        byte >= 0x30 && byte <= 0x39
     }
 
     private mutating func invalidResult() -> DecoderResult<MouseEvent> {
