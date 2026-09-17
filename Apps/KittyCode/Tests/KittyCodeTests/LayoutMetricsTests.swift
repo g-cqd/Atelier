@@ -86,3 +86,46 @@ struct LayoutMetricsTests {
         #expect(layout.sidebarWidth == 20)
     }
 }
+
+/// With pixel chrome the separator is a placement under the editor's first column, not a column of its own.
+@Suite
+@MainActor
+struct PixelChromeLayoutTests {
+    @Test
+    func `pixel chrome gives the separator column back to the editor`() {
+        let state = EditorState(rootPath: ".", config: KittyConfig())
+        state.treePanelWidth = 20
+        state.sidebarCollapsed = false
+
+        let cellChrome = LayoutMetrics(state: state, columns: 80, rows: 24)
+        state.usesPixelChrome = true
+        let pixelChrome = LayoutMetrics(state: state, columns: 80, rows: 24)
+
+        #expect(cellChrome.editorStart == pixelChrome.editorStart + 1)
+        #expect(pixelChrome.editorWidth == cellChrome.editorWidth + 1)
+        #expect(LayoutMetrics.editorStart(state: state, columns: 80) == pixelChrome.editorStart)
+    }
+
+    @Test
+    func `the shell draws the separator as a pixel line instead of glyphs when the pipeline has chrome`() {
+        let sut = EditorTestHarness.make(fileContent: ["a"], columns: 60, rows: 10, tabRibbon: .top)
+        sut.state.treePanelWidth = 20
+        sut.state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "a", language: nil)
+        sut.state.restoreStateFromActiveBuffer()
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
+        #expect(sut.pipeline.chromeLines.isEmpty)
+        #expect(sut.pipeline.buffer[1, 20].character == "\u{2502}")
+
+        sut.pipeline.chrome = PixelChrome(cell: .init(width: 8, height: 16))
+        sut.pipeline.beginFrame()
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
+        let separator = ColorRGB(sut.state.colorScheme.separator.fg)
+        #expect(
+            sut.pipeline.chromeLines == [
+                ChromeLine(axis: .vertical, row: 1, column: 20, length: 8, color: separator!),
+                ChromeLine(axis: .horizontal, row: 1, column: 20, length: 40, color: separator!)
+            ])
+        #expect(sut.pipeline.buffer[1, 20].character != "\u{2502}")
+        #expect(sut.state.usesPixelChrome)
+    }
+}

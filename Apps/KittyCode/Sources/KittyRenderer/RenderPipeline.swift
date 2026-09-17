@@ -73,6 +73,12 @@ public final class RenderPipeline {
     /// cells outside any dirty rect.
     public private(set) var dirtyRegions = DirtyRegions()
 
+    /// The pixel chrome layer, present when the terminal can draw under its cells; the shell sets
+    /// ``chromeLines`` each frame and ``flush()`` places them after the cell diff.
+    public var chrome: PixelChrome?
+    /// The lines the shell wants under this frame's cells.
+    public var chromeLines: [ChromeLine] = []
+
     /// Creates a pipeline backed by the given terminal connection and initial viewport dimensions.
     ///
     /// - Parameters:
@@ -200,6 +206,8 @@ public final class RenderPipeline {
             }
 
             scrollHint = nil
+            // The terminal scrolled the placements along with the cells; put them back.
+            chrome?.invalidate()
         }
 
         // Render diff directly into our persistent buffer
@@ -208,6 +216,8 @@ public final class RenderPipeline {
             KittySequences.appendHideCursor(to: &outputBuffer)
             DiffRenderer.render(front: front, back: back, into: &outputBuffer)
         }
+
+        chrome?.render(chromeLines, into: &outputBuffer)
 
         if let r = cursorRow, let c = cursorCol {
             KittySequences.appendMoveCursor(row: r + 1, col: c + 1, to: &outputBuffer)
@@ -247,6 +257,8 @@ public final class RenderPipeline {
         KittySequences.appendBeginSyncUpdate(to: &outputBuffer)
         KittySequences.appendHideCursor(to: &outputBuffer)
         DiffRenderer.renderFull(back, into: &outputBuffer)
+        chrome?.invalidate()
+        chrome?.render(chromeLines, into: &outputBuffer)
 
         if let r = cursorRow, let c = cursorCol {
             KittySequences.appendMoveCursor(row: r + 1, col: c + 1, to: &outputBuffer)
@@ -270,5 +282,6 @@ public final class RenderPipeline {
     public func resize(columns: Int, rows: Int) {
         front.resize(columns: columns, rows: rows)
         back.resize(columns: columns, rows: rows)
+        chrome?.reset()
     }
 }
