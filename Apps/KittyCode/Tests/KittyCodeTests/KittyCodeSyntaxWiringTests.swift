@@ -70,15 +70,14 @@ struct KittyCodeSyntaxWiringTests {
 
     @Test
     @MainActor
-    func `EditorState patches only the affected fallback highlight range`() throws {
+    func `EditorState re-scans the visible window after an edit and leaves off-screen lines alone`() throws {
         let state = EditorState(rootPath: ".", config: KittyConfig())
         state.currentLanguage = "unknown_lang"
-        state.fileContent = ["hello", "world", "tail"]
-        state.highlightedLines = [
-            [StyledSpan(text: "stale-first", style: .default)],
-            [StyledSpan(text: "stale-second", style: .default)],
-            [StyledSpan(text: "tail-sentinel", style: .default)]
-        ]
+        var lines = ["hello", "world", "tail"]
+        lines.append(contentsOf: (3 ..< 200).map { "line \($0)" })
+        state.fileContent = lines
+        state.highlightedLines = lines.map { [StyledSpan(text: "stale " + $0, style: .default)] }
+        state.highlightedLines[150] = [StyledSpan(text: "off-screen-sentinel", style: .default)]
         state.cursorRow = 1
         state.cursorCol = 0
 
@@ -86,9 +85,12 @@ struct KittyCodeSyntaxWiringTests {
             TextOperations.deleteBackward(in: &state.textBuffer, at: &state.textCursor))
         state.textDidChange(mutation)
 
-        #expect(state.fileContent == ["helloworld", "tail"])
-        #expect(state.highlightedLines.count == 2)
+        #expect(state.fileContent.prefix(2) == ["helloworld", "tail"])
+        #expect(state.highlightedLines.count == 199)
         #expect(state.highlightedLines[0].map(\.text).joined() == "helloworld")
-        #expect(state.highlightedLines[1][0].text == "tail-sentinel")
+        // On screen: re-scanned from the buffer, so a comment or string opened by the edit restyles what follows.
+        #expect(state.highlightedLines[1].map(\.text).joined() == "tail")
+        // Off screen: untouched until the coalesced full pass.
+        #expect(state.highlightedLines[149][0].text == "off-screen-sentinel")
     }
 }
