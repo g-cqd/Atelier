@@ -20,7 +20,7 @@ struct ScrollRenderingContentTests {
         columns: Int = 40,
         rows: Int = 12
     ) -> (state: EditorState, pipeline: RenderPipeline) {
-        makeScrollRenderingContext(lineCount: lineCount, columns: columns, rows: rows)
+        EditorTestHarness.makeScrollRendering(lineCount: lineCount, columns: columns, rows: rows)
     }
 
     @Test

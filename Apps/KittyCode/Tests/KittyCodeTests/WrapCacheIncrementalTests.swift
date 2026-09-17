@@ -9,9 +9,9 @@ import Testing
 /// `TextOperations.deleteRange` and drives `textDidChange(_:)` with the
 /// resulting mutation so the wrap cache participates in the incremental
 /// patch. Takes the selection explicitly because the
-/// `makeKittyCodeNavigationContext` fixture doesn't construct an active
-/// buffer (`state.selection` forwards to `bufferManager.activeBuffer?.
-/// selection`, which is nil in that fixture).
+/// `EditorTestHarness.make` fixture doesn't construct an active buffer
+/// (`state.selection` forwards to `bufferManager.activeBuffer?.selection`,
+/// which is nil in that fixture).
 @MainActor
 private func deleteSelection(_ state: EditorState, _ selection: TextSelection) {
     let previous = state.activeBufferSnapshot()
@@ -32,7 +32,7 @@ private func deleteSelection(_ state: EditorState, _ selection: TextSelection) {
 struct WrapCacheIncrementalTests {
     private func makeSUT(lineCount: Int) -> (state: EditorState, pipeline: RenderPipeline) {
         let content = (0 ..< lineCount).map { "line \($0)" }
-        return makeKittyCodeNavigationContext(fileContent: content)
+        return EditorTestHarness.make(fileContent: content)
     }
 
     @Test
