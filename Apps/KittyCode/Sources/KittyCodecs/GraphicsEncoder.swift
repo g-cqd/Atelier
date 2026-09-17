@@ -70,6 +70,8 @@ public enum GraphicsEncoder: Sendable {
             if placement.zIndex != 0 { parts.append("z=\(placement.zIndex)") }
             if placement.xOffset > 0 { parts.append("X=\(placement.xOffset)") }
             if placement.yOffset > 0 { parts.append("Y=\(placement.yOffset)") }
+            if placement.columns > 0 { parts.append("c=\(placement.columns)") }
+            if placement.rows > 0 { parts.append("r=\(placement.rows)") }
             if placement.keepsCursor { parts.append("C=1") }
         }
         switch cmd.deletion {
