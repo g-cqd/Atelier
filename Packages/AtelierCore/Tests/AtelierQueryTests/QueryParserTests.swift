@@ -62,12 +62,12 @@ struct QueryParserTests {
 
     @Test
     func `Parse parenthesized match predicate`() throws {
-        let query = try QueryParser.parse("(#match? @comment \"TODO\")")
+        let query = try QueryParser.parse("(#match? @comment \"NOTE\")")
         #expect(query.patterns.count == 1)
 
         let (capture, pattern) = try requireMatchPredicate(query.patterns[0])
         #expect(capture == "@comment")
-        #expect(pattern == "TODO")
+        #expect(pattern == "NOTE")
     }
 
     @Test
