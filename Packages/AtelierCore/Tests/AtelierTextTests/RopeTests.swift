@@ -255,4 +255,38 @@ import Testing
         #expect(sut.line(at: 999) == "line 999")
         #expect(sut.line(at: 500) == "line 500")
     }
+
+    @Test
+    func `cold line reads agree with the materialised lines across many leaves`() {
+        let lines = (0 ..< 3000).map { "line \($0) with some text to push past the leaf size é" }
+        var rope = Rope(lines.joined(separator: "\n"))
+        rope.invalidateSnapshotCaches()
+        #expect(rope._testSnapshotCachesAreEmpty)
+        #expect(rope.line(at: 0) == lines[0])
+        #expect(rope.line(at: 1234) == lines[1234])
+        #expect(rope.line(at: 2999) == lines[2999])
+        #expect(rope.lines(in: 1230 ..< 1240) == Array(lines[1230 ..< 1240]))
+        #expect(rope.lines(in: 2995 ..< 4000) == Array(lines[2995...]))
+        #expect(rope.lines(in: 5 ..< 5).isEmpty)
+        #expect(rope._testSnapshotCachesAreEmpty)
+    }
+
+    @Test
+    func `ranged line reads keep empty lines and a trailing empty line`() {
+        var rope = Rope("a\n\nb\n")
+        rope.invalidateSnapshotCaches()
+        #expect(rope.lines(in: 0 ..< 4) == ["a", "", "b", ""])
+        #expect(rope.lines(in: 1 ..< 3) == ["", "b"])
+        #expect(rope.line(at: 3) == "")
+    }
+
+    @Test
+    func `removing the only line of a shared rope leaves the other copy intact`() {
+        var rope = Rope("only line")
+        let snapshot = rope
+        _ = rope.removeLine(at: 0)
+        #expect(rope.text.isEmpty)
+        #expect(snapshot.text == "only line")
+        #expect(snapshot.lineCount == 1)
+    }
 }

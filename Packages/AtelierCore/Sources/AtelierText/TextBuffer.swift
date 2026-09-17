@@ -105,21 +105,13 @@ public struct TextBuffer: Sendable {
 
 extension TextBuffer: DocumentSource {
     public func lines(in range: Range<Int>) -> [String] {
-        let clamped = range.clamped(to: 0 ..< lineCount)
-        var result: [String] = []
-        result.reserveCapacity(clamped.count)
-        for lineIndex in clamped {
-            result.append(line(at: lineIndex))
-        }
-        return result
+        rope.lines(in: range)
     }
 
+    /// The rope stores one `\n` per line break, so the serialized size is its byte count plus what a longer line
+    /// ending adds per break: O(1), where walking every line cost a full pass on each status-bar read.
     public func serializedByteCount(lineEndingSize: Int) -> Int {
-        var total = 0
-        for lineIndex in 0 ..< lineCount {
-            total += line(at: lineIndex).lengthOfBytes(using: .utf8)
-        }
-        return total + max(0, lineCount - 1) * lineEndingSize
+        byteCount + max(0, lineCount - 1) * (lineEndingSize - 1)
     }
 
     public func maxLineWidth(in range: Range<Int>, tabSize: Int) -> Int {
