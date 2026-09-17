@@ -107,4 +107,38 @@ struct PixelChromeTests {
         #expect(redrawn.contains("\u{1b}_Ga=d,d=A,q=2"))
         #expect(redrawn.contains("\u{1b}_Ga=t,"))
     }
+
+    @Test
+    func `a fill is a one-pixel image scaled to its cells and a bar is placed to the pixel`() {
+        var chrome = PixelChrome(cell: cell)
+        var bytes = ContiguousArray<UInt8>()
+        chrome.render(
+            [
+                .fill(row: 2, column: 4, columns: 30, rows: 1, color: grey),
+                .fill(row: 3, column: 4, columns: 10, rows: 2, color: grey),
+                .bar(row: 0, column: 50, widthPixels: 3, heightPixels: 45, color: grey, xOffset: 4, yOffset: 7)
+            ], into: &bytes)
+        let controls = commands(bytes)
+        #expect(controls.filter { $0.hasPrefix("a=t") }.count == 2)
+        #expect(controls[0] == "a=t,f=32,t=d,i=1048576,s=1,v=1,q=2")
+        #expect(controls[1].hasSuffix(",z=-1,c=30,r=1,C=1,q=2"))
+        #expect(controls[2].hasSuffix(",z=-1,c=10,r=2,C=1,q=2"))
+        #expect(controls[3] == "a=t,f=32,t=d,i=1048577,s=3,v=45,q=2")
+        #expect(controls[4].hasSuffix(",z=-1,X=4,Y=7,C=1,q=2"))
+        let text = String(decoding: bytes, as: UTF8.self)
+        #expect(text.contains("\u{1b}[3;5H") && text.contains("\u{1b}[1;51H"))
+    }
+
+    @Test
+    func `an empty fill or bar places nothing`() {
+        var chrome = PixelChrome(cell: cell)
+        var bytes = ContiguousArray<UInt8>()
+        chrome.render(
+            [
+                .fill(row: 0, column: 0, columns: 0, rows: 1, color: grey),
+                .bar(row: 0, column: 0, widthPixels: 0, heightPixels: 5, color: grey, xOffset: 0, yOffset: 0)
+            ],
+            into: &bytes)
+        #expect(commands(bytes).isEmpty)
+    }
 }
