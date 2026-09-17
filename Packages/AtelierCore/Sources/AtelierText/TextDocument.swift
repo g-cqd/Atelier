@@ -184,14 +184,7 @@ public final class TextDocument {
         in buffer: TextBuffer,
         lineEnding: LineEnding
     ) -> Int {
-        var total = 0
-        let separatorBytes = lineEnding.sequence.lengthOfBytes(using: .utf8)
-
-        for lineIndex in 0 ..< buffer.lineCount {
-            total += buffer.line(at: lineIndex).lengthOfBytes(using: .utf8)
-        }
-
-        return total + max(0, buffer.lineCount - 1) * separatorBytes
+        buffer.serializedByteCount(lineEndingSize: lineEnding.sequence.lengthOfBytes(using: .utf8))
     }
 
     nonisolated public static func serializedText(from text: String, lineEnding: LineEnding)
