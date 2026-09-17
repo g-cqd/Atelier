@@ -98,9 +98,12 @@ public struct SwiftSyntaxTokenRanges: SyntaxTokenRanging {
         for (offset, unit) in text.utf16.enumerated() where unit == 10 {
             lineStarts.append(offset + 1)
         }
-        if lineStarts.count > lineCount { lineStarts.removeLast(lineStarts.count - max(lineCount, 1)) }
+        // The model has no line after a closing newline; the last kept line then ends before that newline.
+        let keptLines = max(lineCount, 1)
+        let lastLineEnd = lineStarts.count > keptLines ? lineStarts[keptLines] - 1 : text.utf16.count
+        if lineStarts.count > keptLines { lineStarts.removeLast(lineStarts.count - keptLines) }
         let tokens = ranges.map { HighlightToken(byteRange: $0, role: .keyword) }
-        return HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: text.utf16.count)
+        return HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: lastLineEnd)
             .map { $0.map(\.byteRange) }
     }
 }
