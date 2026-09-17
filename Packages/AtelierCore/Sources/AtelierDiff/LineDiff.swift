@@ -76,11 +76,11 @@ public enum LineDiff {
             newEnd -= 1
         }
 
-        var solver = MyersSolver(old: old, new: new)
         if anchoringRareLines {
-            var histogram = HistogramSolver(old: old, new: new, myers: solver)
+            var histogram = HistogramSolver(old: old, new: new)
             histogram.solve(old: prefix ..< oldEnd, new: prefix ..< newEnd, into: &edits)
         } else {
+            var solver = MyersSolver(old: old, new: new)
             solver.solve(old: prefix ..< oldEnd, new: prefix ..< newEnd, into: &edits)
         }
 
@@ -143,12 +143,12 @@ public enum LineDiff {
 private struct HistogramSolver<Element: Hashable> {
     private let old: [Element]
     private let new: [Element]
-    private var myers: MyersSolver<Element>
+    /// Built the first time a stretch has no rare anchor; its two document-sized arrays are often never needed.
+    private var myers: MyersSolver<Element>?
 
-    init(old: [Element], new: [Element], myers: MyersSolver<Element>) {
+    init(old: [Element], new: [Element]) {
         self.old = old
         self.new = new
-        self.myers = myers
     }
 
     private struct Anchor {
@@ -185,7 +185,8 @@ private struct HistogramSolver<Element: Hashable> {
                         work.append(
                             .ranges(oldRange.lowerBound ..< anchor.oldStart, newRange.lowerBound ..< anchor.newStart))
                     } else {
-                        myers.solve(old: oldRange, new: newRange, into: &edits)
+                        if myers == nil { myers = MyersSolver(old: old, new: new) }
+                        myers?.solve(old: oldRange, new: newRange, into: &edits)
                     }
             }
         }

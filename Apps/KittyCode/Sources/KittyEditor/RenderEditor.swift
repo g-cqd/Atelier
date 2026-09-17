@@ -97,13 +97,15 @@ private func activeGutterDecorations(
         return [:]
     }
 
-    return decorations.reduce(into: [Int: TextEditor.GutterDecoration]()) { result, entry in
-        let (lineIndex, color) = entry
+    var result: [Int: TextEditor.GutterDecoration] = [:]
+    for lineIndex in visibleRows(of: state) {
+        guard let color = decorations[lineIndex] else { continue }
         result[lineIndex] = TextEditor.GutterDecoration(
             symbol: gutterSymbol(for: color),
             style: colorScheme.gitStatusStyle(for: color)
         )
     }
+    return result
 }
 
 private func gutterSymbol(for color: FileStatusColor) -> Character {
@@ -116,39 +118,46 @@ private func gutterSymbol(for color: FileStatusColor) -> Character {
     }
 }
 
+/// The rows a frame can show, the only ones the renderer reads highlights and gutter marks for.
+@MainActor
+private func visibleRows(of state: EditorState) -> Range<Int> {
+    let first = max(0, state.scrollOffset)
+    return first ..< min(state.fileLineCount, first + max(state.lastRenderRows, 1) + 1)
+}
+
+/// Per-line highlights for the rows on screen only: a selection spanning a whole document, thousands of git
+/// emphasis ranges or a common-word search would otherwise size every frame by the document.
 @MainActor
 private func activeHighlights(
     state: EditorState,
     colorScheme: EditorState.ColorScheme
 ) -> [Int: [TextHighlight]] {
     var highlights: [Int: [TextHighlight]] = [:]
+    let visible = visibleRows(of: state)
 
     if let selection = state.selection, !selection.isCollapsed {
         let (start, end) = selection.ordered
         let style = colorScheme.selection
 
         if start.row == end.row {
-            if end.col > start.col {
+            if end.col > start.col, visible.contains(start.row) {
                 highlights[start.row] = [
-                    TextHighlight(
-                        range: start.col ... end.col - 1, role: .userSelection, style: style)
+                    TextHighlight(range: start.col ... end.col - 1, role: .userSelection, style: style)
                 ]
             }
         } else {
-            let firstLineLength = state.fileLine(at: start.row).count
-            highlights[start.row] = [
-                TextHighlight(
-                    range: start.col ... firstLineLength, role: .userSelection, style: style)
-            ]
-
-            for row in (start.row + 1) ..< end.row {
-                let lineLength = state.fileLine(at: row).count
-                highlights[row] = [
-                    TextHighlight(range: 0 ... lineLength, role: .userSelection, style: style)
+            if visible.contains(start.row) {
+                let firstLineLength = state.fileLine(at: start.row).count
+                highlights[start.row] = [
+                    TextHighlight(
+                        range: min(start.col, firstLineLength) ... firstLineLength, role: .userSelection, style: style)
                 ]
             }
-
-            if end.row > start.row && end.col > 0 {
+            for row in ((start.row + 1) ..< end.row).clamped(to: visible) {
+                let lineLength = state.fileLine(at: row).count
+                highlights[row] = [TextHighlight(range: 0 ... lineLength, role: .userSelection, style: style)]
+            }
+            if end.row > start.row, end.col > 0, visible.contains(end.row) {
                 highlights[end.row] = [
                     TextHighlight(range: 0 ... end.col - 1, role: .userSelection, style: style)
                 ]
@@ -160,22 +169,23 @@ private func activeHighlights(
         let emphasis = state.bufferManager.activeBuffer?.gitLineDecorations.emphasis, !emphasis.isEmpty
     {
         let style = Style(fg: colorScheme.gitModified.fg, bold: true)
-        for (row, ranges) in emphasis {
+        for row in visible {
+            guard let ranges = emphasis[row] else { continue }
             highlights[row, default: []]
                 .append(contentsOf: ranges.map { TextHighlight(range: $0, role: .changedText, style: style) })
         }
     }
 
     if let search = state.inFileSearch {
-        for (index, match) in search.matches.enumerated() where match.colEnd > match.colStart {
-            let role: TextHighlight.Role =
-                index == search.activeMatchIndex ? .activeSearchMatch : .searchMatch
-            let style =
-                index == search.activeMatchIndex
-                ? colorScheme.activeSearchMatch : colorScheme.searchMatch
-            let highlight = TextHighlight(
-                range: match.colStart ... (match.colEnd - 1), role: role, style: style)
-            highlights[match.row, default: []].append(highlight)
+        for (index, match) in search.matches.enumerated()
+        where match.colEnd > match.colStart && visible.contains(match.row) {
+            let isActive = index == search.activeMatchIndex
+            highlights[match.row, default: []]
+                .append(
+                    TextHighlight(
+                        range: match.colStart ... (match.colEnd - 1),
+                        role: isActive ? .activeSearchMatch : .searchMatch,
+                        style: isActive ? colorScheme.activeSearchMatch : colorScheme.searchMatch))
         }
     }
 
