@@ -73,3 +73,16 @@ import Testing
         #expect(buffer.lineCount == 2)
     }
 }
+
+/// The serialized size comes from the rope's counts, not a walk over every line.
+struct TextBufferSerializedSizeTests {
+    @Test(arguments: [(["a", "bé", ""], 1, 6), (["a", "bé", ""], 2, 8), ([""], 2, 0), (["one"], 2, 3)])
+    func `serialized bytes are the content bytes plus one break per line ending width`(
+        lines: [String], endingSize: Int, expected: Int
+    ) {
+        let buffer = TextBuffer(lines: lines)
+        #expect(buffer.serializedByteCount(lineEndingSize: endingSize) == expected)
+        let walked = lines.reduce(0) { $0 + $1.utf8.count } + max(0, lines.count - 1) * endingSize
+        #expect(buffer.serializedByteCount(lineEndingSize: endingSize) == walked)
+    }
+}

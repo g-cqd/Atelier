@@ -1,4 +1,5 @@
 public import Foundation
+import Synchronization
 
 /// A persistent, value-typed UTF-8 byte rope.
 ///
@@ -144,6 +145,8 @@ public struct Rope: Sendable {
     }
 
     /// UTF-8-decoded content of line `index`, or `""` if out of range.
+    /// - Complexity: O(log n + line length) when the lines cache is cold; the branches' newline counts locate the
+    ///   line without scanning the bytes before it.
     public func line(at index: Int) -> String {
         guard index >= 0, index < lineCount else { return "" }
         // Fast path: if the lines array is already cached on storage we hit
@@ -151,9 +154,29 @@ public struct Rope: Sendable {
         if let cached = storage.cachedLines {
             return cached[index]
         }
-        var out = Data()
-        storage.root.appendLineBytes(at: index, to: &out)
-        return String(decoding: out, as: UTF8.self)
+        return String(decoding: bytes(in: lineRange(forLine: index)), as: UTF8.self)
+    }
+
+    /// The lines with indices in `range`, clamped to the rope, without the terminating newlines.
+    /// - Complexity: O(log n + bytes of the lines) when the lines cache is cold: one ranged byte read, split once.
+    public func lines(in range: Range<Int>) -> [String] {
+        let clamped = range.clamped(to: 0 ..< lineCount)
+        guard !clamped.isEmpty else { return [] }
+        if let cached = storage.cachedLines {
+            return Array(cached[clamped])
+        }
+        let start = lineRange(forLine: clamped.lowerBound).lowerBound
+        let end = lineRange(forLine: clamped.upperBound - 1).upperBound
+        let data = bytes(in: start ..< end)
+        var lines: [String] = []
+        lines.reserveCapacity(clamped.count)
+        var lineStart = data.startIndex
+        for index in data.indices where data[index] == 0x0A {
+            lines.append(String(decoding: data[lineStart ..< index], as: UTF8.self))
+            lineStart = index + 1
+        }
+        lines.append(String(decoding: data[lineStart...], as: UTF8.self))
+        return lines
     }
 
     /// UTF-8 bytes for the given range, clamped to the rope's bounds.
@@ -244,6 +267,7 @@ public struct Rope: Sendable {
     /// Removes line `lineIndex`. Patches the lines cache in place if present.
     @discardableResult
     public mutating func removeLine(at lineIndex: Int) -> String {
+        ensureUnique()
         guard lineIndex >= 0, lineIndex < lineCount else { return "" }
         let removed = line(at: lineIndex)
         let cacheBefore = storage.cachedLines
@@ -317,11 +341,25 @@ extension Rope {
     /// empty caches) or directly through `invalidateCaches()` when storage is
     /// uniquely held.
     fileprivate final class Storage: @unchecked Sendable {
+        /// Written only while the storage is uniquely referenced (`ensureUnique()` precedes every mutation), so a
+        /// shared storage is read-only here; the caches below are the one thing readers write, and they go
+        /// through a lock so two threads materialising the same rope cannot tear each other's store.
         var root: RopeNode {
             didSet { invalidateCaches() }
         }
-        var cachedText: String?
-        var cachedLines: [String]?
+        private struct Caches {
+            var text: String?
+            var lines: [String]?
+        }
+        private let caches = Mutex(Caches())
+        var cachedText: String? {
+            get { caches.withLock { $0.text } }
+            set { caches.withLock { $0.text = newValue } }
+        }
+        var cachedLines: [String]? {
+            get { caches.withLock { $0.lines } }
+            set { caches.withLock { $0.lines = newValue } }
+        }
         init(root: RopeNode) {
             self.root = root
         }
@@ -331,8 +369,10 @@ extension Rope {
         }
 
         func invalidateCaches() {
-            cachedText = nil
-            cachedLines = nil
+            caches.withLock {
+                $0.text = nil
+                $0.lines = nil
+            }
         }
     }
 }
@@ -429,46 +469,6 @@ enum RopeNode: Sendable {
     /// terminating newline. Single tree walk: descends to the leaf containing
     /// the line start, then collects bytes forward across leaves until it
     /// finds the terminator (or end of document).
-    func appendLineBytes(at index: Int, to out: inout Data) {
-        var lineRemaining = index
-        var collecting = false
-        // Returns true to continue walking, false to stop.
-        @discardableResult
-        func walk(_ node: RopeNode) -> Bool {
-            switch node {
-                case .leaf(let leaf):
-                    let bytes = leaf.data
-                    var idx = bytes.startIndex
-                    if !collecting {
-                        // Need to skip `lineRemaining` newlines to reach the target line.
-                        while idx < bytes.endIndex, lineRemaining > 0 {
-                            if bytes[idx] == 0x0A {
-                                lineRemaining -= 1
-                            }
-                            idx = bytes.index(after: idx)
-                        }
-                        if lineRemaining > 0 { return true }
-                        collecting = true
-                    }
-                    // Collect bytes until the next newline.
-                    let start = idx
-                    while idx < bytes.endIndex, bytes[idx] != 0x0A {
-                        idx = bytes.index(after: idx)
-                    }
-                    if start < idx {
-                        out.append(bytes[start ..< idx])
-                    }
-                    // Hit a newline → done.
-                    if idx < bytes.endIndex { return false }
-                    return true
-                case .branch(let branch):
-                    if !walk(branch.left) { return false }
-                    return walk(branch.right)
-            }
-        }
-        _ = walk(self)
-    }
-
     /// Walks the tree once, accumulating bytes between newlines into `current`
     /// and flushing decoded lines into `lines`. The final line stays in
     /// `current` so the caller can decide whether to append a trailing entry.
