@@ -39,7 +39,7 @@ public func computeShellLayout(state: EditorState, columns: Int, rows: Int) -> (
         : nil
 
     let separatorRect: Rect? =
-        layout.sidebarWidth > 0
+        layout.sidebarWidth > 0 && !state.usesPixelChrome
         ? Rect(
             x: layout.activityBarWidth + layout.sidebarWidth, y: layout.contentStartRow, width: 1,
             height: layout.contentRows)
@@ -92,8 +92,13 @@ public func renderShellLayout(
     let colorScheme = state.colorScheme
     guard cols > 0 && rows > 1 else { return }
 
+    state.usesPixelChrome = pipeline.chrome != nil
     let (shellRects, focusMap) = computeShellLayout(state: state, columns: cols, rows: rows)
     state.focusMap = focusMap
+    pipeline.chromeLines =
+        state.usesPixelChrome
+        ? pixelChromeLines(rects: shellRects, sidebarShown: shellRects.sidebar != nil, colorScheme: colorScheme)
+        : []
 
     let layout = LayoutMetrics(state: state, columns: cols, rows: rows)
     guard layout.contentRows > 0 else { return }
@@ -228,4 +233,27 @@ public func renderShellLayout(
         pipeline.cursorRow = nil
         pipeline.cursorCol = nil
     }
+}
+
+/// The one-pixel lines drawn under the cells when pixel chrome is on: the pane separator along the editor's
+/// left edge and the underline of the tab ribbon. Empty when the frame uses cell chrome.
+@MainActor
+func pixelChromeLines(rects: ShellLayoutRects, sidebarShown: Bool, colorScheme: EditorState.ColorScheme)
+    -> [ChromeLine]
+{
+    let color = ColorRGB(colorScheme.separator.fg) ?? ColorRGB(r: 0x30, g: 0x36, b: 0x3d)
+    var lines: [ChromeLine] = []
+    if sidebarShown, rects.editor.width > 0, rects.editor.height > 0 {
+        lines.append(
+            ChromeLine(
+                axis: .vertical, row: rects.editor.y, column: rects.editor.x, length: rects.editor.height,
+                color: color))
+    }
+    if let ribbon = rects.tabRibbon, rects.editor.height > 0 {
+        lines.append(
+            ChromeLine(
+                axis: .horizontal, row: ribbon.maxY, column: rects.editor.x, length: rects.editor.width,
+                color: color))
+    }
+    return lines
 }

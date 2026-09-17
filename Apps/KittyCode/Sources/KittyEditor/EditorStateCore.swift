@@ -1118,6 +1118,10 @@ public final class EditorState {
     @ObservationIgnored public var isScrolling = false
     @ObservationIgnored public var scrollDragState: ScrollDragState?
     @ObservationIgnored public var focusMap: FocusMap?
+    /// Whether the frame is drawn with pixel chrome: the pane separator and ribbon underline are one-pixel
+    /// placements under the cells instead of a cell column and glyphs. Set by the shell from the pipeline
+    /// before each layout, so hit testing and rendering agree.
+    @ObservationIgnored public var usesPixelChrome = false
     @ObservationIgnored public var lastRenderColumns = 80
     @ObservationIgnored public var lastRenderRows = 24
     @ObservationIgnored public var lastScrollDirection: MouseButton?

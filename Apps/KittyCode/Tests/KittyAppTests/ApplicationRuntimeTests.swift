@@ -109,3 +109,32 @@ struct ApplicationRuntimeTests {
         }
     }
 }
+
+/// Whether a run draws pixel chrome: terminal detection with an environment override either way.
+struct PixelChromeSelectionTests {
+    private let size = TerminalSize(columns: 100, rows: 50, pixelWidth: 800, pixelHeight: 1000)
+
+    @Test
+    func `a capable terminal gets its cell size and an incapable one nothing`() {
+        #expect(
+            ApplicationRuntime.pixelChromeCell(environment: ["KITTY_WINDOW_ID": "1"], size: size)
+                == .init(width: 8, height: 20))
+        #expect(ApplicationRuntime.pixelChromeCell(environment: ["TERM_PROGRAM": "Apple_Terminal"], size: size) == nil)
+        #expect(
+            ApplicationRuntime.pixelChromeCell(
+                environment: ["KITTY_WINDOW_ID": "1"], size: TerminalSize(columns: 80, rows: 24)) == nil)
+    }
+
+    @Test
+    func `the environment can force pixel chrome off or on`() {
+        #expect(
+            ApplicationRuntime.pixelChromeCell(
+                environment: ["KITTY_WINDOW_ID": "1", "KITTYCODE_PIXEL_CHROME": "0"], size: size) == nil)
+        #expect(
+            ApplicationRuntime.pixelChromeCell(environment: ["KITTYCODE_PIXEL_CHROME": "1"], size: size)
+                == .init(width: 8, height: 20))
+        #expect(
+            ApplicationRuntime.pixelChromeCell(
+                environment: ["KITTYCODE_PIXEL_CHROME": "1"], size: TerminalSize(columns: 80, rows: 24)) == nil)
+    }
+}

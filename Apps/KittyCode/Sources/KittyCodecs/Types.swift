@@ -162,6 +162,36 @@ public struct GraphicsCommand: Sendable, Equatable {
     public var width: UInt32
     public var height: UInt32
     public var payload: [UInt8]
+    /// Placement fields (`a=p`): the placement id, the z-index (negative draws under text), the pixel offset
+    /// inside the cursor cell, and whether the cursor stays put after the placement.
+    public var placement: Placement?
+    /// What `a=d` deletes.
+    public var deletion: Deletion?
+    /// Suppress the terminal's `OK` reply (`q=2`), so a fire-and-forget command never lands in the input stream.
+    public var isQuiet = false
+
+    public struct Placement: Sendable, Equatable {
+        public var id: UInt32
+        public var zIndex: Int32
+        public var xOffset: UInt32
+        public var yOffset: UInt32
+        public var keepsCursor: Bool
+
+        public init(id: UInt32, zIndex: Int32 = 0, xOffset: UInt32 = 0, yOffset: UInt32 = 0, keepsCursor: Bool = true) {
+            self.id = id
+            self.zIndex = zIndex
+            self.xOffset = xOffset
+            self.yOffset = yOffset
+            self.keepsCursor = keepsCursor
+        }
+    }
+
+    public enum Deletion: Sendable, Equatable {
+        /// Every visible placement; `freeingData` also frees the image data.
+        case allPlacements(freeingData: Bool)
+        /// The placements of the image `id` (and, with `freeingData`, the image itself).
+        case image(id: UInt32, freeingData: Bool)
+    }
 
     public init(
         action: Action = .transmitAndDisplay,
@@ -170,7 +200,10 @@ public struct GraphicsCommand: Sendable, Equatable {
         id: UInt32 = 0,
         width: UInt32 = 0,
         height: UInt32 = 0,
-        payload: [UInt8] = []
+        payload: [UInt8] = [],
+        placement: Placement? = nil,
+        deletion: Deletion? = nil,
+        isQuiet: Bool = false
     ) {
         self.action = action
         self.format = format
@@ -179,5 +212,8 @@ public struct GraphicsCommand: Sendable, Equatable {
         self.width = width
         self.height = height
         self.payload = payload
+        self.placement = placement
+        self.deletion = deletion
+        self.isQuiet = isQuiet
     }
 }

@@ -91,3 +91,36 @@ struct GraphicsEncoderTests {
         #expect(bytes.last == 0x5c)
     }
 }
+
+/// Placement and deletion controls, the commands the pixel chrome layer relies on.
+struct GraphicsPlacementEncodingTests {
+    private func control(_ command: GraphicsCommand) -> String {
+        let text = String(decoding: GraphicsEncoder.encode(command), as: UTF8.self)
+        return String(text.dropFirst(3).prefix { $0 != ";" })
+    }
+
+    @Test
+    func `a placement names the image and placement, its z-index, offsets and cursor policy`() {
+        let placement = GraphicsCommand.Placement(id: 7, zIndex: -1, xOffset: 3, yOffset: 0, keepsCursor: true)
+        #expect(
+            control(GraphicsCommand(action: .placement, id: 42, placement: placement, isQuiet: true))
+                == "a=p,i=42,p=7,z=-1,X=3,C=1,q=2")
+    }
+
+    @Test
+    func `deletions free data only when asked`() {
+        #expect(control(GraphicsCommand(action: .delete, deletion: .allPlacements(freeingData: false))) == "a=d,d=a")
+        #expect(
+            control(GraphicsCommand(action: .delete, deletion: .allPlacements(freeingData: true), isQuiet: true))
+                == "a=d,d=A,q=2")
+        #expect(control(GraphicsCommand(action: .delete, deletion: .image(id: 9, freeingData: true))) == "a=d,d=I,i=9")
+    }
+
+    @Test
+    func `a transmit keeps its format and dimensions`() {
+        let command = GraphicsCommand(
+            action: .transmit, format: .rgba, transmission: .direct, id: 5, width: 1, height: 2, payload: [1, 2, 3, 4],
+            isQuiet: true)
+        #expect(control(command) == "a=t,f=32,t=d,i=5,s=1,v=2,q=2")
+    }
+}
