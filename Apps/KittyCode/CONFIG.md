@@ -413,3 +413,14 @@ These are hardcoded and not configurable via JSON.
   }
 }
 ```
+
+## Pixel chrome (environment)
+
+On a terminal that speaks the kitty graphics protocol and reports its pixel size (kitty, Ghostty, WezTerm, Konsole),
+the pane separator, the tab-ribbon underline and the status rule are one-pixel lines, and the editor's selection,
+current line, search hits, scroll bar and git gutter marks are drawn under the cells as pixels; the cells keep
+their foregrounds only. Other terminals get the same chrome in cells.
+
+| Variable | Values | Effect |
+|---|---|---|
+| `KITTYCODE_PIXEL_CHROME` | `0` / `1` | `0` forces cell chrome on a capable terminal; `1` forces pixel chrome where detection says no, provided the terminal reports a pixel size. |
