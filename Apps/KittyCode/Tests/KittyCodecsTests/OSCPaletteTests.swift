@@ -22,7 +22,8 @@ struct OSCPaletteTests {
     }
 
     @Test(arguments: [
-        "\u{1b}]10;rgb:ff/ff\u{1b}\\", "\u{1b}]4;x;rgb:0/0/0\u{07}", "\u{1b}]52;c;YQ==\u{07}", "\u{1b}[A",
+        "\u{1b}]10;rgb:ff/ff\u{1b}\\", "\u{1b}]4;x;rgb:0/0/0\u{07}", "\u{1b}]4;256;rgb:0/0/0\u{07}",
+        "\u{1b}]4;-1;rgb:0/0/0\u{07}", "\u{1b}]52;c;YQ==\u{07}", "\u{1b}[A",
         "\u{1b}]10;rgb:1/2/3",
         "abc"
     ])

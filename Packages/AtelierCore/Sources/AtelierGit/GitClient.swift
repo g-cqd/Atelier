@@ -6,11 +6,14 @@ import func AemiRuntime.mapConcurrently
 public enum GitError: Error, Equatable, LocalizedError {
     case commandFailed(String)
     case notARepository
+    /// A ref, object id or path that could be read as an option or break the command line.
+    case invalidArgument(String)
 
     public var errorDescription: String? {
         switch self {
             case .commandFailed(let message): message.trimmingCharacters(in: .whitespacesAndNewlines)
             case .notARepository: "Not a git repository"
+            case .invalidArgument(let value): "Not a usable git reference or path: \(value)"
         }
     }
 }
@@ -33,7 +36,7 @@ public struct GitClient: Sendable {
     ///   - timeout: The budget of one git run on the runner's clock; nil lets a run take as long as it needs.
     ///   - isolation: How much of the caller's environment and of the repository's configuration git may see.
     public init(
-        repository: URL, runner: any ProcessRunner, timeout: Duration? = nil, isolation: GitIsolation = .inheriting
+        repository: URL, runner: any ProcessRunner, timeout: Duration? = nil, isolation: GitIsolation = .strict
     ) {
         self.repository = repository
         self.runner = runner
@@ -42,9 +45,13 @@ public struct GitClient: Sendable {
     }
 
     /// The root of the repository `url` lies in, or nil when it lies in none.
-    public static func repositoryRoot(containing url: URL, runner: any ProcessRunner) async -> URL? {
+    public static func repositoryRoot(
+        containing url: URL, runner: any ProcessRunner, isolation: GitIsolation = .strict
+    ) async -> URL? {
         let directory = url.hasDirectoryPath ? url : url.deletingLastPathComponent()
-        guard let data = try? await run(["rev-parse", "--show-toplevel"], in: directory, runner: runner)
+        guard
+            let data = try? await run(
+                ["rev-parse", "--show-toplevel"], in: directory, runner: runner, isolation: isolation)
         else { return nil }
         let path = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         return path.isEmpty ? nil : URL(filePath: path, directoryHint: .isDirectory)
@@ -58,13 +65,17 @@ public struct GitClient: Sendable {
     }
 
     public func resolve(ref: String) async throws -> String {
-        let data = try await run(["rev-parse", "--verify", "--quiet", "\(ref)^{commit}"])
+        let data = try await run([
+            "rev-parse", "--verify", "--quiet", "--end-of-options", "\(try Self.checked(ref))^{commit}"
+        ])
         return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Files of the tree at `ref`, filtered to the supported extensions.
     public func tree(at ref: String, isSupported: @Sendable (String) -> Bool) async throws -> [GitTreeEntry] {
-        GitParsers.tree(try await run(["ls-tree", "-r", "-l", "-z", ref]), isSupported: isSupported)
+        GitParsers.tree(
+            try await run(["ls-tree", "-r", "-l", "-z", "--end-of-options", try Self.checked(ref)]),
+            isSupported: isSupported)
     }
 
     /// The branch and every path that is not clean, ignored files included, untracked files listed one by one.
@@ -92,11 +103,11 @@ public struct GitClient: Sendable {
     /// The contents of `path` as committed at `ref`, through `git show`.
     /// - Throws: ``GitError`` when the path does not exist at that ref.
     public func content(of path: String, at ref: String) async throws -> Data {
-        try await run(["show", "\(ref):\(path)"])
+        try await run(["show", "--end-of-options", "\(try Self.checked(ref)):\(try Self.checked(path))"])
     }
 
     public func blob(_ id: String) async throws -> Data {
-        try await run(["cat-file", "blob", id])
+        try await run(["cat-file", "blob", try Self.checked(id)])
     }
 
     /// Contents of many blobs through one `cat-file --batch` process instead of one process per blob.
@@ -110,7 +121,9 @@ public struct GitClient: Sendable {
     /// Renames between two refs, or between a ref and the working tree when `to` is nil, old path to new path.
     public func renames(from: String, to: String?) async throws -> [String: String] {
         GitParsers.renames(
-            try await run(["diff", "--name-status", "-M", "-z", "--diff-filter=R", from] + (to.map { [$0] } ?? [])))
+            try await run(
+                ["diff", "--name-status", "-M", "-z", "--diff-filter=R", "--end-of-options", try Self.checked(from)]
+                    + (try to.map { [try Self.checked($0)] } ?? [])))
     }
 
     private func references(pattern: String...) async throws -> [String] {
@@ -120,6 +133,16 @@ public struct GitClient: Sendable {
 
     private func recentCommits(limit: Int) async throws -> [GitCommit] {
         GitParsers.commits(try await run(["log", "--format=%H%x1f%h%x1f%s", "-n", String(limit)]))
+    }
+
+    /// A ref, object id or path as git may see it on the command line: not empty, not option-shaped, and free of
+    /// the bytes that end an argument or a record. `--end-of-options` guards the commands too; this refuses the
+    /// value outright so a planted ref such as `--output=~/.zshrc` never reaches git at all.
+    static func checked(_ value: String) throws(GitError) -> String {
+        guard !value.isEmpty, !value.hasPrefix("-"), !value.utf8.contains(0), !value.utf8.contains(0x0A) else {
+            throw .invalidArgument(value)
+        }
+        return value
     }
 
     private func run(_ arguments: [String], input: Data? = nil) async throws -> Data {
@@ -144,7 +167,7 @@ public struct GitClient: Sendable {
     /// a runner failure becomes a ``GitError`` naming it, and cancelling the task terminates git.
     private static func run(
         _ arguments: [String], input: Data? = nil, in directory: URL, runner: any ProcessRunner,
-        timeout: Duration? = nil, isolation: GitIsolation = .inheriting
+        timeout: Duration? = nil, isolation: GitIsolation = .strict
     ) async throws -> Data {
         PhaseTrace.log("git \(arguments.prefix(2).joined(separator: " "))")
         defer { PhaseTrace.log("git done \(arguments.prefix(2).joined(separator: " "))") }

@@ -143,7 +143,7 @@ private struct ScratchFiles: Sendable {
         let directory = FileManager.default.temporaryDirectory
         let stem = "atelier-process-\(UUID().uuidString)"
         let errorFile = directory.appending(path: stem + ".stderr")
-        try Data().write(to: errorFile)
+        try Self.createPrivateFile(at: errorFile, contents: Data())
         self.errorFile = errorFile
         guard let input else {
             inputFile = nil
@@ -151,13 +151,25 @@ private struct ScratchFiles: Sendable {
         }
         let url = directory.appending(path: stem + ".stdin")
         do {
-            try input.write(to: url)
+            try Self.createPrivateFile(at: url, contents: input)
         } catch {
             // Nothing will `remove()` a value that never returned, so the error file goes now.
             try? FileManager.default.removeItem(at: errorFile)
             throw error
         }
         inputFile = url
+    }
+
+    /// Creates the file owner-readable only and refuses an existing path or a symlink, so a shared temporary
+    /// directory can neither read git's error text or stdin payload nor redirect the write.
+    private static func createPrivateFile(at url: URL, contents: Data) throws {
+        let descriptor = url.withUnsafeFileSystemRepresentation { path in
+            path.map { open($0, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600) } ?? -1
+        }
+        guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        defer { try? handle.close() }
+        try handle.write(contentsOf: contents)
     }
 
     func errorHandle() throws -> FileHandle {

@@ -46,6 +46,10 @@ public enum GitIsolation: Sendable, Hashable {
         "-c", "protocol.file.allow=user",
         "-c", "core.fsmonitor=false",
         "-c", "core.sshCommand=/usr/bin/false",
-        "-c", "core.hooksPath=/dev/null"
+        "-c", "core.hooksPath=/dev/null",
+        "-c", "diff.external=",
+        "-c", "core.pager=cat",
+        "-c", "core.editor=false",
+        "-c", "uploadpack.packObjectsHook="
     ]
 }
