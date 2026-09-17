@@ -1,6 +1,7 @@
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable function_body_length
 public import AemiCore
+import Foundation
 import KittyCodecs
 public import KittyInput
 public import KittyRenderer
@@ -27,6 +28,34 @@ public final class ApplicationRuntime {
     /// clock's tick advances — so callers that just bump the clock from a
     /// background task (`schedulePostLoadProcessing`, file watcher, git
     /// refresh) don't need to also explicitly invalidate the refresh source.
+    /// The cell size pixel chrome draws with, when the terminal supports it. `KITTYCODE_PIXEL_CHROME=0`
+    /// forces cell chrome on a capable terminal and `=1` forces pixel chrome where detection says no,
+    /// provided the terminal reports a pixel size.
+    nonisolated static func pixelChromeCell(environment: [String: String], size: TerminalSize)
+        -> TerminalCapabilities.CellPixelSize?
+    {
+        let capabilities = TerminalCapabilities(environment: environment, size: size)
+        switch environment["KITTYCODE_PIXEL_CHROME"] {
+            case "0": return nil
+            case "1": return capabilities.cellPixelSize
+            default: return capabilities.supportsPixelChrome ? capabilities.cellPixelSize : nil
+        }
+    }
+
+    /// Gives `pipeline` a pixel chrome layer sized for `size` when the terminal supports one. When `replacing`,
+    /// only a pipeline that already had chrome gets a new layer (a resize may change the cell size), and the
+    /// new layer starts by deleting what the old one placed.
+    private static func attachPixelChrome(to pipeline: RenderPipeline, size: TerminalSize, replacing: Bool) {
+        if replacing {
+            guard pipeline.chrome != nil, let cell = TerminalCapabilities.cellPixelSize(of: size) else { return }
+            var chrome = PixelChrome(cell: cell)
+            chrome.reset()
+            pipeline.chrome = chrome
+        } else if let cell = pixelChromeCell(environment: ProcessInfo.processInfo.environment, size: size) {
+            pipeline.chrome = PixelChrome(cell: cell)
+        }
+    }
+
     public func run(
         render: @MainActor (RenderPipeline) -> Void,
         onEvent: @MainActor (InputEvent, RenderPipeline) -> Bool = { _, _ in true },
@@ -42,7 +71,8 @@ public final class ApplicationRuntime {
 
         defer {
             let cleanup =
-                KittySequences.popKeyboardMode
+                PixelChrome.deleteAllBytes
+                + KittySequences.popKeyboardMode
                 + KittySequences.disableMouseSGR
                 + KittySequences.disableFocusEvents
                 + KittySequences.disableBracketedPaste
@@ -89,6 +119,7 @@ public final class ApplicationRuntime {
             columns: size.columns,
             rows: size.rows
         )
+        Self.attachPixelChrome(to: pipeline, size: size, replacing: false)
 
         let inputSource = InputSource(connection: connection)
         configureInputSource(inputSource)
@@ -158,6 +189,7 @@ public final class ApplicationRuntime {
             switch event {
                 case .resize(let newSize):
                     pipeline.resize(columns: newSize.columns, rows: newSize.rows)
+                    Self.attachPixelChrome(to: pipeline, size: newSize, replacing: true)
                     pipeline.buffer.clear()
                     render(pipeline)
                     do {

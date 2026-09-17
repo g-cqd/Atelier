@@ -21,7 +21,7 @@ public struct LayoutMetrics {
         } else {
             sidebarWidth = min(state.treePanelWidth, columns / 2)
         }
-        let separatorWidth = sidebarWidth > 0 ? 1 : 0
+        let separatorWidth = sidebarWidth > 0 && !state.usesPixelChrome ? 1 : 0
         return abWidth + sidebarWidth + separatorWidth
     }
 
@@ -41,7 +41,8 @@ public struct LayoutMetrics {
             self.sidebarWidth = min(state.treePanelWidth, columns / 2)
         }
         self.totalSidebarWidth = activityBarWidth + sidebarWidth
-        let separatorWidth = sidebarWidth > 0 ? 1 : 0
+        // With pixel chrome the separator is a one-pixel placement under the editor's first column.
+        let separatorWidth = sidebarWidth > 0 && !state.usesPixelChrome ? 1 : 0
         self.editorStart = totalSidebarWidth + separatorWidth
         self.editorWidth = max(0, columns - self.editorStart)
     }

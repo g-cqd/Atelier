@@ -55,11 +55,33 @@ public enum GraphicsEncoder: Sendable {
     private static func buildControl(_ cmd: GraphicsCommand) -> String {
         var parts: [String] = []
         parts.append("a=\(cmd.action.rawValue)")
-        parts.append("f=\(cmd.format.rawValue)")
-        parts.append("t=\(cmd.transmission.rawValue)")
+        switch cmd.action {
+            case .placement, .delete:
+                break
+            default:
+                parts.append("f=\(cmd.format.rawValue)")
+                parts.append("t=\(cmd.transmission.rawValue)")
+        }
         if cmd.id > 0 { parts.append("i=\(cmd.id)") }
         if cmd.width > 0 { parts.append("s=\(cmd.width)") }
         if cmd.height > 0 { parts.append("v=\(cmd.height)") }
+        if let placement = cmd.placement {
+            parts.append("p=\(placement.id)")
+            if placement.zIndex != 0 { parts.append("z=\(placement.zIndex)") }
+            if placement.xOffset > 0 { parts.append("X=\(placement.xOffset)") }
+            if placement.yOffset > 0 { parts.append("Y=\(placement.yOffset)") }
+            if placement.keepsCursor { parts.append("C=1") }
+        }
+        switch cmd.deletion {
+            case .allPlacements(let freeing):
+                parts.append("d=\(freeing ? "A" : "a")")
+            case .image(let id, let freeing):
+                parts.append("d=\(freeing ? "I" : "i")")
+                if cmd.id == 0 { parts.append("i=\(id)") }
+            case nil:
+                break
+        }
+        if cmd.isQuiet { parts.append("q=2") }
         return parts.joined(separator: ",")
     }
 
