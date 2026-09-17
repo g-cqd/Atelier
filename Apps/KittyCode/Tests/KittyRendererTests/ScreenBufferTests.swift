@@ -87,3 +87,26 @@ struct ScreenBufferTests {
         #expect(buffer.dirty.isEmpty)
     }
 }
+
+/// Text reaches the terminal through cells; a control character in a cell would be a command, not a glyph.
+struct ScreenBufferControlTests {
+    @Test
+    func `control characters are shown as the replacement glyph and never stored`() {
+        var buffer = ScreenBuffer(columns: 12, rows: 1)
+        buffer.write("a\u{1b}]52;c;\u{07}b\u{9b}c\u{7f}", row: 0, col: 0, style: .default)
+        let shown = (0 ..< 12).map { buffer[0, $0].character }
+        #expect(!shown.contains { ScreenBuffer.isControl($0) })
+        #expect(shown.prefix(3) == ["a", "\u{FFFD}", "]"])
+        #expect(shown.contains("b") && shown.contains("c"))
+        #expect(ScreenBuffer.isControl("\t") && ScreenBuffer.isControl("\u{85}") && !ScreenBuffer.isControl("é"))
+    }
+
+    @Test
+    func `a shift outside the buffer is refused`() {
+        var buffer = ScreenBuffer(columns: 4, rows: 3)
+        buffer.write("abcd", row: 2, col: 0, style: .default)
+        buffer.shiftRows(regionY: 1, regionHeight: 5, regionX: 0, regionWidth: 4, delta: 1)
+        buffer.shiftRows(regionY: 0, regionHeight: 3, regionX: 2, regionWidth: 4, delta: 1)
+        #expect((0 ..< 4).map { buffer[2, $0].character } == ["a", "b", "c", "d"])
+    }
+}

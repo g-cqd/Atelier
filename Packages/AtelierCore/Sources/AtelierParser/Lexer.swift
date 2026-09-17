@@ -103,7 +103,9 @@ public struct Lexer: Sendable {
             if let scanner = externalScanner {
                 let validSymbols = Set(scanner.validSymbols)
                 if !validSymbols.isEmpty,
-                    let result = scanner.scan(source: utf8, position: pos, validSymbols: validSymbols)
+                    let result = scanner.scan(source: utf8, position: pos, validSymbols: validSymbols),
+                    // A scanner's length is its own claim; only a non-empty span inside the source is honoured.
+                    result.length > 0, result.length <= utf8.count - pos
                 {
                     let endPos = pos + result.length
                     let endPoint = advancePoint(point, over: utf8, from: pos, to: endPos)

@@ -155,9 +155,7 @@ struct KittyGitTests {
             if spec.arguments.contains("--porcelain=v2") {
                 return porcelain(["? loose.txt", "1 .M N... 100644 100644 100644 aaaa bbbb tracked.txt"])
             }
-            #expect(
-                spec.arguments == ["show", "HEAD:tracked.txt"]
-                    || spec.arguments.suffix(2) == ["show", "HEAD:tracked.txt"])
+            #expect(spec.arguments.suffix(3) == ["show", "--end-of-options", "HEAD:tracked.txt"])
             return .success("one\ntwo\n")
         }
         let provider = GitStatusProvider(rootPath: "/project", runner: runner)

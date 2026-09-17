@@ -64,7 +64,10 @@ public struct ScreenBuffer: Sendable {
     public mutating func write(_ string: String, row: Int, col: Int, style: Style) {
         guard row >= 0, row < rows, col >= 0 else { return }
         var c = col
-        for char in string {
+        for raw in string {
+            // A control character stored in a cell would reach the terminal as a command (an ESC sequence in a
+            // file name or a search hit); every writer goes through here, so the neutralisation is done once.
+            let char = Self.isControl(raw) ? Self.replacement : raw
             let w = UnicodeWidth.displayWidth(of: char)
             guard w > 0 else { continue }
             if w == 2 {
@@ -80,6 +83,16 @@ public struct ScreenBuffer: Sendable {
                 }
                 c += 1
             }
+        }
+    }
+
+    /// The glyph a control character is shown as.
+    public static let replacement: Character = "\u{FFFD}"
+
+    /// Whether `character` carries a C0 control, DEL or a C1 control.
+    public static func isControl(_ character: Character) -> Bool {
+        character.unicodeScalars.contains { scalar in
+            scalar.value < 0x20 || scalar.value == 0x7F || (0x80 ... 0x9F).contains(scalar.value)
         }
     }
 
@@ -128,7 +141,9 @@ public struct ScreenBuffer: Sendable {
         regionX: Int, regionWidth: Int,
         delta: Int
     ) {
-        guard delta != 0, regionWidth > 0, regionHeight > 0, abs(delta) < regionHeight else {
+        guard delta != 0, regionWidth > 0, regionHeight > 0, abs(delta) < regionHeight,
+            regionY >= 0, regionX >= 0, regionY + regionHeight <= rows, regionX + regionWidth <= columns
+        else {
             return
         }
 

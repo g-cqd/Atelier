@@ -201,11 +201,15 @@ public struct UnifiedPatch: Sendable, Equatable {
         return path
     }
 
+    /// The largest line number a hunk header may name; beyond it the header is treated as malformed rather than
+    /// letting the reconstruction pad a document with that many empty lines.
+    public static let maximumLineNumber = 1 << 22
+
     private static func hunkHeader(_ line: Substring) -> Hunk {
         func range(_ token: Substring) -> (Int, Int) {
             let parts = token.dropFirst().split(separator: ",", maxSplits: 1)
-            let start = Int(parts.first ?? "") ?? 0
-            let count = parts.count > 1 ? Int(parts[1]) ?? 1 : 1
+            let start = min(max(Int(parts.first ?? "") ?? 0, 0), maximumLineNumber)
+            let count = min(max(parts.count > 1 ? Int(parts[1]) ?? 1 : 1, 0), maximumLineNumber)
             return (start, count)
         }
         let tokens = line.dropFirst(3).split(separator: " ", maxSplits: 2)
