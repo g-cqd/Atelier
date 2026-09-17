@@ -73,6 +73,35 @@ public struct LineChangeMarkers: Sendable, Equatable {
         byLine = markers
     }
 
+    /// The (old, new) line pairs the ``LineChange/modified`` marks stand for: within each run of edits, the removed
+    /// and inserted lines pair up in order, so an intraline emphasis can compare exactly the lines the gutter
+    /// marks as modified.
+    /// - Complexity: O(edits)
+    public static func modifiedPairs(edits: [DiffEdit]) -> [(old: Int, new: Int)] {
+        var pairs: [(old: Int, new: Int)] = []
+        var removed: [Int] = []
+        var inserted: [Int] = []
+        func closeRun() {
+            for (oldIndex, newIndex) in zip(removed, inserted) {
+                pairs.append((oldIndex, newIndex))
+            }
+            removed.removeAll(keepingCapacity: true)
+            inserted.removeAll(keepingCapacity: true)
+        }
+        for edit in edits {
+            switch edit {
+                case .equal:
+                    closeRun()
+                case .delete(let oldIndex):
+                    removed.append(oldIndex)
+                case .insert(let newIndex):
+                    inserted.append(newIndex)
+            }
+        }
+        closeRun()
+        return pairs
+    }
+
     /// The markers between two line sources under `pipeline`.
     public init(old: some DiffSource, new: some DiffSource, pipeline: DiffPipeline = DiffPipeline()) {
         guard new.lineCount > 0 else {

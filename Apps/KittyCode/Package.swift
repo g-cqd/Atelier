@@ -57,12 +57,14 @@ let package = Package(
 
         // Layer 1 — Escape sequence encoders/decoders
         .target(
-            name: "KittyCodecs", dependencies: ["KittyTerminal", "KittyStyle"],
+            name: "KittyCodecs",
+            dependencies: ["KittyTerminal", "KittyStyle", .product(name: "AemiKernel", package: "aemi")],
             swiftSettings: strict),
 
         // Layer 2a — Async InputEvent stream
         .target(
-            name: "KittyInput", dependencies: ["KittyCodecs"], swiftSettings: strict),
+            name: "KittyInput", dependencies: ["KittyCodecs", .product(name: "AemiKernel", package: "aemi")],
+            swiftSettings: strict),
 
         // Layer 2b — Screen buffer, diff renderer
         .target(

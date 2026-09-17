@@ -5,6 +5,8 @@ public import KittySyntax
 /// A highlighted range within a single line, carrying its own style.
 public struct TextHighlight: Sendable, Equatable {
     public enum Role: Int, Sendable, Equatable, Comparable {
+        /// Words a modified line changed against its git base; yields to every other highlight.
+        case changedText = -1
         case searchMatch = 0
         case userSelection = 1
         case activeSearchMatch = 2
