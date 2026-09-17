@@ -1,6 +1,6 @@
 import Testing
 
-@testable import KittySearch
+@testable import AtelierSearch
 
 @Suite("SearchPattern compilation")
 struct SearchPatternTests {

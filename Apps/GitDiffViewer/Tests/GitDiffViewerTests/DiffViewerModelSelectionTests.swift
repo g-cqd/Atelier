@@ -1,5 +1,6 @@
 import AemiCore
 import AemiTesting
+import AtelierFileTree
 import DiffCore
 import Foundation
 import Synchronization

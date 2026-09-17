@@ -1,3 +1,4 @@
+import AtelierFileTree
 import Testing
 
 @testable import DiffComparison
@@ -53,7 +54,7 @@ struct ComparisonTests {
             right: [entry("z/same.swift", "1"), entry("a/x/changed.swift", "8")],
             leftSource: nil, rightSource: nil
         )
-        let leftTree = FileNode.tree(from: ["z/same.swift", "a/x/changed.swift"])
+        let leftTree = PathNode.tree(from: ["z/same.swift", "a/x/changed.swift"])
 
         let full = ExplorerTrees.build(
             comparison: comparison, leftTree: leftTree, rightTree: leftTree, showsChangesOnly: false, style: .hierarchy)

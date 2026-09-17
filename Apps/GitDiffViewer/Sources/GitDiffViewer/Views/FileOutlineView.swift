@@ -1,4 +1,5 @@
 import AppKit
+import AtelierFileTree
 import DiffComparison
 import DiffCore
 import DiffGit
@@ -135,7 +136,7 @@ struct FileOutlineView: NSViewRepresentable {
                 )
             }
             var reused: [String: OutlineItem] = [:]
-            func build(_ node: FileNode, parent: OutlineItem?, continuesChain: Bool) -> OutlineItem {
+            func build(_ node: PathNode, parent: OutlineItem?, continuesChain: Bool) -> OutlineItem {
                 let item = itemsByKey[node.id] ?? OutlineItem(node: node)
                 item.node = node
                 item.parent = parent
@@ -152,7 +153,7 @@ struct FileOutlineView: NSViewRepresentable {
                 roots = only.nodes.map { build($0, parent: nil, continuesChain: false) }
             } else {
                 roots = sections.map { section in
-                    let node = FileNode(
+                    let node = PathNode(
                         id: Self.sectionPrefix + section.id, name: section.title, isDirectory: true,
                         children: section.nodes)
                     let item = itemsByKey[node.id] ?? OutlineItem(node: node)
@@ -379,15 +380,15 @@ struct FileOutlineView: NSViewRepresentable {
 /// One row of the outline, kept between rebuilds so the outline view recognises it.
 final class OutlineItem: NSObject {
     let key: String
-    var node: FileNode
+    var node: PathNode
     var children: [OutlineItem] = []
-    /// See ``FileNode/chainKey``.
+    /// See ``PathNode/chainKey``.
     var chainKey: String
     /// A group row heading one of the explorer's sections; it has no file and cannot be selected.
     var isSection = false
     weak var parent: OutlineItem?
 
-    init(node: FileNode) {
+    init(node: PathNode) {
         key = node.id
         self.node = node
         chainKey = node.id
@@ -493,7 +494,7 @@ final class FileCellView: NSTableCellView {
         fatalError("init(coder:) is not supported")
     }
 
-    func configure(node: FileNode, glyph: ChangeGlyph?) {
+    func configure(node: PathNode, glyph: ChangeGlyph?) {
         imageView?.image = NSImage(
             systemSymbolName: node.isDirectory ? "folder" : "doc.text",
             accessibilityDescription: node.isDirectory ? "Folder" : "File")
