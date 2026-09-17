@@ -147,6 +147,10 @@ public func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderP
             handleMouse(mouse, state: state, pipeline: pipeline)
             return true
 
+        case .unknown(let bytes):
+            state.receiveTerminalReply(bytes)
+            return true
+
         default:
             return true
     }

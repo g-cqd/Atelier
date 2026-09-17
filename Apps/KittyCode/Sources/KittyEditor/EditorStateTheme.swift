@@ -126,6 +126,42 @@ extension EditorState {
         )
     }
 
+    /// The syntax theme the config asks for beyond its own colours: the Xcode theme it names, else one derived
+    /// from the terminal palette when `syntax.themeFromTerminal` is set and the palette has been answered.
+    /// - Throws: The read or parse error of the `.xccolortheme` file.
+    static func resolveConfiguredSyntaxTheme(config: KittyConfig, palette: TerminalPalette) throws -> Theme? {
+        if let xcode = try loadXcodeTheme(config: config) { return xcode }
+        guard config.syntax.themeFromTerminal, palette.foreground != nil || palette.background != nil else {
+            return nil
+        }
+        return Theme(.derived(from: palette))
+    }
+
+    /// Feeds one undecoded terminal reply to the palette collector. Returns whether the bytes were a palette
+    /// reply; the device-attributes reply that ends the round applies the derived theme when the config asks
+    /// for it and no Xcode theme is set.
+    @discardableResult
+    public func receiveTerminalReply(_ bytes: [UInt8]) -> Bool {
+        guard let reply = OSCPalette.parse(bytes) else { return false }
+        switch reply {
+            case .foreground(let color):
+                terminalPalette.foreground = ThemeColor(color)
+            case .background(let color):
+                terminalPalette.background = ThemeColor(color)
+            case .ansi(let index, let color):
+                guard index < 256 else { return true }
+                if terminalPalette.ansi.count <= index {
+                    terminalPalette.ansi.append(
+                        contentsOf: repeatElement(nil, count: index + 1 - terminalPalette.ansi.count))
+                }
+                terminalPalette.ansi[index] = ThemeColor(color)
+            case .end:
+                guard config.syntax.themeFromTerminal, config.syntax.xcodeTheme == nil else { return true }
+                replaceConfiguredSyntaxTheme(Theme(.derived(from: terminalPalette)))
+        }
+        return true
+    }
+
     /// The syntax theme `config.syntax.xcodeTheme` names, resolved to terminal styles; nil when none is set.
     /// - Throws: The read or parse error of the `.xccolortheme` file.
     static func loadXcodeTheme(config: KittyConfig) throws -> Theme? {
@@ -133,5 +169,12 @@ extension EditorState {
         let url = URL(filePath: PathUtilities.expandingTilde(in: path))
         let document = try XcodeThemeDocument(contentsOf: url)
         return Theme(document.syntaxTheme(named: url.deletingPathExtension().lastPathComponent))
+    }
+}
+
+extension ThemeColor {
+    /// A theme colour from the terminal's 8-bit channels.
+    init(_ color: ColorRGB) {
+        self.init(byteRed: color.r, green: color.g, blue: color.b)
     }
 }

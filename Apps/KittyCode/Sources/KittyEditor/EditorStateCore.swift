@@ -2,6 +2,7 @@ public import AemiCore
 import AtelierGit
 public import AtelierProcess
 public import AtelierText
+public import AtelierTheme
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable file_length type_body_length
 import Foundation
@@ -525,6 +526,8 @@ public final class EditorState {
     /// The theme `syntax.xcodeTheme` names, loaded when the config is applied; nil when none is configured or
     /// the file could not be read, in which case the colour scheme's syntax colours apply.
     @ObservationIgnored private var configuredSyntaxTheme: Theme?
+    /// The colours the terminal answered for its palette, as `receiveTerminalReply` gathers them.
+    @ObservationIgnored public var terminalPalette = TerminalPalette()
 
     public var syntaxTheme: Theme {
         if let cached = cachedSyntaxTheme { return cached }
@@ -533,14 +536,27 @@ public final class EditorState {
         return theme
     }
 
-    /// Loads the configured Xcode theme, if any, and reports a failure in the status bar.
+    /// Loads the configured Xcode theme, if any, else the terminal-derived one when asked for and the palette
+    /// has arrived, and reports a failure in the status bar.
     private func loadConfiguredSyntaxTheme(_ config: KittyConfig) {
         do {
-            configuredSyntaxTheme = try Self.loadXcodeTheme(config: config)
+            configuredSyntaxTheme = try Self.resolveConfiguredSyntaxTheme(config: config, palette: terminalPalette)
         } catch {
             configuredSyntaxTheme = nil
             statusMessage = "Could not load syntax.xcodeTheme: \(error.localizedDescription)"
         }
+    }
+
+    /// Replaces the configured syntax theme and re-highlights every open buffer with it.
+    func replaceConfiguredSyntaxTheme(_ theme: Theme?) {
+        configuredSyntaxTheme = theme
+        cachedSyntaxTheme = nil
+        highlightSession = nil
+        for buffer in bufferManager.buffers {
+            buffer.highlightSession = nil
+        }
+        refreshHighlights()
+        markEverythingDirty()
     }
 
     private static func makeSyntaxTheme(from colorScheme: ColorScheme) -> Theme {
@@ -1290,7 +1306,7 @@ public final class EditorState {
         self.config = config
         self.treePanelWidth = config.treeWidth
         self.colorScheme = Self.makeColorScheme(config: config)
-        self.configuredSyntaxTheme = try? Self.loadXcodeTheme(config: config)
+        self.configuredSyntaxTheme = try? Self.resolveConfiguredSyntaxTheme(config: config, palette: TerminalPalette())
         let catalog = config.useSFSymbolsInTerminal ? SymbolCatalogLoader.loadOrDiscover() : nil
         self.symbolTheme = TerminalSymbolTheme.make(
             symbolsEnabled: config.useSFSymbolsInTerminal, catalog: catalog)

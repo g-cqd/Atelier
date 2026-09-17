@@ -239,6 +239,11 @@ struct KittyCodeEntry {
                 },
                 configureInputSource: { inputSource in
                     refreshSource.bind(inputSource: inputSource)
+                    // The terminal is in raw mode by now, so its palette answers land in the input stream
+                    // as undecoded replies that `handleEvent` feeds to the palette collector.
+                    if config.syntax.themeFromTerminal {
+                        try? connection.write(OSCPalette.query())
+                    }
                 },
                 renderClock: renderClock
             )
