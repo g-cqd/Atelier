@@ -57,9 +57,9 @@ struct QueryMatcherTests {
     func `Wildcard predicate filters wildcard matches`() throws {
         let comment = SyntaxNode(type: "comment", byteRange: 0 ..< 4)
         let root = SyntaxNode(type: "source", children: [comment], byteRange: 0 ..< 7)
-        let tree = SyntaxTree(root: root, source: "TODO();")
+        let tree = SyntaxTree(root: root, source: "NOTE();")
 
-        let query = try QueryParser.parse("(_) @comment (#match? @comment \"^TODO$\")")
+        let query = try QueryParser.parse("(_) @comment (#match? @comment \"^NOTE$\")")
         let matches = QueryMatcher.execute(query: query, tree: tree)
 
         #expect(matches.count == 1)
