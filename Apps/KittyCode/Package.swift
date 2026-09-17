@@ -99,7 +99,8 @@ let package = Package(
         .target(
             name: "KittySearch",
             dependencies: [
-                .product(name: "AemiKernels", package: "aemi"), .product(name: "AemiKernel", package: "aemi")
+                .product(name: "AemiKernels", package: "aemi"), .product(name: "AemiKernel", package: "aemi"),
+                .product(name: "AemiIO", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
             ],
             swiftSettings: strict),
 
@@ -114,8 +115,6 @@ let package = Package(
                 .product(name: "AtelierQuery", package: "AtelierCore"), "KittyStyle",
                 .product(name: "AtelierSyntaxModel", package: "AtelierCore"),
                 .product(name: "AemiCore", package: "aemi"),
-                .product(name: "AtelierLexers", package: "AtelierCore"),
-                .product(name: "AtelierTheme", package: "AtelierCore"),
                 .product(name: "AemiKernel", package: "aemi")
             ],
             resources: [.copy("Grammars")],
@@ -155,12 +154,12 @@ let package = Package(
             dependencies: [
                 "KittyApp", "KittyWorkspace", "KittyInput", .product(name: "AtelierText", package: "AtelierCore"),
                 "KittyFileTree",
-                .product(name: "AtelierTheme", package: "AtelierCore"),
                 "KittyRenderer", "KittySyntax", "KittySymbols", "KittyGit", "KittySearch",
                 "KittyStyle", "KittyTerminal",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "AemiCore", package: "aemi"),
-                .product(name: "AemiKernel", package: "aemi")
+                .product(name: "AemiKernel", package: "aemi"),
+                .product(name: "AemiRuntime", package: "aemi")
             ],
             swiftSettings: strict),
 
@@ -198,7 +197,10 @@ let package = Package(
             swiftSettings: strict),
         .testTarget(
             name: "KittySyntaxTests",
-            dependencies: ["KittySyntax", "KittyCodecs", .product(name: "AtelierSyntaxModel", package: "AtelierCore")],
+            dependencies: [
+                "KittySyntax", "KittyCodecs", .product(name: "AtelierSyntaxModel", package: "AtelierCore"),
+                .product(name: "AemiTestKit", package: "aemi")
+            ],
             swiftSettings: strict),
         .testTarget(
             name: "KittyWidgetsTests", dependencies: ["KittyWidgets"],
@@ -236,7 +238,8 @@ let package = Package(
             ],
             swiftSettings: strict),
         .testTarget(
-            name: "KittySearchTests", dependencies: ["KittySearch"],
+            name: "KittySearchTests",
+            dependencies: ["KittySearch", .product(name: "AemiRuntime", package: "aemi")],
             swiftSettings: strict)
     ]
 )

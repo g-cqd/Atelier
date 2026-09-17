@@ -1,11 +1,16 @@
+import AemiIO
+import AemiKernels
 import Foundation
 import Synchronization
 import System
+
+public import class AemiRuntime.BlockingOffloadPool
 
 public func searchWorkspace(
     pattern: SearchPattern,
     files: [String],
     openBuffers: [String: [String]],
+    pool: BlockingOffloadPool,
     maxResults: Int = 5000,
     onProgress: @escaping @Sendable (SearchFileResult) -> Void
 ) async -> SearchRunResult {
@@ -32,7 +37,7 @@ public func searchWorkspace(
                     if let bufferLines = openBuffers[filePath] {
                         lines = bufferLines
                     } else {
-                        guard let fileLines = readFileLines(at: filePath) else {
+                        guard let fileLines = await readFileLines(at: filePath, pool: pool) else {
                             counters.incrementFilesSearched()
                             continue
                         }
@@ -85,53 +90,82 @@ public func searchWorkspace(
     )
 }
 
-/// Audit A4 — `FileManager.contents(atPath:)` reads the whole file into a
-/// `Data`, then `String(data:encoding:)` re-decodes into a UTF-8 String,
-/// then `split` allocates a `[String]` of every line. Peak RSS per worker
-/// = ~3× the largest file in flight, multiplied by worker count.
+/// Audit A4 — `FileManager.contents(atPath:)` reads the whole file into a `Data`, then
+/// `String(data:encoding:)` re-decodes into a UTF-8 String, then `split` allocates a `[String]` of
+/// every line. Peak RSS per worker = ~3× the largest file in flight, multiplied by worker count.
 ///
-/// The streaming version below reads in 64 KB chunks, splits on `0x0A`
-/// directly in `Data` space, and decodes one line at a time. Peak per
-/// worker drops to ~64 KB chunk + one pending line + the per-file
-/// `[String]` accumulator. The match-line snippets stay correct because
-/// the final `[String]` is still produced — the win is in the in-flight
-/// allocation footprint.
-private func readFileLines(at path: String) -> [String]? {
-    guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
-    defer { try? handle.close() }
-
-    var lines: [String] = []
-    // Bytes accumulated since the last newline. A line that spans two
-    // chunks lives here briefly before being decoded.
-    var pending = Data()
-    let chunkSize = 64 * 1024
-
-    while let chunk = try? handle.read(upToCount: chunkSize), !chunk.isEmpty {
-        var cursor = chunk.startIndex
-        while let newlineIndex = chunk[cursor...].firstIndex(of: 0x0A) {
-            if pending.isEmpty {
-                lines.append(decodeLine(chunk[cursor ..< newlineIndex]))
-            } else {
-                pending.append(chunk[cursor ..< newlineIndex])
-                lines.append(decodeLine(pending))
-                pending.removeAll(keepingCapacity: true)
-            }
-            cursor = chunk.index(after: newlineIndex)
-        }
-        // Carry the trailing fragment forward; the next chunk completes the line.
-        if cursor < chunk.endIndex {
-            pending.append(chunk[cursor...])
-        }
-    }
-    // Trailing fragment (and explicit empty-trailing-line for files that
-    // end with `\n`, preserving the original
-    // `split(omittingEmptySubsequences: false)` semantics).
-    lines.append(decodeLine(pending))
-    return lines
+/// The mapped version below opens the file through `PosixFile`, maps it read-only with
+/// `RawFileMap`, and scans for `\n` with the SIMD `AemiKernels.firstIndexOfByte` kernel instead of a
+/// byte-by-byte Swift loop or a `Data`-chunked scan. No chunk boundary bookkeeping is needed — the
+/// whole file is one mapped region — and only each line's bytes are copied into a `String`, not the
+/// whole file. This is blocking, syscall/mmap-bound work, so it always runs on `pool`
+/// (`BlockingOffloadPool`), never inline on the cooperative pool that drives this task group.
+private func readFileLines(at path: String, pool: BlockingOffloadPool) async -> [String]? {
+    try? await pool.run { readFileLinesBlocking(at: path) }
 }
 
-private func decodeLine(_ slice: Data) -> String {
-    String(data: slice, encoding: .utf8) ?? ""
+/// The blocking body `readFileLines` offloads to `pool`. Returns `nil` when the file cannot be
+/// opened, measured or mapped (deleted or permission-denied between enumeration and search —
+/// matches the previous `FileHandle`-based `nil` return).
+private func readFileLinesBlocking(at path: String) -> [String]? {
+    guard let file = try? PosixFile(path: path, mode: .readOnly) else { return nil }
+    defer { file.close() }
+    guard let size = try? file.fileSize() else { return nil }
+    // `mmap` rejects a zero-length mapping; an empty file has exactly one (empty) line, matching
+    // `"".split(separator: "\n", omittingEmptySubsequences: false) == [""]`.
+    guard size > 0 else { return [""] }
+
+    guard let map = try? RawFileMap(fileDescriptor: file.fileDescriptor, capacity: size) else {
+        return nil
+    }
+    // The whole file is scanned once, front to back: let the kernel page it in ahead of the scan.
+    map.prefetch(offset: 0, length: size)
+    // `withRegion`'s `RawSpan` is scoped to this closure (statically prevented from escaping the
+    // mapping); `splitLines` runs entirely inside that scope, so the raw pointer it derives from
+    // `withUnsafeBytes` never outlives the mapping.
+    return map.withRegion(offset: 0, count: size) { region in
+        region.withUnsafeBytes { splitLines($0) }
+    }
+}
+
+/// Splits a mapped file's bytes on `\n`, matching `String.split(separator: "\n",
+/// omittingEmptySubsequences: false)`: a trailing `\n` produces one extra empty element at the end.
+///
+/// Invariant: `buffer` is only valid for the duration of this call (handed in from
+/// `RawFileMap.withRegion`'s scoped `RawSpan` via `withUnsafeBytes`, both of which return before this
+/// function's caller does), and every offset read here — `lineStart` and `lineStart + relativeNewline`
+/// — stays within `0...buffer.count` by construction of the loop below, so no read reaches past the
+/// mapped region.
+private func splitLines(_ buffer: UnsafeRawBufferPointer) -> [String] {
+    guard let base = buffer.baseAddress else { return [""] }
+    let bytes = base.assumingMemoryBound(to: UInt8.self)
+    let count = buffer.count
+    var lines: [String] = []
+    var lineStart = 0
+    while true {
+        if lineStart == count {
+            lines.append("")
+            return lines
+        }
+        let remaining = count - lineStart
+        let relativeNewline = AemiKernels.firstIndexOfByte(
+            base: bytes + lineStart, count: remaining, needle: 0x0A)
+        let lineEnd = lineStart + relativeNewline
+        lines.append(decodeLine(bytes, from: lineStart, to: lineEnd))
+        if relativeNewline == remaining {
+            return lines
+        }
+        lineStart = lineEnd + 1
+    }
+}
+
+/// Decodes `bytes[start..<end]` as UTF-8, mirroring the previous `String(data:encoding:.utf8) ?? ""`
+/// fallback for invalid byte sequences. `start` and `end` are always produced by the newline scan in
+/// `splitLines`, so `0 <= start <= end <= count` holds for the same mapped buffer.
+private func decodeLine(_ bytes: UnsafePointer<UInt8>, from start: Int, to end: Int) -> String {
+    guard end > start else { return "" }
+    let slice = UnsafeBufferPointer(start: bytes + start, count: end - start)
+    return String(validating: slice, as: UTF8.self) ?? ""
 }
 
 extension Duration {

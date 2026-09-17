@@ -88,7 +88,8 @@ struct KittyCodeEntry {
         let processRunner = HardenedProcessRunner(pool: offloadPool, clock: clock)
 
         let state = EditorState(
-            rootPath: launchConfig.rootPath, config: config, taskProvider: taskProvider, clock: clock)
+            rootPath: launchConfig.rootPath, config: config, taskProvider: taskProvider, clock: clock,
+            searchPool: offloadPool)
         state.readOnly = launchConfig.readOnly
 
         await state.loadInitialTree()
