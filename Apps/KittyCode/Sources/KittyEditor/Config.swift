@@ -270,6 +270,9 @@ public struct KittyConfig: Codable, Sendable {
         /// Path of an Xcode `.xccolortheme` whose syntax colours replace the six `theme.*Foreground` syntax
         /// colours; `~` expands to the home directory. Nil keeps the configured colours.
         public var xcodeTheme: String?
+        /// Derive the syntax colours from the terminal's own palette (queried with OSC 10, 11 and 4 at
+        /// startup) when no Xcode theme is set, so the editor matches the terminal around it.
+        public var themeFromTerminal: Bool = false
 
         public init() {}
 
@@ -281,6 +284,8 @@ public struct KittyConfig: Codable, Sendable {
                 try c.decodeIfPresent([String].self, forKey: .disabledLanguages)
                 ?? d.disabledLanguages
             xcodeTheme = try c.decodeIfPresent(String.self, forKey: .xcodeTheme) ?? d.xcodeTheme
+            themeFromTerminal =
+                try c.decodeIfPresent(Bool.self, forKey: .themeFromTerminal) ?? d.themeFromTerminal
         }
     }
 

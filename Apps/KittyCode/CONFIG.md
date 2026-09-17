@@ -49,6 +49,7 @@ KittyCode reads its configuration from `~/.kittycode.json` on launch. All fields
 | `syntax.enabled` | `bool` | `true` | Enable Tree-sitter-based syntax highlighting. |
 | `syntax.disabledLanguages` | `[string]` | `[]` | Language identifiers to exclude from highlighting (e.g. `["python", "ruby"]`). |
 | `syntax.xcodeTheme` | `string` | unset | Path of an Xcode `.xccolortheme` (`~` allowed) whose syntax colours replace the `theme.*Foreground` syntax colours. |
+| `syntax.themeFromTerminal` | `bool` | `false` | Derive the syntax colours from the terminal's palette (OSC 10/11/4 query at startup) when no `xcodeTheme` is set. |
 
 ## Auto-Save (`autoSave`)
 
