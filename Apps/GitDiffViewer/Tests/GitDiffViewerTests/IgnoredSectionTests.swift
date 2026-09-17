@@ -1,3 +1,4 @@
+import AtelierFileTree
 import AtelierGit
 import Foundation
 import Testing
@@ -48,8 +49,8 @@ struct IgnoredSectionTests {
             left: [entry("a.swift", "1")], right: [entry("a.swift", "2")], leftSource: nil, rightSource: nil,
             rightIgnored: [ignored("build/out.txt")]
         )
-        let leftTree = FileNode.tree(from: ["a.swift"])
-        let rightTree = FileNode.tree(from: ["a.swift"])
+        let leftTree = PathNode.tree(from: ["a.swift"])
+        let rightTree = PathNode.tree(from: ["a.swift"])
 
         let hidden = ExplorerTrees.build(
             comparison: comparison, leftTree: leftTree, rightTree: rightTree, showsChangesOnly: true, style: .hierarchy)

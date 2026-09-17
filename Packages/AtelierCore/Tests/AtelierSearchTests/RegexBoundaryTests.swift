@@ -1,6 +1,6 @@
 import Testing
 
-@testable import KittySearch
+@testable import AtelierSearch
 
 @Test(arguments: ["", "abc"])
 func `zero width anchors keep their original line boundaries`(line: String) throws {

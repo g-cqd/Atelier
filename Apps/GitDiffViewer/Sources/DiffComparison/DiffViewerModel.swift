@@ -1,4 +1,5 @@
 package import AemiCore
+package import AtelierFileTree
 package import DiffCore
 package import DiffGit
 package import DiffRendering
@@ -79,15 +80,15 @@ package final class DiffViewerModel {
     package var statuses: [String: PathStatus] { comparison.statuses }
     /// Renamed files, left path to right path.
     package var renames: [String: String] { comparison.renames.byLeft }
-    package var leftTree: [FileNode] { trees.left }
-    package var rightTree: [FileNode] { trees.right }
-    package var unifiedTree: [FileNode] { trees.unified }
+    package var leftTree: [PathNode] { trees.left }
+    package var rightTree: [PathNode] { trees.right }
+    package var unifiedTree: [PathNode] { trees.unified }
     /// The groups of each explorer: the compared files, and the ignored ones when the setting shows them.
     package var leftSections: [ExplorerSection] { sections(changes: trees.left, ignored: trees.leftIgnored) }
     package var rightSections: [ExplorerSection] { sections(changes: trees.right, ignored: trees.rightIgnored) }
     package var unifiedSections: [ExplorerSection] { sections(changes: trees.unified, ignored: trees.unifiedIgnored) }
 
-    private func sections(changes: [FileNode], ignored: [FileNode]) -> [ExplorerSection] {
+    private func sections(changes: [PathNode], ignored: [PathNode]) -> [ExplorerSection] {
         let compared = ExplorerSection(
             kind: .changes, title: settings.showsChangesOnly ? "Changes" : "Files", nodes: changes)
         guard settings.showsIgnoredFiles else { return [compared] }

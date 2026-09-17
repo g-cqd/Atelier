@@ -1,4 +1,5 @@
 package import AemiCore
+package import AtelierFileTree
 import DiffCore
 package import DiffGit
 import DiffRendering
@@ -23,7 +24,7 @@ package final class SideState {
     /// Files git ignores in a working tree, read on demand by `loadIgnoredEntries()`; nil until then.
     package private(set) var ignoredEntries: [SourceEntry]?
     package private(set) var entriesByPath: [String: SourceEntry] = [:]
-    package private(set) var tree: [FileNode] = []
+    package private(set) var tree: [PathNode] = []
     package private(set) var isLoading = false
     package private(set) var errorMessage: String?
     package var customRef = ""
@@ -162,7 +163,7 @@ package final class SideState {
         self.entries = entries
         ignoredEntries = ignored
         entriesByPath = Dictionary(entries.map { ($0.relativePath, $0) }, uniquingKeysWith: { first, _ in first })
-        tree = FileNode.tree(from: entries.map(\.relativePath))
+        tree = PathNode.tree(from: entries.map(\.relativePath))
         if notifying { onEntriesChanged?() }
     }
 }

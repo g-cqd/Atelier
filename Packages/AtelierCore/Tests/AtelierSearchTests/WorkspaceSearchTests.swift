@@ -2,7 +2,7 @@ import AemiRuntime
 import Foundation
 import Testing
 
-@testable import KittySearch
+@testable import AtelierSearch
 
 @Suite("WorkspaceSearch")
 struct WorkspaceSearchTests {

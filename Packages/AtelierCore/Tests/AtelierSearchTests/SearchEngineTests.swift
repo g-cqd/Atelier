@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import KittySearch
+@testable import AtelierSearch
 
 @Suite("Search engine — findMatches")
 struct SearchEngineTests {

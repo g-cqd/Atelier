@@ -17,6 +17,7 @@ public import KittyWorkspace
 public import Observation
 import System
 import os
+
 public import class AemiRuntime.BlockingOffloadPool
 
 /// Signpost emitter for editor hot paths — wraps `textDidChange` and the
