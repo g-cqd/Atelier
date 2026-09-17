@@ -78,13 +78,13 @@ public struct KeymapResolver: Sendable {
             .vimEnterVisualLine
         vimNormalBindings[KeyStroke(keyCode: AsciiKey.w)] = .vimMoveWordForward
         vimNormalBindings[KeyStroke(keyCode: AsciiKey.b)] = .vimMoveWordBackward
-        vimNormalBindings[KeyStroke(keyCode: UInt32(Character("0").asciiValue!))] =
+        vimNormalBindings[KeyStroke(keyCode: UInt32(UInt8(ascii: "0")))] =
             .vimMoveLineStart
         vimNormalBindings[
-            KeyStroke(keyCode: UInt32(Character("$").asciiValue!), modifiers: .shift)] =
+            KeyStroke(keyCode: UInt32(UInt8(ascii: "$")), modifiers: .shift)] =
             .vimMoveLineEnd
         vimNormalBindings[KeyStroke(keyCode: AsciiKey.p)] = .vimPaste
-        vimNormalBindings[KeyStroke(keyCode: UInt32(Character("/").asciiValue!))] =
+        vimNormalBindings[KeyStroke(keyCode: UInt32(UInt8(ascii: "/")))] =
             .vimSearchForward
         context[.editorVimNormal] = vimNormalBindings
 
@@ -97,10 +97,10 @@ public struct KeymapResolver: Sendable {
         vimVisualBindings[KeyStroke(keyCode: AsciiKey.l)] = .vimMoveRight
         vimVisualBindings[KeyStroke(keyCode: AsciiKey.w)] = .vimMoveWordForward
         vimVisualBindings[KeyStroke(keyCode: AsciiKey.b)] = .vimMoveWordBackward
-        vimVisualBindings[KeyStroke(keyCode: UInt32(Character("0").asciiValue!))] =
+        vimVisualBindings[KeyStroke(keyCode: UInt32(UInt8(ascii: "0")))] =
             .vimMoveLineStart
         vimVisualBindings[
-            KeyStroke(keyCode: UInt32(Character("$").asciiValue!), modifiers: .shift)] =
+            KeyStroke(keyCode: UInt32(UInt8(ascii: "$")), modifiers: .shift)] =
             .vimMoveLineEnd
         context[.editorVimVisual] = vimVisualBindings
 

@@ -125,8 +125,9 @@ struct LineInterner {
     private func matches(_ identifier: Int, _ normalized: UnsafeRawBufferPointer) -> Bool {
         let range = ranges[identifier]
         guard range.count == normalized.count else { return false }
-        return arena.withUnsafeBytes {
-            unsafe memcmp($0.baseAddress! + range.lowerBound, normalized.baseAddress, range.count) == 0
+        return arena.withUnsafeBytes { bytes in
+            guard let base = bytes.baseAddress, let other = normalized.baseAddress else { return range.isEmpty }
+            return unsafe memcmp(base + range.lowerBound, other, range.count) == 0
         }
     }
 }
