@@ -6,9 +6,24 @@ struct CodeScanner<Unit: LexerUnit> {
     let syntax: LanguageSyntax
     private var tokens: [Token] = []
 
+    /// Lengths and first units the language's keywords span, so the identifier scan can skip the keyword lookup.
+    private let keywordLengths: ClosedRange<Int>
+    private let keywordFirstUnits: [Bool]
+
     init(units: [Unit], syntax: LanguageSyntax) {
         self.units = units
         self.syntax = syntax
+        var shortest = Int.max
+        var longest = 0
+        var firstUnits = [Bool](repeating: false, count: 128)
+        for keyword in syntax.keywords {
+            let count = keyword.utf8.count
+            shortest = min(shortest, count)
+            longest = max(longest, count)
+            if let first = keyword.utf8.first, first < 128 { firstUnits[Int(first)] = true }
+        }
+        keywordLengths = shortest <= longest ? shortest ... longest : 0 ... 0
+        keywordFirstUnits = firstUnits
     }
 
     mutating func scan() -> [Token] {
@@ -137,8 +152,10 @@ struct CodeScanner<Unit: LexerUnit> {
     private mutating func scanIdentifier(from start: Int) -> Int {
         var index = start
         while index < units.count, ASCII.isIdentifier(units[index]) { index += 1 }
-        let word = Unit.text(units[start ..< index])
-        if syntax.keywords.contains(word) {
+        // Only a word that could be a keyword by length and first unit pays for a String; most identifiers do not.
+        if keywordLengths.contains(index - start), units[start] < 128, keywordFirstUnits[Int(units[start])],
+            syntax.keywords.contains(Unit.text(units[start ..< index]))
+        {
             tokens.append(Token(kind: .keyword, range: start ..< index))
         } else if ASCII.isUpper(units[start]) {
             tokens.append(Token(kind: .type, range: start ..< index))

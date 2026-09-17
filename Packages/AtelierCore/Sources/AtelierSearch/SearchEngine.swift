@@ -3,7 +3,7 @@ import Foundation
 /// Returns non-overlapping matches with character-based columns.
 /// Regex matches that split an extended grapheme cluster are omitted so replacement cannot
 /// corrupt a character. ICU's `\X` matches a complete grapheme cluster.
-/// - Note: Cancellation or the cooperative per-line regex budget returns matches collected so far.
+/// - Note: Cancellation or the cooperative per-file regex budget returns matches collected so far.
 public func findMatches(in lines: [String], pattern: SearchPattern) -> [SearchMatch] {
     var matches: [SearchMatch] = []
 
@@ -17,28 +17,39 @@ public func findMatches(in lines: [String], pattern: SearchPattern) -> [SearchMa
                 // within a bounded number of lines, not at task-group boundary.
                 if Task.isCancelled { return matches }
                 var searchStart = line.startIndex
+                // Columns are carried forward from the previous match: measuring each one from the start of the
+                // line made a line with many hits quadratic in its length.
+                var searchStartColumn = 0
                 while searchStart < line.endIndex,
                     let range = line.range(
                         of: text, options: options, range: searchStart ..< line.endIndex)
                 {
-                    let colStart = line.distance(from: line.startIndex, to: range.lowerBound)
-                    let colEnd = line.distance(from: line.startIndex, to: range.upperBound)
+                    let colStart = searchStartColumn + line.distance(from: searchStart, to: range.lowerBound)
+                    let colEnd = colStart + line.distance(from: range.lowerBound, to: range.upperBound)
                     matches.append(SearchMatch(row: row, colStart: colStart, colEnd: colEnd))
                     searchStart = range.upperBound
+                    searchStartColumn = colEnd
                 }
             }
 
         case .regex(let regex):
+            // One budget for the whole file: a per-line budget let a backtracking pattern spend it on every line.
+            let deadline = ContinuousClock.now.advanced(by: RegexMatcher.fileBudget)
             for (row, line) in lines.enumerated() {
-                if Task.isCancelled { return matches }
-                RegexMatcher.enumerate(regex.expression, in: line) { match in
+                if Task.isCancelled || ContinuousClock.now >= deadline { return matches }
+                var cursor = line.startIndex
+                var cursorColumn = 0
+                RegexMatcher.enumerate(regex.expression, in: line, deadline: deadline) { match in
                     guard let range = Range(match.range, in: line),
                         range.lowerBound.samePosition(in: line) != nil,
-                        range.upperBound.samePosition(in: line) != nil
+                        range.upperBound.samePosition(in: line) != nil,
+                        range.lowerBound >= cursor
                     else { return true }
-                    let colStart = line.distance(from: line.startIndex, to: range.lowerBound)
-                    let colEnd = line.distance(from: line.startIndex, to: range.upperBound)
+                    let colStart = cursorColumn + line.distance(from: cursor, to: range.lowerBound)
+                    let colEnd = colStart + line.distance(from: range.lowerBound, to: range.upperBound)
                     matches.append(SearchMatch(row: row, colStart: colStart, colEnd: colEnd))
+                    cursor = range.upperBound
+                    cursorColumn = colEnd
                     return true
                 }
             }

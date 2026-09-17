@@ -175,6 +175,7 @@ package enum DiffRenderer {
         var longestLine = 0
         for row in rows {
             var length = 0
+            var tabs = 0
             switch row {
                 case .diff(let diffRow, let fileIndex, let file):
                     let shown = shownLine(of: diffRow, in: file, side: side)
@@ -182,6 +183,7 @@ package enum DiffRenderer {
                     if let shown {
                         text.append(contentsOf: shown.line)
                         length = shown.line.utf16.count
+                        for unit in shown.line.utf16 where unit == 9 { tabs += 1 }
                         for token in shown.tokens {
                             spans.tokens.append(
                                 (
@@ -211,15 +213,14 @@ package enum DiffRenderer {
                 case .header(let title, let fileIndex):
                     text.append(title)
                     length = title.utf16.count
+                    for unit in title.utf16 where unit == 9 { tabs += 1 }
                     metas.append(RowMeta(kind: .header, oldNumber: nil, newNumber: nil, fileIndex: fileIndex))
             }
             text.append("\n")
             lineStarts.append(offset)
-            longestLine = max(
-                longestLine,
-                length + 3
-                    * text.utf16[text.utf16.index(text.utf16.endIndex, offsetBy: -(length + 1))...].filter { $0 == 9 }
-                    .count)
+            // Counted on the row as it was appended: re-slicing the accumulated text was quadratic once it held a
+            // non-ASCII character.
+            longestLine = max(longestLine, length + 3 * tabs)
             offset += length + 1
         }
         if text.hasSuffix("\n") {

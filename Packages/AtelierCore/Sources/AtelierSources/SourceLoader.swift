@@ -110,7 +110,20 @@ public struct SourceLoader: SourceReading {
         var hasher = Insecure.SHA1()
         hasher.update(data: Data("blob \(data.count)\0".utf8))
         hasher.update(data: data)
-        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        return Self.hex(hasher.finalize())
+    }
+
+    private static let hexDigits: [UInt8] = Array("0123456789abcdef".utf8)
+
+    /// Lowercase hex of a digest without going through `String(format:)` per byte.
+    static func hex(_ digest: some Sequence<UInt8>) -> String {
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(40)
+        for byte in digest {
+            bytes.append(hexDigits[Int(byte >> 4)])
+            bytes.append(hexDigits[Int(byte & 0x0F)])
+        }
+        return String(decoding: bytes, as: UTF8.self)
     }
 
     /// Hashes a file through a read-only memory mapping, so no copy of the contents is made.
@@ -127,7 +140,7 @@ public struct SourceLoader: SourceReading {
         var hasher = Insecure.SHA1()
         guard size > 0 else {
             hasher.update(data: Data("blob 0\0".utf8))
-            return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+            return Self.hex(hasher.finalize())
         }
         let file = try PosixFile(path: path, mode: .readOnly)
         defer { file.close() }
@@ -141,7 +154,7 @@ public struct SourceLoader: SourceReading {
                 region.withUnsafeBytes { hasher.update(bufferPointer: $0) }
             }
         }
-        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        return Self.hex(hasher.finalize())
     }
 
     /// Salted with the path: files a patch carries without content, such as pure renames or mode changes, would
@@ -335,42 +348,80 @@ public struct PatchSource: SourceProvider {
     public let cache: PatchCache
 
     public func entries() async throws -> [GitTreeEntry] {
-        try await cache.patch(at: url).files
-            .compactMap { file in
-                guard !file.isBinary, let path = path(of: file) else { return nil }
-                let text = text(of: file)
-                return GitTreeEntry(
+        try await cache.entry(at: url).texts(side: side).ordered
+            .map { path, text in
+                GitTreeEntry(
                     relativePath: path, blobID: SourceLoader.patchBlobID(path: path, text: text), size: text.utf8.count)
             }
     }
 
     public func content(of entry: GitTreeEntry) async throws -> String {
-        try await cache.patch(at: url).files.first { path(of: $0) == entry.relativePath }.map(text(of:)) ?? ""
+        try await cache.entry(at: url).texts(side: side).byPath[entry.relativePath] ?? ""
     }
 
-    private func path(of file: UnifiedPatch.FileChange) -> String? {
-        side == .old ? file.oldPath : file.newPath
-    }
-
-    private func text(of file: UnifiedPatch.FileChange) -> String {
-        (side == .old ? file.reconstructedTexts.old : file.reconstructedTexts.new) ?? ""
+    public func contents(of entries: [GitTreeEntry]) async throws -> [String: String] {
+        let byPath = try await cache.entry(at: url).texts(side: side).byPath
+        return Dictionary(
+            entries.compactMap { entry in byPath[entry.relativePath].map { (entry.relativePath, $0) } },
+            uniquingKeysWith: { first, _ in first })
     }
 }
 
-/// Parsed patches by file, kept as long as the file's modification date is unchanged.
+/// Parsed patches by file, kept as long as the file's modification date is unchanged, with both sides' documents
+/// reconstructed once and indexed by path: a comparison asks for every file's text at least twice.
 public final class PatchCache: Sendable {
-    private let patches = Mutex<[URL: (modified: Date?, patch: UnifiedPatch)]>([:])
+    /// One side's reconstructed texts, in patch order and by path.
+    public struct SideTexts: Sendable {
+        public var ordered: [(path: String, text: String)]
+        public var byPath: [String: String]
+    }
+
+    /// A parsed patch with its reconstructed sides.
+    public struct Entry: Sendable {
+        public let patch: UnifiedPatch
+        public let old: SideTexts
+        public let new: SideTexts
+
+        public func texts(side: ComparisonSource.PatchSide) -> SideTexts {
+            side == .old ? old : new
+        }
+
+        init(patch: UnifiedPatch) {
+            self.patch = patch
+            var old = SideTexts(ordered: [], byPath: [:])
+            var new = SideTexts(ordered: [], byPath: [:])
+            for file in patch.files where !file.isBinary {
+                let texts = file.reconstructedTexts
+                if let path = file.oldPath, let text = texts.old, old.byPath[path] == nil {
+                    old.ordered.append((path, text))
+                    old.byPath[path] = text
+                }
+                if let path = file.newPath, let text = texts.new, new.byPath[path] == nil {
+                    new.ordered.append((path, text))
+                    new.byPath[path] = text
+                }
+            }
+            self.old = old
+            self.new = new
+        }
+    }
+
+    private let entries = Mutex<[URL: (modified: Date?, entry: Entry)]>([:])
 
     public func patch(at url: URL) async throws -> UnifiedPatch {
+        try await entry(at: url).patch
+    }
+
+    public func entry(at url: URL) async throws -> Entry {
         let modified = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-        if let cached = patches.withLock({ $0[url] }), cached.modified == modified { return cached.patch }
+        if let cached = entries.withLock({ $0[url] }), cached.modified == modified { return cached.entry }
         let parsed = try await Self.parse(at: url)
-        patches.withLock { $0[url] = (modified, parsed) }
+        entries.withLock { $0[url] = (modified, parsed) }
         return parsed
     }
 
     @concurrent
-    private static func parse(at url: URL) async throws -> UnifiedPatch {
-        UnifiedPatch(parsing: try String(contentsOf: url, encoding: .utf8))
+    private static func parse(at url: URL) async throws -> Entry {
+        Entry(patch: UnifiedPatch(parsing: try String(contentsOf: url, encoding: .utf8)))
     }
 }
