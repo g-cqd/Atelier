@@ -3,7 +3,7 @@ import KittyStyle
 
 // MARK: - ColorRGB
 
-public struct ColorRGB: Sendable, Equatable {
+public struct ColorRGB: Sendable, Equatable, Hashable {
     public var r: UInt8
     public var g: UInt8
     public var b: UInt8
@@ -150,5 +150,13 @@ extension ColorRGB: Codable {
 extension ColorRGB {
     public static func == (lhs: ColorRGB, rhs: ColorRGB) -> Bool {
         lhs.r == rhs.r && lhs.g == rhs.g && lhs.b == rhs.b && lhs.alpha == rhs.alpha
+    }
+}
+
+extension ColorRGB {
+    /// The RGB value of a true-colour cell colour; nil for the default or an indexed colour.
+    public init?(_ color: Color) {
+        guard case .rgb(let r, let g, let b) = color else { return nil }
+        self.init(r: r, g: g, b: b)
     }
 }
