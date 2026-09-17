@@ -67,7 +67,7 @@ let package = Package(
         .target(
             name: "DiffComparison",
             dependencies: [
-                "DiffCore", "DiffGit", "DiffRendering",
+                "DiffCore", "DiffGit", "DiffRendering", .product(name: "AtelierFileTree", package: "AtelierCore"),
                 .product(name: "AemiCore", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
             ],
             swiftSettings: strict

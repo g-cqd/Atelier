@@ -34,7 +34,9 @@ let package = Package(
         .library(name: "AtelierGrammar", targets: ["AtelierGrammar"]),
         .library(name: "AtelierParser", targets: ["AtelierParser"]),
         .library(name: "AtelierQuery", targets: ["AtelierQuery"]),
-        .library(name: "AtelierTheme", targets: ["AtelierTheme"])
+        .library(name: "AtelierTheme", targets: ["AtelierTheme"]),
+        .library(name: "AtelierFileTree", targets: ["AtelierFileTree"]),
+        .library(name: "AtelierSearch", targets: ["AtelierSearch"])
     ],
     dependencies: [
         .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
@@ -85,6 +87,23 @@ let package = Package(
         ),
         // Text storage: a UTF-8 rope with a line index, cursors, selections, mutations and display metrics.
         .target(name: "AtelierText", swiftSettings: strict),
+        // File trees: a lazily scanned directory tree with secure paths, visibility rules and git statuses, and a
+        // tree built from relative paths with chain compaction, as a comparison's explorer shows it.
+        .target(
+            name: "AtelierFileTree",
+            dependencies: ["AtelierGit", "AtelierProcess"],
+            swiftSettings: strict
+        ),
+        // Workspace search: file enumeration, literal and regex matching over mapped files on the blocking pool,
+        // and replacement templates.
+        .target(
+            name: "AtelierSearch",
+            dependencies: [
+                .product(name: "AemiKernels", package: "aemi"), .product(name: "AemiKernel", package: "aemi"),
+                .product(name: "AemiIO", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
+            ],
+            swiftSettings: strict
+        ),
         // tree-sitter grammar.json loading and LR/lex table compilation.
         .target(name: "AtelierGrammar", swiftSettings: strict),
         // The GLR parser over compiled tables.
@@ -95,6 +114,14 @@ let package = Package(
             name: "AtelierDiffTests", dependencies: ["AtelierDiff", .product(name: "AemiTestKit", package: "aemi")],
             swiftSettings: strict),
         .testTarget(name: "AtelierSyntaxModelTests", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
+        .testTarget(
+            name: "AtelierFileTreeTests",
+            dependencies: ["AtelierFileTree", .product(name: "AemiTestKit", package: "aemi")],
+            swiftSettings: strict),
+        .testTarget(
+            name: "AtelierSearchTests",
+            dependencies: ["AtelierSearch", .product(name: "AemiRuntime", package: "aemi")],
+            swiftSettings: strict),
         // Themes as values keyed by highlight role, with Xcode theme import; the apps bridge to their colour types.
         .target(name: "AtelierTheme", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
         .testTarget(
