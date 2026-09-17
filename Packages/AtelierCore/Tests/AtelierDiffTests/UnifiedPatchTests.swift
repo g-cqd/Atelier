@@ -109,4 +109,21 @@ struct UnifiedPatchTests {
                 .init(kind: .removed, text: "two"), .init(kind: .added, text: "deux")
             ])
     }
+
+    @Test
+    func `a hunk header naming an absurd line number is clamped instead of padding a document with it`() {
+        let patch = UnifiedPatch(
+            parsing: """
+                --- a/f
+                +++ b/f
+                @@ -9223372036854775807,1 +99999999999,1 @@
+                -x
+                +y
+                """)
+        let file = patch.files[0]
+        #expect(file.hunks[0].oldStart == UnifiedPatch.maximumLineNumber)
+        #expect(file.hunks[0].newStart == UnifiedPatch.maximumLineNumber)
+        let texts = file.reconstructedTexts
+        #expect((texts.new ?? "").utf8.count <= UnifiedPatch.maximumLineNumber + 2)
+    }
 }

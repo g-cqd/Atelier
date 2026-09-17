@@ -51,7 +51,9 @@ public enum OSCPalette: Sendable {
                 guard fields.count == 2, let color = color(fields[1]) else { return nil }
                 return .background(color)
             case "4":
-                guard fields.count == 3, let index = Int(fields[1]), index >= 0, let color = color(fields[2]) else {
+                guard fields.count == 3, let index = Int(fields[1]), (0 ..< 256).contains(index),
+                    let color = color(fields[2])
+                else {
                     return nil
                 }
                 return .ansi(index: index, color)

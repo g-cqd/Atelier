@@ -18,9 +18,13 @@ struct GitClientRunnerTests {
         let resolved = try await client.resolve(ref: "main")
         #expect(resolved == "abc123")
         let spec = try #require(runner.specs.first)
-        #expect(spec.arguments == ["rev-parse", "--verify", "--quiet", "main^{commit}"])
+        #expect(
+            spec.arguments
+                == GitIsolation.strictConfigurationFlags + [
+                    "rev-parse", "--verify", "--quiet", "--end-of-options", "main^{commit}"
+                ])
         #expect(spec.currentDirectory == Self.repository)
-        #expect(spec.environment == .inherited(overriding: GitClient.hardeningEnvironment))
+        #expect(spec.environment == GitIsolation.strict.environment)
         #expect(spec.timeout == .seconds(10))
         #expect(spec.executable == GitClient.executable)
     }
@@ -74,8 +78,10 @@ struct GitClientRunnerTests {
         let client = GitClient(repository: Self.repository, runner: runner, isolation: .strict)
         _ = try await client.workingTreePaths()
         let spec = try #require(runner.specs.first)
-        #expect(spec.arguments.prefix(8) == GitIsolation.strictConfigurationFlags[...])
-        #expect(spec.arguments.suffix(from: 8).first == "ls-files")
+        let flags = GitIsolation.strictConfigurationFlags
+        #expect(spec.arguments.prefix(flags.count) == flags[...])
+        #expect(spec.arguments.suffix(from: flags.count).first == "ls-files")
+        #expect(flags.contains("diff.external=") && flags.contains("core.pager=cat"))
         guard case .exactly(let variables) = spec.environment else {
             Issue.record("expected an exact environment")
             return
@@ -98,6 +104,42 @@ struct GitClientRunnerTests {
         let text = try await GitClient(repository: Self.repository, runner: show)
             .content(of: "Sources/a.swift", at: "HEAD")
         #expect(String(decoding: text, as: UTF8.self) == "let a = 1\n")
-        #expect(show.specs.first?.arguments == ["show", "HEAD:Sources/a.swift"])
+        #expect(show.specs.first?.arguments.suffix(2) == ["show", "--end-of-options", "HEAD:Sources/a.swift"].suffix(2))
+    }
+
+    @Test
+    func `an inheriting client keeps the caller's environment and passes no configuration flags`() async throws {
+        let runner = FakeProcessRunner(always: .success("abc\n"))
+        let client = GitClient(repository: Self.repository, runner: runner, isolation: .inheriting)
+        _ = try await client.resolve(ref: "main")
+        let spec = try #require(runner.specs.first)
+        #expect(spec.arguments.first == "rev-parse")
+        #expect(spec.environment == .inherited(overriding: GitClient.hardeningEnvironment))
+    }
+
+    @Test(arguments: ["--output=/tmp/x", "-", "", "a\nb", "a\u{0}b"])
+    func `an option-shaped or unprintable ref never reaches git`(ref: String) async {
+        let runner = FakeProcessRunner(always: .success("abc\n"))
+        let client = GitClient(repository: Self.repository, runner: runner)
+        await #expect(throws: GitError.invalidArgument(ref)) { try await client.resolve(ref: ref) }
+        await #expect(throws: GitError.invalidArgument(ref)) { try await client.tree(at: ref) { _ in true } }
+        await #expect(throws: GitError.invalidArgument(ref)) { try await client.content(of: "p", at: ref) }
+        await #expect(throws: GitError.invalidArgument(ref)) { try await client.renames(from: "HEAD", to: ref) }
+        #expect(runner.specs.isEmpty)
+    }
+
+    @Test
+    func `refs and paths sit behind --end-of-options in every command that takes one`() async throws {
+        let runner = FakeProcessRunner(always: .success(""))
+        let client = GitClient(repository: Self.repository, runner: runner)
+        _ = try? await client.tree(at: "v1") { _ in true }
+        _ = try? await client.renames(from: "a", to: "b")
+        _ = try? await client.content(of: "dir/f", at: "v1")
+        for spec in runner.specs {
+            let arguments = Array(spec.arguments.drop(while: { $0 == "-c" || $0.contains("=") }))
+            let marker = try #require(arguments.firstIndex(of: "--end-of-options"))
+            #expect(!arguments[(marker + 1)...].isEmpty)
+            #expect(arguments[(marker + 1)...].allSatisfy { !$0.hasPrefix("-") })
+        }
     }
 }
