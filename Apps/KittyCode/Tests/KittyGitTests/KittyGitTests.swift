@@ -130,6 +130,26 @@ struct KittyGitTests {
     }
 
     @Test
+    func `a modified line carries the words that changed, as character columns`() {
+        let decorations = GitStatusProvider.lineDecorations(
+            base: ["let total = price * count", "unchanged", "wholly different line"],
+            current: ["let total = price * quantity", "unchanged", "nothing in common here at all"],
+            addedColor: .added)
+        #expect(decorations.markers == [0: .modified, 2: .modified])
+        #expect(decorations.emphasis == [0: [20 ... 27]])
+        let accented = GitStatusProvider.lineDecorations(
+            base: ["café au lait"], current: ["café au thé"], addedColor: .added)
+        #expect(accented.emphasis == [0: [8 ... 10]])
+    }
+
+    @Test
+    func `utf16 ranges convert to character columns across multi-unit characters`() {
+        let line: Substring = "a😀b c"
+        #expect(GitStatusProvider.characterRanges([0 ..< 1, 1 ..< 3, 3 ..< 6], in: line) == [0 ... 0, 1 ... 1, 2 ... 4])
+        #expect(GitStatusProvider.characterRanges([5 ..< 9], in: line).isEmpty)
+    }
+
+    @Test
     func `an untracked file is marked on every line and a committed file's base comes from git show`() async {
         let runner = FakeProcessRunner { spec in
             if spec.arguments.contains("--porcelain=v2") {

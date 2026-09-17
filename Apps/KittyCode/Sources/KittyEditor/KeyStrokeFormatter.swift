@@ -1,3 +1,4 @@
+import AemiKernel
 import Foundation
 import KittyCodecs
 import KittyInput
@@ -33,14 +34,12 @@ public enum KeyStrokeFormatter {
         if keyCode == Key.left.rawValue { return "Left" }
         if keyCode == Key.right.rawValue { return "Right" }
 
-        // Lowercase ASCII letter (a-z)
-        if keyCode >= 0x61 && keyCode <= 0x7A {
-            return String(UnicodeScalar(keyCode - 32)!)  // Uppercase
+        // ASCII letters read as their uppercase form.
+        if let byte = UInt8(exactly: keyCode), ASCII.isLowercase(byte) {
+            return String(UnicodeScalar(byte - 32))
         }
-
-        // Uppercase ASCII letter (A-Z)
-        if keyCode >= 0x41 && keyCode <= 0x5A {
-            return String(UnicodeScalar(keyCode)!)
+        if let byte = UInt8(exactly: keyCode), ASCII.isUppercase(byte) {
+            return String(UnicodeScalar(byte))
         }
 
         return String(format: "0x%X", keyCode)
