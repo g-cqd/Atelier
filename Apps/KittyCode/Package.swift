@@ -90,7 +90,8 @@ let package = Package(
             name: "KittyGit",
             dependencies: [
                 "KittyFileTree", .product(name: "AtelierProcess", package: "AtelierCore"),
-                .product(name: "AtelierGit", package: "AtelierCore")
+                .product(name: "AtelierGit", package: "AtelierCore"),
+                .product(name: "AtelierDiff", package: "AtelierCore")
             ],
             swiftSettings: strict),
 
@@ -113,6 +114,8 @@ let package = Package(
                 .product(name: "AtelierQuery", package: "AtelierCore"), "KittyStyle",
                 .product(name: "AtelierSyntaxModel", package: "AtelierCore"),
                 .product(name: "AemiCore", package: "aemi"),
+                .product(name: "AtelierLexers", package: "AtelierCore"),
+                .product(name: "AtelierTheme", package: "AtelierCore"),
                 .product(name: "AemiKernel", package: "aemi")
             ],
             resources: [.copy("Grammars")],
@@ -152,6 +155,7 @@ let package = Package(
             dependencies: [
                 "KittyApp", "KittyWorkspace", "KittyInput", .product(name: "AtelierText", package: "AtelierCore"),
                 "KittyFileTree",
+                .product(name: "AtelierTheme", package: "AtelierCore"),
                 "KittyRenderer", "KittySyntax", "KittySymbols", "KittyGit", "KittySearch",
                 "KittyStyle", "KittyTerminal",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),

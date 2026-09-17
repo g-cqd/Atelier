@@ -1,4 +1,5 @@
 public import AemiCore
+import AtelierGit
 public import AtelierProcess
 public import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
@@ -519,12 +520,25 @@ public final class EditorState {
     /// Recomputed when `colorScheme.didSet` fires (theme switch / config
     /// reload) — see init and `applyConfig`.
     @ObservationIgnored private var cachedSyntaxTheme: Theme?
+    /// The theme `syntax.xcodeTheme` names, loaded when the config is applied; nil when none is configured or
+    /// the file could not be read, in which case the colour scheme's syntax colours apply.
+    @ObservationIgnored private var configuredSyntaxTheme: Theme?
 
     public var syntaxTheme: Theme {
         if let cached = cachedSyntaxTheme { return cached }
-        let theme = Self.makeSyntaxTheme(from: colorScheme)
+        let theme = configuredSyntaxTheme ?? Self.makeSyntaxTheme(from: colorScheme)
         cachedSyntaxTheme = theme
         return theme
+    }
+
+    /// Loads the configured Xcode theme, if any, and reports a failure in the status bar.
+    private func loadConfiguredSyntaxTheme(_ config: KittyConfig) {
+        do {
+            configuredSyntaxTheme = try Self.loadXcodeTheme(config: config)
+        } catch {
+            configuredSyntaxTheme = nil
+            statusMessage = "Could not load syntax.xcodeTheme: \(error.localizedDescription)"
+        }
     }
 
     private static func makeSyntaxTheme(from colorScheme: ColorScheme) -> Theme {
@@ -1250,6 +1264,7 @@ public final class EditorState {
         self.config = config
         self.treePanelWidth = config.treeWidth
         self.colorScheme = Self.makeColorScheme(config: config)
+        self.configuredSyntaxTheme = try? Self.loadXcodeTheme(config: config)
         let catalog = config.useSFSymbolsInTerminal ? SymbolCatalogLoader.loadOrDiscover() : nil
         self.symbolTheme = TerminalSymbolTheme.make(
             symbolsEnabled: config.useSFSymbolsInTerminal, catalog: catalog)
@@ -1504,6 +1519,7 @@ public final class EditorState {
     public func applyConfig(_ newConfig: KittyConfig) {
         cancelPendingAcceleratedScroll(state: self, resetBurst: true)
         config = newConfig
+        loadConfiguredSyntaxTheme(newConfig)
         colorScheme = Self.makeColorScheme(config: newConfig)
         treePanelWidth = newConfig.treeWidth
         let catalog = newConfig.useSFSymbolsInTerminal ? SymbolCatalogLoader.loadOrDiscover() : nil
