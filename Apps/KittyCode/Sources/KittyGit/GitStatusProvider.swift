@@ -85,11 +85,21 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         }
     }
 
-    /// The gutter marks of `current` against `base`, from the shared diff engine.
+    /// The gutter marks of `current` against `base` and, for each modified line, the words that changed, both
+    /// from the shared diff engine.
     static func lineDecorations(base: [String], current: [String], addedColor: FileStatusColor) -> GitLineDecorations {
-        let markers = LineChangeMarkers(
-            old: SubstringLines(base.map { Substring($0) }), new: SubstringLines(current.map { Substring($0) }))
+        let old = base.map { Substring($0) }
+        let new = current.map { Substring($0) }
+        let edits = LineDiff.diffLines(old: SubstringLines(old), new: SubstringLines(new))
+        let markers = LineChangeMarkers(edits: edits, newLineCount: new.count)
         guard !markers.isEmpty else { return .empty }
+        var emphasis: [Int: [ClosedRange<Int>]] = [:]
+        for pair in LineChangeMarkers.modifiedPairs(edits: edits) {
+            guard let ranges = IntralineDiff.emphasis(old: old[pair.old], new: new[pair.new], granularity: .word)?.new,
+                !ranges.isEmpty
+            else { continue }
+            emphasis[pair.new] = Self.characterRanges(ranges, in: new[pair.new])
+        }
         return GitLineDecorations(
             markers: markers.byLine.mapValues { change in
                 switch change {
@@ -97,7 +107,28 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
                     case .modified: .modified
                     case .deleted: .deleted
                 }
-            })
+            },
+            emphasis: emphasis)
+    }
+
+    /// UTF-16 offset ranges of `line` as closed character ranges, the unit the terminal columns are counted in.
+    /// - Complexity: O(line length)
+    static func characterRanges(_ utf16Ranges: [Range<Int>], in line: Substring) -> [ClosedRange<Int>] {
+        var characterAtUTF16 = [Int](repeating: 0, count: line.utf16.count + 1)
+        var offset = 0
+        for (index, character) in line.enumerated() {
+            for _ in 0 ..< character.utf16.count {
+                characterAtUTF16[offset] = index
+                offset += 1
+            }
+        }
+        characterAtUTF16[offset] = line.count
+        return utf16Ranges.compactMap { range in
+            guard range.lowerBound < range.upperBound, range.upperBound <= line.utf16.count else { return nil }
+            let start = characterAtUTF16[range.lowerBound]
+            let end = characterAtUTF16[range.upperBound - 1]
+            return start ... end
+        }
     }
 
     // MARK: - Base contents

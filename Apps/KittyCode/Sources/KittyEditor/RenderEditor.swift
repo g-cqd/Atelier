@@ -156,6 +156,16 @@ private func activeHighlights(
         }
     }
 
+    if state.config.git.enabled, state.config.git.decorations.showLineChanges,
+        let emphasis = state.bufferManager.activeBuffer?.gitLineDecorations.emphasis, !emphasis.isEmpty
+    {
+        let style = Style(fg: colorScheme.gitModified.fg, bold: true)
+        for (row, ranges) in emphasis {
+            highlights[row, default: []]
+                .append(contentsOf: ranges.map { TextHighlight(range: $0, role: .changedText, style: style) })
+        }
+    }
+
     if let search = state.inFileSearch {
         for (index, match) in search.matches.enumerated() where match.colEnd > match.colStart {
             let role: TextHighlight.Role =
