@@ -17,6 +17,7 @@ public import KittyWorkspace
 public import Observation
 import System
 import os
+public import class AemiRuntime.BlockingOffloadPool
 
 /// Signpost emitter for editor hot paths — wraps `textDidChange` and the
 /// wrap-cache rebuild so Instruments traces can attribute frame-budget
@@ -1251,13 +1252,33 @@ public final class EditorState {
 
     @ObservationIgnored public let taskProvider: any TaskProvider
     @ObservationIgnored public let clock: any Clock<Duration>
+    /// Blocking-offload pool workspace search runs its per-file `mmap` + newline scan on, so that
+    /// blocking work never parks a cooperative-pool thread. The composition root (`AppMain`) creates
+    /// one `BlockingOffloadPool` for the whole process and passes it in here; when no pool is supplied
+    /// (a caller — typically a test — that doesn't need to share one with the rest of the app)
+    /// `EditorState` creates and owns a minimal one-worker pool instead, and `shutdown()` releases it.
+    /// `BlockingOffloadPool`'s worker threads keep the pool alive until `shutdown()` runs (its `deinit`
+    /// does not stop them — see its doc comment), so any owned fallback pool must be shut down through
+    /// `EditorState.shutdown()` to avoid leaking a thread.
+    @ObservationIgnored public let searchPool: BlockingOffloadPool
+    /// Whether `searchPool` was created by this instance rather than injected — only then does
+    /// `shutdown()` own its teardown; an injected pool is released by whoever created it.
+    @ObservationIgnored private let ownsSearchPool: Bool
 
     public init(
         rootPath: String, config: KittyConfig,
-        taskProvider: any TaskProvider = .default, clock: any Clock<Duration> = ContinuousClock()
+        taskProvider: any TaskProvider = .default, clock: any Clock<Duration> = ContinuousClock(),
+        searchPool: BlockingOffloadPool? = nil
     ) {
         self.taskProvider = taskProvider
         self.clock = clock
+        if let searchPool {
+            self.searchPool = searchPool
+            self.ownsSearchPool = false
+        } else {
+            self.searchPool = BlockingOffloadPool(width: 1)
+            self.ownsSearchPool = true
+        }
         self.workspace = WorkspaceSession(rootPath: rootPath)
         self.bufferManager = workspace.bufferManager
         self.treeState = workspace.treeState
@@ -1340,6 +1361,7 @@ public final class EditorState {
         workspaceSearchDebounceTask?.cancel()
         workspaceSearchDebounceTask = nil
         fullHighlightTask = nil
+        if ownsSearchPool { searchPool.shutdown() }
     }
 
     /// Background-highlight body invoked by the long-lived consumer task.
