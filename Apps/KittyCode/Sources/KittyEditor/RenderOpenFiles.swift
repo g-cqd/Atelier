@@ -1,3 +1,4 @@
+import AtelierGit
 import AtelierText
 import KittyCodecs
 import KittyFileTree

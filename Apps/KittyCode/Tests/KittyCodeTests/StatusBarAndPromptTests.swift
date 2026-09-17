@@ -1,3 +1,4 @@
+import AtelierGit
 import AtelierText
 import Foundation
 import KittyCodecs

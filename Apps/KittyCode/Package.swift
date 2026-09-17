@@ -114,6 +114,8 @@ let package = Package(
                 .product(name: "AtelierParser", package: "AtelierCore"),
                 .product(name: "AtelierQuery", package: "AtelierCore"), "KittyStyle",
                 .product(name: "AtelierSyntaxModel", package: "AtelierCore"),
+                .product(name: "AtelierLexers", package: "AtelierCore"),
+                .product(name: "AtelierTheme", package: "AtelierCore"),
                 .product(name: "AemiCore", package: "aemi"),
                 .product(name: "AemiKernel", package: "aemi")
             ],
@@ -153,6 +155,7 @@ let package = Package(
             name: "KittyEditor",
             dependencies: [
                 "KittyApp", "KittyWorkspace", "KittyInput", .product(name: "AtelierText", package: "AtelierCore"),
+                .product(name: "AtelierTheme", package: "AtelierCore"),
                 "KittyFileTree",
                 "KittyRenderer", "KittySyntax", "KittySymbols", "KittyGit", "KittySearch",
                 "KittyStyle", "KittyTerminal",
