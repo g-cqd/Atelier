@@ -20,7 +20,7 @@ import Testing
 struct DirtyPipelinePerfTests {
     private func makeSUT(lineCount: Int) -> (state: EditorState, pipeline: RenderPipeline) {
         let content = (0 ..< lineCount).map { "line \($0)" }
-        return makeKittyCodeNavigationContext(fileContent: content)
+        return EditorTestHarness.make(fileContent: content)
     }
 
     @Test
