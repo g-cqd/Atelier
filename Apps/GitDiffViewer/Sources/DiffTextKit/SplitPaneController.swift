@@ -113,7 +113,14 @@ package final class SplitPaneController: NSObject {
 
     private func apply(spacing: [Double], to textView: NSTextView, rendered: RenderedText) {
         guard let contentStorage = textView.textContentStorage else { return }
+        // A pass that changes no row (the common case after a debounce burst) costs a full attribute walk otherwise.
+        let key = ObjectIdentifier(textView)
+        if appliedSpacing[key]?.rendered === rendered, appliedSpacing[key]?.spacing == spacing { return }
         RowSpacing.apply(spacing, to: contentStorage, rendered: rendered)
+        appliedSpacing[key] = (rendered, spacing)
         textView.enclosingScrollView?.superview?.needsDisplay = true
     }
+
+    /// The spacing last applied to each pane and the text it was applied to.
+    private var appliedSpacing: [ObjectIdentifier: (rendered: RenderedText, spacing: [Double])] = [:]
 }

@@ -26,9 +26,9 @@ public enum IntralineDiff {
         newTokens: [Range<Int>]? = nil,
         refiners: [any IntralineRefining] = []
     ) -> (old: [Range<Int>], new: [Range<Int>])? {
+        guard old.utf16.count <= maximumLineLength, new.utf16.count <= maximumLineLength else { return nil }
         let oldUnits = Array(old.utf16)
         let newUnits = Array(new.utf16)
-        guard oldUnits.count <= maximumLineLength, newUnits.count <= maximumLineLength else { return nil }
 
         // Indentation is never the change worth pointing at: compare past it and shift the ranges back.
         let oldLead = oldUnits.prefix { $0 == 32 || $0 == 9 }.count

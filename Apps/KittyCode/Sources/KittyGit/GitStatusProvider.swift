@@ -10,7 +10,7 @@ import Synchronization
 public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvider, Sendable {
     private enum BaseContent: Sendable {
         case missing
-        case text(String)
+        case text(String, lines: [Substring])
     }
 
     private struct State: Sendable {
@@ -80,16 +80,21 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
             case .missing:
                 guard status == .added else { return .empty }
                 return Self.addedLineDecorations(for: lines, color: .added)
-            case .text(let content):
-                return Self.lineDecorations(base: Self.splitLines(content), current: lines, addedColor: .added)
+            case .text(_, let baseLines):
+                return Self.lineDecorations(base: baseLines, current: lines.map { Substring($0) }, addedColor: .added)
         }
     }
 
     /// The gutter marks of `current` against `base` and, for each modified line, the words that changed, both
     /// from the shared diff engine.
     static func lineDecorations(base: [String], current: [String], addedColor: FileStatusColor) -> GitLineDecorations {
-        let old = base.map { Substring($0) }
-        let new = current.map { Substring($0) }
+        lineDecorations(
+            base: base.map { Substring($0) }, current: current.map { Substring($0) }, addedColor: addedColor)
+    }
+
+    static func lineDecorations(base old: [Substring], current new: [Substring], addedColor: FileStatusColor)
+        -> GitLineDecorations
+    {
         let edits = LineDiff.diffLines(old: SubstringLines(old), new: SubstringLines(new))
         let markers = LineChangeMarkers(edits: edits, newLineCount: new.count)
         guard !markers.isEmpty else { return .empty }
@@ -149,7 +154,9 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
 
     private func loadBaseContent(relativePath: String) async -> BaseContent {
         guard let data = try? await client.content(of: relativePath, at: "HEAD") else { return .missing }
-        return .text(String(decoding: data, as: UTF8.self))
+        let content = String(decoding: data, as: UTF8.self)
+        // Split once: every debounced refresh diffs against these lines.
+        return .text(content, lines: Self.splitLines(content).map { Substring($0) })
     }
 
     private func relativePath(for normalizedPath: String) -> String? {

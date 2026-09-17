@@ -5,15 +5,18 @@ import os
 enum RegexMatcher {
     private static let logger = Logger(subsystem: "com.kittytui.search", category: "regex")
 
-    /// Enumerates matches until completion, cancellation, the 50 ms budget, or a false callback result.
+    /// What one file's regex pass may spend before the remaining lines are skipped.
+    static let fileBudget: Duration = .milliseconds(500)
+
+    /// Enumerates matches until completion, cancellation, `deadline`, or a false callback result.
     /// - Note: Foundation controls callback frequency; the budget is cooperative, not a hard deadline.
     static func enumerate(
         _ regex: NSRegularExpression,
         in text: String,
+        deadline: ContinuousClock.Instant,
         body: (NSTextCheckingResult) -> Bool
     ) {
-        guard !Task.isCancelled else { return }
-        let deadline = ContinuousClock.now.advanced(by: .milliseconds(50))
+        guard !Task.isCancelled, ContinuousClock.now < deadline else { return }
         regex.enumerateMatches(
             in: text, options: [.reportProgress, .reportCompletion],
             range: NSRange(text.startIndex ..< text.endIndex, in: text)
@@ -25,9 +28,7 @@ enum RegexMatcher {
                 logger.error("Regular expression matching failed inside Foundation")
                 stop.pointee = true
             } else if ContinuousClock.now >= deadline {
-                logger.warning(
-                    "Regular expression exceeded its per-line time budget; remaining matches skipped"
-                )
+                logger.warning("Regular expression exceeded its time budget; remaining matches skipped")
                 stop.pointee = true
             } else if let result, !body(result) {
                 stop.pointee = true

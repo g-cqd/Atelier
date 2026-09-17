@@ -19,7 +19,8 @@ public func buildReplacement(
             let matchStr = String(chars[match.colStart ..< match.colEnd])
 
             var result = replacement
-            RegexMatcher.enumerate(regex.wholeExpression, in: matchStr) { regexMatch in
+            let deadline = ContinuousClock.now.advanced(by: RegexMatcher.fileBudget)
+            RegexMatcher.enumerate(regex.wholeExpression, in: matchStr, deadline: deadline) { regexMatch in
                 result = expandReplacementTemplate(replacement, using: regexMatch, in: matchStr)
                 return false
             }
