@@ -43,7 +43,8 @@ public enum SyntaxHighlighter {
 
     private static func scan<Unit: LexerUnit>(_ units: [Unit], language: Language) -> [Token] {
         switch language {
-            case .swift, .objectiveC, .kotlin, .java, .javascript, .typescript, .c, .cpp, .python, .shell, .fish:
+            case .swift, .objectiveC, .kotlin, .java, .javascript, .typescript, .c, .cpp, .python, .shell, .fish,
+                .rust, .go, .ruby, .lua:
                 var scanner = CodeScanner(units: units, syntax: LanguageSyntax.syntax(for: language))
                 return scanner.scan()
             case .html:
