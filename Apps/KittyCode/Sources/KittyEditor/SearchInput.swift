@@ -584,6 +584,7 @@ public func triggerWorkspaceSearch(state: EditorState) {
     let rootPath = state.rootPath
     let maxResults = state.config.search.maxResults
     let taskProvider = state.taskProvider
+    let searchPool = state.searchPool
 
     state.workspaceSearchTask = taskProvider.task(role: .work) { @MainActor in
         // Enumerate files off the main actor
@@ -603,11 +604,12 @@ public func triggerWorkspaceSearch(state: EditorState) {
         }
 
         let result =
-            await taskProvider.detachedTask(role: .work) { [openBuffers] in
+            await taskProvider.detachedTask(role: .work) { [openBuffers, searchPool] in
                 await searchWorkspace(
                     pattern: pattern,
                     files: files,
                     openBuffers: openBuffers,
+                    pool: searchPool,
                     maxResults: maxResults,
                     onProgress: { _ in }
                 )
