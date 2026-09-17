@@ -4,3 +4,5 @@
 DerivedData/
 .DS_Store
 xcuserdata/
+# Xcode's workspace-level resolution; each package's Package.resolved is the pin.
+Atelier.xcworkspace/xcshareddata/swiftpm/
