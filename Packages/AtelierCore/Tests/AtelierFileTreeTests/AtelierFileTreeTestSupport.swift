@@ -2,7 +2,7 @@ import AemiTestKit
 import Foundation
 import Testing
 
-@testable import KittyFileTree
+@testable import AtelierFileTree
 
 extension Tag {
     @Tag static var fileNode: Self

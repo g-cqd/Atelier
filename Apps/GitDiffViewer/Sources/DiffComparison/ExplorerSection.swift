@@ -1,3 +1,4 @@
+package import AtelierFileTree
 import DiffCore
 import DiffGit
 import DiffRendering
@@ -14,9 +15,9 @@ package struct ExplorerSection: Equatable, Sendable, Identifiable {
 
     package let kind: Kind
     package let title: String
-    package let nodes: [FileNode]
+    package let nodes: [PathNode]
 
-    package init(kind: Kind, title: String, nodes: [FileNode]) {
+    package init(kind: Kind, title: String, nodes: [PathNode]) {
         self.kind = kind
         self.title = title
         self.nodes = nodes

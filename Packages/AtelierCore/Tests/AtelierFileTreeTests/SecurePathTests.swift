@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import KittyFileTree
+@testable import AtelierFileTree
 
 @Suite(.tags(.securePath))
 struct SecurePathTests {

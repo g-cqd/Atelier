@@ -1,17 +1,14 @@
-import DiffCore
-import DiffGit
-import DiffRendering
 import Foundation
-import Observation
 
-/// A node of the explorer tree, identified by its path relative to the source root.
-package struct FileNode: Identifiable, Hashable, Sendable {
-    package let id: String
-    package let name: String
-    package let isDirectory: Bool
-    package let children: [FileNode]?
+/// A node of a tree built from relative paths, identified by its path relative to the root: the explorer tree of a
+/// comparison, a search result grouping, or any listing that comes as paths rather than a directory scan.
+public struct PathNode: Identifiable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let isDirectory: Bool
+    public let children: [PathNode]?
 
-    package init(id: String, name: String, isDirectory: Bool, children: [FileNode]?) {
+    public init(id: String, name: String, isDirectory: Bool, children: [PathNode]?) {
         self.id = id
         self.name = name
         self.isDirectory = isDirectory
@@ -20,7 +17,7 @@ package struct FileNode: Identifiable, Hashable, Sendable {
 
     /// Builds a tree from relative paths. Directories sort before files, both case-insensitively.
     /// - Complexity: O(paths * depth)
-    package static func tree(from paths: [String]) -> [FileNode] {
+    public static func tree(from paths: [String]) -> [PathNode] {
         final class Builder {
             var children: [String: Builder] = [:]
             var isFile = false
@@ -42,14 +39,14 @@ package struct FileNode: Identifiable, Hashable, Sendable {
             node.isFile = true
         }
 
-        func nodes(of builder: Builder, prefix: String) -> [FileNode] {
+        func nodes(of builder: Builder, prefix: String) -> [PathNode] {
             builder.children
                 .map { name, child in
                     let id = prefix.isEmpty ? name : "\(prefix)/\(name)"
                     return if child.isFile {
-                        FileNode(id: id, name: name, isDirectory: false, children: nil)
+                        PathNode(id: id, name: name, isDirectory: false, children: nil)
                     } else {
-                        FileNode(id: id, name: name, isDirectory: true, children: nodes(of: child, prefix: id))
+                        PathNode(id: id, name: name, isDirectory: true, children: nodes(of: child, prefix: id))
                     }
                 }
                 .sorted { lhs, rhs in
@@ -62,13 +59,13 @@ package struct FileNode: Identifiable, Hashable, Sendable {
     }
 
     /// One node per file, named by the file name alone, with no directories at all.
-    package static func flatList(from paths: [String]) -> [FileNode] {
+    public static func flatList(from paths: [String]) -> [PathNode] {
         paths.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-            .map { FileNode(id: $0, name: ($0 as NSString).lastPathComponent, isDirectory: false, children: nil) }
+            .map { PathNode(id: $0, name: ($0 as NSString).lastPathComponent, isDirectory: false, children: nil) }
     }
 
     /// Paths of every file under this node, in tree order; the tree depth bounds the recursion.
-    package var filePaths: [String] {
+    public var filePaths: [String] {
         guard let children else { return [id] }
         return children.flatMap(\.filePaths)
     }
@@ -77,7 +74,7 @@ package struct FileNode: Identifiable, Hashable, Sendable {
     /// or a directory that is not such a link keeps its own id. `a`, `a/b` and `a/b/c` share it in the full hierarchy,
     /// and the compacted tree names its folded row by it, so a fold survives a switch between the two styles.
     /// - Complexity: O(chain length)
-    package var chainKey: String {
+    public var chainKey: String {
         var node = self
         while let children = node.children, children.count == 1, let only = children.first, only.isDirectory {
             node = only
@@ -86,20 +83,20 @@ package struct FileNode: Identifiable, Hashable, Sendable {
     }
 
     /// Keeps the nodes whose path satisfies `isIncluded`, and the directories leading to them.
-    package func filtered(_ isIncluded: (String) -> Bool) -> FileNode? {
+    public func filtered(_ isIncluded: (String) -> Bool) -> PathNode? {
         guard let children else {
             return isIncluded(id) ? self : nil
         }
         let kept = children.compactMap { $0.filtered(isIncluded) }
-        return kept.isEmpty ? nil : FileNode(id: id, name: name, isDirectory: true, children: kept)
+        return kept.isEmpty ? nil : PathNode(id: id, name: name, isDirectory: true, children: kept)
     }
 }
 
-extension [FileNode] {
+extension [PathNode] {
     /// Folds every chain of single-child directories into one node whose name is the joined path, the way
     /// compact folders work in code editors. Directories holding a single file keep their own node.
     /// - Complexity: O(nodes)
-    package func compacted() -> [FileNode] {
+    public func compacted() -> [PathNode] {
         map { node in
             guard node.isDirectory, var children = node.children else { return node }
             var name = node.name
@@ -109,7 +106,7 @@ extension [FileNode] {
                 id = only.id
                 children = grandchildren
             }
-            return FileNode(id: id, name: name, isDirectory: true, children: children.compacted())
+            return PathNode(id: id, name: name, isDirectory: true, children: children.compacted())
         }
     }
 }

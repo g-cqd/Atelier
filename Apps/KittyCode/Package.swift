@@ -77,8 +77,7 @@ let package = Package(
             name: "KittyFileTree",
             dependencies: [
                 .product(name: "AemiCore", package: "aemi"),
-                .product(name: "AtelierGit", package: "AtelierCore"),
-                .product(name: "AtelierProcess", package: "AtelierCore")
+                .product(name: "AtelierFileTree", package: "AtelierCore")
             ],
             swiftSettings: strict),
 
@@ -98,10 +97,7 @@ let package = Package(
         // Layer 2g — Search engine primitives
         .target(
             name: "KittySearch",
-            dependencies: [
-                .product(name: "AemiKernels", package: "aemi"), .product(name: "AemiKernel", package: "aemi"),
-                .product(name: "AemiIO", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
-            ],
+            dependencies: [.product(name: "AtelierSearch", package: "AtelierCore")],
             swiftSettings: strict),
 
         // Layers 3a–3c (grammar tables, GLR parser, queries) and 2c (text storage) live in AtelierCore.
@@ -219,13 +215,6 @@ let package = Package(
             ],
             swiftSettings: strict),
         .testTarget(
-            name: "KittyFileTreeTests",
-            dependencies: [
-                "KittyFileTree", .product(name: "AemiTesting", package: "aemi"),
-                .product(name: "AemiTestKit", package: "aemi")
-            ],
-            swiftSettings: strict),
-        .testTarget(
             name: "KittySymbolsTests", dependencies: ["KittySymbols"],
             swiftSettings: strict),
         .testTarget(
@@ -239,10 +228,6 @@ let package = Package(
                 .product(name: "AtelierTestSupport", package: "AtelierCore"),
                 .product(name: "AemiRuntime", package: "aemi")
             ],
-            swiftSettings: strict),
-        .testTarget(
-            name: "KittySearchTests",
-            dependencies: ["KittySearch", .product(name: "AemiRuntime", package: "aemi")],
             swiftSettings: strict)
     ]
 )
