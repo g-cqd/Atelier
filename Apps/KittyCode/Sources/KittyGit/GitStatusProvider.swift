@@ -81,7 +81,8 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
                 guard status == .added else { return .empty }
                 return Self.addedLineDecorations(for: lines, color: .added)
             case .text(_, let baseLines):
-                return Self.lineDecorations(base: baseLines, current: lines.map { Substring($0) }, addedColor: .added)
+                return Self.lineDecorations(
+                    baseLines: baseLines, currentLines: lines.map { Substring($0) }, addedColor: .added)
         }
     }
 
@@ -89,10 +90,10 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
     /// from the shared diff engine.
     static func lineDecorations(base: [String], current: [String], addedColor: FileStatusColor) -> GitLineDecorations {
         lineDecorations(
-            base: base.map { Substring($0) }, current: current.map { Substring($0) }, addedColor: addedColor)
+            baseLines: base.map { Substring($0) }, currentLines: current.map { Substring($0) }, addedColor: addedColor)
     }
 
-    static func lineDecorations(base old: [Substring], current new: [Substring], addedColor: FileStatusColor)
+    static func lineDecorations(baseLines old: [Substring], currentLines new: [Substring], addedColor: FileStatusColor)
         -> GitLineDecorations
     {
         let edits = LineDiff.diffLines(old: SubstringLines(old), new: SubstringLines(new))
