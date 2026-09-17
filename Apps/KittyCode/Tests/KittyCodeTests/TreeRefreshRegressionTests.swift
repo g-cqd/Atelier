@@ -22,7 +22,7 @@ struct TreeRefreshRegressionTests {
         activityBar: Bool = false,
         tabRibbon: KittyConfig.TabRibbonPosition = .hidden
     ) -> (state: EditorState, pipeline: RenderPipeline) {
-        makeRuntimeRegressionContext(
+        EditorTestHarness.make(
             fileContent: fileContent,
             columns: columns,
             rows: rows,
