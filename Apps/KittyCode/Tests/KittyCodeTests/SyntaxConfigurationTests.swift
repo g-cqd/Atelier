@@ -1,4 +1,5 @@
 import AtelierText
+import AtelierTheme
 import Foundation
 import KittyCodecs
 import KittyFileTree
@@ -82,5 +83,35 @@ struct SyntaxConfigurationTests {
 
         #expect(state.syntaxTheme.style(for: "keyword") == schemeKeyword)
         #expect(state.statusMessage.hasPrefix("Could not load syntax.xcodeTheme"))
+    }
+
+    @Test
+    func `the terminal palette derives the syntax theme once its replies are in, when asked for`() {
+        var config = KittyConfig()
+        config.syntax.themeFromTerminal = true
+        let state = EditorState(rootPath: ".", config: config)
+        let schemeKeyword = state.syntaxTheme.style(for: "keyword")
+
+        #expect(state.receiveTerminalReply(Array("\u{1b}]10;rgb:e6e6/e6e6/e6e6\u{1b}\\".utf8)))
+        #expect(state.receiveTerminalReply(Array("\u{1b}]11;rgb:1414/1414/1414\u{07}".utf8)))
+        #expect(state.receiveTerminalReply(Array("\u{1b}]4;5;rgb:c8/1e/c8\u{1b}\\".utf8)))
+        #expect(!state.receiveTerminalReply(Array("\u{1b}[A".utf8)))
+        #expect(state.syntaxTheme.style(for: "keyword") == schemeKeyword)
+
+        #expect(state.receiveTerminalReply(Array("\u{1b}[?62;22c".utf8)))
+
+        #expect(state.syntaxTheme.style(for: "keyword").fg == .rgb(r: 200, g: 30, b: 200))
+        #expect(state.syntaxTheme.defaultStyle.fg == .rgb(r: 230, g: 230, b: 230))
+        #expect(state.terminalPalette.ansi.count == 6)
+    }
+
+    @Test
+    func `palette replies leave the theme alone unless the config asks for it`() {
+        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let before = state.syntaxTheme
+        state.receiveTerminalReply(Array("\u{1b}]10;rgb:ff/ff/ff\u{07}".utf8))
+        state.receiveTerminalReply(Array("\u{1b}[?1;2c".utf8))
+        #expect(state.syntaxTheme.style(for: "keyword") == before.style(for: "keyword"))
+        #expect(state.terminalPalette.foreground != nil)
     }
 }
