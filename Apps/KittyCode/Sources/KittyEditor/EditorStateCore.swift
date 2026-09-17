@@ -675,27 +675,48 @@ public final class EditorState {
             return
         }
 
-        let lines = fileContent
-        guard isMutationApplicable(mutation, lineCount: lines.count) else {
+        // Lines come straight from the buffer: materialising every line of the document (`fileContent`) on a
+        // keystroke cost a full document's worth of strings on a large file.
+        let lineCount = fileLineCount
+        guard isMutationApplicable(mutation, lineCount: lineCount) else {
             refreshHighlights()
             return
         }
 
-        let updatedHighlights = session.highlightLines(lines[mutation.updatedLineRange])
+        let updatedHighlights = session.highlightLines(textBuffer.lines(in: mutation.updatedLineRange))
         highlightedLines.replaceSubrange(mutation.originalLineRange, with: updatedHighlights)
+
+        // A comment or string the edit opened or closed restyles what follows it: re-scan the visible window with
+        // some lookback so the screen is right at once, and hand the rest of the document to the coalesced full
+        // pass when the window's last line changed style, which is the sign of a construct running past it.
+        let window = highlightWindow(around: mutation.updatedLineRange, lineCount: lineCount)
+        guard window != mutation.updatedLineRange, window.upperBound <= highlightedLines.count else { return }
+        let before = highlightedLines[window.upperBound - 1]
+        let windowHighlights = session.highlightLines(textBuffer.lines(in: window))
+        guard windowHighlights.count == window.count else { return }
+        highlightedLines.replaceSubrange(window, with: windowHighlights)
+        if windowHighlights[windowHighlights.count - 1] != before, lineCount > Self.viewportHighlightThreshold {
+            fullHighlightContinuation.yield(())
+        }
+    }
+
+    /// The visible lines with lookback, widened to include `edited`; `edited` alone when it lies off screen.
+    private func highlightWindow(around edited: Range<Int>, lineCount: Int) -> Range<Int> {
+        let visible = max(0, scrollOffset - 200) ..< min(lineCount, max(scrollOffset, 0) + lastRenderRows + 50)
+        guard visible.overlaps(edited) || visible.contains(edited.lowerBound) else { return edited }
+        return min(visible.lowerBound, edited.lowerBound) ..< max(visible.upperBound, edited.upperBound)
     }
 
     /// Plain-text refresh that only touches the lines covered by `mutation`.
     /// Avoids rebuilding the full `highlightedLines` array on every keystroke
     /// when syntax highlighting is off.
     private func refreshPlainHighlights(after mutation: TextMutation) {
-        let lines = fileContent
-        guard isMutationApplicable(mutation, lineCount: lines.count) else {
+        guard isMutationApplicable(mutation, lineCount: fileLineCount) else {
             refreshHighlights()
             return
         }
         let style = colorScheme.editorText
-        let replacement = lines[mutation.updatedLineRange]
+        let replacement = textBuffer.lines(in: mutation.updatedLineRange)
             .map { line in
                 [StyledSpan(text: line, style: style)]
             }
@@ -822,7 +843,11 @@ public final class EditorState {
             statusMessage = "Read-only mode"
             return
         }
+        // The widest line only widens on an edit's own lines; dropping the cached width with the other snapshot
+        // caches made every keystroke re-measure the display width of the whole document.
+        let knownMaxLineWidth = cachedMaxLineWidth
         invalidateTextSnapshotCache()
+        cachedMaxLineWidth = knownMaxLineWidth
         if let buf = bufferManager.activeBuffer {
             buf.postOpenProcessingTask?.cancel()
             buf.postOpenProcessingTask = nil
@@ -1394,13 +1419,13 @@ public final class EditorState {
     private func performFullHighlight() async {
         guard syntaxHighlightingEnabled else { return }
         let session = currentHighlightSession()
-        guard !session.prefersLineInput else { return }
 
         let lineCount = fileLineCount
         guard lineCount > Self.viewportHighlightThreshold else { return }
 
         let source = documentText
-        let fullHighlights = session.highlightDocument(source: source)
+        let fullHighlights =
+            session.prefersLineInput ? session.highlightLines(fileContent) : session.highlightDocument(source: source)
 
         // Only apply if the document hasn't moved on while we worked.
         guard documentText == source else { return }
