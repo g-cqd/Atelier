@@ -158,7 +158,9 @@ package enum DiffRenderer {
             offset += line.utf16.count + 1
         }
         let tokens = LexicalHighlightEngine().highlight(utf16: Array(text.utf16), language: language)
-        return HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: text.utf16.count)
+        // The last line ends where its text does: a token running to the end of a text that closes with a newline
+        // (an unterminated string, say) must not spill past the line's own length.
+        return HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: max(0, offset - 1))
     }
 
     private static func render(rows: [RenderRow], side: RenderedSide, options: Options) -> RenderedText {
