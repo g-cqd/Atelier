@@ -64,7 +64,7 @@ public enum KeyStrokeParser {
             case "backspace": return Key.backspace.rawValue
             case "esc", "escape": return AsciiKey.escape
             case "tab": return Key.tab.rawValue
-            case "space": return UInt32(Character(" ").asciiValue!)
+            case "space": return UInt32(UInt8(ascii: " "))
             case "up": return Key.up.rawValue
             case "down": return Key.down.rawValue
             case "left": return Key.left.rawValue
