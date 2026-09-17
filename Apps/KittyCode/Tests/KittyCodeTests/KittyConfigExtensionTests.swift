@@ -94,10 +94,12 @@ struct KittyConfigExtensionTests {
         config.git.decorations.maxLineDiffBytes = 2048
         config.syntax.disabledLanguages = ["python", "ruby"]
         config.syntax.xcodeTheme = "~/Themes/Dusk.xccolortheme"
+        config.syntax.themeFromTerminal = true
 
         let data = try JSONEncoder().encode(config)
         let decoded = try JSONDecoder().decode(KittyConfig.self, from: data)
         #expect(decoded.syntax.xcodeTheme == "~/Themes/Dusk.xccolortheme")
+        #expect(decoded.syntax.themeFromTerminal)
         #expect(decoded.autoSave.enabled == true)
         #expect(decoded.autoSave.interval == 60)
         #expect(decoded.tabRibbon.position == .hidden)
