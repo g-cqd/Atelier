@@ -123,9 +123,47 @@ struct PixelChromeLayoutTests {
         #expect(
             sut.pipeline.chromeLines == [
                 ChromeLine(axis: .vertical, row: 1, column: 20, length: 8, color: separator!),
-                ChromeLine(axis: .horizontal, row: 1, column: 20, length: 40, color: separator!)
+                ChromeLine(axis: .horizontal, row: 1, column: 20, length: 40, color: separator!),
+                ChromeLine(axis: .horizontal, row: 9, column: 0, length: 60, color: separator!)
             ])
         #expect(sut.pipeline.buffer[1, 20].character != "\u{2502}")
         #expect(sut.state.usesPixelChrome)
+    }
+
+    @Test
+    func `the editor's selection, current line, search hits and scroll thumb become pixel fills and bars`() {
+        var lines = (0 ..< 200).map { "line \($0) text" }
+        lines[5] = "\tselected words here"
+        let sut = EditorTestHarness.make(fileContent: lines, columns: 80, rows: 12, sidebarCollapsed: true)
+        sut.state.bufferManager.open(
+            filePath: "/big.txt", fileName: "big.txt", content: lines.joined(separator: "\n"), language: nil)
+        sut.state.restoreStateFromActiveBuffer()
+        sut.state.config.editor.highlightCurrentLine = true
+        sut.state.colorScheme = EditorState.makeColorScheme(config: sut.state.config)
+        sut.state.mode = .editor
+        sut.state.cursorRow = 5
+        sut.state.cursorCol = 3
+        sut.state.selection = TextSelection(anchor: TextPosition(row: 5, col: 1), head: TextPosition(row: 6, col: 4))
+        sut.pipeline.chrome = PixelChrome(cell: .init(width: 10, height: 20))
+        sut.pipeline.beginFrame()
+        renderShellLayout(pipeline: sut.pipeline, state: sut.state)
+
+        let fills = sut.pipeline.chromeElements.compactMap { element -> (row: Int, column: Int, columns: Int)? in
+            if case .fill(let row, let column, let columns, _, _) = element { return (row, column, columns) }
+            return nil
+        }
+        let gutter = 4  // three digits of line numbers plus a space
+        // Row 5 is the cursor line (full band) and the selection's first row from the tab's display width on.
+        #expect(fills.contains { $0.row == 5 && $0.column == gutter })
+        #expect(fills.contains { $0.row == 5 && $0.column == gutter + 4 })
+        #expect(fills.contains { $0.row == 6 && $0.column == gutter && $0.columns == 4 })
+        let bars = sut.pipeline.chromeElements.filter {
+            guard case .bar = $0 else { return false }
+            return true
+        }
+        #expect(bars.count == 2)
+        // The cells no longer carry the selection background.
+        #expect(sut.pipeline.buffer[5, gutter + 4].style.bg == .default)
+        #expect(sut.pipeline.buffer[5, gutter + 4].character == "s")
     }
 }

@@ -95,9 +95,10 @@ public func renderShellLayout(
     state.usesPixelChrome = pipeline.chrome != nil
     let (shellRects, focusMap) = computeShellLayout(state: state, columns: cols, rows: rows)
     state.focusMap = focusMap
-    pipeline.chromeLines =
+    pipeline.chromeElements =
         state.usesPixelChrome
         ? pixelChromeLines(rects: shellRects, sidebarShown: shellRects.sidebar != nil, colorScheme: colorScheme)
+            .map(ChromeElement.line)
         : []
 
     let layout = LayoutMetrics(state: state, columns: cols, rows: rows)
@@ -254,6 +255,11 @@ func pixelChromeLines(rects: ShellLayoutRects, sidebarShown: Bool, colorScheme: 
             ChromeLine(
                 axis: .horizontal, row: ribbon.maxY, column: rects.editor.x, length: rects.editor.width,
                 color: color))
+    }
+    if rects.statusBar.width > 0 {
+        lines.append(
+            ChromeLine(
+                axis: .horizontal, row: rects.statusBar.y, column: 0, length: rects.statusBar.width, color: color))
     }
     return lines
 }

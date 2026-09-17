@@ -76,8 +76,19 @@ public final class RenderPipeline {
     /// The pixel chrome layer, present when the terminal can draw under its cells; the shell sets
     /// ``chromeLines`` each frame and ``flush()`` places them after the cell diff.
     public var chrome: PixelChrome?
-    /// The lines the shell wants under this frame's cells.
-    public var chromeLines: [ChromeLine] = []
+    /// The elements the shell wants under this frame's cells.
+    public var chromeElements: [ChromeElement] = []
+
+    /// The one-pixel lines among ``chromeElements``; setting replaces every element with lines.
+    public var chromeLines: [ChromeLine] {
+        get {
+            chromeElements.compactMap { element in
+                if case .line(let line) = element { return line }
+                return nil
+            }
+        }
+        set { chromeElements = newValue.map(ChromeElement.line) }
+    }
 
     /// Creates a pipeline backed by the given terminal connection and initial viewport dimensions.
     ///
@@ -217,7 +228,7 @@ public final class RenderPipeline {
             DiffRenderer.render(front: front, back: back, into: &outputBuffer)
         }
 
-        chrome?.render(chromeLines, into: &outputBuffer)
+        chrome?.render(chromeElements, into: &outputBuffer)
 
         if let r = cursorRow, let c = cursorCol {
             KittySequences.appendMoveCursor(row: r + 1, col: c + 1, to: &outputBuffer)
@@ -258,7 +269,7 @@ public final class RenderPipeline {
         KittySequences.appendHideCursor(to: &outputBuffer)
         DiffRenderer.renderFull(back, into: &outputBuffer)
         chrome?.invalidate()
-        chrome?.render(chromeLines, into: &outputBuffer)
+        chrome?.render(chromeElements, into: &outputBuffer)
 
         if let r = cursorRow, let c = cursorCol {
             KittySequences.appendMoveCursor(row: r + 1, col: c + 1, to: &outputBuffer)

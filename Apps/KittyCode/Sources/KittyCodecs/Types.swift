@@ -176,13 +176,21 @@ public struct GraphicsCommand: Sendable, Equatable {
         public var xOffset: UInt32
         public var yOffset: UInt32
         public var keepsCursor: Bool
+        /// Cells the image is scaled to fill (`c=`, `r=`); zero shows it at its pixel size.
+        public var columns: UInt32
+        public var rows: UInt32
 
-        public init(id: UInt32, zIndex: Int32 = 0, xOffset: UInt32 = 0, yOffset: UInt32 = 0, keepsCursor: Bool = true) {
+        public init(
+            id: UInt32, zIndex: Int32 = 0, xOffset: UInt32 = 0, yOffset: UInt32 = 0, keepsCursor: Bool = true,
+            columns: UInt32 = 0, rows: UInt32 = 0
+        ) {
             self.id = id
             self.zIndex = zIndex
             self.xOffset = xOffset
             self.yOffset = yOffset
             self.keepsCursor = keepsCursor
+            self.columns = columns
+            self.rows = rows
         }
     }
 
