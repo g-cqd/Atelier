@@ -68,4 +68,13 @@ struct IntralineGranularityTests {
         let emphasis = IntralineDiff.emphasis(old: "one two three", new: "four five six", granularity: .word)
         #expect(emphasis == nil)
     }
+
+    @Test
+    func `a token running to a closing newline stays within its line`() {
+        let text = "let s = \"open\n}\n"
+        let byLine = SwiftSyntaxTokenRanges().tokenRangesByLine(text: text, language: .swift)
+        #expect(byLine.count == 2)
+        #expect(byLine[1].allSatisfy { $0.upperBound <= 1 })
+        #expect(byLine[0].allSatisfy { $0.upperBound <= 13 })
+    }
 }
