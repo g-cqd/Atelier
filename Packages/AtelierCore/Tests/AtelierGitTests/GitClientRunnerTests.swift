@@ -67,4 +67,37 @@ struct GitClientRunnerTests {
         let none = FakeProcessRunner(always: .failure(128, error: "fatal: not a git repository"))
         #expect(await GitClient.repositoryRoot(containing: file, runner: none) == nil)
     }
+
+    @Test
+    func `strict isolation scrubs the environment and pins the dangerous configuration keys`() async throws {
+        let runner = FakeProcessRunner(always: .success(""))
+        let client = GitClient(repository: Self.repository, runner: runner, isolation: .strict)
+        _ = try await client.workingTreePaths()
+        let spec = try #require(runner.specs.first)
+        #expect(spec.arguments.prefix(8) == GitIsolation.strictConfigurationFlags[...])
+        #expect(spec.arguments.suffix(from: 8).first == "ls-files")
+        guard case .exactly(let variables) = spec.environment else {
+            Issue.record("expected an exact environment")
+            return
+        }
+        #expect(variables["GIT_TERMINAL_PROMPT"] == "0")
+        #expect(variables["GIT_CONFIG_NOSYSTEM"] == "1")
+        #expect(variables["LC_ALL"] == "C")
+        #expect(variables["GIT_SSH_COMMAND"] == nil)
+    }
+
+    @Test
+    func `ignored paths collapse directories on request and content comes from show`() async throws {
+        let runner = FakeProcessRunner(always: .success("build/\u{0}out.log\u{0}"))
+        let client = GitClient(repository: Self.repository, runner: runner)
+        #expect(try await client.ignoredPaths(collapsingDirectories: true) == ["build/", "out.log"])
+        #expect(runner.specs.last?.arguments.last == "--directory")
+        _ = try await client.ignoredPaths()
+        #expect(runner.specs.last?.arguments.contains("--directory") == false)
+        let show = FakeProcessRunner(always: .success("let a = 1\n"))
+        let text = try await GitClient(repository: Self.repository, runner: show)
+            .content(of: "Sources/a.swift", at: "HEAD")
+        #expect(String(decoding: text, as: UTF8.self) == "let a = 1\n")
+        #expect(show.specs.first?.arguments == ["show", "HEAD:Sources/a.swift"])
+    }
 }

@@ -25,15 +25,20 @@ public struct GitClient: Sendable {
     public let repository: URL
     private let runner: any ProcessRunner
     private let timeout: Duration?
+    private let isolation: GitIsolation
 
     /// - Parameters:
     ///   - repository: The repository root every command runs in.
     ///   - runner: How git is spawned; the app owns the pool behind it, tests inject a fake.
     ///   - timeout: The budget of one git run on the runner's clock; nil lets a run take as long as it needs.
-    public init(repository: URL, runner: any ProcessRunner, timeout: Duration? = nil) {
+    ///   - isolation: How much of the caller's environment and of the repository's configuration git may see.
+    public init(
+        repository: URL, runner: any ProcessRunner, timeout: Duration? = nil, isolation: GitIsolation = .inheriting
+    ) {
         self.repository = repository
         self.runner = runner
         self.timeout = timeout
+        self.isolation = isolation
     }
 
     /// The root of the repository `url` lies in, or nil when it lies in none.
@@ -76,9 +81,18 @@ public struct GitClient: Sendable {
         GitParsers.paths(try await run(["ls-files", "-z", "--cached", "--others", "--exclude-standard"]))
     }
 
-    /// Untracked files git ignores.
-    public func ignoredPaths() async throws -> [String] {
-        GitParsers.paths(try await run(["ls-files", "-z", "--others", "--ignored", "--exclude-standard"]))
+    /// Untracked files git ignores; with `collapsingDirectories`, a directory that is ignored as a whole is one
+    /// entry with a trailing slash instead of every file under it, which is what a tree filter wants.
+    public func ignoredPaths(collapsingDirectories: Bool = false) async throws -> [String] {
+        var arguments = ["ls-files", "-z", "--others", "--ignored", "--exclude-standard"]
+        if collapsingDirectories { arguments.append("--directory") }
+        return GitParsers.paths(try await run(arguments))
+    }
+
+    /// The contents of `path` as committed at `ref`, through `git show`.
+    /// - Throws: ``GitError`` when the path does not exist at that ref.
+    public func content(of path: String, at ref: String) async throws -> Data {
+        try await run(["show", "\(ref):\(path)"])
     }
 
     public func blob(_ id: String) async throws -> Data {
@@ -109,7 +123,8 @@ public struct GitClient: Sendable {
     }
 
     private func run(_ arguments: [String], input: Data? = nil) async throws -> Data {
-        try await Self.run(arguments, input: input, in: repository, runner: runner, timeout: timeout)
+        try await Self.run(
+            arguments, input: input, in: repository, runner: runner, timeout: timeout, isolation: isolation)
     }
 
     /// Where git lives: `GDV_GIT` when it names an executable, else the first `git` on `PATH` or in the usual
@@ -129,13 +144,13 @@ public struct GitClient: Sendable {
     /// a runner failure becomes a ``GitError`` naming it, and cancelling the task terminates git.
     private static func run(
         _ arguments: [String], input: Data? = nil, in directory: URL, runner: any ProcessRunner,
-        timeout: Duration? = nil
+        timeout: Duration? = nil, isolation: GitIsolation = .inheriting
     ) async throws -> Data {
         PhaseTrace.log("git \(arguments.prefix(2).joined(separator: " "))")
         defer { PhaseTrace.log("git done \(arguments.prefix(2).joined(separator: " "))") }
         let spec = ProcessSpec(
-            executable: executable, arguments: arguments, currentDirectory: directory,
-            environment: .inherited(overriding: hardeningEnvironment), standardInput: input, timeout: timeout)
+            executable: executable, arguments: isolation.configurationFlags + arguments, currentDirectory: directory,
+            environment: isolation.environment, standardInput: input, timeout: timeout)
         let output: ProcessOutput
         do {
             output = try await runner.run(spec)
