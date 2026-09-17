@@ -18,7 +18,7 @@ struct MouseScrollNavigationTests {
     private func makeSUT(fileContent: [String], columns: Int = 80, rows: Int = 24) -> (
         state: EditorState, pipeline: RenderPipeline
     ) {
-        makeKittyCodeNavigationContext(fileContent: fileContent, columns: columns, rows: rows)
+        EditorTestHarness.make(fileContent: fileContent, columns: columns, rows: rows)
     }
 
     @Test
@@ -119,7 +119,7 @@ struct MouseScrollNavigationTests {
 
         #expect(sut.state.scrollOffset == 3)
 
-        settlePendingAcceleratedScroll(sut.state)
+        EditorTestHarness.settlePendingAcceleratedScroll(sut.state)
 
         #expect(sut.state.scrollOffset == 7)
     }
@@ -159,7 +159,7 @@ struct MouseScrollNavigationTests {
             pipeline: sut.pipeline
         )
 
-        settlePendingAcceleratedScroll(sut.state)
+        EditorTestHarness.settlePendingAcceleratedScroll(sut.state)
 
         #expect(sut.state.scrollOffset == 2)
         #expect(sut.state.pendingAcceleratedScrollLines == 0)

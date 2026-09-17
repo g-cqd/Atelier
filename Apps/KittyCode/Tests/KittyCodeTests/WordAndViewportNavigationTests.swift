@@ -18,7 +18,7 @@ struct WordAndViewportNavigationTests {
     private func makeSUT(fileContent: [String], columns: Int = 80, rows: Int = 24) -> (
         state: EditorState, pipeline: RenderPipeline
     ) {
-        makeKittyCodeNavigationContext(fileContent: fileContent, columns: columns, rows: rows)
+        EditorTestHarness.make(fileContent: fileContent, columns: columns, rows: rows)
     }
 
     @Test

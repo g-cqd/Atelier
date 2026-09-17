@@ -1,3 +1,4 @@
+import AtelierGit
 import AtelierText
 import Foundation
 import KittyCodecs
@@ -22,7 +23,7 @@ struct SidebarDecorationRegressionTests {
         activityBar: Bool = false,
         tabRibbon: KittyConfig.TabRibbonPosition = .hidden
     ) -> (state: EditorState, pipeline: RenderPipeline) {
-        makeRuntimeRegressionContext(
+        EditorTestHarness.make(
             fileContent: fileContent,
             columns: columns,
             rows: rows,

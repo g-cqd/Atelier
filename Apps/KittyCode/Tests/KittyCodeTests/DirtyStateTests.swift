@@ -12,7 +12,7 @@ struct DirtyStateTests {
     private func makeSUT(fileContent: [String] = ["alpha", "beta", "gamma"])
         -> (state: EditorState, pipeline: RenderPipeline)
     {
-        makeKittyCodeNavigationContext(fileContent: fileContent)
+        EditorTestHarness.make(fileContent: fileContent)
     }
 
     @Test
@@ -97,7 +97,7 @@ struct DirtyStateTests {
     @Test
     func `small scroll marks only the newly exposed rows`() {
         let sut = makeSUT(fileContent: (0 ..< 100).map { "line \($0)" })
-        // makeKittyCodeNavigationContext uses 24 rows; visibleRows ~= 22.
+        // EditorTestHarness.make uses 24 rows; visibleRows ~= 22.
         // Make sure we have a sensible row size so the delta is "small".
         sut.state.lastRenderRows = 24
         _ = sut.state.drainDirtyState()
@@ -129,7 +129,7 @@ struct DirtyStateTests {
     @Test
     func `changing mode marks both chrome and content dirty`() {
         let sut = makeSUT()
-        // makeKittyCodeNavigationContext leaves the editor in `.editor` mode,
+        // EditorTestHarness.make leaves the editor in `.editor` mode,
         // so switch to `.tree` to assert a real transition.
         _ = sut.state.drainDirtyState()
         sut.state.mode = .tree
