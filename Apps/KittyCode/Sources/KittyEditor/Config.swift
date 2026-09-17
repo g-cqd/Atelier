@@ -267,6 +267,9 @@ public struct KittyConfig: Codable, Sendable {
     public struct SyntaxConfig: Codable, Sendable {
         public var enabled: Bool = true
         public var disabledLanguages: [String] = []
+        /// Path of an Xcode `.xccolortheme` whose syntax colours replace the six `theme.*Foreground` syntax
+        /// colours; `~` expands to the home directory. Nil keeps the configured colours.
+        public var xcodeTheme: String?
 
         public init() {}
 
@@ -277,6 +280,7 @@ public struct KittyConfig: Codable, Sendable {
             disabledLanguages =
                 try c.decodeIfPresent([String].self, forKey: .disabledLanguages)
                 ?? d.disabledLanguages
+            xcodeTheme = try c.decodeIfPresent(String.self, forKey: .xcodeTheme) ?? d.xcodeTheme
         }
     }
 
