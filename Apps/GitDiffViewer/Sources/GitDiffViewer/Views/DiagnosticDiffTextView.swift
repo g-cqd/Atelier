@@ -29,6 +29,8 @@ struct DiagnosticDiffTextView: View {
     @State private var overlay = DiagnosticOverlay()
     @State private var version = 0
     @State private var clicked: ClickedDiagnostics?
+    /// Bumped by every ``recompute()``; a mapping that lands after a newer one started is dropped.
+    @State private var recomputeGeneration = 0
 
     var body: some View {
         DiffTextView(
@@ -53,16 +55,26 @@ struct DiagnosticDiffTextView: View {
         .onChange(of: model.settings.diagnosticsEnabled) { recompute() }
     }
 
+    /// Maps this pane's findings off the main actor and applies the result, guarded by generation so a slower,
+    /// superseded mapping (an older render, or diagnostics that have since moved on) can never overwrite a newer
+    /// one that already landed.
     private func recompute() {
+        recomputeGeneration &+= 1
+        let generation = recomputeGeneration
         guard model.settings.diagnosticsEnabled, let diagnostics = model.diagnostics else {
             overlay.replace([:])
             version += 1
             return
         }
-        let rows = DiagnosticRowMapper.rows(
-            for: rendered, paths: model.diagnosticFilePaths, findings: diagnostics.findingsByFile)
-        overlay.replace(rows)
-        version += 1
+        let paths = model.diagnosticFilePaths
+        let findings = diagnostics.findingsByFile
+        let rendered = rendered
+        Task {
+            let rows = await DiagnosticRowMapper.rowsOffMain(for: rendered, paths: paths, findings: findings)
+            guard generation == recomputeGeneration else { return }
+            overlay.replace(rows)
+            version += 1
+        }
     }
 
     /// Resolves a hover hit through ``DiffComparison/HoverDocumentationModel`` and renders its markdown for the

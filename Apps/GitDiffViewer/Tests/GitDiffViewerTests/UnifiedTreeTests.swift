@@ -44,6 +44,7 @@ struct UnifiedTreeTests {
 
         sut.settings.showsChangesOnly = true
         sut.rebuildTrees()
+        try await taskProvider.waitForAllTasks()
 
         #expect(sut.unifiedTree.map(\.id) == ["gone"])
     }

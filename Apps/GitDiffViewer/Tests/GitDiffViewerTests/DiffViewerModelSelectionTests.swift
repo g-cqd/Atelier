@@ -153,6 +153,7 @@ struct DiffViewerModelSelectionTests {
         let firstRender = try #require(sut.renderedFiles.first?.rendered.id)
 
         sut.settings.showsChangesOnly = true
+        try await harness.taskProvider.waitForAllTasks()
         #expect(sut.leftTree.map(\.id) == ["a"])
         #expect(sut.renderedFiles.first?.rendered.id == firstRender)
 
