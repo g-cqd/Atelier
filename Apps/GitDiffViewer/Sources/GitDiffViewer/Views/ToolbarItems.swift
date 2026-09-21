@@ -33,6 +33,37 @@ struct DiffTotalsLabel: View {
     }
 }
 
+/// Static-analysis totals for the working tree: warnings and errors from every enabled tool, hidden entirely
+/// while diagnostics are off or nothing has been found. Mirrors ``DiffTotalsLabel``'s shape so the two sit
+/// naturally beside each other in the toolbar.
+struct DiagnosticsLabel: View {
+    let model: DiffViewerModel
+
+    var body: some View {
+        if model.settings.diagnosticsEnabled, let diagnostics = model.diagnostics, !diagnostics.summary.isEmpty {
+            let summary = diagnostics.summary
+            HStack(spacing: 6) {
+                if summary.warnings > 0 {
+                    Label("\(summary.warnings)", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+                if summary.errors > 0 {
+                    Label("\(summary.errors)", systemImage: "xmark.circle.fill")
+                        .foregroundStyle(.red)
+                }
+            }
+            .labelStyle(.titleAndIcon)
+            .font(.callout.monospacedDigit())
+            .fixedSize()
+            .toolbarItemMetrics()
+            // One name in the customization sheet: the numbers would otherwise be read out as the item's name.
+            .accessibilityLabel("Diagnostics")
+            .help(
+                DiagnosticsBreakdown.lines(summary: summary, runStates: diagnostics.runStates).joined(separator: "\n"))
+        }
+    }
+}
+
 /// The badge and line counts of the file on screen, for people who would rather read them at the top than in the
 /// status bar at the bottom.
 struct SelectedFileLabel: View {

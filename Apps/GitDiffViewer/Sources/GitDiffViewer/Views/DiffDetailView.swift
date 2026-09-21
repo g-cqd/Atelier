@@ -46,7 +46,8 @@ struct DiffDetailView: View {
         switch model.settings.mode {
             case .inline:
                 if let unified = rendered.unified {
-                    DiffTextView(
+                    DiagnosticDiffTextView(
+                        model: model,
                         rendered: unified,
                         gutter: .dual,
                         keepsScrollPosition: rendered.keepsScrollPosition,
@@ -62,6 +63,7 @@ struct DiffDetailView: View {
             case .split, .stacked:
                 if let old = rendered.old, let new = rendered.new {
                     SplitDiffView(
+                        model: model,
                         old: old,
                         new: new,
                         keepsScrollPosition: rendered.keepsScrollPosition,
@@ -81,6 +83,7 @@ struct DiffDetailView: View {
 }
 
 private struct SplitDiffView: View {
+    let model: DiffViewerModel
     let old: RenderedText
     let new: RenderedText
     let keepsScrollPosition: Bool
@@ -99,17 +102,17 @@ private struct SplitDiffView: View {
     var body: some View {
         let layout = isStacked ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
         layout {
-            DiffTextView(
-                rendered: old, gutter: .old, keepsScrollPosition: keepsScrollPosition, wrapsLines: wrapsLines,
-                wrapColumn: wrapColumn, showsMinimap: showsMinimap, syncsScrolling: syncsScrolling,
-                scrollRequest: scrollRequest, splitController: controller,
+            DiagnosticDiffTextView(
+                model: model, rendered: old, gutter: .old, keepsScrollPosition: keepsScrollPosition,
+                wrapsLines: wrapsLines, wrapColumn: wrapColumn, showsMinimap: showsMinimap,
+                syncsScrolling: syncsScrolling, scrollRequest: scrollRequest, splitController: controller,
                 onGapDrag: onGapDrag, currentExpansion: currentExpansion
             )
             Divider()
-            DiffTextView(
-                rendered: new, gutter: .new, keepsScrollPosition: keepsScrollPosition, wrapsLines: wrapsLines,
-                wrapColumn: wrapColumn, showsMinimap: showsMinimap, syncsScrolling: syncsScrolling,
-                scrollRequest: scrollRequest, splitController: controller,
+            DiagnosticDiffTextView(
+                model: model, rendered: new, gutter: .new, keepsScrollPosition: keepsScrollPosition,
+                wrapsLines: wrapsLines, wrapColumn: wrapColumn, showsMinimap: showsMinimap,
+                syncsScrolling: syncsScrolling, scrollRequest: scrollRequest, splitController: controller,
                 onGapDrag: onGapDrag, currentExpansion: currentExpansion
             )
         }

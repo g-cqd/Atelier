@@ -14,6 +14,7 @@ struct StatusBarView: View {
         HStack(spacing: 16) {
             subject
             Spacer(minLength: 8)
+            diagnostics
             position
             timing
         }
@@ -54,6 +55,34 @@ struct StatusBarView: View {
                 Text("Comparing…").foregroundStyle(.secondary)
             case .error, .noChanges, .noSelection, .noSources:
                 Text("Ready").foregroundStyle(.secondary)
+        }
+    }
+
+    /// Static-analysis totals for the working tree, next to the git ones ``subject`` already shows.
+    @ViewBuilder private var diagnostics: some View {
+        if model.settings.diagnosticsEnabled, let diagnostics = model.diagnostics {
+            if diagnostics.isRunning {
+                ProgressView().controlSize(.mini)
+            }
+            let summary = diagnostics.summary
+            if !summary.isEmpty {
+                HStack(spacing: 8) {
+                    if summary.warnings > 0 {
+                        Label("\(summary.warnings)", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .fixedSize()
+                    }
+                    if summary.errors > 0 {
+                        Label("\(summary.errors)", systemImage: "xmark.circle.fill")
+                            .foregroundStyle(.red)
+                            .fixedSize()
+                    }
+                }
+                .labelStyle(.titleAndIcon)
+                .help(
+                    DiagnosticsBreakdown.lines(summary: summary, runStates: diagnostics.runStates)
+                        .joined(separator: "\n"))
+            }
         }
     }
 

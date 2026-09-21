@@ -1,3 +1,4 @@
+import AtelierDiagnostics
 import DiffComparison
 import DiffCore
 import DiffGit
@@ -11,6 +12,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var settings: ViewerSettings
     let runner: any ProcessRunner
+    let discovery: ToolDiscovery
 
     var body: some View {
         TabView {
@@ -22,6 +24,9 @@ struct SettingsView: View {
             }
             Tab("Appearance", systemImage: "paintpalette") {
                 AppearanceSettings(settings: settings, runner: runner)
+            }
+            Tab("Tools", systemImage: "wrench.and.screwdriver") {
+                ToolsSettings(settings: settings, discovery: discovery)
             }
         }
         .frame(width: 560, height: 520)
@@ -159,7 +164,7 @@ private struct AppearanceSettings: View {
 }
 
 extension Text {
-    fileprivate func settingsCaption() -> some View {
+    func settingsCaption() -> some View {
         font(.caption).foregroundStyle(.secondary)
     }
 }
