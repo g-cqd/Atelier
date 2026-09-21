@@ -59,7 +59,8 @@ struct DiagnosticsEngineTests {
 
         let file = DiagnosticsEngine.FileTarget(
             path: "A.swift", contentHash: "hash-1", url: root.appending(path: "A.swift"))
-        let request = Self.request(root: root, files: [file], tool: .swiftlint, customPath: executable.path)
+        let request = Self.request(
+            root: root, files: [file], corpusFingerprint: "fp-1", tool: .swiftlint, customPath: executable.path)
 
         let first = try await engine.run(.swiftlint, request: request)
         let second = try await engine.run(.swiftlint, request: request)
@@ -75,10 +76,12 @@ struct DiagnosticsEngineTests {
 
     @Test
     func `a changed content hash busts the cache`() async throws {
+        // arcleak, not swiftlint: swiftlint is corpus-scoped, and its cache payload keys off the corpus
+        // fingerprint rather than any one file's content hash.
         let temp = TemporaryDirectory(prefix: "diageng")
         defer { temp.cleanup() }
         let root = URL(filePath: temp.file("root"))
-        let executable = URL(filePath: temp.file("tool/swiftlint"))
+        let executable = URL(filePath: temp.file("tool/arcleak"))
         try Self.makeExecutable(at: executable)
         let runner = FakeProcessRunner(always: Self.sarifOutput(root: root))
         let discovery = Self.discovery(runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
@@ -86,16 +89,16 @@ struct DiagnosticsEngineTests {
 
         let url = root.appending(path: "A.swift")
         let first = try await engine.run(
-            .swiftlint,
+            .arcleak,
             request: Self.request(
                 root: root, files: [DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "hash-1", url: url)],
-                tool: .swiftlint, customPath: executable.path)
+                tool: .arcleak, customPath: executable.path)
         )
         let second = try await engine.run(
-            .swiftlint,
+            .arcleak,
             request: Self.request(
                 root: root, files: [DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "hash-2", url: url)],
-                tool: .swiftlint, customPath: executable.path)
+                tool: .arcleak, customPath: executable.path)
         )
 
         #expect(!first.fromCache)
@@ -117,7 +120,8 @@ struct DiagnosticsEngineTests {
 
         let file = DiagnosticsEngine.FileTarget(
             path: "A.swift", contentHash: "hash-1", url: root.appending(path: "A.swift"))
-        let request = Self.request(root: root, files: [file], tool: .swiftlint, customPath: executable.path)
+        let request = Self.request(
+            root: root, files: [file], corpusFingerprint: "fp-1", tool: .swiftlint, customPath: executable.path)
 
         let configURL = root.appending(path: ".swiftlint.yml")
         try "one".write(to: configURL, atomically: true, encoding: .utf8)
@@ -229,7 +233,8 @@ struct DiagnosticsEngineTests {
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let file = DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "a", url: root.appending(path: "A.swift"))
-        let request = Self.request(root: root, files: [file], tool: .swiftlint, customPath: executable.path)
+        let request = Self.request(
+            root: root, files: [file], corpusFingerprint: "fp-1", tool: .swiftlint, customPath: executable.path)
         let result = try await engine.run(.swiftlint, request: request)
         guard case .failed = result.status else {
             Issue.record("expected .failed, got \(result.status)")
@@ -257,35 +262,37 @@ struct DiagnosticsEngineTests {
 
     @Test
     func `a per-file tool with no files is skipped`() async throws {
+        // arcleak, not swiftlint: swiftlint is now corpus-scoped, so an empty file list is not what makes it skip.
         let temp = TemporaryDirectory(prefix: "diageng")
         defer { temp.cleanup() }
         let root = URL(filePath: temp.file("root"))
-        let executable = URL(filePath: temp.file("tool/swiftlint"))
+        let executable = URL(filePath: temp.file("tool/arcleak"))
         try Self.makeExecutable(at: executable)
         let runner = FakeProcessRunner(always: .success(""))
         let discovery = Self.discovery(runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
-        let request = Self.request(root: root, files: [], tool: .swiftlint, customPath: executable.path)
-        let result = try await engine.run(.swiftlint, request: request)
+        let request = Self.request(root: root, files: [], tool: .arcleak, customPath: executable.path)
+        let result = try await engine.run(.arcleak, request: request)
         #expect(result.status == .skipped("no files"))
         #expect(runner.specs.isEmpty)
     }
 
     @Test
     func `a per-file tool with only blobs not on disk is skipped`() async throws {
+        // arcleak, not swiftlint: swiftlint is now corpus-scoped and never reads a file's on-disk URL.
         let temp = TemporaryDirectory(prefix: "diageng")
         defer { temp.cleanup() }
         let root = URL(filePath: temp.file("root"))
-        let executable = URL(filePath: temp.file("tool/swiftlint"))
+        let executable = URL(filePath: temp.file("tool/arcleak"))
         try Self.makeExecutable(at: executable)
         let runner = FakeProcessRunner(always: .success(""))
         let discovery = Self.discovery(runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let file = DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "a", url: nil)
-        let request = Self.request(root: root, files: [file], tool: .swiftlint, customPath: executable.path)
-        let result = try await engine.run(.swiftlint, request: request)
+        let request = Self.request(root: root, files: [file], tool: .arcleak, customPath: executable.path)
+        let result = try await engine.run(.arcleak, request: request)
         #expect(result.status == .skipped("sources not on disk"))
         #expect(runner.specs.isEmpty)
     }
@@ -310,7 +317,8 @@ struct DiagnosticsEngineTests {
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
         let file = DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "a", url: root.appending(path: "A.swift"))
-        let request = Self.request(root: root, files: [file], tool: .swiftlint, customPath: executable.path)
+        let request = Self.request(
+            root: root, files: [file], corpusFingerprint: "fp-1", tool: .swiftlint, customPath: executable.path)
 
         let task = Task {
             try await engine.run(.swiftlint, request: request)
