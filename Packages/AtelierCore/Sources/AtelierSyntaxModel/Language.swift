@@ -60,6 +60,16 @@ public enum Language: Sendable, Equatable, CaseIterable {
         }
     }
 
+    /// The language identifier a Language Server Protocol `textDocument` carries. Matches ``name`` except where
+    /// the LSP specification spells it differently.
+    public var lspLanguageID: String {
+        switch self {
+            case .shell, .fish: "shellscript"
+            case .plain: "plaintext"
+            default: name
+        }
+    }
+
     private static let byName: [String: Language] = {
         var names = Dictionary(uniqueKeysWithValues: Language.allCases.map { ($0.name, $0) })
         names["objc"] = .objectiveC

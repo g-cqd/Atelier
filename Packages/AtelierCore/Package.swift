@@ -36,11 +36,23 @@ let package = Package(
         .library(name: "AtelierQuery", targets: ["AtelierQuery"]),
         .library(name: "AtelierTheme", targets: ["AtelierTheme"]),
         .library(name: "AtelierFileTree", targets: ["AtelierFileTree"]),
-        .library(name: "AtelierSearch", targets: ["AtelierSearch"])
+        .library(name: "AtelierSearch", targets: ["AtelierSearch"]),
+        .library(name: "AtelierDiagnostics", targets: ["AtelierDiagnostics"]),
+        .library(name: "AtelierLSP", targets: ["AtelierLSP"]),
+        .library(name: "AtelierDocIndex", targets: ["AtelierDocIndex"])
     ],
     dependencies: [
         .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0")
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
+        .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "1.0.0"),
+        // AemiJSON's tape parser + lazy navigation back the hot JSON paths: SARIF decode
+        // (AtelierDiagnostics) and JSON-RPC envelope routing (AtelierLSP). The checkout at
+        // ~/Developer/AemiJSON tracks g-cqd/AemiJSON (feature/raw-subtree-bytes), where the
+        // JSONParseOptions.recordsContainerSpans / JSON.withRawJSONBytes work lives; a local path
+        // while that branch settles. Switch to
+        // .package(url: "https://github.com/g-cqd/AemiJSON.git", branch: "feature/raw-subtree-bytes")
+        // to pin remotely (private repo: resolution needs the g-cqd credentials).
+        .package(path: "../../../AemiJSON")
     ],
     targets: [
         // The vocabulary highlighting is expressed in: languages, and later roles and tokens.
@@ -63,10 +75,45 @@ let package = Package(
             ],
             swiftSettings: strict
         ),
-        // Subprocesses: one blocking job per run on aemi's pool, temp-file input and errors, clock-driven timeouts.
+        // Subprocesses: one blocking job per run on aemi's pool, temp-file input and errors, clock-driven timeouts;
+        // plus a long-lived bidirectional session over swift-subprocess for servers that speak over stdio.
         .target(
             name: "AtelierProcess",
-            dependencies: [.product(name: "AemiRuntime", package: "aemi")],
+            dependencies: [
+                .product(name: "AemiRuntime", package: "aemi"),
+                .product(name: "Subprocess", package: "swift-subprocess")
+            ],
+            swiftSettings: strict
+        ),
+        // Static-analysis tools as values: discovery on disk, argv builders, SARIF and xcode-format parsing, and an
+        // engine that runs each tool as one cancellable, cached, off-main job.
+        .target(
+            name: "AtelierDiagnostics",
+            dependencies: [
+                "AtelierProcess", .product(name: "AemiRuntime", package: "aemi"),
+                .product(name: "AemiJSON", package: "AemiJSON")
+            ],
+            swiftSettings: strict
+        ),
+        // A minimal Language Server Protocol client: base-protocol framing, JSON-RPC, and a sourcekit-lsp session
+        // for hover documentation. Hand-rolled types for exactly the requests the apps make.
+        .target(
+            name: "AtelierLSP",
+            dependencies: [
+                "AtelierProcess", "AtelierSyntaxModel",
+                .product(name: "AemiJSON", package: "AemiJSON")
+            ],
+            swiftSettings: strict
+        ),
+        // Documentation from source alone: doc comments indexed over swift-syntax trees, and the identifier under a
+        // position, for hover content that needs no build context.
+        .target(
+            name: "AtelierDocIndex",
+            dependencies: [
+                "AtelierSyntaxModel",
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax")
+            ],
             swiftSettings: strict
         ),
         // A git client over AtelierProcess: commands as methods, output parsed by pure functions in GitParsers.
@@ -162,6 +209,25 @@ let package = Package(
             swiftSettings: strict),
         .testTarget(
             name: "AtelierSwiftSyntaxTests", dependencies: ["AtelierSwiftSyntax", "AtelierDiff", "AtelierSyntaxModel"],
+            swiftSettings: strict),
+        .testTarget(
+            name: "AtelierDiagnosticsTests",
+            dependencies: [
+                "AtelierDiagnostics", "AtelierProcess", "AtelierTestSupport",
+                .product(name: "AemiTestKit", package: "aemi")
+            ],
+            swiftSettings: strict
+        ),
+        .testTarget(
+            name: "AtelierLSPTests",
+            dependencies: [
+                "AtelierLSP", "AtelierProcess", .product(name: "AemiRuntime", package: "aemi"),
+                .product(name: "AemiTestKit", package: "aemi")
+            ],
+            swiftSettings: strict
+        ),
+        .testTarget(
+            name: "AtelierDocIndexTests", dependencies: ["AtelierDocIndex", "AtelierSyntaxModel"],
             swiftSettings: strict)
     ]
 )
