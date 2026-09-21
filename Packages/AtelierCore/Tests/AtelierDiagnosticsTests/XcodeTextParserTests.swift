@@ -42,6 +42,27 @@ struct XcodeTextParserTests {
     }
 
     @Test
+    func `a parenthesized rule prefix, as swiftformat emits, is extracted the same way as a bracketed one`() {
+        let text = "/repo/Sources/A.swift:12:5: warning: (trailingCommas) remove trailing comma"
+        let findings = XcodeTextParser.findings(from: text, tool: .swiftformat, root: Self.root)
+        #expect(
+            findings == [
+                Finding(
+                    tool: .swiftformat, ruleID: "trailingCommas", message: "remove trailing comma",
+                    file: "Sources/A.swift", line: 12, column: 5, severity: .warning
+                )
+            ])
+    }
+
+    @Test
+    func `a swiftformat message with no rule prefix keeps swiftformat as the rule id`() {
+        let text = "/repo/B.swift:3:1: note: plain message"
+        let findings = XcodeTextParser.findings(from: text, tool: .swiftformat, root: Self.root)
+        #expect(findings[0].ruleID == "swiftformat")
+        #expect(findings[0].message == "plain message")
+    }
+
+    @Test
     func `an absolute path under the root becomes relative`() {
         let text = "/repo/Nested/C.swift:1:1: warning: [X] msg"
         let findings = XcodeTextParser.findings(from: text, tool: .swiftFormat, root: Self.root)

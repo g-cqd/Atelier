@@ -38,8 +38,14 @@ public enum XcodeTextParser {
         guard let severity = severities[severityToken] else { return nil }
         var message = String(fields[3]).trimmingCharacters(in: .whitespaces)
 
-        var ruleID = "swift-format"
+        // Apple's swift-format leads a rule's message with `[RuleName]`; Lockwood's swiftformat leads with
+        // `(ruleName)` instead. Either way, the rule name becomes the finding's ruleID and is stripped from the
+        // message that is left.
+        var ruleID = tool.rawValue
         if message.hasPrefix("["), let closing = message.firstIndex(of: "]") {
+            ruleID = String(message[message.index(after: message.startIndex) ..< closing])
+            message = String(message[message.index(after: closing)...]).trimmingCharacters(in: .whitespaces)
+        } else if message.hasPrefix("("), let closing = message.firstIndex(of: ")") {
             ruleID = String(message[message.index(after: message.startIndex) ..< closing])
             message = String(message[message.index(after: closing)...]).trimmingCharacters(in: .whitespaces)
         }
