@@ -112,6 +112,14 @@ public actor DiagnosticsEngine {
                 tool: tool, findings: [], status: .skipped("requires a working tree"), duration: .zero,
                 fromCache: false)
         }
+        if let requiredConfigurationFile = tool.requiredConfigurationFile,
+            !fileManager.fileExists(atPath: request.root.appending(path: requiredConfigurationFile).path)
+        {
+            return ToolResult(
+                tool: tool, findings: [],
+                status: .skipped("no \(tool.displayName) configuration in this project"), duration: .zero,
+                fromCache: false)
+        }
 
         guard let located = await discovery.locate(tool, location: request.tools[tool]) else {
             return ToolResult(tool: tool, findings: [], status: .toolMissing, duration: .zero, fromCache: false)

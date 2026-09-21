@@ -2,6 +2,10 @@
 public enum DiagnosticTool: String, CaseIterable, Sendable, Codable, Identifiable {
     case swiftlint
     case swiftFormat = "swift-format"
+    /// Nick Lockwood's SwiftFormat (github.com/nicklockwood/SwiftFormat), distinct from Apple's ``swiftFormat``:
+    /// a different binary, a different configuration file (`.swiftformat`), and a different rule set. Some
+    /// projects adopt this one instead of Apple's, so both are offered as independent tools.
+    case swiftformat
     case arcleak
     case dolly
     case deadwood
@@ -13,17 +17,21 @@ public enum DiagnosticTool: String, CaseIterable, Sendable, Codable, Identifiabl
         switch self {
             case .swiftlint: "swiftlint"
             case .swiftFormat: "swift-format"
+            case .swiftformat: "swiftformat"
             case .arcleak: "arcleak"
             case .dolly: "dolly"
             case .deadwood: "deadwood"
         }
     }
 
-    /// The name shown in UI.
+    /// The name shown in UI. Apple's and Lockwood's formatters share a name closely enough (`swift-format` vs
+    /// `swiftformat`) that the Tools tab spells the second out fully, with its author, to keep the two
+    /// unambiguous at a glance.
     public var displayName: String {
         switch self {
             case .swiftlint: "SwiftLint"
             case .swiftFormat: "swift-format"
+            case .swiftformat: "SwiftFormat (Lockwood)"
             case .arcleak: "arcleak"
             case .dolly: "dolly"
             case .deadwood: "deadwood"
@@ -35,6 +43,7 @@ public enum DiagnosticTool: String, CaseIterable, Sendable, Codable, Identifiabl
         switch self {
             case .swiftlint: "GDV_SWIFTLINT"
             case .swiftFormat: "GDV_SWIFT_FORMAT"
+            case .swiftformat: "GDV_SWIFTFORMAT"
             case .arcleak: "GDV_ARCLEAK"
             case .dolly: "GDV_DOLLY"
             case .deadwood: "GDV_DEADWOOD"
@@ -49,8 +58,8 @@ public enum DiagnosticTool: String, CaseIterable, Sendable, Codable, Identifiabl
 
     public var scope: AnalysisScope {
         switch self {
-            case .swiftlint, .swiftFormat, .arcleak: .perFile
-            case .dolly, .deadwood: .corpus
+            case .swiftFormat, .arcleak: .perFile
+            case .swiftlint, .swiftformat, .dolly, .deadwood: .corpus
         }
     }
 
@@ -62,7 +71,7 @@ public enum DiagnosticTool: String, CaseIterable, Sendable, Codable, Identifiabl
 
     public var outputFormat: ToolOutputFormat {
         switch self {
-            case .swiftFormat: .xcodeTextOnStderr
+            case .swiftFormat, .swiftformat: .xcodeTextOnStderr
             case .swiftlint, .arcleak, .dolly, .deadwood: .sarif
         }
     }
@@ -72,6 +81,7 @@ public enum DiagnosticTool: String, CaseIterable, Sendable, Codable, Identifiabl
         switch self {
             case .swiftlint: [".swiftlint.yml"]
             case .swiftFormat: [".swift-format"]
+            case .swiftformat: [".swiftformat"]
             case .arcleak: [".arcleak.yml", ".arcleak-baseline.json"]
             case .dolly: [".dolly.yml"]
             case .deadwood: [".deadwood.yml"]
@@ -81,5 +91,17 @@ public enum DiagnosticTool: String, CaseIterable, Sendable, Codable, Identifiabl
     /// True when the tool ships inside the Swift toolchain rather than needing a separate install.
     public var isInToolchain: Bool {
         self == .swiftFormat
+    }
+
+    /// The configuration file name whose absence at the analyzed root means the tool has not been adopted by the
+    /// project, so ``DiagnosticsEngine`` skips running it there rather than reporting findings from a config the
+    /// project never opted into. `nil` for a tool that is still useful without a project-specific configuration
+    /// (swiftlint's curated defaults, for instance) or that has no dedicated configuration file of its own.
+    public var requiredConfigurationFile: String? {
+        switch self {
+            case .swiftFormat: ".swift-format"
+            case .swiftformat: ".swiftformat"
+            case .swiftlint, .arcleak, .dolly, .deadwood: nil
+        }
     }
 }

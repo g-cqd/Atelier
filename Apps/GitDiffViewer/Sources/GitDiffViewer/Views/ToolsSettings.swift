@@ -76,6 +76,10 @@ struct ToolsSettings: View {
                         customPath: toolCustomPathBinding(tool),
                         executableName: tool.executableName
                     )
+                    if let requiredConfigurationFile = tool.requiredConfigurationFile {
+                        Text("Runs only in projects that carry a \(requiredConfigurationFile) file.")
+                            .settingsCaption()
+                    }
                 }
             }
             Section("Language Servers") {

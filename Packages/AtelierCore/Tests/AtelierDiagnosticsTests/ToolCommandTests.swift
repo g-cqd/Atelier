@@ -8,8 +8,9 @@ struct ToolCommandTests {
     private static let root = URL(filePath: "/repo")
 
     @Test(arguments: [
-        (DiagnosticTool.swiftlint, ["lint", "--reporter", "sarif", "--quiet", "A.swift"]),
-        (.swiftFormat, ["lint", "A.swift"]),
+        (DiagnosticTool.swiftlint, ["lint", "--reporter", "sarif", "--quiet"]),
+        (.swiftFormat, ["lint", "--configuration", "/repo/.swift-format", "A.swift"]),
+        (.swiftformat, ["--lint", "."]),
         (.arcleak, ["analyze", "A.swift", "--format", "sarif"]),
         (.dolly, ["analyze", "/repo", "--format", "sarif"]),
         (.deadwood, ["analyze", "/repo", "--format", "sarif"])
@@ -26,6 +27,7 @@ struct ToolCommandTests {
     @Test(arguments: [
         (DiagnosticTool.swiftlint, Set<Int32>([0, 1, 2, 3])),
         (.swiftFormat, Set<Int32>([0, 1])),
+        (.swiftformat, Set<Int32>([0, 1])),
         (.arcleak, Set<Int32>([0, 1])),
         (.dolly, Set<Int32>([0, 1])),
         (.deadwood, Set<Int32>([0, 1]))

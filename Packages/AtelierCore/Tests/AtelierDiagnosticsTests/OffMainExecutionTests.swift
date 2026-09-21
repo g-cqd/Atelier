@@ -56,7 +56,8 @@ struct OffMainExecutionTests {
         let file = DiagnosticsEngine.FileTarget(
             path: "A.swift", contentHash: "hash-1", url: root.appending(path: "A.swift"))
         let request = DiagnosticsEngine.Request(
-            root: root, files: [file], tools: [.swiftlint: ToolLocation(customPath: executable.path)])
+            root: root, files: [file], corpusFingerprint: "fp-1",
+            tools: [.swiftlint: ToolLocation(customPath: executable.path)])
 
         let result = try await engine.run(.swiftlint, request: request)
 

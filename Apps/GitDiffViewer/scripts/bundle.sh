@@ -30,7 +30,7 @@ mkdir -p "$helpers"
 
 tools_dir="${GDV_TOOLS_DIR:-$script_dir/../../..}"
 
-for tool in swiftlint swift-format arcleak dolly deadwood; do
+for tool in swiftlint swift-format swiftformat arcleak dolly deadwood; do
     # env override, e.g. GDV_BUNDLE_SWIFT_FORMAT
     upper=$(echo "$tool" | tr 'a-z-' 'A-Z_')
     eval "override=\${GDV_BUNDLE_${upper}:-}"
