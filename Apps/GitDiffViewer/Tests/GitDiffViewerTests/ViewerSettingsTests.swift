@@ -1,3 +1,4 @@
+import AtelierDiagnostics
 import DiffCore
 import Foundation
 import Testing
@@ -27,6 +28,11 @@ struct ViewerSettingsTests {
         #expect(sut.lineHeightMultiple == 0)
         #expect(!sut.isolatesChanges)
         #expect(sut.contextLines == 3)
+        #expect(!sut.diagnosticsEnabled)
+        #expect(sut.showsHoverDocumentation)
+        #expect(sut.toolLocations.count == DiagnosticTool.allCases.count)
+        #expect(DiagnosticTool.allCases.allSatisfy { sut.toolLocations[$0]?.isEnabled == true })
+        #expect(sut.lspServerLocations == ["sourcekit-lsp": ToolLocation()])
     }
 
     @Test
@@ -48,6 +54,10 @@ struct ViewerSettingsTests {
         sut.lineHeightMultiple = 1.4
         sut.isolatesChanges = true
         sut.contextLines = 5
+        sut.diagnosticsEnabled = true
+        sut.showsHoverDocumentation = false
+        sut.toolLocations = [.swiftlint: ToolLocation(isEnabled: false, customPath: "/usr/local/bin/swiftlint")]
+        sut.lspServerLocations = ["sourcekit-lsp": ToolLocation(customPath: "/usr/bin/sourcekit-lsp")]
 
         let reloaded = ViewerSettings(defaults: defaults)
 
@@ -66,6 +76,28 @@ struct ViewerSettingsTests {
         #expect(reloaded.lineHeightMultiple == 1.4)
         #expect(reloaded.isolatesChanges)
         #expect(reloaded.contextLines == 5)
+        #expect(reloaded.diagnosticsEnabled)
+        #expect(!reloaded.showsHoverDocumentation)
+        #expect(
+            reloaded.toolLocations == [
+                .swiftlint: ToolLocation(isEnabled: false, customPath: "/usr/local/bin/swiftlint")
+            ])
+        #expect(reloaded.lspServerLocations == ["sourcekit-lsp": ToolLocation(customPath: "/usr/bin/sourcekit-lsp")])
+    }
+
+    @Test
+    func `toggling the diagnostics master switch fires the diagnostics change category`() throws {
+        let sut = ViewerSettings(defaults: try makeDefaults())
+        final class Owner {}
+        let owner = Owner()
+        var changes: [ViewerSettings.Change] = []
+        sut.addObserver(owner) { changes.append($0) }
+
+        sut.diagnosticsEnabled = true
+        sut.toolLocations = [:]
+        sut.lspServerLocations = [:]
+
+        #expect(changes == [.diagnostics, .diagnostics, .diagnostics])
     }
 
     @Test
