@@ -1,9 +1,18 @@
+import AemiCore
 package import AtelierDiagnostics
 package import AtelierLSP
+import Darwin
 import DiffCore
 import DiffGit
 import DiffRendering
 import Foundation
+
+/// Whether the calling thread is the process' main thread; used to assert the executor contract of
+/// ``DiffViewerModel/corpusFingerprint(changedPaths:comparison:leftEntries:rightEntries:)`` stays off it, in
+/// debug builds and under tests.
+private func isOnMainThread() -> Bool {
+    pthread_main_np() != 0
+}
 
 /// Diagnostics and hover documentation wiring for ``DiffViewerModel``, split out of the main file to keep it under
 /// the `file_length` limit. `pipeline`, `taskProvider` and `diagnosticsVersion`'s setter are widened from `private`
@@ -68,6 +77,8 @@ extension DiffViewerModel {
     /// sense against a working tree the tools can actually run over, so anything else (two arbitrary refs, a
     /// patch) reports no root and clears whatever was showing.
     func updateDiagnostics() {
+        diagnosticsTask?.cancel()
+        diagnosticsGeneration += 1
         guard let diagnostics else { return }
         guard case .directory(let rightRoot) = right.source else {
             diagnostics.comparisonChanged(root: nil, files: [], corpusFingerprint: nil)
@@ -84,17 +95,37 @@ extension DiffViewerModel {
                 return DiagnosticsEngine.FileTarget(
                     path: rightPath, contentHash: contentHash, url: rightRoot.appending(path: rightPath))
             }
-        // A precise corpus fingerprint would read HEAD's commit and `git status --porcelain`, but nothing
-        // downstream of `Comparison` exposes a `GitClient` to do that with. The sorted (path, content hash) list
-        // of every changed file already changes exactly when the working tree does, which is the property a
-        // corpus-scoped tool's cache key needs; it is just a little more to hash for a very large changeset.
+        let leftEntries = left.entriesByPath
+        let rightEntries = right.entriesByPath
+        let comparison = comparison
+        let generation = diagnosticsGeneration
+        diagnosticsTask = taskProvider.task {
+            let corpusFingerprint = await Self.corpusFingerprint(
+                changedPaths: changedPaths, comparison: comparison, leftEntries: leftEntries,
+                rightEntries: rightEntries)
+            guard generation == diagnosticsGeneration else { return }
+            diagnostics.comparisonChanged(root: rightRoot, files: swiftFiles, corpusFingerprint: corpusFingerprint)
+        }
+    }
+
+    /// The sorted (path, content hash) fingerprint of every changed file, hashed off the main actor (SE-0461's
+    /// `@concurrent`): cheap for a handful of files, but a large changeset is enough sorting and hashing to be
+    /// worth keeping off the window's own actor. A precise fingerprint would read HEAD's commit and
+    /// `git status --porcelain`, but nothing downstream of `Comparison` exposes a `GitClient` to do that with;
+    /// this list already changes exactly when the working tree does, which is the property a corpus-scoped
+    /// tool's cache key needs.
+    @concurrent
+    private static func corpusFingerprint(
+        changedPaths: [String], comparison: Comparison, leftEntries: [String: SourceEntry],
+        rightEntries: [String: SourceEntry]
+    ) async -> String {
+        assert(!isOnMainThread(), "corpusFingerprint must run off the main actor")
         let fingerprintEntries = changedPaths.sorted()
             .map { leftPath -> String in
                 let rightPath = comparison.counterpartPath(of: leftPath, in: .left)
-                let hash = right.entriesByPath[rightPath]?.blobID ?? left.entriesByPath[leftPath]?.blobID ?? "-"
+                let hash = rightEntries[rightPath]?.blobID ?? leftEntries[leftPath]?.blobID ?? "-"
                 return "\(rightPath)=\(hash)"
             }
-        let corpusFingerprint = SourceLoader.blobID(of: Data(fingerprintEntries.joined(separator: "\n").utf8))
-        diagnostics.comparisonChanged(root: rightRoot, files: swiftFiles, corpusFingerprint: corpusFingerprint)
+        return SourceLoader.blobID(of: Data(fingerprintEntries.joined(separator: "\n").utf8))
     }
 }

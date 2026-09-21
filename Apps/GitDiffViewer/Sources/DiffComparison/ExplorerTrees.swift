@@ -1,9 +1,17 @@
 package import AtelierFileTree
+import Darwin
 import DiffCore
 package import DiffGit
 import DiffRendering
 import Foundation
 import Observation
+
+/// Whether the calling thread is the process' main thread; used to assert the executor contract of
+/// ``ExplorerTrees/buildOffMain(comparison:leftTree:rightTree:showsChangesOnly:showsIgnoredFiles:style:)`` stays
+/// off it, in debug builds and under tests.
+private func isOnMainThread() -> Bool {
+    pthread_main_np() != 0
+}
 
 /// The explorer trees for both sides and the merged view, with every directory carrying the aggregate status of
 /// its files. Built as one value from the comparison and the display settings.
@@ -53,6 +61,19 @@ package struct ExplorerTrees: Sendable, Equatable {
             trees.unifiedIgnored = arranged(PathNode.tree(from: Array(comparison.ignoredPaths)), style: style)
         }
         return trees
+    }
+
+    /// Same build as ``build(comparison:leftTree:rightTree:showsChangesOnly:showsIgnoredFiles:style:)``,
+    /// guaranteed to run off the main actor (SE-0461's `@concurrent`) so a large tree never blocks it.
+    @concurrent
+    package static func buildOffMain(
+        comparison: Comparison, leftTree: [PathNode], rightTree: [PathNode], showsChangesOnly: Bool,
+        showsIgnoredFiles: Bool = false, style: FileTreeStyle
+    ) async -> ExplorerTrees {
+        assert(!isOnMainThread(), "buildOffMain must run off the main actor")
+        return build(
+            comparison: comparison, leftTree: leftTree, rightTree: rightTree, showsChangesOnly: showsChangesOnly,
+            showsIgnoredFiles: showsIgnoredFiles, style: style)
     }
 
     private static func arranged(_ nodes: [PathNode], style: FileTreeStyle) -> [PathNode] {

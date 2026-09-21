@@ -52,6 +52,13 @@ package final class DiffViewerModel {
     @ObservationIgnored private var sourcesTask: Task<Void, Never>?
     @ObservationIgnored private var prologueTask: Task<LoadedSides?, Never>?
     @ObservationIgnored private var renamesTask: Task<Void, Never>?
+    @ObservationIgnored private var treesTask: Task<Void, Never>?
+    /// Bumped by every ``rebuildTrees()``; a build that lands after a newer one started is dropped.
+    @ObservationIgnored private var treesGeneration = 0
+    // Widened from `private` to `internal` so `DiffViewerModel+Diagnostics.swift`'s `updateDiagnostics()` can
+    // guard its own async fingerprint hop against a newer call superseding it.
+    @ObservationIgnored var diagnosticsTask: Task<Void, Never>?
+    @ObservationIgnored var diagnosticsGeneration = 0
 
     /// Files shown together when a folder or nothing is selected; capped so a whole repository stays responsive.
     package static let combinedFileLimit = 200
@@ -304,17 +311,30 @@ package final class DiffViewerModel {
         }
     }
 
-    /// Applies the changed-files filter and the tree style from the settings to the explorer trees. Showing the
-    /// ignored files asks each side for them; they join the comparison when they arrive, without a re-render.
+    /// Applies the changed-files filter and the tree style from the settings to the explorer trees, off the main
+    /// actor: a large repository's tree is expensive enough to build that doing it inline would stall the window.
+    /// Generation-guarded like ``RenderPipeline``'s renders, so a rebuild started before a stale one lands never
+    /// overwrites it with older trees (no flash back to a previous state).
     package func rebuildTrees() {
-        trees = ExplorerTrees.build(
-            comparison: comparison, leftTree: left.tree, rightTree: right.tree,
-            showsChangesOnly: settings.showsChangesOnly, showsIgnoredFiles: settings.showsIgnoredFiles,
-            style: settings.treeStyle
-        )
-        guard settings.showsIgnoredFiles, !left.isLoading, !right.isLoading else { return }
-        left.loadIgnoredEntries()
-        right.loadIgnoredEntries()
+        treesTask?.cancel()
+        treesGeneration += 1
+        let generation = treesGeneration
+        let comparison = comparison
+        let leftTree = left.tree
+        let rightTree = right.tree
+        let showsChangesOnly = settings.showsChangesOnly
+        let showsIgnoredFiles = settings.showsIgnoredFiles
+        let style = settings.treeStyle
+        treesTask = taskProvider.task {
+            let built = await ExplorerTrees.buildOffMain(
+                comparison: comparison, leftTree: leftTree, rightTree: rightTree,
+                showsChangesOnly: showsChangesOnly, showsIgnoredFiles: showsIgnoredFiles, style: style)
+            guard generation == treesGeneration else { return }
+            trees = built
+            guard settings.showsIgnoredFiles, !left.isLoading, !right.isLoading else { return }
+            left.loadIgnoredEntries()
+            right.loadIgnoredEntries()
+        }
     }
 
     private func ignoredEntriesChanged() {
