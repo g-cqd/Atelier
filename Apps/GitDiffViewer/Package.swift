@@ -60,7 +60,10 @@ let package = Package(
         ),
         .target(
             name: "DiffTextKit",
-            dependencies: ["DiffCore", "DiffRendering", .product(name: "AemiCore", package: "aemi")],
+            dependencies: [
+                "DiffCore", "DiffRendering", .product(name: "AtelierDiagnostics", package: "AtelierCore"),
+                .product(name: "AemiCore", package: "aemi")
+            ],
             swiftSettings: strict
         ),
         // App-tier models spawn through AemiCore's task provider; fan-out and the clock seam come from AemiRuntime.
@@ -68,6 +71,9 @@ let package = Package(
             name: "DiffComparison",
             dependencies: [
                 "DiffCore", "DiffGit", "DiffRendering", .product(name: "AtelierFileTree", package: "AtelierCore"),
+                .product(name: "AtelierDiagnostics", package: "AtelierCore"),
+                .product(name: "AtelierLSP", package: "AtelierCore"),
+                .product(name: "AtelierDocIndex", package: "AtelierCore"),
                 .product(name: "AemiCore", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
             ],
             swiftSettings: strict
@@ -82,6 +88,7 @@ let package = Package(
             name: "GitDiffViewerTests",
             dependencies: [
                 "DiffComparison", "DiffGit", "DiffRendering", "DiffTextKit",
+                .product(name: "AtelierDiagnostics", package: "AtelierCore"),
                 .product(name: "AtelierSources", package: "AtelierCore"),
                 .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),
                 .product(name: "AtelierTestSupport", package: "AtelierCore"),

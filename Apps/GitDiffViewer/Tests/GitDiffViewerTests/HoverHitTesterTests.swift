@@ -1,0 +1,144 @@
+import AppKit
+import DiffCore
+import Testing
+
+@testable import DiffRendering
+@testable import DiffTextKit
+
+/// Hosts a `RenderedText` in an off-screen text view configured the same way `DiffTextView.makeNSView` sets one
+/// up (TextKit 2, the pane's container inset and padding, no wrapping) and lays it out fully.
+@MainActor
+private func makeTextView(rendered: RenderedText, width: CGFloat = 800) -> NSTextView {
+    let textView = NSTextView(usingTextLayoutManager: true)
+    textView.textContainerInset = NSSize(width: 0, height: DiffPaneMetrics.containerInset)
+    textView.textContainer?.lineFragmentPadding = DiffPaneMetrics.lineFragmentPadding
+    textView.textContainer?.widthTracksTextView = false
+    textView.textContainer?.size = NSSize(width: width, height: DiffPaneMetrics.unboundedExtent)
+    textView.textContentStorage?.textStorage?.setAttributedString(rendered.attributed)
+    textView.textLayoutManager?.ensureLayout(for: textView.textLayoutManager!.documentRange)
+    return textView
+}
+
+/// The pixel a test wants to click, computed the same way the monospaced system palette lays rows out: uniform
+/// row height and character width, the container inset and the line fragment padding as the only offsets.
+@MainActor
+private func point(row: Int, column: Int, in rendered: RenderedText, centered: Bool = true) -> NSPoint {
+    let charWidth = ("0" as NSString).size(withAttributes: [.font: rendered.palette.font]).width
+    let x =
+        DiffPaneMetrics.lineFragmentPadding + CGFloat(column) * charWidth + (centered ? charWidth / 2 : 0)
+    let y = DiffPaneMetrics.containerInset + (CGFloat(row) + 0.5) * rendered.lineHeight
+    return NSPoint(x: x, y: y)
+}
+
+@MainActor
+struct HoverHitTesterTests {
+    private let text = "let alphaBeta = 1\n"
+
+    private func rendered() throws -> RenderedText {
+        try #require(DiffRenderer.render(oldText: text, newText: text, language: .plain).new)
+    }
+
+    @Test
+    func `a point mid-identifier resolves the row, side, line and column, with an anchor around the point`() throws {
+        let rendered = try rendered()
+        let textView = makeTextView(rendered: rendered)
+        // "let alphaBeta = 1": alphaBeta spans columns 4..<13; column 8 sits inside it.
+        let target = point(row: 0, column: 8, in: rendered)
+
+        let hit = try #require(HoverHitTester.hit(at: target, textView: textView, rendered: rendered))
+
+        #expect(hit.row == 0)
+        #expect(hit.side == .new)
+        #expect(hit.line == 0)
+        #expect(hit.utf16Column == 8)
+        #expect(hit.fileIndex == 0)
+        #expect(hit.anchorRect.minX <= target.x)
+        #expect(hit.anchorRect.maxX >= target.x)
+    }
+
+    @Test
+    func `the first character of an identifier resolves too`() throws {
+        let rendered = try rendered()
+        let textView = makeTextView(rendered: rendered)
+        let target = point(row: 0, column: 4, in: rendered)
+
+        let hit = try #require(HoverHitTester.hit(at: target, textView: textView, rendered: rendered))
+
+        #expect(hit.utf16Column == 4)
+    }
+
+    @Test
+    func `a point over punctuation or whitespace misses`() throws {
+        let rendered = try rendered()
+        let textView = makeTextView(rendered: rendered)
+
+        // Column 14 is the '=' sign; column 3 is the space before "alphaBeta".
+        #expect(
+            HoverHitTester.hit(at: point(row: 0, column: 14, in: rendered), textView: textView, rendered: rendered)
+                == nil)
+        #expect(
+            HoverHitTester.hit(at: point(row: 0, column: 3, in: rendered), textView: textView, rendered: rendered)
+                == nil)
+    }
+
+    @Test
+    func `a point past the end of the line misses`() throws {
+        let rendered = try rendered()
+        let textView = makeTextView(rendered: rendered)
+
+        #expect(
+            HoverHitTester.hit(at: point(row: 0, column: 100, in: rendered), textView: textView, rendered: rendered)
+                == nil)
+    }
+
+    @Test
+    func `a header row misses`() throws {
+        let file = FileDiffInput(title: "a.swift", oldText: text, newText: text, language: .plain)
+        let prepared = PreparedDiff(file, granularity: .word)
+        let diff = DiffRenderer.render(
+            prepared: [prepared], options: DiffRenderer.Options(sides: [.new]), layout: .full, withHeaders: true)
+        let rendered = try #require(diff.new)
+        let textView = makeTextView(rendered: rendered)
+
+        // Row 0 is the header; row 1 is "let alphaBeta = 1".
+        #expect(
+            HoverHitTester.hit(at: point(row: 0, column: 2, in: rendered), textView: textView, rendered: rendered)
+                == nil)
+        let hit = HoverHitTester.hit(at: point(row: 1, column: 8, in: rendered), textView: textView, rendered: rendered)
+        #expect(hit?.utf16Column == 8)
+    }
+
+    @Test
+    func `a gap row misses`() throws {
+        // Seven unchanged lines with the second and sixth edited: with zero context the renderer collapses the
+        // untouched runs into gap rows around and between the two changes.
+        let old = "line1\nline2AAAA\nline3\nline4\nline5\nline6AAAA\nline7\n"
+        let new = "line1\nline2BBBB\nline3\nline4\nline5\nline6BBBB\nline7\n"
+        let diff = DiffRenderer.render(
+            oldText: old, newText: new, language: .plain, layout: .changes(context: 0, expansions: [:]))
+        let rendered = try #require(diff.new)
+        // Row 0 is the leading gap (line1 hidden).
+        #expect(rendered.rows[0].kind == .gap)
+        let textView = makeTextView(rendered: rendered)
+
+        #expect(
+            HoverHitTester.hit(at: point(row: 0, column: 2, in: rendered), textView: textView, rendered: rendered)
+                == nil)
+    }
+
+    @Test
+    func `an identifier after an emoji keeps a correct UTF-16 column`() throws {
+        let line = "let x = \u{1F600} name\n"
+        let diff = DiffRenderer.render(oldText: line, newText: line, language: .plain)
+        let rendered = try #require(diff.new)
+        let textView = makeTextView(rendered: rendered)
+        // "let x = 😀 name": 😀 is a surrogate pair at columns 8-9 (2 UTF-16 units); "name" starts at column 11.
+        let nsLine = line as NSString
+        let nameColumn = (nsLine.range(of: "name")).location
+        let target = point(row: 0, column: nameColumn + 1, in: rendered)
+
+        let hit = try #require(HoverHitTester.hit(at: target, textView: textView, rendered: rendered))
+
+        #expect(hit.utf16Column == nameColumn + 1)
+    }
+}

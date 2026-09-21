@@ -11,6 +11,9 @@ import SwiftUI
 package final class DiffFragmentProvider: NSObject, @preconcurrency NSTextLayoutManagerDelegate {
     package let metrics: ViewportMetrics
     package var rendered: RenderedText?
+    /// Diagnostics for the pane's rows; read again for every fragment TextKit lays out, so it can be swapped at any
+    /// time without rebuilding the fragment provider.
+    package var overlay: DiagnosticOverlay?
 
     package init(rendered: RenderedText? = nil, metrics: ViewportMetrics = ViewportMetrics()) {
         self.rendered = rendered
@@ -25,12 +28,14 @@ package final class DiffFragmentProvider: NSObject, @preconcurrency NSTextLayout
         let fragment = DiffLayoutFragment(textElement: textElement, range: textElement.elementRange)
         fragment.metrics = metrics
         fragment.baselineOffset = rendered?.baselineOffset ?? 0
+        fragment.overlay = overlay
         guard let rendered, let contentManager = textLayoutManager.textContentManager else { return fragment }
         let offset = contentManager.offset(from: textLayoutManager.documentRange.location, to: location)
         if let row = rendered.row(containing: offset) {
             fragment.backgroundColor = rendered.palette.rowBackground(
                 for: row.kind, side: rendered.side, isMoved: row.isMoved)
         }
+        if !rendered.rows.isEmpty { fragment.rowIndex = rendered.rowIndex(containing: offset) }
         return fragment
     }
 }

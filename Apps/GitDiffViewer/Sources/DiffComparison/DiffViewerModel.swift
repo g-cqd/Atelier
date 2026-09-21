@@ -20,6 +20,17 @@ package final class DiffViewerModel {
     package let left: SideState
     package let right: SideState
     package let settings: ViewerSettings
+    /// Injected after init since it is optional and owns no state this model depends on; nil keeps diagnostics
+    /// out of the picture entirely, as in a test that has no use for them.
+    package var diagnostics: DiagnosticsModel?
+    /// Bumped whenever ``diagnostics``' findings change, so a view holding a ``DiffTextKit/DiagnosticOverlay``
+    /// (an ``Observable`` cannot see change on its own) knows to recompute it.
+    // Widened from `private(set)` to `internal(set)` so `DiffViewerModel+Diagnostics.swift`'s
+    // `attachDiagnostics(engine:settings:)` can bump it from its findings-changed callback.
+    package internal(set) var diagnosticsVersion = 0
+    /// Injected after init, mirroring ``diagnostics``: nil keeps hover documentation out of the picture
+    /// entirely, as in a test that has no use for it.
+    package var hoverDocs: HoverDocumentationModel?
 
     package private(set) var selectedPath: String?
     package private(set) var tabs = DiffTabs()
@@ -33,10 +44,11 @@ package final class DiffViewerModel {
     private var timer: OperationTimer
     private var navigator = ChangeNavigator()
 
-    private let pipeline: RenderPipeline
+    // Widened from `private` to `internal` so `DiffViewerModel+Diagnostics.swift` can read them.
+    let pipeline: RenderPipeline
     private let preparer: DiffPreparer
     private let reader: any SourceReading
-    private let taskProvider: any TaskProvider
+    let taskProvider: any TaskProvider
     @ObservationIgnored private var sourcesTask: Task<Void, Never>?
     @ObservationIgnored private var prologueTask: Task<LoadedSides?, Never>?
     @ObservationIgnored private var renamesTask: Task<Void, Never>?
@@ -244,6 +256,8 @@ package final class DiffViewerModel {
             comparison = .empty
             trees = .empty
             pipeline.clear()
+            diagnostics?.comparisonChanged(root: nil, files: [], corpusFingerprint: nil)
+            hoverDocs?.comparisonChanged(root: nil, files: [])
             return
         }
         comparison = Comparison(
@@ -253,6 +267,7 @@ package final class DiffViewerModel {
         folding.reset()
         detectRenames()
         rebuildTrees()
+        updateDiagnostics()
         tabs.keepOnly { comparison.contains($0) }
         if let selectedPath, !comparison.contains(selectedPath) {
             applySelection(tabs.activePath)
@@ -488,10 +503,12 @@ package final class DiffViewerModel {
                     navigator.focusFirst()
                     requestScrollToCurrentChange()
                 }
+                updateHoverDocs()
             case .finished:
                 folding.listCompleted()
                 timer.finish()
                 prefetch()
+                updateHoverDocs()
             case .failed:
                 timer.finish()
         }
@@ -519,6 +536,8 @@ package final class DiffViewerModel {
                 palette = Self.palette(for: settings.themePath)
                 relayout()
             case .appearance: break
+            // DiagnosticsModel observes ViewerSettings on its own; nothing for this model to do here.
+            case .diagnostics: break
         }
     }
 
