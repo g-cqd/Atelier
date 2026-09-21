@@ -165,6 +165,10 @@ struct ContentView: View {
             DiffTotalsLabel(model: model)
         }
         .defaultCustomization(.hidden)
+        ToolbarItem(id: ToolbarID.diagnostics, placement: .primaryAction) {
+            DiagnosticsLabel(model: model)
+        }
+        .defaultCustomization(.hidden)
         ToolbarItem(id: ToolbarID.previousChange, placement: .primaryAction) {
             Button("Previous", systemImage: "chevron.up") { model.goToPreviousChange() }
                 .help("Previous change (⌘⇧↑)")
@@ -281,6 +285,7 @@ enum ToolbarID {
     static let whitespace = "whitespace"
     static let granularity = "granularity"
     static let totals = "totals"
+    static let diagnostics = "diagnostics"
     static let fileStats = "fileStats"
     static let viewOptions = "viewOptions"
 }

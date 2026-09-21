@@ -1,5 +1,7 @@
 import AemiRuntime
 import AppKit
+import AtelierDiagnostics
+import AtelierLSP
 import AtelierProcess
 import DiffComparison
 import DiffCore
@@ -36,7 +38,7 @@ struct GitDiffViewerApp: App {
         WindowGroup(id: WindowID.comparison, for: LaunchConfiguration.self) { $configuration in
             ComparisonWindow(
                 configuration: configuration ?? LaunchOptions.configuration, settings: settings, recents: recents,
-                reader: appDelegate.services.loader
+                reader: appDelegate.services.loader, services: appDelegate.services
             )
             .frame(minWidth: 900, minHeight: 600)
         }
@@ -47,7 +49,10 @@ struct GitDiffViewerApp: App {
         .restorationBehavior(.disabled)
 
         Settings {
-            SettingsView(settings: settings, runner: appDelegate.services.runner)
+            SettingsView(
+                settings: settings, runner: appDelegate.services.runner,
+                discovery: appDelegate.services.toolDiscovery
+            )
         }
     }
 }
@@ -90,13 +95,62 @@ final class AppServices {
     let runner: HardenedProcessRunner
     let loader: SourceLoader
 
+    /// A pool of its own: a slow corpus lint must never starve git's width-4 pool.
+    let diagnosticsPool = BlockingOffloadPool(width: 2)
+    let diagnosticsRunner: HardenedProcessRunner
+    let toolDiscovery: ToolDiscovery
+    let diagnosticsEngine: DiagnosticsEngine
+    /// One sourcekit-lsp session per workspace root, shared by every comparison window.
+    let lspRegistry: SourceKitLSPRegistry
+
     init() {
         runner = HardenedProcessRunner(pool: pool)
         loader = SourceLoader(runner: runner)
+
+        diagnosticsRunner = HardenedProcessRunner(pool: diagnosticsPool)
+        toolDiscovery = ToolDiscovery(
+            runner: diagnosticsRunner,
+            bundledDirectory: Bundle.main.bundleURL.appending(path: "Contents/Helpers")
+        )
+        diagnosticsEngine = DiagnosticsEngine(runner: diagnosticsRunner, discovery: toolDiscovery)
+
+        let toolDiscovery = toolDiscovery
+        lspRegistry = SourceKitLSPRegistry { root in
+            await Self.sourceKitLSPConfiguration(workspaceRoot: root, toolDiscovery: toolDiscovery)
+        }
     }
 
     func shutdown() {
         pool.shutdown()
+        diagnosticsPool.shutdown()
+    }
+
+    /// Resolves sourcekit-lsp the same way every other tool is discovered, honoring a user-pinned custom path.
+    /// `AppServices` is created before ``ViewerSettings`` (which is per-window, `@State` in the app's scene), so
+    /// rather than wire a settings reference through app init, the pinned path is read straight out of user
+    /// defaults under the same key ``ViewerSettings`` itself stores `lspServerLocations` under -- this closure
+    /// only runs lazily, the first time a workspace root's session is requested, by which point Settings may
+    /// well have written a pin.
+    private static func sourceKitLSPConfiguration(workspaceRoot: URL, toolDiscovery: ToolDiscovery) async
+        -> SourceKitLSPService.Configuration?
+    {
+        guard
+            let located = await toolDiscovery.locate(
+                executableName: "sourcekit-lsp", overrideVariable: "GDV_SOURCEKIT_LSP",
+                customPath: pinnedSourceKitLSPPath(), searchesToolchain: true)
+        else { return nil }
+        return SourceKitLSPService.Configuration(serverExecutable: located.url, workspaceRoot: workspaceRoot)
+    }
+
+    /// Mirrors ``ViewerSettings/Key/lspServerLocations``'s own user-defaults key: the literal is duplicated
+    /// rather than shared because that key lives on a type this app-wide, pre-settings service has no business
+    /// depending on.
+    private static func pinnedSourceKitLSPPath() -> String? {
+        guard let data = UserDefaults.standard.data(forKey: "lspServerLocations"),
+            let decoded = try? JSONDecoder().decode([String: ToolLocation].self, from: data),
+            let location = decoded["sourcekit-lsp"], location.isEnabled
+        else { return nil }
+        return location.customPath
     }
 }
 
@@ -104,7 +158,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let services = AppServices()
 
     func applicationWillTerminate(_ notification: Notification) {
+        Self.drainLSPSessions(services.lspRegistry)
         services.shutdown()
+    }
+
+    /// Best-effort graceful shutdown of every sourcekit-lsp session, bounded so a hung server can never hold
+    /// termination up: `applicationWillTerminate` is synchronous, so the graceful `shutdown`/`exit` conversation
+    /// (itself already timeout-bounded per session) gets a fixed budget on a semaphore, and whatever is still
+    /// running past it is abandoned -- the process exiting closes every child's pipes right behind it, which is
+    /// sourcekit-lsp's own cue to go away.
+    private static func drainLSPSessions(_ registry: SourceKitLSPRegistry) {
+        let semaphore = DispatchSemaphore(value: 0)
+        Task {
+            await registry.shutdownAll()
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 1)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

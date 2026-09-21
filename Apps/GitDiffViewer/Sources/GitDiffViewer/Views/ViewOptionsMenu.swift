@@ -40,6 +40,7 @@ struct ViewOptionsMenu: NSViewRepresentable {
         let syncsScrolling: Bool
         let showsMinimap: Bool
         let showsStatusBar: Bool
+        let showsHoverDocumentation: Bool
         let isolatesChanges: Bool
         let granularity: IntralineGranularity
         let showsChangesOnly: Bool
@@ -53,6 +54,7 @@ struct ViewOptionsMenu: NSViewRepresentable {
             syncsScrolling = settings.syncsScrolling
             showsMinimap = settings.showsMinimap
             showsStatusBar = settings.showsStatusBar
+            showsHoverDocumentation = settings.showsHoverDocumentation
             isolatesChanges = settings.isolatesChanges
             granularity = settings.granularity
             showsChangesOnly = settings.showsChangesOnly
@@ -78,6 +80,8 @@ struct ViewOptionsMenu: NSViewRepresentable {
             menu.addItem(toggle("Sync scroll", snapshot.syncsScrolling, #selector(toggleSync)))
             menu.addItem(toggle("Minimap", snapshot.showsMinimap, #selector(toggleMinimap)))
             menu.addItem(toggle("Status bar", snapshot.showsStatusBar, #selector(toggleStatusBar)))
+            menu.addItem(
+                toggle("Documentation on Hover", snapshot.showsHoverDocumentation, #selector(toggleHoverDocumentation)))
             menu.addItem(toggle("Isolate changes", snapshot.isolatesChanges, #selector(toggleIsolate), key: "4"))
             menu.addItem(.separator())
             menu.addItem(
@@ -160,6 +164,7 @@ struct ViewOptionsMenu: NSViewRepresentable {
         @objc func toggleSync() { settings.syncsScrolling.toggle() }
         @objc func toggleMinimap() { settings.showsMinimap.toggle() }
         @objc func toggleStatusBar() { settings.showsStatusBar.toggle() }
+        @objc func toggleHoverDocumentation() { settings.showsHoverDocumentation.toggle() }
         @objc func toggleIsolate() { settings.isolatesChanges.toggle() }
         @objc func toggleChangesOnly() { settings.showsChangesOnly.toggle() }
         @objc func toggleIgnoredFiles() { settings.showsIgnoredFiles.toggle() }

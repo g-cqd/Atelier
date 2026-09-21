@@ -78,6 +78,9 @@ private struct FileCard: View {
                 .truncationMode(.middle)
                 .multilineTextAlignment(.leading)
             Spacer()
+            if model.settings.diagnosticsEnabled {
+                DiagnosticCountBadge(counts: model.diagnosticSeverityCounts(for: file.path))
+            }
             ChangeBadge(summary: summary)
         }
         .padding(.leading, 12)
@@ -134,5 +137,30 @@ private struct FileCard: View {
 
     private func expansion(_ key: GapKey) -> GapExpansion {
         model.expansion(of: key)
+    }
+}
+
+/// This file's warning and error counts, in the same idiom as the header's own +/− line counts. Hidden when the
+/// file has neither.
+private struct DiagnosticCountBadge: View {
+    let counts: DiagnosticSeverityCounts
+
+    var body: some View {
+        if !counts.isEmpty {
+            HStack(spacing: 6) {
+                if counts.warnings > 0 {
+                    Label("\(counts.warnings)", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .fixedSize()
+                }
+                if counts.errors > 0 {
+                    Label("\(counts.errors)", systemImage: "xmark.circle.fill")
+                        .foregroundStyle(.red)
+                        .fixedSize()
+                }
+            }
+            .labelStyle(.titleAndIcon)
+            .font(.caption.monospacedDigit())
+        }
     }
 }
