@@ -63,6 +63,7 @@ struct DiffViewerModelTreeTests {
         try await harness.load(sut)
 
         sut.settings.showsChangesOnly = true
+        try await harness.taskProvider.waitForAllTasks()
 
         #expect(sut.leftTree.map(\.id) == ["a"])
         #expect(sut.leftTree.first?.children?.first?.children?.map(\.id) == ["a/x/changed.swift"])
@@ -140,6 +141,7 @@ struct DiffViewerModelTreeTests {
 
         sut.settings.showsChangesOnly = true
         sut.settings.treeStyle = .compact
+        try await harness.taskProvider.waitForAllTasks()
 
         #expect(sut.leftTree.map(\.name) == ["a/b/c"])
         #expect(sut.leftTree.first?.children?.map(\.id) == ["a/b/c/changed.swift"])
@@ -157,6 +159,7 @@ struct DiffViewerModelTreeTests {
         try await harness.load(sut)
 
         sut.settings.treeStyle = .flat
+        try await harness.taskProvider.waitForAllTasks()
 
         #expect(sut.leftTree.map(\.id) == ["a/x/y.swift", "b/z.swift"])
         #expect(sut.leftTree.map(\.name) == ["y.swift", "z.swift"])

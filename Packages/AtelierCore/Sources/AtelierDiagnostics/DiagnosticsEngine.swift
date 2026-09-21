@@ -1,5 +1,12 @@
 public import AtelierProcess
+import Darwin
 public import Foundation
+
+/// Whether the calling thread is the process' main thread; used to assert the executor contract of
+/// ``DiagnosticsEngine/parsedFindings(from:tool:root:)`` stays off it, in debug builds and under tests.
+private func isOnMainThread() -> Bool {
+    pthread_main_np() != 0
+}
 
 /// Runs each diagnostic tool as one cancellable, timeout-bounded job, parses its output into ``Finding``s, and
 /// caches the full result per tool-version/config/payload combination so an unchanged run costs nothing to repeat.
@@ -166,7 +173,7 @@ public actor DiagnosticsEngine {
         }
 
         let findings: [Finding]
-        switch Self.parsedFindings(from: output, tool: tool, root: request.root) {
+        switch await Self.parsedFindings(from: output, tool: tool, root: request.root) {
             case .success(let parsed): findings = parsed
             case .failure(let failure):
                 return ToolResult(
@@ -209,10 +216,14 @@ public actor DiagnosticsEngine {
         let message: String
     }
 
-    /// The tool's output decoded per its format.
+    /// The tool's output decoded per its format, off the main actor (SE-0461's `@concurrent`): a large SARIF
+    /// payload or a big Xcode text log is real parsing work, freeing the engine's own actor to keep taking other
+    /// tools' results while this one decodes.
+    @concurrent
     private static func parsedFindings(
         from output: ProcessOutput, tool: DiagnosticTool, root: URL
-    ) -> Result<[Finding], ParseFailure> {
+    ) async -> Result<[Finding], ParseFailure> {
+        assert(!isOnMainThread(), "parsedFindings must run off the main actor")
         switch tool.outputFormat {
             case .sarif:
                 do {

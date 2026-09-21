@@ -1,7 +1,14 @@
 package import AtelierDiagnostics
+import Darwin
 package import DiffRendering
 import Foundation
 import Synchronization
+
+/// Whether the calling thread is the process' main thread; used to assert the executor contract of the
+/// `@concurrent` work below stays off it, in debug builds and under tests.
+private func isOnMainThread() -> Bool {
+    pthread_main_np() != 0
+}
 
 /// Per-pane row annotations: written on the main actor when results land, read on TextKit's own drawing thread.
 /// A `Mutex` makes that cross-thread hand-off safe without pulling drawing onto the main actor.
@@ -62,6 +69,17 @@ package final class DiagnosticOverlay: Sendable {
 /// with the path each rendered row's `fileIndex` belongs to. A finding annotates the row whose file matches and
 /// whose new-side line number equals the finding's line (new-side only, v1).
 package enum DiagnosticRowMapper {
+    /// Same mapping as ``rows(for:paths:findings:)``, guaranteed to run off the main actor (SE-0461's
+    /// `@concurrent`) so the caller can await it from the main actor without blocking it. `RenderedText` is
+    /// `@unchecked Sendable` and `Finding` is fully `Sendable`, so both inputs cross for free.
+    @concurrent
+    package static func rowsOffMain(
+        for rendered: RenderedText, paths: [Int: String], findings: [String: [Finding]]
+    ) async -> [Int: DiagnosticOverlay.RowDiagnostics] {
+        assert(!isOnMainThread(), "rowsOffMain must run off the main actor")
+        return rows(for: rendered, paths: paths, findings: findings)
+    }
+
     package static func rows(
         for rendered: RenderedText, paths: [Int: String], findings: [String: [Finding]]
     ) -> [Int: DiagnosticOverlay.RowDiagnostics] {
