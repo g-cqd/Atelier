@@ -1,3 +1,4 @@
+package import AtelierDiagnostics
 package import DiffCore
 import DiffGit
 import DiffRendering
@@ -64,6 +65,8 @@ package final class ViewerSettings {
         case palette
         /// Panes and chrome react by themselves.
         case appearance
+        /// Diagnostics must be re-run, or cleared when the master toggle turns off.
+        case diagnostics
     }
 
     /// Called after every change with what it affects, one handler per observer. Held weakly by the observer,
@@ -115,6 +118,27 @@ package final class ViewerSettings {
     package var contextLines: Int { didSet { store(contextLines, Key.contextLines, .layout) } }
     /// Line height as a multiple of the font's; zero follows the theme (1.0 for the system palette).
     package var lineHeightMultiple: Double { didSet { store(lineHeightMultiple, Key.lineHeightMultiple, .layout) } }
+    /// Master toggle for the diagnostics track; off cancels any run in flight and clears findings.
+    package var diagnosticsEnabled: Bool {
+        didSet { store(diagnosticsEnabled, Key.diagnosticsEnabled, .diagnostics) }
+    }
+    /// Shown as its own setting rather than folded into `.diagnostics`: it toggles a hover popover the same way
+    /// every other appearance flag toggles a piece of chrome, with nothing to re-run or recompute.
+    package var showsHoverDocumentation: Bool {
+        didSet { store(showsHoverDocumentation, Key.showsHoverDocumentation, .appearance) }
+    }
+    /// Per-tool enablement and custom executable path, keyed by tool; every tool is enabled by default.
+    package var toolLocations: [DiagnosticTool: ToolLocation] {
+        didSet {
+            let encoded = Dictionary(uniqueKeysWithValues: toolLocations.map { ($0.key.rawValue, $0.value) })
+            store(try? JSONEncoder().encode(encoded), Key.toolLocations, .diagnostics)
+        }
+    }
+    /// Per-server overrides for tools discovered the same way but not in ``DiagnosticTool``, such as
+    /// `sourcekit-lsp`; keyed by a server id rather than a typed enum since the set is open-ended.
+    package var lspServerLocations: [String: ToolLocation] {
+        didSet { store(try? JSONEncoder().encode(lspServerLocations), Key.lspServerLocations, .diagnostics) }
+    }
 
     private let defaults: UserDefaults
 
@@ -149,6 +173,22 @@ package final class ViewerSettings {
         lineHeightMultiple = defaults.double(forKey: Key.lineHeightMultiple)
         contextLines = defaults.object(forKey: Key.contextLines) as? Int ?? 3
         isolatesChanges = defaults.bool(forKey: Key.isolatesChanges)
+        diagnosticsEnabled = defaults.bool(forKey: Key.diagnosticsEnabled)
+        showsHoverDocumentation = defaults.object(forKey: Key.showsHoverDocumentation) as? Bool ?? true
+        toolLocations =
+            defaults.data(forKey: Key.toolLocations)
+            .flatMap { try? JSONDecoder().decode([String: ToolLocation].self, from: $0) }
+            .map { decoded in
+                Dictionary(
+                    uniqueKeysWithValues: decoded.compactMap { key, value in
+                        DiagnosticTool(rawValue: key).map { ($0, value) }
+                    })
+            }
+            ?? Dictionary(uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation()) })
+        lspServerLocations =
+            defaults.data(forKey: Key.lspServerLocations)
+            .flatMap { try? JSONDecoder().decode([String: ToolLocation].self, from: $0) }
+            ?? ["sourcekit-lsp": ToolLocation()]
     }
 
     private enum Key {
@@ -170,5 +210,9 @@ package final class ViewerSettings {
         static let lineHeightMultiple = "lineHeightMultiple"
         static let contextLines = "contextLines"
         static let isolatesChanges = "isolatesChanges"
+        static let diagnosticsEnabled = "diagnosticsEnabled"
+        static let showsHoverDocumentation = "hoverDocumentation"
+        static let toolLocations = "diagnosticToolLocations"
+        static let lspServerLocations = "lspServerLocations"
     }
 }

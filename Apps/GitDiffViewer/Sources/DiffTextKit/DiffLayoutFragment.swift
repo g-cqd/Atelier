@@ -1,4 +1,5 @@
 package import AppKit
+import AtelierDiagnostics
 import DiffCore
 import DiffRendering
 import Foundation
@@ -23,6 +24,9 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
     package var metrics: ViewportMetrics?
     /// How far to raise the glyphs inside their line, to centre them when the line is taller than they need.
     package var baselineOffset: CGFloat = 0
+    /// The overlay diagnostics are read from, and this fragment's row within it; set together, at layout time.
+    package var overlay: DiagnosticOverlay?
+    package var rowIndex: Int = -1
 
     package override var renderingSurfaceBounds: CGRect {
         super.renderingSurfaceBounds.union(backgroundRect(origin: .zero))
@@ -36,6 +40,7 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
             context.restoreGState()
         }
         drawEmphasis(at: point, in: context)
+        drawDiagnostics(at: point, in: context)
         guard baselineOffset != 0 else { return super.draw(at: point, in: context) }
         // Only the glyphs move: the backgrounds above fill the line as it was laid out.
         context.saveGState()
@@ -62,6 +67,51 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
                         height: bounds.height))
                 context.restoreGState()
             }
+        }
+    }
+
+    /// The row's diagnostics, underlined beneath its first line fragment: a dashed line the width of a column range
+    /// (or the whole line, for a whole-row diagnostic that carries no column). Wrapped continuation lines are not
+    /// annotated: `SquiggleRange` columns are relative to the row's own text, not to any one wrapped line of it.
+    private func drawDiagnostics(at point: CGPoint, in context: CGContext) {
+        guard let overlay, rowIndex >= 0, let row = overlay.row(rowIndex), let line = textLineFragments.first else {
+            return
+        }
+        let bounds = line.typographicBounds
+        let y = point.y + bounds.maxY - 2
+        guard !row.squiggles.isEmpty else {
+            drawSquiggle(
+                in: context, color: color(for: row.severity), x0: point.x + bounds.minX,
+                x1: point.x + bounds.minX + bounds.width, y: y)
+            return
+        }
+        let length = line.characterRange.length
+        for squiggle in row.squiggles where squiggle.start < length {
+            let startX = line.locationForCharacter(at: squiggle.start).x
+            let endX = line.locationForCharacter(at: min(squiggle.end ?? length, length)).x
+            drawSquiggle(
+                in: context, color: color(for: squiggle.severity), x0: point.x + bounds.minX + startX,
+                x1: point.x + bounds.minX + endX, y: y)
+        }
+    }
+
+    private func drawSquiggle(in context: CGContext, color: NSColor, x0: CGFloat, x1: CGFloat, y: CGFloat) {
+        guard x1 > x0 else { return }
+        context.saveGState()
+        context.setStrokeColor(color.withAlphaComponent(0.8).cgColor)
+        context.setLineWidth(1.2)
+        context.setLineDash(phase: 0, lengths: [2, 2])
+        context.move(to: CGPoint(x: x0, y: y))
+        context.addLine(to: CGPoint(x: x1, y: y))
+        context.strokePath()
+        context.restoreGState()
+    }
+
+    private func color(for severity: Finding.Severity) -> NSColor {
+        switch severity {
+            case .error: .systemRed
+            case .warning: .systemYellow
+            case .note: .systemGray
         }
     }
 

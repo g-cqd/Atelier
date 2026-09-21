@@ -1,4 +1,5 @@
 package import AppKit
+package import AtelierDiagnostics
 package import DiffCore
 package import DiffRendering
 package import Foundation
@@ -41,16 +42,28 @@ package final class DiffGutterView: NSView {
         didSet { invalidateIntrinsicContentSize() }
     }
 
+    /// Diagnostics for the pane's rows; when non-empty, an extra badge column appears at the gutter's leading edge.
+    package var overlay: DiagnosticOverlay? {
+        didSet {
+            invalidateIntrinsicContentSize()
+            needsDisplay = true
+        }
+    }
+
     /// Called while a gap handle is dragged, with the expansion at the start of the drag and the rows dragged so far.
     package var onGapDrag: ((GapMarker, GapExpansion, Int) -> Void)?
     /// Expansion currently applied to a gap, captured when a drag starts.
     package var currentExpansion: ((GapKey) -> GapExpansion)?
+    /// Called with a row's diagnostics and the badge's frame when its badge is clicked.
+    package var onDiagnosticClick: ((_ rowIndex: Int, _ findings: [Finding], _ badgeRect: NSRect) -> Void)?
 
     /// The text system whose rows are numbered; set together with `rendered`.
     package weak var source: (any GutterTextSource)?
     private weak var clipView: NSClipView?
     private let padding: CGFloat = 8
     private let columnGap: CGFloat = 10
+    private let badgeWidth: CGFloat = 14
+    private var showsBadges: Bool { overlay?.isEmpty == false }
     /// A gap handle drag in progress: the gap, the expansion it started from, and the geometry rows are counted in.
     private struct GapDrag {
         let marker: GapMarker
@@ -85,7 +98,8 @@ package final class DiffGutterView: NSView {
 
     package var thickness: CGFloat {
         let columns: CGFloat = style == .dual ? 2 : 1
-        return padding * 2 + columns * columnWidth + (columns - 1) * columnGap
+        let numbersWidth = padding * 2 + columns * columnWidth + (columns - 1) * columnGap
+        return numbersWidth + (showsBadges ? badgeWidth : 0)
     }
 
     package override var intrinsicContentSize: NSSize {
@@ -134,7 +148,7 @@ package final class DiffGutterView: NSView {
     }
 
     package override func resetCursorRects() {
-        forEachVisibleFragment { fragment, row, y in
+        forEachVisibleFragment { fragment, row, _, y in
             guard row.kind == .gap else { return }
             addCursorRect(
                 NSRect(x: 0, y: y, width: bounds.width, height: fragment.layoutFragmentFrame.height),
@@ -142,10 +156,28 @@ package final class DiffGutterView: NSView {
         }
     }
 
+    /// The row (if any) whose badge sits under `point`, its diagnostics, and the badge's own frame.
+    private func badgeHit(at point: NSPoint) -> (
+        rowIndex: Int, diagnostics: DiagnosticOverlay.RowDiagnostics, rect: NSRect
+    )? {
+        guard showsBadges, point.x >= 0, point.x < badgeWidth else { return nil }
+        var found: (Int, DiagnosticOverlay.RowDiagnostics, NSRect)?
+        forEachVisibleFragment { fragment, _, rowIndex, y in
+            let frame = fragment.layoutFragmentFrame
+            guard point.y >= y, point.y < y + frame.height, let diagnostics = overlay?.row(rowIndex) else { return }
+            found = (rowIndex, diagnostics, NSRect(x: 0, y: y, width: badgeWidth, height: frame.height))
+        }
+        return found
+    }
+
     package override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        if let (rowIndex, diagnostics, rect) = badgeHit(at: point) {
+            onDiagnosticClick?(rowIndex, diagnostics.findings, rect)
+            return
+        }
         var hit: (GapMarker, CGFloat)?
-        forEachVisibleFragment { fragment, row, y in
+        forEachVisibleFragment { fragment, row, _, y in
             let frame = fragment.layoutFragmentFrame
             if let gap = row.gap, point.y >= y, point.y < y + frame.height {
                 hit = (gap, fragment.textLineFragments.first?.typographicBounds.height ?? frame.height)
@@ -172,9 +204,10 @@ package final class DiffGutterView: NSView {
         drag = nil
     }
 
-    /// Visits the laid-out fragments intersecting the clip view, with each row's metadata and its y in this view.
-    private func forEachVisibleFragment(_ body: (NSTextLayoutFragment, RowMeta, CGFloat) -> Void) {
-        guard let source, let rendered, let layoutManager = source.gutterLayoutManager,
+    /// Visits the laid-out fragments intersecting the clip view, with each row's metadata, its row index, and its
+    /// y in this view.
+    private func forEachVisibleFragment(_ body: (NSTextLayoutFragment, RowMeta, Int, CGFloat) -> Void) {
+        guard let source, let rendered, !rendered.rows.isEmpty, let layoutManager = source.gutterLayoutManager,
             let contentManager = layoutManager.textContentManager
         else { return }
         let scrollOffset = clipView?.bounds.origin.y ?? 0
@@ -191,8 +224,8 @@ package final class DiffGutterView: NSView {
             if y + frame.height < 0 { return true }
             let offset = contentManager.offset(
                 from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
-            guard let row = rendered.row(containing: offset) else { return true }
-            body(fragment, row, y)
+            let rowIndex = rendered.rowIndex(containing: offset)
+            body(fragment, rendered.rows[rowIndex], rowIndex, y)
             return true
         }
     }
@@ -210,11 +243,16 @@ package final class DiffGutterView: NSView {
             .font: palette.gutterFont, .foregroundColor: palette.gutterChangedText
         ]
 
-        forEachVisibleFragment { fragment, row, y in
+        let numbersOffset = showsBadges ? badgeWidth : 0
+
+        forEachVisibleFragment { fragment, row, rowIndex, y in
             let frame = fragment.layoutFragmentFrame
             if row.kind == .gap {
                 drawGapHandle(y: y, height: frame.height)
                 return
+            }
+            if showsBadges, let diagnostics = overlay?.row(rowIndex) {
+                drawBadge(diagnostics, y: y, height: frame.height)
             }
             let attributes = row.kind == .context ? baseAttributes : changedAttributes
             // A line numbered the same on both sides shows its number once, next to the text.
@@ -236,9 +274,36 @@ package final class DiffGutterView: NSView {
                 guard let number else { continue }
                 let label = String(number) as NSString
                 let size = label.size(withAttributes: attributes)
-                let x = padding + CGFloat(column) * (columnWidth + columnGap) + columnWidth - size.width
+                let x = numbersOffset + padding + CGFloat(column) * (columnWidth + columnGap) + columnWidth - size.width
                 label.draw(at: NSPoint(x: x, y: top), withAttributes: attributes)
             }
+        }
+    }
+
+    /// A filled dot in the badge column, the row's worst severity's colour; a small white count on top when more
+    /// than one finding landed on the row, skipped if the badge is too small to fit it legibly.
+    private func drawBadge(_ diagnostics: DiagnosticOverlay.RowDiagnostics, y: CGFloat, height: CGFloat) {
+        let diameter: CGFloat = 7
+        let centerX = badgeWidth / 2
+        let centerY = y + height / 2
+        let rect = NSRect(x: centerX - diameter / 2, y: centerY - diameter / 2, width: diameter, height: diameter)
+        badgeColor(for: diagnostics.severity).setFill()
+        NSBezierPath(ovalIn: rect).fill()
+        guard diagnostics.count > 1 else { return }
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 8, weight: .bold), .foregroundColor: NSColor.white
+        ]
+        let label = String(diagnostics.count) as NSString
+        let size = label.size(withAttributes: attributes)
+        guard size.width <= diameter + 2, size.height <= diameter + 2 else { return }
+        label.draw(at: NSPoint(x: centerX - size.width / 2, y: centerY - size.height / 2), withAttributes: attributes)
+    }
+
+    private func badgeColor(for severity: Finding.Severity) -> NSColor {
+        switch severity {
+            case .error: .systemRed
+            case .warning: .systemYellow
+            case .note: .systemGray
         }
     }
 }
