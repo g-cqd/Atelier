@@ -123,7 +123,7 @@ struct KittyCodeEntry {
         }
 
         // Config file watcher
-        let configWatcher = FileWatcher(taskProvider: taskProvider, clock: clock)
+        let configWatcher = FileWatcher()
         let configURL =
             launchConfig.configPath.map { URL(fileURLWithPath: $0) } ?? KittyConfig.configURL
         let configPath = configURL.path
@@ -146,7 +146,7 @@ struct KittyCodeEntry {
         // File watcher
         var fileWatcherIntegration: FileWatcherIntegration?
         if config.fileWatcherEnabled {
-            let watcher = FileWatcher(taskProvider: taskProvider, clock: clock)
+            let watcher = FileWatcher()
             let integration = FileWatcherIntegration(
                 watcher: watcher, workspace: state.workspace, delegate: state, taskProvider: taskProvider)
             integration.start()

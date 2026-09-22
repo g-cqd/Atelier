@@ -1,32 +1,81 @@
-public import AemiCore
 import Foundation
+import Synchronization
 
+/// Watches directories (FSEvents) and individual files (per-file `DispatchSource`) for changes,
+/// surfacing both as a consumer-driven `AsyncStream`.
+///
+/// Core-tier shape: the actor exposes `async` functions and one `AsyncStream<FileWatchEvent>` the
+/// caller drives with its own task — no `TaskProvider`, no unstructured `Task` spawned internally,
+/// and no `AemiCore`/`AemiRuntime` `ClockInstant` erasure helper. `DispatchSource`/FSEvents are
+/// event *sources*, not task primitives, so using them here does not violate the "no unstructured
+/// tasks" rule: their callbacks run synchronously on a GCD queue and either write directly to the
+/// (`Sendable`) stream continuation, or — for the self-write suppression window below — consult a
+/// plain, lock-guarded, pure data structure with no actor hop and therefore no task needed to cross
+/// isolation. The suppression window measures elapsed time against `ContinuousClock` directly
+/// (rather than through an injected `any Clock<Duration>`): its own unit tests exercise the pure
+/// `SuppressionWindow` type with synthetic `Duration`s, so nothing here needs a virtual clock.
 public actor FileWatcher {
     public enum FileWatchEvent: Sendable {
         case fileChanged(String)
         case directoryChanged(String)
     }
 
+    /// Pure, synchronous, independently testable self-write suppression window: `suppressNotifications`
+    /// records a path at a point in time, `isSuppressed` answers whether that path is still inside the
+    /// window. Backed by a `Mutex` (not the actor) so `DispatchSource` event handlers — which run outside
+    /// any task — can consult it without an `await`.
+    final class SuppressionWindow: Sendable {
+        private let timestamps = Mutex<[String: Duration]>([:])
+        private let window: Duration
+
+        init(window: Duration) {
+            self.window = window
+        }
+
+        func record(_ path: String, now: Duration) {
+            timestamps.withLock { table in
+                table[path] = now
+                // Opportunistic cleanup: every insertion also evicts any entry whose suppression
+                // window has already elapsed. Without this, a path whose suppression record never
+                // sees a matching fsevent stays in the dictionary forever — over a long session of
+                // rename/delete ops, memory grows linearly with the count of suppressed paths.
+                if table.count > 1 {
+                    table = table.filter { now - $0.value < window }
+                }
+            }
+        }
+
+        func isSuppressed(_ path: String, now: Duration) -> Bool {
+            timestamps.withLock { table in
+                guard let recordedAt = table[path] else { return false }
+                if now - recordedAt < window {
+                    return true
+                }
+                table.removeValue(forKey: path)
+                return false
+            }
+        }
+    }
+
     private var fileSources: [String: any DispatchSourceFileSystemObject] = [:]
     private var directoryStream: FSEventStreamRef?
     private var streamQueue: DispatchQueue?
     private var continuation: AsyncStream<FileWatchEvent>.Continuation?
-    private var suppressTimestamps: [String: ClockInstant] = [:]
     /// Strong reference to the box passed to `FSEventStreamCreate` so the
     /// callback's `info` pointer stays valid for the stream's lifetime.
     /// Cleared in `stop()` after the stream has been invalidated.
     private var directoryStreamBox: SendableContinuationBox?
-    private let taskProvider: any TaskProvider
-    private let clock: any Clock<Duration>
+    private nonisolated let epoch: ContinuousClock.Instant
+    private nonisolated let suppression: SuppressionWindow
 
     private static let debounceInterval: TimeInterval = 0.1
     private static let suppressWindow: Duration = .seconds(1)
 
     nonisolated public let events: AsyncStream<FileWatchEvent>
 
-    public init(taskProvider: any TaskProvider = .default, clock: any Clock<Duration> = ContinuousClock()) {
-        self.taskProvider = taskProvider
-        self.clock = clock
+    public init() {
+        self.epoch = ContinuousClock.now
+        self.suppression = SuppressionWindow(window: Self.suppressWindow)
         var captured: AsyncStream<FileWatchEvent>.Continuation?
         self.events = AsyncStream { continuation in
             captured = continuation
@@ -93,15 +142,16 @@ public actor FileWatcher {
 
         let capturedContinuation = continuation
         let capturedPath = path
-        let capturedSelf = self
-        let capturedTaskProvider = taskProvider
+        let capturedEpoch = epoch
+        let capturedSuppression = suppression
 
         source.setEventHandler {
-            capturedTaskProvider.task(role: .work) {
-                let suppressed = await capturedSelf.isSuppressed(capturedPath)
-                if !suppressed {
-                    capturedContinuation?.yield(.fileChanged(capturedPath))
-                }
+            // Runs on a GCD queue, outside any task. `ContinuousClock.now` is a synchronous, concrete
+            // (non-existential) property read and `SuppressionWindow` is lock-guarded, so this
+            // suppression check needs no actor hop and spawns no unstructured task.
+            let elapsed = capturedEpoch.duration(to: ContinuousClock.now)
+            if !capturedSuppression.isSuppressed(capturedPath, now: elapsed) {
+                capturedContinuation?.yield(.fileChanged(capturedPath))
             }
         }
 
@@ -118,19 +168,11 @@ public actor FileWatcher {
         source.cancel()
     }
 
-    public func suppressNotifications(for path: String) {
-        // Opportunistic cleanup: every insertion also evicts any entry whose
-        // suppression window has already elapsed. Without this, a path whose
-        // suppression record never sees a matching fsevent stays in the
-        // dictionary forever — over a long session of rename/delete ops,
-        // memory grows linearly with the count of suppressed paths.
-        let now = clock.erasedNow()
-        suppressTimestamps[path] = now
-        if suppressTimestamps.count > 1 {
-            suppressTimestamps = suppressTimestamps.filter {
-                $0.value.duration(to: now) < Self.suppressWindow
-            }
-        }
+    /// Marks `path` as self-written so the next matching fsevent (typically the app's own save) is
+    /// dropped instead of round-tripping back as an external change. Synchronous and lock-based —
+    /// no actor hop needed, so callers on any isolation can call it directly.
+    public nonisolated func suppressNotifications(for path: String) {
+        suppression.record(path, now: epoch.duration(to: ContinuousClock.now))
     }
 
     public func stop() {
@@ -151,15 +193,6 @@ public actor FileWatcher {
 
         continuation?.finish()
         continuation = nil
-    }
-
-    private func isSuppressed(_ path: String) -> Bool {
-        guard let timestamp = suppressTimestamps[path] else { return false }
-        if timestamp.duration(to: clock.erasedNow()) < Self.suppressWindow {
-            return true
-        }
-        suppressTimestamps.removeValue(forKey: path)
-        return false
     }
 }
 
