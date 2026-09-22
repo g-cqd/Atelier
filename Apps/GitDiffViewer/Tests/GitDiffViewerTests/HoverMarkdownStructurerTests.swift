@@ -1,0 +1,140 @@
+import Foundation
+import Testing
+
+@testable import DiffRendering
+
+@Suite struct HoverMarkdownStructurerTests {
+    @Test func fencedDeclarationAndAbstractSplitCleanly() {
+        let markdown = """
+            ```swift
+            func add(_ a: Int, _ b: Int) -> Int
+            ```
+
+            Adds two numbers.
+            """
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(document.declaration == "func add(_ a: Int, _ b: Int) -> Int")
+        #expect(document.summary == "Adds two numbers.")
+        #expect(document.discussion == nil)
+        #expect(document.parameters.isEmpty)
+        #expect(document.returns == nil)
+        #expect(document.extraCandidates.isEmpty)
+    }
+
+    @Test func abstractAndDiscussionAreKeptApart() {
+        let markdown = """
+            ```swift
+            func add(_ a: Int, _ b: Int) -> Int
+            ```
+
+            Adds two numbers.
+
+            This is a longer discussion of what adding numbers means, spread across a second paragraph.
+            """
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(document.summary == "Adds two numbers.")
+        #expect(document.discussion?.contains("longer discussion") == true)
+    }
+
+    @Test func parametersAndReturnsListsAreParsedIntoFields() {
+        let markdown = """
+            ```swift
+            func add(_ a: Int, _ b: Int) -> Int
+            ```
+
+            Adds two numbers.
+
+            - Parameters:
+              - a: The first addend.
+              - b: The second addend.
+            - Returns: The sum of `a` and `b`.
+            """
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(document.parameters.count == 2)
+        #expect(document.parameters[0].name == "a")
+        #expect(document.parameters[0].text == "The first addend.")
+        #expect(document.parameters[1].name == "b")
+        #expect(document.parameters[1].text == "The second addend.")
+        #expect(document.returns == "The sum of `a` and `b`.")
+    }
+
+    @Test func multipleResultsProducesExtraCandidatesCappedAtTwo() {
+        let markdown = """
+            ## Multiple results
+
+            ```swift
+            func add(_ a: Int, _ b: Int) -> Int
+            ```
+
+            Adds two numbers.
+
+            ---
+
+            ```swift
+            func add(_ a: Double, _ b: Double) -> Double
+            ```
+
+            Adds two doubles.
+
+            ---
+
+            ```swift
+            func add(_ a: Float, _ b: Float) -> Float
+            ```
+
+            Adds two floats.
+
+            ---
+
+            ```swift
+            func add(_ a: Int8, _ b: Int8) -> Int8
+            ```
+
+            Adds two bytes.
+            """
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(document.declaration == "func add(_ a: Int, _ b: Int) -> Int")
+        #expect(document.summary == "Adds two numbers.")
+        #expect(document.extraCandidates.count == 2)
+        #expect(document.extraCandidates[0].declaration == "func add(_ a: Double, _ b: Double) -> Double")
+        #expect(document.extraCandidates[0].summary == "Adds two doubles.")
+        #expect(document.extraCandidates[1].declaration == "func add(_ a: Float, _ b: Float) -> Float")
+    }
+
+    @Test func docIndexOverloadJoinerAlsoProducesExtraCandidates() {
+        // The doc-comment index joins several entries the same way, with no "## Multiple results" heading.
+        let markdown = """
+            ```swift
+            func add(_ a: Int, _ b: Int) -> Int
+            ```
+
+            First overload.
+
+            ---
+
+            ```swift
+            func add(_ a: Double, _ b: Double) -> Double
+            ```
+
+            Second overload.
+            """
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(document.declaration == "func add(_ a: Int, _ b: Int) -> Int")
+        #expect(document.extraCandidates.count == 1)
+        #expect(document.extraCandidates[0].summary == "Second overload.")
+    }
+
+    @Test func markdownWithNoFenceHasNoDeclaration() {
+        let document = HoverMarkdownStructurer.structure("Just a plain doc comment.")
+        #expect(document.declaration == nil)
+        #expect(document.summary == "Just a plain doc comment.")
+    }
+
+    @Test func emptyMarkdownProducesAnEmptyDocument() {
+        let document = HoverMarkdownStructurer.structure("")
+        #expect(document.declaration == nil)
+        #expect(document.summary == nil)
+        #expect(document.parameters.isEmpty)
+        #expect(document.extraCandidates.isEmpty)
+    }
+}

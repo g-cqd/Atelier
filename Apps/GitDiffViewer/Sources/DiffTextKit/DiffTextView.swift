@@ -23,7 +23,7 @@ package struct DiffTextView: NSViewRepresentable {
     package var onDisplayed: (() -> Void)?
     /// Shows documentation for the identifier under the pointer after it rests there.
     package var hoverEnabled = false
-    package var hoverResolver: (@Sendable (HoverHit) async -> AttributedString?)?
+    package var hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)?
     /// Diagnostics drawn over this pane's rows: a squiggle in the text, and a badge in the gutter.
     package var diagnosticOverlay: DiagnosticOverlay?
     /// Bumped by the caller whenever `diagnosticOverlay`'s content changes in place (`replace(_:)`), since the
@@ -39,7 +39,7 @@ package struct DiffTextView: NSViewRepresentable {
         splitController: SplitPaneController? = nil,
         onGapDrag: ((GapMarker, GapExpansion, Int) -> Void)? = nil, currentExpansion: ((GapKey) -> GapExpansion)? = nil,
         onDisplayed: (() -> Void)? = nil, hoverEnabled: Bool = false,
-        hoverResolver: (@Sendable (HoverHit) async -> AttributedString?)? = nil,
+        hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil,
         diagnosticOverlay: DiagnosticOverlay? = nil, diagnosticsVersion: Int = 0,
         onDiagnosticClick: ((_ rowIndex: Int, _ findings: [Finding], _ badgeRect: NSRect) -> Void)? = nil
     ) {
