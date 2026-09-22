@@ -98,6 +98,8 @@ package final class ViewerSettings {
         case appearance
         /// Diagnostics must be re-run, or cleared when the master toggle turns off.
         case diagnostics
+        /// ``autoRefresh`` flipped: the window's ``RepositoryFreshness`` watcher attaches or tears down.
+        case freshness
     }
 
     /// Called after every change with what it affects, one handler per observer. Held weakly by the observer,
@@ -173,6 +175,15 @@ package final class ViewerSettings {
     package var showsChangesOnly: Bool { didSet { store(showsChangesOnly, Key.showsChangesOnly, .trees) } }
     /// Lists the files git ignores in a section of their own, so their content can be looked at on demand.
     package var showsIgnoredFiles: Bool { didSet { store(showsIgnoredFiles, Key.showsIgnoredFiles, .trees) } }
+    /// Whether the window watches the working tree and the repository's `.git` metadata for external changes
+    /// (another editor's save, a `git pull` or checkout run in a terminal) and reloads on its own.
+    ///
+    /// Global, not project-scoped: `projectScopedKeys` below holds settings whose *right value* genuinely differs
+    /// from one repository to the next (how many context lines, which tools run). Whether this window watches for
+    /// outside changes isn't a property of the repository being compared — it's a workflow preference ("do I want
+    /// this to update itself while I work") the user carries from one project to the next, the same way the theme
+    /// or the layout chrome does, so it stays a single app-wide value like those.
+    package var autoRefresh: Bool { didSet { store(autoRefresh, Key.autoRefresh, .freshness) } }
     package var granularity: IntralineGranularity { didSet { store(granularity.rawValue, Key.granularity, .diff) } }
     /// Which diff heuristics are wired in; any change re-diffs the selection.
     package var diffHeuristics: DiffHeuristics {
@@ -260,6 +271,7 @@ package final class ViewerSettings {
         syncsScrolling = defaults.object(forKey: Key.syncsScrolling) as? Bool ?? true
         showsChangesOnly = defaults.bool(forKey: Key.showsChangesOnly)
         showsIgnoredFiles = defaults.bool(forKey: Key.showsIgnoredFiles)
+        autoRefresh = defaults.object(forKey: Key.autoRefresh) as? Bool ?? true
         granularity = defaults.string(forKey: Key.granularity).flatMap(IntralineGranularity.init(rawValue:)) ?? .word
         diffHeuristics =
             defaults.data(forKey: Key.diffHeuristics)
@@ -315,6 +327,7 @@ package final class ViewerSettings {
                 syncsScrolling = true
                 showsMinimap = true
                 showsStatusBar = true
+                autoRefresh = true
             case .diff:
                 isolatesChanges = false
                 contextLines = restoredValue(Key.contextLines, appDefault: 3) {
@@ -382,7 +395,7 @@ package final class ViewerSettings {
                 return [
                     explorerPlacement != .top, treeStyle != .hierarchy, showsChangesOnly != false,
                     showsIgnoredFiles != false, syncsScrolling != true, showsMinimap != true,
-                    showsStatusBar != true
+                    showsStatusBar != true, autoRefresh != true
                 ]
                 .count { $0 }
             case .diff:
@@ -415,6 +428,7 @@ package final class ViewerSettings {
         static let syncsScrolling = "syncsScrolling"
         static let showsChangesOnly = "showsChangesOnly"
         static let showsIgnoredFiles = "showsIgnoredFiles"
+        static let autoRefresh = "autoRefresh"
         static let granularity = "intralineGranularity"
         static let diffHeuristics = "diffHeuristics"
         static let showsMinimap = "showsMinimap"

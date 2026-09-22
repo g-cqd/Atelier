@@ -12,6 +12,7 @@ package enum SettingLabel {
     package static let syncScrolling = "Keep panes scrolled together"
     package static let showsMinimap = "Show minimap"
     package static let showsStatusBar = "Show status bar"
+    package static let autoRefresh = "Refresh automatically when files change"
 
     // MARK: Diff / What's compared & how it's matched
 
