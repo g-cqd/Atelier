@@ -1,5 +1,5 @@
 {
-  "originHash" : "9f422bef428ed825242393e8dc24f9ee2aa580d8403aaa30e8feda7568a32c4c",
+  "originHash" : "83894fbcbae5e8162b3af91d4bcc15a4d5e15a4b20e43970720dee8db686fcb7",
   "pins" : [
     {
       "identity" : "aemi",
@@ -26,6 +26,15 @@
       "state" : {
         "revision" : "a0cb0954ecb21e4e31b0070e6ed5674e8556685a",
         "version" : "1.6.0"
+      }
+    },
+    {
+      "identity" : "swift-subprocess",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-subprocess.git",
+      "state" : {
+        "revision" : "b3937ab85dd32f6e9435914599c1519074769c1a",
+        "version" : "1.0.0"
       }
     },
     {
