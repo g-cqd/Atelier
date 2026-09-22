@@ -131,8 +131,48 @@ public struct GitClient: Sendable {
             try await run(["for-each-ref", "--format=%(refname:short)", "--sort=-committerdate"] + pattern))
     }
 
+    /// Local and remote-tracking branches, most recently committed first; a thin, reusable wrapper over
+    /// ``references(pattern:)`` so a caller can refresh branches alone, without the full cost of ``info()``.
+    public func branches() async throws -> [String] {
+        try await references(pattern: "refs/heads", "refs/remotes")
+    }
+
+    /// Tags, most recently committed first; see ``branches()``.
+    public func tags() async throws -> [String] {
+        try await references(pattern: "refs/tags")
+    }
+
     private func recentCommits(limit: Int) async throws -> [GitCommit] {
         GitParsers.commits(try await run(["log", "--format=%H%x1f%h%x1f%s", "-n", String(limit)]))
+    }
+
+    /// The repository's remotes, one per name, with their `fetch` URL; a remote with only a `push` line is left
+    /// out.
+    public func remotes() async throws -> [GitRemote] {
+        GitParsers.remotes(try await run(["remote", "-v"]))
+    }
+
+    /// How many commits `local` has that `upstream` does not (`ahead`), and the reverse (`behind`).
+    public func aheadBehind(_ local: String, upstream: String) async throws -> (ahead: Int, behind: Int) {
+        try GitParsers.aheadBehind(
+            try await run([
+                "rev-list", "--left-right", "--count", "--end-of-options",
+                "\(try Self.checked(local))...\(try Self.checked(upstream))"
+            ]))
+    }
+
+    /// Fetches from `remote`, `refspecs` when given, pruning stale remote-tracking branches on request. Always runs
+    /// under ``GitIsolation/networking`` regardless of the client's own isolation, because it must authenticate
+    /// against a real remote; `timeout` overrides the client's own budget for this one call, since a network fetch
+    /// can reasonably take longer than a local command.
+    public func fetch(
+        remote: String = "origin", refspecs: [String] = [], prune: Bool = false, timeout: Duration = .seconds(120)
+    ) async throws {
+        let arguments =
+            ["fetch"] + (prune ? ["--prune"] : []) + ["--end-of-options", try Self.checked(remote)]
+            + (try refspecs.map(Self.checked))
+        _ = try await Self.run(
+            arguments, in: repository, runner: runner, timeout: timeout, isolation: .networking)
     }
 
     /// A ref, object id or path as git may see it on the command line: not empty, not option-shaped, and free of
