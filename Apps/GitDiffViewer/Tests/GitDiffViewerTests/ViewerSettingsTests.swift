@@ -119,6 +119,17 @@ struct ViewerSettingsTests {
     }
 
     @Test
+    func `appearance scheme defaults to system and round trips through user defaults`() throws {
+        let defaults = try makeDefaults()
+        let sut = ViewerSettings(defaults: defaults)
+        #expect(sut.appearanceScheme == .system)
+
+        sut.appearanceScheme = .dark
+        let reloaded = ViewerSettings(defaults: defaults)
+        #expect(reloaded.appearanceScheme == .dark)
+    }
+
+    @Test
     func `the settings pane defaults to general and round trips through user defaults`() throws {
         let defaults = try makeDefaults()
         let sut = ViewerSettings(defaults: defaults)
@@ -185,7 +196,8 @@ struct ViewerSettingsTests {
         sut.mode = .inline
         sut.wrapsLines = false
         sut.wrapColumn = 100
-        #expect(sut.settingsDiffCount(.appearance) == 5)
+        sut.appearanceScheme = .dark
+        #expect(sut.settingsDiffCount(.appearance) == 6)
 
         sut.restoreDefaults(.appearance)
 
@@ -194,6 +206,7 @@ struct ViewerSettingsTests {
         #expect(sut.mode == .split)
         #expect(sut.wrapsLines)
         #expect(sut.wrapColumn == 0)
+        #expect(sut.appearanceScheme == .system)
         #expect(sut.settingsDiffCount(.appearance) == 0)
     }
 
