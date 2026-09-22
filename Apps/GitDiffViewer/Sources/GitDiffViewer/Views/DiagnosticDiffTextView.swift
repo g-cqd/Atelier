@@ -80,17 +80,19 @@ struct DiagnosticDiffTextView: View {
         }
     }
 
-    /// Resolves a hover hit through ``DiffComparison/HoverDocumentationModel`` and renders its markdown for the
-    /// popover; nil while no hover documentation model is attached, so ``DiffTextView`` never asks.
-    private var hoverResolver: (@Sendable (HoverHit) async -> AttributedString?)? {
+    /// Resolves a hover hit through ``DiffComparison/HoverDocumentationModel`` and structures and colors its
+    /// markdown for the panel, using this pane's own palette; nil while no hover documentation model is attached,
+    /// so ``DiffTextView`` never asks.
+    private var hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? {
         guard let hoverDocs = model.hoverDocs else { return nil }
+        let palette = rendered.palette
         return { hit in
             let side: HoverQuerySide = hit.side == .new ? .new : .old
             guard
                 let content = await hoverDocs.hover(
                     fileIndex: hit.fileIndex, side: side, line: hit.line, utf16Column: hit.utf16Column)
             else { return nil }
-            return renderHoverMarkdown(content.markdown)
+            return HoverDocument.build(from: content, palette: palette)
         }
     }
 }

@@ -2,30 +2,9 @@ package import AemiCore
 package import AppKit
 package import DiffRendering
 import Foundation
-package import SwiftUI
-
-/// Documentation shown while the pointer rests on an identifier: SwiftUI markdown in a scrollable, selectable
-/// popover.
-package struct HoverDocView: View {
-    package let content: AttributedString
-
-    package init(content: AttributedString) {
-        self.content = content
-    }
-
-    package var body: some View {
-        ScrollView {
-            Text(content)
-                .textSelection(.enabled)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-        }
-        .frame(maxWidth: 480, maxHeight: 360, alignment: .topLeading)
-    }
-}
 
 /// Debounces pointer movement over a diff pane into a single documentation lookup, and shows the result in a
-/// popover anchored to the hovered identifier.
+/// rich hover panel anchored to the hovered identifier.
 ///
 /// Resolution is single-flight by construction: a new hit chains behind whatever resolution is already running
 /// (sleeping or awaiting the resolver), so at most one call to ``resolve`` is ever in flight, and a stale one
@@ -39,8 +18,8 @@ package final class DocHoverController: NSObject {
         }
     }
 
-    /// Resolves markdown-rendered content for a hit; `nil` means nothing to show.
-    package var resolve: (@Sendable (HoverHit) async -> AttributedString?)?
+    /// Resolves structured, colored documentation for a hit; `nil` means nothing to show.
+    package var resolve: (@Sendable (HoverHit) async -> HoverDocument?)?
     package let debounce: Duration
 
     private let clock: any Clock<Duration>
@@ -54,10 +33,12 @@ package final class DocHoverController: NSObject {
     /// Repeated moves over the same identifier are no-ops as long as this stays set.
     private var currentHit: HoverHit?
     private var shownHit: HoverHit?
-    private var popover: NSPopover?
+    private let panel = HoverDocPanel()
 
-    /// Whether the documentation popover is currently on screen; for tests only.
-    package var isPopoverVisible: Bool { popover?.isShown ?? false }
+    /// Whether the documentation panel is currently on screen; for tests only.
+    package var isPanelVisible: Bool { panel.isVisible }
+    /// Kept alongside ``isPanelVisible`` for callers (and tests) still written against the popover-era name.
+    package var isPopoverVisible: Bool { isPanelVisible }
 
     package init(
         clock: any Clock<Duration> = ContinuousClock(), taskProvider: any TaskProvider = .default,
@@ -108,13 +89,13 @@ package final class DocHoverController: NSObject {
         renderedProvider = nil
     }
 
-    /// Cancels any in-flight resolution and closes the popover, without detaching from the text view.
+    /// Cancels any in-flight resolution and closes the panel, without detaching from the text view.
     package func invalidate() {
         generation += 1
         pendingTask?.cancel()
         pendingTask = nil
         currentHit = nil
-        closePopover()
+        closePanel()
     }
 
     @objc private func scrollViewBoundsDidChange(_ notification: Notification) {
@@ -136,8 +117,10 @@ package final class DocHoverController: NSObject {
     @objc(mouseEntered:) package func mouseEntered(with event: NSEvent) {}
 
     @objc(mouseExited:) package func mouseExited(with event: NSEvent) {
-        // A move into the popover itself is indistinguishable from leaving the text view here; closing on every
-        // exit is the simple, correct-enough v1 behaviour.
+        // A move into the panel itself also fires this: the panel's own tracking area reports whether the
+        // pointer actually landed there, so leaving for the panel (to click a link, or select its text) does not
+        // dismiss what the pointer just entered.
+        guard !panel.pointerIsInside else { return }
         invalidate()
     }
 
@@ -156,7 +139,7 @@ package final class DocHoverController: NSObject {
             return
         }
         if let shownHit, !shownHit.anchorRect.contains(point) {
-            closePopover()
+            closePanel()
         }
         generation += 1
         let myGeneration = generation
@@ -170,36 +153,20 @@ package final class DocHoverController: NSObject {
             guard let self, self.generation == myGeneration, !Task.isCancelled else { return }
             try? await clock.sleep(for: debounce)
             guard self.generation == myGeneration, !Task.isCancelled else { return }
-            guard let content = await resolve(hit) else { return }
+            guard let document = await resolve(hit) else { return }
             guard self.generation == myGeneration else { return }
-            self.show(content: content, for: hit)
+            self.show(document: document, for: hit)
         }
     }
 
-    private func show(content: AttributedString, for hit: HoverHit) {
+    private func show(document: HoverDocument, for hit: HoverHit) {
         guard let textView else { return }
         shownHit = hit
-        let popover = self.popover ?? makePopover()
-        self.popover = popover
-        (popover.contentViewController as? NSHostingController<HoverDocView>)?.rootView = HoverDocView(content: content)
-        if popover.isShown {
-            popover.positioningRect = hit.anchorRect
-        } else {
-            popover.show(relativeTo: hit.anchorRect, of: textView, preferredEdge: .maxY)
-        }
+        panel.show(document: document, anchorRect: hit.anchorRect, in: textView)
     }
 
-    private func makePopover() -> NSPopover {
-        let popover = NSPopover()
-        popover.behavior = .semitransient
-        popover.animates = false
-        popover.contentViewController = NSHostingController(rootView: HoverDocView(content: AttributedString()))
-        return popover
-    }
-
-    private func closePopover() {
-        guard let popover else { return }
-        popover.performClose(nil)
+    private func closePanel() {
+        panel.close()
         shownHit = nil
     }
 }

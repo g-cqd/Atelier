@@ -13,9 +13,9 @@ private actor ResolverSpy {
     private(set) var maxConcurrent = 0
     private var concurrent = 0
     var delay: Duration = .milliseconds(20)
-    var content: AttributedString? = AttributedString("docs")
+    var content: HoverDocument? = HoverDocument(summary: NSAttributedString(string: "docs"))
 
-    func resolve(_ hit: HoverHit) async -> AttributedString? {
+    func resolve(_ hit: HoverHit) async -> HoverDocument? {
         concurrent += 1
         maxConcurrent = max(maxConcurrent, concurrent)
         try? await Task.sleep(for: delay)
