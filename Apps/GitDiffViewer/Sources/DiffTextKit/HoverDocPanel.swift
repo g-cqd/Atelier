@@ -60,6 +60,16 @@ package final class HoverDocPanel {
     private let footerLabel = HoverDocPanel.makeFooterLabel()
     private let contentStack = NSStackView()
 
+    // The text-bearing slots (`declarationView`, `bodyScrollView`, `returnsView`) have no usable intrinsic
+    // content size of their own -- an `NSTextView` reports `NSViewNoIntrinsicMetric` for both dimensions, and an
+    // `NSScrollView` wrapping one is no different -- so `contentStack` cannot sizeto-fit them from their content the
+    // way it can a label or a grid. Without an explicit height constraint they collapse to their initial zero-size
+    // frame and the panel renders with the text set but invisible; these are computed and kept up to date every
+    // ``render(_:)`` pass from the same measurement `measuredContentHeight()` already uses.
+    private var declarationHeight: NSLayoutConstraint?
+    private var bodyHeight: NSLayoutConstraint?
+    private var returnsHeight: NSLayoutConstraint?
+
     package init() {}
 
     /// Shows (or repositions and re-renders, if already shown) the panel for `document`, anchored at `anchorRect`
@@ -160,6 +170,13 @@ package final class HoverDocPanel {
             view.widthAnchor.constraint(equalToConstant: HoverPanelSizing.width - 24).isActive = true
         }
 
+        declarationHeight = declarationView.heightAnchor.constraint(equalToConstant: 0)
+        declarationHeight?.isActive = true
+        bodyHeight = bodyScrollView.heightAnchor.constraint(equalToConstant: 0)
+        bodyHeight?.isActive = true
+        returnsHeight = returnsView.heightAnchor.constraint(equalToConstant: 0)
+        returnsHeight?.isActive = true
+
         effectView.addSubview(contentStack)
         NSLayoutConstraint.activate([
             contentStack.leadingAnchor.constraint(equalTo: effectView.leadingAnchor),
@@ -179,8 +196,12 @@ package final class HoverDocPanel {
     // MARK: Rendering
 
     private func render(_ document: HoverDocument) {
+        let innerWidth = HoverPanelSizing.width - 24
+
         declarationView.textStorage?.setAttributedString(document.declaration ?? NSAttributedString())
         declarationView.isHidden = document.declaration == nil
+        declarationHeight?.constant =
+            declarationView.isHidden ? 0 : Self.measuredHeight(of: declarationView.textStorage!, width: innerWidth)
 
         let body = NSMutableAttributedString()
         if let summary = document.summary { body.append(summary) }
@@ -190,6 +211,9 @@ package final class HoverDocPanel {
         }
         bodyTextView.textStorage?.setAttributedString(body)
         bodyScrollView.isHidden = body.length == 0
+        bodyHeight?.constant =
+            bodyScrollView.isHidden
+            ? 0 : min(Self.measuredHeight(of: bodyTextView.textStorage!, width: innerWidth), HoverPanelSizing.maxHeight)
 
         renderParameters(document.parameters)
         parametersHeader.isHidden = document.parameters.isEmpty
@@ -198,6 +222,8 @@ package final class HoverDocPanel {
         returnsView.textStorage?.setAttributedString(document.returns ?? NSAttributedString())
         returnsHeader.isHidden = document.returns == nil
         returnsView.isHidden = document.returns == nil
+        returnsHeight?.constant =
+            returnsView.isHidden ? 0 : Self.measuredHeight(of: returnsView.textStorage!, width: innerWidth)
 
         renderCandidates(document.extraCandidates)
         candidatesStack.isHidden = document.extraCandidates.isEmpty
@@ -226,12 +252,18 @@ package final class HoverDocPanel {
 
     private func renderCandidates(_ candidates: [HoverDocument.Candidate]) {
         candidatesStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let innerWidth = HoverPanelSizing.width - 24
         for candidate in candidates {
             guard let declaration = candidate.declaration else { continue }
             let view = HoverDocPanel.makeCodeTextView()
             view.textStorage?.setAttributedString(declaration)
             candidatesStack.addArrangedSubview(view)
-            view.widthAnchor.constraint(equalToConstant: HoverPanelSizing.width - 24).isActive = true
+            view.widthAnchor.constraint(equalToConstant: innerWidth).isActive = true
+            view.heightAnchor
+                .constraint(
+                    equalToConstant: Self.measuredHeight(of: view.textStorage!, width: innerWidth)
+                )
+                .isActive = true
         }
     }
 
@@ -314,6 +346,7 @@ package final class HoverDocPanel {
         view.drawsBackground = false
         view.textContainer?.lineFragmentPadding = 0
         view.textContainerInset = .zero
+        view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }
 
@@ -325,6 +358,7 @@ package final class HoverDocPanel {
         view.textContainer?.lineFragmentPadding = 0
         view.textContainerInset = .zero
         view.textContainer?.widthTracksTextView = true
+        view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }
 

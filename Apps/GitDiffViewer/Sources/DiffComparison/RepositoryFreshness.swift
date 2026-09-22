@@ -256,11 +256,16 @@ package final class RepositoryFreshness {
         if path == paths.gitDir || path.hasPrefix(paths.gitDir + "/") { return .ignored }
         guard path == paths.root || path.hasPrefix(paths.root + "/") else { return .ignored }
         let relative = path.dropFirst(paths.root.count).drop { $0 == "/" }
-        // Mirrors `SourceLoader.DirectorySource.liesUnderSkippedDirectory`: a folder scan never descends into
-        // `node_modules`, `DerivedData`, `Pods` or `Carthage`, so a change under one of them would never be
-        // reflected by `right.reload()` anyway — reloading for it would just be a wasted round trip.
-        let liesUnderSkippedDirectory = relative.split(separator: "/").dropLast()
-            .contains { SourceLoader.skippedDirectories.contains(String($0)) }
-        return liesUnderSkippedDirectory ? .ignored : .tree
+        // Mirrors BOTH of the folder scan's exclusion rules (`SourceLoader.DirectorySource`): the named
+        // `skippedDirectories` (`node_modules`, `DerivedData`, `Pods`, `Carthage`) and `.skipsHiddenFiles`.
+        // The hidden rule is load-bearing, not cosmetic: sourcekit-lsp's background indexer — started by this
+        // very app's hover tier — writes continuously into `<root>/.build/index-build`, and treating those
+        // writes as tree changes turned every hover into a reload loop. A change under a hidden component can
+        // never be reflected by `right.reload()` anyway, exactly like the named skips.
+        let components = relative.split(separator: "/")
+        let liesUnderExcludedComponent = components.dropLast()
+            .contains { SourceLoader.skippedDirectories.contains(String($0)) || $0.hasPrefix(".") }
+        let isHiddenFile = components.last?.hasPrefix(".") ?? true
+        return (liesUnderExcludedComponent || isHiddenFile) ? .ignored : .tree
     }
 }
