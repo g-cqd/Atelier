@@ -57,6 +57,33 @@ public enum GitParsers {
         String(decoding: data, as: UTF8.self).split(separator: "\n").map(String.init).filter { !$0.hasSuffix("/HEAD") }
     }
 
+    /// Splits `remote -v` output: `<name>\t<url> (fetch|push)` per line, kept in first-seen order and de-duplicated
+    /// by name; only the `(fetch)` line of each remote is kept; a name with no fetch line at all (push-only) is
+    /// left out.
+    public static func remotes(_ data: Data) -> [GitRemote] {
+        var order: [String] = []
+        var fetchURLs: [String: String] = [:]
+        for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
+            let fields = line.split(separator: "\t", maxSplits: 1)
+            guard fields.count == 2, fields[1].hasSuffix("(fetch)") else { continue }
+            let name = String(fields[0])
+            let url = fields[1].dropLast("(fetch)".count).trimmingCharacters(in: .whitespaces)
+            if fetchURLs[name] == nil { order.append(name) }
+            fetchURLs[name] = url
+        }
+        return order.map { GitRemote(name: $0, fetchURL: fetchURLs[$0] ?? "") }
+    }
+
+    /// Splits `rev-list --left-right --count` output: `<ahead>\t<behind>` on one line; anything else throws.
+    public static func aheadBehind(_ data: Data) throws(GitError) -> (ahead: Int, behind: Int) {
+        let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        let fields = text.split(separator: "\t")
+        guard fields.count == 2, let ahead = Int(fields[0]), let behind = Int(fields[1]) else {
+            throw .commandFailed("could not parse ahead/behind counts from: \(text)")
+        }
+        return (ahead, behind)
+    }
+
     /// One `<hash>\u{1f}<short hash>\u{1f}<subject>` line per commit; the unit separator keeps subjects with
     /// spaces intact.
     public static func commits(_ data: Data) -> [GitCommit] {

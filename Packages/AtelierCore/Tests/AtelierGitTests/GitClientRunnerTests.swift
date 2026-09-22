@@ -117,6 +117,115 @@ struct GitClientRunnerTests {
         #expect(spec.environment == .inherited(overriding: GitClient.hardeningEnvironment))
     }
 
+    @Test
+    func `branches and tags are thin wrappers over for-each-ref`() async throws {
+        let runner = FakeProcessRunner(always: .success("main\norigin/main\n"))
+        let client = GitClient(repository: Self.repository, runner: runner)
+        #expect(try await client.branches() == ["main", "origin/main"])
+        #expect(runner.specs.last?.arguments.suffix(2) == ["refs/heads", "refs/remotes"])
+
+        let tags = FakeProcessRunner(always: .success("v1.0\n"))
+        let tagClient = GitClient(repository: Self.repository, runner: tags)
+        #expect(try await tagClient.tags() == ["v1.0"])
+        #expect(tags.specs.last?.arguments.suffix(1) == ["refs/tags"])
+    }
+
+    @Test
+    func `remotes runs remote -v`() async throws {
+        let runner = FakeProcessRunner(always: .success("origin\tgit@x:y.git (fetch)\norigin\tgit@x:y.git (push)\n"))
+        let client = GitClient(repository: Self.repository, runner: runner)
+        let remotes = try await client.remotes()
+        #expect(remotes == [GitRemote(name: "origin", fetchURL: "git@x:y.git")])
+        #expect(runner.specs.last?.arguments.suffix(2) == ["remote", "-v"])
+    }
+
+    @Test
+    func `aheadBehind sends checked refs behind rev-list left-right`() async throws {
+        let runner = FakeProcessRunner(always: .success("2\t5\n"))
+        let client = GitClient(repository: Self.repository, runner: runner)
+        let counts = try await client.aheadBehind("main", upstream: "origin/main")
+        #expect(counts.ahead == 2)
+        #expect(counts.behind == 5)
+        #expect(
+            runner.specs.last?.arguments.suffix(5)
+                == ["rev-list", "--left-right", "--count", "--end-of-options", "main...origin/main"])
+    }
+
+    @Test
+    func `aheadBehind refuses option-shaped refs before running git`() async {
+        let runner = FakeProcessRunner(always: .success("0\t0\n"))
+        let client = GitClient(repository: Self.repository, runner: runner)
+        await #expect(throws: GitError.invalidArgument("--evil")) {
+            try await client.aheadBehind("--evil", upstream: "main")
+        }
+        #expect(runner.specs.isEmpty)
+    }
+
+    @Test
+    func `fetch builds the expected argv with prune and refspecs`() async throws {
+        let runner = FakeProcessRunner(always: .success(""))
+        let client = GitClient(repository: Self.repository, runner: runner)
+        try await client.fetch(remote: "origin", refspecs: ["refs/heads/main:refs/remotes/origin/main"], prune: true)
+        let spec = try #require(runner.specs.first)
+        #expect(
+            spec.arguments.suffix(5)
+                == ["fetch", "--prune", "--end-of-options", "origin", "refs/heads/main:refs/remotes/origin/main"])
+    }
+
+    @Test
+    func `fetch without prune or refspecs sends the plain form`() async throws {
+        let runner = FakeProcessRunner(always: .success(""))
+        let client = GitClient(repository: Self.repository, runner: runner)
+        try await client.fetch()
+        let spec = try #require(runner.specs.first)
+        #expect(spec.arguments.suffix(3) == ["fetch", "--end-of-options", "origin"])
+        #expect(!spec.arguments.contains("--prune"))
+    }
+
+    @Test
+    func `fetch rejects an option-shaped remote or refspec before running git`() async {
+        let runner = FakeProcessRunner(always: .success(""))
+        let client = GitClient(repository: Self.repository, runner: runner)
+        await #expect(throws: GitError.invalidArgument("-x")) { try await client.fetch(remote: "-x") }
+        await #expect(throws: GitError.invalidArgument("-y")) {
+            try await client.fetch(refspecs: ["-y"])
+        }
+        #expect(runner.specs.isEmpty)
+    }
+
+    @Test
+    func `fetch runs under networking isolation with a per-call timeout, regardless of the client's own isolation`()
+        async throws
+    {
+        let runner = FakeProcessRunner(always: .success(""))
+        let client = GitClient(repository: Self.repository, runner: runner, timeout: .seconds(5), isolation: .strict)
+        try await client.fetch(timeout: .seconds(45))
+        let spec = try #require(runner.specs.first)
+        #expect(spec.timeout == .seconds(45))
+        #expect(spec.environment == GitIsolation.networking.environment)
+        #expect(
+            Array(spec.arguments.prefix(GitIsolation.networkingConfigurationFlags.count))
+                == GitIsolation.networkingConfigurationFlags)
+        #expect(!spec.arguments.contains("core.sshCommand=/usr/bin/false"))
+    }
+
+    @Test
+    func `networking isolation keeps the caller's environment and drops only the ssh override`() async throws {
+        let runner = FakeProcessRunner(always: .success(""))
+        let client = GitClient(repository: Self.repository, runner: runner)
+        try await client.fetch()
+        let spec = try #require(runner.specs.first)
+        #expect(spec.environment == .inherited(overriding: GitClient.hardeningEnvironment))
+        guard case .inherited(let overrides) = spec.environment else {
+            Issue.record("expected an inherited environment")
+            return
+        }
+        #expect(overrides["GIT_TERMINAL_PROMPT"] == "0")
+        #expect(overrides["GIT_OPTIONAL_LOCKS"] == "0")
+        #expect(
+            GitIsolation.networkingConfigurationFlags.count == GitIsolation.strictConfigurationFlags.count - 2)
+    }
+
     @Test(arguments: ["--output=/tmp/x", "-", "", "a\nb", "a\u{0}b"])
     func `an option-shaped or unprintable ref never reaches git`(ref: String) async {
         let runner = FakeProcessRunner(always: .success("abc\n"))
