@@ -36,20 +36,20 @@ struct ProjectSettingsTests {
     func `a project-scoped key falls back to the base value until the project writes its own`() throws {
         let defaults = try makeDefaults()
         let sut = ViewerSettings(defaults: defaults)
-        sut.contextLines = 8 // base edit, before any project is adopted
+        sut.contextLines = 8  // base edit, before any project is adopted
 
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
         sut.adoptProject(project)
-        #expect(sut.contextLines == 8) // inherits the base value, nothing overridden yet
+        #expect(sut.contextLines == 8)  // inherits the base value, nothing overridden yet
 
-        sut.contextLines = 12 // now writes to the project scope
+        sut.contextLines = 12  // now writes to the project scope
         #expect(sut.contextLines == 12)
-        #expect(defaults.object(forKey: "contextLines") as? Int == 8) // base untouched
+        #expect(defaults.object(forKey: "contextLines") as? Int == 8)  // base untouched
 
         let reopened = ViewerSettings(defaults: defaults)
-        #expect(reopened.contextLines == 8) // a fresh, unadopted instance still sees the base
+        #expect(reopened.contextLines == 8)  // a fresh, unadopted instance still sees the base
         reopened.adoptProject(project)
-        #expect(reopened.contextLines == 12) // adopting the same project picks the override back up
+        #expect(reopened.contextLines == 12)  // adopting the same project picks the override back up
     }
 
     @Test
@@ -63,34 +63,34 @@ struct ProjectSettingsTests {
         sut.showsChangesOnly = true
 
         sut.adoptProject(projectB)
-        #expect(!sut.showsChangesOnly) // project B never overrode it, base default is false
+        #expect(!sut.showsChangesOnly)  // project B never overrode it, base default is false
 
         sut.adoptProject(projectA)
-        #expect(sut.showsChangesOnly) // project A's own override is still there
+        #expect(sut.showsChangesOnly)  // project A's own override is still there
     }
 
     @Test
     func `a non-scoped key stays global across adoption`() throws {
         let defaults = try makeDefaults()
         let sut = ViewerSettings(defaults: defaults)
-        sut.granularity = .syntax // documented as global, not in the scoped set
+        sut.granularity = .syntax  // documented as global, not in the scoped set
 
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
         sut.adoptProject(project)
         #expect(sut.granularity == .syntax)
 
         sut.granularity = .character
-        #expect(defaults.string(forKey: "intralineGranularity") == "character") // wrote straight to the base key
+        #expect(defaults.string(forKey: "intralineGranularity") == "character")  // wrote straight to the base key
 
         let other = ViewerSettings(defaults: defaults)
-        #expect(other.granularity == .character) // visible without adopting any project
+        #expect(other.granularity == .character)  // visible without adopting any project
     }
 
     @Test
     func `adoptProject fires Change only for keys that actually differ`() throws {
         let defaults = try makeDefaults()
         let sut = ViewerSettings(defaults: defaults)
-        sut.contextLines = 8 // base edit shared by every project until overridden
+        sut.contextLines = 8  // base edit shared by every project until overridden
 
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
         final class Owner {}
@@ -100,7 +100,7 @@ struct ProjectSettingsTests {
 
         sut.adoptProject(project)
 
-        #expect(changes.isEmpty) // nothing differs: this instance already reads the base for every scoped key
+        #expect(changes.isEmpty)  // nothing differs: this instance already reads the base for every scoped key
     }
 
     @Test
@@ -109,9 +109,9 @@ struct ProjectSettingsTests {
         let writer = ViewerSettings(defaults: defaults)
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
         writer.adoptProject(project)
-        writer.diagnosticsEnabled = true // writes the override for `project`
+        writer.diagnosticsEnabled = true  // writes the override for `project`
 
-        let sut = ViewerSettings(defaults: defaults) // fresh instance, still reading the (false) base
+        let sut = ViewerSettings(defaults: defaults)  // fresh instance, still reading the (false) base
         #expect(!sut.diagnosticsEnabled)
         final class Owner {}
         let owner = Owner()
@@ -142,7 +142,7 @@ struct ProjectSettingsTests {
 
         sut.clearOverrides(projectKey: project.key, category: .tools)
         #expect(sut.projectsWithOverrides(in: .tools).isEmpty)
-        #expect(!sut.diagnosticsEnabled) // fell back to the base
+        #expect(!sut.diagnosticsEnabled)  // fell back to the base
     }
 
     @Test
@@ -165,20 +165,21 @@ struct ProjectSettingsTests {
     // MARK: - restoreDefaults under adoption
 
     @Test
-    func `restoreDefaults under adoption clears the project override and falls back to the base, not the coded default`()
+    func
+        `restoreDefaults under adoption clears the project override and falls back to the base, not the coded default`()
         throws
     {
         let defaults = try makeDefaults()
         let sut = ViewerSettings(defaults: defaults)
-        sut.contextLines = 11 // base edit, made before any project is adopted
+        sut.contextLines = 11  // base edit, made before any project is adopted
 
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
         sut.adoptProject(project)
-        sut.contextLines = 20 // project override
+        sut.contextLines = 20  // project override
 
         sut.restoreDefaults(.diff)
 
-        #expect(sut.contextLines == 11) // falls back to the base value, not the coded default of 3
+        #expect(sut.contextLines == 11)  // falls back to the base value, not the coded default of 3
         #expect(sut.projectsWithOverrides(in: .diff).isEmpty)
     }
 
