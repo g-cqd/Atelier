@@ -183,6 +183,10 @@ private struct AppearanceSettings: View {
                             + "the other way."
                     )
                     .settingsCaption()
+                    Toggle(SettingLabel.matchesThemeAppearance, isOn: $settings.matchesThemeAppearance)
+                        .disabled(settings.appearanceScheme != .system)
+                    Text("Switch the window light or dark to match the selected color scheme.")
+                        .settingsCaption()
                     Picker("Color scheme", selection: $settings.themePath) {
                         Text("System").tag(String?.none)
                         ForEach(themes) { theme in
@@ -200,6 +204,15 @@ private struct AppearanceSettings: View {
                         }
                     }
                     Text("Theme follows the selected Xcode theme's line spacing, or 1× with the system colors.")
+                        .settingsCaption()
+                }
+                Section("Badges") {
+                    Picker(SettingLabel.badgeScheme, selection: $settings.badgeScheme) {
+                        Text("Classic").tag(BadgeScheme.classic)
+                        Text("Xcode").tag(BadgeScheme.xcode)
+                    }
+                    .pickerStyle(.segmented)
+                    Text("Xcode's scheme reads a modification and a rename both as blue.")
                         .settingsCaption()
                 }
                 Section("Layout") {

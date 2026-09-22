@@ -151,6 +151,25 @@ struct DocHoverControllerTests {
         #expect(controller.isPopoverVisible == false)
     }
 
+    /// A collapsed ``FileCardBody`` unmounts its pane entirely, so this never happens in practice -- but a pane
+    /// whose backing render has gone away for any other reason (a detached-storage race, a stale coordinator) must
+    /// cost nothing to hover over: no hit-test against the text view, no task spawned, no resolver call. This is
+    /// the perf-relevant contract behind why hovering a card with no live content is free.
+    @Test
+    func `pointerMoved with no rendered content does zero resolver or hit-test work`() async throws {
+        let rendered = try rendered()
+        let view = textView(showing: rendered)
+        let (controller, spy, taskProvider) = makeSUT()
+        controller.attach(to: view) { nil }
+
+        controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
+        try? await Task.sleep(for: .milliseconds(20))
+
+        #expect(await spy.calls.isEmpty)
+        #expect(taskProvider.spawnedTaskCount == 0)
+        #expect(controller.isPopoverVisible == false)
+    }
+
     @Test
     func `disabling the controller never calls the resolver`() async throws {
         let rendered = try rendered()

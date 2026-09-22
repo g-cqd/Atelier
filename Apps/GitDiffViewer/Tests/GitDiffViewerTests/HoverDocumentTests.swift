@@ -52,6 +52,58 @@ import Testing
             chipBackground.usingColorSpace(.sRGB) == palette.background.withAlphaComponent(0.94).usingColorSpace(.sRGB))
     }
 
+    /// A regression test for the Helvetica-leaking-into-prose bug: `AttributedString(markdown:)` records bold and
+    /// italic as `inlinePresentationIntent`, never as a font, and the bridge to `NSAttributedString` has nothing
+    /// of its own to fall back to -- a run with no `.font` attribute draws in `NSTextView`'s hardcoded default,
+    /// Helvetica 12, not the system font, dropping the bold/italic styling along with it. Every run of a built
+    /// summary must carry an explicit `NSFont` whose family matches the system font's own, never Helvetica, and
+    /// bold/italic text must carry the matching symbolic trait.
+    @Test func summaryProseAlwaysCarriesAnExplicitSystemFont() throws {
+        let content = HoverContent(
+            markdown: """
+                ```swift
+                struct CameraConfiguration
+                ```
+
+                A **strongly emphasized** value and an *emphasized* one, plus `inline code`.
+                """,
+            source: .docIndex)
+        let document = HoverDocument.build(from: content, palette: .system)
+        let summary = try #require(document.summary)
+
+        let systemFamily = NSFont.systemFont(ofSize: 12).familyName
+        var sawFontlessRun = false
+        var sawBold = false
+        var sawItalic = false
+        var sawMonospaced = false
+        summary.enumerateAttribute(.font, in: NSRange(location: 0, length: summary.length)) { value, range, _ in
+            guard let font = value as? NSFont else {
+                sawFontlessRun = true
+                return
+            }
+            let substring = (summary.string as NSString).substring(with: range)
+            if font.fontDescriptor.symbolicTraits.contains(.bold) {
+                sawBold = true
+                #expect(substring == "strongly emphasized")
+            }
+            if font.fontDescriptor.symbolicTraits.contains(.italic) {
+                sawItalic = true
+                #expect(substring == "emphasized")
+            }
+            if !font.fontDescriptor.symbolicTraits.contains([.bold, .italic]) {
+                #expect(font.familyName == systemFamily || font.fontDescriptor.symbolicTraits.contains(.monoSpace))
+            }
+            if substring == "inline code" {
+                sawMonospaced = true
+                #expect(font.familyName != "Helvetica")
+            }
+        }
+        #expect(!sawFontlessRun)
+        #expect(sawBold)
+        #expect(sawItalic)
+        #expect(sawMonospaced)
+    }
+
     /// An underscored compiler attribute is stripped from the declaration before it reaches the panel, matching
     /// Xcode's own Quick Help; a public attribute is kept.
     @Test func declarationDropsUnderscoredAttributesButKeepsPublicOnes() throws {

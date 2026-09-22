@@ -50,9 +50,14 @@ extension DiffViewerModel {
     /// whatever has actually been diffed, streaming in as more cards of a combined view finish preparing.
     func updateHoverDocs() {
         guard let hoverDocs else { return }
-        let pairs = pipeline.target?.pairs ?? []
+        let allPairs = pipeline.target?.pairs ?? []
         let prepared = pipeline.prepared
-        guard pairs.count == prepared.count else { return }
+        // Feed whatever has landed so far, not all-or-nothing: `prepared` streams in card by card on a combined
+        // view, and gating on the full count starved the doc-comment index for every file — including ones long
+        // since on screen — until the very last card finished. Each `.published` event re-enters here, so the
+        // index grows with the stream and the final call carries the complete set.
+        let pairs = allPairs.prefix(prepared.count)
+        guard !pairs.isEmpty else { return }
         let root: URL? = if case .directory(let rightRoot) = right.source { rightRoot } else { nil }
         let files = zip(pairs.indices, zip(pairs, prepared))
             .map { index, pair in

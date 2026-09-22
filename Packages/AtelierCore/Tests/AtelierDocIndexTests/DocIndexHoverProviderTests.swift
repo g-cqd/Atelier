@@ -101,3 +101,31 @@ struct DocIndexHoverProviderTests {
         #expect(hover == nil)
     }
 }
+
+extension DocIndexHoverProviderTests {
+    /// A focused repro at the hover-provider layer, one level up from `DocCommentIndexTests`' own repro of the
+    /// same shape: hovering the property's own *name*, on its declaration line, inside an `extension`, with an
+    /// explicit `get` accessor block -- exactly the position a user hovering `displayName` in
+    /// `var displayName: String { get { ... } }` lands on.
+    @Test
+    func `hovering a computed property's own name on its declaration line resolves its doc comment`() async throws {
+        let content = """
+            extension ClearableSettingReference {
+                /// The name shown in the picker for this option.
+                var displayName: String {
+                    get {
+                        name
+                    }
+                }
+            }
+            """
+        let index = DocCommentIndex()
+        await index.update(files: [DocIndexFile(uri: "file:///a.swift", content: content)])
+        let provider = DocIndexHoverProvider(index: index)
+        // Line 2 (zero-based) is "    var displayName: String {"; "displayName" starts right after "    var ".
+        let column = "    var ".utf16.count
+        let query = HoverQuery(documentURI: "file:///a.swift", content: content, line: 2, utf16Column: column)
+        let hover = try await provider.hover(query)
+        #expect(hover?.markdown.contains("The name shown in the picker for this option.") == true)
+    }
+}

@@ -31,6 +31,8 @@ package enum SettingLabel {
 
     package static let wrapsLines = "Wrap long lines"
     package static let appearanceScheme = "Appearance"
+    package static let badgeScheme = "Badge colors"
+    package static let matchesThemeAppearance = "Match window appearance to theme"
 
     // MARK: Tools / Diagnostics
 
