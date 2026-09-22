@@ -24,7 +24,13 @@ struct ContentView: View {
                     .ignoresSafeArea(.container, edges: .top)
                     .scrollEdgeEffectStyle(.soft, for: .top)
                     .navigationSplitViewColumnWidth(min: 260, ideal: 340)
-                    .toolbar(removing: settings.explorerPlacement == .top ? .sidebarToggle : nil)
+                // The sidebar toggle stays in the toolbar's default item set for every placement: removing it
+                // conditionally made the default set itself depend on `explorerPlacement`, so two launches (or
+                // this window and one restored under a different placement) could disagree on what "default"
+                // means under the same autosave name, corrupting a saved customization. For the top placement,
+                // `columnVisibility` below always reports `.detailOnly` and ignores the toggle's writes, so the
+                // button is present but a no-op rather than absent -- identity stays constant, only its effect
+                // changes with the setting.
             } detail: {
                 detail
                     .toolbar(id: ToolbarID.toolbar) { toolbar }
@@ -265,6 +271,9 @@ extension SidebarVisibility {
 enum ToolbarID {
     /// The name macOS files the customization under. Bumped when the set of items changes in a way a saved
     /// arrangement cannot survive: a stale one naming items that no longer exist crashes AppKit as it restores it.
+    // A `swift run` build and the app bundle Xcode/`swift build --product` produce read different `defaults`
+    // domains (different bundle identifiers), so a customization saved under one is never seen by the other;
+    // that split is environmental, not a bug in this file, and is not addressed here.
     static let toolbar = "main.2"
     static let compareRepository = "compareRepository"
     static let openPatch = "openPatch"
