@@ -61,11 +61,15 @@ struct ComparisonWindow: View {
                 // simply has nothing to run, so diagnostics stay idle rather than needing a special case here.
                 model.attachDiagnostics(engine: services.diagnosticsEngine, settings: settings)
                 model.attachHoverDocs(lspRegistry: services.lspRegistry)
+                model.attachFreshness()
                 model.start(configuration)
                 recents.record(configuration)
                 dismissWindow(id: WindowID.welcome)
             }
             .task {
+                // The SDK documentation tier resolves once per app and slots in behind the doc-comment index;
+                // a machine without sourcekit-lsp simply leaves the tier absent.
+                model.hoverDocs?.sdkProvider = await services.sdkHoverProvider()
                 guard let root = await resolveProjectRoot() else { return }
                 settings.adoptProject(ProjectIdentity(root: root))
             }

@@ -90,6 +90,10 @@ package final class HoverDocumentationModel {
     /// turns into an unbounded read storm.
     static let maxCorpusFiles = 2000
 
+    /// The on-device Apple SDK tier, injected after construction (it resolves asynchronously, once per app);
+    /// nil leaves hovers answered by the language server and doc-comment index alone.
+    package var sdkProvider: (any HoverProvider)?
+
     package init(lspRegistry: SourceKitLSPRegistry?, taskProvider: any TaskProvider = .default) {
         self.lspRegistry = lspRegistry
         self.taskProvider = taskProvider
@@ -180,8 +184,8 @@ package final class HoverDocumentationModel {
         let query = HoverQuery(documentURI: uri, content: content, line: line, utf16Column: utf16Column)
 
         let primary = await primaryProvider(side: side, path: path, onDiskRoot: onDiskRoot)
-        let provider = TieredHoverProvider(primary: primary, fallback: docProvider)
-        return try? await provider.hover(query)
+        let tiers = [primary, docProvider, sdkProvider].compactMap { $0 }
+        return try? await TieredHoverProviders(tiers).hover(query)
     }
 
     private func primaryProvider(side: HoverQuerySide, path: String, onDiskRoot: URL?) async -> (any HoverProvider)? {
