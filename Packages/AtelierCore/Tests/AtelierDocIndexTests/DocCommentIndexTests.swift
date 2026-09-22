@@ -297,3 +297,31 @@ struct DocCommentIndexTests {
         #expect(entries.first?.signature == "struct Foo")
     }
 }
+
+extension DocCommentIndexTests {
+    /// A focused repro of a user-reported miss: a documented computed property declared inside an `extension`,
+    /// with an explicit `get` accessor block -- the shape a screenshot showed failing to deliver prose to the
+    /// hover panel (declaration-only, `sourcekit-lsp` provenance, meaning no tier answered, when the doc-comment
+    /// index should have).
+    @Test
+    func `a documented computed property inside an extension with an explicit get block is indexed`() async {
+        let index = DocCommentIndex()
+        await index.update(files: [
+            DocIndexFile(
+                uri: "file:///a.swift",
+                content: """
+                    extension ClearableSettingReference {
+                        /// The name shown in the picker for this option.
+                        var displayName: String {
+                            get {
+                                name
+                            }
+                        }
+                    }
+                    """)
+        ])
+        let entries = await index.documentation(forIdentifier: "displayName", preferringURI: nil)
+        #expect(entries.count == 1)
+        #expect(entries.first?.markdown == "The name shown in the picker for this option.")
+    }
+}

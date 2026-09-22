@@ -151,6 +151,17 @@ extension NSColor {
     }
 }
 
+extension SyntaxTheme {
+    /// The background's relative luminance (ITU-R BT.601 weighting, the same one `NSColor.brightnessComponent`
+    /// approximates for sRGB), 0 black to 1 white; nil when the theme leaves its background unset. Exposed as a
+    /// plain `Double` rather than the theme's own `ThemeColor` so a caller outside this module's own dependents
+    /// (the app tier's appearance-follows-theme setting) never needs `AtelierTheme` imported just to ask whether a
+    /// theme reads as dark.
+    package var backgroundLuminance: Double? {
+        background.map { 0.299 * Double($0.red) + 0.587 * Double($0.green) + 0.114 * Double($0.blue) }
+    }
+}
+
 extension NSFont {
     /// The font the descriptor names, when it is installed.
     package convenience init?(_ descriptor: FontDescriptor) {

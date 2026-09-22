@@ -166,7 +166,8 @@ package struct HoverDocument: @unchecked Sendable {
     private static func renderProse(_ text: String) -> NSAttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             allowsExtendedAttributes: false, interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible)
-        let parsed = (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+        var parsed = (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+        Self.materializeFonts(in: &parsed)
         let result = NSMutableAttributedString(parsed)
         // Stamped only where nothing already set a color: markdown source text never specifies one for plain
         // prose, but this stays additive rather than a blanket overwrite in case a future syntax ever does.
@@ -177,5 +178,32 @@ package struct HoverDocument: @unchecked Sendable {
             result.addAttribute(.foregroundColor, value: NSColor.labelColor, range: range)
         }
         return result
+    }
+
+    /// Stamps an explicit `NSFont` on every run of `text` from Foundation's own `inlinePresentationIntent`
+    /// (bold/italic/inline-code), which `AttributedString(markdown:)` records as *intent* and never as a font.
+    /// The bridge to `NSAttributedString` in ``renderProse(_:)`` has nothing of its own to fall back to for a run
+    /// with no font attribute -- `NSTextView` draws it in its hardcoded default, Helvetica 12, not the system
+    /// font, silently losing the bold/italic/code styling along with it. Walked here, on the `AttributedString`
+    /// side, while the intent is still a readable value rather than whatever the bridge chose to encode it into;
+    /// every run leaves with a font, intent or not, so nothing downstream can ever bridge fontless.
+    private static func materializeFonts(in text: inout AttributedString) {
+        let base = NSFont.systemFont(ofSize: 12)
+        for run in text.runs {
+            let intent = run.inlinePresentationIntent
+            if let intent, intent.contains(.code) {
+                text[run.range].font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+                continue
+            }
+            var traits: NSFontDescriptor.SymbolicTraits = []
+            if let intent, intent.contains(.stronglyEmphasized) { traits.insert(.bold) }
+            if let intent, intent.contains(.emphasized) { traits.insert(.italic) }
+            guard !traits.isEmpty else {
+                text[run.range].font = base
+                continue
+            }
+            let descriptor = base.fontDescriptor.withSymbolicTraits(traits)
+            text[run.range].font = NSFont(descriptor: descriptor, size: 12) ?? base
+        }
     }
 }
