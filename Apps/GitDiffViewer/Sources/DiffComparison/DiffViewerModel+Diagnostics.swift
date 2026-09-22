@@ -25,8 +25,7 @@ extension DiffViewerModel {
     /// and a model bridging it to `settings`. Safe to call for every comparison window, a patch's included: a
     /// comparison with no working-tree root simply reports nothing to the engine, so diagnostics stay idle.
     package func attachDiagnostics(engine: DiagnosticsEngine, settings: ViewerSettings) {
-        let session = DiagnosticsSession(engine: engine, taskProvider: RuntimeTaskProviderBridge(taskProvider))
-        let diagnosticsModel = DiagnosticsModel(session: session, settings: settings)
+        let diagnosticsModel = DiagnosticsModel(engine: engine, settings: settings, taskProvider: taskProvider)
         diagnosticsModel.onFindingsChanged = { [weak self] _ in self?.diagnosticsVersion &+= 1 }
         diagnostics = diagnosticsModel
     }

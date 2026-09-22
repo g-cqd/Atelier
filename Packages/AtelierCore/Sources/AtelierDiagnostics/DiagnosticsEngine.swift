@@ -73,12 +73,15 @@ public actor DiagnosticsEngine {
     }
 
     /// Identifies a cached run: the exact tool binary (by path and modification date, since a reinstalled or
-    /// updated tool must not reuse a stale result), its configuration, and its payload.
+    /// updated tool must not reuse a stale result), its configuration, its analysis root (so two different
+    /// repositories, or two windows on the same repository at two different worktree paths, never share a
+    /// result), and its payload.
     private struct CacheKey: Hashable {
         let tool: DiagnosticTool
         let executablePath: String
         let executableModification: Date?
         let configFingerprint: String
+        let root: String
         let payloadFingerprint: String
     }
 
@@ -138,12 +141,7 @@ public actor DiagnosticsEngine {
             argvFiles = []
         }
 
-        let cacheKey = CacheKey(
-            tool: tool, executablePath: located.url.path,
-            executableModification: modificationDate(ofItemAt: located.url.path),
-            configFingerprint: configFingerprint(for: tool, root: request.root),
-            payloadFingerprint: payloadFingerprint(for: tool, request: request)
-        )
+        let cacheKey = cacheKey(for: tool, request: request, locatedPath: located.url.path)
 
         if let cached = cachedFindings(for: cacheKey) {
             return ToolResult(
@@ -196,6 +194,15 @@ public actor DiagnosticsEngine {
 
     // MARK: - Fingerprints
 
+    /// Builds `tool`'s cache key for `request`, run against the tool located at `locatedPath`. Pulled out of
+    /// `run(_:request:)` so that function stays under the house style's length limit.
+    private func cacheKey(for tool: DiagnosticTool, request: Request, locatedPath: String) -> CacheKey {
+        CacheKey(
+            tool: tool, executablePath: locatedPath, executableModification: modificationDate(ofItemAt: locatedPath),
+            configFingerprint: configFingerprint(for: tool, root: request.root),
+            root: canonicalRoot(request.root), payloadFingerprint: payloadFingerprint(for: tool, request: request))
+    }
+
     /// A fingerprint of `tool`'s configuration files at `root`: each configured name's size and modification date,
     /// or `absent` when it does not exist. Any change to a config file busts the cache.
     private func configFingerprint(for tool: DiagnosticTool, root: URL) -> String {
@@ -210,11 +217,22 @@ public actor DiagnosticsEngine {
             .joined(separator: "|")
     }
 
-    /// A fingerprint of what is being analyzed: sorted content hashes for a per-file tool, so any changed, added or
-    /// removed file busts the cache; the corpus fingerprint as-is for a corpus tool.
+    /// `root`, resolved to an absolute, symlink-free path: two requests naming the same directory by different
+    /// spellings (a relative path, a trailing slash, a symlinked worktree) must land on the same cache entries,
+    /// and two different directories must never collide on this alone.
+    private func canonicalRoot(_ root: URL) -> String {
+        root.resolvingSymlinksInPath().standardizedFileURL.path
+    }
+
+    /// A fingerprint of what is being analyzed: each file's path paired with its content hash (not the hashes
+    /// alone) for a per-file tool, sorted by the pair so the fingerprint stays order-independent while still
+    /// tying every hash to the path it was read from -- renaming a file to another path already present, or
+    /// swapping two files' paths, changes at least one pair and so still busts the cache even though the set of
+    /// hashes alone would not have; the corpus fingerprint as-is for a corpus tool.
     private func payloadFingerprint(for tool: DiagnosticTool, request: Request) -> String {
         switch tool.scope {
-            case .perFile: request.files.map(\.contentHash).sorted().joined(separator: ",")
+            case .perFile:
+                request.files.map { "\($0.path)=\($0.contentHash)" }.sorted().joined(separator: ",")
             case .corpus: request.corpusFingerprint ?? ""
         }
     }

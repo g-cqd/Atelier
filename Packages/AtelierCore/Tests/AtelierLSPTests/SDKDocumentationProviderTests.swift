@@ -41,6 +41,11 @@ private struct DecodedDidOpenParams: Decodable {
     let textDocument: TextDocumentItem
 }
 
+private struct DecodedHoverParams: Decodable {
+    let textDocument: TextDocumentIdentifier
+    let position: Position
+}
+
 private func respond(_ transport: PipeTransport, id: JSONRPCID, result: JSONValue) throws {
     transport.deliver(LSPFrameCodec.frame(try JSONRPCMessage.response(id: id, result: result)))
 }
@@ -71,6 +76,19 @@ private func driveOneProbe(
     #expect(hoverEnvelope.method == "textDocument/hover")
     try respond(transport, id: try #require(hoverEnvelope.id), result: hoverResult(markdown: markdown))
     return transport
+}
+
+/// Drives a follow-up probe's `didOpen` + `hover` on an already-connected transport (no handshake needed),
+/// starting right after `startIndex` frames already sent -- used for the type-position fallback probe, which
+/// reuses the live connection from the primary probe.
+private func driveFollowUpProbe(
+    _ transport: PipeTransport, afterFrameCount startIndex: Int, markdown: JSONValue
+) async throws {
+    await transport.sink.waitForCount(startIndex + 2)
+    #expect(try await decodeSent(transport, at: startIndex).method == "textDocument/didOpen")
+    let hoverEnvelope = try await decodeSent(transport, at: startIndex + 1)
+    #expect(hoverEnvelope.method == "textDocument/hover")
+    try respond(transport, id: try #require(hoverEnvelope.id), result: markdown)
 }
 
 @Suite
@@ -196,6 +214,97 @@ struct SDKDocumentationProviderTests {
         #expect(decoded.textDocument.text.contains("let _ = NSView"))
     }
 
+    @Test
+    func `hovers the chain's last dot-separated segment, not its head`() async throws {
+        let factory = ScriptedConnectionFactory()
+        let service = makeService(factory: factory)
+        let provider = SDKDocumentationProvider(service: service)
+
+        let content = "import AppKit\nlet m = NSVisualEffectView.Material.hudWindow"
+        let column = "let m = NSVisualEffectView.Material.hudWindow".utf16.count - 3  // inside "hudWindow"
+        let query = HoverQuery(documentURI: "file:///a.swift", content: content, line: 1, utf16Column: column)
+
+        async let result = provider.hover(query)
+        let transport = try await driveOneProbe(
+            factory: factory, generation: 1, markdown: "The material used for HUD windows.")
+        let content2 = try #require(await result)
+        #expect(content2.markdown == "The material used for HUD windows.")
+
+        let didOpen = try await decodeSent(transport, at: 2)
+        let didOpenData = try JSONEncoder().encode(try #require(didOpen.params))
+        let decodedOpen = try JSONDecoder().decode(DecodedDidOpenParams.self, from: didOpenData)
+        #expect(decodedOpen.textDocument.text.contains("let _ = NSVisualEffectView.Material.hudWindow"))
+
+        let hoverEnvelope = try await decodeSent(transport, at: 3)
+        let hoverData = try JSONEncoder().encode(try #require(hoverEnvelope.params))
+        let decodedHover = try JSONDecoder().decode(DecodedHoverParams.self, from: hoverData)
+        // "let _ = " is 8 UTF-16 units, then "NSVisualEffectView.Material." is 28 more -> the chain's tail
+        // segment, "hudWindow", starts at 36; hovering the head (8) would land on "NSVisualEffectView" instead.
+        #expect(decodedHover.position.character == 36)
+    }
+
+    @Test
+    func `a declaration-only primary answer for a type falls back to a type-position probe with prose`()
+        async throws
+    {
+        let factory = ScriptedConnectionFactory()
+        let service = makeService(factory: factory)
+        let provider = SDKDocumentationProvider(service: service)
+
+        let content = "import SwiftUI\nlet x = StateObject"
+        let column = "let x = StateObject".utf16.count - 3
+        let query = HoverQuery(documentURI: "file:///a.swift", content: content, line: 1, utf16Column: column)
+
+        async let result = provider.hover(query)
+        let transport = try await driveOneProbe(
+            factory: factory, generation: 1, markdown: "```swift\nstruct StateObject<ObjectType>\n```")
+        // The primary answer is declaration-only (no prose), and the chain starts uppercase, so a second,
+        // type-position probe is sent on the same connection.
+        try await driveFollowUpProbe(
+            transport, afterFrameCount: 4,
+            markdown: hoverResult(markdown: "```swift\nstruct StateObject<ObjectType>\n```\n\nProse at last."))
+
+        let content2 = try #require(await result)
+        #expect(content2.markdown == "```swift\nstruct StateObject<ObjectType>\n```\n\nProse at last.")
+        #expect(content2.source == .sdk)
+
+        let secondDidOpen = try await decodeSent(transport, at: 4)
+        let secondDidOpenData = try JSONEncoder().encode(try #require(secondDidOpen.params))
+        let decodedSecondOpen = try JSONDecoder().decode(DecodedDidOpenParams.self, from: secondDidOpenData)
+        #expect(decodedSecondOpen.textDocument.text.contains("typealias _AtelierProbe = StateObject"))
+
+        // The fallback's merged outcome is cached as a single entry: a second identical query hits the cache
+        // without repeating either probe.
+        let framesBefore = await transport.sink.all.count
+        let second = try await provider.hover(query)
+        #expect(second?.markdown == content2.markdown)
+        let framesAfter = await transport.sink.all.count
+        #expect(framesAfter == framesBefore)
+        #expect(await factory.generationCount == 1)
+    }
+
+    @Test
+    func `a prose-bearing primary answer wins immediately -- no fallback probe sent`() async throws {
+        let factory = ScriptedConnectionFactory()
+        let service = makeService(factory: factory)
+        let provider = SDKDocumentationProvider(service: service)
+
+        let content = "import SwiftUI\nlet x = StateObject"
+        let column = "let x = StateObject".utf16.count - 3
+        let query = HoverQuery(documentURI: "file:///a.swift", content: content, line: 1, utf16Column: column)
+
+        async let result = provider.hover(query)
+        let transport = try await driveOneProbe(
+            factory: factory, generation: 1,
+            markdown: "```swift\nstruct StateObject<ObjectType>\n```\n\nA property wrapper.")
+        let content2 = try #require(await result)
+        #expect(content2.markdown == "```swift\nstruct StateObject<ObjectType>\n```\n\nA property wrapper.")
+
+        // Only the one probe's four frames (initialize, initialized, didOpen, hover) were ever sent.
+        let frames = await transport.sink.all.count
+        #expect(frames == 4)
+    }
+
     // MARK: - LRU caching
 
     @Test
@@ -243,6 +352,9 @@ struct SDKDocumentationProviderTests {
         let hoverEnvelope = try await decodeSent(transport, at: 3)
         // Respond with an empty markdown, which the service treats as "nothing to show" -> nil.
         try respond(transport, id: try #require(hoverEnvelope.id), result: .null)
+        // "NSView" starts uppercase, so a prose-less (here, absent) primary answer triggers the type-position
+        // fallback probe on the same connection; also answer that one with nothing, so the overall result is nil.
+        try await driveFollowUpProbe(transport, afterFrameCount: 4, markdown: .null)
         let firstResult = try await first
         #expect(firstResult == nil)
 

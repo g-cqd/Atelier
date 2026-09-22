@@ -46,6 +46,16 @@ public actor ProcessSession {
     private var exitWaiters: [CheckedContinuation<Int32, Never>] = []
     private var stderrTail = Data()
 
+    /// True while one ``send(_:)`` call holds the write slot. ``StandardInputWriter/write(_:)`` suspends across
+    /// its own retries (the pipe filling up, or a partial write), and ``send(_:)`` being actor-isolated only
+    /// keeps its *synchronous* sections exclusive -- across an `await`, a second concurrent `send(_:)` call can
+    /// still be admitted and start writing before the first one has finished, interleaving two callers' bytes
+    /// on the same stdin and corrupting whatever framing (e.g. LSP's `Content-Length`) depends on each message
+    /// arriving whole and in order. This flag, with ``writeWaiters``, turns concurrent sends into a strict FIFO
+    /// queue instead: only the slot holder writes; everyone else parks until it is their turn.
+    private var writeInFlight = false
+    private var writeWaiters: [CheckedContinuation<Void, Never>] = []
+
     /// The most stderr bytes ``stderrSnapshot()`` keeps: 64 KiB.
     private static let stderrCapacity = 64 * 1_024
 
@@ -86,23 +96,65 @@ public actor ProcessSession {
         }
     }
 
-    /// Serialized write to the child's stdin.
+    /// Serialized write to the child's stdin: queued FIFO behind any ``send(_:)`` already in flight, and
+    /// retried until every byte of `data` has actually been accepted, not just attempted once.
     /// - Throws: ``ProcessSessionError/notRunning`` before ``start()`` has reached a running child,
     ///   ``ProcessSessionError/exited(status:stderrTail:)`` once the child has exited, or
-    ///   ``ProcessSessionError/writeFailed(_:)`` when the write itself fails.
+    ///   ``ProcessSessionError/writeFailed(_:)`` when the write itself fails or stalls with no progress.
     public func send(_ data: Data) async throws {
+        await acquireWriteSlot()
+        defer { releaseWriteSlot() }
+
         switch state {
             case .idle, .launching:
                 throw ProcessSessionError.notRunning
             case .exited(let status):
                 throw ProcessSessionError.exited(status: status, stderrTail: stderrTail)
             case .running(let writer):
-                do {
-                    _ = try await writer.write(data)
-                } catch {
-                    throw ProcessSessionError.writeFailed(String(describing: error))
-                }
+                try await writeFully(data, using: writer)
         }
+    }
+
+    /// Writes every byte of `data`, looping past a partial accept: ``StandardInputWriter/write(_:)`` can return
+    /// fewer bytes than it was given (e.g. the child exits mid-write) without throwing, and treating that as a
+    /// complete send would silently truncate a frame.
+    private func writeFully(_ data: Data, using writer: StandardInputWriter) async throws {
+        var remaining = data
+        while !remaining.isEmpty {
+            let written: Int
+            do {
+                written = try await writer.write(remaining)
+            } catch {
+                throw ProcessSessionError.writeFailed(String(describing: error))
+            }
+            guard written > 0 else {
+                throw ProcessSessionError.writeFailed(
+                    "write accepted 0 of \(remaining.count) remaining byte(s); the child is likely gone")
+            }
+            remaining = remaining.dropFirst(written)
+        }
+    }
+
+    /// Blocks until this call is the only one allowed to write, handing the slot off FIFO to whoever queued up
+    /// while the previous holder was writing.
+    private func acquireWriteSlot() async {
+        guard writeInFlight else {
+            writeInFlight = true
+            return
+        }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            writeWaiters.append(continuation)
+        }
+    }
+
+    private func releaseWriteSlot() {
+        guard !writeWaiters.isEmpty else {
+            writeInFlight = false
+            return
+        }
+        // Hand the slot directly to the next waiter rather than clearing `writeInFlight`, so a third concurrent
+        // send() that arrives in between still queues up behind it instead of racing it for the slot.
+        writeWaiters.removeFirst().resume()
     }
 
     /// `SIGTERM`, then `SIGKILL` after ``killGracePeriod``. Safe when never started; returns once the child, if

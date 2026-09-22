@@ -19,6 +19,16 @@ package enum HoverPanelSizing {
         return (maxHeight, true)
     }
 
+    /// The body's own height budget within `maxHeight`, once every other chrome slot (declaration, parameters,
+    /// returns, candidates, diagnostics, footer, and the spacing between them) has taken `chromeHeight`: what is
+    /// left over, floored at 60pt so the body is never squeezed to nothing even when the chrome alone already
+    /// exceeds the cap. Without this floor the body's own height constraint would ask for more room than the
+    /// clamped window actually has, and the excess would be clipped outside the window instead of reachable by
+    /// the body's own scroll.
+    package static func bodyHeightBudget(chromeHeight: CGFloat) -> CGFloat {
+        max(maxHeight - chromeHeight, 60)
+    }
+
     /// The panel's origin, in screen coordinates: below and left-aligned with `anchorRect` when it fits on
     /// `screenFrame`, flipped above the identifier when it would run off the bottom, and clamped horizontally so
     /// it never runs off either side.
@@ -229,12 +239,6 @@ package final class HoverDocPanel {
             if body.length > 0 { body.append(NSAttributedString(string: "\n\n")) }
             body.append(discussion)
         }
-        bodyTextView.textStorage?.setAttributedString(body)
-        bodyScrollView.isHidden = body.length == 0
-        bodyHeight?.constant =
-            bodyScrollView.isHidden
-            ? 0 : min(Self.measuredHeight(of: bodyTextView.textStorage!, width: innerWidth), HoverPanelSizing.maxHeight)
-
         renderParameters(document.parameters)
         parametersHeader.isHidden = document.parameters.isEmpty
         parametersGrid.isHidden = document.parameters.isEmpty
@@ -253,9 +257,41 @@ package final class HoverDocPanel {
 
         footerLabel.stringValue = document.provenance.label
         footerLabel.isHidden = document.provenance.label.isEmpty
+
+        // A declaration with nothing else to show (no prose from any tier, no parameters, no returns, no other
+        // candidates, no diagnostics) is a real, checked answer -- "nobody wrote anything about this" -- not a
+        // loading gap or a bug; saying so plainly keeps an otherwise-empty panel from reading as broken.
+        if body.length == 0, !declarationView.isHidden, parametersGrid.isHidden, returnsView.isHidden,
+            candidatesStack.isHidden, diagnosticsStack.isHidden
+        {
+            body.append(Self.noDocumentationPlaceholder)
+        }
+        bodyTextView.textStorage?.setAttributedString(body)
+        bodyScrollView.isHidden = body.length == 0
+        // Budgeted against every other slot's own height, not the panel's full cap outright -- otherwise a long
+        // discussion alongside a full declaration/parameters/diagnostics chrome could ask for more height than
+        // the clamped window actually has, clipping content the body's own scroller can never reach.
+        let budget = HoverPanelSizing.bodyHeightBudget(chromeHeight: chromeHeight().total)
+        bodyHeight?.constant =
+            bodyScrollView.isHidden
+            ? 0 : min(Self.measuredHeight(of: bodyTextView.textStorage!, width: innerWidth), budget)
     }
 
-    private func renderParameters(_ parameters: [HoverDocument.Field]) {
+    private static let noDocumentationPlaceholder = NSAttributedString(
+        string: "No documentation",
+        attributes: [
+            .font: NSFont.systemFont(ofSize: 12, weight: .regular), .foregroundColor: NSColor.tertiaryLabelColor
+        ]
+    )
+}
+
+// MARK: - Slot rendering, measurement, and view factories
+//
+// Pulled out of the class body itself (rather than merely organized within it) so the class's own body stays
+// well clear of SwiftLint's `type_body_length`: `private` in Swift already extends to every extension of a type
+// in the same file, so nothing here loses access to the class's stored properties.
+extension HoverDocPanel {
+    fileprivate func renderParameters(_ parameters: [HoverDocument.Field]) {
         while parametersGrid.numberOfRows > 0 {
             parametersGrid.removeRow(at: parametersGrid.numberOfRows - 1)
         }
@@ -270,9 +306,12 @@ package final class HoverDocPanel {
         }
     }
 
-    private func renderCandidates(_ candidates: [HoverDocument.Candidate]) {
+    fileprivate func renderCandidates(_ candidates: [HoverDocument.Candidate]) {
         candidatesStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let innerWidth = HoverPanelSizing.width - 24
+        // A hairline rule ahead of the first candidate, so overloads/other declarations read as a distinct
+        // group rather than floating ambiguously after the main declaration's body.
+        if !candidates.isEmpty { candidatesStack.addArrangedSubview(HoverDocPanel.makeCandidatesSeparator()) }
         for candidate in candidates {
             guard let declaration = candidate.declaration else { continue }
             let view = HoverDocPanel.makeCodeTextView()
@@ -287,7 +326,7 @@ package final class HoverDocPanel {
         }
     }
 
-    private func renderDiagnostics(_ diagnostics: [HoverDocument.DiagnosticEntry]) {
+    fileprivate func renderDiagnostics(_ diagnostics: [HoverDocument.DiagnosticEntry]) {
         diagnosticsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for entry in diagnostics {
             let row = NSStackView()
@@ -310,17 +349,31 @@ package final class HoverDocPanel {
 
     /// The total height the content stack's slots ask for at the panel's fixed width, measuring the two rich-text
     /// slots (the body and the declaration) with `NSTextLayoutManager` directly since they have not been laid out
-    /// in a window yet.
-    private func measuredContentHeight() -> CGFloat {
+    /// in a window yet. The body's own contribution here is capped at ``HoverPanelSizing/maxHeight`` only as a
+    /// coarse ceiling for this *overall* total (used to decide whether the panel needs to clamp and scroll at
+    /// all) -- the body's actual height constraint is budgeted more precisely in ``render(_:)`` against what the
+    /// other slots leave it, via ``chromeHeight()``.
+    fileprivate func measuredContentHeight() -> CGFloat {
+        let innerWidth = HoverPanelSizing.width - 24
+        var (total, visibleSlots) = chromeHeight()
+        if let body = bodyTextView.textStorage, !bodyScrollView.isHidden {
+            total += min(Self.measuredHeight(of: body, width: innerWidth), HoverPanelSizing.maxHeight)
+            visibleSlots += 1
+        }
+        total += CGFloat(max(visibleSlots - 1, 0)) * contentStack.spacing
+        return total
+    }
+
+    /// Every slot's height *except* the body's own: what `render(_:)` budgets the body's height constraint
+    /// against, so a long discussion cannot ask for more room than the panel's ``HoverPanelSizing/maxHeight``
+    /// cap actually leaves once the declaration, parameters, returns, candidates, diagnostics and footer have
+    /// all taken their share -- see ``HoverPanelSizing/bodyHeightBudget(chromeHeight:)``.
+    fileprivate func chromeHeight() -> (total: CGFloat, slots: Int) {
         let innerWidth = HoverPanelSizing.width - 24
         var total: CGFloat = contentStack.edgeInsets.top + contentStack.edgeInsets.bottom
         var visibleSlots = 0
         if let declaration = declarationView.textStorage, !declarationView.isHidden {
             total += Self.measuredHeight(of: declaration, width: innerWidth)
-            visibleSlots += 1
-        }
-        if let body = bodyTextView.textStorage, !bodyScrollView.isHidden {
-            total += min(Self.measuredHeight(of: body, width: innerWidth), HoverPanelSizing.maxHeight)
             visibleSlots += 1
         }
         if !parametersGrid.isHidden {
@@ -332,8 +385,8 @@ package final class HoverDocPanel {
             visibleSlots += 1
         }
         if !candidatesStack.isHidden {
-            total += CGFloat(candidatesStack.arrangedSubviews.count) * 24
-            visibleSlots += 1
+            total += 1 + CGFloat(candidatesStack.arrangedSubviews.count) * 24
+            visibleSlots += 2  // the separator plus the candidates stack itself
         }
         if !diagnosticsStack.isHidden {
             total += CGFloat(diagnosticsStack.arrangedSubviews.count) * 20
@@ -343,11 +396,10 @@ package final class HoverDocPanel {
             total += 16
             visibleSlots += 1
         }
-        total += CGFloat(max(visibleSlots - 1, 0)) * contentStack.spacing
-        return total
+        return (total, visibleSlots)
     }
 
-    private static func measuredHeight(of storage: NSTextStorage, width: CGFloat) -> CGFloat {
+    fileprivate static func measuredHeight(of storage: NSTextStorage, width: CGFloat) -> CGFloat {
         guard storage.length > 0 else { return 0 }
         let contentStorage = NSTextContentStorage()
         let layoutManager = NSTextLayoutManager()
@@ -359,7 +411,7 @@ package final class HoverDocPanel {
         return layoutManager.usageBoundsForTextContainer.height
     }
 
-    private static func makeCodeTextView() -> NSTextView {
+    fileprivate static func makeCodeTextView() -> NSTextView {
         let view = NSTextView()
         view.isEditable = false
         view.isSelectable = true
@@ -370,7 +422,7 @@ package final class HoverDocPanel {
         return view
     }
 
-    private static func makeProseTextView() -> NSTextView {
+    fileprivate static func makeProseTextView() -> NSTextView {
         let view = NSTextView()
         view.isEditable = false
         view.isSelectable = true
@@ -382,14 +434,14 @@ package final class HoverDocPanel {
         return view
     }
 
-    private static func makeSectionLabel(_ title: String) -> NSTextField {
+    fileprivate static func makeSectionLabel(_ title: String) -> NSTextField {
         let label = NSTextField(labelWithString: title.uppercased())
         label.font = .systemFont(ofSize: 10, weight: .semibold)
         label.textColor = .tertiaryLabelColor
         return label
     }
 
-    private static func makeFooterLabel() -> NSTextField {
+    fileprivate static func makeFooterLabel() -> NSTextField {
         let label = NSTextField(labelWithString: "")
         label.font = .systemFont(ofSize: 10, weight: .regular)
         label.textColor = .tertiaryLabelColor
@@ -401,6 +453,15 @@ extension HoverDocPanel {
     /// `NSTrackingArea` dispatch by owner selector, the same idiom ``DocHoverController`` itself relies on.
     @objc(mouseEntered:) fileprivate func mouseEntered(with event: NSEvent) { pointerIsInside = true }
     @objc(mouseExited:) fileprivate func mouseExited(with event: NSEvent) { pointerIsInside = false }
+
+    /// A hairline separator sized to the panel's inner width, used ahead of ``renderCandidates(_:)``'s first row.
+    fileprivate static func makeCandidatesSeparator() -> NSBox {
+        let box = NSBox()
+        box.boxType = .separator
+        box.translatesAutoresizingMaskIntoConstraints = false
+        box.widthAnchor.constraint(equalToConstant: HoverPanelSizing.width - 24).isActive = true
+        return box
+    }
 }
 
 extension HoverDocPanel {

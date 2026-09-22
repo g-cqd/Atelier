@@ -18,6 +18,8 @@ extension DiffViewerModel {
         model.onHeadChanged = { [weak self] in self?.reloadForHeadChange() }
         model.onRefsChanged = { [weak self] in self?.refreshBothSidesRepositoryInfo() }
         freshness = model
+        left.onFetched = { [weak self] in self?.handleFetchCompleted(for: .left) }
+        right.onFetched = { [weak self] in self?.handleFetchCompleted(for: .right) }
         updateFreshness()
     }
 
@@ -42,13 +44,55 @@ extension DiffViewerModel {
         compareGitChanges(in: root, leftRef: leftRef)
     }
 
-    /// A loose or packed ref changed outside HEAD: a fetch moved a remote-tracking branch, a branch was created or
-    /// deleted elsewhere. Refreshes both sides' repository info (the branch/tag menus) without touching the diff
-    /// itself — nothing the comparison is currently showing depends on a ref it isn't `HEAD` or checked out as.
+    /// A loose or packed ref changed outside HEAD: a fetch moved a remote-tracking branch, a commit landed on the
+    /// checked-out branch (which moves `refs/heads/<branch>` without touching the symbolic `.git/HEAD` file
+    /// itself, so this fires instead of ``onHeadChanged``), a branch was created or deleted elsewhere.
+    ///
+    /// A side parked on a named ref (``SideState/refChoice`` is ``SideState/RefChoice/ref(_:)``, typically `HEAD`)
+    /// resolves that name fresh on every ``SideState/reload()``, so it may now show a different commit than what
+    /// is on screen; a side on the working tree does not name any ref and cannot be affected this way. Telling a
+    /// ref that actually moved from a fixed SHA that merely looks like one would need a resolve this handler has
+    /// no cheap way to reach from here, so this recomputes whenever either side names a ref at all rather than
+    /// missing a real move -- a conservative trade of an occasional redundant reload for never showing a stale
+    /// diff. Both sides on the working tree keeps the cheap menu-only refresh.
     private func refreshBothSidesRepositoryInfo() {
+        guard !isParkedOnARef(left), !isParkedOnARef(right) else {
+            reloadSources()
+            return
+        }
         taskProvider.task { [weak self] in
             await self?.left.refreshRepositoryInfo()
             await self?.right.refreshRepositoryInfo()
         }
+    }
+
+    /// Whether `side` is compared as a named ref (``SideState/RefChoice/ref(_:)``) rather than the working tree.
+    private func isParkedOnARef(_ side: SideState) -> Bool {
+        if case .ref = side.refChoice { true } else { false }
+    }
+
+    /// A fetch on `fetched`'s side landed and its own repository info is already refreshed. Refreshes the other
+    /// side too when it shares the same repository -- a fetch on one side updates the whole repository's remote
+    /// refs, both sides' menus -- and re-runs the comparison, the same ``reloadSources()`` a manual reload would,
+    /// when either side is parked on a remote-tracking ref the fetch could have moved: resolving a name like
+    /// `origin/develop` again is exactly what shows the remote's new tip.
+    private func handleFetchCompleted(for fetched: Side) {
+        let side = fetched == .left ? left : right
+        let other = fetched == .left ? right : left
+        guard let root = side.repository?.root else { return }
+        taskProvider.task { [weak self] in
+            guard let self, side.repository?.root == root else { return }
+            let sharesRoot = other.repository?.root == root
+            if sharesRoot { await other.refreshRepositoryInfo() }
+            guard self.tracksRemoteRef(side) || (sharesRoot && self.tracksRemoteRef(other)) else { return }
+            self.reloadSources()
+        }
+    }
+
+    /// Whether `side` is parked on a ref that names one of its repository's remotes, the ref shape a fetch's
+    /// `refs/remotes/*` update actually moves.
+    private func tracksRemoteRef(_ side: SideState) -> Bool {
+        guard case .ref(let ref) = side.refChoice else { return false }
+        return RepositoryFetch.isRemoteTrackingRef(ref, remotes: side.remoteNames)
     }
 }

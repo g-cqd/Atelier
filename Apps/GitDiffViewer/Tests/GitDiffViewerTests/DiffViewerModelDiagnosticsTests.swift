@@ -45,10 +45,8 @@ struct DiffViewerModelDiagnosticsTests {
         harness.reader.gitRenames = ["Old.swift": "New.swift"]
         try await harness.load(sut)
 
-        let session = DiagnosticsSession(
-            engine: StubDiagnosticsRunner(), taskProvider: RuntimeTaskProviderBridge(harness.taskProvider))
-        let settings = sut.settings
-        let diagnosticsModel = DiagnosticsModel(session: session, settings: settings)
+        let diagnosticsModel = DiagnosticsModel(
+            engine: StubDiagnosticsRunner(), settings: sut.settings, taskProvider: harness.taskProvider)
         sut.diagnostics = diagnosticsModel
 
         #expect(sut.diagnosticSeverityCounts(for: "Old.swift").isEmpty)

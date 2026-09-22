@@ -98,25 +98,41 @@ package final class DocHoverController: NSObject {
         closePanel()
     }
 
+    /// The clip view origin last acted on, so a bounds-changed notification that fires without an actual scroll
+    /// (tracking-area churn, the panel's own child-window attach nudging layout) is a cheap no-op rather than a
+    /// spurious recompute that can race the fragment ``HoverHitTester`` needs.
+    private var lastScrollOrigin: NSPoint?
+
     /// Tracks the panel to its shown identifier as the clip view scrolls, rather than closing outright: a
     /// scroll-to-dismiss felt like a bug to users reading a doc panel while scrolling the pane under it. Recomputes
     /// the identifier's current on-screen rect from its document-absolute ``HoverHit/identifierRange`` (the
     /// row/column pair alone is not enough once ``NSTextLayoutManager``'s own viewport-based layout has discarded
-    /// the fragment the original ``HoverHit/anchorRect`` was measured from); closes instead when that no longer
-    /// resolves to a rect, or the rect has scrolled outside the text view's own visible rect -- either way, the
-    /// panel would otherwise show for content the user can no longer see it point at.
+    /// the fragment the original ``HoverHit/anchorRect`` was measured from); closes only when that recompute
+    /// *succeeds* and lands outside the text view's own visible rect.
     ///
-    /// One `setFrameOrigin` per scroll notification is cheap enough that no debounce or `CADisplayLink` coalescing
-    /// is worth the complexity; revisit only if this is ever visibly janky.
+    /// A recompute that comes back `nil` is not itself grounds to close: a detached-storage pane (``EmbeddedDiffTextView``'s
+    /// own ``StaticTextLayout``, laid out lazily against its own viewport) can fail to resolve a fragment for a
+    /// range `NSTextLayoutManager` has not been asked to ensure yet, even though the identifier is still right
+    /// there on screen -- closing a panel the user is still reading on a transient layout miss reads as a bug
+    /// worse than the one this scroll-follow path fixed. The panel simply stays where it last was until a
+    /// recompute either succeeds or the caller detaches/invalidates for some other reason.
+    ///
+    /// One `setFrameOrigin` per genuine scroll notification is cheap enough that no debounce or `CADisplayLink`
+    /// coalescing is worth the complexity; revisit only if this is ever visibly janky.
     @objc private func scrollViewBoundsDidChange(_ notification: Notification) {
         guard panel.isVisible, let shownHit, let textView else {
             invalidate()
             return
         }
-        guard
-            let anchorRect = HoverHitTester.anchorRect(for: shownHit.identifierRange, textView: textView),
-            textView.visibleRect.intersects(anchorRect)
-        else {
+        if let clipView = notification.object as? NSClipView {
+            let origin = clipView.bounds.origin
+            guard lastScrollOrigin != origin else { return }
+            lastScrollOrigin = origin
+        }
+        guard let anchorRect = HoverHitTester.anchorRect(for: shownHit.identifierRange, textView: textView) else {
+            return
+        }
+        guard textView.visibleRect.intersects(anchorRect) else {
             invalidate()
             return
         }
@@ -183,11 +199,13 @@ package final class DocHoverController: NSObject {
     private func show(document: HoverDocument, for hit: HoverHit) {
         guard let textView else { return }
         shownHit = hit
+        lastScrollOrigin = textView.enclosingScrollView?.contentView.bounds.origin
         panel.show(document: document, anchorRect: hit.anchorRect, in: textView)
     }
 
     private func closePanel() {
         panel.close()
         shownHit = nil
+        lastScrollOrigin = nil
     }
 }

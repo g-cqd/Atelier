@@ -174,12 +174,16 @@ package final class RepositoryFreshness {
         generation &+= 1
         let generation = generation
 
+        // `.git` may be a linked worktree's pointer file rather than a directory: its private `HEAD` and the
+        // refs it shares with every other worktree of the same repository can both live entirely outside `root`,
+        // so watching only what a plain repository's layout would suggest would never see either move.
+        let location = GitMetadataLocation.resolve(root: Self.normalizedPath(root), read: Self.readGitMetadataFile)
         let paths = WatchedPaths(
             root: Self.normalizedPath(root),
-            gitDir: Self.normalizedPath(root.appending(path: ".git", directoryHint: .isDirectory)),
-            head: Self.normalizedPath(root.appending(path: ".git/HEAD", directoryHint: .notDirectory)),
-            packedRefs: Self.normalizedPath(root.appending(path: ".git/packed-refs", directoryHint: .notDirectory)),
-            refs: Self.normalizedPath(root.appending(path: ".git/refs", directoryHint: .isDirectory)))
+            gitDir: location.gitDir,
+            head: location.gitDir + "/HEAD",
+            packedRefs: location.commonDir + "/packed-refs",
+            refs: location.commonDir + "/refs")
 
         let watcher = makeWatcher()
         self.watcher = watcher
@@ -207,6 +211,13 @@ package final class RepositoryFreshness {
             path.removeLast()
         }
         return path
+    }
+
+    /// Reads a small git metadata file (`.git` itself, or a worktree git dir's `commondir`) whole, or nil when it
+    /// cannot be read as text -- a directory (the plain-repository case), missing, or unreadable for any other
+    /// reason. The seam ``GitMetadataLocation/resolve(root:read:)`` runs its resolution through.
+    private static func readGitMetadataFile(_ path: String) -> String? {
+        try? String(contentsOfFile: path, encoding: .utf8)
     }
 
     private func route(_ event: FileWatcher.FileWatchEvent, paths: WatchedPaths, generation: Int) {

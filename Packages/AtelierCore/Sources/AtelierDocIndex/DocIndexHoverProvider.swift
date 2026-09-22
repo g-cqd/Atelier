@@ -17,11 +17,18 @@ public struct DocIndexHoverProvider: HoverProvider {
         guard !entries.isEmpty else { return nil }
         let sameURI = entries.filter { $0.uri == query.documentURI }
         let shown = sameURI.isEmpty ? Array(entries.prefix(3)) : sameURI
-        let markdown =
-            shown.map { entry in
-                "```swift\n\(entry.signature)\n```\n\n\(entry.markdown)"
+        // The index already collapses duplicate/superseded-history declarations, but two distinct entries can
+        // still render to the identical block (e.g. same signature and doc comment reached via different paths);
+        // a final guard on the rendered text itself keeps those from doubling up in the panel.
+        var seenBlocks: Set<String> = []
+        var blocks: [String] = []
+        for entry in shown {
+            let block = "```swift\n\(entry.signature)\n```\n\n\(entry.markdown)"
+            if seenBlocks.insert(block).inserted {
+                blocks.append(block)
             }
-            .joined(separator: "\n\n---\n\n")
+        }
+        let markdown = blocks.joined(separator: "\n\n---\n\n")
         return HoverContent(markdown: markdown, source: .docIndex)
     }
 }

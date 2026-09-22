@@ -1,9 +1,15 @@
+package import AemiCore
 package import AtelierDiagnostics
 package import Foundation
 import Observation
 
 /// The window's diagnostics state: wires a ``DiagnosticsSession`` to the comparison and to ``ViewerSettings``,
 /// and exposes findings grouped by file for the explorers and detail area to annotate.
+///
+/// ``DiagnosticsSession`` is core-tier and caller-driven (no stored task, no debounce): this model is the caller,
+/// so it owns the debounce (250 ms by default, coalescing a burst of comparison/settings changes into one run),
+/// the cancel-and-replace generation that supersedes a still-running analysis, and the task that drives it all
+/// through its own ``TaskProvider``.
 @Observable
 @MainActor
 package final class DiagnosticsModel {
@@ -37,18 +43,36 @@ package final class DiagnosticsModel {
 
     private let session: DiagnosticsSession
     private let settings: ViewerSettings
+    private let taskProvider: any TaskProvider
+    private let clock: any Clock<Duration>
+    private let debounce: Duration
     /// Each tool's latest findings, kept separately so one tool's fresh result replaces only its own
     /// contribution to ``findingsByFile`` without disturbing another tool's still-in-flight one.
     @ObservationIgnored private var findingsByTool: [DiagnosticTool: [Finding]] = [:]
     /// The request the current comparison would run, kept so a settings change (such as re-enabling a tool)
     /// can re-run it without waiting for the next comparison.
     @ObservationIgnored private var lastRequest: DiagnosticsEngine.Request?
+    /// Bumped by every ``run(_:)`` and ``cancel()``; a debounced or in-flight run whose captured generation no
+    /// longer matches has already been superseded or cancelled, and its updates are dropped when they land.
+    @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var task: Task<Void, Never>?
 
-    package init(session: DiagnosticsSession, settings: ViewerSettings) {
-        self.session = session
+    /// - Parameters:
+    ///   - engine: Runs each enabled tool; the production caller passes a ``DiagnosticsEngine``, a test a fake.
+    ///   - settings: Supplies which tools are enabled and whether diagnostics run at all.
+    ///   - taskProvider: Spawns the debounce and the analysis it guards.
+    ///   - clock: Drives the debounce; a test injects a virtual one.
+    ///   - debounce: Trailing coalesce before a run starts, kept under ``RepositoryFreshness``'s tree debounce so
+    ///     a save's diagnostics never race its freshness reload.
+    package init(
+        engine: any DiagnosticsRunning, settings: ViewerSettings, taskProvider: any TaskProvider,
+        clock: any Clock<Duration> = ContinuousClock(), debounce: Duration = .milliseconds(250)
+    ) {
+        self.session = DiagnosticsSession(engine: engine)
         self.settings = settings
-        session.onUpdate = { [weak self] update in self?.apply(update) }
-        session.onRunStateChanged = { [weak self] running in self?.isRunning = running }
+        self.taskProvider = taskProvider
+        self.clock = clock
+        self.debounce = debounce
         settings.addObserver(self) { [weak self] change in self?.settingsChanged(change) }
     }
 
@@ -57,7 +81,7 @@ package final class DiagnosticsModel {
     package func comparisonChanged(root: URL?, files: [DiagnosticsEngine.FileTarget], corpusFingerprint: String?) {
         guard let root else {
             lastRequest = nil
-            session.cancel()
+            cancel()
             clear()
             return
         }
@@ -66,12 +90,12 @@ package final class DiagnosticsModel {
             root: root, files: files, corpusFingerprint: corpusFingerprint, tools: tools)
         lastRequest = request
         guard settings.diagnosticsEnabled, !tools.isEmpty else {
-            session.cancel()
+            cancel()
             clear()
             return
         }
         resetForNewRun()
-        session.analyze(request)
+        run(request)
     }
 
     /// Drops every finding and run state; call when diagnostics are turned off or nothing is being compared.
@@ -85,7 +109,10 @@ package final class DiagnosticsModel {
         onFindingsChanged?(previousPaths)
     }
 
-    private func apply(_ update: DiagnosticsSession.Update) {
+    /// Validates `generation` and applies `update` in the same actor-isolated step, so a run superseded between
+    /// the check and the mutation (by a new comparison or ``cancel()``) can never repopulate cleared findings.
+    private func apply(_ update: DiagnosticsSession.Update, generation: Int) {
+        guard self.generation == generation else { return }
         let previousPaths = Set(findingsByTool[update.result.tool]?.map(\.file) ?? [])
         findingsByTool[update.result.tool] = update.result.findings
         runStates[update.result.tool] = update.result.status
@@ -117,21 +144,53 @@ package final class DiagnosticsModel {
     private func settingsChanged(_ change: ViewerSettings.Change) {
         guard change == .diagnostics else { return }
         guard settings.diagnosticsEnabled else {
-            session.cancel()
+            cancel()
             clear()
             return
         }
         guard var request = lastRequest else { return }
         let tools = settings.toolLocations.filter(\.value.isEnabled)
         guard !tools.isEmpty else {
-            session.cancel()
+            cancel()
             clear()
             return
         }
         request.tools = tools
         lastRequest = request
         resetForNewRun()
-        session.analyze(request)
+        run(request)
+    }
+
+    /// Debounces, cancels whatever run is still in flight, and hands `request` to the session, applying each
+    /// tool's update as it streams back. The debounce and cancel-and-replace are this model's own — the session
+    /// itself is caller-driven and does neither.
+    private func run(_ request: DiagnosticsEngine.Request) {
+        task?.cancel()
+        generation &+= 1
+        let generation = generation
+        let session = session
+        let clock = clock
+        let debounce = debounce
+
+        task = taskProvider.task { [weak self] in
+            try? await clock.sleep(for: debounce)
+            guard !Task.isCancelled, let self, self.generation == generation else { return }
+            self.isRunning = true
+            await session.analyze(request) { [weak self] update in
+                await self?.apply(update, generation: generation)
+            }
+            guard self.generation == generation else { return }
+            self.isRunning = false
+        }
+    }
+
+    /// Stops the current run (debounced or in flight) without starting another; no further updates are applied
+    /// for it.
+    private func cancel() {
+        task?.cancel()
+        task = nil
+        generation &+= 1
+        isRunning = false
     }
 }
 

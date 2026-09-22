@@ -1,3 +1,4 @@
+import AemiCore
 import AemiTesting
 import Foundation
 import Testing
@@ -60,5 +61,34 @@ struct SideStateFreshnessTests {
         await sut.refreshRepositoryInfo()
 
         #expect(sut.repository?.branches == ["main"])
+    }
+
+    @Test
+    func `refreshRepositoryInfo never publishes over a repository this side has since moved away from`() async throws {
+        let reader = FakeSourceReader()
+        let taskProvider = TaskProviderSpy()
+        let repoA = URL(filePath: "/repoA", directoryHint: .isDirectory)
+        let repoB = URL(filePath: "/repoB", directoryHint: .isDirectory)
+        let initialA = RepositoryInfo(root: repoA, branches: ["main"], tags: [], commits: [])
+        let initialB = RepositoryInfo(root: repoB, branches: ["develop"], tags: [], commits: [])
+        reader.repositories[repoA] = initialA
+        reader.repositories[repoB] = initialB
+        let sut = makeSUT(reader: reader, taskProvider: taskProvider)
+        sut.load(.directory(repoA), repository: initialA)
+        try await taskProvider.waitForAllTasks()
+
+        // A's re-read is gated; `repositoryInfoRequests` confirms it actually started (and so captured A as the
+        // repository to re-read) before this side moves on to B entirely.
+        reader.gate["repositoryInfo:\(repoA.path(percentEncoded: false))"] = AsyncProbe<Void>()
+        taskProvider.task { await sut.refreshRepositoryInfo() }
+        _ = try await reader.repositoryInfoRequests.next()
+
+        sut.load(.directory(repoB), repository: initialB)
+        reader.gate["repositoryInfo:\(repoA.path(percentEncoded: false))"]?.send(())
+        try await taskProvider.waitForAllTasks()
+
+        // A's stale read must never overwrite B's already-published info.
+        #expect(sut.repository?.root == repoB)
+        #expect(sut.repository?.branches == ["develop"])
     }
 }

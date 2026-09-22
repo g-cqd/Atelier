@@ -54,6 +54,9 @@ struct SourceToolbarControl: NSViewRepresentable {
         let repository: RepositoryInfo?
         let refChoice: SideState.RefChoice
         let isSingleFile: Bool
+        let isFetching: Bool
+        let primaryRemoteName: String?
+        let fetchError: String?
 
         /// A ref or a file name keeps its last path component, ellipsized in the middle past 32 characters; the
         /// full name stays in the tooltip and the menu.
@@ -108,6 +111,9 @@ struct SourceToolbarControl: NSViewRepresentable {
             repository = side.repository
             refChoice = side.refChoice
             isSingleFile = side.source?.isSingleFile == true
+            isFetching = side.isFetching
+            primaryRemoteName = side.remoteNames.first
+            fetchError = side.lastFetchError
         }
     }
 
@@ -120,6 +126,7 @@ struct SourceToolbarControl: NSViewRepresentable {
         }
 
         func menu(for snapshot: Snapshot) -> NSMenu {
+            if snapshot.repository != nil { side.loadRemotesIfNeeded() }
             let menu = NSMenu()
             menu.autoenablesItems = false
             let heading = NSMenuItem(
@@ -153,6 +160,8 @@ struct SourceToolbarControl: NSViewRepresentable {
                         titles: repository.commits.map { "\($0.shortHash) \($0.subject)" }, current: snapshot.refChoice)
                 )
                 menu.addItem(item("Commit or ref…", #selector(enterRef)))
+                menu.addItem(.separator())
+                addFetchItems(to: menu, snapshot: snapshot)
                 menu.addItem(.separator())
             }
             menu.addItem(item("Choose Folder or Repository…", #selector(chooseDirectory)))
@@ -190,6 +199,26 @@ struct SourceToolbarControl: NSViewRepresentable {
             item.submenu = submenu
             item.isEnabled = !refs.isEmpty
             return item
+        }
+
+        /// "Fetch origin…", disabled and renamed "Fetching origin…" while one runs, with a second, disabled line
+        /// naming the last failure, if any -- the fetch feature's whole presence in the menu is this one call.
+        private func addFetchItems(to menu: NSMenu, snapshot: Snapshot) {
+            let state = RepositoryFetch.MenuItem(
+                remoteName: snapshot.primaryRemoteName, isFetching: snapshot.isFetching, lastError: snapshot.fetchError
+            )
+            let fetchItem = NSMenuItem(title: state.title, action: #selector(fetch), keyEquivalent: "")
+            fetchItem.target = self
+            fetchItem.isEnabled = state.isEnabled
+            menu.addItem(fetchItem)
+            guard let errorLine = state.errorLine else { return }
+            let errorItem = NSMenuItem(title: errorLine, action: nil, keyEquivalent: "")
+            errorItem.isEnabled = false
+            menu.addItem(errorItem)
+        }
+
+        @objc private func fetch() {
+            Task { await side.fetch() }
         }
 
         @objc func chooseWorkingTree() { side.refChoice = .workingTree }
