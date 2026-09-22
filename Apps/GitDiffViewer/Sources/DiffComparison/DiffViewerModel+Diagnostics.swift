@@ -63,7 +63,8 @@ extension DiffViewerModel {
                     oldText: diff.model.oldText, newText: diff.model.newText, oldBlobID: filePair.old?.blobID,
                     newBlobID: filePair.new?.blobID)
             }
-        hoverDocs.comparisonChanged(root: root, files: files)
+        hoverDocs.comparisonChanged(
+            root: root, files: files, corpusReader: reader, corpusSource: right.source, corpusEntries: right.entries)
     }
 
     /// This file's diagnostics, by its own left path: looked up under the right path ``findingsByFile`` keys them

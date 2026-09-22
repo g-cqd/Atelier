@@ -47,7 +47,9 @@ package final class DiffViewerModel {
     // Widened from `private` to `internal` so `DiffViewerModel+Diagnostics.swift` can read them.
     let pipeline: RenderPipeline
     private let preparer: DiffPreparer
-    private let reader: any SourceReading
+    // Widened from `private` to `internal` so `DiffViewerModel+Diagnostics.swift`'s `updateHoverDocs()` can feed
+    // it the right side's own reader for the background corpus-broadening pass.
+    let reader: any SourceReading
     let taskProvider: any TaskProvider
     @ObservationIgnored private var sourcesTask: Task<Void, Never>?
     @ObservationIgnored private var prologueTask: Task<LoadedSides?, Never>?

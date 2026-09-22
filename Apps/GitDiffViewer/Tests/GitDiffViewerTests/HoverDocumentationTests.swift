@@ -1,5 +1,7 @@
+import AemiTesting
 import AtelierLSP
 import AtelierSyntaxModel
+import DiffGit
 import Foundation
 import Testing
 
@@ -113,6 +115,103 @@ private func query(line: Int = 0, column: Int = 0) -> HoverQuery {
         }
         #expect(content?.markdown.contains("Adds two numbers.") == true)
         #expect(content?.source == .docIndex)
+    }
+
+    // MARK: Corpus broadening
+
+    private static let rightRoot = URL(filePath: "/right", directoryHint: .isDirectory)
+
+    @Test func aSymbolDeclaredOutsideTheChangesetResolvesOnceTheBackgroundCorpusPassIndexesItsFile() async {
+        let model = HoverDocumentationModel(lspRegistry: nil)
+        let reader = FakeSourceReader()
+        let restPath = "Sources/Rest.swift"
+        reader.contents[restPath] = """
+            /// Doubles a number.
+            func double(_ x: Int) -> Int { x * 2 }
+            """
+        // "double" is only used here, not declared: the fast, changed-files-only pass has nothing to say about it.
+        let changed = HoverDocumentationModel.FileEntry(
+            index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift",
+            oldText: "let value = double(3)\n", newText: "let value = double(3)\n", oldBlobID: "old",
+            newBlobID: "new")
+        let restEntry = SourceEntry(relativePath: restPath, blobID: "rest", size: 64)
+
+        model.comparisonChanged(
+            root: nil, files: [changed], corpusReader: reader, corpusSource: .directory(Self.rightRoot),
+            corpusEntries: [restEntry])
+
+        // Both the fast and the background pass are fire-and-forget; poll briefly rather than sleeping a fixed
+        // amount. "double" sits at columns 12..<18 of "let value = double(3)".
+        var content: HoverContent?
+        for _ in 0 ..< 100 {
+            content = await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 13)
+            if content != nil { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(content?.markdown.contains("Doubles a number.") == true)
+    }
+
+    @Test func theBackgroundPassNeverIndexesAFileOverTheSizeCap() async {
+        let model = HoverDocumentationModel(lspRegistry: nil)
+        let reader = FakeSourceReader()
+        let hugePath = "Sources/Huge.swift"
+        reader.contents[hugePath] = """
+            /// Doubles a number.
+            func double(_ x: Int) -> Int { x * 2 }
+            """
+        let changed = HoverDocumentationModel.FileEntry(
+            index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift",
+            oldText: "let value = double(3)\n", newText: "let value = double(3)\n", oldBlobID: "old",
+            newBlobID: "new")
+        let hugeEntry = SourceEntry(
+            relativePath: hugePath, blobID: "huge", size: HoverDocumentationModel.maxCorpusFileSize + 1)
+
+        model.comparisonChanged(
+            root: nil, files: [changed], corpusReader: reader, corpusSource: .directory(Self.rightRoot),
+            corpusEntries: [hugeEntry])
+
+        // Give the background pass every chance to run before asserting it never touched the oversized file.
+        try? await Task.sleep(for: .milliseconds(100))
+        let content = await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 13)
+        #expect(content == nil)
+        try? reader.contentRequests.expectNoBufferedElements()
+    }
+
+    @Test func aStaleBackgroundPassNeverLandsAfterANewerComparisonSupersedesIt() async throws {
+        let model = HoverDocumentationModel(lspRegistry: nil)
+        let reader = FakeSourceReader()
+        let restPath = "Sources/Rest.swift"
+        let gate = AsyncProbe<Void>()
+        reader.gate[restPath] = gate
+        reader.contents[restPath] = """
+            /// Doubles a number.
+            func double(_ x: Int) -> Int { x * 2 }
+            """
+        let restEntry = SourceEntry(relativePath: restPath, blobID: "rest", size: 64)
+        let firstChanged = HoverDocumentationModel.FileEntry(
+            index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift",
+            oldText: "let value = double(3)\n", newText: "let value = double(3)\n", oldBlobID: "old",
+            newBlobID: "new")
+
+        model.comparisonChanged(
+            root: nil, files: [firstChanged], corpusReader: reader, corpusSource: .directory(Self.rightRoot),
+            corpusEntries: [restEntry])
+        // Waits for the stale pass to actually start reading the corpus file (and block on its gate) before a
+        // newer comparison supersedes it, so the guard this test wants is exercised rather than skipped.
+        _ = try await reader.contentRequests.next()
+
+        let secondChanged = HoverDocumentationModel.FileEntry(
+            index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift", oldText: "let x = 1\n",
+            newText: "let x = 1\n", oldBlobID: "old2", newBlobID: "new2")
+        model.comparisonChanged(root: nil, files: [secondChanged])
+        // Only now does the stale pass's blocked read resolve, late enough that landing would clobber the newer
+        // comparison's corpus if nothing guarded against it.
+        gate.send(())
+
+        // Give the stale pass every chance to land wrongly before asserting it never did.
+        try? await Task.sleep(for: .milliseconds(100))
+        let content = await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 13)
+        #expect(content == nil)
     }
 
     @Test func theOldSideNeverConsultsTheLanguageServer() async {

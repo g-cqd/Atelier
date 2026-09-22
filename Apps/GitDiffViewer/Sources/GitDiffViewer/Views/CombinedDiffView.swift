@@ -105,7 +105,8 @@ private struct FileCard: View {
                 if layouts.unified != nil {
                     EmbeddedDiffTextView(
                         layouts: layouts, side: .unified, gutter: .dual, width: contentWidth, wrapMode: wrapMode,
-                        onGapDrag: drag, currentExpansion: expansion, onDisplayed: displayed)
+                        onGapDrag: drag, currentExpansion: expansion, onDisplayed: displayed,
+                        hoverEnabled: hoverEnabled, hoverResolver: hoverResolver)
                 }
             case .split, .stacked:
                 if layouts.old != nil, layouts.new != nil {
@@ -117,13 +118,15 @@ private struct FileCard: View {
                     stack {
                         EmbeddedDiffTextView(
                             layouts: layouts, side: .old, gutter: .old, width: paneWidth, wrapMode: wrapMode,
-                            onGapDrag: drag, currentExpansion: expansion, onDisplayed: displayed
+                            onGapDrag: drag, currentExpansion: expansion, onDisplayed: displayed,
+                            hoverEnabled: hoverEnabled, hoverResolver: hoverResolver
                         )
                         .frame(maxWidth: .infinity)
                         Divider()
                         EmbeddedDiffTextView(
                             layouts: layouts, side: .new, gutter: .new, width: paneWidth, wrapMode: wrapMode,
-                            onGapDrag: drag, currentExpansion: expansion, onDisplayed: displayed
+                            onGapDrag: drag, currentExpansion: expansion, onDisplayed: displayed,
+                            hoverEnabled: hoverEnabled, hoverResolver: hoverResolver
                         )
                         .frame(maxWidth: .infinity)
                     }
@@ -137,6 +140,26 @@ private struct FileCard: View {
 
     private func expansion(_ key: GapKey) -> GapExpansion {
         model.expansion(of: key)
+    }
+
+    private var hoverEnabled: Bool {
+        model.settings.showsHoverDocumentation && model.hoverDocs != nil
+    }
+
+    /// Resolves a hover hit through ``DiffComparison/HoverDocumentationModel`` and renders its markdown for the
+    /// popover, the same as ``DiagnosticDiffTextView``'s own resolver. Each rendered row already carries the
+    /// comparison's global `fileIndex` (``RenderPipeline`` renders every card with its own offset into the
+    /// changeset), so no translation from this card's own path is needed.
+    private var hoverResolver: (@Sendable (HoverHit) async -> AttributedString?)? {
+        guard let hoverDocs = model.hoverDocs else { return nil }
+        return { hit in
+            let side: HoverQuerySide = hit.side == .new ? .new : .old
+            guard
+                let content = await hoverDocs.hover(
+                    fileIndex: hit.fileIndex, side: side, line: hit.line, utf16Column: hit.utf16Column)
+            else { return nil }
+            return renderHoverMarkdown(content.markdown)
+        }
     }
 }
 

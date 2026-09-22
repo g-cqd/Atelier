@@ -18,11 +18,15 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     package var currentExpansion: ((GapKey) -> GapExpansion)?
     /// Called once the pane shows a new render.
     package var onDisplayed: (() -> Void)?
+    /// Shows documentation for the identifier under the pointer after it rests there, the same as ``DiffTextView``.
+    package var hoverEnabled = false
+    package var hoverResolver: (@Sendable (HoverHit) async -> AttributedString?)?
 
     package init(
         layouts: CardLayouts, side: RenderedSide, gutter: GutterStyle, width: CGFloat, wrapMode: WrapMode = .viewport,
         onGapDrag: ((GapMarker, GapExpansion, Int) -> Void)? = nil, currentExpansion: ((GapKey) -> GapExpansion)? = nil,
-        onDisplayed: (() -> Void)? = nil
+        onDisplayed: (() -> Void)? = nil, hoverEnabled: Bool = false,
+        hoverResolver: (@Sendable (HoverHit) async -> AttributedString?)? = nil
     ) {
         self.layouts = layouts
         self.side = side
@@ -32,6 +36,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         self.onGapDrag = onGapDrag
         self.currentExpansion = currentExpansion
         self.onDisplayed = onDisplayed
+        self.hoverEnabled = hoverEnabled
+        self.hoverResolver = hoverResolver
     }
 
     private var layout: StaticTextLayout? {
@@ -78,6 +84,9 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         let pane = DiffPaneView(
             gutterView: gutterView, scrollView: nil, contentView: scrollView, minimapView: minimapView)
         context.coordinator.textView = textView
+        context.coordinator.hoverController.attach(to: textView) { [weak coordinator = context.coordinator] in
+            coordinator?.layout?.rendered
+        }
         update(pane, context: context)
         return pane
     }
@@ -87,6 +96,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     }
 
     package static func dismantleNSView(_ pane: DiffPaneView, coordinator: Coordinator) {
+        coordinator.hoverController.detach()
         coordinator.detach()
     }
 
@@ -104,6 +114,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
             pane.gutterView.rendered = layout.rendered
             onDisplayed?()
         }
+        coordinator.hoverController.isEnabled = hoverEnabled
+        coordinator.hoverController.resolve = hoverResolver
         // Lines that fit take the clip view's width exactly and follow it: the width the card measured can differ
         // from the clip by a point or two, and a text view wider by that much would scroll sideways by that much.
         let scrollView = pane.contentView as? NSScrollView
@@ -144,6 +156,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         package private(set) var layout: StaticTextLayout?
         package var appliedSize: NSSize?
         package var appliedMode: WrapMode?
+        package let hoverController = DocHoverController()
 
         /// Moves the text view's layout manager onto the layout's content storage, leaving whichever storage it
         /// was on, so the view shows the measured text and its row spacing rather than a copy.
@@ -155,6 +168,9 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
             textView.backgroundColor = layout.rendered.palette.background
             textView.selectedTextAttributes = [.backgroundColor: layout.rendered.palette.selection]
             self.layout = layout
+            // A new render, or a different file's layout entirely: whatever hover the old content was showing no
+            // longer points at anything real.
+            hoverController.invalidate()
             // Joining another storage does not invalidate what the view last drew; lay the viewport out afresh.
             layoutManager.textViewportLayoutController.layoutViewport()
             textView.needsLayout = true
