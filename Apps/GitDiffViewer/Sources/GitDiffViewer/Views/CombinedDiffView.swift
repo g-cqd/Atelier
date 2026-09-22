@@ -14,8 +14,21 @@ import SwiftUI
 /// own half of the card's chrome -- the header's own top rounding, the body's own bottom rounding, both sharing
 /// the same corner radius and border colour -- so the two still read as one continuous card whether the header is
 /// sitting in its normal place or floating pinned above a scrolled body.
+///
+/// A header only ever looks detached from its body while it is genuinely floating: ``FileCardHeader`` measures its
+/// own position against ``scrollSpace`` and switches its own chrome (full rounding, border, shadow) on exactly when
+/// it is pinned to the top of the scroll content, matching ``topInset``. At rest, right above its body, it drops
+/// its own bottom edge and shadow so the seam is carried by the body's own border alone -- one line, not two.
 struct CombinedDiffView: View {
     let model: DiffViewerModel
+
+    /// Named so ``FileCardHeader`` can measure its own position in the scroll view's own coordinate space rather
+    /// than the window's, independent of the toolbar height or how the window is placed on screen.
+    nonisolated static let scrollSpace = "CombinedDiffView.scroll"
+    /// The gap a pinned header rests under the toolbar with, matching the same gap every card keeps from the list's
+    /// own edges: one `.contentMargins(.top)` value plays double duty as that resting gap and as the threshold a
+    /// header's own measured position is compared against to decide it is pinned (see ``FileCardHeader/isPinned``).
+    static let topInset: CGFloat = 16
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -30,8 +43,15 @@ struct CombinedDiffView: View {
                         .id(file.id)
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
+            .coordinateSpace(name: Self.scrollSpace)
+            // The list's own top inset moves here instead of living in the stack's padding: a pinned header pins
+            // to the edge `contentMargins` carves out, so this one value both keeps the resting gap under the
+            // toolbar and, doubling as `topInset`, is what a header compares its own position against to know it
+            // is pinned (Fix 2 and Fix 3 below share this one mechanism rather than two).
+            .contentMargins(.top, Self.topInset, for: .scrollContent)
             // Cards scroll beneath the toolbar; the soft edge keeps the bar legible without a hard line.
             .scrollEdgeEffectStyle(.soft, for: .top)
             .onChange(of: model.scrollRequest) { _, request in
@@ -56,8 +76,19 @@ private struct FileCardHeader: View {
     let file: RenderedFile
     let model: DiffViewerModel
 
+    /// Whether this header is currently floating, pinned to the top of the scroll content above a body scrolled
+    /// out from under it, rather than sitting in its normal place directly above that body. Measured, not
+    /// inferred: a pinned `Section` header's own `minY` in ``CombinedDiffView/scrollSpace`` settles at
+    /// ``CombinedDiffView/topInset`` and stays clamped there for as long as it is pinned, while at rest (or while
+    /// merely scrolling past, not yet pinned) it is greater. A half-point slack absorbs floating-point jitter
+    /// between geometry updates.
+    @State private var isPinned = false
+
     private var isCollapsed: Bool { model.collapsedFiles.contains(file.path) }
     private var summary: FileChangeSummary { model.changeSummary(for: file.path, rendered: file.rendered) }
+    /// Whole-card chrome (full rounding, a border on every edge, a lift off the list) applies whenever the header
+    /// carries the card on its own -- collapsed, with no body beneath it, or floating pinned above one.
+    private var floats: Bool { isCollapsed || isPinned }
 
     var body: some View {
         HStack {
@@ -95,17 +126,36 @@ private struct FileCardHeader: View {
         .simultaneousGesture(TapGesture(count: 2).onEnded { model.pin(file.path) })
         .help("Click to fold, double-click to open \(model.displayPath(for: file.path))")
         .clipShape(shape)
-        .overlay(shape.strokeBorder(CardChrome.border))
-        .shadow(color: .black.opacity(0.22), radius: 5, y: 2)
+        .overlay(shape.strokeBorder(CardChrome.border, lineWidth: floats ? 1 : 0))
+        // A floating header (collapsed, or pinned above a scrolled body) sits over whatever the list is scrolling
+        // underneath it; its own rounded corners cut two small triangles out of its otherwise-opaque material,
+        // and without a backing of their own those would show a sliver of scrolling text right through the
+        // corner. This second, *unclipped* material fill sits behind the already-clipped, already-rounded header
+        // above -- squared off to the header's full bounding box -- so what shows through the corner cut is more
+        // frosted glass, not raw content. Only needed while floating: at rest a header has nothing scrolling
+        // underneath its own corners, just its own body sitting flush beneath it.
+        .background { if floats { Rectangle().fill(.regularMaterial) } }
+        .shadow(color: .black.opacity(floats ? 0.22 : 0), radius: floats ? 5 : 0, y: 2)
+        .background {
+            // Measures this header's own resting place in the scroll view's coordinate space to tell a pinned,
+            // floating header from one still sitting in its normal place above its body -- see `isPinned`.
+            Color.clear
+                .onGeometryChange(
+                    for: CGFloat.self, of: { $0.frame(in: .named(CombinedDiffView.scrollSpace)).minY }
+                ) { minY in
+                    isPinned = !isCollapsed && minY <= CombinedDiffView.topInset + 0.5
+                }
+        }
     }
 
-    /// Rounded on top always; rounded on the bottom too exactly when the file is folded, since a folded file has
-    /// no body beneath it -- the header is the whole card then, not a straight edge waiting for one.
+    /// Rounded on top always; rounded on the bottom too exactly while the header carries the whole card on its
+    /// own (``floats``) -- collapsed, with no body beneath it, or pinned and floating above one it has scrolled
+    /// away from. Flat and square on the bottom the rest of the time, so it reads as sitting directly on its body
+    /// rather than as a card of its own stacked on top of it.
     private var shape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
-            topLeadingRadius: CardChrome.cornerRadius, bottomLeadingRadius: isCollapsed ? CardChrome.cornerRadius : 0,
-            bottomTrailingRadius: isCollapsed ? CardChrome.cornerRadius : 0,
-            topTrailingRadius: CardChrome.cornerRadius)
+            topLeadingRadius: CardChrome.cornerRadius, bottomLeadingRadius: floats ? CardChrome.cornerRadius : 0,
+            bottomTrailingRadius: floats ? CardChrome.cornerRadius : 0, topTrailingRadius: CardChrome.cornerRadius)
     }
 }
 

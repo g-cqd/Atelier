@@ -3,17 +3,24 @@ package import DiffRendering
 import Foundation
 
 /// The panel's fixed sizing rules, pulled out of ``HoverDocPanel`` itself so they are testable without an actual
-/// window: a fixed width, a height clamped between a floor and a ceiling (past which only the body scrolls), and
-/// where the panel opens relative to the hovered identifier, flipping above it when it would otherwise run off the
-/// bottom of the screen.
+/// window: a fixed width, a height that hugs its measured content up to a ceiling (past which only the body
+/// scrolls), and where the panel opens relative to the hovered identifier, flipping above it when it would
+/// otherwise run off the bottom of the screen.
 package enum HoverPanelSizing {
     package static let width: CGFloat = 440
-    package static let minHeight: CGFloat = 260
+    /// A floor only for the degenerate case (a document with nothing to show at all, not even a declaration):
+    /// real content is never clamped up to this -- see ``clampedHeight(forContentHeight:)``. Xcode's own Quick
+    /// Help panel has no fixed minimum either; a panel that hugs a two-line declaration and a one-line footer
+    /// should read as exactly that, not pad itself out to a floor sized for a full doc with parameters and a
+    /// multi-paragraph discussion.
+    package static let minHeight: CGFloat = 40
     package static let maxHeight: CGFloat = 420
 
     /// The panel's own height for `contentHeight` of measured content, and whether the body needs its own inner
     /// scroll to show the rest: the chrome around it (header, declaration, parameters, footer) is always shown in
-    /// full, only the body's prose ever scrolls.
+    /// full, only the body's prose ever scrolls. Hugs `contentHeight` exactly between the degenerate floor and the
+    /// ceiling -- no fixed minimum beyond that floor, so a short answer (a declaration and a footer, say) gets a
+    /// short panel instead of empty space padded out to what a full one would need.
     package static func clampedHeight(forContentHeight contentHeight: CGFloat) -> (height: CGFloat, scrolls: Bool) {
         guard contentHeight > maxHeight else { return (max(contentHeight, minHeight), false) }
         return (maxHeight, true)
@@ -59,6 +66,11 @@ package final class HoverDocPanel {
     private var trackingArea: NSTrackingArea?
 
     private let declarationView = HoverDocPanel.makeCodeTextView()
+    /// The declaration's own inset backing, filled with the pane's palette background (see
+    /// ``HoverDocument/chipBackground``) rather than left on the panel's vibrancy glass -- a theme's role colors
+    /// are chosen to read against the pane they render in, which is not necessarily the same light/dark appearance
+    /// as the panel's own popover material.
+    private let declarationChip = NSView()
     private let bodyTextView = HoverDocPanel.makeProseTextView()
     private let bodyScrollView = NSScrollView()
     private let parametersGrid = NSGridView(numberOfColumns: 2, rows: 0)
@@ -79,6 +91,13 @@ package final class HoverDocPanel {
     private var declarationHeight: NSLayoutConstraint?
     private var bodyHeight: NSLayoutConstraint?
     private var returnsHeight: NSLayoutConstraint?
+    /// The candidates group's true content height, tallied by ``renderCandidates(_:)`` itself as it builds each
+    /// row; see that method's own doc comment for why ``chromeHeight()`` reads this instead of guessing.
+    private var candidatesContentHeight: CGFloat = 0
+
+    /// The inset a declaration chip (see ``declarationChip``) keeps between its own background and the code text
+    /// it backs, on every edge.
+    fileprivate static let chipPadding: CGFloat = 4
 
     package init() {}
 
@@ -192,15 +211,17 @@ package final class HoverDocPanel {
         candidatesStack.alignment = .leading
         candidatesStack.spacing = 6
 
+        Self.configureChip(declarationChip, around: declarationView, padding: Self.chipPadding)
+
         for view in [
-            declarationView, bodyScrollView, parametersHeader, parametersGrid, returnsHeader, returnsView,
+            declarationChip, bodyScrollView, parametersHeader, parametersGrid, returnsHeader, returnsView,
             candidatesStack, diagnosticsStack, footerLabel
         ] {
             contentStack.addArrangedSubview(view)
             view.widthAnchor.constraint(equalToConstant: HoverPanelSizing.width - 24).isActive = true
         }
 
-        declarationHeight = declarationView.heightAnchor.constraint(equalToConstant: 0)
+        declarationHeight = declarationChip.heightAnchor.constraint(equalToConstant: 0)
         declarationHeight?.isActive = true
         bodyHeight = bodyScrollView.heightAnchor.constraint(equalToConstant: 0)
         bodyHeight?.isActive = true
@@ -229,9 +250,13 @@ package final class HoverDocPanel {
         let innerWidth = HoverPanelSizing.width - 24
 
         declarationView.textStorage?.setAttributedString(document.declaration ?? NSAttributedString())
-        declarationView.isHidden = document.declaration == nil
+        declarationChip.isHidden = document.declaration == nil
+        declarationChip.layer?.backgroundColor = document.chipBackground?.cgColor
         declarationHeight?.constant =
-            declarationView.isHidden ? 0 : Self.measuredHeight(of: declarationView.textStorage!, width: innerWidth)
+            declarationChip.isHidden
+            ? 0
+            : Self.measuredHeight(of: declarationView.textStorage!, width: innerWidth - 2 * Self.chipPadding)
+                + 2 * Self.chipPadding
 
         let body = NSMutableAttributedString()
         if let summary = document.summary { body.append(summary) }
@@ -249,7 +274,7 @@ package final class HoverDocPanel {
         returnsHeight?.constant =
             returnsView.isHidden ? 0 : Self.measuredHeight(of: returnsView.textStorage!, width: innerWidth)
 
-        renderCandidates(document.extraCandidates)
+        renderCandidates(document.extraCandidates, chipBackground: document.chipBackground)
         candidatesStack.isHidden = document.extraCandidates.isEmpty
 
         renderDiagnostics(document.diagnostics)
@@ -261,7 +286,7 @@ package final class HoverDocPanel {
         // A declaration with nothing else to show (no prose from any tier, no parameters, no returns, no other
         // candidates, no diagnostics) is a real, checked answer -- "nobody wrote anything about this" -- not a
         // loading gap or a bug; saying so plainly keeps an otherwise-empty panel from reading as broken.
-        if body.length == 0, !declarationView.isHidden, parametersGrid.isHidden, returnsView.isHidden,
+        if body.length == 0, !declarationChip.isHidden, parametersGrid.isHidden, returnsView.isHidden,
             candidatesStack.isHidden, diagnosticsStack.isHidden
         {
             body.append(Self.noDocumentationPlaceholder)
@@ -306,24 +331,51 @@ extension HoverDocPanel {
         }
     }
 
-    fileprivate func renderCandidates(_ candidates: [HoverDocument.Candidate]) {
+    /// The candidate group's own content height, tallied here rather than guessed at a flat per-row estimate in
+    /// ``chromeHeight()``: a candidate's declaration wraps to however many lines its own text needs, and (per
+    /// ``HoverDocument/Candidate``'s own contract) its prose is shown too, so the group's true height depends on
+    /// exactly what each candidate actually carries, not a fixed row count.
+    fileprivate func renderCandidates(_ candidates: [HoverDocument.Candidate], chipBackground: NSColor?) {
         candidatesStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let innerWidth = HoverPanelSizing.width - 24
+        var height: CGFloat = 0
         // A hairline rule ahead of the first candidate, so overloads/other declarations read as a distinct
         // group rather than floating ambiguously after the main declaration's body.
-        if !candidates.isEmpty { candidatesStack.addArrangedSubview(HoverDocPanel.makeCandidatesSeparator()) }
-        for candidate in candidates {
-            guard let declaration = candidate.declaration else { continue }
-            let view = HoverDocPanel.makeCodeTextView()
-            view.textStorage?.setAttributedString(declaration)
-            candidatesStack.addArrangedSubview(view)
-            view.widthAnchor.constraint(equalToConstant: innerWidth).isActive = true
-            view.heightAnchor
-                .constraint(
-                    equalToConstant: Self.measuredHeight(of: view.textStorage!, width: innerWidth)
-                )
-                .isActive = true
+        if !candidates.isEmpty {
+            candidatesStack.addArrangedSubview(HoverDocPanel.makeCandidatesSeparator())
+            height += 1
         }
+        for candidate in candidates where candidate.declaration != nil || candidate.summary != nil {
+            if let declaration = candidate.declaration {
+                let view = HoverDocPanel.makeCodeTextView()
+                view.textStorage?.setAttributedString(declaration)
+                let chip = NSView()
+                Self.configureChip(chip, around: view, padding: Self.chipPadding)
+                chip.layer?.backgroundColor = chipBackground?.cgColor
+                let rowHeight =
+                    Self.measuredHeight(of: view.textStorage!, width: innerWidth - 2 * Self.chipPadding)
+                    + 2 * Self.chipPadding
+                candidatesStack.addArrangedSubview(chip)
+                chip.widthAnchor.constraint(equalToConstant: innerWidth).isActive = true
+                chip.heightAnchor.constraint(equalToConstant: rowHeight).isActive = true
+                height += rowHeight + candidatesStack.spacing
+            }
+            // A candidate's own prose (its summary), the same content ``HoverMarkdownStructurer`` parsed for it --
+            // dropping it here, as the panel used to, silently threw away real documentation for any doc-comment-
+            // index answer that resolved to more than one same-named declaration (a common shape for a small,
+            // frequently reused type name declared in several files), even though the tier that answered still
+            // reported itself correctly in the footer.
+            if let summary = candidate.summary {
+                let view = HoverDocPanel.makeProseTextView()
+                view.textStorage?.setAttributedString(summary)
+                let rowHeight = Self.measuredHeight(of: view.textStorage!, width: innerWidth)
+                candidatesStack.addArrangedSubview(view)
+                view.widthAnchor.constraint(equalToConstant: innerWidth).isActive = true
+                view.heightAnchor.constraint(equalToConstant: rowHeight).isActive = true
+                height += rowHeight + candidatesStack.spacing
+            }
+        }
+        candidatesContentHeight = height
     }
 
     fileprivate func renderDiagnostics(_ diagnostics: [HoverDocument.DiagnosticEntry]) {
@@ -372,8 +424,11 @@ extension HoverDocPanel {
         let innerWidth = HoverPanelSizing.width - 24
         var total: CGFloat = contentStack.edgeInsets.top + contentStack.edgeInsets.bottom
         var visibleSlots = 0
-        if let declaration = declarationView.textStorage, !declarationView.isHidden {
-            total += Self.measuredHeight(of: declaration, width: innerWidth)
+        // The chip's own height, already computed (padding included) at the top of `render(_:)`, which always
+        // runs before this -- reusing it here keeps one place of truth for the chip's size instead of remeasuring
+        // at a width that would need to independently agree with the chip's own inset math.
+        if !declarationChip.isHidden {
+            total += declarationHeight?.constant ?? 0
             visibleSlots += 1
         }
         if !parametersGrid.isHidden {
@@ -385,7 +440,7 @@ extension HoverDocPanel {
             visibleSlots += 1
         }
         if !candidatesStack.isHidden {
-            total += 1 + CGFloat(candidatesStack.arrangedSubviews.count) * 24
+            total += candidatesContentHeight
             visibleSlots += 2  // the separator plus the candidates stack itself
         }
         if !diagnosticsStack.isHidden {
@@ -409,6 +464,25 @@ extension HoverDocPanel {
         contentStorage.textStorage?.setAttributedString(storage)
         layoutManager.ensureLayout(for: layoutManager.documentRange)
         return layoutManager.usageBoundsForTextContainer.height
+    }
+
+    /// Wires `chip` up as a declaration chip around `textView`: a layer-backed container, its corners rounded to
+    /// match the panel's own smaller radii, with `textView` pinned `padding` in from every edge so the chip's
+    /// filled background (set later, in ``render(_:)``, from ``HoverDocument/chipBackground``) reads as an inset
+    /// backing behind the code rather than a flush rectangle.
+    fileprivate static func configureChip(_ chip: NSView, around textView: NSTextView, padding: CGFloat) {
+        chip.translatesAutoresizingMaskIntoConstraints = false
+        chip.wantsLayer = true
+        chip.layer?.cornerRadius = 4
+        chip.layer?.cornerCurve = .continuous
+        chip.layer?.masksToBounds = true
+        chip.addSubview(textView)
+        NSLayoutConstraint.activate([
+            textView.leadingAnchor.constraint(equalTo: chip.leadingAnchor, constant: padding),
+            textView.trailingAnchor.constraint(equalTo: chip.trailingAnchor, constant: -padding),
+            textView.topAnchor.constraint(equalTo: chip.topAnchor, constant: padding),
+            textView.bottomAnchor.constraint(equalTo: chip.bottomAnchor, constant: -padding)
+        ])
     }
 
     fileprivate static func makeCodeTextView() -> NSTextView {

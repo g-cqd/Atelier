@@ -17,8 +17,9 @@ struct ComparisonWindow: View {
     /// This window's own settings, not the Settings scene's shared instance: a fresh `ViewerSettings` reads the
     /// exact same base defaults on construction, so the window starts identical to every other one, but from here
     /// on it can adopt a project of its own (below) without perturbing any other open window or the Settings
-    /// window editing the app-wide base. Known limitation, documented on `adoptProject`: a base-default edit made
-    /// in the Settings window afterward does not live-propagate into this instance's unoverridden keys.
+    /// window editing the app-wide base. A base-default edit made in the Settings window afterward still reaches
+    /// this instance's unoverridden keys without a reopen -- see `ViewerSettings.baseSettingChangedNotification`
+    /// and `adoptProject`'s own doc comment.
     @State private var settings: ViewerSettings
     /// Built eagerly, not lazily in `onAppear`: `DiffViewerModel.init` does no I/O of its own (that is `start(_:)`,
     /// guarded below by `hasStarted`), so constructing it here costs nothing but gets `ContentView` -- and with it

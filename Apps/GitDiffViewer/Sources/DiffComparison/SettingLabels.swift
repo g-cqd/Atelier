@@ -30,6 +30,7 @@ package enum SettingLabel {
     // MARK: Appearance
 
     package static let wrapsLines = "Wrap long lines"
+    package static let appearanceScheme = "Appearance"
 
     // MARK: Tools / Diagnostics
 

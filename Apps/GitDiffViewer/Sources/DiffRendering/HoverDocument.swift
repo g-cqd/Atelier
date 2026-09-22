@@ -93,11 +93,20 @@ package struct HoverDocument: @unchecked Sendable {
     package let extraCandidates: [Candidate]
     /// Reserved for the diagnostics-hover unification: always empty today.
     package let diagnostics: [DiagnosticEntry]
+    /// The background a declaration chip (the main declaration, and any ``extraCandidates``' own) should be drawn
+    /// against: the same ``DiffPalette/background`` the pane the hover came from renders its own text on, so a
+    /// theme's role colors -- picked to read against *that* background -- stay legible regardless of the panel's
+    /// own vibrancy material, which may land on either a light or a dark system appearance independent of the
+    /// diff theme. `nil` only when there is no declaration to chip (``build(from:palette:)`` always sets it
+    /// otherwise; ``HoverDocument/init`` defaults it to `nil` for callers, mostly tests, that build a document by
+    /// hand with no theme to speak of).
+    package let chipBackground: NSColor?
 
     package init(
         declaration: NSAttributedString? = nil, summary: NSAttributedString? = nil,
         discussion: NSAttributedString? = nil, parameters: [Field] = [], returns: NSAttributedString? = nil,
-        provenance: Provenance = .unknown, extraCandidates: [Candidate] = [], diagnostics: [DiagnosticEntry] = []
+        provenance: Provenance = .unknown, extraCandidates: [Candidate] = [], diagnostics: [DiagnosticEntry] = [],
+        chipBackground: NSColor? = nil
     ) {
         self.declaration = declaration
         self.summary = summary
@@ -107,6 +116,7 @@ package struct HoverDocument: @unchecked Sendable {
         self.provenance = provenance
         self.extraCandidates = extraCandidates
         self.diagnostics = diagnostics
+        self.chipBackground = chipBackground
     }
 
     /// Parses and colors `content` for the hover panel: ``HoverMarkdownStructurer`` splits its markdown into
@@ -134,7 +144,12 @@ package struct HoverDocument: @unchecked Sendable {
             extraCandidates: parsed.extraCandidates.map { candidate in
                 Candidate(declaration: code(candidate.declaration), summary: prose(candidate.summary))
             },
-            diagnostics: []
+            diagnostics: [],
+            // Blended just short of fully opaque rather than the palette's raw background: the chip should read
+            // as the theme's own surface, but a hairline of the panel's vibrancy showing through at the edges
+            // keeps it looking like a chip set into the glass rather than a flat, unrelated rectangle pasted over
+            // it.
+            chipBackground: palette.background.withAlphaComponent(0.94)
         )
     }
 
