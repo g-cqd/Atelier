@@ -2,6 +2,7 @@ package import AemiCore
 import AtelierDocIndex
 package import AtelierLSP
 package import AtelierSyntaxModel
+package import DiffGit
 package import Foundation
 
 /// LSP first when available; the doc-comment index answers otherwise and for git-blob content.
@@ -76,6 +77,18 @@ package final class HoverDocumentationModel {
     /// right side is on disk, i.e. exactly when the language server tier is ever worth trying.
     private var repositoryRoot: URL?
     private var feedTask: Task<Void, Never>?
+    /// Bumped by every ``comparisonChanged(root:files:corpusReader:corpusSource:corpusEntries:)``; the background
+    /// corpus-broadening pass checks this before it publishes, so a slower, superseded pass can never land after
+    /// a newer comparison already replaced it (`feedTask?.cancel()` alone is not enough: cancellation is
+    /// cooperative, and the broadening pass checks it only between awaits).
+    private var generation = 0
+
+    /// A corpus file too large to be worth parsing for a hover fallback that only serves documentation, not code
+    /// intelligence.
+    static let maxCorpusFileSize = 512 * 1024
+    /// Caps how many files beyond the changeset the background pass reads, so a huge repository comparison never
+    /// turns into an unbounded read storm.
+    static let maxCorpusFiles = 2000
 
     package init(lspRegistry: SourceKitLSPRegistry?, taskProvider: any TaskProvider = .default) {
         self.lspRegistry = lspRegistry
@@ -83,11 +96,23 @@ package final class HoverDocumentationModel {
         docProvider = DocIndexHoverProvider(index: index)
     }
 
-    /// Re-feeds the doc-comment index with both sides of every prepared Swift file, and remembers the working
-    /// tree root (if any) hovers over the new side may resolve a language server against. Fire-and-forget: a
-    /// superseded comparison cancels whatever re-index was still running, so a slower, older update can never
+    /// Re-feeds the doc-comment index with both sides of every prepared (changed) Swift file, and remembers the
+    /// working tree root (if any) hovers over the new side may resolve a language server against. Fire-and-forget:
+    /// a superseded comparison cancels whatever re-index was still running, so a slower, older update can never
     /// land after a newer one.
-    package func comparisonChanged(root: URL?, files: [FileEntry]) {
+    ///
+    /// Coverage contract: the fast pass above only ever indexes symbols *declared* in a changed file, so a hover
+    /// over a symbol declared elsewhere (a type from an unchanged file, say) answers nothing from it alone. When
+    /// `corpusReader`, `corpusSource` and `corpusEntries` are given, a second pass follows in the background,
+    /// reading every other Swift file the right side already listed (skipping anything over
+    /// ``maxCorpusFileSize``, and capped at ``maxCorpusFiles`` files total) and adding it to the index. This is
+    /// still best-effort, not exhaustive: a repository with more than ``maxCorpusFiles`` eligible files, or a
+    /// symbol declared only in a file the cap skipped, will not resolve through the doc-comment index (the LSP
+    /// tier, when one is available for the new side, is unaffected by this cap).
+    package func comparisonChanged(
+        root: URL?, files: [FileEntry], corpusReader: (any SourceReading)? = nil,
+        corpusSource: ComparisonSource? = nil, corpusEntries: [GitTreeEntry] = []
+    ) {
         repositoryRoot = root
         filesByIndex = Dictionary(uniqueKeysWithValues: files.map { ($0.index, $0) })
 
@@ -102,11 +127,43 @@ package final class HoverDocumentationModel {
                         content: file.newText)
                 ]
             }
+        let changedRightPaths = Set(files.map { $0.rightPath ?? $0.leftPath })
+        generation += 1
+        let myGeneration = generation
         feedTask?.cancel()
-        feedTask = taskProvider.task { [index] in
+        feedTask = taskProvider.task { [weak self, index] in
             guard !Task.isCancelled else { return }
             await index.update(files: docFiles)
+            guard let self, let corpusReader, let corpusSource, !Task.isCancelled,
+                myGeneration == self.generation
+            else { return }
+            let candidates = Self.corpusCandidates(entries: corpusEntries, excluding: changedRightPaths)
+            guard !candidates.isEmpty else { return }
+            guard let contents = try? await corpusReader.contents(of: candidates, in: corpusSource) else { return }
+            guard !Task.isCancelled, myGeneration == self.generation else { return }
+            let broadFiles =
+                docFiles
+                + candidates.compactMap { entry in
+                    contents[entry.relativePath]
+                        .map {
+                            DocIndexFile(
+                                uri: Self.uri(path: entry.relativePath, blobID: entry.blobID, onDiskRoot: root),
+                                content: $0)
+                        }
+                }
+            await index.update(files: broadFiles)
         }
+    }
+
+    /// The right side's other Swift files a background pass should add to the corpus: everything not already fed
+    /// by the changeset, small enough to be worth parsing, up to ``maxCorpusFiles``.
+    private static func corpusCandidates(entries: [GitTreeEntry], excluding changed: Set<String>) -> [GitTreeEntry] {
+        Array(
+            entries.filter {
+                $0.relativePath.hasSuffix(".swift") && !changed.contains($0.relativePath)
+                    && $0.size <= maxCorpusFileSize
+            }
+            .prefix(maxCorpusFiles))
     }
 
     /// Answers a hover hit at `fileIndex`/`side`/`line`/`utf16Column` (the same coordinates

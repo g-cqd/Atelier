@@ -38,7 +38,7 @@ struct DiagnosticDiffTextView: View {
             wrapColumn: wrapColumn, showsMinimap: showsMinimap, syncsScrolling: syncsScrolling,
             scrollRequest: scrollRequest, splitController: splitController, onGapDrag: onGapDrag,
             currentExpansion: currentExpansion, onDisplayed: onDisplayed,
-            hoverEnabled: model.settings.showsHoverDocumentation && model.hoverDocs != nil && !model.isRendering,
+            hoverEnabled: model.settings.showsHoverDocumentation && model.hoverDocs != nil,
             hoverResolver: hoverResolver,
             diagnosticOverlay: model.settings.diagnosticsEnabled ? overlay : nil, diagnosticsVersion: version,
             onDiagnosticClick: { _, findings, _ in clicked = ClickedDiagnostics(findings: findings) }
