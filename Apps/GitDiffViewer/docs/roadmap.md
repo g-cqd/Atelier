@@ -50,3 +50,21 @@ See `multi-language-hover-design.md` for the full multi-language design.
 ## Non-goals (decided)
 - No offline docsets tier (Dash/DevDocs) — needs real symbol resolution to avoid confidently
   wrong popovers. No LSP completion/diagnostics/definition. No node/JVM runtime management.
+
+## UI wave (queued behind hover/toolbar debugging)
+- Findings navigator: toolbar item → scrollable list of all analyzer warnings/errors, grouped
+  by file, row click jumps to the line.
+- Diagnostic markers without layout shift: drop the +14pt gutter column; line-number
+  decoration blending with gutter/line + trailing-edge overlay chip; both clickable; popover
+  anchors on the LINE (NSPopover from the owning view with a positioning rect — fixes the
+  top-of-container anchoring bug).
+- Unified hover: diagnostics for the hovered squiggle join documentation in one sectioned
+  surface; context menu (Show Documentation / Show Issue) as the explicit path.
+- Rich popover (investigation running): custom anchored panel (Xcode Quick Help style),
+  syntax-colored code via AtelierLexers+AtelierTheme, sectioned content, provenance footer,
+  apple-docs corpus as the system-API tier.
+- Cards list: sticky file headers — each file's collapsible title bar pins to the top of the
+  scroll view while its file is partially scrolled, so collapse stays reachable; preserve the
+  card rounding/clipping, shadow, and negative space against the toolbar and surroundings
+  (pinned header keeps the card's visual language, likely LazyVStack pinnedViews + custom
+  clipping so the floating header carries the card's top rounding + shadow).

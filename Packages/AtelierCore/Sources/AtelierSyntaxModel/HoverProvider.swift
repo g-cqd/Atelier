@@ -25,6 +25,8 @@ public struct HoverContent: Sendable, Equatable {
         case languageServer
         /// The source-only doc-comment index answered.
         case docIndex
+        /// On-device Apple SDK documentation, via a synthetic sourcekit-lsp probe.
+        case sdk
     }
 
     /// Markdown, possibly with fenced code blocks.

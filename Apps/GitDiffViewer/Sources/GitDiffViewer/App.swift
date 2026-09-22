@@ -120,6 +120,31 @@ final class AppServices {
         }
     }
 
+    /// The scratch sourcekit-lsp session behind the SDK documentation tier, kept so termination can drain it
+    /// alongside the per-root registry. Double-optional: `.some(nil)` records that resolution already failed,
+    /// so a machine without sourcekit-lsp pays the lookup once, not per window.
+    private var sdkHoverState: SDKDocumentationProvider??
+    private(set) var sdkScratchService: SourceKitLSPService?
+
+    /// The on-device Apple SDK documentation tier, built lazily over the same discovery path as the per-root
+    /// language servers and shared by every window.
+    func sdkHoverProvider() async -> SDKDocumentationProvider? {
+        if let resolved = sdkHoverState { return resolved }
+        guard
+            let located = await toolDiscovery.locate(
+                executableName: "sourcekit-lsp", overrideVariable: "GDV_SOURCEKIT_LSP",
+                customPath: Self.pinnedSourceKitLSPPath(), searchesToolchain: true)
+        else {
+            sdkHoverState = .some(nil)
+            return nil
+        }
+        let service = SDKDocumentationProvider.makeScratchService(serverExecutable: located.url)
+        sdkScratchService = service
+        let provider = SDKDocumentationProvider(service: service)
+        sdkHoverState = provider
+        return provider
+    }
+
     func shutdown() {
         pool.shutdown()
         diagnosticsPool.shutdown()
@@ -158,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let services = AppServices()
 
     func applicationWillTerminate(_ notification: Notification) {
-        Self.drainLSPSessions(services.lspRegistry)
+        Self.drainLSPSessions(services.lspRegistry, scratch: services.sdkScratchService)
         services.shutdown()
     }
 
@@ -167,10 +192,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (itself already timeout-bounded per session) gets a fixed budget on a semaphore, and whatever is still
     /// running past it is abandoned -- the process exiting closes every child's pipes right behind it, which is
     /// sourcekit-lsp's own cue to go away.
-    private static func drainLSPSessions(_ registry: SourceKitLSPRegistry) {
+    private static func drainLSPSessions(_ registry: SourceKitLSPRegistry, scratch: SourceKitLSPService?) {
         let semaphore = DispatchSemaphore(value: 0)
         Task {
             await registry.shutdownAll()
+            await scratch?.shutdown()
             semaphore.signal()
         }
         _ = semaphore.wait(timeout: .now() + 1)
