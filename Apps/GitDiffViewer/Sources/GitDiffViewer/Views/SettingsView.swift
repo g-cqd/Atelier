@@ -64,6 +64,11 @@ private struct GeneralSettings: View {
                     Toggle(SettingLabel.syncScrolling, isOn: $settings.syncsScrolling)
                     Toggle(SettingLabel.showsMinimap, isOn: $settings.showsMinimap)
                     Toggle(SettingLabel.showsStatusBar, isOn: $settings.showsStatusBar)
+                    Toggle(SettingLabel.autoRefresh, isOn: $settings.autoRefresh)
+                    Text(
+                        "Watches the working tree and the repository's HEAD and refs, and reloads this window on its own."
+                    )
+                    .settingsCaption()
                 }
             }
             .formStyle(.grouped)

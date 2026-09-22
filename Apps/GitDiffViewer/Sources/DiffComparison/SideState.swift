@@ -122,6 +122,15 @@ package final class SideState {
         apply(entries, ignored: ignored, notifying: false)
     }
 
+    /// Re-reads this side's repository info (branches, tags, commits) without touching its entries, so a fetch or
+    /// a ref/`.git/refs` change updates whatever reads ``repository`` (the branch/tag menus) without a full
+    /// reload. A no-op before any source is chosen, since there is nothing to re-read against yet.
+    package func refreshRepositoryInfo() async {
+        guard let repository else { return }
+        guard let refreshed = await reader.repositoryInfo(containing: repository.root) else { return }
+        self.repository = refreshed
+    }
+
     package func reload() {
         guard let source else { return }
         loadTask?.cancel()

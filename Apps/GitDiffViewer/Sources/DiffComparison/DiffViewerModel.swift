@@ -31,6 +31,9 @@ package final class DiffViewerModel {
     /// Injected after init, mirroring ``diagnostics``: nil keeps hover documentation out of the picture
     /// entirely, as in a test that has no use for it.
     package var hoverDocs: HoverDocumentationModel?
+    /// Injected after init, mirroring ``diagnostics``: nil keeps freshness watching out of the picture entirely,
+    /// as in a test that has no use for it. See ``DiffViewerModel/attachFreshness()``.
+    package var freshness: RepositoryFreshness?
 
     package private(set) var selectedPath: String?
     package private(set) var tabs = DiffTabs()
@@ -267,6 +270,7 @@ package final class DiffViewerModel {
             pipeline.clear()
             diagnostics?.comparisonChanged(root: nil, files: [], corpusFingerprint: nil)
             hoverDocs?.comparisonChanged(root: nil, files: [])
+            updateFreshness()
             return
         }
         comparison = Comparison(
@@ -277,6 +281,7 @@ package final class DiffViewerModel {
         detectRenames()
         rebuildTrees()
         updateDiagnostics()
+        updateFreshness()
         tabs.keepOnly { comparison.contains($0) }
         if let selectedPath, !comparison.contains(selectedPath) {
             applySelection(tabs.activePath)
@@ -560,6 +565,7 @@ package final class DiffViewerModel {
             case .appearance: break
             // DiagnosticsModel observes ViewerSettings on its own; nothing for this model to do here.
             case .diagnostics: break
+            case .freshness: freshness?.setEnabled(settings.autoRefresh)
         }
     }
 
