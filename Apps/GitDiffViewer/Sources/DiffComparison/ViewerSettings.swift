@@ -116,6 +116,48 @@ package final class ViewerSettings {
         }
     }
 
+    /// The project (repository root) this instance currently overlays, or nil while it still only speaks the app
+    /// defaults — set once, shortly after a comparison window resolves its launch configuration's root, through
+    /// ``adoptProject(_:)``.
+    package internal(set) var projectID: ProjectIdentity?
+
+    /// Settings whose value may genuinely vary from one project to the next — see docs/settings-design.md R5.
+    /// Everything else (theme, layout chrome, fonts) stays a single, app-wide value no matter which window last
+    /// touched it.
+    static let projectScopedKeys: Set<String> = [
+        Key.diagnosticsEnabled, Key.analyzedSides, Key.toolLocations, Key.lspServerLocations, Key.contextLines,
+        Key.showsChangesOnly, Key.showsIgnoredFiles, Key.diffHeuristics, Key.treeStyle
+    ]
+
+    static let projectRegistryKey = "projectRegistry"
+
+    static func scopedKey(_ key: String, projectKey: String) -> String {
+        "project.\(projectKey).\(key)"
+    }
+
+    func scopedKey(_ key: String, for projectID: ProjectIdentity) -> String {
+        Self.scopedKey(key, projectKey: projectID.key)
+    }
+
+    /// Which key a read of `key` should actually hit right now: the project-scoped key once something has been
+    /// written there for the adopted project, the base (app-wide) key otherwise — so a project inherits the app
+    /// default until its own first override, exactly like `defaults.set`/`defaults.object` already behave for the
+    /// base key alone.
+    func effectiveKey(_ key: String) -> String {
+        guard let projectID, Self.projectScopedKeys.contains(key) else { return key }
+        let scoped = scopedKey(key, for: projectID)
+        return defaults.object(forKey: scoped) != nil ? scoped : key
+    }
+
+    /// Records `id` in the cross-project registry (id → display path) the first time one of its settings is
+    /// overridden, so the Settings review affordance can enumerate projects without scanning every defaults key.
+    func registerProject(_ id: ProjectIdentity) {
+        var registry = (defaults.dictionary(forKey: Self.projectRegistryKey) as? [String: String]) ?? [:]
+        guard registry[id.key] != id.displayPath else { return }
+        registry[id.key] = id.displayPath
+        defaults.set(registry, forKey: Self.projectRegistryKey)
+    }
+
     package var mode: ViewMode {
         didSet { store(mode.rawValue, Key.mode, (oldValue == .inline) != (mode == .inline) ? .layout : .appearance) }
     }
@@ -179,10 +221,30 @@ package final class ViewerSettings {
         didSet { store(settingsPane.rawValue, Key.settingsPane, .appearance) }
     }
 
-    private let defaults: UserDefaults
+    let defaults: UserDefaults
+
+    /// Set around a block that must assign scoped properties to their (already-decoded) base value without
+    /// recreating the project override that block just removed: `restoreDefaults` and clearing a project's own
+    /// overrides both remove a scoped key and then run the property through its normal setter purely to update
+    /// the in-memory value and notify observers, which would otherwise write straight back to the scoped key it
+    /// was just cleared from.
+    @ObservationIgnored private var isFallingBackToBase = false
+
+    func applyWithoutRecreatingScopedOverrides(_ body: () -> Void) {
+        isFallingBackToBase = true
+        defer { isFallingBackToBase = false }
+        body()
+    }
 
     private func store(_ value: Any?, _ key: String, _ change: Change) {
-        defaults.set(value, forKey: key)
+        if let projectID, Self.projectScopedKeys.contains(key) {
+            if !isFallingBackToBase {
+                defaults.set(value, forKey: scopedKey(key, for: projectID))
+                registerProject(projectID)
+            }
+        } else {
+            defaults.set(value, forKey: key)
+        }
         observers.removeAll { $0.owner.object == nil }
         for observer in observers { observer.handler(change) }
     }
@@ -214,16 +276,7 @@ package final class ViewerSettings {
         isolatesChanges = defaults.bool(forKey: Key.isolatesChanges)
         diagnosticsEnabled = defaults.bool(forKey: Key.diagnosticsEnabled)
         showsHoverDocumentation = defaults.object(forKey: Key.showsHoverDocumentation) as? Bool ?? true
-        toolLocations =
-            defaults.data(forKey: Key.toolLocations)
-            .flatMap { try? JSONDecoder().decode([String: ToolLocation].self, from: $0) }
-            .map { decoded in
-                Dictionary(
-                    uniqueKeysWithValues: decoded.compactMap { key, value in
-                        DiagnosticTool(rawValue: key).map { ($0, value) }
-                    })
-            }
-            ?? Dictionary(uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation()) })
+        toolLocations = Self.decodeToolLocations(defaults.data(forKey: Key.toolLocations))
         lspServerLocations =
             defaults.data(forKey: Key.lspServerLocations)
             .flatMap { try? JSONDecoder().decode([String: ToolLocation].self, from: $0) }
@@ -236,21 +289,42 @@ package final class ViewerSettings {
 
     /// Resets every setting in `category` to its coded default, going through the same setters as a user edit so
     /// each one stores to user defaults and fires its observers exactly as it would for a manual change.
+    ///
+    /// For a scoped setting, "restore defaults" means something different once a project has been adopted: rather
+    /// than force every project back to the coded default, it clears this project's own override and falls back
+    /// to whatever the base (app-wide) value currently is -- the same thing turning the override off by hand
+    /// would leave behind. A project-less instance (the Settings window itself) still resets straight to the
+    /// coded default, exactly as before.
     package func restoreDefaults(_ category: SettingsCategory) {
+        applyWithoutRecreatingScopedOverrides { restoreDefaultsUnguarded(category) }
+    }
+
+    private func restoreDefaultsUnguarded(_ category: SettingsCategory) {
         switch category {
             case .general:
                 explorerPlacement = .top
-                treeStyle = .hierarchy
-                showsChangesOnly = false
-                showsIgnoredFiles = false
+                treeStyle = restoredValue(Key.treeStyle, appDefault: FileTreeStyle.hierarchy) {
+                    defaults.string(forKey: Key.treeStyle).flatMap(FileTreeStyle.init(rawValue:)) ?? .hierarchy
+                }
+                showsChangesOnly = restoredValue(Key.showsChangesOnly, appDefault: false) {
+                    defaults.bool(forKey: Key.showsChangesOnly)
+                }
+                showsIgnoredFiles = restoredValue(Key.showsIgnoredFiles, appDefault: false) {
+                    defaults.bool(forKey: Key.showsIgnoredFiles)
+                }
                 syncsScrolling = true
                 showsMinimap = true
                 showsStatusBar = true
             case .diff:
                 isolatesChanges = false
-                contextLines = 3
+                contextLines = restoredValue(Key.contextLines, appDefault: 3) {
+                    defaults.object(forKey: Key.contextLines) as? Int ?? 3
+                }
                 granularity = .word
-                diffHeuristics = DiffHeuristics()
+                diffHeuristics = restoredValue(Key.diffHeuristics, appDefault: DiffHeuristics()) {
+                    defaults.data(forKey: Key.diffHeuristics)
+                        .flatMap { try? JSONDecoder().decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()
+                }
             case .appearance:
                 themePath = nil
                 lineHeightMultiple = 0
@@ -258,12 +332,45 @@ package final class ViewerSettings {
                 wrapsLines = true
                 wrapColumn = 0
             case .tools:
-                diagnosticsEnabled = false
+                diagnosticsEnabled = restoredValue(Key.diagnosticsEnabled, appDefault: false) {
+                    defaults.bool(forKey: Key.diagnosticsEnabled)
+                }
                 showsHoverDocumentation = true
-                analyzedSides = .newer
-                toolLocations = Dictionary(uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation()) })
-                lspServerLocations = ["sourcekit-lsp": ToolLocation()]
+                analyzedSides = restoredValue(Key.analyzedSides, appDefault: AnalyzedSides.newer) {
+                    defaults.string(forKey: Key.analyzedSides).flatMap(AnalyzedSides.init(rawValue:)) ?? .newer
+                }
+                toolLocations = restoredValue(
+                    Key.toolLocations,
+                    appDefault: Dictionary(uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation()) })
+                ) { Self.decodeToolLocations(defaults.data(forKey: Key.toolLocations)) }
+                lspServerLocations = restoredValue(
+                    Key.lspServerLocations, appDefault: ["sourcekit-lsp": ToolLocation()]
+                ) {
+                    defaults.data(forKey: Key.lspServerLocations)
+                        .flatMap { try? JSONDecoder().decode([String: ToolLocation].self, from: $0) }
+                        ?? ["sourcekit-lsp": ToolLocation()]
+                }
         }
+    }
+
+    /// Clears `key`'s project override (if any) and returns what the property should become: the base value,
+    /// decoded by `decodeBase`, when a project is adopted, or the coded app-wide default otherwise.
+    private func restoredValue<Value>(_ key: String, appDefault: Value, decodeBase: () -> Value) -> Value {
+        guard let projectID else { return appDefault }
+        defaults.removeObject(forKey: scopedKey(key, for: projectID))
+        return decodeBase()
+    }
+
+    static func decodeToolLocations(_ data: Data?) -> [DiagnosticTool: ToolLocation] {
+        data
+            .flatMap { try? JSONDecoder().decode([String: ToolLocation].self, from: $0) }
+            .map { decoded in
+                Dictionary(
+                    uniqueKeysWithValues: decoded.compactMap { key, value in
+                        DiagnosticTool(rawValue: key).map { ($0, value) }
+                    })
+            }
+            ?? Dictionary(uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation()) })
     }
 
     /// How many settings in `category` currently differ from their coded default, for the tab footer's subtle
@@ -300,7 +407,7 @@ package final class ViewerSettings {
         }
     }
 
-    private enum Key {
+    enum Key {
         static let mode = "viewMode"
         static let explorerPlacement = "explorerPlacement"
         static let sidebarVisibility = "sidebarVisibility"

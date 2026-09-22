@@ -37,7 +37,7 @@ struct GitDiffViewerApp: App {
 
         WindowGroup(id: WindowID.comparison, for: LaunchConfiguration.self) { $configuration in
             ComparisonWindow(
-                configuration: configuration ?? LaunchOptions.configuration, settings: settings, recents: recents,
+                configuration: configuration ?? LaunchOptions.configuration, recents: recents,
                 reader: appDelegate.services.loader, services: appDelegate.services
             )
             .frame(minWidth: 900, minHeight: 600)

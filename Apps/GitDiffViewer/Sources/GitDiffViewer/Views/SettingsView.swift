@@ -218,26 +218,95 @@ private struct AppearanceSettings: View {
 }
 
 /// A tab's footer (R4): a subtle count of settings that differ from their coded default (P6 — the default is the
-/// recommendation, so deviation is worth surfacing, cheaply, without a dot per control), and a button that resets
-/// just this tab's settings.
+/// recommendation, so deviation is worth surfacing, cheaply, without a dot per control), a button that resets
+/// just this tab's settings, and — for a tab with at least one project-scoped setting (R5) — a count of the
+/// projects currently overriding one of them, with a "Review…" affordance to look at and clear those overrides
+/// without having to reopen each project's own window.
 struct SettingsRestoreDefaultsFooter: View {
     @Bindable var settings: ViewerSettings
     let category: SettingsCategory
+    @State private var isReviewingOverrides = false
 
     var body: some View {
-        HStack {
-            let count = settings.settingsDiffCount(category)
-            if count > 0 {
-                Text("\(count) setting\(count == 1 ? "" : "s") differ\(count == 1 ? "s" : "") from defaults")
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                let count = settings.settingsDiffCount(category)
+                if count > 0 {
+                    Text("\(count) setting\(count == 1 ? "" : "s") differ\(count == 1 ? "s" : "") from defaults")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Restore Defaults") { settings.restoreDefaults(category) }
+                    .disabled(count == 0)
+            }
+            let overriddenProjects = settings.projectsWithOverrides(in: category)
+            if !overriddenProjects.isEmpty {
+                HStack {
+                    Text(
+                        "Overridden in \(overriddenProjects.count) project\(overriddenProjects.count == 1 ? "" : "s")"
+                    )
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Review…") { isReviewingOverrides = true }
+                }
             }
-            Spacer()
-            Button("Restore Defaults") { settings.restoreDefaults(category) }
-                .disabled(count == 0)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
+        .sheet(isPresented: $isReviewingOverrides) {
+            ProjectOverridesReview(settings: settings, category: category)
+        }
+    }
+}
+
+/// Lists every project overriding one of `category`'s settings (R5), each with its own "Clear" button, plus a
+/// blanket "Clear All" — the review affordance the tab footer's "Review…" button opens.
+///
+/// The registry `projectsWithOverrides` reads lives in user defaults, not in an `@Observable` property, so nothing
+/// here can rely on `settings` to trigger a redraw after a clear; `projects` is loaded into local `@State`
+/// instead and refreshed by hand right after every mutation.
+private struct ProjectOverridesReview: View {
+    let settings: ViewerSettings
+    let category: SettingsCategory
+    @Environment(\.dismiss) private var dismiss
+    @State private var projects: [(key: String, displayPath: String)] = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Project Overrides").font(.headline).padding([.horizontal, .top], 16)
+            List(projects, id: \.key) { project in
+                HStack {
+                    Text(project.displayPath).lineLimit(1).truncationMode(.middle)
+                    Spacer()
+                    Button("Clear") { clear(project.key) }
+                }
+            }
+            .frame(minHeight: 120)
+            HStack {
+                Button("Clear All") {
+                    for project in projects { settings.clearOverrides(projectKey: project.key, category: category) }
+                    refresh()
+                }
+                .disabled(projects.isEmpty)
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(16)
+        }
+        .frame(width: 420, height: 280)
+        .onAppear(perform: refresh)
+    }
+
+    private func clear(_ projectKey: String) {
+        settings.clearOverrides(projectKey: projectKey, category: category)
+        refresh()
+    }
+
+    private func refresh() {
+        projects = settings.projectsWithOverrides(in: category)
     }
 }
 
