@@ -88,15 +88,7 @@ package final class HoverDocPanel {
         let size = NSSize(width: HoverPanelSizing.width, height: height)
         panel.setContentSize(size)
 
-        let screenAnchor: NSRect
-        if let window = textView.window {
-            screenAnchor = window.convertToScreen(textView.convert(anchorRect, to: nil))
-        } else {
-            screenAnchor = anchorRect
-        }
-        let origin = HoverPanelSizing.origin(
-            anchorRect: screenAnchor, panelSize: size, screenFrame: screen.visibleFrame)
-        panel.setFrameOrigin(origin)
+        setOrigin(forAnchorRect: anchorRect, panelSize: size, in: textView, hostWindow: hostWindow, screen: screen)
 
         if !isVisible {
             hostWindow.addChildWindow(panel, ordered: .above)
@@ -104,6 +96,29 @@ package final class HoverDocPanel {
             isVisible = true
         }
         attachedWindow = hostWindow
+    }
+
+    /// Repositions an already-visible panel to a freshly recomputed `anchorRect` (in `textView`'s own
+    /// coordinates), without re-rendering or resizing it -- what ``DocHoverController`` calls on every scroll to
+    /// keep the panel tracking the identifier it documents. A no-op if the panel is not currently showing.
+    package func reposition(anchorRect: NSRect, in textView: NSTextView) {
+        guard isVisible, let panel, let hostWindow = textView.window, let screen = hostWindow.screen else { return }
+        setOrigin(
+            forAnchorRect: anchorRect, panelSize: panel.frame.size, in: textView, hostWindow: hostWindow,
+            screen: screen)
+    }
+
+    /// The shared origin math ``show(document:anchorRect:in:)`` and ``reposition(anchorRect:in:)`` both need:
+    /// converts `anchorRect` to screen coordinates and places the panel per ``HoverPanelSizing/origin``.
+    private func setOrigin(
+        forAnchorRect anchorRect: NSRect, panelSize: NSSize, in textView: NSTextView, hostWindow: NSWindow,
+        screen: NSScreen
+    ) {
+        guard let panel else { return }
+        let screenAnchor = hostWindow.convertToScreen(textView.convert(anchorRect, to: nil))
+        let origin = HoverPanelSizing.origin(
+            anchorRect: screenAnchor, panelSize: panelSize, screenFrame: screen.visibleFrame)
+        panel.setFrameOrigin(origin)
     }
 
     /// Hides the panel and detaches it from its host window; a no-op when it is not showing.
@@ -138,6 +153,11 @@ package final class HoverDocPanel {
         effectView.layer?.cornerRadius = 8
         effectView.layer?.cornerCurve = .continuous
         effectView.layer?.masksToBounds = true
+        // `.behindWindow` blending samples what is behind the window directly, bypassing the layer mask above for
+        // that sampled material -- the canonical AppKit fix is a `maskImage`: a resizable rounded-rect template
+        // whose alpha channel clips the *material itself*, not just the layer's drawn content, so the glass never
+        // bleeds square past the panel's rounded corners.
+        effectView.maskImage = Self.roundedMaskImage(cornerRadius: 8)
 
         contentStack.orientation = .vertical
         contentStack.alignment = .leading
@@ -381,6 +401,26 @@ extension HoverDocPanel {
     /// `NSTrackingArea` dispatch by owner selector, the same idiom ``DocHoverController`` itself relies on.
     @objc(mouseEntered:) fileprivate func mouseEntered(with event: NSEvent) { pointerIsInside = true }
     @objc(mouseExited:) fileprivate func mouseExited(with event: NSEvent) { pointerIsInside = false }
+}
+
+extension HoverDocPanel {
+    /// A resizable, all-black rounded-rect template image sized just past `cornerRadius` on each edge, with cap
+    /// insets equal to the radius: stretched over any rect via `NSImageResizingMode.stretch`, its corners keep
+    /// their curvature while its edges and center tile flat, the standard shape an `NSVisualEffectView.maskImage`
+    /// needs to clip `.behindWindow` material to a rounded rect at any size.
+    fileprivate static func roundedMaskImage(cornerRadius: CGFloat) -> NSImage {
+        let edge = cornerRadius * 2 + 1
+        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
+            let path = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
+            NSColor.black.setFill()
+            path.fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(
+            top: cornerRadius, left: cornerRadius, bottom: cornerRadius, right: cornerRadius)
+        image.resizingMode = .stretch
+        return image
+    }
 }
 
 extension HoverDocument.DiagnosticEntry.Severity {

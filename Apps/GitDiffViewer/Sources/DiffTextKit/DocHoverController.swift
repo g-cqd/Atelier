@@ -98,8 +98,29 @@ package final class DocHoverController: NSObject {
         closePanel()
     }
 
+    /// Tracks the panel to its shown identifier as the clip view scrolls, rather than closing outright: a
+    /// scroll-to-dismiss felt like a bug to users reading a doc panel while scrolling the pane under it. Recomputes
+    /// the identifier's current on-screen rect from its document-absolute ``HoverHit/identifierRange`` (the
+    /// row/column pair alone is not enough once ``NSTextLayoutManager``'s own viewport-based layout has discarded
+    /// the fragment the original ``HoverHit/anchorRect`` was measured from); closes instead when that no longer
+    /// resolves to a rect, or the rect has scrolled outside the text view's own visible rect -- either way, the
+    /// panel would otherwise show for content the user can no longer see it point at.
+    ///
+    /// One `setFrameOrigin` per scroll notification is cheap enough that no debounce or `CADisplayLink` coalescing
+    /// is worth the complexity; revisit only if this is ever visibly janky.
     @objc private func scrollViewBoundsDidChange(_ notification: Notification) {
-        invalidate()
+        guard panel.isVisible, let shownHit, let textView else {
+            invalidate()
+            return
+        }
+        guard
+            let anchorRect = HoverHitTester.anchorRect(for: shownHit.identifierRange, textView: textView),
+            textView.visibleRect.intersects(anchorRect)
+        else {
+            invalidate()
+            return
+        }
+        panel.reposition(anchorRect: anchorRect, in: textView)
     }
 
     /// `NSTrackingArea` sends these directly to their owner by selector, not through the responder chain, so this

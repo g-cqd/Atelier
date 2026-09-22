@@ -60,6 +60,32 @@ struct DocHoverControllerTests {
         return textView
     }
 
+    /// Wraps `textView` in a real `NSScrollView` (also hosted in a real, retained window), the way a diff pane
+    /// actually attaches it -- ``DocHoverController/attach(to:rendered:)`` only observes
+    /// `NSView.boundsDidChangeNotification` from an enclosing scroll view's clip view, so a scroll-follow test
+    /// needs one.
+    private func scrollingTextView(showing rendered: RenderedText) -> (scrollView: NSScrollView, textView: NSTextView) {
+        let textView = NSTextView(usingTextLayoutManager: true)
+        textView.textContainerInset = NSSize(width: 0, height: DiffPaneMetrics.containerInset)
+        textView.textContainer?.lineFragmentPadding = DiffPaneMetrics.lineFragmentPadding
+        textView.textContainer?.widthTracksTextView = false
+        textView.textContainer?.size = NSSize(width: 800, height: DiffPaneMetrics.unboundedExtent)
+        textView.textContentStorage?.textStorage?.setAttributedString(rendered.attributed)
+        textView.textLayoutManager?.ensureLayout(for: textView.textLayoutManager!.documentRange)
+        textView.frame = NSRect(x: 0, y: 0, width: 800, height: rendered.lineHeight * CGFloat(rendered.rows.count) + 40)
+
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 800, height: 100))
+        scrollView.documentView = textView
+        scrollView.hasVerticalScroller = true
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 100), styleMask: [.borderless], backing: .buffered,
+            defer: false)
+        window.contentView?.addSubview(scrollView)
+        retainedWindows.append(window)
+        return (scrollView, textView)
+    }
+
     /// Column 8 sits inside "alphaBeta" on row 0; column 8 of row 1 sits inside "gammaDelta".
     private func point(row: Int, column: Int, in rendered: RenderedText) -> NSPoint {
         let charWidth = ("0" as NSString).size(withAttributes: [.font: rendered.palette.font]).width
@@ -138,6 +164,49 @@ struct DocHoverControllerTests {
 
         #expect(await spy.calls.isEmpty)
         #expect(taskProvider.spawnedTaskCount == 0)
+    }
+
+    // MARK: Scroll-follow
+
+    private func manyLinesRendered(count: Int = 40) throws -> RenderedText {
+        let manyLines = (0 ..< count).map { "let identifier\($0) = \($0)\n" }.joined()
+        return try #require(DiffRenderer.render(oldText: manyLines, newText: manyLines, language: .plain).new)
+    }
+
+    @Test
+    func `scrolling while the panel is visible keeps it open, repositioned, not closed`() async throws {
+        let rendered = try manyLinesRendered()
+        let (scrollView, view) = scrollingTextView(showing: rendered)
+        let (controller, _, taskProvider) = makeSUT()
+        controller.attach(to: view) { rendered }
+
+        controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
+        try await taskProvider.waitForAllTasks(timeout: .seconds(2))
+        #expect(controller.isPopoverVisible == true)
+
+        // A small scroll: row 0's anchor stays within the 100pt-tall viewport.
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: 5))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+
+        #expect(controller.isPopoverVisible == true)
+    }
+
+    @Test
+    func `scrolling the hovered identifier entirely out of view closes the panel`() async throws {
+        let rendered = try manyLinesRendered()
+        let (scrollView, view) = scrollingTextView(showing: rendered)
+        let (controller, _, taskProvider) = makeSUT()
+        controller.attach(to: view) { rendered }
+
+        controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
+        try await taskProvider.waitForAllTasks(timeout: .seconds(2))
+        #expect(controller.isPopoverVisible == true)
+
+        // Scroll far enough that row 0 is nowhere near the 100pt-tall viewport any more.
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: rendered.lineHeight * 30))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+
+        #expect(controller.isPopoverVisible == false)
     }
 
     @Test

@@ -338,4 +338,88 @@ struct TieredHoverProvidersTests {
         let result = try await tiered.hover(query())
         #expect(result?.markdown == "fallback")
     }
+
+    // MARK: Quality-aware tiering: a declaration-only base does not win outright
+
+    @Test
+    func `declaration-only repo LSP, nil doc index, prose SDK -- merges declaration with SDK prose, provenance sdk`()
+        async throws
+    {
+        let repoLSP = StubProvider(
+            result: HoverContent(markdown: "```swift\nclass NSPopover\n```", source: .languageServer))
+        let docIndex = StubProvider(result: nil)
+        let sdk = StubProvider(
+            result: HoverContent(markdown: "A means to display additional content.", source: .sdk))
+        let tiered = TieredHoverProviders([repoLSP, docIndex, sdk])
+
+        let result = try await tiered.hover(query())
+
+        #expect(result?.source == .sdk)
+        #expect(result?.markdown.contains("class NSPopover") == true)
+        #expect(result?.markdown.contains("A means to display additional content.") == true)
+    }
+
+    @Test
+    func `declaration-only repo LSP, doc index has the doc comment -- merges with provenance docIndex`() async throws {
+        let repoLSP = StubProvider(
+            result: HoverContent(markdown: "```swift\nfunc loadConfig() -> Config\n```", source: .languageServer))
+        let docIndex = StubProvider(
+            result: HoverContent(
+                markdown: "```swift\nfunc loadConfig() -> Config\n```\n\nLoads the configuration.", source: .docIndex)
+        )
+        let sdk = StubProvider(result: nil)
+        let tiered = TieredHoverProviders([repoLSP, docIndex, sdk])
+
+        let result = try await tiered.hover(query())
+
+        #expect(result?.source == .docIndex)
+        #expect(result?.markdown.contains("Loads the configuration.") == true)
+        #expect(result?.markdown.contains("func loadConfig() -> Config") == true)
+    }
+
+    @Test
+    func `first tier already has prose -- wins immediately, later tiers not consulted`() async throws {
+        let recorder = CallRecorder()
+        let first = RecordingProvider(
+            name: "first", result: HoverContent(markdown: "Repo prose.", source: .languageServer), recorder: recorder)
+        let second = RecordingProvider(
+            name: "second", result: HoverContent(markdown: "Doc index prose.", source: .docIndex), recorder: recorder)
+        let tiered = TieredHoverProviders([first, second])
+
+        let result = try await tiered.hover(query())
+
+        #expect(result?.source == .languageServer)
+        #expect(result?.markdown == "Repo prose.")
+        #expect(await recorder.calls == ["first"])
+    }
+
+    @Test
+    func `no tier ever supplies prose -- declaration-only base still returned`() async throws {
+        let repoLSP = StubProvider(
+            result: HoverContent(markdown: "```swift\nclass NSPopover\n```", source: .languageServer))
+        let docIndex = StubProvider(result: nil)
+        let sdk = StubProvider(result: nil)
+        let tiered = TieredHoverProviders([repoLSP, docIndex, sdk])
+
+        let result = try await tiered.hover(query())
+
+        #expect(result?.source == .languageServer)
+        #expect(result?.markdown == "```swift\nclass NSPopover\n```")
+    }
+
+    @Test
+    func `later tier already carries its own declaration and prose -- returned whole, no prepend`() async throws {
+        let repoLSP = StubProvider(
+            result: HoverContent(markdown: "```swift\nclass NSPopover\n```", source: .languageServer))
+        let sdk = StubProvider(
+            result: HoverContent(
+                markdown: "```swift\nclass NSPopover : NSResponder\n```\n\nSDK prose.", source: .sdk))
+        let tiered = TieredHoverProviders([repoLSP, sdk])
+
+        let result = try await tiered.hover(query())
+
+        #expect(result?.source == .sdk)
+        #expect(result?.markdown.contains("class NSPopover : NSResponder") == true)
+        #expect(result?.markdown.contains("class NSPopover\n```\n\n```") == false)
+    }
 }
