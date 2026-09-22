@@ -43,9 +43,10 @@ extension ToolStatusRow {
     }
 }
 
-/// The Settings ▸ Tools tab: the diagnostics master toggles, then one section per static-analysis tool and one for
-/// the language servers diagnostics and hover documentation share, each showing where the tool was found (or why
-/// it was not) and letting the user pin a custom executable.
+/// The Settings ▸ Tools tab (R1): the diagnostics master toggles up top, then one list with a single summary row
+/// per tool — status dot, name, status text, an enable toggle — each disclosing its path row (Locate…/Reset) on
+/// demand rather than showing it always. A pinned path that is not usable auto-expands so the problem is visible
+/// without a click. The whole list dims while the master toggle is off, since none of it can run anyway.
 struct ToolsSettings: View {
     @Bindable var settings: ViewerSettings
     let discovery: ToolDiscovery
@@ -53,87 +54,127 @@ struct ToolsSettings: View {
     /// Keyed by ``DiagnosticTool/rawValue`` for a static-analysis tool, or the server id for a language server.
     @State private var statuses: [String: ToolStatus] = [:]
     @State private var isRefreshing = false
+    /// Rows the user expanded or collapsed by hand, overriding the auto-expand-when-broken default.
+    @State private var expandedOverrides: [String: Bool] = [:]
 
     var body: some View {
-        Form {
-            Section("Diagnostics") {
-                Toggle("Analyze changed Swift files", isOn: $settings.diagnosticsEnabled)
-                Text(
-                    "Runs the enabled tools below on the files of a comparison; results appear inline and in the status bar."
-                )
-                .settingsCaption()
-                Toggle("Show documentation on hover", isOn: $settings.showsHoverDocumentation)
-                Text("Shows a language server's documentation for the symbol under the pointer.")
-                    .settingsCaption()
-                Button("Refresh Tool Status") { Task { await refreshAll() } }
-                    .disabled(isRefreshing)
-            }
-            ForEach(DiagnosticTool.allCases) { tool in
-                Section(tool.displayName) {
-                    toolRow(
-                        title: "Enabled", key: tool.rawValue,
-                        isEnabled: toolEnabledBinding(tool),
-                        customPath: toolCustomPathBinding(tool),
-                        executableName: tool.executableName
+        VStack(spacing: 0) {
+            Form {
+                Section("Diagnostics") {
+                    Toggle(SettingLabel.diagnosticsEnabled, isOn: $settings.diagnosticsEnabled)
+                    Toggle(SettingLabel.showsHoverDocumentation, isOn: $settings.showsHoverDocumentation)
+                    Picker(SettingLabel.analyzedSides, selection: $settings.analyzedSides) {
+                        Text("Newer side").tag(AnalyzedSides.newer)
+                        Text("Both sides").tag(AnalyzedSides.both)
+                    }
+                    .disabled(!settings.diagnosticsEnabled)
+                    Text(
+                        "Findings on a removed or old line only show with \"Both sides\", and are a best-effort "
+                            + "echo of the newer side's analysis at the same line number, not an independent look "
+                            + "at the old content."
                     )
-                    if let requiredConfigurationFile = tool.requiredConfigurationFile {
-                        Text("Runs only in projects that carry a \(requiredConfigurationFile) file.")
-                            .settingsCaption()
+                    .settingsCaption()
+                    Button(SettingLabel.refreshToolStatus) { Task { await refreshAll() } }
+                        .disabled(isRefreshing)
+                    // R6: friction on a trust-sensitive setting — shown always, not only on first enable, since
+                    // that reads the same and costs nothing extra to keep visible.
+                    Text(
+                        "Enabled tools below run their own discovered executables against this project's files "
+                            + "whenever a comparison changes."
+                    )
+                    .settingsCaption()
+                }
+                Section("Tools") {
+                    ForEach(DiagnosticTool.allCases) { tool in
+                        toolDisclosure(
+                            key: tool.rawValue, title: tool.displayName, executableName: tool.executableName,
+                            isEnabled: toolEnabledBinding(tool), customPath: toolCustomPathBinding(tool),
+                            footnote: tool.requiredConfigurationFile.map {
+                                "Runs only in projects that carry a \($0) file."
+                            }
+                        )
                     }
                 }
+                .disabled(!settings.diagnosticsEnabled)
+                .opacity(settings.diagnosticsEnabled ? 1 : 0.5)
+                Section("Language Servers") {
+                    toolDisclosure(
+                        key: Self.sourceKitLSPKey, title: "sourcekit-lsp", executableName: "sourcekit-lsp",
+                        isEnabled: lspEnabledBinding(Self.sourceKitLSPKey),
+                        customPath: lspCustomPathBinding(Self.sourceKitLSPKey), footnote: nil
+                    )
+                }
+                .disabled(!settings.diagnosticsEnabled)
+                .opacity(settings.diagnosticsEnabled ? 1 : 0.5)
             }
-            Section("Language Servers") {
-                toolRow(
-                    title: "sourcekit-lsp", key: Self.sourceKitLSPKey,
-                    isEnabled: lspEnabledBinding(Self.sourceKitLSPKey),
-                    customPath: lspCustomPathBinding(Self.sourceKitLSPKey),
-                    executableName: "sourcekit-lsp"
-                )
-            }
+            .formStyle(.grouped)
+            SettingsRestoreDefaultsFooter(settings: settings, category: .tools)
         }
-        .formStyle(.grouped)
+        .navigationTitle("Tools")
         .task { await refreshAll() }
     }
 
     private static let sourceKitLSPKey = "sourcekit-lsp"
 
+    /// One tool's row: a summary line (dot, name, status, enable toggle) always shown, and a `DisclosureGroup`
+    /// revealing the path row — the rare-use control (P5) — only when expanded, auto-expanded when the pinned
+    /// path is broken so the problem does not hide behind a click.
     @ViewBuilder
-    private func toolRow(
-        title: String, key: String, isEnabled: Binding<Bool>, customPath: Binding<String?>, executableName: String
+    private func toolDisclosure(
+        key: String, title: String, executableName: String, isEnabled: Binding<Bool>, customPath: Binding<String?>,
+        footnote: String?
     ) -> some View {
-        Toggle("Enable \(title)", isOn: isEnabled)
-        HStack(spacing: 6) {
-            let row = row(for: key, pinned: customPath.wrappedValue != nil, isEnabled: isEnabled.wrappedValue)
-            Circle()
-                .fill(row.color)
-                .frame(width: 8, height: 8)
-            Text(
-                isEnabled.wrappedValue
-                    ? toolStatusDescription(statuses[key], pinned: customPath.wrappedValue != nil) : "Off"
-            )
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .truncationMode(.middle)
-        }
-        HStack {
-            Text(customPath.wrappedValue ?? "Automatic")
+        let row = row(for: key, pinned: customPath.wrappedValue != nil, isEnabled: isEnabled.wrappedValue)
+        DisclosureGroup(isExpanded: isExpandedBinding(key: key, autoExpand: row.health == .broken)) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(customPath.wrappedValue ?? "Automatic")
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button("Locate…") {
+                        if let chosen = chooseExecutable(named: executableName) {
+                            customPath.wrappedValue = chosen
+                            Task { await refresh(key: key) }
+                        }
+                    }
+                    if customPath.wrappedValue != nil {
+                        Button("Reset") {
+                            customPath.wrappedValue = nil
+                            Task { await refresh(key: key) }
+                        }
+                    }
+                }
+                if let footnote {
+                    Text(footnote).settingsCaption()
+                }
+            }
+            .padding(.top, 2)
+        } label: {
+            HStack(spacing: 6) {
+                Circle().fill(row.color).frame(width: 8, height: 8)
+                Text(title)
+                Text(
+                    isEnabled.wrappedValue
+                        ? toolStatusDescription(statuses[key], pinned: customPath.wrappedValue != nil) : "Off"
+                )
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            Spacer()
-            Button("Locate…") {
-                if let chosen = chooseExecutable(named: executableName) {
-                    customPath.wrappedValue = chosen
-                    Task { await refresh(key: key) }
-                }
-            }
-            if customPath.wrappedValue != nil {
-                Button("Reset") {
-                    customPath.wrappedValue = nil
-                    Task { await refresh(key: key) }
-                }
+                Spacer()
+                Toggle("Enable \(title)", isOn: isEnabled)
+                    .labelsHidden()
             }
         }
+    }
+
+    private func isExpandedBinding(key: String, autoExpand: Bool) -> Binding<Bool> {
+        Binding(
+            get: { expandedOverrides[key] ?? autoExpand },
+            set: { expandedOverrides[key] = $0 }
+        )
     }
 
     private func row(for key: String, pinned: Bool, isEnabled: Bool) -> ToolStatusRow {

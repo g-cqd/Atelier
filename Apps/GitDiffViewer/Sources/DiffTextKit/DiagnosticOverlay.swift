@@ -67,26 +67,37 @@ package final class DiagnosticOverlay: Sendable {
 
 /// Builds a `DiagnosticOverlay`'s row content for one rendered text: findings keyed by comparison-relative path,
 /// with the path each rendered row's `fileIndex` belongs to. A finding annotates the row whose file matches and
-/// whose new-side line number equals the finding's line (new-side only, v1).
+/// whose new-side line number equals the finding's line. When `includesOldSide` is set (``AnalyzedSides/both``),
+/// a removed row (no new-side line) whose old-side line number matches a finding is annotated too — findings
+/// come from analyzing the newer side only, so this old-side echo is best-effort context, not an independent
+/// analysis of the old content; the deeper left-content analysis stays roadmapped.
 package enum DiagnosticRowMapper {
-    /// Same mapping as ``rows(for:paths:findings:)``, guaranteed to run off the main actor (SE-0461's
-    /// `@concurrent`) so the caller can await it from the main actor without blocking it. `RenderedText` is
-    /// `@unchecked Sendable` and `Finding` is fully `Sendable`, so both inputs cross for free.
+    /// Same mapping as ``rows(for:paths:findings:includesOldSide:)``, guaranteed to run off the main actor
+    /// (SE-0461's `@concurrent`) so the caller can await it from the main actor without blocking it.
+    /// `RenderedText` is `@unchecked Sendable` and `Finding` is fully `Sendable`, so both inputs cross for free.
     @concurrent
     package static func rowsOffMain(
-        for rendered: RenderedText, paths: [Int: String], findings: [String: [Finding]]
+        for rendered: RenderedText, paths: [Int: String], findings: [String: [Finding]], includesOldSide: Bool = false
     ) async -> [Int: DiagnosticOverlay.RowDiagnostics] {
         assert(!isOnMainThread(), "rowsOffMain must run off the main actor")
-        return rows(for: rendered, paths: paths, findings: findings)
+        return rows(for: rendered, paths: paths, findings: findings, includesOldSide: includesOldSide)
     }
 
     package static func rows(
-        for rendered: RenderedText, paths: [Int: String], findings: [String: [Finding]]
+        for rendered: RenderedText, paths: [Int: String], findings: [String: [Finding]], includesOldSide: Bool = false
     ) -> [Int: DiagnosticOverlay.RowDiagnostics] {
         var byRow: [Int: [Finding]] = [:]
         for (rowIndex, meta) in rendered.rows.enumerated() {
-            guard let line = meta.newNumber, let path = paths[meta.fileIndex], let candidates = findings[path]
-            else { continue }
+            guard let path = paths[meta.fileIndex], let candidates = findings[path] else { continue }
+            let line: Int?
+            if let newNumber = meta.newNumber {
+                line = newNumber
+            } else if includesOldSide {
+                line = meta.oldNumber
+            } else {
+                line = nil
+            }
+            guard let line else { continue }
             let matches = candidates.filter { $0.line == line }
             guard !matches.isEmpty else { continue }
             byRow[rowIndex, default: []].append(contentsOf: matches)
