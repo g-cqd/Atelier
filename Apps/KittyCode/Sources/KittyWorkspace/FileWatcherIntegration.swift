@@ -59,7 +59,8 @@ public final class FileWatcherIntegration {
     }
 
     public func suppressForSave(_ path: String) {
-        taskProvider.task(role: .work) { await watcher.suppressNotifications(for: path) }
+        // Synchronous and lock-based on the watcher side — no task needed to cross isolation.
+        watcher.suppressNotifications(for: path)
     }
 
     private func handleEvent(_ event: FileWatcher.FileWatchEvent) async {
