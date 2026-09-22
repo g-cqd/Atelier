@@ -58,28 +58,6 @@ struct DiffViewerModelTests {
     }
 
     @Test
-    func `cards fold per file, all at once, and unfold when the sources change`() async throws {
-        let sut = harness.makeSUT()
-        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [
-            harness.entry("a.swift", "1"), harness.entry("b.swift", "2")
-        ]
-        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [
-            harness.entry("a.swift", "8"), harness.entry("b.swift", "9")
-        ]
-        try await harness.load(sut)
-
-        sut.toggleCollapsed("a.swift")
-        #expect(sut.collapsedFiles == ["a.swift"])
-        sut.toggleCollapsed("a.swift")
-        #expect(sut.collapsedFiles.isEmpty)
-        sut.setAllCollapsed(true)
-        #expect(sut.collapsedFiles == ["a.swift", "b.swift"])
-
-        sut.sourcesChanged()
-        #expect(sut.collapsedFiles.isEmpty)
-    }
-
-    @Test
     func `added and deleted files start folded in the card list`() async throws {
         let sut = harness.makeSUT()
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [

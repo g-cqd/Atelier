@@ -36,6 +36,15 @@ package final class RenderPipeline {
         case failed(String)
     }
 
+    /// The sources and the diff options a render happens against, bundled so the pipeline's private helpers stay
+    /// under the file's parameter-count limit.
+    private struct RenderInputs {
+        let left: ComparisonSource
+        let right: ComparisonSource
+        let granularity: IntralineGranularity
+        let heuristics: DiffHeuristics
+    }
+
     package private(set) var file: RenderedDiff?
     package private(set) var cards: [RenderedFile] = []
     package private(set) var target: Target?
@@ -55,6 +64,11 @@ package final class RenderPipeline {
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var options: DiffRenderer.Options
     @ObservationIgnored private var layout: (context: Int, isolates: Bool) = (3, false)
+
+    /// Granularity and heuristics of whatever is currently published, so the next `render` can tell whether they
+    /// still match and a pair kept from before was diffed the same way.
+    @ObservationIgnored private var publishedGranularity: IntralineGranularity?
+    @ObservationIgnored private var publishedHeuristics: DiffHeuristics?
 
     private let preparer: DiffPreparer
     private let taskProvider: any TaskProvider
@@ -85,15 +99,26 @@ package final class RenderPipeline {
     }
 
     /// Renders `target` afresh. Whatever is already prepared is published in this very update, before any task hop.
+    ///
+    /// A pair kept from the previously-published target — same path, same blobs on both sides, same granularity
+    /// and heuristics — is neither re-prepared nor re-rendered: the very `PreparedDiff` and `RenderedFile` it had
+    /// are reused, so the array published to the UI reuses the same object references and a view keyed on them
+    /// (a card's `RenderedDiff.id`, a pane's `RenderedText`) never rebuilds. This is what makes a reload or an
+    /// auto-refresh re-comparison leave untouched files exactly where they were, fold and scroll included: only
+    /// pairs whose identity actually changed go through prepare-and-render again.
     package func render(
         _ target: Target, left: ComparisonSource, right: ComparisonSource, granularity: IntralineGranularity,
         heuristics: DiffHeuristics
     ) {
+        let inputs = RenderInputs(left: left, right: right, granularity: granularity, heuristics: heuristics)
         task?.cancel()
+        let reuse = reuse(for: target, granularity: granularity, heuristics: heuristics)
         generation += 1
         isRendering = true
         let generation = generation
         self.target = target
+        publishedGranularity = granularity
+        publishedHeuristics = heuristics
         file = nil
         cards = []
         prepared = []
@@ -101,53 +126,21 @@ package final class RenderPipeline {
         gapExpansions = [:]
         preparer.cancelPrefetch()
 
-        let pairs = target.pairs
-        if let head = pairs.first, let cached = preparer.cached(head, granularity: granularity, heuristics: heuristics)
-        {
-            prepared = [cached]
-            publish(
-                Self.render(prepared, target: target, options: options, layout: renderLayout, keepingScroll: false),
-                generation: generation, appending: false)
-            if pairs.count == 1 {
-                finish(generation)
-                return
-            }
-        }
-        task = taskProvider.task {
-            do {
-                if prepared.isEmpty {
-                    let head = try await preparer.prepare(
-                        Array(pairs.prefix(1)), left: left, right: right, granularity: granularity,
-                        heuristics: heuristics)
-                    guard generation == self.generation else { return }
-                    prepared = head
-                    publish(
-                        try await Self.renderOffMain(
-                            head, target: target, options: options, layout: renderLayout, keepingScroll: false),
-                        generation: generation, appending: false)
+        switch target {
+            case .file(let pair):
+                if let reused = reuse.file {
+                    prepared = reuse.preparedByIdentity[PairIdentity(pair)].map { [$0] } ?? []
+                    file = reused
+                    finish(generation)
+                    return
                 }
-                if pairs.count > 1 {
-                    let tail = try await preparer.prepare(
-                        Array(pairs.dropFirst()), left: left, right: right, granularity: granularity,
-                        heuristics: heuristics)
-                    guard generation == self.generation else { return }
-                    prepared += tail
-                    publish(
-                        try await Self.renderOffMain(
-                            tail, target: target, options: options, layout: renderLayout, keepingScroll: false,
-                            firstIndex: 1), generation: generation, appending: true)
+                renderFresh(target, inputs: inputs, keepingScroll: reuse.sameFilePath, generation: generation)
+            case .cards(let pairs):
+                guard !reuse.cardsByIdentity.isEmpty else {
+                    renderFresh(target, inputs: inputs, keepingScroll: false, generation: generation)
+                    return
                 }
-                finish(generation)
-            } catch is CancellationError {
-                return
-            } catch {
-                guard generation == self.generation else { return }
-                self.error = error.localizedDescription
-                completedGeneration = generation
-                isRendering = false
-                isRendering = false
-                onEvent?(.failed(error.localizedDescription))
-            }
+                renderCardsDifferentially(pairs, reuse: reuse, inputs: inputs, generation: generation)
         }
     }
 
@@ -273,6 +266,203 @@ package final class RenderPipeline {
                     .cards[0]
                 }
                 return .cards(files)
+        }
+    }
+}
+
+/// Reuse of the previously-published state across a `render`: what makes a reload or an auto-refresh
+/// re-comparison leave already-loaded files untouched. Kept out of the class body, which otherwise grows past the
+/// house style's length limit for one type.
+extension RenderPipeline {
+    /// A pair's rendering identity: the path and both blob ids. Two pairs with the same identity produce the same
+    /// diff, so whichever one is already prepared or rendered can stand in for the other without redoing any work.
+    private struct PairIdentity: Hashable {
+        let path: String
+        let oldBlob: String?
+        let newBlob: String?
+
+        init(_ pair: FilePair) {
+            path = pair.path
+            oldBlob = pair.old?.blobID
+            newBlob = pair.new?.blobID
+        }
+    }
+
+    /// Whatever the currently-published cards or file can lend to the next render: prepared diffs and rendered
+    /// cards, keyed by identity, plus the currently rendered file when its target renders a single file.
+    private struct Reuse {
+        var file: RenderedDiff?
+        /// Whether the previous `.file` target named the same path as the one about to render, whatever its blobs:
+        /// a reload of the selected file keeps the pane's scroll even though its content changed.
+        var sameFilePath = false
+        var preparedByIdentity: [PairIdentity: PreparedDiff] = [:]
+        var cardsByIdentity: [PairIdentity: RenderedFile] = [:]
+    }
+
+    /// What the next render can reuse from the currently-published state: nothing when the granularity or the
+    /// heuristics differ, since only a like-for-like diff can stand in for another. A render still streaming in
+    /// (two reloads racing, one of both sides) is fine to reuse from too: `prepared` and `cards` only ever grow as
+    /// a prefix of their target's pairs, in order, so whatever prefix has actually landed is safe to lend as is,
+    /// and whatever has not is simply treated the same as a pair that is missing outright. Call before bumping
+    /// `generation` or clearing published state.
+    private func reuse(for target: Target, granularity: IntralineGranularity, heuristics: DiffHeuristics) -> Reuse {
+        var reuse = Reuse()
+        guard granularity == publishedGranularity, heuristics == publishedHeuristics, let previousTarget = self.target
+        else { return reuse }
+        let oldPairs = previousTarget.pairs
+        switch previousTarget {
+            case .file(let pair):
+                guard let oldPrepared = prepared.first else { return reuse }
+                let identity = PairIdentity(pair)
+                reuse.preparedByIdentity[identity] = oldPrepared
+                if case .file(let newPair) = target {
+                    reuse.sameFilePath = newPair.path == pair.path
+                    if PairIdentity(newPair) == identity { reuse.file = file }
+                }
+            case .cards:
+                // A reused card keeps whatever `firstFileIndex` it was rendered with (baked into its rows, and
+                // relied on by hover to map a hit back to its file), so only a pair that stayed at the very same
+                // position, not merely somewhere in the new list, can be reused as is. A pair that moved is
+                // rendered afresh, at its new position, like a genuinely new one.
+                guard case .cards(let newPairs) = target else { return reuse }
+                let landed = min(oldPairs.count, prepared.count, cards.count)
+                for index in 0 ..< landed where index < newPairs.count {
+                    let identity = PairIdentity(oldPairs[index])
+                    guard identity == PairIdentity(newPairs[index]) else { continue }
+                    reuse.preparedByIdentity[identity] = prepared[index]
+                    reuse.cardsByIdentity[identity] = cards[index]
+                }
+        }
+        return reuse
+    }
+
+    /// The original, unconditional render: every pair of `target` prepared and rendered afresh, streaming the
+    /// first pair in as soon as it lands and the rest in one batch behind it.
+    private func renderFresh(_ target: Target, inputs: RenderInputs, keepingScroll: Bool, generation: Int) {
+        let pairs = target.pairs
+        if let head = pairs.first,
+            let cached = preparer.cached(head, granularity: inputs.granularity, heuristics: inputs.heuristics)
+        {
+            prepared = [cached]
+            publish(
+                Self.render(
+                    prepared, target: target, options: options, layout: renderLayout, keepingScroll: keepingScroll),
+                generation: generation, appending: false)
+            if pairs.count == 1 {
+                finish(generation)
+                return
+            }
+        }
+        task = taskProvider.task {
+            do {
+                if prepared.isEmpty {
+                    let head = try await preparer.prepare(
+                        Array(pairs.prefix(1)), left: inputs.left, right: inputs.right,
+                        granularity: inputs.granularity, heuristics: inputs.heuristics)
+                    guard generation == self.generation else { return }
+                    prepared = head
+                    publish(
+                        try await Self.renderOffMain(
+                            head, target: target, options: options, layout: renderLayout,
+                            keepingScroll: keepingScroll),
+                        generation: generation, appending: false)
+                }
+                if pairs.count > 1 {
+                    let tail = try await preparer.prepare(
+                        Array(pairs.dropFirst()), left: inputs.left, right: inputs.right,
+                        granularity: inputs.granularity, heuristics: inputs.heuristics)
+                    guard generation == self.generation else { return }
+                    prepared += tail
+                    publish(
+                        try await Self.renderOffMain(
+                            tail, target: target, options: options, layout: renderLayout,
+                            keepingScroll: keepingScroll, firstIndex: 1), generation: generation, appending: true)
+                }
+                finish(generation)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard generation == self.generation else { return }
+                self.error = error.localizedDescription
+                completedGeneration = generation
+                isRendering = false
+                onEvent?(.failed(error.localizedDescription))
+            }
+        }
+    }
+
+    /// Renders a card list against what the previously-published cards can lend it: pairs whose identity is
+    /// unchanged are neither prepared nor rendered again, only the rest go through ``DiffPreparer`` and
+    /// ``DiffRenderer``. Published once, in the target's order, whether that takes one main-actor turn (every pair
+    /// reused) or a task hop (some pairs need work).
+    private func renderCardsDifferentially(
+        _ pairs: [FilePair], reuse: Reuse, inputs: RenderInputs, generation: Int
+    ) {
+        let identities = pairs.map(PairIdentity.init)
+        let missingIndices = identities.indices.filter { reuse.cardsByIdentity[identities[$0]] == nil }
+
+        guard !missingIndices.isEmpty else {
+            prepared = identities.compactMap { reuse.preparedByIdentity[$0] }
+            publish(
+                .cards(identities.compactMap { reuse.cardsByIdentity[$0] }), generation: generation, appending: false)
+            finish(generation)
+            return
+        }
+
+        let missingPairs = missingIndices.map { pairs[$0] }
+        // Rendered one by one, each at its own position in `pairs`: a card's rows bake in the `firstFileIndex`
+        // hover keys its lookups by, and a missing pair does not sit in one contiguous run within `pairs` (the
+        // reused ones around it keep their own slots), so the block-plus-offset shared with `renderFresh` does
+        // not apply here.
+        let options = self.options
+        let layout = renderLayout
+        task = taskProvider.task {
+            do {
+                let freshPrepared = try await self.preparer.prepare(
+                    missingPairs, left: inputs.left, right: inputs.right, granularity: inputs.granularity,
+                    heuristics: inputs.heuristics)
+                guard generation == self.generation else { return }
+                let indexed = Array(zip(missingIndices, freshPrepared))
+                let freshCards = try await mapConcurrently(
+                    indexed, limit: ProcessInfo.processInfo.activeProcessorCount
+                ) { index, diff -> RenderedFile in
+                    guard
+                        case .cards(let files) = Self.render(
+                            [diff], target: .cards([pairs[index]]), options: options, layout: layout,
+                            keepingScroll: false, firstIndex: index)
+                    else { preconditionFailure("Self.render(target: .cards) always returns .cards") }
+                    return files[0]
+                }
+                guard generation == self.generation else { return }
+                let freshPreparedByIdentity = Dictionary(
+                    zip(missingPairs.map(PairIdentity.init), freshPrepared), uniquingKeysWith: { first, _ in first })
+                let freshCardsByIdentity = Dictionary(
+                    zip(missingPairs.map(PairIdentity.init), freshCards), uniquingKeysWith: { first, _ in first })
+                var mergedPrepared: [PreparedDiff] = []
+                var mergedCards: [RenderedFile] = []
+                mergedPrepared.reserveCapacity(identities.count)
+                mergedCards.reserveCapacity(identities.count)
+                for identity in identities {
+                    if let kept = reuse.preparedByIdentity[identity], let card = reuse.cardsByIdentity[identity] {
+                        mergedPrepared.append(kept)
+                        mergedCards.append(card)
+                    } else if let fresh = freshPreparedByIdentity[identity], let card = freshCardsByIdentity[identity] {
+                        mergedPrepared.append(fresh)
+                        mergedCards.append(card)
+                    }
+                }
+                self.prepared = mergedPrepared
+                self.publish(.cards(mergedCards), generation: generation, appending: false)
+                self.finish(generation)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard generation == self.generation else { return }
+                self.error = error.localizedDescription
+                self.completedGeneration = generation
+                self.isRendering = false
+                self.onEvent?(.failed(error.localizedDescription))
+            }
         }
     }
 }

@@ -277,7 +277,9 @@ package final class DiffViewerModel {
             left: left.entries, right: right.entries, leftSource: left.source, rightSource: right.source,
             leftIgnored: left.ignoredEntries ?? [], rightIgnored: right.ignoredEntries ?? []
         )
-        folding.reset()
+        // Not `folding.reset()`: a reload or an auto-refresh re-comparison keeps the user's folds. `CardFolding`
+        // is keyed by path, so a fold made before a reload still applies to the same file after it; a path that
+        // stops existing simply never matches a card again, `collapsed` holding a stale entry for it or not.
         detectRenames()
         rebuildTrees()
         updateDiagnostics()
