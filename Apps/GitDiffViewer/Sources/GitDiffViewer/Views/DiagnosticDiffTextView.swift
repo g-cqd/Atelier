@@ -53,6 +53,7 @@ struct DiagnosticDiffTextView: View {
         .onChange(of: rendered.id) { recompute() }
         .onChange(of: model.diagnosticsVersion) { recompute() }
         .onChange(of: model.settings.diagnosticsEnabled) { recompute() }
+        .onChange(of: model.settings.analyzedSides) { recompute() }
     }
 
     /// Maps this pane's findings off the main actor and applies the result, guarded by generation so a slower,
@@ -68,9 +69,11 @@ struct DiagnosticDiffTextView: View {
         }
         let paths = model.diagnosticFilePaths
         let findings = diagnostics.findingsByFile
+        let includesOldSide = model.settings.analyzedSides == .both
         let rendered = rendered
         Task {
-            let rows = await DiagnosticRowMapper.rowsOffMain(for: rendered, paths: paths, findings: findings)
+            let rows = await DiagnosticRowMapper.rowsOffMain(
+                for: rendered, paths: paths, findings: findings, includesOldSide: includesOldSide)
             guard generation == recomputeGeneration else { return }
             overlay.replace(rows)
             version += 1

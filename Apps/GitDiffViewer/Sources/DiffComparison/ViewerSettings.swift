@@ -49,6 +49,37 @@ package enum SidebarVisibility: String, CaseIterable, Identifiable {
     package var id: String { rawValue }
 }
 
+/// Which side of a comparison diagnostics tools analyze. Findings come from the tools running against the newer
+/// (on-disk) side, so the old side's rows only ever get a best-effort echo of a finding that also names the same
+/// line number on the old side — never an independent analysis of the old content itself.
+package enum AnalyzedSides: String, CaseIterable, Identifiable, Codable {
+    /// Only the newer side is analyzed; the older side never shows diagnostics.
+    case newer
+    /// The newer side is analyzed as usual, and its findings are echoed onto old-side rows that share the same
+    /// line number — useful context on a removed or changed line, not a genuine analysis of the old content.
+    case both
+
+    package var id: String { rawValue }
+}
+
+/// The Settings window's tabs, persisted so the window reopens on whichever the user last looked at.
+package enum SettingsPane: String, CaseIterable, Identifiable, Codable {
+    case general
+    case diff
+    case appearance
+    case tools
+
+    package var id: String { rawValue }
+}
+
+/// A group of related settings a Settings tab shows together, for per-tab "Restore Defaults".
+package enum SettingsCategory: CaseIterable {
+    case general
+    case diff
+    case appearance
+    case tools
+}
+
 /// User preferences, persisted in user defaults and shared by the main window, the options bar and the Settings window.
 @Observable
 @MainActor
@@ -139,6 +170,14 @@ package final class ViewerSettings {
     package var lspServerLocations: [String: ToolLocation] {
         didSet { store(try? JSONEncoder().encode(lspServerLocations), Key.lspServerLocations, .diagnostics) }
     }
+    /// Which side(s) of a comparison diagnostics findings are mapped onto.
+    package var analyzedSides: AnalyzedSides {
+        didSet { store(analyzedSides.rawValue, Key.analyzedSides, .diagnostics) }
+    }
+    /// The Settings window's last-viewed tab, restored the next time it opens.
+    package var settingsPane: SettingsPane {
+        didSet { store(settingsPane.rawValue, Key.settingsPane, .appearance) }
+    }
 
     private let defaults: UserDefaults
 
@@ -189,6 +228,76 @@ package final class ViewerSettings {
             defaults.data(forKey: Key.lspServerLocations)
             .flatMap { try? JSONDecoder().decode([String: ToolLocation].self, from: $0) }
             ?? ["sourcekit-lsp": ToolLocation()]
+        analyzedSides =
+            defaults.string(forKey: Key.analyzedSides).flatMap(AnalyzedSides.init(rawValue:)) ?? .newer
+        settingsPane =
+            defaults.string(forKey: Key.settingsPane).flatMap(SettingsPane.init(rawValue:)) ?? .general
+    }
+
+    /// Resets every setting in `category` to its coded default, going through the same setters as a user edit so
+    /// each one stores to user defaults and fires its observers exactly as it would for a manual change.
+    package func restoreDefaults(_ category: SettingsCategory) {
+        switch category {
+            case .general:
+                explorerPlacement = .top
+                treeStyle = .hierarchy
+                showsChangesOnly = false
+                showsIgnoredFiles = false
+                syncsScrolling = true
+                showsMinimap = true
+                showsStatusBar = true
+            case .diff:
+                isolatesChanges = false
+                contextLines = 3
+                granularity = .word
+                diffHeuristics = DiffHeuristics()
+            case .appearance:
+                themePath = nil
+                lineHeightMultiple = 0
+                mode = .split
+                wrapsLines = true
+                wrapColumn = 0
+            case .tools:
+                diagnosticsEnabled = false
+                showsHoverDocumentation = true
+                analyzedSides = .newer
+                toolLocations = Dictionary(uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation()) })
+                lspServerLocations = ["sourcekit-lsp": ToolLocation()]
+        }
+    }
+
+    /// How many settings in `category` currently differ from their coded default, for the tab footer's subtle
+    /// deviation indicator (P6): cheap enough to recompute on every render since each category is a handful of
+    /// comparisons.
+    package func settingsDiffCount(_ category: SettingsCategory) -> Int {
+        switch category {
+            case .general:
+                return [
+                    explorerPlacement != .top, treeStyle != .hierarchy, showsChangesOnly != false,
+                    showsIgnoredFiles != false, syncsScrolling != true, showsMinimap != true,
+                    showsStatusBar != true
+                ]
+                .count { $0 }
+            case .diff:
+                return [
+                    isolatesChanges != false, contextLines != 3, granularity != .word,
+                    diffHeuristics != DiffHeuristics()
+                ]
+                .count { $0 }
+            case .appearance:
+                return [
+                    themePath != nil, lineHeightMultiple != 0, mode != .split, wrapsLines != true, wrapColumn != 0
+                ]
+                .count { $0 }
+            case .tools:
+                let defaultToolLocations = Dictionary(
+                    uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation()) })
+                return [
+                    diagnosticsEnabled != false, showsHoverDocumentation != true, analyzedSides != .newer,
+                    toolLocations != defaultToolLocations, lspServerLocations != ["sourcekit-lsp": ToolLocation()]
+                ]
+                .count { $0 }
+        }
     }
 
     private enum Key {
@@ -214,5 +323,7 @@ package final class ViewerSettings {
         static let showsHoverDocumentation = "hoverDocumentation"
         static let toolLocations = "diagnosticToolLocations"
         static let lspServerLocations = "lspServerLocations"
+        static let analyzedSides = "analyzedSides"
+        static let settingsPane = "settingsPane"
     }
 }

@@ -147,6 +147,51 @@ struct DiagnosticRowMapperTests {
     }
 
     @Test
+    func `a removed line is not annotated by default, even when its old line number matches a finding`() throws {
+        // Removing the last line keeps every surviving row's new-side number distinct from the removed row's
+        // old-side number, so a match can only come from the old-side fallback under test, never a coincidence.
+        let old = "line1\nline2\nline3\n"
+        let new = "line1\nline2\n"
+        let rendered = try #require(DiffRenderer.render(oldText: old, newText: new, language: .plain).old)
+        let paths = [0: "a.swift"]
+        let findings = ["a.swift": [finding(line: 3)]]
+
+        let rows = DiagnosticRowMapper.rows(for: rendered, paths: paths, findings: findings)
+
+        #expect(rows.isEmpty)
+    }
+
+    @Test
+    func `a removed line is annotated when includesOldSide matches its old line number`() throws {
+        let old = "line1\nline2\nline3\n"
+        let new = "line1\nline2\n"
+        let rendered = try #require(DiffRenderer.render(oldText: old, newText: new, language: .plain).old)
+        let paths = [0: "a.swift"]
+        let findings = ["a.swift": [finding(line: 3)]]
+
+        let rows = DiagnosticRowMapper.rows(for: rendered, paths: paths, findings: findings, includesOldSide: true)
+
+        let removedRowIndex = try #require(rendered.rows.firstIndex { $0.newNumber == nil && $0.oldNumber == 3 })
+        let row = try #require(rows[removedRowIndex])
+        #expect(row.findings == [finding(line: 3)])
+    }
+
+    @Test
+    func `includesOldSide never re-annotates a row that already has a new-side line number`() throws {
+        let text = "line1\nline2\nline3\n"
+        let rendered = try #require(DiffRenderer.render(oldText: text, newText: text, language: .plain).new)
+        let paths = [0: "a.swift"]
+        let findings = ["a.swift": [finding(line: 2)]]
+
+        let rows = DiagnosticRowMapper.rows(for: rendered, paths: paths, findings: findings, includesOldSide: true)
+
+        // Every row here has a new-side number, so the old-side fallback never triggers; the result is the same
+        // as the new-side-only mapping.
+        #expect(rows.count == 1)
+        #expect(rows[1]?.findings == [finding(line: 2)])
+    }
+
+    @Test
     func `a finding under a different file index than the row's is absent`() throws {
         let file1 = PreparedDiff(
             FileDiffInput(title: "a.swift", oldText: "x\n", newText: "x\n", language: .plain), granularity: .word)
