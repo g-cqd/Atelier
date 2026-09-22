@@ -121,17 +121,21 @@ package final class DocHoverController: NSObject {
         invalidate()
     }
 
-    /// `NSTrackingArea` sends these directly to their owner by selector, not through the responder chain, so
-    /// this need not subclass `NSResponder`; `@objc` alone makes the selectors visible to it.
-    @objc package func mouseMoved(with event: NSEvent) {
+    /// `NSTrackingArea` sends these directly to their owner by selector, not through the responder chain, so this
+    /// need not subclass `NSResponder`. The explicit `@objc(...)` names are load-bearing: `DocHoverController` is
+    /// a plain `NSObject`, not an `NSResponder` override, so Swift's default selector synthesis for a
+    /// `with:`-labelled method produces `mouseMovedWith:` (etc), not the fixed `mouseMoved:` Cocoa's tracking-area
+    /// dispatch actually sends -- silently losing every hover event to an "unrecognized selector" AppKit log
+    /// rather than a crash, since `NSTrackingArea` dispatch degrades to a no-op when the owner does not respond.
+    @objc(mouseMoved:) package func mouseMoved(with event: NSEvent) {
         guard let textView else { return }
         pointerMoved(to: textView.convert(event.locationInWindow, from: nil))
     }
 
     /// No-op: nothing shows until the pointer actually rests on an identifier, which `mouseMoved` alone detects.
-    @objc package func mouseEntered(with event: NSEvent) {}
+    @objc(mouseEntered:) package func mouseEntered(with event: NSEvent) {}
 
-    @objc package func mouseExited(with event: NSEvent) {
+    @objc(mouseExited:) package func mouseExited(with event: NSEvent) {
         // A move into the popover itself is indistinguishable from leaving the text view here; closing on every
         // exit is the simple, correct-enough v1 behaviour.
         invalidate()
