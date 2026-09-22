@@ -1,5 +1,4 @@
 import AppKit
-import AtelierGit
 import DiffComparison
 import DiffCore
 import DiffGit
@@ -62,6 +61,17 @@ struct ComparisonWindow: View {
             .onChange(of: model.currentConfiguration) { _, current in
                 if let current { recents.record(current) }
             }
+            // Rebinds the window's project-scoped settings whenever the comparison's own repository changes,
+            // not just once at launch: switching to a different repository through the source toolbar must move
+            // this window's project-scoped writes with it, or they keep landing under whatever project it
+            // launched with. `currentProjectRoot` is already resolved (each side's `SideState.repository` did
+            // that work as it loaded, the same way `GitClient.repositoryRoot(containing:)` would), so adopting it
+            // needs no further I/O and so no supersession guard of its own -- `onChange` already delivers values
+            // in order, and `adoptProject` is synchronous.
+            .onChange(of: model.currentProjectRoot, initial: true) { _, root in
+                guard let root else { return }
+                settings.adoptProject(ProjectIdentity(root: root))
+            }
             .onAppear {
                 guard !hasStarted else { return }
                 hasStarted = true
@@ -78,24 +88,7 @@ struct ComparisonWindow: View {
                 // The SDK documentation tier resolves once per app and slots in behind the doc-comment index;
                 // a machine without sourcekit-lsp simply leaves the tier absent.
                 model.hoverDocs?.sdkProvider = await services.sdkHoverProvider()
-                guard let root = await resolveProjectRoot() else { return }
-                settings.adoptProject(ProjectIdentity(root: root))
             }
-    }
-
-    /// Where this window's project lives, resolved the same way `git` itself would: the repository root
-    /// containing whichever path the launch configuration names, so a subfolder or a non-root path still maps to
-    /// the same project as the rest of the repository. Patches carry no filesystem root of their own and stay
-    /// unadopted -- their settings remain whatever the base currently holds.
-    private func resolveProjectRoot() async -> URL? {
-        let candidate: URL?
-        switch configuration {
-            case .patch: candidate = nil
-            case .files(let left, _): candidate = left
-            case .repository(let url, _, _): candidate = url
-        }
-        guard let candidate else { return nil }
-        return await GitClient.repositoryRoot(containing: candidate, runner: services.runner)
     }
 }
 

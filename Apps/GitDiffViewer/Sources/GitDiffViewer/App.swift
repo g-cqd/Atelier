@@ -138,10 +138,12 @@ final class AppServices {
     /// language servers and shared by every window.
     func sdkHoverProvider() async -> SDKDocumentationProvider? {
         if let resolved = sdkHoverState { return resolved }
+        let location = Self.sourceKitLSPToolLocation()
         guard
+            sourceKitLSPDiscoveryEnabled(location),
             let located = await toolDiscovery.locate(
                 executableName: "sourcekit-lsp", overrideVariable: "GDV_SOURCEKIT_LSP",
-                customPath: Self.pinnedSourceKitLSPPath(), searchesToolchain: true)
+                customPath: location?.customPath, searchesToolchain: true)
         else {
             sdkHoverState = .some(nil)
             return nil
@@ -167,47 +169,63 @@ final class AppServices {
     private static func sourceKitLSPConfiguration(workspaceRoot: URL, toolDiscovery: ToolDiscovery) async
         -> SourceKitLSPService.Configuration?
     {
+        let location = sourceKitLSPToolLocation()
         guard
+            sourceKitLSPDiscoveryEnabled(location),
             let located = await toolDiscovery.locate(
                 executableName: "sourcekit-lsp", overrideVariable: "GDV_SOURCEKIT_LSP",
-                customPath: pinnedSourceKitLSPPath(), searchesToolchain: true)
+                customPath: location?.customPath, searchesToolchain: true)
         else { return nil }
         return SourceKitLSPService.Configuration(serverExecutable: located.url, workspaceRoot: workspaceRoot)
     }
 
     /// Mirrors ``ViewerSettings/Key/lspServerLocations``'s own user-defaults key: the literal is duplicated
     /// rather than shared because that key lives on a type this app-wide, pre-settings service has no business
-    /// depending on.
-    private static func pinnedSourceKitLSPPath() -> String? {
+    /// depending on. Disabling sourcekit-lsp must gate discovery itself, not merely fall back to searching for it
+    /// with no custom path (which workspace and SDK-tier discovery would still happily find on `$PATH` or the
+    /// active toolchain) -- so callers check ``ToolLocation/isEnabled`` before ever calling ``ToolDiscovery/locate``.
+    private static func sourceKitLSPToolLocation() -> ToolLocation? {
         guard let data = UserDefaults.standard.data(forKey: "lspServerLocations"),
-            let decoded = try? JSONDecoder().decode([String: ToolLocation].self, from: data),
-            let location = decoded["sourcekit-lsp"], location.isEnabled
+            let decoded = try? JSONDecoder().decode([String: ToolLocation].self, from: data)
         else { return nil }
-        return location.customPath
+        return decoded["sourcekit-lsp"]
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let services = AppServices()
 
-    func applicationWillTerminate(_ notification: Notification) {
-        Self.drainLSPSessions(services.lspRegistry, scratch: services.sdkScratchService)
-        services.shutdown()
+    /// Defers termination rather than blocking the MainActor on the drain: `applicationWillTerminate` runs
+    /// synchronously on the main thread, and a `DispatchSemaphore.wait` there would freeze the run loop, so any
+    /// MainActor hop the drain (or something it calls transitively) ever needs can never happen -- the wait
+    /// exhausts its whole budget on every quit instead of returning as soon as the drain finishes. Returning
+    /// `.terminateLater` and replying once the drain (or its own bounded timeout) completes keeps the run loop
+    /// alive throughout.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        Task { @MainActor in
+            await Self.drainLSPSessions(services.lspRegistry, scratch: services.sdkScratchService)
+            services.shutdown()
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 
     /// Best-effort graceful shutdown of every sourcekit-lsp session, bounded so a hung server can never hold
-    /// termination up: `applicationWillTerminate` is synchronous, so the graceful `shutdown`/`exit` conversation
-    /// (itself already timeout-bounded per session) gets a fixed budget on a semaphore, and whatever is still
-    /// running past it is abandoned -- the process exiting closes every child's pipes right behind it, which is
-    /// sourcekit-lsp's own cue to go away.
-    private static func drainLSPSessions(_ registry: SourceKitLSPRegistry, scratch: SourceKitLSPService?) {
-        let semaphore = DispatchSemaphore(value: 0)
-        Task {
-            await registry.shutdownAll()
-            await scratch?.shutdown()
-            semaphore.signal()
+    /// termination up: the graceful `shutdown`/`exit` conversation (itself already timeout-bounded per session)
+    /// races a fixed budget, and whatever is still running past it is abandoned -- the process exiting closes
+    /// every child's pipes right behind it, which is sourcekit-lsp's own cue to go away.
+    private static func drainLSPSessions(_ registry: SourceKitLSPRegistry, scratch: SourceKitLSPService?) async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                await registry.shutdownAll()
+                await scratch?.shutdown()
+            }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(1))
+            }
+            await group.next()
+            group.cancelAll()
         }
-        _ = semaphore.wait(timeout: .now() + 1)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

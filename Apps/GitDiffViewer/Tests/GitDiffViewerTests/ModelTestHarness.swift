@@ -91,6 +91,7 @@ final class FakeSourceReader: SourceReading, Sendable {
 
     private let state = Mutex(State())
     let contentRequests = AsyncProbe<String>()
+    let repositoryInfoRequests = AsyncProbe<URL>()
 
     var entries: [ComparisonSource: [SourceEntry]] {
         get { state.withLock { $0.entries } }
@@ -123,7 +124,13 @@ final class FakeSourceReader: SourceReading, Sendable {
         set { state.withLock { $0.gitRenames = newValue } }
     }
 
-    func repositoryInfo(containing url: URL) async -> RepositoryInfo? { repositories[url] }
+    func repositoryInfo(containing url: URL) async -> RepositoryInfo? {
+        repositoryInfoRequests.send(url)
+        if let gate = gate["repositoryInfo:\(url.path(percentEncoded: false))"] {
+            _ = try? await gate.next()
+        }
+        return repositories[url]
+    }
 
     func renames(from left: ComparisonSource, to right: ComparisonSource) async -> [String: String] { gitRenames }
 

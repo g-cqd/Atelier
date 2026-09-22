@@ -137,4 +137,24 @@ import Testing
         #expect(document.parameters.isEmpty)
         #expect(document.extraCandidates.isEmpty)
     }
+
+    @Test func underscoredAttributeLinesAreStrippedFromTheDeclaration() {
+        let markdown = """
+            ```swift
+            @_originallyDefinedIn(module: "SwiftUICore", macOS 15.0)
+            @_originallyDefinedIn(module: "SwiftUICore", iOS 18.0)
+            @MainActor @preconcurrency
+            @frozen
+            struct StateObject<ObjectType> where ObjectType: ObservableObject
+            ```
+
+            A property wrapper type that instantiates an observable object.
+            """
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(
+            document.declaration
+                == "@MainActor @preconcurrency\n@frozen\nstruct StateObject<ObjectType> where ObjectType: ObservableObject"
+        )
+        #expect(document.summary == "A property wrapper type that instantiates an observable object.")
+    }
 }

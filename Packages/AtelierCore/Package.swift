@@ -46,13 +46,12 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "1.0.0"),
         // AemiJSON's tape parser + lazy navigation back the hot JSON paths: SARIF decode
-        // (AtelierDiagnostics) and JSON-RPC envelope routing (AtelierLSP). The checkout at
-        // ~/Developer/AemiJSON tracks g-cqd/AemiJSON (feature/raw-subtree-bytes), where the
-        // JSONParseOptions.recordsContainerSpans / JSON.withRawJSONBytes work lives; a local path
-        // while that branch settles. Switch to
-        // .package(url: "https://github.com/g-cqd/AemiJSON.git", branch: "feature/raw-subtree-bytes")
-        // to pin remotely (private repo: resolution needs the g-cqd credentials).
-        .package(path: "../../../AemiJSON")
+        // (AtelierDiagnostics) and JSON-RPC envelope routing (AtelierLSP). Pinned to the exact
+        // revision of feature/raw-subtree-bytes (JSONParseOptions.recordsContainerSpans /
+        // JSON.withRawJSONBytes) on the g-cqd mirror, so a clean checkout resolves without a
+        // sibling working copy (private repo: resolution needs the g-cqd SSH credentials).
+        // Local iteration: swap for `.package(path: "../../../AemiJSON")`.
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "b98f139b2aa0581b6103ce0943662fc54e28a193")
     ],
     targets: [
         // The vocabulary highlighting is expressed in: languages, and later roles and tokens.

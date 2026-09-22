@@ -141,10 +141,26 @@ package struct HoverDocument: @unchecked Sendable {
     /// A minimal markdown-to-`NSAttributedString` pass for the plain-prose pieces a structured document carries
     /// (no fences expected in a summary, a discussion or a parameter's own description): Foundation's own parser,
     /// falling back to plain text for a fragment it rejects rather than showing nothing.
+    ///
+    /// `AttributedString(markdown:)` leaves `.foregroundColor` unset wherever the source markdown never asked for
+    /// one, which is every plain run of prose; shown on an `NSVisualEffectView`'s vibrant material (the panel's
+    /// own `.popover` material, `.behindWindow` blended), text with no explicit color draws blended into the glass
+    /// rather than opaque -- readable as blank in front of a light backdrop. `labelColor` is stamped over the
+    /// whole run afterward so prose is always opaque, the same way ``CodeAttributedBuilder`` already stamps
+    /// explicit palette colors on the declaration (which is why the declaration alone was ever visible).
     private static func renderProse(_ text: String) -> NSAttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             allowsExtendedAttributes: false, interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible)
         let parsed = (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
-        return NSAttributedString(parsed)
+        let result = NSMutableAttributedString(parsed)
+        // Stamped only where nothing already set a color: markdown source text never specifies one for plain
+        // prose, but this stays additive rather than a blanket overwrite in case a future syntax ever does.
+        result.enumerateAttribute(
+            .foregroundColor, in: NSRange(location: 0, length: result.length)
+        ) { value, range, _ in
+            guard value == nil else { return }
+            result.addAttribute(.foregroundColor, value: NSColor.labelColor, range: range)
+        }
+        return result
     }
 }

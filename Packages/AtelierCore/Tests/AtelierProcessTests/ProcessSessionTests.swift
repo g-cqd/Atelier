@@ -80,6 +80,47 @@ struct ProcessSessionTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func `concurrent sends do not interleave and each arrives whole`() async throws {
+        let session = Self.session("/bin/cat")
+        try await session.start()
+        // Larger than any plausible pipe buffer, so an unserialized send would almost certainly interleave
+        // the two payloads' bytes rather than happening to get lucky with single-syscall writes.
+        let sizeEach = 2 * 1_024 * 1_024
+        let payloadA = Data(repeating: 0x41, count: sizeEach)
+        let payloadB = Data(repeating: 0x42, count: sizeEach)
+        let expectedTotal = sizeEach * 2
+
+        async let sendA: Void = session.send(payloadA)
+        async let sendB: Void = session.send(payloadB)
+
+        var collected = Data()
+        for try await chunk in session.output {
+            collected.append(chunk)
+            if collected.count >= expectedTotal { break }
+        }
+        _ = try await (sendA, sendB)
+
+        #expect(collected.count == expectedTotal)
+        // The collected stream must be two unbroken, same-byte runs -- one full payload followed by the
+        // other, in either order -- never a mix of 'A' and 'B' bytes within a run.
+        let firstByte = collected[collected.startIndex]
+        guard let boundary = collected.firstIndex(where: { $0 != firstByte }) else {
+            Issue.record("expected two distinct payloads, got one uniform run")
+            return
+        }
+        let firstRun = collected[collected.startIndex ..< boundary]
+        let secondRun = collected[boundary...]
+        let secondByte = collected[boundary]
+        #expect(firstRun.allSatisfy { $0 == firstByte })
+        #expect(secondRun.allSatisfy { $0 == secondByte })
+        #expect(firstRun.count == sizeEach)
+        #expect(secondRun.count == sizeEach)
+
+        await session.terminate()
+        _ = await session.waitForExit()
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func `send before start throws notRunning`() async throws {
         let session = Self.session("/bin/cat")
         do {

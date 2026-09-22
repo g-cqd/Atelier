@@ -207,23 +207,41 @@ struct GitClientRunnerTests {
             Array(spec.arguments.prefix(GitIsolation.networkingConfigurationFlags.count))
                 == GitIsolation.networkingConfigurationFlags)
         #expect(!spec.arguments.contains("core.sshCommand=/usr/bin/false"))
+        #expect(spec.arguments.contains("core.sshCommand=ssh"))
     }
 
     @Test
-    func `networking isolation keeps the caller's environment and drops only the ssh override`() async throws {
+    func `networking isolation pins core sshCommand instead of leaving it for the repository's config to win`()
+        async throws
+    {
         let runner = FakeProcessRunner(always: .success(""))
         let client = GitClient(repository: Self.repository, runner: runner)
         try await client.fetch()
         let spec = try #require(runner.specs.first)
-        #expect(spec.environment == .inherited(overriding: GitClient.hardeningEnvironment))
-        guard case .inherited(let overrides) = spec.environment else {
-            Issue.record("expected an inherited environment")
+        // A `-c` pin must be present, and it must be the last occurrence of the key on the command line, because
+        // git resolves a repeated key (across `-c` and the repository's own config file) to its last value; an
+        // *absent* `-c` here would let a hostile `.git/config` set `core.sshCommand` to an arbitrary command.
+        #expect(spec.arguments.contains("core.sshCommand=ssh"))
+        #expect(
+            GitIsolation.networkingConfigurationFlags.count == GitIsolation.strictConfigurationFlags.count)
+    }
+
+    @Test
+    func `networking isolation keeps authentication variables but strips repository-selection ones`() async throws {
+        let runner = FakeProcessRunner(always: .success(""))
+        let client = GitClient(repository: Self.repository, runner: runner)
+        try await client.fetch()
+        let spec = try #require(runner.specs.first)
+        guard case .exactly(let variables) = spec.environment else {
+            Issue.record("expected an exact environment for networking isolation")
             return
         }
-        #expect(overrides["GIT_TERMINAL_PROMPT"] == "0")
-        #expect(overrides["GIT_OPTIONAL_LOCKS"] == "0")
-        #expect(
-            GitIsolation.networkingConfigurationFlags.count == GitIsolation.strictConfigurationFlags.count - 2)
+        #expect(variables["GIT_TERMINAL_PROMPT"] == "0")
+        #expect(variables["GIT_OPTIONAL_LOCKS"] == "0")
+        #expect(variables["HOME"] == ProcessInfo.processInfo.environment["HOME"])
+        for variable in GitIsolation.repositorySelectionVariables {
+            #expect(variables[variable] == nil, "\(variable) must not reach a networking git run")
+        }
     }
 
     @Test(arguments: ["--output=/tmp/x", "-", "", "a\nb", "a\u{0}b"])

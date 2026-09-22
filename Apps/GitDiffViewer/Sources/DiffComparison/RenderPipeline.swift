@@ -123,7 +123,7 @@ package final class RenderPipeline {
         cards = []
         prepared = []
         error = nil
-        gapExpansions = [:]
+        gapExpansions = reusableGapExpansions(gapExpansions, target: target, reuse: reuse)
         preparer.cancelPrefetch()
 
         switch target {
@@ -280,11 +280,22 @@ extension RenderPipeline {
         let path: String
         let oldBlob: String?
         let newBlob: String?
+        private let oldPresent: Bool
+        private let newPresent: Bool
 
         init(_ pair: FilePair) {
             path = pair.path
             oldBlob = pair.old?.blobID
             newBlob = pair.new?.blobID
+            oldPresent = pair.old != nil
+            newPresent = pair.new != nil
+        }
+
+        /// False when a side that exists lacks a content hash -- `SourceLoader` does not hash working-tree files
+        /// past its size limit, so `nil` there means "unknown", not "same as last time". Such a pair can never
+        /// prove its content is unchanged, so its identity must never be reused, even against itself.
+        var isReusable: Bool {
+            (!oldPresent || oldBlob != nil) && (!newPresent || newBlob != nil)
         }
     }
 
@@ -314,11 +325,10 @@ extension RenderPipeline {
             case .file(let pair):
                 guard let oldPrepared = prepared.first else { return reuse }
                 let identity = PairIdentity(pair)
+                if case .file(let newPair) = target { reuse.sameFilePath = newPair.path == pair.path }
+                guard identity.isReusable else { return reuse }
                 reuse.preparedByIdentity[identity] = oldPrepared
-                if case .file(let newPair) = target {
-                    reuse.sameFilePath = newPair.path == pair.path
-                    if PairIdentity(newPair) == identity { reuse.file = file }
-                }
+                if case .file(let newPair) = target, PairIdentity(newPair) == identity { reuse.file = file }
             case .cards:
                 // A reused card keeps whatever `firstFileIndex` it was rendered with (baked into its rows, and
                 // relied on by hover to map a hit back to its file), so only a pair that stayed at the very same
@@ -328,12 +338,31 @@ extension RenderPipeline {
                 let landed = min(oldPairs.count, prepared.count, cards.count)
                 for index in 0 ..< landed where index < newPairs.count {
                     let identity = PairIdentity(oldPairs[index])
-                    guard identity == PairIdentity(newPairs[index]) else { continue }
+                    guard identity.isReusable, identity == PairIdentity(newPairs[index]) else { continue }
                     reuse.preparedByIdentity[identity] = prepared[index]
                     reuse.cardsByIdentity[identity] = cards[index]
                 }
         }
         return reuse
+    }
+
+    /// Gap expansions to carry into this render: only those whose file is being reused as is, since a reused
+    /// `RenderedDiff`/`RenderedFile` already has those rows baked in at the position its `GapKey.fileIndex` names.
+    /// A freshly rendered file starts collapsed regardless of what was expanded before, and an expansion kept for
+    /// a `fileIndex` no reused pair claims this render would otherwise dangle -- ready to misapply to whatever
+    /// ends up at that position next, or make ``resetGaps()`` a no-op for content that visually still shows
+    /// revealed rows nothing here still tracks.
+    private func reusableGapExpansions(_ current: [GapKey: GapExpansion], target: Target, reuse: Reuse)
+        -> [GapKey: GapExpansion]
+    {
+        switch target {
+            case .file:
+                return reuse.file != nil ? current : [:]
+            case .cards(let pairs):
+                let reusedIndices = Set(pairs.indices.filter { reuse.cardsByIdentity[PairIdentity(pairs[$0])] != nil })
+                guard !reusedIndices.isEmpty else { return [:] }
+                return current.filter { reusedIndices.contains($0.key.fileIndex) }
+        }
     }
 
     /// The original, unconditional render: every pair of `target` prepared and rendered afresh, streaming the

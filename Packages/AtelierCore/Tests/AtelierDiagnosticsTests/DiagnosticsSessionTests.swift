@@ -4,9 +4,9 @@ import Testing
 
 @testable import AtelierDiagnostics
 
-/// ``DiagnosticsSession``'s orchestration: debouncing, superseding, fan-out and cancellation, exercised against a
-/// fake ``DiagnosticsRunning`` whose per-tool timing is driven by a ``TestClock`` instead of real time.
-@MainActor
+/// ``DiagnosticsSession``'s orchestration: fan-out, per-tool delivery and cancellation, exercised against a fake
+/// ``DiagnosticsRunning`` whose per-tool timing is driven by a ``TestClock`` instead of real time. Debouncing and
+/// superseding are the caller's responsibility now, so they are exercised in `DiagnosticsModelTests` instead.
 struct DiagnosticsSessionTests {
     private static let root = URL(filePath: "/repo")
 
@@ -15,140 +15,79 @@ struct DiagnosticsSessionTests {
     }
 
     @Test
-    func `superseding a run cancels its slow tool, which never delivers`() async throws {
-        let clock = TestClock()
-        let runner = FakeDiagnosticsRunner(clock: clock)
-        await runner.configure(.swiftlint, delay: .seconds(1))
-        let spy = TaskProviderSpy()
-        let sut = DiagnosticsSession(engine: runner, taskProvider: spy, clock: clock, debounce: .milliseconds(10))
-        var updates: [DiagnosticsSession.Update] = []
-        sut.onUpdate = { updates.append($0) }
-
-        sut.analyze(Self.request([.swiftlint: ToolLocation()]))
-        try await clock.waitForSleepers(atLeast: 1)
-        clock.advance(by: .milliseconds(10))
-        try await clock.waitForSleepers(atLeast: 1)
-
-        // Supersedes before swiftlint's one-second delay ever elapses.
-        sut.analyze(Self.request([.arcleak: ToolLocation()]))
-        try await clock.waitForSleepers(atLeast: 1)
-        clock.advance(by: .milliseconds(10))
-        try await spy.waitForAllTasks()
-
-        #expect(updates.map(\.result.tool) == [.arcleak])
-    }
-
-    @Test
     func `each tool's finding delivers as it finishes, with isLast set on the final one`() async throws {
         let clock = TestClock()
         let runner = FakeDiagnosticsRunner(clock: clock)
         await runner.configure(.swiftlint, delay: .seconds(2))
         await runner.configure(.arcleak, delay: .seconds(1))
-        let spy = TaskProviderSpy()
-        let sut = DiagnosticsSession(engine: runner, taskProvider: spy, clock: clock, debounce: .milliseconds(10))
-        var updates: [DiagnosticsSession.Update] = []
-        let updateProbe = AsyncEventProbe<DiagnosticTool>()
-        sut.onUpdate = {
-            updates.append($0)
-            updateProbe.record($0.result.tool)
+        let sut = DiagnosticsSession(engine: runner)
+        let updateProbe = AsyncEventProbe<DiagnosticsSession.Update>()
+
+        let analyzeTask = Task {
+            await sut.analyze(Self.request([.swiftlint: ToolLocation(), .arcleak: ToolLocation()])) { update in
+                updateProbe.record(update)
+            }
         }
 
-        sut.analyze(Self.request([.swiftlint: ToolLocation(), .arcleak: ToolLocation()]))
-        try await clock.waitForSleepers(atLeast: 1)
-        clock.advance(by: .milliseconds(10))
         // Both tools' delays are parked before either is released.
         try await clock.waitForSleepers(atLeast: 2)
         clock.advance(by: .seconds(1))
         // arcleak's one-second delay has elapsed; swiftlint's two-second one has not.
         _ = try await updateProbe.wait(forAtLeast: 1)
         clock.advance(by: .seconds(1))
-        try await spy.waitForAllTasks()
+        await analyzeTask.value
 
+        let updates = updateProbe.events
         #expect(updates.map(\.result.tool) == [.arcleak, .swiftlint])
         #expect(updates.map(\.isLast) == [false, true])
     }
 
     @Test
-    func `two analyze calls before the debounce elapses run once`() async throws {
-        let clock = TestClock()
-        let runner = FakeDiagnosticsRunner(clock: clock)
-        let spy = TaskProviderSpy()
-        let sut = DiagnosticsSession(engine: runner, taskProvider: spy, clock: clock, debounce: .milliseconds(10))
-        var runStates: [Bool] = []
-        sut.onRunStateChanged = { runStates.append($0) }
-
-        sut.analyze(Self.request([.swiftlint: ToolLocation()]))
-        try await clock.waitForSleepers(atLeast: 1)
-        sut.analyze(Self.request([.swiftlint: ToolLocation()]))
-        try await clock.waitForSleepers(atLeast: 1)
-        clock.advance(by: .milliseconds(10))
-        try await spy.waitForAllTasks()
-
-        let calls = await runner.calls
-        #expect(calls == [.swiftlint])
-        #expect(runStates == [true, false])
-    }
-
-    @Test
-    func `cancel stops delivery of a run still in flight`() async throws {
+    func `cancelling the awaiting task cancels every tool still in flight, delivering nothing further`()
+        async throws
+    {
         let clock = TestClock()
         let runner = FakeDiagnosticsRunner(clock: clock)
         await runner.configure(.swiftlint, delay: .seconds(1))
-        let spy = TaskProviderSpy()
-        let sut = DiagnosticsSession(engine: runner, taskProvider: spy, clock: clock, debounce: .milliseconds(10))
-        var updates: [DiagnosticsSession.Update] = []
-        var runStates: [Bool] = []
-        sut.onUpdate = { updates.append($0) }
-        sut.onRunStateChanged = { runStates.append($0) }
+        let sut = DiagnosticsSession(engine: runner)
+        let updateProbe = AsyncEventProbe<DiagnosticsSession.Update>()
 
-        sut.analyze(Self.request([.swiftlint: ToolLocation()]))
-        try await clock.waitForSleepers(atLeast: 1)
-        clock.advance(by: .milliseconds(10))
+        let analyzeTask = Task {
+            await sut.analyze(Self.request([.swiftlint: ToolLocation()])) { update in updateProbe.record(update) }
+        }
         try await clock.waitForSleepers(atLeast: 1)
 
-        sut.cancel()
-        try await spy.waitForAllTasks()
+        analyzeTask.cancel()
+        _ = await analyzeTask.value
         clock.advance(by: .seconds(1))
-        try await spy.waitForAllTasks()
 
-        #expect(updates.isEmpty)
-        #expect(runStates == [true, false])
-        #expect(!sut.isRunning)
+        #expect(updateProbe.events.isEmpty)
     }
 
     @Test
     func `a disabled tool is never run`() async throws {
         let clock = TestClock()
         let runner = FakeDiagnosticsRunner(clock: clock)
-        let spy = TaskProviderSpy()
-        let sut = DiagnosticsSession(engine: runner, taskProvider: spy, clock: clock, debounce: .milliseconds(10))
+        let sut = DiagnosticsSession(engine: runner)
 
-        sut.analyze(
-            Self.request([.swiftlint: ToolLocation(isEnabled: false), .arcleak: ToolLocation(isEnabled: true)]))
-        try await clock.waitForSleepers(atLeast: 1)
-        clock.advance(by: .milliseconds(10))
-        try await spy.waitForAllTasks()
+        await sut.analyze(
+            Self.request([.swiftlint: ToolLocation(isEnabled: false), .arcleak: ToolLocation(isEnabled: true)])
+        ) { _ in }
 
         let calls = await runner.calls
         #expect(calls == [.arcleak])
     }
 
     @Test
-    func `an empty enabled set reports a run that starts and immediately ends, with no updates`() async throws {
+    func `an empty enabled set returns immediately with no updates`() async throws {
         let clock = TestClock()
         let runner = FakeDiagnosticsRunner(clock: clock)
-        let spy = TaskProviderSpy()
-        let sut = DiagnosticsSession(engine: runner, taskProvider: spy, clock: clock, debounce: .milliseconds(10))
-        var runStates: [Bool] = []
+        let sut = DiagnosticsSession(engine: runner)
         var updates: [DiagnosticsSession.Update] = []
-        sut.onRunStateChanged = { runStates.append($0) }
-        sut.onUpdate = { updates.append($0) }
 
-        sut.analyze(Self.request([.swiftlint: ToolLocation(isEnabled: false)]))
+        await sut.analyze(Self.request([.swiftlint: ToolLocation(isEnabled: false)])) { updates.append($0) }
 
-        #expect(runStates == [true, false])
         #expect(updates.isEmpty)
-        #expect(!sut.isRunning)
     }
 }
 

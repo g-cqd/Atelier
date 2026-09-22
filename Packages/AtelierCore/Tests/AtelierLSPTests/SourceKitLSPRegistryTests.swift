@@ -1,3 +1,4 @@
+import AemiTestKit
 import Foundation
 import Testing
 
@@ -63,6 +64,31 @@ private actor ConfigurationSpy {
 
         #expect(first == nil)
         #expect(second == nil)
+        #expect(await spy.callCount == 1)
+    }
+
+    @Test func concurrentFirstRequestsForTheSameRootShareOneInitialization() async throws {
+        let spy = ConfigurationSpy()
+        let gate = AsyncLatch()
+        let entered = AsyncLatch()
+        let registry = SourceKitLSPRegistry { root in
+            // Only the winning first caller ever reaches here; a duplicate-initialization bug would call
+            // this twice concurrently, which `spy.callCount` below would then catch as 2 instead of 1.
+            entered.open()
+            try? await gate.wait()
+            return await spy.makeConfiguration(for: root)
+        }
+        let root = URL(filePath: "/tmp/workspace-concurrent")
+
+        async let first = registry.service(forRoot: root)
+        async let second = registry.service(forRoot: root)
+
+        try await entered.wait()
+        gate.open()
+
+        let (firstService, secondService) = await (first, second)
+        #expect(firstService != nil)
+        #expect(firstService === secondService)
         #expect(await spy.callCount == 1)
     }
 

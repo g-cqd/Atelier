@@ -6,6 +6,8 @@ public enum LSPFramingError: Error, Equatable, Sendable {
     case malformedHeader(String)
     /// The header block ended without a `Content-Length` header.
     case missingContentLength
+    /// The declared length was negative.
+    case negativeContentLength(Int)
     /// The declared length exceeded the codec's configured maximum.
     case payloadTooLarge(Int)
 }
@@ -33,6 +35,10 @@ public struct LSPFrameCodec: Sendable {
         while let headerEnd = buffer.range(of: Self.headerTerminator) {
             let headerData = buffer[buffer.startIndex ..< headerEnd.lowerBound]
             let contentLength = try Self.parseContentLength(headerData)
+
+            guard contentLength >= 0 else {
+                throw LSPFramingError.negativeContentLength(contentLength)
+            }
 
             guard contentLength <= maximumPayloadSize else {
                 throw LSPFramingError.payloadTooLarge(contentLength)

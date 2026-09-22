@@ -131,7 +131,18 @@ package enum HoverMarkdownStructurer {
         }
         if body.hasSuffix("\n") { body.removeLast() }
         let rest = String(leading[closeRange.upperBound...])
-        return (body, rest)
+        return (stripUnderscoredAttributeLines(body), rest)
+    }
+
+    /// Drops any declaration line that is nothing but an underscored (`@_`-prefixed) attribute -- compiler-internal
+    /// annotations such as `@_originallyDefinedIn(module: "...", ...)` or `@_specialize(...)` that sourcekit-lsp's
+    /// declaration answers sometimes carry for a system symbol, and that Xcode's own Quick Help hides. A public
+    /// attribute (`@MainActor`, `@frozen`, `@propertyWrapper`, `@preconcurrency`, ...) never starts with the `_`
+    /// sigil, so this only ever removes the underscored ones.
+    private static func stripUnderscoredAttributeLines(_ declaration: String) -> String {
+        let lines = declaration.components(separatedBy: "\n")
+        let kept = lines.filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("@_") }
+        return kept.joined(separator: "\n")
     }
 
     /// Pulls a `- Parameters:` list and a `- Returns:` item out of `lines`, in whatever order and position they

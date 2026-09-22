@@ -31,6 +31,9 @@ final class PipeTransport: LSPTransport, Sendable {
     let incoming: AsyncThrowingStream<Data, any Error>
     private let incomingContinuation: AsyncThrowingStream<Data, any Error>.Continuation
     let sink = FrameSink()
+    /// How many times ``close()`` ran, so a test can prove ``LSPConnection/stop()`` disposed the transport even
+    /// when the read loop had already marked the connection closed on its own.
+    let closeCount = CloseCounter()
 
     init() {
         let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
@@ -43,6 +46,7 @@ final class PipeTransport: LSPTransport, Sendable {
     }
 
     func close() async {
+        await closeCount.increment()
         incomingContinuation.finish()
     }
 
@@ -59,6 +63,12 @@ final class PipeTransport: LSPTransport, Sendable {
             incomingContinuation.finish()
         }
     }
+}
+
+/// A simple counter a test can await-read, for actions (like `close()`) that have no other observable trace.
+actor CloseCounter {
+    private(set) var count = 0
+    func increment() { count += 1 }
 }
 
 /// Strips the `Content-Length` header off one framed chunk, for a test that wants the raw JSON.

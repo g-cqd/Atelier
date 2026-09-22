@@ -52,6 +52,12 @@ public actor DocCommentIndex {
     }
 
     /// Entries whose name matches exactly, with `preferringURI`'s entries sorted first and a stable order otherwise.
+    /// A file being re-indexed under an `atelier-blob://` URI (a diff's old side) and again under its live
+    /// `file://` URI (the working copy) is one declaration, not two: duplicate and superseded-history candidates
+    /// among every URI *other than* `preferringURI` are collapsed before sorting -- see
+    /// `collapsingHistoricalDuplicates`. `preferringURI`'s own entries are never touched by that collapse: hovering
+    /// an old blob's own declaration must show *that* declaration, even when a newer `file://` entry at the same
+    /// path has since changed it -- the query is asking about the revision it names, not the working copy.
     public func documentation(forIdentifier name: String, preferringURI uri: String?) -> [DocEntry] {
         var matches: [DocEntry] = []
         for state in files.values {
@@ -59,7 +65,10 @@ public actor DocCommentIndex {
                 matches.append(entry)
             }
         }
-        matches.sort { lhs, rhs in
+        let sameURI = uri.map { queryURI in matches.filter { $0.uri == queryURI } } ?? []
+        let otherURIs = uri == nil ? matches : matches.filter { $0.uri != uri }
+        var combined = sameURI + Self.collapsingHistoricalDuplicates(otherURIs)
+        combined.sort { lhs, rhs in
             if let uri {
                 let lhsPreferred = lhs.uri == uri
                 let rhsPreferred = rhs.uri == uri
@@ -69,7 +78,79 @@ public actor DocCommentIndex {
             if lhs.name != rhs.name { return lhs.name < rhs.name }
             return lhs.signature < rhs.signature
         }
-        return matches
+        return combined
+    }
+
+    /// Collapses entries that are really the same declaration seen more than once:
+    ///  - An `atelier-blob://<oid>/<path>` entry (a diff's old side) is dropped whenever a `file://` entry among
+    ///    `entries` resolves to the same underlying path, even if their signatures differ -- the blob side is
+    ///    history, never a candidate, and a changed signature (e.g. a conformance added since that blob) does not
+    ///    make it a second, legitimate declaration.
+    ///  - Among what remains, entries that render identically -- the same whitespace-normalized signature *and*
+    ///    the same doc comment, i.e. truly the same declaration seen twice (a corpus copy of the same file
+    ///    indexed a second time under a different URI) -- are collapsed to one, preferring a `file://` entry over
+    ///    any other scheme when both are present. Two declarations that merely happen to share a signature (say,
+    ///    two different `run()` overrides with their own doc comments) are not touched by this: their markdown
+    ///    differs, so they are not "identical".
+    /// Genuinely distinct same-name declarations at different paths are left alone.
+    private static func collapsingHistoricalDuplicates(_ entries: [DocEntry]) -> [DocEntry] {
+        let filePaths = entries.compactMap { entry -> String? in
+            guard entry.uri.hasPrefix("file://") else { return nil }
+            return underlyingPath(from: entry.uri)
+        }
+        let survivingHistory = entries.filter { entry in
+            guard entry.uri.hasPrefix("atelier-blob://"), let blobPath = underlyingPath(from: entry.uri) else {
+                return true
+            }
+            return !filePaths.contains { isSameUnderlyingPath($0, blobPath) }
+        }
+
+        var bestByRendering: [String: DocEntry] = [:]
+        var order: [String] = []
+        for entry in survivingHistory {
+            let key = normalizedWhitespace(entry.signature) + "\u{0}" + entry.markdown
+            if let existing = bestByRendering[key] {
+                if !existing.uri.hasPrefix("file://"), entry.uri.hasPrefix("file://") {
+                    bestByRendering[key] = entry
+                }
+            } else {
+                bestByRendering[key] = entry
+                order.append(key)
+            }
+        }
+        return order.compactMap { bestByRendering[$0] }
+    }
+
+    /// The declaration's path as it would appear on disk, derived from either URI shape: the segment after the
+    /// blob OID for `atelier-blob://<oid>/<path>`, or everything after the scheme (leading slashes stripped) for
+    /// `file://<root>/<path>` -- callers compare these as suffixes since the `file://` side carries a repository
+    /// root the blob side does not.
+    private static func underlyingPath(from uri: String) -> String? {
+        if uri.hasPrefix("atelier-blob://") {
+            let rest = uri.dropFirst("atelier-blob://".count)
+            guard let slash = rest.firstIndex(of: "/") else { return nil }
+            return String(rest[rest.index(after: slash)...])
+        }
+        if uri.hasPrefix("file://") {
+            var rest = String(uri.dropFirst("file://".count))
+            while rest.hasPrefix("/") { rest.removeFirst() }
+            return rest.isEmpty ? nil : rest
+        }
+        return nil
+    }
+
+    /// Whether two derived paths name the same file: equal outright, or one is a path-component-aligned suffix of
+    /// the other (so `"repo/Sources/Foo.swift"` matches `"Sources/Foo.swift"` but not `"OldFoo.swift"`).
+    private static func isSameUnderlyingPath(_ lhs: String, _ rhs: String) -> Bool {
+        if lhs == rhs { return true }
+        let (shorter, longer) = lhs.count <= rhs.count ? (lhs, rhs) : (rhs, lhs)
+        guard !shorter.isEmpty, longer.hasSuffix(shorter) else { return false }
+        let boundary = longer.index(longer.endIndex, offsetBy: -shorter.count - 1)
+        return longer[boundary] == "/"
+    }
+
+    private static func normalizedWhitespace(_ text: String) -> String {
+        text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
     private static func hash(of content: String) -> Int {

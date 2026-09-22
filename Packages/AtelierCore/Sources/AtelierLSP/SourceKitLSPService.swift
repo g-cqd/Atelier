@@ -86,6 +86,14 @@ public actor SourceKitLSPService {
     private let connectionFactory: ConnectionFactory
 
     private var connection: LSPConnection?
+    /// Non-nil while a connection is being created and handshaken: a first caller does the work, every other
+    /// concurrent caller for the same session parks its continuation here instead of racing its own
+    /// ``connectionFactory``/`initialize` and clobbering the stored ``connection``.
+    private var establishingWaiters: [CheckedContinuation<LSPConnection?, Never>]?
+    /// Bumped by every teardown path (``shutdown()``, the abrupt teardown on a dead transport, an idle
+    /// timeout). An in-flight ``ensureConnection()`` that started before the bump must not publish its result
+    /// (or leave a connection nobody will stop) once the session has moved on without it.
+    private var connectionGeneration = 0
     private var restartsUsed = 0
     private var permanentlyUnavailable = false
 
@@ -114,7 +122,6 @@ public actor SourceKitLSPService {
         uri: String, languageID: String, content: String, line: Int, utf16Column: Int
     ) async -> HoverContent? {
         guard !permanentlyUnavailable else { return nil }
-        idleGeneration += 1
         defer { scheduleIdleShutdown() }
 
         guard let connection = await ensureConnection() else { return nil }
@@ -145,6 +152,7 @@ public actor SourceKitLSPService {
     public func shutdown() async {
         idleTask?.cancel()
         idleTask = nil
+        connectionGeneration += 1
         guard let connection else { return }
         self.connection = nil
         openDocuments.removeAll()
@@ -156,21 +164,61 @@ public actor SourceKitLSPService {
 
     private func ensureConnection() async -> LSPConnection? {
         if let connection { return connection }
+
+        if establishingWaiters != nil {
+            return await withCheckedContinuation { (continuation: CheckedContinuation<LSPConnection?, Never>) in
+                if establishingWaiters != nil {
+                    establishingWaiters?.append(continuation)
+                } else {
+                    // The in-flight attempt finished (and cleared the waiters list) between the check above and
+                    // this closure running; both steps are actor-isolated and synchronous, so this cannot
+                    // actually happen, but resume rather than leak the continuation if it ever does.
+                    continuation.resume(returning: connection)
+                }
+            }
+        }
+
         guard !permanentlyUnavailable else { return nil }
 
+        establishingWaiters = []
+        let startedGeneration = connectionGeneration
+        var newConnection: LSPConnection?
         do {
-            let newConnection = try await connectionFactory(configuration)
-            try await performHandshake(newConnection)
-            connection = newConnection
-            return newConnection
+            let created = try await connectionFactory(configuration)
+            newConnection = created
+            try await performHandshake(created)
+            guard connectionGeneration == startedGeneration else {
+                // A teardown ran while this was establishing: the session has already moved on without it, so
+                // this connection must not become the stored one -- stop it instead of leaking it.
+                await created.stop()
+                resumeEstablishingWaiters(with: nil)
+                return nil
+            }
+            connection = created
+            resumeEstablishingWaiters(with: created)
+            return created
         } catch {
+            // A connection that was created but never finished (or never started) `initialize` still has a
+            // running reader/process behind it; stop it before giving up so a failed attempt does not leak.
+            if let newConnection {
+                await newConnection.stop()
+            }
             restartsUsed += 1
             if restartsUsed > configuration.maximumRestarts {
                 permanentlyUnavailable = true
             } else {
                 try? await clock.sleep(for: .seconds(1))
             }
+            resumeEstablishingWaiters(with: nil)
             return nil
+        }
+    }
+
+    private func resumeEstablishingWaiters(with connection: LSPConnection?) {
+        let waiters = establishingWaiters ?? []
+        establishingWaiters = nil
+        for waiter in waiters {
+            waiter.resume(returning: connection)
         }
     }
 
@@ -188,6 +236,7 @@ public actor SourceKitLSPService {
     /// The transport is already gone (or as good as); drop it without wasting time on the `shutdown`/`exit`
     /// protocol over a connection that cannot answer.
     private func abruptTeardown() async {
+        connectionGeneration += 1
         guard let connection else { return }
         self.connection = nil
         openDocuments.removeAll()
@@ -209,11 +258,23 @@ public actor SourceKitLSPService {
 
     private func scheduleIdleShutdown() {
         idleTask?.cancel()
+        // Each scheduling call gets its own, strictly increasing generation, distinct from every earlier one:
+        // an older timer's generation can then never match the latest one, even if two overlapping hovers both
+        // reach here between the same pair of awaits.
+        idleGeneration += 1
         let generation = idleGeneration
         let duration = configuration.idleShutdown
         let sessionClock = clock
         idleTask = Task { [weak self] in
-            try? await sessionClock.sleep(for: duration)
+            do {
+                try await sessionClock.sleep(for: duration)
+            } catch {
+                // Cancelled by a later call to scheduleIdleShutdown (or by shutdown()/deinit): the session is
+                // either still alive under a newer timer or already being torn down some other way. Firing
+                // idleFire here regardless of cancellation is exactly what let a fresher timer's cancellation
+                // of a stale one still shut the live connection down; must return without touching it.
+                return
+            }
             await self?.idleFire(generation: generation)
         }
     }

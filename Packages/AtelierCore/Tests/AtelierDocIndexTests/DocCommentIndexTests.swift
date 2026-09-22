@@ -237,4 +237,63 @@ struct DocCommentIndexTests {
         #expect(entries.first?.uri == "file:///b.swift")
         #expect(entries.first?.markdown == "From B.")
     }
+
+    @Test
+    func `blob and file entries with the same signature collapse to the file entry`() async {
+        let index = DocCommentIndex()
+        await index.update(files: [
+            DocIndexFile(uri: "atelier-blob://deadbeef/Sources/Foo.swift", content: "/// Foo.\nstruct Foo {}"),
+            DocIndexFile(uri: "file:///repo/Sources/Foo.swift", content: "/// Foo.\nstruct Foo {}")
+        ])
+        let entries = await index.documentation(forIdentifier: "Foo", preferringURI: nil)
+        #expect(entries.count == 1)
+        #expect(entries.first?.uri == "file:///repo/Sources/Foo.swift")
+    }
+
+    @Test
+    func `blob and file entries at the same path with different signatures keep only the file entry`() async {
+        let index = DocCommentIndex()
+        await index.update(files: [
+            DocIndexFile(uri: "atelier-blob://deadbeef/Sources/Foo.swift", content: "/// Foo.\nstruct Foo {}"),
+            DocIndexFile(
+                uri: "file:///repo/Sources/Foo.swift", content: "/// Foo.\nstruct Foo: Sendable {}")
+        ])
+        let entries = await index.documentation(forIdentifier: "Foo", preferringURI: nil)
+        #expect(entries.count == 1)
+        #expect(entries.first?.uri == "file:///repo/Sources/Foo.swift")
+        #expect(entries.first?.signature == "struct Foo: Sendable")
+    }
+
+    @Test
+    func `same-named declarations at genuinely different paths both remain candidates`() async {
+        let index = DocCommentIndex()
+        await index.update(files: [
+            DocIndexFile(uri: "atelier-blob://deadbeef/Sources/Foo.swift", content: "/// Foo A.\nstruct Foo {}"),
+            DocIndexFile(uri: "file:///repo/Sources/Bar.swift", content: "/// Foo B.\nstruct Foo {}")
+        ])
+        let entries = await index.documentation(forIdentifier: "Foo", preferringURI: nil)
+        #expect(entries.count == 2)
+    }
+
+    @Test
+    func `hovering the old blob side itself shows the old side's own documentation, not the new one's`() async {
+        let index = DocCommentIndex()
+        await index.update(files: [
+            DocIndexFile(
+                uri: "atelier-blob://deadbeef/Sources/Foo.swift", content: "/// Old doc, no conformance.\nstruct Foo {}"
+            ),
+            DocIndexFile(
+                uri: "file:///repo/Sources/Foo.swift",
+                content: "/// New doc, now Sendable.\nstruct Foo: Sendable {}")
+        ])
+        // The query's own URI is the blob (the old side of a diff): its own declaration must survive the
+        // cross-URI historical dedupe and sort first, even though a newer `file://` entry at the same path
+        // exists and would otherwise supersede it.
+        let entries = await index.documentation(
+            forIdentifier: "Foo", preferringURI: "atelier-blob://deadbeef/Sources/Foo.swift")
+        #expect(entries.count == 2)
+        #expect(entries.first?.uri == "atelier-blob://deadbeef/Sources/Foo.swift")
+        #expect(entries.first?.markdown == "Old doc, no conformance.")
+        #expect(entries.first?.signature == "struct Foo")
+    }
 }

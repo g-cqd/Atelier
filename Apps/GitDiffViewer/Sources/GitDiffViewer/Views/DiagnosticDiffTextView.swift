@@ -1,3 +1,4 @@
+import AppKit
 import AtelierDiagnostics
 import DiffComparison
 import DiffCore
@@ -28,7 +29,9 @@ struct DiagnosticDiffTextView: View {
 
     @State private var overlay = DiagnosticOverlay()
     @State private var version = 0
-    @State private var clicked: ClickedDiagnostics?
+    /// Kept alive for as long as it is on screen: `NSPopover.show` does not itself retain the popover past this
+    /// scope, and it is transient (dismisses on an outside click) so there is never more than one at a time.
+    @State private var diagnosticPopover: NSPopover?
     /// Bumped by every ``recompute()``; a mapping that lands after a newer one started is dropped.
     @State private var recomputeGeneration = 0
 
@@ -41,14 +44,8 @@ struct DiagnosticDiffTextView: View {
             hoverEnabled: model.settings.showsHoverDocumentation && model.hoverDocs != nil,
             hoverResolver: hoverResolver,
             diagnosticOverlay: model.settings.diagnosticsEnabled ? overlay : nil, diagnosticsVersion: version,
-            onDiagnosticClick: { _, findings, _ in clicked = ClickedDiagnostics(findings: findings) }
+            onDiagnosticClick: showDiagnosticPopover
         )
-        // The badge's own rect is in the gutter's AppKit (bottom-left origin) coordinates, which do not map
-        // cleanly onto SwiftUI's anchor space; anchoring to the pane itself keeps this simple and still puts the
-        // popover right next to the row that was clicked.
-        .popover(item: $clicked) { clicked in
-            DiagnosticFindingsList(findings: clicked.findings)
-        }
         .onAppear { recompute() }
         .onChange(of: rendered.id) { recompute() }
         .onChange(of: model.diagnosticsVersion) { recompute() }
@@ -82,24 +79,62 @@ struct DiagnosticDiffTextView: View {
 
     /// Resolves a hover hit through ``DiffComparison/HoverDocumentationModel`` and structures and colors its
     /// markdown for the panel, using this pane's own palette; nil while no hover documentation model is attached,
-    /// so ``DiffTextView`` never asks.
+    /// so ``DiffTextView`` never asks. When the hovered row also carries diagnostics, they join the same document
+    /// (``HoverDocument/diagnostics``), so the unified panel shows the issue the squiggle pointed at alongside
+    /// whatever documentation resolved for the identifier under it -- one hover, one surface.
     private var hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? {
         guard let hoverDocs = model.hoverDocs else { return nil }
         let palette = rendered.palette
+        let overlay = overlay
         return { hit in
             let side: HoverQuerySide = hit.side == .new ? .new : .old
+            let rowDiagnostics = overlay.row(hit.row)?.findings.map { HoverDocument.DiagnosticEntry($0) } ?? []
             guard
                 let content = await hoverDocs.hover(
                     fileIndex: hit.fileIndex, side: side, line: hit.line, utf16Column: hit.utf16Column)
-            else { return nil }
-            return HoverDocument.build(from: content, palette: palette)
+            else {
+                guard !rowDiagnostics.isEmpty else { return nil }
+                return HoverDocument(diagnostics: rowDiagnostics)
+            }
+            var document = HoverDocument.build(from: content, palette: palette)
+            guard !rowDiagnostics.isEmpty else { return document }
+            document = HoverDocument(
+                declaration: document.declaration, summary: document.summary, discussion: document.discussion,
+                parameters: document.parameters, returns: document.returns, provenance: document.provenance,
+                extraCandidates: document.extraCandidates, diagnostics: rowDiagnostics)
+            return document
         }
+    }
+
+    /// Presents ``DiagnosticFindingsList`` as an `NSPopover` anchored on the row's own frame, the same way Xcode's
+    /// issue navigator opens off a line -- the fix for the popover that used to anchor to the whole pane
+    /// (SwiftUI's `.popover(item:)` has no notion of "this row", only "this view"), which put it at the pane's own
+    /// origin instead of next to whatever was clicked.
+    private func showDiagnosticPopover(rowIndex: Int, findings: [Finding], anchorRect: NSRect, in view: NSView) {
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = NSHostingController(rootView: DiagnosticFindingsList(findings: findings))
+        diagnosticPopover = popover
+        popover.show(relativeTo: anchorRect, of: view, preferredEdge: .minY)
     }
 }
 
-private struct ClickedDiagnostics: Identifiable {
-    let id = UUID()
-    let findings: [Finding]
+extension HoverDocument.DiagnosticEntry {
+    fileprivate nonisolated init(_ finding: Finding) {
+        self.init(
+            severity: .init(finding.severity), message: "\(finding.ruleID): \(finding.message)",
+            tool: finding.tool.displayName)
+    }
+}
+
+extension HoverDocument.DiagnosticEntry.Severity {
+    fileprivate nonisolated init(_ severity: Finding.Severity) {
+        switch severity {
+            case .error: self = .error
+            case .warning: self = .warning
+            case .note: self = .note
+        }
+    }
 }
 
 /// The findings on one row, native and simple: an icon for how serious each is, its rule and message, which tool
