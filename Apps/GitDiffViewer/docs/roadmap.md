@@ -68,3 +68,13 @@ See `multi-language-hover-design.md` for the full multi-language design.
   card rounding/clipping, shadow, and negative space against the toolbar and surroundings
   (pinned header keeps the card's visual language, likely LazyVStack pinnedViews + custom
   clipping so the floating header carries the card's top rounding + shadow).
+
+## Reload continuity wave (user-requested)
+- Differential re-comparison: on reload/auto-refresh, diff incoming FilePairs against current
+  by (path, oldBlobID, newBlobID); unchanged pairs keep their RenderedText/cards untouched
+  (DiffPreparer already caches by blob keys — the gap is pipeline-level set-diff + selective
+  publish instead of clear-and-republish).
+- No viewer collapse on reload: card fold state and scroll position survive both file reloads
+  and full re-comparisons; explicitly preserved for the files that do re-render.
+- Native tabs: investigate NSWindow tabbing (tabbingMode/tabbingIdentifier bridged from the
+  SwiftUI WindowGroup) so comparisons can live as native macOS window tabs.
