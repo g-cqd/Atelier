@@ -274,7 +274,14 @@ enum ToolbarID {
     // A `swift run` build and the app bundle Xcode/`swift build --product` produce read different `defaults`
     // domains (different bundle identifiers), so a customization saved under one is never seen by the other;
     // that split is environmental, not a bug in this file, and is not addressed here.
-    static let toolbar = "main.2"
+    //
+    // Bumped again to "main.3": items have been added to the declared set since "main.2" was last saved (both
+    // the bundled and unbundled `defaults` domains hold a "main.2" customization whose "TB Item Identifiers"
+    // roster is missing several of them, e.g. `reload`/`fileStats`/`diagnostics`/`totals`), and one domain's
+    // saved default items even name an id ("viewOptions") absent from its own item roster. AppKit trapped while
+    // reconciling that drift against the current declaration; a fresh autosave name is the only way to shed a
+    // config this out of sync rather than trying to patch it back into agreement item by item.
+    static let toolbar = "main.3"
     static let compareRepository = "compareRepository"
     static let openPatch = "openPatch"
     static let reload = "reload"
