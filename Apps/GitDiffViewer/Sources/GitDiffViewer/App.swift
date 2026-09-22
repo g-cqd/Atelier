@@ -23,6 +23,14 @@ struct GitDiffViewerApp: App {
         // the command line skips it and opens the comparison straight away.
         Window("Welcome to Git Diff Viewer", id: WindowID.welcome) {
             WelcomeView(recents: recents, reader: appDelegate.services.loader)
+                // Explicitly opted out, not just left at the `.automatic` default: AppKit's automatic grouping
+                // can still merge windows that share a class and toolbar configuration, and the welcome window
+                // must never join the comparison windows' tab group.
+                .background(
+                    WindowTabbingConfigurator { window in window.tabbingMode = .disallowed }
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                )
         }
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(LaunchOptions.hasArguments ? .suppressed : .presented)
@@ -212,6 +220,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Closing the last comparison brings the welcome window back instead of quitting, as Xcode does.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    /// The tab bar's "+" button: AppKit sends this `@IBAction`-style message up the responder chain, which for a
+    /// window with no document and no view claiming it falls through to `NSApp`, and from there to its delegate
+    /// -- this method is that fallback. Reopening Welcome, rather than launching a blank comparison, is the
+    /// existing way this app starts something new (`WelcomeCommand`, and `windowWillClose` below after the last
+    /// comparison closes), so the tab bar's plus button follows the same path instead of inventing another one.
+    @objc func newWindowForTab(_ sender: Any?) {
+        Self.performWelcomeCommand()
     }
 
     @objc private func windowWillClose(_ notification: Notification) {
