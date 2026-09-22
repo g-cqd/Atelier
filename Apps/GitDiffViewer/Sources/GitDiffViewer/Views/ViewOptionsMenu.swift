@@ -76,63 +76,95 @@ struct ViewOptionsMenu: NSViewRepresentable {
         func menu(for snapshot: Snapshot) -> NSMenu {
             let menu = NSMenu()
             menu.addItem(NSMenuItem(title: "View options", action: nil, keyEquivalent: ""))
-            menu.addItem(toggle("Wrap lines", snapshot.wrapsLines, #selector(toggleWrap)))
-            menu.addItem(toggle("Sync scroll", snapshot.syncsScrolling, #selector(toggleSync)))
-            menu.addItem(toggle("Minimap", snapshot.showsMinimap, #selector(toggleMinimap)))
-            menu.addItem(toggle("Status bar", snapshot.showsStatusBar, #selector(toggleStatusBar)))
-            menu.addItem(
-                toggle("Documentation on Hover", snapshot.showsHoverDocumentation, #selector(toggleHoverDocumentation)))
-            menu.addItem(toggle("Isolate changes", snapshot.isolatesChanges, #selector(toggleIsolate), key: "4"))
+            for item in topItems(for: snapshot) { menu.addItem(item) }
             menu.addItem(.separator())
-            menu.addItem(
+            for item in matchingItems(for: snapshot) { menu.addItem(item) }
+            menu.addItem(.separator())
+            for item in fileItems(for: snapshot) { menu.addItem(item) }
+            return menu
+        }
+
+        /// The window-chrome toggles that show up first, most-used items nearest the top (P2).
+        private func topItems(for snapshot: Snapshot) -> [NSMenuItem] {
+            [
+                toggle(SettingLabel.wrapsLines, snapshot.wrapsLines, #selector(toggleWrap)),
+                toggle(SettingLabel.syncScrolling, snapshot.syncsScrolling, #selector(toggleSync)),
+                toggle(SettingLabel.showsMinimap, snapshot.showsMinimap, #selector(toggleMinimap)),
+                toggle(SettingLabel.showsStatusBar, snapshot.showsStatusBar, #selector(toggleStatusBar)),
+                toggle(
+                    SettingLabel.showsHoverDocumentation, snapshot.showsHoverDocumentation,
+                    #selector(toggleHoverDocumentation)),
+                toggle(SettingLabel.isolatesChanges, snapshot.isolatesChanges, #selector(toggleIsolate), key: "4")
+            ]
+        }
+
+        /// What's compared and how it's matched: granularity, the heuristics and whitespace handling.
+        private func matchingItems(for snapshot: Snapshot) -> [NSMenuItem] {
+            [
                 submenu(
-                    "Highlight changes by",
+                    SettingLabel.granularity,
                     [
                         ("Characters", snapshot.granularity == .character, #selector(granularityCharacter)),
                         ("Words", snapshot.granularity == .word, #selector(granularityWord)),
                         ("Syntax", snapshot.granularity == .syntax, #selector(granularitySyntax))
-                    ]))
-            menu.addItem(
+                    ]),
                 submenu(
-                    "Diff heuristics",
+                    SettingLabel.advancedMatching,
                     [
-                        ("Anchor on rare lines", snapshot.heuristics.anchorsRareLines, #selector(toggleAnchors)),
-                        ("Slide by indentation", snapshot.heuristics.slidesToIndentation, #selector(toggleSlides)),
-                        ("Pair similar lines", snapshot.heuristics.pairsSimilarLines, #selector(togglePairs)),
-                        ("Clean up emphasis", snapshot.heuristics.cleansUpEmphasis, #selector(toggleCleanup)),
-                        ("Mark moved blocks", snapshot.heuristics.detectsMovedBlocks, #selector(toggleMoved))
-                    ]))
-            menu.addItem(
-                submenu(
-                    "Whitespace",
-                    [
-                        ("Compare exactly", snapshot.heuristics.whitespace == .exact, #selector(whitespaceExact)),
+                        (SettingLabel.anchorsRareLines, snapshot.heuristics.anchorsRareLines, #selector(toggleAnchors)),
                         (
-                            "Ignore trailing", snapshot.heuristics.whitespace == .ignoreTrailing,
+                            SettingLabel.slidesToIndentation, snapshot.heuristics.slidesToIndentation,
+                            #selector(toggleSlides)
+                        ),
+                        (
+                            SettingLabel.pairsSimilarLines, snapshot.heuristics.pairsSimilarLines,
+                            #selector(togglePairs)
+                        ),
+                        (
+                            SettingLabel.cleansUpEmphasis, snapshot.heuristics.cleansUpEmphasis,
+                            #selector(toggleCleanup)
+                        ),
+                        (
+                            SettingLabel.detectsMovedBlocks, snapshot.heuristics.detectsMovedBlocks,
+                            #selector(toggleMoved)
+                        )
+                    ]),
+                submenu(
+                    SettingLabel.whitespace,
+                    [
+                        ("Exactly", snapshot.heuristics.whitespace == .exact, #selector(whitespaceExact)),
+                        (
+                            "Ignoring trailing whitespace", snapshot.heuristics.whitespace == .ignoreTrailing,
                             #selector(whitespaceTrailing)
                         ),
                         (
-                            "Ignore leading and trailing", snapshot.heuristics.whitespace == .ignoreLeadingAndTrailing,
-                            #selector(whitespaceEdges)
+                            "Ignoring leading and trailing whitespace",
+                            snapshot.heuristics.whitespace == .ignoreLeadingAndTrailing, #selector(whitespaceEdges)
                         ),
-                        ("Ignore all", snapshot.heuristics.whitespace == .ignoreAll, #selector(whitespaceAll))
-                    ]))
-            menu.addItem(.separator())
-            menu.addItem(toggle("Changed files only", snapshot.showsChangesOnly, #selector(toggleChangesOnly)))
-            menu.addItem(toggle("Ignored files", snapshot.showsIgnoredFiles, #selector(toggleIgnoredFiles)))
-            menu.addItem(
+                        (
+                            "Ignoring all whitespace", snapshot.heuristics.whitespace == .ignoreAll,
+                            #selector(whitespaceAll)
+                        )
+                    ])
+            ]
+        }
+
+        /// File explorer and tree presentation.
+        private func fileItems(for snapshot: Snapshot) -> [NSMenuItem] {
+            [
+                toggle(SettingLabel.showsChangesOnly, snapshot.showsChangesOnly, #selector(toggleChangesOnly)),
+                toggle(SettingLabel.showsIgnoredFiles, snapshot.showsIgnoredFiles, #selector(toggleIgnoredFiles)),
                 submenu(
-                    "Files",
+                    SettingLabel.treeStyle,
                     [
                         ("Tree", snapshot.treeStyle == .hierarchy, #selector(treeHierarchy)),
-                        ("Compact tree", snapshot.treeStyle == .compact, #selector(treeCompact)),
-                        ("Flat list", snapshot.treeStyle == .flat, #selector(treeFlat))
-                    ]))
-            menu.addItem(
+                        ("Tree with compact folders", snapshot.treeStyle == .compact, #selector(treeCompact)),
+                        ("Flat list of paths", snapshot.treeStyle == .flat, #selector(treeFlat))
+                    ]),
                 submenu(
-                    "Explorers",
+                    SettingLabel.explorerPlacement,
                     [
-                        ("Two explorers on top", snapshot.explorerPlacement == .top, #selector(placementTop)),
+                        ("Two explorers above the diff", snapshot.explorerPlacement == .top, #selector(placementTop)),
                         (
                             "Two explorers in a sidebar", snapshot.explorerPlacement == .sidebar,
                             #selector(placementSidebar)
@@ -141,8 +173,8 @@ struct ViewOptionsMenu: NSViewRepresentable {
                             "One merged tree in a sidebar", snapshot.explorerPlacement == .unifiedSidebar,
                             #selector(placementUnified)
                         )
-                    ]))
-            return menu
+                    ])
+            ]
         }
 
         private func toggle(_ title: String, _ isOn: Bool, _ action: Selector, key: String = "") -> NSMenuItem {
