@@ -55,15 +55,15 @@ struct SourceToolbarControl: NSViewRepresentable {
         let refChoice: SideState.RefChoice
         let isSingleFile: Bool
 
-        /// A branch keeps its last path component, ellipsized in the middle past 32 characters; the full name stays
-        /// in the tooltip and the menu.
-        private static func shortened(_ ref: String) -> String {
-            let name = ref.split(separator: "/").last.map(String.init) ?? ref
+        /// A ref or a file name keeps its last path component, ellipsized in the middle past 32 characters; the
+        /// full name stays in the tooltip and the menu.
+        private static func shortened(_ text: String) -> String {
+            let name = text.split(separator: "/").last.map(String.init) ?? text
             guard name.count > 30 else { return name }
             return name.prefix(16) + "…" + name.suffix(12)
         }
 
-        private static func attributedTitle(for source: ComparisonSource?, fallback: String) -> NSAttributedString {
+        private static func attributedTitle(for described: SourceDescriptor?, fallback: String) -> NSAttributedString {
             let context: [NSAttributedString.Key: Any] = [
                 .foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: NSFont.systemFontSize)
             ]
@@ -72,36 +72,35 @@ struct SourceToolbarControl: NSViewRepresentable {
                 .font: NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
             ]
             let title = NSMutableAttributedString()
-            switch source {
-                case .gitRef(let repository, let ref):
-                    title.append(NSAttributedString(string: repository.lastPathComponent + "  ", attributes: context))
-                    title.append(NSAttributedString(string: shortened(GitCommit.abbreviated(ref)), attributes: main))
-                case .patch(let url, let side):
-                    title.append(NSAttributedString(string: url.lastPathComponent + "  ", attributes: context))
-                    title.append(NSAttributedString(string: side == .old ? "before" : "after", attributes: main))
-                case .file(let url), .directory(let url):
-                    title.append(
-                        NSAttributedString(
-                            string: url.deletingLastPathComponent().lastPathComponent + "  ", attributes: context))
-                    title.append(NSAttributedString(string: url.lastPathComponent, attributes: main))
-                case nil:
-                    title.append(NSAttributedString(string: fallback, attributes: main))
+            guard let described else {
+                title.append(NSAttributedString(string: fallback, attributes: main))
+                return title
             }
+            title.append(NSAttributedString(string: described.context + "  ", attributes: context))
+            title.append(NSAttributedString(string: shortened(described.primary), attributes: main))
             return title
         }
 
+        /// The SF Symbol for each family a descriptor can name. `workingTree` gets a symbol of its own --
+        /// distinct from `folder`'s plain directory and `branch`'s fork -- because a working tree is a git
+        /// concept sharing the repository as its context, not an ordinary folder; "pencil.and.outline" reads as
+        /// "uncommitted work in progress", which is what the working tree is.
+        private static func symbolName(for symbol: SourceDescriptor.Symbol) -> String {
+            switch symbol {
+                case .file: "doc"
+                case .folder: "folder"
+                case .branch: "arrow.triangle.branch"
+                case .workingTree: "pencil.and.outline"
+                case .patch: "doc.plaintext"
+            }
+        }
+
         init(side: SideState, position: Side) {
+            let described = side.source?.descriptor(repository: side.repository)
             title = side.source?.displayName ?? "Choose \(position == .left ? "left" : "right") side…"
-            attributedTitle = Self.attributedTitle(for: side.source, fallback: title)
-            symbol =
-                switch side.source {
-                    case .file: "doc"
-                    case .directory: "folder"
-                    case .gitRef: "arrow.triangle.branch"
-                    case .patch: "doc.plaintext"
-                    case nil: "plus.circle"
-                }
-            detail = side.source?.detail ?? ""
+            attributedTitle = Self.attributedTitle(for: described, fallback: title)
+            symbol = described.map { Self.symbolName(for: $0.symbol) } ?? "plus.circle"
+            detail = described?.detail ?? ""
             fileCount = side.source == nil ? nil : side.entries.count
             isLoading = side.isLoading
             errorMessage = side.errorMessage
