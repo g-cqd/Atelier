@@ -176,6 +176,41 @@ struct HoverHitTesterTests {
                 == nil)
     }
 
+    // MARK: identifierRange / anchorRect(for:textView:)
+
+    @Test
+    func `identifierRange spans the hovered identifier, document-absolute`() throws {
+        let rendered = try rendered()
+        let textView = makeTextView(rendered: rendered)
+        let target = point(row: 0, column: 8, in: rendered)
+
+        let hit = try #require(HoverHitTester.hit(at: target, textView: textView, rendered: rendered))
+
+        let string = rendered.attributed.string as NSString
+        #expect(string.substring(with: hit.identifierRange) == "alphaBeta")
+    }
+
+    @Test
+    func `anchorRect(for:textView:) recomputes the same rect a fresh hit measured`() throws {
+        let rendered = try rendered()
+        let textView = makeTextView(rendered: rendered)
+        let target = point(row: 0, column: 8, in: rendered)
+        let hit = try #require(HoverHitTester.hit(at: target, textView: textView, rendered: rendered))
+
+        let recomputed = try #require(HoverHitTester.anchorRect(for: hit.identifierRange, textView: textView))
+
+        #expect(recomputed == hit.anchorRect)
+    }
+
+    @Test
+    func `anchorRect(for:textView:) is nil for a range past the end of the document`() throws {
+        let rendered = try rendered()
+        let textView = makeTextView(rendered: rendered)
+        let outOfBounds = NSRange(location: rendered.attributed.length + 50, length: 4)
+
+        #expect(HoverHitTester.anchorRect(for: outOfBounds, textView: textView) == nil)
+    }
+
     @Test
     func `an identifier after an emoji keeps a correct UTF-16 column`() throws {
         let line = "let x = \u{1F600} name\n"

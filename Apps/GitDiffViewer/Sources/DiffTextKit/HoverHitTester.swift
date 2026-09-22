@@ -19,8 +19,12 @@ package struct HoverHit: Sendable, Equatable {
     package let utf16Column: Int
     /// The row index in `RenderedText.rows`/`lineStarts`.
     package let row: Int
-    /// The hovered identifier run's bounds, in text-view coordinates.
+    /// The hovered identifier run's bounds, in text-view coordinates, as laid out when the hit was made.
     package let anchorRect: NSRect
+    /// The identifier's UTF-16 range in `RenderedText.attributed`'s full string -- document-absolute, not
+    /// row-relative, so ``HoverHitTester/anchorRect(for:textView:)`` can re-locate the same glyphs after a
+    /// scroll, when ``anchorRect`` may already be stale (or the fragment it was measured from no longer laid out).
+    package let identifierRange: NSRange
 }
 
 /// Maps a point in text-view coordinates to the identifier hovered there.
@@ -76,19 +80,67 @@ package enum HoverHitTester {
             return nil
         }
 
+        let anchorRect = Self.rect(
+            forIdentifierRange: identifierRange, fragmentOrigin: fragmentOrigin, fragmentStart: fragmentStart,
+            line: line, inset: inset)
+
+        return HoverHit(
+            fileIndex: meta.fileIndex, side: side, line: number - 1, utf16Column: offset - rowStart, row: rowIndex,
+            anchorRect: anchorRect, identifierRange: identifierRange)
+    }
+
+    /// Recomputes the current anchor rect for an already-known identifier, given its document-absolute
+    /// ``HoverHit/identifierRange``: re-ensures layout at that location and re-measures it, the same way
+    /// ``hit(at:textView:rendered:)`` measures a freshly-hit one. Used to keep an open hover panel tracking its
+    /// line across a scroll, since ``NSTextLayoutManager`` only keeps fragments near the viewport laid out --
+    /// the original ``HoverHit/anchorRect`` may already be stale, or its fragment discarded outright.
+    ///
+    /// `nil` when the range can no longer be resolved to a location at all (the document shrank under it), or
+    /// when a layout fragment cannot be produced for it (nothing currently justifies laying it out, e.g. it sits
+    /// far outside any viewport `NSTextLayoutManager` has ever been asked to ensure) -- either way, the caller's
+    /// cue to close rather than show a stale or wrong position.
+    @MainActor
+    package static func anchorRect(for identifierRange: NSRange, textView: NSTextView) -> NSRect? {
+        guard let layoutManager = textView.textLayoutManager,
+            let contentManager = layoutManager.textContentManager,
+            let start = contentManager.location(
+                layoutManager.documentRange.location, offsetBy: identifierRange.location),
+            let end = contentManager.location(start, offsetBy: identifierRange.length),
+            let range = NSTextRange(location: start, end: end)
+        else { return nil }
+        layoutManager.ensureLayout(for: range)
+        guard let fragment = layoutManager.textLayoutFragment(for: start) else { return nil }
+        let fragmentOrigin = fragment.layoutFragmentFrame.origin
+        let fragmentStart = contentManager.offset(
+            from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
+        guard
+            let line = fragment.textLineFragments.first(where: { lineFragment in
+                let lineStart = fragmentStart + lineFragment.characterRange.location
+                let lineEnd = lineStart + lineFragment.characterRange.length
+                return identifierRange.location >= lineStart && identifierRange.location < lineEnd
+            })
+        else { return nil }
+        return Self.rect(
+            forIdentifierRange: identifierRange, fragmentOrigin: fragmentOrigin, fragmentStart: fragmentStart,
+            line: line, inset: textView.textContainerInset)
+    }
+
+    /// `identifierRange`'s bounds within `line`, converted to text-view coordinates via `fragmentOrigin` and
+    /// `inset` -- the measurement ``hit(at:textView:rendered:)`` and ``anchorRect(for:textView:)`` both need, once
+    /// each already has the line fragment the range falls on.
+    private static func rect(
+        forIdentifierRange identifierRange: NSRange, fragmentOrigin: NSPoint, fragmentStart: Int,
+        line: NSTextLineFragment, inset: NSSize
+    ) -> NSRect {
         let startLocal = identifierRange.location - fragmentStart
         let endLocal = identifierRange.location + identifierRange.length - fragmentStart
         let startPoint = line.locationForCharacter(at: startLocal)
         let endPoint = line.locationForCharacter(at: endLocal)
         let minX = min(startPoint.x, endPoint.x)
         let maxX = max(startPoint.x, endPoint.x)
-        let anchorRect = NSRect(
+        return NSRect(
             x: fragmentOrigin.x + minX + inset.width, y: fragmentOrigin.y + line.typographicBounds.minY + inset.height,
             width: maxX - minX, height: line.typographicBounds.height)
-
-        return HoverHit(
-            fileIndex: meta.fileIndex, side: side, line: number - 1, utf16Column: offset - rowStart, row: rowIndex,
-            anchorRect: anchorRect)
     }
 
     /// Content rows carry source text; gaps, headers and filler rows never do.
