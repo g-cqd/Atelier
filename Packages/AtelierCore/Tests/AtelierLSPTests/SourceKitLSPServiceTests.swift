@@ -254,6 +254,67 @@ struct SourceKitLSPServiceTests {
     }
 
     @Test
+    func `two concurrent first hovers share one connection instead of racing two initializes`() async throws {
+        let factory = ScriptedConnectionFactory()
+        let configuration = SourceKitLSPService.Configuration(
+            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+        let service = SourceKitLSPService(configuration: configuration) { _ in await factory.make() }
+
+        async let first = service.hover(
+            uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
+        async let second = service.hover(
+            uri: "file:///b.swift", languageID: "swift", content: "b", line: 0, utf16Column: 0)
+
+        // Only one connection should ever be requested from the factory, no matter how the two hovers
+        // interleave their awaits.
+        await factory.waitForGeneration(1)
+        let transport = await factory.transport(at: 0)
+        await transport.sink.waitForCount(1)
+        let initializeEnvelope = try await decodeSent(transport, at: 0)
+        #expect(initializeEnvelope.method == "initialize")
+        try respond(transport, id: try #require(initializeEnvelope.id), result: .object([:]))
+
+        // Both hovers proceed once the shared handshake completes: didOpen ×2 plus hover ×2, in some order,
+        // over the one connection.
+        await transport.sink.waitForCount(6)
+        for index in 2 ..< 6 {
+            let envelope = try await decodeSent(transport, at: index)
+            if envelope.method == "textDocument/hover" {
+                try respond(transport, id: try #require(envelope.id), result: hoverResult(markdown: "x"))
+            }
+        }
+
+        let (firstResult, secondResult) = await (first, second)
+        #expect(firstResult != nil)
+        #expect(secondResult != nil)
+        #expect(await factory.generationCount == 1)
+    }
+
+    @Test
+    func `a connection that fails to initialize is stopped rather than leaked`() async throws {
+        let factory = ScriptedConnectionFactory()
+        var configuration = SourceKitLSPService.Configuration(
+            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+        configuration.requestTimeout = .milliseconds(10)
+        configuration.maximumRestarts = 0
+        configuration.idleShutdown = .zero
+        let clock = TestClock()
+        let service = SourceKitLSPService(configuration: configuration, clock: clock) { _ in await factory.make() }
+
+        async let hover = service.hover(
+            uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
+        try await clock.waitForAdditionalSleepers(1)
+        clock.advance(by: .milliseconds(10))
+        let content = await hover
+        #expect(content == nil)
+
+        // The connection that never answered `initialize` must have had its transport closed, not left
+        // running behind a session that gave up on it.
+        let transport = await factory.transport(at: 0)
+        #expect(await transport.closeCount.count == 1)
+    }
+
+    @Test
     func `an idle session shuts down gracefully and reconnects on the next hover`() async throws {
         let factory = ScriptedConnectionFactory()
         var configuration = SourceKitLSPService.Configuration(

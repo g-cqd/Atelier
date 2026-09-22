@@ -134,6 +134,50 @@ struct RepositoryFreshnessTests {
     }
 
     @Test
+    func `attaching to a linked worktree watches its private HEAD and the common refs, not <root>-.git`() async throws {
+        func noTrailingSlash(_ path: String) -> String { path.hasSuffix("/") ? String(path.dropLast()) : path }
+        let base = FileManager.default.temporaryDirectory
+            .appending(path: "freshness-worktree-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let worktreeRoot = noTrailingSlash(
+            base.appending(path: "worktree", directoryHint: .isDirectory).path(percentEncoded: false))
+        let commonGitDir = noTrailingSlash(
+            base.appending(path: "main/.git", directoryHint: .isDirectory).path(percentEncoded: false))
+        let privateGitDir = noTrailingSlash(
+            base.appending(path: "main/.git/worktrees/feature", directoryHint: .isDirectory)
+                .path(percentEncoded: false))
+        try FileManager.default.createDirectory(atPath: worktreeRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(atPath: privateGitDir, withIntermediateDirectories: true)
+        try "gitdir: \(privateGitDir)\n"
+            .write(
+                toFile: worktreeRoot + "/.git", atomically: true, encoding: .utf8)
+        try "\(commonGitDir)\n"
+            .write(
+                toFile: privateGitDir + "/commondir", atomically: true, encoding: .utf8)
+
+        let factory = WatcherFactory()
+        let sut = makeSUT(factory: factory)
+        let root = Self.url(worktreeRoot)
+        let probe = AsyncProbe<Void>()
+        sut.onTreeChanged = { probe.send(()) }
+        sut.comparisonChanged(rightSource: .directory(root), repositoryRoot: root)
+        let source = try #require(factory.latest)
+        // Same rendezvous as "attaching watches the tree root...": driving one event to a fired callback proves
+        // every `watch*` call ahead of it in `attach(root:)` already ran.
+        try await fire(.fileChanged(worktreeRoot + "/a.swift"), on: source, after: Self.treeDebounce, probe: probe)
+
+        #expect(await source.watchedDirectories.contains(worktreeRoot))
+        #expect(await source.watchedFiles.contains(privateGitDir + "/HEAD"))
+        #expect(await source.watchedFiles.contains(commonGitDir + "/packed-refs"))
+        #expect(await source.watchedDirectories.contains(commonGitDir + "/refs"))
+        // Never watched at the worktree's own (nonexistent, for this purpose) `<root>/.git/HEAD` or
+        // `<root>/.git/refs`: those paths would never receive the real HEAD or refs' events.
+        #expect(await !source.watchedFiles.contains(worktreeRoot + "/.git/HEAD"))
+        #expect(await !source.watchedDirectories.contains(worktreeRoot + "/.git/refs"))
+        try await drain(sut)
+    }
+
+    @Test
     func `nothing attaches when the right side is not the repository's own working tree`() {
         let factory = WatcherFactory()
         let sut = makeSUT(factory: factory)

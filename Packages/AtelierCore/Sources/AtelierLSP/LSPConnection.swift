@@ -27,7 +27,15 @@ public actor LSPConnection {
     private var nextRequestID = 0
     private var pending: [JSONRPCID: CheckedContinuation<Data?, any Error>] = [:]
     private var readTask: Task<Void, Never>?
+    /// Set as soon as requests must stop being accepted: either ``stop()`` was called, or the read loop ended
+    /// (a malformed frame, or the server closing its side). Independent of ``transportDisposed`` -- a read loop
+    /// ending on its own does not itself release the transport, only marks it unusable for new work.
     private var closed = false
+    /// Set once ``LSPTransport/close()`` has actually run. ``stop()`` always drives the transport to this state,
+    /// even when the read loop already set ``closed`` -- otherwise a connection whose reader ended on a
+    /// malformed frame would keep its transport (and the process/pipes behind it) alive forever, since
+    /// ``stop()`` used to no-op whenever ``closed`` was already true.
+    private var transportDisposed = false
 
     public init(transport: any LSPTransport) {
         self.transport = transport
@@ -76,13 +84,15 @@ public actor LSPConnection {
     }
 
     /// Ends the read loop, closes the transport, and fails every pending request with
-    /// ``LSPConnectionError/transportClosed(_:)``. Idempotent.
+    /// ``LSPConnectionError/transportClosed(_:)``. Idempotent, and always disposes the transport even when the
+    /// read loop already marked the connection closed (a malformed frame, or the server hanging up first).
     public func stop() async {
-        guard !closed else { return }
         closed = true
         readTask?.cancel()
         readTask = nil
         failAllPending(with: LSPConnectionError.transportClosed("connection stopped"))
+        guard !transportDisposed else { return }
+        transportDisposed = true
         await transport.close()
     }
 

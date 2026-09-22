@@ -57,11 +57,13 @@ struct LSPConnectionTests {
         async let second = connection.request("b", EmptyParams(), as: Payload.self)
         await transport.sink.waitForCount(2)
 
+        // `async let` does not promise which of two child tasks actually reaches the actor -- and so sends its
+        // frame -- first; match each envelope by its method rather than by array position, so this assertion
+        // holds regardless of which one the scheduler happened to run first.
         let frames = await transport.sink.all
-        let firstEnvelope = try JSONDecoder().decode(SentEnvelope.self, from: unframe(frames[0]))
-        let secondEnvelope = try JSONDecoder().decode(SentEnvelope.self, from: unframe(frames[1]))
-        let firstID = try #require(firstEnvelope.id)
-        let secondID = try #require(secondEnvelope.id)
+        let envelopes = try frames.map { try JSONDecoder().decode(SentEnvelope.self, from: unframe($0)) }
+        let firstID = try #require(envelopes.first { $0.method == "a" }?.id)
+        let secondID = try #require(envelopes.first { $0.method == "b" }?.id)
 
         // Respond to the second request first.
         transport.deliver(
@@ -140,6 +142,33 @@ struct LSPConnectionTests {
         await #expect(throws: LSPConnectionError.self) {
             _ = try await connection.request("another", EmptyParams(), as: Payload.self)
         }
+    }
+
+    @Test
+    func `stop disposes the transport even after the read loop already marked the connection closed`() async throws {
+        let transport = PipeTransport()
+        let connection = LSPConnection(transport: transport)
+        await connection.start()
+
+        let task = Task {
+            try await connection.request("thing/get", EmptyParams(), as: Payload.self)
+        }
+        await transport.sink.waitForCount(1)
+
+        // The read loop ends the connection on its own (malformed frame or the server hanging up); this must
+        // not make a later `stop()` skip disposing the transport.
+        transport.endIncoming()
+        await #expect(throws: LSPConnectionError.self) {
+            _ = try await task.value
+        }
+        #expect(await transport.closeCount.count == 0)
+
+        await connection.stop()
+        #expect(await transport.closeCount.count == 1)
+
+        // Idempotent: a second stop() must not double-close the transport.
+        await connection.stop()
+        #expect(await transport.closeCount.count == 1)
     }
 
     @Test

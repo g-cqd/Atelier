@@ -30,7 +30,8 @@ package struct DiffTextView: NSViewRepresentable {
     /// overlay is a reference type the representable otherwise cannot see change.
     package var diagnosticsVersion = 0
     /// Called with a row's findings and the clicked badge's frame, in the gutter's own coordinates.
-    package var onDiagnosticClick: ((_ rowIndex: Int, _ findings: [Finding], _ badgeRect: NSRect) -> Void)?
+    package var onDiagnosticClick:
+        ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)?
 
     package init(
         rendered: RenderedText, gutter: GutterStyle, keepsScrollPosition: Bool = false, wrapsLines: Bool = true,
@@ -41,7 +42,7 @@ package struct DiffTextView: NSViewRepresentable {
         onDisplayed: (() -> Void)? = nil, hoverEnabled: Bool = false,
         hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil,
         diagnosticOverlay: DiagnosticOverlay? = nil, diagnosticsVersion: Int = 0,
-        onDiagnosticClick: ((_ rowIndex: Int, _ findings: [Finding], _ badgeRect: NSRect) -> Void)? = nil
+        onDiagnosticClick: ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)? = nil
     ) {
         self.rendered = rendered
         self.gutter = gutter

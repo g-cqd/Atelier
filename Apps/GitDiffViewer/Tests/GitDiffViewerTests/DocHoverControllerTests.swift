@@ -210,6 +210,24 @@ struct DocHoverControllerTests {
     }
 
     @Test
+    func `a bounds-changed notification with no actual scroll offset is a no-op`() async throws {
+        let rendered = try manyLinesRendered()
+        let (scrollView, view) = scrollingTextView(showing: rendered)
+        let (controller, _, taskProvider) = makeSUT()
+        controller.attach(to: view) { rendered }
+
+        controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
+        try await taskProvider.waitForAllTasks(timeout: .seconds(2))
+        #expect(controller.isPopoverVisible == true)
+
+        // Same origin as already reflected: a spurious notification, not a scroll.
+        NotificationCenter.default.post(
+            name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+
+        #expect(controller.isPopoverVisible == true)
+    }
+
+    @Test
     func `resolution never runs more than one at a time`() async throws {
         let rendered = try rendered()
         let view = textView(showing: rendered)

@@ -15,15 +15,25 @@ public import Foundation
 /// 4. Synthesize a scratch Swift file: the imports, then a probe expression built from the chain --
 ///    `let _ = <chain>` when the chain starts with an uppercase letter (a type or type-qualified member, which
 ///    resolves as an expression on its own), `let _ = { <chain> }` as a fallback so a call-shaped or
-///    lowercase-rooted-but-import-qualified chain still parses as a closure body.
+///    lowercase-rooted-but-import-qualified chain still parses as a closure body. The hover position within that
+///    line targets the *last* dot-separated segment of the chain -- `NSVisualEffectView.Material.hudWindow`
+///    hovers at `hudWindow`, not the leading `NSVisualEffectView` -- since sourcekit-lsp resolves a dotted
+///    expression per-token, not for the chain as a whole; targeting the head would answer with the outermost
+///    type's own declaration (and typically no prose) regardless of which member was actually being asked about.
 /// 5. `didOpen` the synthetic document at a fabricated `file://` URI under a scratch temp directory, hover at
-///    the identifier's position within the synthesized probe line, and map any non-empty result to
-///    ``HoverContent`` with ``HoverContent/Source-swift.enum/sdk``.
+///    that position, and map any non-empty result to ``HoverContent`` with ``HoverContent/Source-swift.enum/sdk``.
+/// 6. When that first probe's answer has no prose (a bare declaration, or nothing at all) and the chain starts
+///    with an uppercase letter, retry once with a second, type-position probe -- `typealias _AtelierProbe =
+///    <chain>` -- hovering the chain there instead. Some toolchains resolve a type's bare value-position
+///    reference to an unapplied initializer overload list rather than the type itself (no prose either way, but
+///    a different, unhelpful answer); the type-position form asks for the type itself unambiguously. Whichever
+///    of the two answers has prose wins; if neither does, the first (already-fetched) answer is kept -- some
+///    answer beats none. At most two probes are ever sent per query, and only the final chosen answer is cached.
 ///
 /// ## Limits (honest, live-verified against a real toolchain)
 /// - Declarations resolve reliably; doc comments surface only when the SDK's `.swiftdoc` carries them.
 /// - Availability annotations and the online-only long-form discussion Xcode shows are absent.
-/// - Old plain-comment Objective-C headers give a declaration only, no prose.
+/// - Old plain-comment Objective-C headers give a declaration only, no prose, even after the second probe.
 /// - A bare member name with no receiver and no qualifying import (e.g. hovering `foo` in `x.foo`) is rejected
 ///   before any LSP call; only the qualified chain resolves.
 ///
@@ -70,7 +80,7 @@ public actor SDKDocumentationProvider: HoverProvider {
             return cached
         }
 
-        let result = await probe(
+        let result = await probeWithFallback(
             chain: extraction.chain, chainStartsUppercase: extraction.startsUppercase, imports: imports)
         store(key, result)
         return result
@@ -78,24 +88,51 @@ public actor SDKDocumentationProvider: HoverProvider {
 
     // MARK: - Probing
 
-    private func probe(chain: String, chainStartsUppercase: Bool, imports: [String]) async -> HoverContent? {
+    /// Runs the primary (value-position) probe; when it has nothing to show or no prose and the chain names a
+    /// type (starts uppercase), retries once with a type-position probe instead. See the type-level doc comment,
+    /// point 6, for why a second attempt is worthwhile and why it is only ever a second attempt.
+    private func probeWithFallback(chain: String, chainStartsUppercase: Bool, imports: [String]) async
+        -> HoverContent?
+    {
+        let primary = await probe(
+            chain: chain, chainStartsUppercase: chainStartsUppercase, imports: imports, typePosition: false)
+        if let primary, HoverContentQuality.hasProse(primary.markdown) { return primary }
+        guard chainStartsUppercase else { return primary }
+
+        let secondary = await probe(
+            chain: chain, chainStartsUppercase: chainStartsUppercase, imports: imports, typePosition: true)
+        if let secondary, HoverContentQuality.hasProse(secondary.markdown) { return secondary }
+        return primary
+    }
+
+    private func probe(chain: String, chainStartsUppercase: Bool, imports: [String], typePosition: Bool) async
+        -> HoverContent?
+    {
         syntheticDocumentCounter += 1
         let uri = "file:///tmp/atelier-sdk-probe/probe-\(syntheticDocumentCounter).swift"
 
         var lines: [String] = imports.map { "import \($0)" }
         let probeLineIndex = lines.count
-        if chainStartsUppercase {
-            lines.append("let _ = \(chain)")
+        let prefix: String
+        if typePosition {
+            // A type-position reference: some toolchains resolve a bare value-position `let _ = Type` to an
+            // unapplied initializer overload list instead of the type itself when `Type` is initializable in a
+            // way that reads as call-shaped; a `typealias` target is unambiguously the type.
+            prefix = "typealias _AtelierProbe = "
+            lines.append("\(prefix)\(chain)")
+        } else if chainStartsUppercase {
+            prefix = "let _ = "
+            lines.append("\(prefix)\(chain)")
         } else {
-            lines.append("let _ = { \(chain) }")
+            prefix = "let _ = { "
+            lines.append("\(prefix)\(chain) }")
         }
         let content = lines.joined(separator: "\n")
 
-        // The probe line is `let _ = ` (8 characters) or `let _ = { ` (11 characters) followed by the chain;
-        // hover at the chain's first character so sourcekit-lsp resolves the leading (outermost-qualifying)
-        // symbol of the dotted chain.
-        let prefix = chainStartsUppercase ? "let _ = " : "let _ = { "
-        let column = prefix.utf16.count
+        // Hover at the chain's *last* dot-separated segment: sourcekit-lsp resolves a dotted expression
+        // per-token, so hovering the head of `NSVisualEffectView.Material.hudWindow` answers with
+        // `NSVisualEffectView` itself (no prose) regardless of which member the chain actually names.
+        let column = prefix.utf16.count + Self.tailSegmentOffset(in: chain)
 
         guard
             let hover = await service.hover(
@@ -103,6 +140,13 @@ public actor SDKDocumentationProvider: HoverProvider {
             !hover.markdown.isEmpty
         else { return nil }
         return HoverContent(markdown: hover.markdown, source: .sdk)
+    }
+
+    /// The UTF-16 offset, within `chain`, of its last dot-separated segment's first character; `0` when `chain`
+    /// has no dot.
+    private static func tailSegmentOffset(in chain: String) -> Int {
+        guard let lastDot = chain.lastIndex(of: ".") else { return 0 }
+        return chain[chain.startIndex ... lastDot].utf16.count
     }
 
     // MARK: - Cache (LRU, including nil results)

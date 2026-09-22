@@ -118,6 +118,14 @@ package final class DiffViewerModel {
         guard settings.showsIgnoredFiles else { return [compared] }
         return [compared, ExplorerSection(kind: .ignored, title: "Ignored Files", nodes: ignored)]
     }
+    /// The repository root the comparison currently belongs to, for the window's per-project settings identity:
+    /// the left side's, or the right's when only it resolved one (a patch, or two arbitrary folders neither
+    /// inside a repository, leaves both nil). Each side's ``SideState/repository`` already resolves the same way
+    /// `git` itself would (up from whatever path was chosen to the repository root containing it) as soon as it
+    /// loads, and updates again on every later switch through the source toolbar — so this reflects the
+    /// comparison's *current* project, not just the one it launched with.
+    package var currentProjectRoot: URL? { left.repository?.root ?? right.repository?.root }
+
     package var rendered: RenderedDiff? { pipeline.file }
     /// One rendered diff per changed file when a folder or nothing is selected.
     package var renderedFiles: [RenderedFile] { pipeline.cards }
@@ -146,10 +154,17 @@ package final class DiffViewerModel {
     }
 
     /// What the detail area shows, derived from the model so the view has no logic of its own.
+    ///
+    /// Whatever is already published takes priority over a source reload in flight: `left.isLoading` or
+    /// `right.isLoading` only switches to `.loading` when there is nothing to show yet (the very first load, or a
+    /// comparison ``RenderPipeline/clear()`` actually emptied). A reload of an already-shown comparison keeps
+    /// showing it -- ``RenderPipeline`` keeps its previous `file`/`cards` published throughout a side's reload and
+    /// only replaces what actually changed once it lands -- rather than unmounting the detail views into a
+    /// `ProgressView` and back, which would drop their scroll position and any in-progress selection.
     package var detailState: DetailState {
-        if left.isLoading || right.isLoading { return .loading }
         if isShowingCombinedFiles, !renderedFiles.isEmpty { return .cards }
         if let rendered { return .file(rendered) }
+        if left.isLoading || right.isLoading { return .loading }
         if isRendering { return .loading }
         if let renderError { return .error(renderError) }
         guard left.source != nil, right.source != nil else { return .noSources }

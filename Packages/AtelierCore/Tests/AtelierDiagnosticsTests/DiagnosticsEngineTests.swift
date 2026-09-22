@@ -9,7 +9,7 @@ import Testing
 /// ``DiagnosticsEngine``'s caching, scope handling and result mapping, with tools located through a
 /// ``ToolDiscovery`` over a custom path so no real tool is ever spawned.
 struct DiagnosticsEngineTests {
-    private static let sarif = """
+    static let sarif = """
         {"version": "2.1.0", "runs": [{"results": [
             {"ruleId": "line_length", "level": "warning", "message": {"text": "Line too long"},
              "locations": [{"physicalLocation": {"artifactLocation": {"uri": "file://ROOT/A.swift"},
@@ -19,24 +19,24 @@ struct DiagnosticsEngineTests {
 
     /// Writes an executable script at `url`; its contents are irrelevant since a ``FakeProcessRunner`` never
     /// actually spawns it, but discovery still needs a real, executable file on disk to find.
-    private static func makeExecutable(at url: URL) throws {
+    static func makeExecutable(at url: URL) throws {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try "#!/bin/sh\n".write(to: url, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
     }
 
-    private static func sarifOutput(root: URL) -> ProcessOutput {
+    static func sarifOutput(root: URL) -> ProcessOutput {
         .success(Self.sarif.replacingOccurrences(of: "ROOT", with: root.path))
     }
 
     /// A discovery that resolves `tool` to `executable` through a custom path, with every other rung starved of a
     /// runner call by disabling the toolchain search and leaving `PATH` unconsulted (nothing to find there anyway).
-    private static func discovery(runner: any ProcessRunner, executable: URL, home: URL) -> ToolDiscovery {
+    static func discovery(runner: any ProcessRunner, executable: URL, home: URL) -> ToolDiscovery {
         ToolDiscovery(runner: runner, bundledDirectory: nil, homeDirectory: home, environment: [:])
     }
 
-    private static func request(
+    static func request(
         root: URL, files: [DiagnosticsEngine.FileTarget], corpusFingerprint: String? = nil,
         tool: DiagnosticTool, customPath: String
     ) -> DiagnosticsEngine.Request {
