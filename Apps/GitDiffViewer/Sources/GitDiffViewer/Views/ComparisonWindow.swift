@@ -51,6 +51,14 @@ struct ComparisonWindow: View {
     var body: some View {
         ContentView(settings: settings, model: model)
             .navigationTitle(model.windowTitle)
+            .background(
+                WindowTabbingConfigurator { window in
+                    window.tabbingMode = .preferred
+                    window.tabbingIdentifier = WindowID.comparisonTabGroup
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            )
             .onChange(of: model.currentConfiguration) { _, current in
                 if let current { recents.record(current) }
             }
@@ -94,4 +102,39 @@ struct ComparisonWindow: View {
 enum WindowID {
     static let welcome = "welcome"
     static let comparison = "comparison"
+    /// Shared `NSWindow.tabbingIdentifier` for every comparison window (a patch included: it opens through the
+    /// same `WindowGroup` and renders the same `ContentView` chrome, so it tabs alongside the rest rather than
+    /// standing apart). The welcome window gets no identifier of its own -- see `WindowTabbingConfigurator`'s use
+    /// in `App.swift` -- so it can never merge into this group.
+    static let comparisonTabGroup = "comparison-group"
+}
+
+/// Bridges to the hosting `NSWindow` once AppKit attaches this view, to reach window-tab configuration
+/// (`tabbingMode`, `tabbingIdentifier`) that has no SwiftUI-native surface on this SDK: `apple-docs` turned up
+/// only the AppKit properties (confirmed against the macOS 26.5 SDK), no `Window`-scene modifier wrapping them.
+/// Invisible and non-interactive by construction (see call sites' `.allowsHitTesting(false)`): it exists purely
+/// to run `configure` once AppKit hands it a window, on `viewDidMoveToWindow`.
+struct WindowTabbingConfigurator: NSViewRepresentable {
+    let configure: (NSWindow) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = ConfiguringView()
+        view.configure = configure
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class ConfiguringView: NSView {
+        var configure: ((NSWindow) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            configure?(window)
+        }
+
+        // Never part of hit-testing: this view exists only to observe its window, not to draw or receive events.
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
 }
