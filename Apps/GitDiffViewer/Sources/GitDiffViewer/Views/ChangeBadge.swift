@@ -71,8 +71,40 @@ enum ChangeGlyph {
         }
     }
 
+    /// This kind, in the scheme-and-state-independent vocabulary ``BadgeStyleResolver`` resolves from.
+    var badgeKind: BadgeChangeKind {
+        switch self {
+            case .added: .added
+            case .deleted: .deleted
+            case .modified: .modified
+            case .renamed: .renamed
+        }
+    }
+
     static let size: CGFloat = 18
     static let cornerRadius: CGFloat = 4
+}
+
+extension BadgeColorToken {
+    var color: Color {
+        switch self {
+            case .green: .green
+            case .blue: .blue
+            case .red: .red
+            case .orange: .orange
+            case .purple: .purple
+        }
+    }
+
+    var nsColor: NSColor {
+        switch self {
+            case .green: .systemGreen
+            case .blue: .systemBlue
+            case .red: .systemRed
+            case .orange: .systemOrange
+            case .purple: .systemPurple
+        }
+    }
 }
 
 /// A letter badge for the kind of change, with line counts where they mean something.
@@ -108,20 +140,60 @@ struct ChangeBadge: View {
     }
 }
 
-/// The letter alone, the square everything else is built around.
+/// The letter alone, the square everything else is built around. Defaults reproduce today's look exactly --
+/// classic colours, filled -- so a card header or a toolbar label that never passes ``scheme``/``state`` keeps
+/// drawing exactly as it always has; only the explorer's rows opt into the state-aware, scheme-aware look.
 struct ChangeGlyphBadge: View {
     let glyph: ChangeGlyph
+    var scheme: BadgeScheme = .classic
+    var state: BadgeChangeState = .staged
+    var isSelected = false
+    var isFocused = false
 
     var body: some View {
+        let style = BadgeStyleResolver.resolve(
+            scheme: scheme, kind: glyph.badgeKind, state: state, isSelected: isSelected, isFocused: isFocused)
         Text(glyph.letter)
             .font(.caption.bold())
-            .foregroundStyle(.white)
+            .foregroundStyle(style.text.color)
             .frame(width: ChangeGlyph.size, height: ChangeGlyph.size)
-            .background(RoundedRectangle(cornerRadius: ChangeGlyph.cornerRadius).fill(glyph.color))
+            .background(RoundedRectangle(cornerRadius: ChangeGlyph.cornerRadius).fill(style.fill.color))
+            .overlay {
+                if let stroke = style.stroke {
+                    RoundedRectangle(cornerRadius: ChangeGlyph.cornerRadius).strokeBorder(stroke.color, lineWidth: 1)
+                }
+            }
+    }
+}
+
+extension BadgeFill {
+    fileprivate var color: Color {
+        switch self {
+            case .none: .clear
+            case .token(let token): token.color
+            case .white: .white
+        }
+    }
+}
+
+extension BadgeTextColor {
+    fileprivate var color: Color {
+        switch self {
+            case .white: .white
+            case .token(let token): token.color
+            case .primary: .primary
+        }
     }
 }
 
 /// The same badge for AppKit rows: the explorer draws thousands of them, so it stays a plain view.
+///
+/// Selection and focus reach this view the same way AppKit already tells a plain ``NSTableCellView`` subview
+/// about them: the row view assigns its own `backgroundStyle` to every subview that implements
+/// `-setBackgroundStyle:`, `.emphasized` exactly when the row is selected *and* its outline view is the key
+/// window's first responder (a selection in an unfocused window reads `.normal`, same as no selection at all) --
+/// precisely the native blue-vs-gray distinction the badge's own invert should follow, with nothing bespoke to
+/// track.
 final class ChangeBadgeView: NSView {
     var glyph: ChangeGlyph? {
         didSet {
@@ -135,6 +207,22 @@ final class ChangeBadgeView: NSView {
         didSet { needsDisplay = true }
     }
 
+    var scheme: BadgeScheme = .classic {
+        didSet { needsDisplay = true }
+    }
+
+    /// Where this row's change stands against the index; see ``BadgeChangeState``.
+    var state: BadgeChangeState = .staged {
+        didSet { needsDisplay = true }
+    }
+
+    @objc dynamic var backgroundStyle: NSView.BackgroundStyle = .normal {
+        didSet {
+            guard oldValue != backgroundStyle else { return }
+            needsDisplay = true
+        }
+    }
+
     override var intrinsicContentSize: NSSize {
         NSSize(width: ChangeGlyph.size, height: ChangeGlyph.size)
     }
@@ -142,11 +230,35 @@ final class ChangeBadgeView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let glyph else { return }
         let alpha: CGFloat = isDimmed ? 0.35 : 1
-        glyph.nsColor.withAlphaComponent(alpha).setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: ChangeGlyph.cornerRadius, yRadius: ChangeGlyph.cornerRadius).fill()
+        let isEmphasizedSelection = backgroundStyle == .emphasized
+        let style = BadgeStyleResolver.resolve(
+            scheme: scheme, kind: glyph.badgeKind, state: state, isSelected: isEmphasizedSelection,
+            isFocused: isEmphasizedSelection)
+        let path = NSBezierPath(
+            roundedRect: bounds, xRadius: ChangeGlyph.cornerRadius, yRadius: ChangeGlyph.cornerRadius)
+        switch style.fill {
+            case .none: break
+            case .token(let token):
+                token.nsColor.withAlphaComponent(alpha).setFill()
+                path.fill()
+            case .white:
+                NSColor.white.withAlphaComponent(alpha).setFill()
+                path.fill()
+        }
+        if let stroke = style.stroke {
+            stroke.nsColor.withAlphaComponent(alpha).setStroke()
+            path.lineWidth = 1
+            path.stroke()
+        }
+        let textColor: NSColor =
+            switch style.text {
+                case .white: .white
+                case .token(let token): token.nsColor
+                case .primary: .labelColor
+            }
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .bold),
-            .foregroundColor: NSColor.white.withAlphaComponent(alpha)
+            .foregroundColor: textColor.withAlphaComponent(alpha)
         ]
         let text = NSAttributedString(string: glyph.letter, attributes: attributes)
         let size = text.size()

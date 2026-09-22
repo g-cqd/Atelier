@@ -63,6 +63,15 @@ package final class SideState {
         self.taskProvider = taskProvider
     }
 
+    /// Where this side's changes stand against the index, for the badges its files show: ``BadgeChangeState/staged``
+    /// for anything committed (a ref, a file, a patch side -- nothing here can be more or less staged than its own
+    /// content), ``BadgeChangeState/unstaged`` for a live working tree, where an uncommitted edit may or may not be
+    /// staged and this app currently has no per-file index data to tell the two apart (see ``BadgeChangeState``'s
+    /// doc comment).
+    package var badgeState: BadgeChangeState {
+        if case .directory = source { .unstaged } else { .staged }
+    }
+
     package var refChoice: RefChoice {
         get {
             if case .gitRef(_, let ref) = source { .ref(ref) } else { .workingTree }

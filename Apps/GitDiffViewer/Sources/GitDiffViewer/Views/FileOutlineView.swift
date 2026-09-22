@@ -25,6 +25,13 @@ struct FileOutlineView: NSViewRepresentable {
     let onSelect: (String) -> Void
     let onPin: (String) -> Void
     let uiState: ExplorerUIState
+    /// Which colours a badge's letter is drawn in.
+    var badgeScheme: BadgeScheme = .classic
+    /// Where every badge in this tree stands against the index -- see ``FileExplorerView``/``UnifiedExplorerView``
+    /// for how it is derived from the comparison. One value for the whole tree: this app has no per-file index
+    /// data to distinguish a staged file from an unstaged one within the same comparison (see
+    /// ``BadgeChangeState``'s doc comment there for the gap).
+    var badgeState: BadgeChangeState = .staged
 
     func makeCoordinator() -> Coordinator {
         Coordinator(uiState: uiState)
@@ -78,6 +85,8 @@ struct FileOutlineView: NSViewRepresentable {
         coordinator.onSelect = onSelect
         coordinator.onPin = onPin
         coordinator.uiState = uiState
+        coordinator.badgeScheme = badgeScheme
+        coordinator.badgeState = badgeState
         if coordinator.isSidebar != isSidebar {
             coordinator.applyPlacement(isSidebar: isSidebar, to: outline)
         }
@@ -102,6 +111,8 @@ struct FileOutlineView: NSViewRepresentable {
         var onSelect: (String) -> Void = { _ in }
         var onPin: (String) -> Void = { _ in }
         var uiState: ExplorerUIState
+        var badgeScheme: BadgeScheme = .classic
+        var badgeState: BadgeChangeState = .staged
         weak var outlineView: NSOutlineView?
 
         private var roots: [OutlineItem] = []
@@ -372,7 +383,9 @@ struct FileOutlineView: NSViewRepresentable {
         }
 
         private func configure(_ cell: FileCellView, for item: OutlineItem) {
-            cell.configure(node: item.node, glyph: status(item.key).flatMap(ChangeGlyph.init))
+            cell.configure(
+                node: item.node, glyph: status(item.key).flatMap(ChangeGlyph.init), scheme: badgeScheme,
+                state: badgeState)
         }
     }
 }
@@ -494,13 +507,15 @@ final class FileCellView: NSTableCellView {
         fatalError("init(coder:) is not supported")
     }
 
-    func configure(node: PathNode, glyph: ChangeGlyph?) {
+    func configure(node: PathNode, glyph: ChangeGlyph?, scheme: BadgeScheme, state: BadgeChangeState) {
         imageView?.image = NSImage(
             systemSymbolName: node.isDirectory ? "folder" : "doc.text",
             accessibilityDescription: node.isDirectory ? "Folder" : "File")
         textField?.stringValue = node.name
         badge.glyph = glyph
         badge.isDimmed = node.isDirectory
+        badge.scheme = scheme
+        badge.state = state
         toolTip = glyph?.title
         setAccessibilityHelp(glyph?.title)
     }

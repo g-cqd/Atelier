@@ -78,3 +78,25 @@ See `multi-language-hover-design.md` for the full multi-language design.
   and full re-comparisons; explicitly preserved for the files that do re-render.
 - Native tabs: investigate NSWindow tabbing (tabbingMode/tabbingIdentifier bridged from the
   SwiftUI WindowGroup) so comparisons can live as native macOS window tabs.
+
+## Tab bar styling (user-requested; needs investigation)
+Native NSWindow tab restyling is largely private API — investigate honestly what's reachable:
+inter-tab gap equal to the bar's surrounding negative space, glass tabs with very light shadow,
+close button not reserving leading space (appears IN PLACE of the leading badge on hover),
+diff badge instead of the doc icon as the tab's leading visual, neutral tab tint (badge carries
+the cue). If native tabs can't be styled to this spec (likely — the tab bar exposes only
+title/accessoryView/tooltip), evaluate a custom in-window tab strip replacing native tabbing,
+weighing the loss of native merge/drag behaviors. Decision needed before implementation.
+
+## Accent-color adaptation (research)
+Adapting app accent colors throughout the UI to the selected syntax theme (beyond light/dark
+matching, which is implemented as `matchesThemeAppearance`): needs a palette-extraction design
+(dominant hue from theme keywords/accents), contrast guarantees, and a decision on scope
+(controls? selection? badges?). Research before committing.
+
+## Badge state fidelity (follow-up)
+Per-file staged/unstaged/untracked badge states need AtelierGit to stop collapsing porcelain
+v2's index (X) and worktree (Y) columns into one FileStatus, plus a path from GitStatusEntry
+into SourceEntry/the comparison model. v1 approximates by side kind (working tree = unstaged
+style). Cross-consumer enum change — sequence with the FileStatusProvider/GitStatusProvider
+modularization move.

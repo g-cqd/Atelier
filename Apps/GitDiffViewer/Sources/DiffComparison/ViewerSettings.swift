@@ -248,6 +248,13 @@ package final class ViewerSettings {
     package var appearanceScheme: AppearanceScheme {
         didSet { store(appearanceScheme.rawValue, Key.appearanceScheme, .appearance) }
     }
+    /// Which colours a change badge's letter is drawn in: classic red/green/orange/purple, or Xcode's own.
+    package var badgeScheme: BadgeScheme { didSet { store(badgeScheme.rawValue, Key.badgeScheme, .appearance) } }
+    /// Whether the window follows the selected theme's own light/dark background instead of the system's, when
+    /// ``appearanceScheme`` is ``AppearanceScheme/system`` -- an explicit light/dark pin always wins.
+    package var matchesThemeAppearance: Bool {
+        didSet { store(matchesThemeAppearance, Key.matchesThemeAppearance, .appearance) }
+    }
 
     let defaults: UserDefaults
 
@@ -327,6 +334,8 @@ package final class ViewerSettings {
             defaults.string(forKey: Key.settingsPane).flatMap(SettingsPane.init(rawValue:)) ?? .general
         appearanceScheme =
             defaults.string(forKey: Key.appearanceScheme).flatMap(AppearanceScheme.init(rawValue:)) ?? .system
+        badgeScheme = defaults.string(forKey: Key.badgeScheme).flatMap(BadgeScheme.init(rawValue:)) ?? .classic
+        matchesThemeAppearance = defaults.object(forKey: Key.matchesThemeAppearance) as? Bool ?? false
         baseSettingObserver = NotificationCenter.default.addObserver(
             forName: Self.baseSettingChangedNotification, object: nil, queue: .main
         ) { [weak self] notification in
@@ -387,6 +396,8 @@ package final class ViewerSettings {
                 wrapsLines = true
                 wrapColumn = 0
                 appearanceScheme = .system
+                badgeScheme = .classic
+                matchesThemeAppearance = false
             case .tools:
                 diagnosticsEnabled = restoredValue(Key.diagnosticsEnabled, appDefault: false) {
                     defaults.bool(forKey: Key.diagnosticsEnabled)
@@ -450,7 +461,7 @@ package final class ViewerSettings {
             case .appearance:
                 return [
                     themePath != nil, lineHeightMultiple != 0, mode != .split, wrapsLines != true, wrapColumn != 0,
-                    appearanceScheme != .system
+                    appearanceScheme != .system, badgeScheme != .classic, matchesThemeAppearance != false
                 ]
                 .count { $0 }
             case .tools:
@@ -463,7 +474,12 @@ package final class ViewerSettings {
                 .count { $0 }
         }
     }
+}
 
+// The user-defaults keys behind every property above, kept in an extension rather than the class body itself:
+// nothing but string constants, so there is no reason for it to count against `type_body_length`'s budget for the
+// logic the class body actually holds.
+extension ViewerSettings {
     enum Key {
         static let mode = "viewMode"
         static let explorerPlacement = "explorerPlacement"
@@ -491,5 +507,7 @@ package final class ViewerSettings {
         static let analyzedSides = "analyzedSides"
         static let settingsPane = "settingsPane"
         static let appearanceScheme = "appearanceScheme"
+        static let badgeScheme = "badgeScheme"
+        static let matchesThemeAppearance = "matchesThemeAppearance"
     }
 }

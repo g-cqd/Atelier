@@ -113,6 +113,13 @@ enum LaunchOptions {
 /// effect at once, everywhere; every window's own hover panel already matches its own view's
 /// `effectiveAppearance` (`HoverDocPanel`), which AppKit derives from this override on its own, so there is
 /// nothing to double up there.
+///
+/// ``ViewerSettings/matchesThemeAppearance`` adds one more source for the override this applies, beneath
+/// ``ViewerSettings/appearanceScheme`` in precedence: an explicit light or dark pin always wins (it says
+/// outright how the chrome should look), and `.system` with the toggle off keeps following the system the way it
+/// always has. Only `.system` with the toggle on hands the choice to the selected theme's own background --
+/// which is why this also observes `.palette`, not just `.appearance`: a theme change alone must re-derive the
+/// override just as much as flipping either setting does.
 @MainActor
 private final class AppearanceApplier {
     private let settings: ViewerSettings
@@ -121,7 +128,7 @@ private final class AppearanceApplier {
         self.settings = settings
         apply()
         settings.addObserver(self) { [weak self] change in
-            guard change == .appearance else { return }
+            guard change == .appearance || change == .palette else { return }
             self?.apply()
         }
     }
@@ -131,7 +138,24 @@ private final class AppearanceApplier {
         // SwiftUI has brought AppKit up, and `NSApp` -- an implicitly-unwrapped optional -- is still nil there.
         // `.shared` creates the application object on first touch, so the launch-time apply is safe and every
         // later one hits the same instance `NSApp` will point at.
-        NSApplication.shared.appearance = settings.appearanceScheme.nsAppearance
+        NSApplication.shared.appearance = Self.resolvedAppearance(
+            explicit: settings.appearanceScheme, matchesTheme: settings.matchesThemeAppearance,
+            themeLuminance: settings.themePath.flatMap(XcodeThemeLibrary.theme(at:))?.backgroundLuminance)
+    }
+
+    /// The override to hand `NSApplication.appearance`, or nil to leave the system's own choice alone. Pure aside
+    /// from the two `NSAppearance` literals it returns, which is all the platform gives an `NSColor`-free way to
+    /// name; ``AppearancePrecedence/resolve(explicit:matchesTheme:themeIsDark:)`` carries the actual precedence
+    /// and luminance logic where a test can reach it without AppKit. `themeLuminance` comes from
+    /// ``DiffRendering/SyntaxTheme/backgroundLuminance``, itself `NSColor`-free, so nothing here ever needs to
+    /// touch a theme's raw `ThemeColor`.
+    static func resolvedAppearance(
+        explicit: AppearanceScheme, matchesTheme: Bool, themeLuminance: Double?
+    ) -> NSAppearance? {
+        let themeIsDark = themeLuminance.map { $0 < AppearancePrecedence.darkLuminanceThreshold }
+        let resolved = AppearancePrecedence.resolve(
+            explicit: explicit, matchesTheme: matchesTheme, themeIsDark: themeIsDark)
+        return resolved.nsAppearance
     }
 }
 

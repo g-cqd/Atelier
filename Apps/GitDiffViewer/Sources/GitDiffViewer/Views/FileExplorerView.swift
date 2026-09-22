@@ -22,7 +22,9 @@ struct FileExplorerView: View {
             status: { model.status(of: $0, in: position) },
             onSelect: { model.select($0, from: position) },
             onPin: { model.pin($0, from: position) },
-            uiState: uiState
+            uiState: uiState,
+            badgeScheme: model.settings.badgeScheme,
+            badgeState: side.badgeState
         )
         .overlay {
             if side.source == nil {
@@ -47,7 +49,9 @@ struct UnifiedExplorerView: View {
             status: { model.status(ofPath: $0) },
             onSelect: { model.select($0, from: .left) },
             onPin: { model.pin($0, from: .left) },
-            uiState: uiState
+            uiState: uiState,
+            badgeScheme: model.settings.badgeScheme,
+            badgeState: model.left.badgeState == .staged && model.right.badgeState == .staged ? .staged : .unstaged
         )
         .overlay {
             if model.left.source == nil, model.right.source == nil {

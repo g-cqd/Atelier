@@ -130,6 +130,28 @@ struct ViewerSettingsTests {
     }
 
     @Test
+    func `badge scheme defaults to classic and round trips through user defaults`() throws {
+        let defaults = try makeDefaults()
+        let sut = ViewerSettings(defaults: defaults)
+        #expect(sut.badgeScheme == .classic)
+
+        sut.badgeScheme = .xcode
+        let reloaded = ViewerSettings(defaults: defaults)
+        #expect(reloaded.badgeScheme == .xcode)
+    }
+
+    @Test
+    func `matches theme appearance defaults to off and round trips through user defaults`() throws {
+        let defaults = try makeDefaults()
+        let sut = ViewerSettings(defaults: defaults)
+        #expect(sut.matchesThemeAppearance == false)
+
+        sut.matchesThemeAppearance = true
+        let reloaded = ViewerSettings(defaults: defaults)
+        #expect(reloaded.matchesThemeAppearance == true)
+    }
+
+    @Test
     func `the settings pane defaults to general and round trips through user defaults`() throws {
         let defaults = try makeDefaults()
         let sut = ViewerSettings(defaults: defaults)
