@@ -113,6 +113,45 @@ struct GitClientTests {
     }
 
     @Test
+    func `remotes keep one fetch URL per name and drop push-only remotes`() {
+        let output = Data(
+            """
+            origin\tgit@github.com:aemi/atelier.git (fetch)
+            origin\tgit@github.com:aemi/atelier.git (push)
+            upstream\thttps://example.com/upstream.git (fetch)
+            mirror\tgit@example.com:mirror.git (push)
+            """
+            .utf8)
+
+        let remotes = GitParsers.remotes(output)
+
+        #expect(
+            remotes == [
+                GitRemote(name: "origin", fetchURL: "git@github.com:aemi/atelier.git"),
+                GitRemote(name: "upstream", fetchURL: "https://example.com/upstream.git")
+            ])
+    }
+
+    @Test
+    func `remotes parsing of empty output is an empty list`() {
+        #expect(GitParsers.remotes(Data()).isEmpty)
+    }
+
+    @Test
+    func `ahead behind counts split on the tab`() throws {
+        let counts = try GitParsers.aheadBehind(Data("3\t7\n".utf8))
+        #expect(counts.ahead == 3)
+        #expect(counts.behind == 7)
+    }
+
+    @Test
+    func `malformed ahead behind output throws`() {
+        #expect(throws: GitError.self) { try GitParsers.aheadBehind(Data("not-a-count\n".utf8)) }
+        #expect(throws: GitError.self) { try GitParsers.aheadBehind(Data("3\n".utf8)) }
+        #expect(throws: GitError.self) { try GitParsers.aheadBehind(Data()) }
+    }
+
+    @Test
     func `a failing command reports git's message`() async throws {
         let root = FileManager.default.temporaryDirectory.appending(
             path: "gdv-git-\(UUID().uuidString)", directoryHint: .isDirectory)

@@ -28,6 +28,17 @@ public struct GitCommit: Sendable, Hashable, Identifiable {
     public var id: String { hash }
 }
 
+/// One entry of `git remote -v`, the `(fetch)` URL only.
+public struct GitRemote: Sendable, Equatable {
+    public let name: String
+    public let fetchURL: String
+
+    public init(name: String, fetchURL: String) {
+        self.name = name
+        self.fetchURL = fetchURL
+    }
+}
+
 public struct RepositoryInfo: Sendable, Hashable {
     public let root: URL
     public let branches: [String]
