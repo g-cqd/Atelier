@@ -20,13 +20,13 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     package var onDisplayed: (() -> Void)?
     /// Shows documentation for the identifier under the pointer after it rests there, the same as ``DiffTextView``.
     package var hoverEnabled = false
-    package var hoverResolver: (@Sendable (HoverHit) async -> AttributedString?)?
+    package var hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)?
 
     package init(
         layouts: CardLayouts, side: RenderedSide, gutter: GutterStyle, width: CGFloat, wrapMode: WrapMode = .viewport,
         onGapDrag: ((GapMarker, GapExpansion, Int) -> Void)? = nil, currentExpansion: ((GapKey) -> GapExpansion)? = nil,
         onDisplayed: (() -> Void)? = nil, hoverEnabled: Bool = false,
-        hoverResolver: (@Sendable (HoverHit) async -> AttributedString?)? = nil
+        hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil
     ) {
         self.layouts = layouts
         self.side = side
