@@ -15,8 +15,18 @@ import UniformTypeIdentifiers
 @main
 struct GitDiffViewerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var settings = ViewerSettings()
+    @State private var settings: ViewerSettings
     @State private var recents = RecentComparisons()
+    /// Keeps `NSApp.appearance` in sync with `settings.appearanceScheme` for the app's whole life -- see
+    /// ``AppearanceApplier``. Held as `@State` purely so one instance survives every `body` re-evaluation instead
+    /// of being rebuilt (and re-subscribed) on each one; nothing here ever reads it back.
+    @State private var appearanceApplier: AppearanceApplier
+
+    init() {
+        let settings = ViewerSettings()
+        _settings = State(initialValue: settings)
+        _appearanceApplier = State(initialValue: AppearanceApplier(settings: settings))
+    }
 
     var body: some Scene {
         // First, so a click on the Dock icon with no window open brings the welcome back. A launch with paths on
@@ -93,6 +103,47 @@ enum LaunchOptions {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else { return nil }
         return URL(filePath: path, directoryHint: isDirectory.boolValue ? .isDirectory : .notDirectory)
+    }
+}
+
+/// Applies ``ViewerSettings/appearanceScheme`` to `NSApp.appearance`, application-wide rather than per window: a
+/// pinned choice describes how the whole app's chrome should look, the same as the theme or the layout chrome
+/// already do, not a property of any one comparison window. Reads and observes the app's one shared
+/// ``ViewerSettings`` instance -- the same instance the Settings scene edits -- so a change made there takes
+/// effect at once, everywhere; every window's own hover panel already matches its own view's
+/// `effectiveAppearance` (`HoverDocPanel`), which AppKit derives from this override on its own, so there is
+/// nothing to double up there.
+@MainActor
+private final class AppearanceApplier {
+    private let settings: ViewerSettings
+
+    init(settings: ViewerSettings) {
+        self.settings = settings
+        apply()
+        settings.addObserver(self) { [weak self] change in
+            guard change == .appearance else { return }
+            self?.apply()
+        }
+    }
+
+    private func apply() {
+        // `NSApplication.shared`, not the `NSApp` global: this runs from `GitDiffViewerApp.init()`, before
+        // SwiftUI has brought AppKit up, and `NSApp` -- an implicitly-unwrapped optional -- is still nil there.
+        // `.shared` creates the application object on first touch, so the launch-time apply is safe and every
+        // later one hits the same instance `NSApp` will point at.
+        NSApplication.shared.appearance = settings.appearanceScheme.nsAppearance
+    }
+}
+
+extension AppearanceScheme {
+    /// `nil` (the system default) for `.system`: AppKit already treats a `nil` override as "follow the system",
+    /// the same thing turning a pinned choice back off should leave behind.
+    fileprivate var nsAppearance: NSAppearance? {
+        switch self {
+            case .system: nil
+            case .light: NSAppearance(named: .aqua)
+            case .dark: NSAppearance(named: .darkAqua)
+        }
     }
 }
 

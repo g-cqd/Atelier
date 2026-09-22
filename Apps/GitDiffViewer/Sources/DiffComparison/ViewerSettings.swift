@@ -62,6 +62,17 @@ package enum AnalyzedSides: String, CaseIterable, Identifiable, Codable {
     package var id: String { rawValue }
 }
 
+/// Whether the window chrome follows the system's own light/dark choice or is pinned to one, independent of the
+/// diff theme itself -- useful when a theme's own colours read best against the window frame going the other way
+/// than the system currently is.
+package enum AppearanceScheme: String, CaseIterable, Identifiable, Codable {
+    case system
+    case light
+    case dark
+
+    package var id: String { rawValue }
+}
+
 /// The Settings window's tabs, persisted so the window reopens on whichever the user last looked at.
 package enum SettingsPane: String, CaseIterable, Identifiable, Codable {
     case general
@@ -231,6 +242,12 @@ package final class ViewerSettings {
     package var settingsPane: SettingsPane {
         didSet { store(settingsPane.rawValue, Key.settingsPane, .appearance) }
     }
+    /// Whether the window chrome (title bar, controls, the Settings window itself) follows the system's own
+    /// light/dark choice or is pinned to one. App-wide, not project-scoped, like every other piece of chrome: it
+    /// describes how the app should look, not a property of any one repository.
+    package var appearanceScheme: AppearanceScheme {
+        didSet { store(appearanceScheme.rawValue, Key.appearanceScheme, .appearance) }
+    }
 
     let defaults: UserDefaults
 
@@ -247,6 +264,16 @@ package final class ViewerSettings {
         body()
     }
 
+    /// Set for the duration of applying a base-key change received from another instance's broadcast, so the
+    /// normal setter that reload runs through doesn't turn straight around and re-broadcast the very value it was
+    /// just handed -- the same discipline ``isFallingBackToBase`` uses to keep `store` from writing back to a key
+    /// a caller is only reading from right now. Not `private`: ``baseSettingChanged(posterID:key:)`` (in
+    /// `ViewerSettings+ProjectOverrides.swift`, alongside every other reload path) needs it too.
+    @ObservationIgnored var isApplyingBroadcast = false
+    /// `nonisolated(unsafe)`: only ever written once, at the end of `init`, and read once, in `deinit` -- which,
+    /// unlike every other member here, cannot itself be `@MainActor`-isolated -- to remove the very same token.
+    @ObservationIgnored private nonisolated(unsafe) var baseSettingObserver: (any NSObjectProtocol)?
+
     private func store(_ value: Any?, _ key: String, _ change: Change) {
         if let projectID, Self.projectScopedKeys.contains(key) {
             if !isFallingBackToBase {
@@ -255,6 +282,7 @@ package final class ViewerSettings {
             }
         } else {
             defaults.set(value, forKey: key)
+            if !isApplyingBroadcast { postBaseSettingChanged(key: key) }
         }
         observers.removeAll { $0.owner.object == nil }
         for observer in observers { observer.handler(change) }
@@ -297,6 +325,20 @@ package final class ViewerSettings {
             defaults.string(forKey: Key.analyzedSides).flatMap(AnalyzedSides.init(rawValue:)) ?? .newer
         settingsPane =
             defaults.string(forKey: Key.settingsPane).flatMap(SettingsPane.init(rawValue:)) ?? .general
+        appearanceScheme =
+            defaults.string(forKey: Key.appearanceScheme).flatMap(AppearanceScheme.init(rawValue:)) ?? .system
+        baseSettingObserver = NotificationCenter.default.addObserver(
+            forName: Self.baseSettingChangedNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            guard let poster = notification.object else { return }
+            guard let key = notification.userInfo?[Self.baseSettingChangedKey] as? String else { return }
+            let posterID = ObjectIdentifier(poster as AnyObject)
+            MainActor.assumeIsolated { self?.baseSettingChanged(posterID: posterID, key: key) }
+        }
+    }
+
+    deinit {
+        if let baseSettingObserver { NotificationCenter.default.removeObserver(baseSettingObserver) }
     }
 
     /// Resets every setting in `category` to its coded default, going through the same setters as a user edit so
@@ -344,6 +386,7 @@ package final class ViewerSettings {
                 mode = .split
                 wrapsLines = true
                 wrapColumn = 0
+                appearanceScheme = .system
             case .tools:
                 diagnosticsEnabled = restoredValue(Key.diagnosticsEnabled, appDefault: false) {
                     defaults.bool(forKey: Key.diagnosticsEnabled)
@@ -406,7 +449,8 @@ package final class ViewerSettings {
                 .count { $0 }
             case .appearance:
                 return [
-                    themePath != nil, lineHeightMultiple != 0, mode != .split, wrapsLines != true, wrapColumn != 0
+                    themePath != nil, lineHeightMultiple != 0, mode != .split, wrapsLines != true, wrapColumn != 0,
+                    appearanceScheme != .system
                 ]
                 .count { $0 }
             case .tools:
@@ -446,5 +490,6 @@ package final class ViewerSettings {
         static let lspServerLocations = "lspServerLocations"
         static let analyzedSides = "analyzedSides"
         static let settingsPane = "settingsPane"
+        static let appearanceScheme = "appearanceScheme"
     }
 }

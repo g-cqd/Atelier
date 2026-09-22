@@ -18,7 +18,7 @@ struct SettingLabelTests {
             SettingLabel.anchorsRareLines, SettingLabel.slidesToIndentation, SettingLabel.pairsSimilarLines,
             SettingLabel.cleansUpEmphasis, SettingLabel.detectsMovedBlocks, SettingLabel.wrapsLines,
             SettingLabel.diagnosticsEnabled, SettingLabel.showsHoverDocumentation, SettingLabel.analyzedSides,
-            SettingLabel.refreshToolStatus
+            SettingLabel.refreshToolStatus, SettingLabel.appearanceScheme
         ]
 
         #expect(labels.allSatisfy { !$0.isEmpty })

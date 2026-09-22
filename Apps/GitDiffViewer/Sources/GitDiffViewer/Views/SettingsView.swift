@@ -172,6 +172,17 @@ private struct AppearanceSettings: View {
         VStack(spacing: 0) {
             Form {
                 Section("Colors") {
+                    Picker(SettingLabel.appearanceScheme, selection: $settings.appearanceScheme) {
+                        Text("System").tag(AppearanceScheme.system)
+                        Text("Light").tag(AppearanceScheme.light)
+                        Text("Dark").tag(AppearanceScheme.dark)
+                    }
+                    .pickerStyle(.segmented)
+                    Text(
+                        "Match the system, or pin the window chrome light or dark — useful when the diff theme is "
+                            + "the other way."
+                    )
+                    .settingsCaption()
                     Picker("Color scheme", selection: $settings.themePath) {
                         Text("System").tag(String?.none)
                         ForEach(themes) { theme in

@@ -31,6 +31,27 @@ import Testing
         #expect(summary.string == "A value type describing how a capture session should be configured.")
     }
 
+    /// The declaration chip's backing comes from the pane's own palette, not the panel's vibrancy material: a
+    /// theme's role colors are chosen to read against the pane they render in, so the panel copies that same
+    /// background behind the declaration (and any candidate declarations) rather than leaving it to whatever
+    /// light/dark appearance the panel's own glass happens to land on.
+    @Test func buildCarriesTheChipBackgroundFromThePalette() throws {
+        let content = HoverContent(
+            markdown: """
+                ```swift
+                struct CameraConfiguration
+                ```
+
+                A value type describing how a capture session should be configured.
+                """,
+            source: .docIndex)
+        let palette = DiffPalette.system
+        let document = HoverDocument.build(from: content, palette: palette)
+        let chipBackground = try #require(document.chipBackground)
+        #expect(
+            chipBackground.usingColorSpace(.sRGB) == palette.background.withAlphaComponent(0.94).usingColorSpace(.sRGB))
+    }
+
     /// An underscored compiler attribute is stripped from the declaration before it reaches the panel, matching
     /// Xcode's own Quick Help; a public attribute is kept.
     @Test func declarationDropsUnderscoredAttributesButKeepsPublicOnes() throws {

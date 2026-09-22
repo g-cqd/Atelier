@@ -5,9 +5,18 @@ import Testing
 @testable import DiffTextKit
 
 @Suite struct HoverPanelSizingTests {
-    @Test func contentShorterThanTheFloorClampsUpToTheMinimumHeight() {
-        let (height, scrolls) = HoverPanelSizing.clampedHeight(forContentHeight: 40)
+    @Test func contentShorterThanTheDegenerateFloorClampsUpToIt() {
+        let (height, scrolls) = HoverPanelSizing.clampedHeight(forContentHeight: 10)
         #expect(height == HoverPanelSizing.minHeight)
+        #expect(!scrolls)
+    }
+
+    /// A short, real answer -- a one-line declaration and a footer, say -- hugs its own content instead of
+    /// padding out to some fixed minimum: the panel used to force every hover up to a 260pt floor, leaving a void
+    /// under anything shorter than that regardless of how little it actually had to show.
+    @Test func aShortDocumentHugsItsOwnContentRatherThanPaddingToAFixedFloor() {
+        let (height, scrolls) = HoverPanelSizing.clampedHeight(forContentHeight: 90)
+        #expect(height == 90)
         #expect(!scrolls)
     }
 

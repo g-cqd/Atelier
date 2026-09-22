@@ -157,4 +157,57 @@ import Testing
         )
         #expect(document.summary == "A property wrapper type that instantiates an observable object.")
     }
+
+    /// Pins the exact shape ``AtelierDocIndex/DocIndexHoverProvider`` produces for a name declared in more than one
+    /// file (`entries.prefix(3)` joined by `"\n\n---\n\n"`, each block its own `"```swift\n<signature>\n```\n\n<doc
+    /// comment>"`): the primary block's own summary and discussion must survive alongside every later block landing
+    /// as an ``HoverMarkdownStructurer/Document/extraCandidates`` entry with both its own declaration and its own
+    /// summary intact -- a regression pin for a live repro (hovering a small type name, `Reference`, declared under
+    /// three different parent types in the same project) that had shown a correctly-attributed "doc comment" footer
+    /// with no prose rendered, because the panel that consumes this shape used to drop a candidate's own summary
+    /// outright.
+    @Test func multiEntryDocIndexAnswerKeepsEveryBlocksOwnSummary() {
+        let markdown = """
+            ```swift
+            @GenerateStub public struct Reference: Identifiable, Decodable, Hashable, Sendable
+            ```
+
+            A colour reference embedded in a widget response.
+
+            Points at the same entity as ``Widget/Colour``, so it reuses its identifier type.
+
+            ---
+
+            ```swift
+            @GenerateStub public struct Reference: Identifiable, Decodable, Hashable, Sendable
+            ```
+
+            A priority reference embedded in a widget response.
+
+            Points at the same entity as ``Widget/Priority``, so it reuses its identifier type.
+
+            ---
+
+            ```swift
+            @GenerateStub public struct Reference: Identifiable, Decodable, Sendable
+            ```
+
+            A size reference embedded in a widget response.
+
+            Points at the same entity as ``Widget/Size``, so it reuses its identifier type.
+            """
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(document.summary == "A colour reference embedded in a widget response.")
+        #expect(
+            document.discussion == "Points at the same entity as ``Widget/Colour``, so it reuses its identifier type.")
+        #expect(document.extraCandidates.count == 2)
+        #expect(
+            document.extraCandidates[0].declaration
+                == "@GenerateStub public struct Reference: Identifiable, Decodable, Hashable, Sendable")
+        #expect(document.extraCandidates[0].summary == "A priority reference embedded in a widget response.")
+        #expect(
+            document.extraCandidates[1].declaration
+                == "@GenerateStub public struct Reference: Identifiable, Decodable, Sendable")
+        #expect(document.extraCandidates[1].summary == "A size reference embedded in a widget response.")
+    }
 }
