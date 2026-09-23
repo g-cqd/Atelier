@@ -50,6 +50,23 @@ struct GrammarRegistryTests {
     }
 
     @Test
+    func `an extension registered without its dot is found`() {
+        let registry = GrammarRegistry()
+        registry.register(GrammarRegistry.LanguageEntry(name: "elvish", extensions: ["elv"], path: "elvish"))
+
+        #expect(registry.entry(forExtension: ".elv")?.name == "elvish")
+        #expect(registry.entry(forFilename: "build.elv")?.name == "elvish")
+    }
+
+    @Test
+    func `an extension registered in capitals is found by a file name`() {
+        let registry = GrammarRegistry()
+        registry.register(GrammarRegistry.LanguageEntry(name: "elvish", extensions: [".ELV"], path: "elvish"))
+
+        #expect(registry.entry(forFilename: "build.elv")?.name == "elvish")
+    }
+
+    @Test
     func `loadManifest registers all 19 languages from bundled languages json`() async throws {
         let grammarsPath = try #require(KittySyntaxResources.bundle.resourcePath)
         let manifestPath = "\(grammarsPath)/Grammars/languages.json"
