@@ -37,7 +37,9 @@ func `regex never splits a character during replacement`() throws {
 
 @Test
 func `replacement preserves alternation and empty optional captures`() throws {
-    let pattern = try #require(compilePattern(SearchQuery(text: "(a|ab)(c)?", isRegex: true)))
-    let match = SearchMatch(row: 0, colStart: 0, colEnd: 2)
+    // The anchor makes the second alternative the one that matches, with the optional group left empty.
+    let pattern = try #require(compilePattern(SearchQuery(text: "(a|ab)(c)?$", isRegex: true)))
+    let match = try #require(findMatches(in: ["ab"], pattern: pattern).first)
+    #expect(match == SearchMatch(row: 0, colStart: 0, colEnd: 2))
     #expect(buildReplacement(for: match, in: "ab", pattern: pattern, replacement: "$1:$2") == "ab:")
 }
