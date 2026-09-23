@@ -30,6 +30,17 @@ public struct ProcessSpec: Sendable, Hashable {
     public var standardInput: Data?
     /// Wall-clock budget on the runner's clock; the child is terminated when it elapses.
     public var timeout: Duration?
+    /// The most bytes of standard output a run takes; a child that writes more is terminated, and the run fails with
+    /// ``ProcessError/outputLimitExceeded(_:limit:)``.
+    public var standardOutputLimit: Int
+    /// The most bytes of standard error a run takes, with the same consequence.
+    public var standardErrorLimit: Int
+
+    /// 512 MiB, git's own big-file threshold: far past any listing, log or blob batch the apps read, short of what a
+    /// runaway child fills memory with.
+    public static let defaultStandardOutputLimit = 512 << 20
+    /// 16 MiB: room for a linter's progress lines over a large corpus.
+    public static let defaultStandardErrorLimit = 16 << 20
 
     public init(
         executable: URL,
@@ -37,7 +48,9 @@ public struct ProcessSpec: Sendable, Hashable {
         currentDirectory: URL? = nil,
         environment: Environment = .inherited(),
         standardInput: Data? = nil,
-        timeout: Duration? = nil
+        timeout: Duration? = nil,
+        standardOutputLimit: Int = Self.defaultStandardOutputLimit,
+        standardErrorLimit: Int = Self.defaultStandardErrorLimit
     ) {
         self.executable = executable
         self.arguments = arguments
@@ -45,6 +58,8 @@ public struct ProcessSpec: Sendable, Hashable {
         self.environment = environment
         self.standardInput = standardInput
         self.timeout = timeout
+        self.standardOutputLimit = standardOutputLimit
+        self.standardErrorLimit = standardErrorLimit
     }
 }
 
@@ -67,6 +82,12 @@ public struct ProcessOutput: Sendable, Equatable {
     public var errorText: String {
         String(decoding: standardError, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    /// One of a child's two outputs.
+    public enum Stream: Sendable, Hashable {
+        case standardOutput
+        case standardError
+    }
 }
 
 /// Why a run produced no output.
@@ -75,6 +96,8 @@ public enum ProcessError: Error, Equatable, Sendable {
     case launchFailed(String)
     /// The spec's timeout elapsed; the child was terminated.
     case timedOut(Duration)
+    /// The child wrote more than the spec's limit on one of its outputs; it was terminated and its output dropped.
+    case outputLimitExceeded(ProcessOutput.Stream, limit: Int)
     /// The runner's blocking pool refused the job.
     case poolUnavailable(String)
 }
