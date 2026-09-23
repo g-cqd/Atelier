@@ -27,7 +27,8 @@ private final class ResolutionSpy: Sendable {
         let service = SourceKitLSPService(
             configuration: SourceKitLSPService.Configuration(
                 serverExecutable: URL(filePath: "/usr/bin/false"), workspaceRoot: probeDirectory))
-        return SDKHoverTier.Resolved(provider: SDKDocumentationProvider(service: service), service: service)
+        return SDKHoverTier.Resolved(
+            provider: SDKDocumentationProvider(service: service), probeDirectory: probeDirectory)
     }
 
     deinit { try? FileManager.default.removeItem(at: probeDirectory) }

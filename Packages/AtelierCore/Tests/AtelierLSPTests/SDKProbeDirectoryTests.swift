@@ -65,10 +65,6 @@ struct SDKProbeDirectoryTests {
         ) {
             try SDKDocumentationProvider.makeProbeDirectory(in: missingParent)
         }
-        #expect(throws: SDKProbeDirectoryError.self) {
-            try SDKDocumentationProvider.makeScratchService(
-                serverExecutable: URL(filePath: "/usr/bin/true"), parentDirectory: missingParent)
-        }
     }
 
     @Test
