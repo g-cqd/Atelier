@@ -74,6 +74,17 @@ struct GitClientRunnerTests {
     }
 
     @Test
+    func `the repository root is read, configuration included, within the timeout given`() async throws {
+        let runner = FakeProcessRunner.gated(always: .success("/repo\n"))
+
+        _ = await GitClient.repositoryRoot(
+            containing: Self.repository, runner: runner, timeout: .seconds(7), gate: GitConfigGate())
+
+        #expect(!runner.specs.isEmpty)
+        #expect(runner.specs.allSatisfy { $0.timeout == .seconds(7) })
+    }
+
+    @Test
     func `strict isolation scrubs the environment and pins the dangerous configuration keys`() async throws {
         let runner = FakeProcessRunner.gated(always: .success(""))
         let client = GitClient(repository: Self.repository, runner: runner, isolation: .strict, gate: GitConfigGate())
