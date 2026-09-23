@@ -284,7 +284,8 @@ public final class GLRParser: Sendable {
 
     /// Replaces the top `count` nodes of `stack` with one `nonTerminal` node built by production `rule`, and moves to
     /// the table's GOTO state from the state the first of those nodes was pushed in. Without that GOTO state the
-    /// reduction is an error.
+    /// reduction is an error. The node takes the production's fields, its children the production's aliases, and the
+    /// stack the production's dynamic precedence.
     ///
     /// The node spans its children; an empty reduction sits where the node below it ends, at the start of the input
     /// if there is none. The nodes on a stack therefore stay in source order, so a node always ends after it starts.
@@ -296,7 +297,7 @@ public final class GLRParser: Sendable {
         }
         let height = stack.height(ofTop: count) + 1
         guard height <= Self.maxTreeDepth else { return .tooDeep }
-        let children = stack.popNodes(count)
+        var children = stack.popNodes(count)
 
         let byteRange: Range<Int>
         let pointRange: Range<Point>
@@ -310,9 +311,16 @@ public final class GLRParser: Sendable {
             pointRange = point ..< point
         }
         var nodeFields: [String: [SyntaxNode]] = [:]
-
-        for (idx, fieldName) in productionFields(for: rule) where idx < children.count {
-            nodeFields[fieldName, default: []].append(children[idx])
+        var dynamicPrecedence = 0
+        if productions.indices.contains(rule) {
+            for (index, alias) in productions[rule].aliases where index < children.count {
+                children[index].type = alias.type
+                children[index].isNamed = alias.isNamed
+            }
+            for (index, fieldName) in productions[rule].fields where index < children.count {
+                nodeFields[fieldName, default: []].append(children[index])
+            }
+            dynamicPrecedence = productions[rule].dynamicPrecedence
         }
 
         stack.pushNode(
@@ -325,7 +333,7 @@ public final class GLRParser: Sendable {
                 isNamed: true
             ),
             height: height)
-        stack.addDynamicPrecedence(productions.indices.contains(rule) ? productions[rule].dynamicPrecedence : 0)
+        stack.addDynamicPrecedence(dynamicPrecedence)
         stack.state = target
         return .reduced
     }
@@ -334,11 +342,6 @@ public final class GLRParser: Sendable {
 // MARK: - Tree Building
 
 extension GLRParser {
-    private func productionFields(for ruleIndex: Int) -> [Int: String] {
-        guard productions.indices.contains(ruleIndex) else { return [:] }
-        return productions[ruleIndex].fields
-    }
-
     /// The stack's only node, or a node above its nodes spanning the source, `byteCount` bytes ending at `endPoint`.
     /// That extra level must not take the tree past ``maxTreeDepth``: then the parse declines, freeing the stack.
     private func buildRootNode(
