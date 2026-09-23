@@ -29,15 +29,31 @@ public actor DiagnosticsEngine {
         /// to fingerprint, such as a comparison between two arbitrary sources.
         public var corpusFingerprint: String?
         public var tools: [DiagnosticTool: ToolLocation]
+        /// What the tree under `root` holds, configuration files included, when that is known apart from where
+        /// `root` is: a git tree id, for a ref exported into a throwaway folder. The cache is then keyed by it rather
+        /// than by `root`'s path and its configuration files' dates, so a later export of the same tree answers from
+        /// the cache, and ``DiagnosticsEngine/cachedResult(_:request:)`` can answer before any export.
+        public var contentIdentity: String?
 
         public init(
             root: URL, files: [FileTarget], corpusFingerprint: String? = nil,
-            tools: [DiagnosticTool: ToolLocation] = [:]
+            tools: [DiagnosticTool: ToolLocation] = [:], contentIdentity: String? = nil
         ) {
             self.root = root
             self.files = files
             self.corpusFingerprint = corpusFingerprint
             self.tools = tools
+            self.contentIdentity = contentIdentity
+        }
+
+        /// This request read from `folder` instead: the root and every file's location move there.
+        public func rooted(at folder: URL) -> Request {
+            var rooted = self
+            rooted.root = folder
+            rooted.files = files.map {
+                FileTarget(path: $0.path, contentHash: $0.contentHash, url: folder.appending(path: $0.path))
+            }
+            return rooted
         }
     }
 
@@ -82,7 +98,14 @@ public actor DiagnosticsEngine {
     private let clock: any Clock<Duration>
     private let fileManager = FileManager.default
 
-    private var cache: [CacheKey: [Finding]] = [:]
+    /// What a cached run concluded: its findings, or, for a request identified by content, that it skipped for
+    /// want of a configuration file, which only the files could tell.
+    private enum CachedOutcome {
+        case findings([Finding])
+        case skipped(String)
+    }
+
+    private var cache: [CacheKey: CachedOutcome] = [:]
     /// Recency order for the cache's simple LRU eviction, oldest first.
     private var cacheOrder: [CacheKey] = []
     private let cacheCapacity = 64
@@ -99,21 +122,9 @@ public actor DiagnosticsEngine {
     public func run(_ tool: DiagnosticTool, request: Request) async throws -> ToolResult {
         let scope = tool.scope
 
-        if scope == .perFile, request.files.isEmpty {
-            return ToolResult(tool: tool, findings: [], status: .skipped("no files"), duration: .zero, fromCache: false)
-        }
-        if scope == .corpus, request.corpusFingerprint == nil {
-            return ToolResult(
-                tool: tool, findings: [], status: .skipped("requires a working tree"), duration: .zero,
-                fromCache: false)
-        }
-        if let requiredConfigurationFile = tool.requiredConfigurationFile,
-            !fileManager.fileExists(atPath: request.root.appending(path: requiredConfigurationFile).path)
-        {
-            return ToolResult(
-                tool: tool, findings: [],
-                status: .skipped("no \(tool.displayName) configuration in this project"), duration: .zero,
-                fromCache: false)
+        if let skipped = Self.skippedWithoutRunning(tool, request: request) { return skipped }
+        if request.contentIdentity == nil, !hasRequiredConfiguration(tool, at: request.root) {
+            return Self.skippedForConfiguration(tool)
         }
 
         guard let located = await discovery.locate(tool, location: request.tools[tool]) else {
@@ -135,10 +146,12 @@ public actor DiagnosticsEngine {
 
         let cacheKey = cacheKey(for: tool, request: request, locatedPath: located.url.path)
 
-        if let cached = cachedFindings(for: cacheKey) {
-            return ToolResult(
-                tool: tool, findings: filterFindings(cached, tool: tool, request: request), status: .succeeded,
-                duration: .zero, fromCache: true)
+        if let cached = cachedOutcome(for: cacheKey) {
+            return result(from: cached, tool: tool, request: request)
+        }
+        if request.contentIdentity != nil, !hasRequiredConfiguration(tool, at: request.root) {
+            store(.skipped(Self.missingConfiguration(tool)), for: cacheKey)
+            return Self.skippedForConfiguration(tool)
         }
 
         let spec = ProcessSpec(
@@ -183,20 +196,79 @@ public actor DiagnosticsEngine {
                     tool: tool, findings: [], status: .failed(message), duration: duration, fromCache: false)
         }
 
-        store(findings, for: cacheKey)
+        store(.findings(findings), for: cacheKey)
         return ToolResult(
             tool: tool, findings: filterFindings(findings, tool: tool, request: request), status: .succeeded,
             duration: duration, fromCache: false)
     }
 
+    /// What ``run(_:request:)`` would answer for `tool` without running anything and without reading
+    /// `request.root`: a skip or a missing tool it can tell from the request alone, or a result from the cache. Nil
+    /// when the tool would have to run, so a caller that must first put the files on disk only does it then.
+    public func cachedResult(_ tool: DiagnosticTool, request: Request) async -> ToolResult? {
+        if let skipped = Self.skippedWithoutRunning(tool, request: request) { return skipped }
+        if request.contentIdentity == nil, !hasRequiredConfiguration(tool, at: request.root) {
+            return Self.skippedForConfiguration(tool)
+        }
+        guard let located = await discovery.locate(tool, location: request.tools[tool]) else {
+            return ToolResult(tool: tool, findings: [], status: .toolMissing, duration: .zero, fromCache: false)
+        }
+        let key = cacheKey(for: tool, request: request, locatedPath: located.url.path)
+        return cachedOutcome(for: key).map { result(from: $0, tool: tool, request: request) }
+    }
+
+    /// The result of a request that needs no run at all: a per-file tool with no file, or a corpus tool with no
+    /// corpus to fingerprint.
+    private static func skippedWithoutRunning(_ tool: DiagnosticTool, request: Request) -> ToolResult? {
+        if tool.scope == .perFile, request.files.isEmpty {
+            return ToolResult(tool: tool, findings: [], status: .skipped("no files"), duration: .zero, fromCache: false)
+        }
+        if tool.scope == .corpus, request.corpusFingerprint == nil {
+            return ToolResult(
+                tool: tool, findings: [], status: .skipped("requires a working tree"), duration: .zero,
+                fromCache: false)
+        }
+        return nil
+    }
+
+    private static func skippedForConfiguration(_ tool: DiagnosticTool) -> ToolResult {
+        ToolResult(
+            tool: tool, findings: [], status: .skipped(missingConfiguration(tool)), duration: .zero, fromCache: false)
+    }
+
+    /// Why a tool that needs a configuration file did not run.
+    private static func missingConfiguration(_ tool: DiagnosticTool) -> String {
+        "no \(tool.displayName) configuration in this project"
+    }
+
+    /// Whether `root` carries the configuration file `tool` needs, or `tool` needs none.
+    private func hasRequiredConfiguration(_ tool: DiagnosticTool, at root: URL) -> Bool {
+        guard let requiredConfigurationFile = tool.requiredConfigurationFile else { return true }
+        return fileManager.fileExists(atPath: root.appending(path: requiredConfigurationFile).path)
+    }
+
+    private func result(from outcome: CachedOutcome, tool: DiagnosticTool, request: Request) -> ToolResult {
+        switch outcome {
+            case .findings(let findings):
+                ToolResult(
+                    tool: tool, findings: filterFindings(findings, tool: tool, request: request), status: .succeeded,
+                    duration: .zero, fromCache: true)
+            case .skipped(let reason):
+                ToolResult(tool: tool, findings: [], status: .skipped(reason), duration: .zero, fromCache: true)
+        }
+    }
+
     // MARK: - Fingerprints
 
     /// `tool`'s cache key for `request`, run with the binary at `locatedPath`.
+    /// A request identified by content is keyed by that identity, which covers its configuration files, in place of
+    /// its root and their dates: its root is a throwaway folder, and may not exist yet.
     private func cacheKey(for tool: DiagnosticTool, request: Request, locatedPath: String) -> CacheKey {
         CacheKey(
             tool: tool, executablePath: locatedPath, executableModification: modificationDate(ofItemAt: locatedPath),
-            configFingerprint: configFingerprint(for: tool, root: request.root),
-            root: canonicalRoot(request.root), payloadFingerprint: payloadFingerprint(for: tool, request: request))
+            configFingerprint: request.contentIdentity == nil ? configFingerprint(for: tool, root: request.root) : "",
+            root: request.contentIdentity.map { "content:\($0)" } ?? canonicalRoot(request.root),
+            payloadFingerprint: payloadFingerprint(for: tool, request: request))
     }
 
     /// A fingerprint of `tool`'s configuration files at `root`: each configured name's size and modification date,
@@ -272,13 +344,13 @@ public actor DiagnosticsEngine {
 
     // MARK: - Cache
 
-    private func cachedFindings(for key: CacheKey) -> [Finding]? {
-        guard let findings = cache[key] else { return nil }
+    private func cachedOutcome(for key: CacheKey) -> CachedOutcome? {
+        guard let outcome = cache[key] else { return nil }
         touch(key)
-        return findings
+        return outcome
     }
 
-    private func store(_ findings: [Finding], for key: CacheKey) {
+    private func store(_ outcome: CachedOutcome, for key: CacheKey) {
         if cache[key] == nil {
             cacheOrder.append(key)
             if cacheOrder.count > cacheCapacity {
@@ -288,7 +360,7 @@ public actor DiagnosticsEngine {
         } else {
             touch(key)
         }
-        cache[key] = findings
+        cache[key] = outcome
     }
 
     private func touch(_ key: CacheKey) {
