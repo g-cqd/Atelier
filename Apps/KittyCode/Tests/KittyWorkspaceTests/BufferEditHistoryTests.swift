@@ -268,11 +268,7 @@ import Testing
         #expect(buffer.editHistory.maxUndoSteps == 5)
     }
 
-    /// Audit A2c — snapshots that enter the undo stack must not retain the
-    /// rope's materialised `text` / `lines` caches. A warm snapshot pinning
-    /// multi-megabyte cached strings × 200 transitions × N buffers was the
-    /// proximate cause of the ~1 GB long-session drift before the cache-drop
-    /// at record time landed.
+    /// Snapshots entering the undo stack drop the rope's text and line caches, which would pin megabytes per step.
     @Test func `recordChange drops snapshot text and lines caches`() {
         let initial = makeSnapshot("alpha\nbeta\ngamma")
         let after = makeSnapshot("alpha\nbeta\ngamma\ndelta")
@@ -324,10 +320,7 @@ import Testing
         #expect(top.after.textBuffer.text == "alphabetagamma")
     }
 
-    /// Audit A2a — count-based `maxUndoSteps` doesn't bound memory; a
-    /// 1 MB document × 200 entries is 400 MB regardless of count. The new
-    /// `maxUndoBytes` cap prunes oldest entries until total retained
-    /// snapshot bytes fall under the byte budget.
+    /// A count cap can't bound memory (200 steps of a 1 MB document hold 400 MB), so `maxUndoBytes` prunes by size.
     @Test func `recordChange prunes by byte budget when document is large`() {
         // Use a small budget so we don't have to allocate hundreds of MB.
         let initial = makeSnapshot(String(repeating: "x", count: 1_000))

@@ -1,10 +1,6 @@
 import Synchronization
 
-/// Property wrapper for view-local mutable state.
-///
-/// In a terminal UI, re-render is triggered by the event loop after each event,
-/// so `@State` is a simple value holder. The runtime re-renders the full view tree
-/// each frame (cheap for terminal UIs).
+/// View-local mutable state, a plain value holder: the event loop re-renders the whole tree after each event.
 @propertyWrapper
 public struct State<Value: Sendable>: Sendable {
     private let storage: Storage

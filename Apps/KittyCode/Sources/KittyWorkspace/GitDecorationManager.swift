@@ -30,21 +30,13 @@ public final class GitDecorationManager {
     private let taskProvider: any TaskProvider
     private let clock: any Clock<Duration>
 
-    /// Long-lived consumer that handles the debounced refresh path. The
-    /// producer (`scheduleRefreshForActiveBuffer(debounced: true)`) just
-    /// yields a tick into `debouncedSignal`; the consumer waits one
-    /// `lineChangeDebounceMilliseconds` window per signal and then re-reads
-    /// active-buffer state on the main actor to compute decorations.
-    /// `bufferingNewest(1)` collapses bursts of keystrokes (the hot path)
-    /// into a single work cycle.
+    /// Debounced refresh requests: `bufferingNewest(1)` collapses a burst of keystrokes into one refresh after the
+    /// debounce window.
     private let debouncedSignal: AsyncStream<Void>
     private let debouncedContinuation: AsyncStream<Void>.Continuation
     private var debouncedConsumer: Task<Void, Never>?
 
-    /// One-shot task for the rare immediate refresh path (tab switch,
-    /// external file reload). Kept separate from the debounced consumer so
-    /// the tab-switch's "no delay" intent isn't accidentally coalesced into
-    /// the debounced stream when keystrokes arrive in quick succession.
+    /// The undelayed refresh of a tab switch or reload, separate so keystrokes can't fold it into a debounced one.
     private var immediateTask: Task<Void, Never>?
 
     public init(
@@ -99,11 +91,8 @@ public final class GitDecorationManager {
         }
     }
 
-    /// Re-reads active-buffer state on the main actor and computes the
-    /// decoration set. Safe to call from either the debounced consumer or
-    /// the one-shot immediate task — both paths route through here, and
-    /// the staleness gate inside `apply(_:for:version:)` rejects results
-    /// that arrive after the buffer has moved on.
+    /// Computes decorations from the active buffer's current state; `apply(_:for:version:)` drops them if the buffer
+    /// has moved on meanwhile.
     private func performRefresh() async {
         guard gitConfig.showGitStatus,
             gitConfig.showLineChanges,
@@ -119,10 +108,7 @@ public final class GitDecorationManager {
         let version = buffer.documentVersion
         let maxLineDiffBytes = gitConfig.maxLineDiffBytes
 
-        // `Rope.byteCount` is O(1) (cached on the tree root); avoid
-        // materialising `[String]` lines + summing UTF-8 lengths just to
-        // perform the size gate. Lines are still materialised below for the
-        // diff provider, but the cache will be warm by then.
+        // `byteCount` is cached on the rope, so the size gate needs no materialised lines.
         guard textBuffer.byteCount <= maxLineDiffBytes else {
             clearActiveDecorations(for: path, version: version)
             return
@@ -154,11 +140,8 @@ public final class GitDecorationManager {
     }
 
     private func clearActiveDecorations() {
-        // Cancel any in-flight immediate refresh so a stale `apply` can't
-        // re-populate decorations after we've explicitly cleared them.
-        // (The debounced consumer's stream still drains older queued
-        // signals harmlessly — `performRefresh` re-checks `gitConfig.show*`
-        // guards on entry.)
+        // A stale immediate refresh must not repopulate what is being cleared; queued debounced signals recheck the
+        // config on entry.
         immediateTask?.cancel()
         immediateTask = nil
 

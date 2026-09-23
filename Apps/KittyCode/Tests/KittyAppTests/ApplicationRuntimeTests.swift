@@ -16,8 +16,7 @@ struct ApplicationRuntimeTests {
 
         let runtime = ApplicationRuntime(connection: mock)
 
-        // The runtime should write setup sequences and then cleanup
-        // It will exit when it reads 'q'
+        // Writes the setup sequences, then the cleanup once Ctrl+C ends the run.
         try await runtime.run(TestApp.self)
 
         let output = mock.writtenOutput
