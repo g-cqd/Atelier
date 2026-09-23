@@ -29,6 +29,11 @@ struct DiffViewerModelFetchTests {
         FakeProcessRunner.gated(remotes: ["origin": "git@example.com:x.git"]) { spec in
             if spec.arguments.contains("fetch") { return .success("") }
             if spec.arguments.contains("remote") { return .success("origin\tgit@example.com:x.git (fetch)\n") }
+            // A remote-tracking ref's commit moves with its tree; every other ref stays put.
+            if spec.arguments.contains("--verify") {
+                let isRemote = spec.arguments.last?.hasPrefix("origin/develop") == true
+                return .success(isRemote ? "commit-\(tree.current)\n" : "commit-main\n")
+            }
             if spec.arguments.contains("rev-parse") { return .success(Self.root.path(percentEncoded: false)) }
             if spec.arguments.contains("for-each-ref") { return .success("main\norigin/develop\n") }
             if spec.arguments.contains("log") { return .success("") }
@@ -69,6 +74,45 @@ struct DiffViewerModelFetchTests {
         try await taskProvider.waitForAllTasks()
 
         #expect(sut.left.entries.map(\.relativePath) == ["b.swift"])
+    }
+
+    @Test
+    func `a fetch that moves the tracked ref reloads that side once, the watcher's notice of the same refs included`()
+        async throws
+    {
+        let taskProvider = TaskProviderSpy.tolerant()
+        let tree = RemoteTree()
+        let runner = makeRunner(tree: tree)
+        let (sut, cleanup) = makeSUT(runner: runner, taskProvider: taskProvider)
+        defer { cleanup() }
+        let clock = TestClock()
+        let watchers = WatcherFactory()
+        sut.attachFreshness(clock: clock, makeWatcher: watchers.makeWatcher)
+        let repository = RepositoryInfo(root: Self.root, branches: ["main", "origin/develop"], tags: [], commits: [])
+        sut.left.load(.gitRef(repository: Self.root, ref: "origin/develop"), repository: repository)
+        sut.right.load(.directory(Self.root), repository: repository)
+        try await taskProvider.waitForAllTasks()
+        let source = try #require(watchers.latest)
+        try await source.waitUntilWatching(2)
+        func remoteListings() -> Int {
+            runner.commandSpecs.count { $0.arguments.contains("ls-tree") && $0.arguments.last == "origin/develop" }
+        }
+        let listingsBefore = remoteListings()
+
+        tree.move(to: "b.swift")
+        await sut.left.fetch()
+        try await taskProvider.waitForAllTasks()
+        // The fetch moved the remote-tracking ref on disk, which the watcher reports as well.
+        try #require(source.write("/repo/.git/refs/remotes/origin/develop"))
+        try await clock.waitForSleepers()
+        clock.advance(by: .milliseconds(150))
+        try await taskProvider.waitForAllTasks()
+
+        #expect(sut.left.entries.map(\.relativePath) == ["b.swift"])
+        #expect(remoteListings() == listingsBefore + 1)
+        sut.freshness?.teardown()
+        try await taskProvider.waitForAllTasks()
+        try await taskProvider.waitForObservationsToFinish()
     }
 
     @Test

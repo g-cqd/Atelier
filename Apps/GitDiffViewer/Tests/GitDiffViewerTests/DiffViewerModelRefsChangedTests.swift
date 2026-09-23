@@ -27,6 +27,8 @@ struct DiffViewerModelRefsChangedTests {
 
     private nonisolated func makeRunner(headTree: HeadTree) -> FakeProcessRunner {
         FakeProcessRunner { spec in
+            // HEAD's commit moves with the tree a commit leaves behind.
+            if spec.arguments.contains("--verify") { return .success("commit-\(headTree.current)\n") }
             if spec.arguments.contains("rev-parse") { return .success(Self.root.path(percentEncoded: false)) }
             if spec.arguments.contains("for-each-ref") { return .success("main\n") }
             if spec.arguments.contains("log") { return .success("") }

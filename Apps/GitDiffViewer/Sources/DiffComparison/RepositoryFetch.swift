@@ -2,12 +2,6 @@ import Foundation
 
 /// The pure decisions of the fetch feature, made from what a side already knows about its own fetch.
 package enum RepositoryFetch {
-    /// Whether `ref` names a remote-tracking branch: the part before its first slash is one of `remotes`.
-    package static func isRemoteTrackingRef(_ ref: String, remotes: [String]) -> Bool {
-        guard let slash = ref.firstIndex(of: "/") else { return false }
-        return remotes.contains(String(ref[ref.startIndex ..< slash]))
-    }
-
     /// The toolbar's fetch menu item: its title, whether it can be clicked, and the last failure.
     package struct MenuItem: Equatable {
         package let title: String
