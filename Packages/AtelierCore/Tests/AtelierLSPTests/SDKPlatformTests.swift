@@ -119,19 +119,27 @@ struct ProjectPlatformsTests {
     }
 
     @Test
-    func `the nearest manifest that declares a platform decides for a file`() throws {
+    func `a file follows the nearest manifest that declares a platform`() throws {
         let tree = ScratchTree()
         try tree.makeDirectory("repo/.git")
         try tree.write("SDKROOT = iphoneos;", at: "repo/App.xcodeproj/project.pbxproj")
         try tree.write("let package = Package(platforms: [.macOS(.v14)])", at: "repo/Tools/Package.swift")
         try tree.write("// no platforms", at: "repo/Tools/Sources/Tool/Package.swift")
-        try tree.makeDirectory("repo/App/Sources")
         try tree.makeDirectory("repo/Tools/Sources/Tool")
 
-        let appFile = tree.root.appending(path: "repo/App/Sources/View.swift")
         let toolFile = tree.root.appending(path: "repo/Tools/Sources/Tool/main.swift")
-        #expect(ProjectPlatforms.declared(forFileAt: appFile) == [.iOS])
         #expect(ProjectPlatforms.declared(forFileAt: toolFile) == [.macOS])
+    }
+
+    @Test
+    func `a file with no manifest of its own follows the project at the repository root`() throws {
+        let tree = ScratchTree()
+        try tree.makeDirectory("repo/.git")
+        try tree.write("SDKROOT = iphoneos;", at: "repo/App.xcodeproj/project.pbxproj")
+        try tree.makeDirectory("repo/App/Sources")
+
+        let appFile = tree.root.appending(path: "repo/App/Sources/View.swift")
+        #expect(ProjectPlatforms.declared(forFileAt: appFile) == [.iOS])
     }
 
     @Test
@@ -164,7 +172,7 @@ struct ProjectPlatformsTests {
         #expect(ProjectPlatforms.declared(forFileAt: tree.root.appending(path: "repo/Sources/A.swift")) == [])
     }
 
-    @Test
+    @Test(.timeLimit(.minutes(1)))
     func `a manifest that is not a regular file is not read`() throws {
         let tree = ScratchTree()
         let path = tree.root.appending(path: "Package.swift").path(percentEncoded: false)
