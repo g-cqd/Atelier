@@ -146,8 +146,11 @@ let package = Package(
             ],
             swiftSettings: strict
         ),
-        // tree-sitter grammar.json loading and LR/lex table compilation.
-        .target(name: "AtelierGrammar", swiftSettings: strict),
+        // tree-sitter grammar.json loading and LR/lex table compilation. Reads grammar.json with AemiJSON's
+        // Foundation-free engine; the Codable layer is not needed.
+        .target(
+            name: "AtelierGrammar", dependencies: [.product(name: "AemiJSONCore", package: "AemiJSON")],
+            swiftSettings: strict),
         // The GLR parser over compiled tables.
         .target(name: "AtelierParser", dependencies: ["AtelierGrammar"], swiftSettings: strict),
         // tree-sitter .scm query parsing and matching over syntax trees.
