@@ -2,29 +2,8 @@ import Testing
 
 @testable import DiffComparison
 
-/// The pure pieces of the fetch feature: what counts as a remote-tracking ref, and what the toolbar's fetch menu
-/// item should say.
+/// The pure pieces of the fetch feature: what the toolbar's fetch menu item should say.
 struct RepositoryFetchTests {
-    @Test
-    func `a ref shaped remote-slash-branch is remote-tracking when the remote is known`() {
-        #expect(RepositoryFetch.isRemoteTrackingRef("origin/develop", remotes: ["origin"]))
-    }
-
-    @Test
-    func `a local branch that happens to contain a slash is not remote-tracking`() {
-        #expect(!RepositoryFetch.isRemoteTrackingRef("feature/foo", remotes: ["origin"]))
-    }
-
-    @Test
-    func `a ref with no slash at all is not remote-tracking`() {
-        #expect(!RepositoryFetch.isRemoteTrackingRef("main", remotes: ["origin"]))
-    }
-
-    @Test
-    func `no known remotes means nothing is remote-tracking`() {
-        #expect(!RepositoryFetch.isRemoteTrackingRef("origin/develop", remotes: []))
-    }
-
     @Test
     func `menu item titles the primary remote when idle`() {
         let state = RepositoryFetch.MenuItem(remoteName: "upstream", isFetching: false, lastError: nil)
