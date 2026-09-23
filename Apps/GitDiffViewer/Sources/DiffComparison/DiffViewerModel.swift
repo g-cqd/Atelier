@@ -46,6 +46,8 @@ package final class DiffViewerModel {
     private var navigator = ChangeNavigator()
 
     let pipeline: RenderPipeline
+    /// Runs gap handle drags, revealing rows through ``pipeline`` one card at a time.
+    let gapDrags: GapDragController
     private let preparer: DiffPreparer
     let reader: any SourceReading
     let taskProvider: any TaskProvider
@@ -75,7 +77,8 @@ package final class DiffViewerModel {
         settings: ViewerSettings = ViewerSettings(),
         reader: any SourceReading,
         taskProvider: any TaskProvider = .default,
-        uptime: @escaping MonotonicNanosecondsProvider = LiveClock.monotonicNanoseconds
+        uptime: @escaping MonotonicNanosecondsProvider = LiveClock.monotonicNanoseconds,
+        clock: any Clock<Duration> = ContinuousClock()
     ) {
         self.settings = settings
         self.reader = reader
@@ -85,8 +88,12 @@ package final class DiffViewerModel {
         self.palette = palette
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider)
         self.preparer = preparer
-        pipeline = RenderPipeline(
+        let pipeline = RenderPipeline(
             preparer: preparer, taskProvider: taskProvider, options: Self.options(settings, palette: palette))
+        self.pipeline = pipeline
+        gapDrags = GapDragController(
+            taskProvider: taskProvider, clock: clock, expansion: { pipeline.expansion(of: $0) },
+            apply: { pipeline.setExpansion($0, for: $1) })
         left = SideState(label: "Left", reader: reader, taskProvider: taskProvider)
         right = SideState(label: "Right", reader: reader, taskProvider: taskProvider)
         left.onReload = { [weak self] in self?.timer.begin() }
@@ -460,6 +467,12 @@ package final class DiffViewerModel {
     package func adjustGap(_ marker: GapMarker, from base: GapExpansion, byLines delta: Int) {
         timer.abandon()
         pipeline.adjustGap(marker, from: base, byLines: delta)
+    }
+
+    /// Feeds a gap handle's drag to ``gapDrags``; each step renders only the card it drags.
+    package func handleGapDrag(_ event: GapDragEvent) {
+        timer.abandon()
+        gapDrags.handle(event)
     }
 
     package func resetRevealedLines() {

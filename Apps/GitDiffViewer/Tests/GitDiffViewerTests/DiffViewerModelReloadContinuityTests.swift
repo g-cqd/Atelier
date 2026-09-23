@@ -255,13 +255,13 @@ struct DiffViewerModelReloadContinuityTests {
         let sut = harness.makeSUT()
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]
         harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "2")]
-        harness.reader.contents["a.swift"] = (1 ... 30).map { "line \($0)" }.joined(separator: "\n") + "\n"
+        harness.serveOneChangeInTheMiddle()
         try await harness.load(sut)
         sut.settings.isolatesChanges = true
         sut.select("a.swift")
         try await harness.taskProvider.waitForAllTasks()
         let marker = try #require(sut.rendered?.old?.rows.first?.gap)
-        sut.adjustGap(marker, from: GapExpansion(), byLines: 4)
+        harness.drag(sut, .extendsChangeBelow, of: marker, rows: 4)
         try await harness.taskProvider.waitForAllTasks()
         #expect(sut.expansion(of: marker.key) == GapExpansion(below: 0, above: 4))
 
