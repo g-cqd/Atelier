@@ -120,6 +120,17 @@ struct ViewerSettingsTests {
     }
 
     @Test
+    func `a stored compact folders flag survives adopting a project`() throws {
+        let defaults = try makeDefaults()
+        defaults.set(true, forKey: "compactsFolders")
+        let sut = ViewerSettings(defaults: defaults)
+
+        sut.adoptProject(ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory)))
+
+        #expect(sut.treeStyle == .compact)
+    }
+
+    @Test
     func `analyzed sides defaults to the right side only and round trips through user defaults`() throws {
         let defaults = try makeDefaults()
         let sut = ViewerSettings(defaults: defaults)

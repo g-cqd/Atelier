@@ -26,7 +26,7 @@ extension ViewerSettings {
             showsStatusBar = true
         }
         treeStyle = restoredValue(Key.treeStyle, appDefault: FileTreeStyle.hierarchy) {
-            defaults.string(forKey: Key.treeStyle).flatMap(FileTreeStyle.init(rawValue:)) ?? .hierarchy
+            Self.storedTreeStyle(defaults, key: Key.treeStyle)
         }
         showsChangesOnly = restoredValue(Key.showsChangesOnly, appDefault: false) {
             defaults.bool(forKey: Key.showsChangesOnly)
