@@ -42,12 +42,12 @@ let package = Package(
         .library(name: "AtelierDocIndex", targets: ["AtelierDocIndex"])
     ],
     dependencies: [
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "739d982e95db75eb1e6565c79c42c705dbae247f"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "1.0.0"),
         // Pinned to the feature/raw-subtree-bytes revision for `JSON.withRawJSONBytes`; the private mirror needs the
         // g-cqd SSH credentials. Iterate locally with `.package(path: "../../../AemiJSON")`.
-        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "b98f139b2aa0581b6103ce0943662fc54e28a193")
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "efb0a35746e17db0cc519bc8f6fa23887f7105aa")
     ],
     targets: [
         // The vocabulary highlighting is expressed in: languages, and later roles and tokens.
