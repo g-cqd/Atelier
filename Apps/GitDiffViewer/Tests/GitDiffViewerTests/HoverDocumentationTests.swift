@@ -1,4 +1,5 @@
 import AemiTesting
+import AtelierDocIndex
 import AtelierLSP
 import AtelierSyntaxModel
 import DiffGit
@@ -22,6 +23,11 @@ private final class CorpusReaderSpy: SourceReading, Sendable {
 
     /// Every batch read so far, in order.
     var batches: [[String]] { state.withLock(\.batches) }
+
+    /// How many times `path` was read.
+    func reads(of path: String) -> Int {
+        state.withLock { $0.batches.joined().filter { $0 == path }.count }
+    }
 
     subscript(path: String) -> String? {
         get { state.withLock { $0.contents[path] } }
@@ -56,6 +62,18 @@ private final class CorpusReaderSpy: SourceReading, Sendable {
     func renames(from left: ComparisonSource, to right: ComparisonSource) async -> [String: String] { [:] }
 }
 
+/// Counts the files an index parses.
+private final class ParseCounter: Sendable {
+    private let parsed = Mutex(0)
+
+    var count: Int { parsed.withLock { $0 } }
+
+    func extract(uri: String, content: String) -> [DocEntry] {
+        parsed.withLock { $0 += 1 }
+        return DocCommentIndex.extractEntries(uri: uri, content: content)
+    }
+}
+
 @MainActor
 @Suite struct HoverDocumentationModelTests {
     private let swiftDocComment = """
@@ -70,15 +88,23 @@ private final class CorpusReaderSpy: SourceReading, Sendable {
         """
 
     private let taskProvider = TaskProviderSpy.tolerant()
+    private let parses = ParseCounter()
 
-    private func makeSUT(lspRegistry: SourceKitLSPRegistry? = nil) -> HoverDocumentationModel {
-        HoverDocumentationModel(lspRegistry: lspRegistry, taskProvider: taskProvider)
+    private func makeSUT(
+        lspRegistry: SourceKitLSPRegistry? = nil, index: DocCommentIndex = DocCommentIndex()
+    ) -> HoverDocumentationModel {
+        HoverDocumentationModel(lspRegistry: lspRegistry, taskProvider: taskProvider, index: index)
+    }
+
+    /// An index that counts the files it parses in ``parses``.
+    private func countingIndex() -> DocCommentIndex {
+        DocCommentIndex(extractor: { [parses] uri, content in parses.extract(uri: uri, content: content) })
     }
 
     /// A changed file that only calls `double`, which ``restSource`` declares; "double" sits at columns 12..<18.
-    private func caller(index: Int = 0, blob: String = "new") -> HoverDocumentationModel.FileEntry {
+    private func caller(blob: String = "new") -> HoverDocumentationModel.FileEntry {
         HoverDocumentationModel.FileEntry(
-            index: index, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift",
+            index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift",
             oldText: "let value = double(3)\n", newText: "let value = double(3)\n", oldBlobID: "old", newBlobID: blob)
     }
 
@@ -185,6 +211,233 @@ private final class CorpusReaderSpy: SourceReading, Sendable {
         #expect(await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 13) == nil)
     }
 
+    @Test
+    func `a superseded corpus pass asks for no further batch`() async throws {
+        let model = makeSUT()
+        let reader = makeReader()
+        let gate = TaskGate()
+        reader.hold(until: gate)
+        let corpus = (0 ..< HoverDocumentationModel.corpusChunkSize + 8)
+            .map { SourceEntry(relativePath: "Sources/F\($0).swift", blobID: "f\($0)", size: 64) }
+
+        model.comparisonChanged(
+            root: nil, files: [caller()], corpusReader: reader, corpusSource: .directory(Self.rightRoot),
+            corpusEntries: corpus)
+        let first = try #require(try await reader.batchStarted.next())
+        model.comparisonChanged(root: nil, files: [caller(blob: "newer")])
+        gate.open()
+        try await taskProvider.waitForAllTasks()
+
+        #expect(first.count < corpus.count)
+        #expect(reader.batches == [first])
+    }
+
+    @Test
+    func `an identical feed reads no corpus file again`() async throws {
+        let model = makeSUT()
+        let reader = makeReader()
+
+        try await feed(model, [caller()], reader: reader, corpus: [restEntry()])
+        try await feed(model, [caller()], reader: reader, corpus: [restEntry()])
+
+        #expect(reader.reads(of: Self.restPath) == 1)
+    }
+
+    @Test
+    func `an identical feed parses nothing`() async throws {
+        let model = makeSUT(index: countingIndex())
+        let reader = makeReader()
+        try await feed(model, [caller()], reader: reader, corpus: [restEntry()])
+        let parsed = parses.count
+
+        try await feed(model, [caller()], reader: reader, corpus: [restEntry()])
+
+        #expect(parsed == 3)
+        #expect(parses.count == parsed)
+    }
+
+    @Test
+    func `a feed with no files leaves the corpus indexed for the next feed`() async throws {
+        let model = makeSUT()
+        let reader = makeReader()
+
+        try await feed(model, [caller()], reader: reader, corpus: [restEntry()])
+        try await feed(model, [])
+        try await feed(model, [caller()], reader: reader, corpus: [restEntry()])
+
+        #expect(reader.reads(of: Self.restPath) == 1)
+        let content = await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 13)
+        #expect(content?.markdown.contains("Doubles a number.") == true)
+    }
+
+    @Test
+    func `growing the changeset keeps the corpus indexed`() async throws {
+        let model = makeSUT()
+        let reader = makeReader()
+        let second = HoverDocumentationModel.FileEntry(
+            index: 1, leftPath: "Sources/Bar.swift", rightPath: "Sources/Bar.swift", oldText: "let x = 1\n",
+            newText: "let x = 2\n", oldBlobID: "bar1", newBlobID: "bar2")
+
+        try await feed(model, [caller()], reader: reader, corpus: [restEntry()])
+        try await feed(model, [caller(), second], reader: reader, corpus: [restEntry()])
+
+        #expect(reader.reads(of: Self.restPath) == 1)
+        let content = await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 13)
+        #expect(content?.markdown.contains("Doubles a number.") == true)
+    }
+
+    @Test
+    func `a file without a blob id is fed again`() async throws {
+        let model = makeSUT()
+        func unhashed(_ doc: String) -> HoverDocumentationModel.FileEntry {
+            let text = "/// \(doc)\nfunc run() {}\n"
+            return HoverDocumentationModel.FileEntry(
+                index: 0, leftPath: "Sources/Big.swift", rightPath: "Sources/Big.swift", oldText: text,
+                newText: text, oldBlobID: "big", newBlobID: nil)
+        }
+
+        try await feed(model, [unhashed("One.")])
+        try await feed(model, [unhashed("Two.")])
+
+        let content = await model.hover(fileIndex: 0, side: .new, line: 1, utf16Column: 6)
+        #expect(content?.markdown.contains("Two.") == true)
+    }
+
+    @Test
+    func `the index holds only the current comparison over twenty comparisons`() async throws {
+        let index = DocCommentIndex()
+        let model = makeSUT(index: index)
+        let reader = makeReader()
+        var sizes: [Int] = []
+
+        for comparison in 0 ..< 20 {
+            let changed = HoverDocumentationModel.FileEntry(
+                index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift",
+                oldText: "let value = double(\(comparison))\n", newText: "let value = double(3)\n",
+                oldBlobID: "old\(comparison)", newBlobID: "new\(comparison)")
+            try await feed(model, [changed], reader: reader, corpus: [restEntry(blob: "rest\(comparison)")])
+            sizes.append(await index.fileCount)
+        }
+
+        // Each comparison is one changed file's two sides and one corpus file.
+        #expect(sizes == Array(repeating: 3, count: 20))
+    }
+
+    @Test
+    func `a corpus file renamed on disk leaves nothing under its old path`() async throws {
+        let model = makeSUT()
+        let reader = CorpusReaderSpy()
+        reader["Sources/Old.swift"] = "/// Doubles, as it was.\nfunc double(_ x: Int) -> Int { x * 2 }\n"
+        reader["Sources/New.swift"] = "/// Doubles, as it is.\nfunc double(_ x: Int) -> Int { x * 2 }\n"
+        let root = try makeScratchRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try await feed(
+            model, [caller()], root: root, reader: reader,
+            corpus: [SourceEntry(relativePath: "Sources/Old.swift", blobID: "d1", size: 64)])
+        try await feed(
+            model, [caller()], root: root, reader: reader,
+            corpus: [SourceEntry(relativePath: "Sources/New.swift", blobID: "d2", size: 64)])
+
+        let markdown = try #require(await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 13)?.markdown)
+        #expect(markdown.contains("as it is."))
+        #expect(!markdown.contains("as it was."))
+    }
+
+    @Test
+    func `a model turned off reads and parses nothing`() async throws {
+        let index = countingIndex()
+        let model = makeSUT(index: index)
+        let reader = makeReader()
+        model.isEnabled = false
+
+        try await feed(model, [caller()], reader: reader, corpus: [restEntry()])
+
+        #expect(reader.batches.isEmpty)
+        #expect(parses.count == 0)
+        #expect(await index.fileCount == 0)
+    }
+
+    @Test
+    func `turning the model off stops the corpus pass in flight`() async throws {
+        let model = makeSUT()
+        let reader = makeReader()
+        let gate = TaskGate()
+        reader.hold(until: gate)
+        let corpus = (0 ..< HoverDocumentationModel.corpusChunkSize + 8)
+            .map { SourceEntry(relativePath: "Sources/F\($0).swift", blobID: "f\($0)", size: 64) }
+
+        model.comparisonChanged(
+            root: nil, files: [caller()], corpusReader: reader, corpusSource: .directory(Self.rightRoot),
+            corpusEntries: corpus)
+        let first = try #require(try await reader.batchStarted.next())
+        model.isEnabled = false
+        gate.open()
+        try await taskProvider.waitForAllTasks()
+
+        #expect(reader.batches == [first])
+    }
+
+    /// A fresh directory standing in for a repository root, since the registry only admits roots that exist.
+    private func makeScratchRoot() throws -> URL {
+        let root = FileManager.default.temporaryDirectory.appending(
+            path: "gdv-hover-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+        return root
+    }
+}
+
+extension HoverDocumentationModelTests {
+    // MARK: One declaration per side (HOVER-11)
+
+    /// `Foo`, declared in a file whose new side adds a conformance, and a second file that uses it; "Foo" sits at
+    /// columns 10..<13 of "let foo = Foo()".
+    private func declarationAndUse(leftPath: String, rightPath: String) -> [HoverDocumentationModel.FileEntry] {
+        [
+            HoverDocumentationModel.FileEntry(
+                index: 0, leftPath: leftPath, rightPath: rightPath, oldText: "/// A foo.\nstruct Foo {}\n",
+                newText: "/// A foo.\nstruct Foo: Sendable {}\n", oldBlobID: "foo1", newBlobID: "foo2"),
+            HoverDocumentationModel.FileEntry(
+                index: 1, leftPath: "Sources/Use.swift", rightPath: "Sources/Use.swift",
+                oldText: "let foo = Foo()\n", newText: "let foo = Foo()\n", oldBlobID: "use1", newBlobID: "use2")
+        ]
+    }
+
+    @Test
+    func `hovering the new side of two refs lists only the new declaration`() async throws {
+        let model = makeSUT()
+        try await feed(model, declarationAndUse(leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift"))
+
+        let markdown = try #require(await model.hover(fileIndex: 1, side: .new, line: 0, utf16Column: 11)?.markdown)
+
+        #expect(markdown.contains("```swift\nstruct Foo: Sendable\n```"))
+        #expect(!markdown.contains("```swift\nstruct Foo\n```"))
+    }
+
+    @Test
+    func `hovering the old side of two refs lists only the old declaration`() async throws {
+        let model = makeSUT()
+        try await feed(model, declarationAndUse(leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift"))
+
+        let markdown = try #require(await model.hover(fileIndex: 1, side: .old, line: 0, utf16Column: 11)?.markdown)
+
+        #expect(markdown.contains("```swift\nstruct Foo\n```"))
+        #expect(!markdown.contains("Sendable"))
+    }
+
+    @Test
+    func `hovering the new side of a renamed file lists only its new declaration`() async throws {
+        let model = makeSUT()
+        let root = try makeScratchRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try await feed(model, declarationAndUse(leftPath: "Old/Foo.swift", rightPath: "New/Foo.swift"), root: root)
+
+        let markdown = try #require(await model.hover(fileIndex: 1, side: .new, line: 0, utf16Column: 11)?.markdown)
+
+        #expect(markdown.contains("```swift\nstruct Foo: Sendable\n```"))
+        #expect(!markdown.contains("```swift\nstruct Foo\n```"))
+    }
+
     // MARK: Language server tier
 
     @Test
@@ -225,13 +478,5 @@ private final class CorpusReaderSpy: SourceReading, Sendable {
         model.comparisonChanged(root: root, files: [entry])
         _ = await model.hover(fileIndex: 0, side: .new, line: 1, utf16Column: 6)
         #expect(callCount.withLock { $0 } == 1)
-    }
-
-    /// A fresh directory standing in for a repository root, since the registry only admits roots that exist.
-    private func makeScratchRoot() throws -> URL {
-        let root = FileManager.default.temporaryDirectory.appending(
-            path: "gdv-hover-\(UUID().uuidString)", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
-        return root
     }
 }
