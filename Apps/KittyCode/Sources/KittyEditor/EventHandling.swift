@@ -146,6 +146,10 @@ public func handleEvent(event: InputEvent, state: EditorState, pipeline: RenderP
             handleMouse(mouse, state: state, pipeline: pipeline)
             return true
 
+        case .overflow(let overflow):
+            reportInputOverflow(overflow, state: state)
+            return true
+
         case .unknown(let bytes):
             state.receiveTerminalReply(bytes)
             return true
@@ -273,6 +277,24 @@ func receiveClipboardReply(_ reply: OSCClipboard.Reply, state: EditorState) -> B
             state.statusMessage = "Nothing pasted: the terminal's clipboard reply was not base64"
     }
     return true
+}
+
+/// Says in the status bar that the input router dropped a sequence past its cap, none of which was typed.
+@MainActor
+private func reportInputOverflow(_ overflow: InputOverflow, state: EditorState) {
+    let payloadCap = "\(SequenceRouter.maxPasteSize / 1_048_576) MiB"
+    switch overflow {
+        case .paste:
+            state.statusMessage = "Paste too large (over \(payloadCap)): nothing pasted"
+        case .osc(command: 52) where state.pendingClipboardReplies > 0:
+            state.pendingClipboardReplies -= 1
+            state.statusMessage = "Clipboard too large to paste (over \(payloadCap))"
+        case .osc:
+            state.statusMessage = "Ignored a terminal reply over \(payloadCap)"
+        case .controlSequence:
+            state.statusMessage =
+                "Ignored an escape sequence over \(SequenceRouter.maxControlSequenceSize / 1024) KiB"
+    }
 }
 
 @MainActor
