@@ -74,6 +74,8 @@ package enum SettingsPane: String, CaseIterable, Identifiable, Codable {
     case diff
     case appearance
     case tools
+    /// Every known project, with what it overrides.
+    case projects
 
     package var id: String { rawValue }
 }
@@ -127,11 +129,11 @@ package final class ViewerSettings {
     /// The project whose overrides overlay the app defaults; nil until ``adoptProject(_:)``.
     package internal(set) var projectID: ProjectIdentity?
 
-    /// Settings whose value may vary from one project to the next; everything else stays app-wide.
-    static let projectScopedKeys: Set<String> = [
-        Key.diagnosticsEnabled, Key.analyzedSides, Key.toolLocations, Key.lspServerLocations, Key.contextLines,
-        Key.showsChangesOnly, Key.showsIgnoredFiles, Key.diffHeuristics, Key.treeStyle, Key.granularity
-    ]
+    /// Settings whose value may vary from one project to the next, every tab's ``scopedKeys(for:)``; everything
+    /// else stays app-wide.
+    static let projectScopedKeys: Set<String> = SettingsCategory.allCases.reduce(into: []) { keys, category in
+        keys.formUnion(scopedKeys(for: category))
+    }
 
     static let projectRegistryKey = "projectRegistry"
 
@@ -313,7 +315,7 @@ package final class ViewerSettings {
     }
 
     /// `nonisolated(unsafe)`: written once at the end of `init` and read once in the nonisolated `deinit`.
-    @ObservationIgnored private nonisolated(unsafe) var baseSettingObserver: (any NSObjectProtocol)?
+    @ObservationIgnored private nonisolated(unsafe) var settingObserver: (any NSObjectProtocol)?
 
     private func store(_ value: Any?, _ key: String, _ change: Change) {
         if !isApplyingStoredValues { write(value, key) }
@@ -321,17 +323,19 @@ package final class ViewerSettings {
         for observer in observers { observer.handler(change) }
     }
 
-    /// Writes a user's edit: to the adopted project's key for a scoped setting, to the base key, announced to every
-    /// other instance, otherwise.
+    /// Writes a user's edit to the adopted project's key for a scoped setting, to the base key otherwise, and
+    /// announces it to every other instance, so each window on that project, or on none that overrides the key,
+    /// follows at once.
     private func write(_ value: Any?, _ key: String) {
         guard let projectID, Self.projectScopedKeys.contains(key) else {
             defaults.set(value, forKey: key)
-            postBaseSettingChanged(key: key)
+            postSettingChanged(key: key, projectKey: nil)
             return
         }
         guard !isFallingBackToBase else { return }
         defaults.set(value, forKey: scopedKey(key, for: projectID))
         registerProject(projectID)
+        postSettingChanged(key: key, projectKey: projectID.key)
     }
 
     package init(defaults: UserDefaults = .standard) {
@@ -375,140 +379,19 @@ package final class ViewerSettings {
             defaults.string(forKey: Key.appearanceScheme).flatMap(AppearanceScheme.init(rawValue:)) ?? .system
         badgeScheme = defaults.string(forKey: Key.badgeScheme).flatMap(BadgeScheme.init(rawValue:)) ?? .classic
         matchesThemeAppearance = defaults.object(forKey: Key.matchesThemeAppearance) as? Bool ?? false
-        baseSettingObserver = NotificationCenter.default.addObserver(
-            forName: Self.baseSettingChangedNotification, object: nil, queue: .main
+        settingObserver = NotificationCenter.default.addObserver(
+            forName: Self.settingChangedNotification, object: nil, queue: .main
         ) { [weak self] notification in
             guard let poster = notification.object else { return }
-            guard let key = notification.userInfo?[Self.baseSettingChangedKey] as? String else { return }
+            guard let key = notification.userInfo?[Self.settingChangedKey] as? String else { return }
+            let projectKey = notification.userInfo?[Self.settingChangedProjectKey] as? String
             let posterID = ObjectIdentifier(poster as AnyObject)
-            MainActor.assumeIsolated { self?.baseSettingChanged(posterID: posterID, key: key) }
+            MainActor.assumeIsolated { self?.settingChanged(posterID: posterID, key: key, projectKey: projectKey) }
         }
     }
 
     deinit {
-        if let baseSettingObserver { NotificationCenter.default.removeObserver(baseSettingObserver) }
-    }
-}
-
-/// Restoring defaults and counting deviations, per Settings tab.
-extension ViewerSettings {
-    /// Resets every setting in `category` to its coded default through the same setters as a user edit. Once a
-    /// project is adopted, a scoped setting instead drops the project's override and falls back to the base value.
-    package func restoreDefaults(_ category: SettingsCategory) {
-        applyWithoutRecreatingScopedOverrides { restoreDefaultsUnguarded(category) }
-    }
-
-    private func restoreDefaultsUnguarded(_ category: SettingsCategory) {
-        switch category {
-            case .general:
-                explorerPlacement = .top
-                treeStyle = restoredValue(Key.treeStyle, appDefault: FileTreeStyle.hierarchy) {
-                    defaults.string(forKey: Key.treeStyle).flatMap(FileTreeStyle.init(rawValue:)) ?? .hierarchy
-                }
-                showsChangesOnly = restoredValue(Key.showsChangesOnly, appDefault: false) {
-                    defaults.bool(forKey: Key.showsChangesOnly)
-                }
-                showsIgnoredFiles = restoredValue(Key.showsIgnoredFiles, appDefault: false) {
-                    defaults.bool(forKey: Key.showsIgnoredFiles)
-                }
-                syncsScrolling = true
-                showsMinimap = true
-                showsStatusBar = true
-                autoRefresh = true
-            case .diff:
-                isolatesChanges = false
-                contextLines = restoredValue(Key.contextLines, appDefault: 3) {
-                    defaults.object(forKey: Key.contextLines) as? Int ?? 3
-                }
-                granularity = restoredValue(Key.granularity, appDefault: IntralineGranularity.word) {
-                    defaults.string(forKey: Key.granularity).flatMap(IntralineGranularity.init(rawValue:)) ?? .word
-                }
-                diffHeuristics = restoredValue(Key.diffHeuristics, appDefault: DiffHeuristics()) {
-                    defaults.data(forKey: Key.diffHeuristics)
-                        .flatMap { try? DefaultsJSON.decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()
-                }
-            case .appearance:
-                themePath = nil
-                lineHeightMultiple = 0
-                mode = .split
-                wrapsLines = true
-                wrapColumn = 0
-                appearanceScheme = .system
-                badgeScheme = .classic
-                matchesThemeAppearance = false
-            case .tools:
-                diagnosticsEnabled = restoredValue(Key.diagnosticsEnabled, appDefault: false) {
-                    defaults.bool(forKey: Key.diagnosticsEnabled)
-                }
-                showsHoverDocumentation = true
-                analyzedSides = restoredValue(Key.analyzedSides, appDefault: AnalyzedSides.newer) {
-                    defaults.string(forKey: Key.analyzedSides).flatMap(AnalyzedSides.init(rawValue:)) ?? .newer
-                }
-                toolLocations = restoredValue(
-                    Key.toolLocations,
-                    appDefault: Dictionary(uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation()) })
-                ) { Self.decodeToolLocations(defaults.data(forKey: Key.toolLocations)) }
-                lspServerLocations = restoredValue(
-                    Key.lspServerLocations, appDefault: ["sourcekit-lsp": ToolLocation()]
-                ) {
-                    defaults.data(forKey: Key.lspServerLocations)
-                        .flatMap { try? DefaultsJSON.decode([String: ToolLocation].self, from: $0) }
-                        ?? ["sourcekit-lsp": ToolLocation()]
-                }
-        }
-    }
-
-    /// Clears `key`'s project override (if any) and returns what the property should become: the base value,
-    /// decoded by `decodeBase`, when a project is adopted, or the coded app-wide default otherwise.
-    private func restoredValue<Value>(_ key: String, appDefault: Value, decodeBase: () -> Value) -> Value {
-        guard let projectID else { return appDefault }
-        defaults.removeObject(forKey: scopedKey(key, for: projectID))
-        return decodeBase()
-    }
-
-    static func decodeToolLocations(_ data: Data?) -> [DiagnosticTool: ToolLocation] {
-        data
-            .flatMap { try? DefaultsJSON.decode([String: ToolLocation].self, from: $0) }
-            .map { decoded in
-                Dictionary(
-                    uniqueKeysWithValues: decoded.compactMap { key, value in
-                        DiagnosticTool(rawValue: key).map { ($0, value) }
-                    })
-            }
-            ?? Dictionary(uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation()) })
-    }
-
-    /// How many settings in `category` differ from their coded default, for the tab footer's deviation indicator.
-    package func settingsDiffCount(_ category: SettingsCategory) -> Int {
-        switch category {
-            case .general:
-                return [
-                    explorerPlacement != .top, treeStyle != .hierarchy, showsChangesOnly != false,
-                    showsIgnoredFiles != false, syncsScrolling != true, showsMinimap != true,
-                    showsStatusBar != true, autoRefresh != true
-                ]
-                .count { $0 }
-            case .diff:
-                return [
-                    isolatesChanges != false, contextLines != 3, granularity != .word,
-                    diffHeuristics != DiffHeuristics()
-                ]
-                .count { $0 }
-            case .appearance:
-                return [
-                    themePath != nil, lineHeightMultiple != 0, mode != .split, wrapsLines != true, wrapColumn != 0,
-                    appearanceScheme != .system, badgeScheme != .classic, matchesThemeAppearance != false
-                ]
-                .count { $0 }
-            case .tools:
-                let defaultToolLocations = Dictionary(
-                    uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation()) })
-                return [
-                    diagnosticsEnabled != false, showsHoverDocumentation != true, analyzedSides != .newer,
-                    toolLocations != defaultToolLocations, lspServerLocations != ["sourcekit-lsp": ToolLocation()]
-                ]
-                .count { $0 }
-        }
+        if let settingObserver { NotificationCenter.default.removeObserver(settingObserver) }
     }
 }
 

@@ -2,23 +2,54 @@ import AtelierDiagnostics
 import DiffCore
 import Foundation
 
-/// The per-project override surface: adoption, cross-instance reloads, the Settings queries, and override clearing.
+/// The per-project override surface: adoption, cross-instance reloads, the known projects, and override clearing.
 extension ViewerSettings {
-    /// The subset of `projectScopedKeys` a given Settings tab shows, for the "overridden in N projects" footer.
+    /// The settings of `category`'s tab that can differ from one project to the next (decision D11): what a
+    /// comparison shows and how, and the tools. What stays app-wide is how the app itself looks and is arranged:
+    /// the appearance, theme matching and badge colors D11 names, and with them the color scheme, the line height,
+    /// the explorers' placement, synced scrolling and the status bar.
     static func scopedKeys(for category: SettingsCategory) -> Set<String> {
         switch category {
-            case .general: [Key.showsChangesOnly, Key.showsIgnoredFiles, Key.treeStyle]
-            case .diff: [Key.contextLines, Key.diffHeuristics, Key.granularity]
-            case .appearance: []
-            case .tools: [Key.diagnosticsEnabled, Key.analyzedSides, Key.toolLocations, Key.lspServerLocations]
+            case .general:
+                [Key.showsChangesOnly, Key.showsIgnoredFiles, Key.treeStyle, Key.showsMinimap, Key.autoRefresh]
+            case .diff: [Key.isolatesChanges, Key.contextLines, Key.granularity, Key.diffHeuristics]
+            case .appearance: [Key.mode, Key.wrapsLines, Key.wrapColumn]
+            case .tools:
+                [
+                    Key.diagnosticsEnabled, Key.showsHoverDocumentation, Key.analyzedSides, Key.toolLocations,
+                    Key.lspServerLocations
+                ]
         }
+    }
+
+    /// Each setting's defaults key by property, for the views that ask whether a control edits a project's value.
+    private static let keysByProperty: [PartialKeyPath<ViewerSettings>: String] = [
+        \.mode: Key.mode, \.explorerPlacement: Key.explorerPlacement, \.wrapsLines: Key.wrapsLines,
+        \.syncsScrolling: Key.syncsScrolling, \.showsChangesOnly: Key.showsChangesOnly,
+        \.showsIgnoredFiles: Key.showsIgnoredFiles, \.autoRefresh: Key.autoRefresh, \.granularity: Key.granularity,
+        \.diffHeuristics: Key.diffHeuristics, \.showsMinimap: Key.showsMinimap, \.showsStatusBar: Key.showsStatusBar,
+        \.treeStyle: Key.treeStyle, \.wrapColumn: Key.wrapColumn, \.themePath: Key.themePath,
+        \.lineHeightMultiple: Key.lineHeightMultiple, \.contextLines: Key.contextLines,
+        \.isolatesChanges: Key.isolatesChanges, \.diagnosticsEnabled: Key.diagnosticsEnabled,
+        \.showsHoverDocumentation: Key.showsHoverDocumentation, \.toolLocations: Key.toolLocations,
+        \.lspServerLocations: Key.lspServerLocations, \.analyzedSides: Key.analyzedSides,
+        \.appearanceScheme: Key.appearanceScheme, \.badgeScheme: Key.badgeScheme,
+        \.matchesThemeAppearance: Key.matchesThemeAppearance
+    ]
+
+    /// Whether the setting behind `property` can differ per project; the Settings window greys out the others while
+    /// it edits a project, since they apply to every project alike.
+    package static func isProjectScoped(_ property: PartialKeyPath<ViewerSettings>) -> Bool {
+        keysByProperty[property].map(projectScopedKeys.contains) ?? false
     }
 
     /// Adopts `id` as this instance's project and re-reads every scoped key, so each value that changes goes
     /// through its setter and reaches observers as a manual edit would, without being written back: adopting a
-    /// project creates no override. Nothing rebuilds the model or its window.
+    /// project creates no override. The project joins the known projects the Settings window lists. Nothing
+    /// rebuilds the model or its window.
     package func adoptProject(_ id: ProjectIdentity?) {
         projectID = id
+        if let id { rememberProject(id) }
         applyingStoredValues { reloadProjectScopedValues() }
     }
 
@@ -153,27 +184,84 @@ extension ViewerSettings {
         return true
     }
 
-    /// Posted in-process after an instance writes a base key, so every other instance sharing its `UserDefaults`
-    /// picks up the new value without its window reopening.
-    nonisolated static let baseSettingChangedNotification = Notification.Name(
-        "GitDiffViewer.ViewerSettings.baseSettingChanged")
-    /// The `userInfo` key `baseSettingChangedNotification` carries the written key's name under.
-    nonisolated static let baseSettingChangedKey = "key"
+    // MARK: - Broadcasts
 
-    /// Tells every other instance that this one wrote the base `key`.
-    func postBaseSettingChanged(key: String) {
-        NotificationCenter.default.post(
-            name: Self.baseSettingChangedNotification, object: self, userInfo: [Self.baseSettingChangedKey: key])
+    /// Posted in-process after an instance writes a key, so every other instance sharing its `UserDefaults` picks up
+    /// the new value without its window reopening.
+    nonisolated static let settingChangedNotification = Notification.Name(
+        "GitDiffViewer.ViewerSettings.settingChanged")
+    /// The `userInfo` key `settingChangedNotification` carries the written key's name under.
+    nonisolated static let settingChangedKey = "key"
+    /// The `userInfo` key naming the project whose override was written or cleared; absent for a base write.
+    nonisolated static let settingChangedProjectKey = "project"
+
+    /// Tells every other instance that this one wrote `key`: the base key when `projectKey` is nil, that project's
+    /// override of it otherwise.
+    func postSettingChanged(key: String, projectKey: String?) {
+        var userInfo = [Self.settingChangedKey: key]
+        if let projectKey { userInfo[Self.settingChangedProjectKey] = projectKey }
+        NotificationCenter.default.post(name: Self.settingChangedNotification, object: self, userInfo: userInfo)
+        if projectKey != nil { postProjectsChanged() }
     }
 
-    /// Reloads a base key another instance just wrote, unless this instance's project override of `key` wins. The
-    /// value is only read, never written back, so a broadcast neither re-broadcasts nor creates an override. Takes
-    /// `Sendable` values because the `Notification` itself must not cross into `MainActor.assumeIsolated`.
-    func baseSettingChanged(posterID: ObjectIdentifier, key: String) {
+    /// Reloads a key another instance just wrote: a base key, unless this instance's project override of `key`
+    /// wins; a project's override, only in an instance on that project. The value is only read, never written back,
+    /// so a broadcast neither re-broadcasts nor creates an override. Takes `Sendable` values because the
+    /// `Notification` itself must not cross into `MainActor.assumeIsolated`.
+    func settingChanged(posterID: ObjectIdentifier, key: String, projectKey: String?) {
         guard posterID != ObjectIdentifier(self) else { return }
-        if let projectID, defaults.object(forKey: scopedKey(key, for: projectID)) != nil { return }
+        if let projectKey {
+            guard projectID?.key == projectKey else { return }
+        } else if let projectID, defaults.object(forKey: scopedKey(key, for: projectID)) != nil {
+            return
+        }
         applyingStoredValues { reload(key: key) }
     }
+
+    // MARK: - Known projects
+
+    /// The defaults key of every project a window adopted, key to display path, whether or not it overrides anything.
+    static let knownProjectsKey = "knownProjects"
+
+    /// Posted in-process whenever a project becomes known, or one of its overrides is written or cleared, so the
+    /// Settings window's list follows.
+    nonisolated static let projectsChangedNotification = Notification.Name(
+        "GitDiffViewer.ViewerSettings.projectsChanged")
+
+    func postProjectsChanged() {
+        NotificationCenter.default.post(name: Self.projectsChangedNotification, object: self)
+    }
+
+    /// Records `id` among the known projects. Knowing a project is not overriding anything: the override registry and
+    /// "overridden in N projects" only count what the user changed.
+    private func rememberProject(_ id: ProjectIdentity) {
+        var known = (defaults.dictionary(forKey: Self.knownProjectsKey) as? [String: String]) ?? [:]
+        guard known[id.key] != id.displayPath else { return }
+        known[id.key] = id.displayPath
+        defaults.set(known, forKey: Self.knownProjectsKey)
+        postProjectsChanged()
+    }
+
+    /// Every project the app knows of, a window's or one with overrides, sorted by name and then by path.
+    package var knownProjects: [ProjectIdentity] {
+        let known = (defaults.dictionary(forKey: Self.knownProjectsKey) as? [String: String]) ?? [:]
+        let registry = (defaults.dictionary(forKey: Self.projectRegistryKey) as? [String: String]) ?? [:]
+        return Set(known.values).union(registry.values)
+            .map { ProjectIdentity(root: URL(filePath: $0, directoryHint: .isDirectory)) }
+            .sorted { ($0.name, $0.displayPath) < ($1.name, $1.displayPath) }
+    }
+
+    /// The keys `projectKey` overrides, in the order the Settings tabs show them.
+    package func overriddenKeys(projectKey: String) -> [String] {
+        Self.orderedScopedKeys.filter { defaults.object(forKey: Self.scopedKey($0, projectKey: projectKey)) != nil }
+    }
+
+    /// Every scoped key, tab by tab.
+    static var orderedScopedKeys: [String] {
+        SettingsCategory.allCases.flatMap { scopedKeys(for: $0).sorted() }
+    }
+
+    // MARK: - Overrides
 
     /// Every project that overrides at least one setting in `category`, sorted by display path.
     package func projectsWithOverrides(in category: SettingsCategory) -> [(key: String, displayPath: String)] {
@@ -189,25 +277,38 @@ extension ViewerSettings {
             .sorted { $0.displayPath < $1.displayPath }
     }
 
-    /// Clears every override `projectKey` holds in `category`; the project leaves the registry once it overrides
-    /// nothing. An instance that adopted `projectKey` refreshes its in-memory values to match.
-    package func clearOverrides(projectKey: String, category: SettingsCategory) {
-        for key in Self.scopedKeys(for: category) {
-            defaults.removeObject(forKey: Self.scopedKey(key, projectKey: projectKey))
-        }
+    /// Removes `projectKey`'s override of `key`, if it has one, and tells every instance on that project, which falls
+    /// back to the app-wide value; the project leaves the override registry once it overrides nothing.
+    package func clearOverride(_ key: String, projectKey: String) {
+        let scoped = Self.scopedKey(key, projectKey: projectKey)
+        guard defaults.object(forKey: scoped) != nil else { return }
+        defaults.removeObject(forKey: scoped)
         pruneRegistryIfFullyCleared(projectKey: projectKey)
+        postSettingChanged(key: key, projectKey: projectKey)
+    }
+
+    /// Clears every override `projectKey` holds in `category`. An instance that adopted `projectKey` refreshes its
+    /// in-memory values to match.
+    package func clearOverrides(projectKey: String, category: SettingsCategory) {
+        for key in Self.scopedKeys(for: category) { clearOverride(key, projectKey: projectKey) }
         refreshIfAdopted(projectKey)
     }
 
-    /// Clears every override `projectKey` holds in any category, and drops it from the registry.
+    /// Clears every override `projectKey` holds in any category; the project stays known.
     package func clearAllOverrides(projectKey: String) {
-        for key in Self.projectScopedKeys {
-            defaults.removeObject(forKey: Self.scopedKey(key, projectKey: projectKey))
-        }
-        var registry = (defaults.dictionary(forKey: Self.projectRegistryKey) as? [String: String]) ?? [:]
-        registry.removeValue(forKey: projectKey)
-        defaults.set(registry, forKey: Self.projectRegistryKey)
+        for key in Self.projectScopedKeys { clearOverride(key, projectKey: projectKey) }
         refreshIfAdopted(projectKey)
+    }
+
+    /// Clears every override `projectKey` holds and forgets the project, until a window adopts it again.
+    package func forgetProject(projectKey: String) {
+        clearAllOverrides(projectKey: projectKey)
+        for registryKey in [Self.knownProjectsKey, Self.projectRegistryKey] {
+            var entries = (defaults.dictionary(forKey: registryKey) as? [String: String]) ?? [:]
+            guard entries.removeValue(forKey: projectKey) != nil else { continue }
+            defaults.set(entries, forKey: registryKey)
+        }
+        postProjectsChanged()
     }
 
     private func refreshIfAdopted(_ projectKey: String) {
@@ -221,7 +322,7 @@ extension ViewerSettings {
         }
         guard !stillOverrides else { return }
         var registry = (defaults.dictionary(forKey: Self.projectRegistryKey) as? [String: String]) ?? [:]
-        registry.removeValue(forKey: projectKey)
+        guard registry.removeValue(forKey: projectKey) != nil else { return }
         defaults.set(registry, forKey: Self.projectRegistryKey)
     }
 }
