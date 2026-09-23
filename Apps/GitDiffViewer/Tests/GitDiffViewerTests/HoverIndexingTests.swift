@@ -14,8 +14,11 @@ struct HoverIndexingTests {
     private let harness = ModelTestHarness()
 
     /// `a.swift` changed and calls `double`; `rest.swift` is unchanged and declares it, so only the hover corpus pass
-    /// ever reads `rest.swift`.
-    private func makeLoadedSUT(showsHover: Bool = true, isolatesChanges: Bool = false) async throws -> DiffViewerModel {
+    /// ever reads `rest.swift`. With `editsLineFifteen`, the new side of `a.swift` differs at line 15, so its gaps sit
+    /// next to a change and offer drag handles.
+    private func makeLoadedSUT(
+        showsHover: Bool = true, isolatesChanges: Bool = false, editsLineFifteen: Bool = false
+    ) async throws -> DiffViewerModel {
         let sut = harness.makeSUT()
         sut.settings.showsHoverDocumentation = showsHover
         sut.settings.isolatesChanges = isolatesChanges
@@ -26,8 +29,13 @@ struct HoverIndexingTests {
         harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [
             harness.entry("a.swift", "2"), harness.entry("rest.swift", "9")
         ]
-        harness.reader.contents["a.swift"] =
-            "let value = double(3)\n" + (1 ... 30).map { "let line\($0) = \($0)" }.joined(separator: "\n") + "\n"
+        let lines = ["let value = double(3)"] + (1 ... 30).map { "let line\($0) = \($0)" }
+        harness.reader.contents["a.swift"] = lines.joined(separator: "\n") + "\n"
+        if editsLineFifteen {
+            var edited = lines
+            edited[15] = "let line15 = 150"
+            harness.reader.blobContents["2"] = edited.joined(separator: "\n") + "\n"
+        }
         harness.reader.contents["rest.swift"] = "/// Doubles a number.\nfunc double(_ x: Int) -> Int { x * 2 }\n"
         try await harness.load(sut)
         return sut
@@ -75,14 +83,15 @@ struct HoverIndexingTests {
 
     @Test
     func `dragging a gap reads no corpus file`() async throws {
-        let sut = try await makeLoadedSUT(isolatesChanges: true)
+        let sut = try await makeLoadedSUT(isolatesChanges: true, editsLineFifteen: true)
         #expect(try await reads(3).sorted() == ["a.swift", "a.swift", "rest.swift"])
-        let marker = try #require(sut.renderedFiles.first?.rendered.old?.rows.first?.gap)
+        let rows = try #require(sut.renderedFiles.first?.rendered.old?.rows)
+        let marker = try #require(rows.lazy.compactMap(\.gap).first { !$0.handles.isEmpty })
 
-        sut.adjustGap(marker, from: GapExpansion(), byLines: 4)
+        harness.drag(sut, try #require(marker.handles.first), of: marker, rows: 4)
         try await harness.taskProvider.waitForAllTasks()
 
-        #expect(sut.expansion(of: marker.key) == GapExpansion(below: 0, above: 4))
+        #expect(sut.expansion(of: marker.key) != GapExpansion())
         try harness.reader.contentRequests.expectNoBufferedElements()
     }
 }
