@@ -1,8 +1,4 @@
-/// Layout calculations for `ScrollView` rendering, hit testing, and drag handling.
-///
-/// Follows the same pattern as `TreeViewLayout` and `TextEditorLayout`:
-/// widget-specific metrics on top, delegating to `VerticalScrollIndicatorLayout`
-/// for universal proportional math.
+/// Layout for `ScrollView` rendering, hit testing and dragging, over `VerticalScrollIndicatorLayout`'s proportions.
 public enum ScrollViewLayout {
     /// Scroll metrics for the scroll view.
     public static func verticalScrollMetrics<Content>(

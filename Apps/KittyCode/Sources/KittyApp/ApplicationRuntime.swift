@@ -20,14 +20,6 @@ public final class ApplicationRuntime {
         self.taskProvider = taskProvider
     }
 
-    /// Run with explicit render and event callbacks.
-    /// `render` is called once initially and on each resize.
-    /// `onEvent` is called for every input event; return `false` to quit.
-    /// If `renderClock` is non-nil, an observation-listener task is started
-    /// that injects `InputEvent.refresh` into the input source whenever the
-    /// clock's tick advances — so callers that just bump the clock from a
-    /// background task (`schedulePostLoadProcessing`, file watcher, git
-    /// refresh) don't need to also explicitly invalidate the refresh source.
     /// The cell size pixel chrome draws with, when the terminal supports it. `KITTYCODE_PIXEL_CHROME=0`
     /// forces cell chrome on a capable terminal and `=1` forces pixel chrome where detection says no,
     /// provided the terminal reports a pixel size.
@@ -56,6 +48,14 @@ public final class ApplicationRuntime {
         }
     }
 
+    /// Runs the terminal session until `onEvent` returns `false` or the input ends, then restores the terminal,
+    /// logging any failure to do so.
+    /// - Parameters:
+    ///   - render: Draws a frame; called for the first frame and after every resize.
+    ///   - onEvent: Handles each input event; returning `false` ends the session.
+    ///   - configureInputSource: Prepares the input source before its read loop starts.
+    ///   - renderClock: When given, its tick changes inject `InputEvent.refresh`, a burst coalescing into one.
+    /// - Throws: `AppError.terminalSetupFailed` when raw mode, the setup sequences or the size query fail.
     public func run(
         render: @MainActor (RenderPipeline) -> Void,
         onEvent: @MainActor (InputEvent, RenderPipeline) -> Bool = { _, _ in true },
@@ -125,10 +125,7 @@ public final class ApplicationRuntime {
         configureInputSource(inputSource)
         let readTask = inputSource.start()
 
-        // Observation-listener task: re-establishes a `withObservationTracking`
-        // dependency on `renderClock.tick` after each fire. Synchronous
-        // bursts of `advance()` calls inside one main-actor entry coalesce
-        // into a single resume + a single `.refresh` injection.
+        // `withObservationTracking` fires once, so the loop tracks `tick` afresh after every change.
         let observationTask: Task<Void, Never>?
         if let renderClock {
             observationTask = taskProvider.task(role: .observation) { @MainActor [weak inputSource] in

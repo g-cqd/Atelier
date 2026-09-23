@@ -43,9 +43,7 @@ public struct ViewBuilder {
         ForEachArrayView(views: components)
     }
 
-    /// Enables `if #available` blocks inside a `@ViewBuilder` body. Wraps the
-    /// component so the builder type stays stable when the branch is taken on
-    /// platforms that meet the availability check.
+    /// Enables `if #available` blocks inside a `@ViewBuilder` body, passing the component through unchanged.
     public static func buildLimitedAvailability<C: View>(_ component: C) -> C {
         component
     }

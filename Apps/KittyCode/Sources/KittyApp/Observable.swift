@@ -1,21 +1,5 @@
-/// View-model primitive for the terminal UI framework.
-///
-/// The renderer re-runs the whole view tree each frame, driven by events
-/// coming through the input stream (including the synthetic `.refresh`
-/// event injected by `RenderRefreshSource`). View models inherit from
-/// `ViewModel` and call `invalidate()` (directly or via `@Published`) when
-/// their state changes so the next frame picks up the new values.
-///
-/// Wiring at the app boundary looks like:
-///
-/// ```swift
-/// let refreshSource = RenderRefreshSource()
-/// let model = MyModel()
-/// model.invalidate = { [weak refreshSource] in refreshSource?.invalidate() }
-/// ```
-///
-/// Using `@Published` on stored properties of a `ViewModel` subclass causes
-/// writes to call `invalidate()` automatically:
+/// The base of view models: a state change calls `invalidate()`, directly or through `@Published`, so the next frame
+/// picks up the new values; `bind(to:)` wires it to the render loop.
 ///
 /// ```swift
 /// final class CounterModel: ViewModel {
@@ -24,15 +8,12 @@
 /// ```
 @MainActor
 open class ViewModel {
-    /// Invoked from `invalidate()`. Wire this to the render refresh source so
-    /// state changes show up on the next frame. Default is a no-op so tests
-    /// and headless usage stay safe.
+    /// Called on every state change; a no-op until wired to the render loop, as `bind(to:)` does.
     public var invalidate: @MainActor () -> Void = {}
 
     public init() {}
 
-    /// Convenience for subclasses that prefer call-site readability over
-    /// invoking the `invalidate` closure directly.
+    /// Calls `invalidate()`.
     public final func notifyChange() {
         invalidate()
     }
@@ -46,10 +27,8 @@ open class ViewModel {
     }
 }
 
-/// Property wrapper that calls `ViewModel.invalidate()` whenever the wrapped
-/// value is assigned. Use only on stored properties of a `ViewModel`
-/// subclass — Swift's static-subscript dispatch supplies the enclosing
-/// instance automatically. Reads do **not** trigger invalidation.
+/// Calls the enclosing view model's `invalidate()` on every assignment, never on a read. Valid only on a stored
+/// property of a `ViewModel` subclass.
 @MainActor
 @propertyWrapper
 public struct Published<Value> {
@@ -59,9 +38,7 @@ public struct Published<Value> {
         self.storage = wrappedValue
     }
 
-    /// Required by `@propertyWrapper`. Direct access only succeeds when the
-    /// wrapper is attached to a `ViewModel` subclass; the static subscript
-    /// below is what the compiler actually calls in that case.
+    /// Unavailable: a `ViewModel` reaches the value through the enclosing-instance subscript.
     @available(
         *, unavailable,
         message: "@Published only works on ViewModel subclasses; use the enclosing-instance access."

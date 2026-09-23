@@ -57,10 +57,8 @@ public final class AutoSaveManager {
             if buffer === bufferManager.activeBuffer {
                 saveActiveBuffer()
             } else {
-                // Hand the write off to a background task so a slow disk can't
-                // stall the render loop. The buffer reference is captured but
-                // only used on the main actor after the write completes; the
-                // snapshot we serialize is value-typed and safe to send.
+                // Written in the background so a slow disk can't stall rendering; the buffer itself is only updated
+                // back on the main actor.
                 let path = buffer.filePath
                 let data = Data(buffer.textBuffer.text.utf8)
                 taskProvider.detachedTask(role: .work, priority: .utility) { [weak buffer] in
