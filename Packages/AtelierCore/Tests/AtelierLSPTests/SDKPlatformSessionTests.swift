@@ -108,6 +108,20 @@ struct SDKPlatformSessionTests {
     }
 
     @Test
+    func `a UIKit import after a dozen others still reaches the iOS session and its probe`() async throws {
+        let sessions = PlatformSessions()
+        let provider = SDKDocumentationProvider(sessions: { await sessions.make($0) })
+        let imports = (0 ..< 12).map { "import Module\($0)\n" }.joined() + "import UIKit\n"
+
+        let answer = try await provider.hover(query(imports + "let view = UIView()", hovering: "UIView"))
+
+        #expect(answer?.markdown == "Documented on iOS.")
+        let opened = try #require(await sessions.openedTexts(on: .iOS).first)
+        #expect(opened.contains("import UIKit"))
+        await provider.shutdown()
+    }
+
+    @Test
     func `each platform's session is made once`() async throws {
         let sessions = PlatformSessions()
         let provider = SDKDocumentationProvider(sessions: { await sessions.make($0) })
