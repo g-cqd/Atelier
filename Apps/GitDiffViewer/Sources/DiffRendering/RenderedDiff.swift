@@ -19,6 +19,13 @@ package struct GapMarker: Sendable, Hashable {
     package let isTrailing: Bool
 }
 
+/// A gap where a rendered text shows it: on the boundary between the two rows around the rows it hides (book DIFF-02).
+package struct RenderedGap: Sendable, Hashable {
+    /// The boundary, counted in rows above it: 0 lies above the first row, `rows.count` below the last.
+    package let boundary: Int
+    package let marker: GapMarker
+}
+
 package struct RowMeta: Sendable {
     package let kind: RowKind
     package let oldNumber: Int?
@@ -77,6 +84,8 @@ package final class RenderedText: @unchecked Sendable {
     package let palette: DiffPalette
     package let attributed: NSAttributedString
     package let rows: [RowMeta]
+    /// The gaps between rows, in ascending boundary order.
+    package let gaps: [RenderedGap]
     /// UTF-16 offset of each row's first unit, ascending.
     package let lineStarts: [Int]
     /// Character cells of the longest row, tabs counted as four, for sizing an unwrapped pane.
@@ -88,13 +97,15 @@ package final class RenderedText: @unchecked Sendable {
     package let lineHeight: CGFloat
 
     package init(
-        side: RenderedSide, palette: DiffPalette, attributed: NSAttributedString, rows: [RowMeta], lineStarts: [Int],
-        longestLine: Int, baselineOffset: CGFloat = 0, lineHeight: CGFloat? = nil
+        side: RenderedSide, palette: DiffPalette, attributed: NSAttributedString, rows: [RowMeta],
+        gaps: [RenderedGap], lineStarts: [Int], longestLine: Int, baselineOffset: CGFloat = 0,
+        lineHeight: CGFloat? = nil
     ) {
         self.side = side
         self.palette = palette
         self.attributed = attributed
         self.rows = rows
+        self.gaps = gaps
         self.lineStarts = lineStarts
         self.longestLine = longestLine
         self.baselineOffset = baselineOffset
@@ -126,6 +137,20 @@ package final class RenderedText: @unchecked Sendable {
             if lineStarts[middle] <= offset { low = middle + 1 } else { high = middle }
         }
         return max(low - 1, 0)
+    }
+
+    /// The gaps on the boundaries in `boundaries`, in order.
+    /// - Complexity: O(log gaps)
+    package func gaps(on boundaries: ClosedRange<Int>) -> ArraySlice<RenderedGap> {
+        var low = 0
+        var high = gaps.count
+        while low < high {
+            let middle = (low + high) / 2
+            if gaps[middle].boundary < boundaries.lowerBound { low = middle + 1 } else { high = middle }
+        }
+        var end = low
+        while end < gaps.count, gaps[end].boundary <= boundaries.upperBound { end += 1 }
+        return gaps[low ..< end]
     }
 }
 
