@@ -277,4 +277,67 @@ struct ToolDiscoveryTests {
             executableName: "ghost", overrideVariable: nil, customPath: nil, searchesToolchain: true)
         #expect(runner.specs.count > callsBefore)
     }
+
+    @Test
+    func `an xcrun probe cancelled with its lookup is not cached as a miss`() async throws {
+        let temp = TemporaryDirectory(prefix: "toolloc")
+        defer { temp.cleanup() }
+        let toolchainTool = URL(filePath: temp.file("toolchain/atelier-probe"))
+        try Self.makeExecutable(at: toolchainTool)
+        let firstProbe = AsyncLatch()
+        let runner = FakeProcessRunner { spec in
+            guard spec.executable.path == "/usr/bin/xcrun" else { return .success("") }
+            if !firstProbe.isOpen {
+                firstProbe.open()
+                // Never opened: this probe ends only when its lookup is cancelled.
+                try await AsyncLatch().wait()
+            }
+            return .success(toolchainTool.path + "\n")
+        }
+        let discovery = ToolDiscovery(
+            runner: runner, bundledDirectory: nil, homeDirectory: URL(filePath: temp.file("home")),
+            environment: ["SHELL": "/bin/zsh"], wellKnownDirectories: [])
+        let cancelled = Task {
+            await discovery.locate(
+                executableName: "atelier-probe", overrideVariable: nil, customPath: nil, searchesToolchain: true)
+        }
+        try await firstProbe.wait()
+        cancelled.cancel()
+        _ = await cancelled.value
+
+        let retried = await discovery.locate(
+            executableName: "atelier-probe", overrideVariable: nil, customPath: nil, searchesToolchain: true)
+
+        #expect(retried?.origin == .toolchain)
+    }
+
+    @Test
+    func `a version probe cancelled with its lookup is not cached`() async throws {
+        let temp = TemporaryDirectory(prefix: "toolloc")
+        defer { temp.cleanup() }
+        let tool = URL(filePath: temp.file("custom/swiftlint"))
+        try Self.makeExecutable(at: tool)
+        let firstProbe = AsyncLatch()
+        let runner = FakeProcessRunner { spec in
+            guard spec.arguments == ["--version"] else { return .success("") }
+            if !firstProbe.isOpen {
+                firstProbe.open()
+                // Never opened: this probe ends only when its lookup is cancelled.
+                try await AsyncLatch().wait()
+            }
+            return .success("0.65.1\n")
+        }
+        let discovery = ToolDiscovery(
+            runner: runner, bundledDirectory: nil, homeDirectory: URL(filePath: temp.file("home")),
+            environment: [:], wellKnownDirectories: [])
+        let location = ToolLocation(customPath: tool.path)
+        let cancelled = Task { await discovery.status(.swiftlint, location: location) }
+        try await firstProbe.wait()
+        cancelled.cancel()
+        _ = await cancelled.value
+
+        let retried = await discovery.status(.swiftlint, location: location)
+
+        #expect(retried.version == "0.65.1")
+    }
 }
