@@ -415,7 +415,13 @@ extension SideState {
     }
 
     private func reloadUnlessCurrent() async {
-        await loadTask?.value
+        // A load that starts while another is awaited, the one a custom ref chains or a new choice, lists afresh:
+        // its commit is the one to compare with, so the check waits for loads to stop starting.
+        var awaited: Task<Void, Never>?
+        while let running = loadTask, running != awaited {
+            awaited = running
+            await running.value
+        }
         guard case .gitRef(let repository, let ref) = source else { return }
         let listedAt = resolvedCommit
         let current: String?
