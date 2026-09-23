@@ -194,6 +194,9 @@ public actor SDKDocumentationProvider: HoverProvider {
         on service: SourceKitLSPService, chain: String, chainStartsUppercase: Bool, imports: [String],
         typePosition: Bool
     ) async -> HoverOutcome {
+        // A session reconnects on its next hover, so one that `shutdown()` ended while this query waited on its first
+        // probe would otherwise start a server again, in a probe directory its owner is removing.
+        guard !isShutDown else { return .unavailable }
         syntheticDocumentCounter += 1
         let uri = service.workspaceRoot.appending(path: "probe-\(syntheticDocumentCounter).swift").absoluteString
 
