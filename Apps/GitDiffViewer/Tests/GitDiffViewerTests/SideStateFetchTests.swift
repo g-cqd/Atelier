@@ -83,9 +83,11 @@ struct SideStateFetchTests {
 
     @Test
     func `a second fetch while one is running does nothing`() async throws {
+        let started = AsyncProbe<Void>()
         let gate = AsyncProbe<Void>()
         let runner = FakeProcessRunner.gated(remotes: Self.remotes) { spec in
             if spec.arguments.contains("fetch") {
+                started.send(())
                 _ = try await gate.next()
                 return .success("")
             }
@@ -95,8 +97,8 @@ struct SideStateFetchTests {
         sut.load(.directory(Self.root), repository: Self.info, entries: [])
 
         let first = Task { await sut.fetch() }
-        // Yields until the runner has actually received the fetch spec, so `isFetching` is certainly set.
-        while runner.specs.last(where: { $0.arguments.contains("fetch") }) == nil { await Task.yield() }
+        // The runner has the fetch spec in hand, so `isFetching` is certainly set.
+        _ = try await started.next()
 
         await sut.fetch()
         let fetchCallsWhileFirstWasRunning = runner.specs.count(where: { $0.arguments.contains("fetch") })
@@ -141,9 +143,11 @@ struct SideStateFetchTests {
     func `fetch never publishes remote names read for a repository this side has since moved away from`()
         async throws
     {
+        let started = AsyncProbe<Void>()
         let gate = AsyncProbe<Void>()
-        let runner = FakeProcessRunner { spec in
+        let runner = FakeProcessRunner.gated { spec in
             if spec.arguments.contains("remote") {
+                started.send(())
                 _ = try await gate.next()
                 return Self.remotesOutput(["origin"])
             }
@@ -153,8 +157,8 @@ struct SideStateFetchTests {
         sut.load(.directory(Self.root), repository: Self.info, entries: [])
 
         let fetchTask = Task { await sut.fetch() }
-        // Yields until the `remote` spec arrives, so the `remotes()` read is in flight against the first repository.
-        while runner.specs.last(where: { $0.arguments.contains("remote") }) == nil { await Task.yield() }
+        // The `remotes()` read is in flight against the first repository once the runner has its spec.
+        _ = try await started.next()
 
         let otherRoot = URL(filePath: "/other", directoryHint: .isDirectory)
         let otherInfo = RepositoryInfo(root: otherRoot, branches: [], tags: [], commits: [])
@@ -170,7 +174,7 @@ struct SideStateFetchTests {
 
     @Test
     func `switching the side to a different repository forgets the previous fetch state`() async throws {
-        let runner = FakeProcessRunner { spec in
+        let runner = FakeProcessRunner.gated(remotes: Self.remotes) { spec in
             spec.arguments.contains("fetch") ? .failure(1, error: "no route to host") : Self.remotesOutput()
         }
         let sut = makeSUT(runner: runner)
