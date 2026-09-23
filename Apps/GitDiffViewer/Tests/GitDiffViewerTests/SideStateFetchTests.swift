@@ -6,9 +6,8 @@ import Testing
 @testable import DiffComparison
 @testable import DiffGit
 
-/// ``SideState/fetch()``: the runner it reuses from the app's own ``SourceLoader``, the argv and isolation it
-/// sends git, and what it does with a success or a failure. ``SideState/loadRemotesIfNeeded()`` alongside it,
-/// since the fetch menu's remote name comes from there.
+/// ``SideState/fetch()``: its runner, the arguments and isolation it sends git, its success and failure paths,
+/// and the remote names ``SideState/loadRemotesIfNeeded()`` reads for it.
 @MainActor
 struct SideStateFetchTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
@@ -151,8 +150,7 @@ struct SideStateFetchTests {
         sut.load(.directory(Self.root), repository: Self.info, entries: [])
 
         let fetchTask = Task { await sut.fetch() }
-        // Yields until the runner has actually received the `remote` spec, so this side's `remotes()` read is
-        // certainly in flight against the original repository.
+        // Yields until the `remote` spec arrives, so the `remotes()` read is in flight against the first repository.
         while runner.specs.last(where: { $0.arguments.contains("remote") }) == nil { await Task.yield() }
 
         let otherRoot = URL(filePath: "/other", directoryHint: .isDirectory)

@@ -158,14 +158,8 @@ import Testing
         #expect(document.summary == "A property wrapper type that instantiates an observable object.")
     }
 
-    /// Pins the exact shape ``AtelierDocIndex/DocIndexHoverProvider`` produces for a name declared in more than one
-    /// file (`entries.prefix(3)` joined by `"\n\n---\n\n"`, each block its own `"```swift\n<signature>\n```\n\n<doc
-    /// comment>"`): the primary block's own summary and discussion must survive alongside every later block landing
-    /// as an ``HoverMarkdownStructurer/Document/extraCandidates`` entry with both its own declaration and its own
-    /// summary intact -- a regression pin for a live repro (hovering a small type name, `Reference`, declared under
-    /// three different parent types in the same project) that had shown a correctly-attributed "doc comment" footer
-    /// with no prose rendered, because the panel that consumes this shape used to drop a candidate's own summary
-    /// outright.
+    /// Pins the shape ``AtelierDocIndex/DocIndexHoverProvider`` gives a name declared in several files: the primary
+    /// block keeps its prose, and every later block becomes a candidate with its declaration and summary.
     @Test func multiEntryDocIndexAnswerKeepsEveryBlocksOwnSummary() {
         let markdown = """
             ```swift

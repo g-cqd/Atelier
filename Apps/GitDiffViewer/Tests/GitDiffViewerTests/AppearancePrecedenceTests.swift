@@ -2,8 +2,8 @@ import Testing
 
 @testable import DiffComparison
 
-/// ``AppearancePrecedence`` (Feature 2): an explicit light/dark pin always wins; `.system` only takes the theme's
-/// own luminance when ``ViewerSettings/matchesThemeAppearance`` is on and a theme is actually selected.
+/// ``AppearancePrecedence``: an explicit light/dark pin always wins; `.system` only takes the theme's own luminance
+/// when ``ViewerSettings/matchesThemeAppearance`` is on and a theme is actually selected.
 struct AppearancePrecedenceTests {
     @Test
     func `an explicit light pin wins even when the toggle is on and the theme is dark`() {

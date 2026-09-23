@@ -7,10 +7,8 @@ import Testing
 @testable import DiffComparison
 @testable import DiffGit
 
-/// ``DiffViewerModel/attachFreshness()``'s fetch wiring: a fetch that lands on a side parked on a remote-tracking
-/// ref re-runs the comparison against the moved ref, the way a manual reload would; a fetch on a local branch
-/// does not. Exercised through a real ``SideState/fetch()`` against a fake runner, not a synthetic callback, so
-/// the whole chain -- runner, remotes, fetch, refresh, re-compare -- is what is actually under test.
+/// The fetch wiring: a fetch re-runs the comparison when a side is parked on a remote-tracking ref, and not for a
+/// local branch; driven through a real ``SideState/fetch()`` over a fake runner.
 @MainActor
 struct DiffViewerModelFetchTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
@@ -91,8 +89,7 @@ struct DiffViewerModelFetchTests {
         await sut.right.fetch()
         try await taskProvider.waitForAllTasks()
 
-        // Still "right.txt": fetching moved no remote-tracking ref either side is parked on, so neither side
-        // reloads and `main`'s own (unmoved) tree is what both keep showing.
+        // Still "right.txt": neither side is parked on a remote-tracking ref, so neither reloads.
         #expect(sut.left.entries.map(\.relativePath) == ["right.txt"])
     }
 }

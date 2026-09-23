@@ -60,8 +60,7 @@ import Testing
 }
 
 extension String {
-    /// The UTF-16 offset of the first occurrence of `substring`, for asserting on a specific span in a test
-    /// fixture without hardcoding a fragile magic number.
+    /// The UTF-16 offset of the first occurrence of `substring`.
     fileprivate func utf16Distance(of substring: String) -> Int {
         guard let range = range(of: substring) else { return 0 }
         return utf16.distance(from: utf16.startIndex, to: range.lowerBound.samePosition(in: utf16)!)

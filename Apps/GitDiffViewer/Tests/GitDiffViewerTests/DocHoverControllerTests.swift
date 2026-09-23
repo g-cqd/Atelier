@@ -34,9 +34,7 @@ private final class WindowRetainer {
 @MainActor
 struct DocHoverControllerTests {
     private let text = "let alphaBeta = 1\nlet gammaDelta = 2\n"
-    /// `NSWindow` does not retain its content view's window relationship beyond what AppKit itself holds; nothing
-    /// else in the test keeps the window alive, so it would be deallocated (and the text view's `window` reset to
-    /// nil) right after the helper returns without this.
+    /// Keeps the test windows alive; nothing else holds them once a helper returns.
     private let retainedWindows = WindowRetainer()
 
     private func rendered() throws -> RenderedText {
@@ -51,7 +49,7 @@ struct DocHoverControllerTests {
         textView.textContainer?.size = NSSize(width: 800, height: DiffPaneMetrics.unboundedExtent)
         textView.textContentStorage?.textStorage?.setAttributedString(rendered.attributed)
         textView.textLayoutManager?.ensureLayout(for: textView.textLayoutManager!.documentRange)
-        // NSPopover needs a real window to show against.
+        // The panel needs a real window to attach to.
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 200), styleMask: [.borderless], backing: .buffered,
             defer: false)
@@ -60,10 +58,7 @@ struct DocHoverControllerTests {
         return textView
     }
 
-    /// Wraps `textView` in a real `NSScrollView` (also hosted in a real, retained window), the way a diff pane
-    /// actually attaches it -- ``DocHoverController/attach(to:rendered:)`` only observes
-    /// `NSView.boundsDidChangeNotification` from an enclosing scroll view's clip view, so a scroll-follow test
-    /// needs one.
+    /// A text view in a real scroll view and window, since the controller follows scrolls through the clip view.
     private func scrollingTextView(showing rendered: RenderedText) -> (scrollView: NSScrollView, textView: NSTextView) {
         let textView = NSTextView(usingTextLayoutManager: true)
         textView.textContainerInset = NSSize(width: 0, height: DiffPaneMetrics.containerInset)
@@ -151,10 +146,7 @@ struct DocHoverControllerTests {
         #expect(controller.isPopoverVisible == false)
     }
 
-    /// A collapsed ``FileCardBody`` unmounts its pane entirely, so this never happens in practice -- but a pane
-    /// whose backing render has gone away for any other reason (a detached-storage race, a stale coordinator) must
-    /// cost nothing to hover over: no hit-test against the text view, no task spawned, no resolver call. This is
-    /// the perf-relevant contract behind why hovering a card with no live content is free.
+    /// Hovering a pane whose render has gone away costs nothing: no hit-test, no task, no resolver call.
     @Test
     func `pointerMoved with no rendered content does zero resolver or hit-test work`() async throws {
         let rendered = try rendered()

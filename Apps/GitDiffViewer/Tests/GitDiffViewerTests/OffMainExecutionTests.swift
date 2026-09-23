@@ -12,19 +12,16 @@ import Testing
 @testable import DiffRendering
 @testable import DiffTextKit
 
-/// Whether the calling thread is the process' main thread; a private copy of the same probe the production
-/// `@concurrent` seams assert with, so these tests can observe the same executor contract from the outside.
+/// Whether the calling thread is the main thread.
 private func isOnMainThread() -> Bool {
     pthread_main_np() != 0
 }
 
-/// Proves the `@concurrent` seams this offload wave introduced actually run off the main actor when called from
-/// it, and that they still answer exactly what their synchronous counterpart would (SE-0461 changes only where
-/// work runs, never what it computes).
+/// The `@concurrent` seams run off the main actor when called from it, and answer what their synchronous
+/// counterparts do.
 @MainActor
 struct OffMainExecutionTests {
-    /// A minimal companion seam with no production purpose beyond this test: proves `@concurrent` itself
-    /// guarantees the global executor under this package's settings, independent of any one wrapper's own logic.
+    /// A bare `@concurrent` function, proving the attribute alone leaves the main actor under this package's settings.
     @concurrent
     private static func probeIsOnMain() async -> Bool {
         isOnMainThread()

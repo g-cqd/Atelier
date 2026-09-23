@@ -8,11 +8,8 @@ import Testing
 @testable import DiffRendering
 @testable import DiffTextKit
 
-/// Two windows, and the Settings window, each hold their own ``ViewerSettings`` instance over the same
-/// `UserDefaults` suite (see `ComparisonWindow`'s own doc comment on why). A base-default edit made through one of
-/// them now live-propagates to every other one's unoverridden keys, in-process, without any of them having to
-/// reopen -- these tests are the other half of the contract ``ProjectSettingsTests`` already covers for adopting a
-/// project in the first place.
+/// Instances over the same `UserDefaults`, one per window and one for Settings: a base-default edit through one
+/// reaches every other instance's unoverridden keys without a reopen.
 @MainActor
 struct ViewerSettingsBroadcastTests {
     @Test
@@ -57,8 +54,7 @@ struct ViewerSettingsBroadcastTests {
 
         #expect(!b.wrapsLines)
         #expect(!c.wrapsLines)
-        // c reacts to a's one base edit exactly once: were b's own reload (itself triggered by a's broadcast) to
-        // re-broadcast in turn, c would see this fire a second time.
+        // Exactly once: a re-broadcast of b's own reload would fire it again.
         #expect(cChanges == [.appearance])
     }
 

@@ -7,13 +7,8 @@ import Testing
 @testable import DiffComparison
 @testable import DiffGit
 
-/// Classification, debounce coalescing, and teardown behavior of ``RepositoryFreshness``, run against a synthetic
-/// ``WatchEventSource`` instead of real FSEvents/`DispatchSource`s.
-///
-/// Timing is driven by a virtual ``AemiTesting/TestClock`` (`waitForSleepers()` then `advance(by:)`) rather than a
-/// real debounce: no test here ever depends on how fast the shared cooperative/`MainActor` executor happens to be
-/// under a full, parallel suite run, only on the clock the test itself advances. The moment a callback actually ran
-/// is then confirmed through ``AemiTesting/AsyncProbe``, fed from the callback under test — event-driven, no poll.
+/// Classification, debounce coalescing and teardown of ``RepositoryFreshness``, against a synthetic
+/// ``WatchEventSource`` and a virtual clock.
 @MainActor
 struct RepositoryFreshnessTests {
     private let taskProvider = TaskProviderSpy()
@@ -87,9 +82,7 @@ struct RepositoryFreshnessTests {
         URL(filePath: path, directoryHint: .isDirectory)
     }
 
-    /// Sends `event`, waits for the debounce task it schedules to actually be sleeping on `clock` (the
-    /// deterministic stand-in for "routing already ran"), advances past `duration`, then waits for `probe` to
-    /// confirm the callback fired — three separate, event-driven rendezvous, no real time and no poll anywhere.
+    /// Sends `event`, waits for its debounce to sleep on `clock`, advances past `duration`, then waits for `probe`.
     private func fire(
         _ event: FileWatcher.FileWatchEvent, on source: FakeWatchEventSource, after duration: Duration,
         probe: AsyncProbe<Void>
@@ -100,11 +93,8 @@ struct RepositoryFreshnessTests {
         _ = try await probe.next()
     }
 
-    /// Stops `sut`'s watcher and drains every task behind it before the test returns. Without this, a test that
-    /// merely lets `sut` fall out of scope leaves its consumer task and the `Task { await watcher.stop() }`
-    /// `deinit` spawns to unwind on their own time, off any task this suite's `taskProvider` still knows about;
-    /// across dozens of tests those unawaited chains pile up and starve the cooperative thread pool for the whole
-    /// process. Draining here bounds every test to the resources its own watcher actually used.
+    /// Stops `sut`'s watcher and drains every task behind it: tasks left to unwind on their own pile up across the
+    /// suite and starve the cooperative pool.
     private func drain(_ sut: RepositoryFreshness) async throws {
         sut.teardown()
         try await taskProvider.waitForAllTasks()
@@ -121,9 +111,7 @@ struct RepositoryFreshnessTests {
         sut.comparisonChanged(rightSource: .directory(root), repositoryRoot: root)
 
         let source = try #require(factory.latest)
-        // The consumer task's `watchDirectory`/`watchFile` calls happen asynchronously; driving one event all the
-        // way to a fired callback is the deterministic way to know they already ran (routing only starts once
-        // every `watch*` call ahead of it in `attach(root:)` has completed).
+        // Watches register asynchronously; a fired callback proves every `watch*` call already ran.
         try await fire(.fileChanged("/repo/a.swift"), on: source, after: Self.treeDebounce, probe: probe)
 
         #expect(await source.watchedDirectories.contains("/repo"))
@@ -162,16 +150,14 @@ struct RepositoryFreshnessTests {
         sut.onTreeChanged = { probe.send(()) }
         sut.comparisonChanged(rightSource: .directory(root), repositoryRoot: root)
         let source = try #require(factory.latest)
-        // Same rendezvous as "attaching watches the tree root...": driving one event to a fired callback proves
-        // every `watch*` call ahead of it in `attach(root:)` already ran.
+
         try await fire(.fileChanged(worktreeRoot + "/a.swift"), on: source, after: Self.treeDebounce, probe: probe)
 
         #expect(await source.watchedDirectories.contains(worktreeRoot))
         #expect(await source.watchedFiles.contains(privateGitDir + "/HEAD"))
         #expect(await source.watchedFiles.contains(commonGitDir + "/packed-refs"))
         #expect(await source.watchedDirectories.contains(commonGitDir + "/refs"))
-        // Never watched at the worktree's own (nonexistent, for this purpose) `<root>/.git/HEAD` or
-        // `<root>/.git/refs`: those paths would never receive the real HEAD or refs' events.
+        // Not the plain-repository paths, which a linked worktree's HEAD and refs never touch.
         #expect(await !source.watchedFiles.contains(worktreeRoot + "/.git/HEAD"))
         #expect(await !source.watchedDirectories.contains(worktreeRoot + "/.git/refs"))
         try await drain(sut)
@@ -212,9 +198,7 @@ struct RepositoryFreshnessTests {
         clock.advance(by: .milliseconds(300))
         #expect(treeChanges == 0)
 
-        // A second event well inside the window cancels the pending wait and restarts it: waiting for a fresh
-        // registration (rather than just "a sleeper is queued") is what makes this deterministic even while the
-        // first, cancelled sleeper is still momentarily in the queue.
+        // Waits for a fresh sleeper registration, since the cancelled one may still be queued.
         let mark = clock.registrationMark()
         source.send(.fileChanged("/repo/b.swift"))
         try await clock.waitForSleepers(1, after: mark)
@@ -272,8 +256,7 @@ struct RepositoryFreshnessTests {
         sut.comparisonChanged(rightSource: .directory(root), repositoryRoot: root)
         let source = try #require(factory.latest)
 
-        // The skipped path never schedules anything; a legitimate event sent right after proves the pipeline is
-        // still live and that exactly one reload happened — the one the skipped path could never have produced.
+        // A legitimate event after the skipped one proves the pipeline is live and only it reloaded.
         source.send(.fileChanged("/repo/node_modules/left-pad/index.js"))
         try await fire(.fileChanged("/repo/Sources/Foo.swift"), on: source, after: Self.treeDebounce, probe: probe)
 
@@ -300,8 +283,7 @@ struct RepositoryFreshnessTests {
         sut.comparisonChanged(rightSource: .directory(repositoryB), repositoryRoot: repositoryB)
         let freshSource = try #require(factory.all.dropFirst().first)
 
-        // The stale watcher's event can never schedule a reload once superseded (the generation guard drops it
-        // outright, with no timing dependency); a fresh event proves the pipeline moved on and settles the count.
+        // The stale event is dropped; a fresh one proves the pipeline moved on and settles the count.
         staleSource.send(.fileChanged("/repoA/a.swift"))
         try await fire(.fileChanged("/repoB/b.swift"), on: freshSource, after: Self.treeDebounce, probe: probe)
 
@@ -343,8 +325,7 @@ struct RepositoryFreshnessTests {
     }
 }
 
-/// A synthetic ``WatchEventSource``: records what it was asked to watch and lets a test push events on demand,
-/// with no FSEvents/`DispatchSource` behind it.
+/// A synthetic ``WatchEventSource`` that records what it watches and lets a test push events.
 private actor FakeWatchEventSource: WatchEventSource {
     nonisolated let events: AsyncStream<FileWatcher.FileWatchEvent>
     private let continuation: AsyncStream<FileWatcher.FileWatchEvent>.Continuation
@@ -375,16 +356,14 @@ private actor FakeWatchEventSource: WatchEventSource {
         continuation.finish()
     }
 
-    /// Delivers `event` to whatever is currently iterating ``events``. Nonisolated and synchronous, matching
-    /// `FileWatcher.suppressNotifications`'s shape, so a test can call it without an `await`.
+    /// Delivers `event` to whatever is iterating ``events``; synchronous, so a test calls it without `await`.
     nonisolated func send(_ event: FileWatcher.FileWatchEvent) {
         continuation.yield(event)
     }
 }
 
-/// Builds a fresh ``FakeWatchEventSource`` per attachment, the way `RepositoryFreshness.init`'s real default
-/// (`{ FileWatcher() }`) does, and keeps every one so a test can tell a superseded attachment's source from its
-/// successor's.
+/// Builds a fresh ``FakeWatchEventSource`` per attachment and keeps each, so a test can tell a superseded source
+/// from its successor.
 private final class WatcherFactory: Sendable {
     private let sources = Mutex<[FakeWatchEventSource]>([])
 

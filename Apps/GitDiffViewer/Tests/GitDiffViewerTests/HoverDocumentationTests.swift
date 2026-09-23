@@ -196,16 +196,14 @@ private func query(line: Int = 0, column: Int = 0) -> HoverQuery {
         model.comparisonChanged(
             root: nil, files: [firstChanged], corpusReader: reader, corpusSource: .directory(Self.rightRoot),
             corpusEntries: [restEntry])
-        // Waits for the stale pass to actually start reading the corpus file (and block on its gate) before a
-        // newer comparison supersedes it, so the guard this test wants is exercised rather than skipped.
+        // Waits until the stale pass blocks on its corpus read, so the newer comparison supersedes it mid-flight.
         _ = try await reader.contentRequests.next()
 
         let secondChanged = HoverDocumentationModel.FileEntry(
             index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift", oldText: "let x = 1\n",
             newText: "let x = 1\n", oldBlobID: "old2", newBlobID: "new2")
         model.comparisonChanged(root: nil, files: [secondChanged])
-        // Only now does the stale pass's blocked read resolve, late enough that landing would clobber the newer
-        // comparison's corpus if nothing guarded against it.
+        // The stale read resolves only now, when landing would clobber the newer comparison's corpus.
         gate.send(())
 
         // Give the stale pass every chance to land wrongly before asserting it never did.
