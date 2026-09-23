@@ -9,6 +9,8 @@ public import KittyRenderer
 public import KittySearch
 import KittyWorkspace
 
+import class AemiRuntime.BlockingOffloadPool
+
 public enum SearchStepDirection {
     case next
     case previous
@@ -585,12 +587,8 @@ public func triggerWorkspaceSearch(state: EditorState) {
     let searchPool = state.searchPool
 
     state.workspaceSearchTask = taskProvider.task(role: .work) { @MainActor in
-        // Enumerate files off the main actor
-        let files =
-            await taskProvider.detachedTask(role: .work) {
-                enumerateSearchableFiles(rootPath: rootPath)
-            }
-            .value
+        // The walk blocks on the file system, so it runs on the pool, off the main actor and the cooperative pool.
+        let files = (try? await searchPool.run { enumerateSearchableFiles(rootPath: rootPath) }) ?? []
 
         guard !Task.isCancelled else { return }
 
