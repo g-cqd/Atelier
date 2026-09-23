@@ -20,13 +20,15 @@ private func makeTextView(rendered: RenderedText, width: CGFloat = 800) -> NSTex
 }
 
 /// The pixel a test wants to click, computed the same way the monospaced system palette lays rows out: uniform
-/// row height and character width, the container inset and the line fragment padding as the only offsets.
+/// row height and character width, the container inset, the line fragment padding, and the bands of the gaps
+/// between the rows above as the only offsets.
 @MainActor
 private func point(row: Int, column: Int, in rendered: RenderedText, centered: Bool = true) -> NSPoint {
     let charWidth = ("0" as NSString).size(withAttributes: [.font: rendered.palette.font]).width
     let x =
         DiffPaneMetrics.lineFragmentPadding + CGFloat(column) * charWidth + (centered ? charWidth / 2 : 0)
-    let y = DiffPaneMetrics.containerInset + (CGFloat(row) + 0.5) * rendered.lineHeight
+    let bands = (0 ..< row).reduce(0) { $0 + rendered.bandSpacing(afterRow: $1) }
+    let y = DiffPaneMetrics.containerInset + (CGFloat(row) + 0.5) * rendered.lineHeight + bands
     return NSPoint(x: x, y: y)
 }
 

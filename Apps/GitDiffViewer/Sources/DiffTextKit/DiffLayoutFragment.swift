@@ -27,6 +27,8 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
     /// The overlay diagnostics are read from, and this fragment's row within it; set together, at layout time.
     package var overlay: DiagnosticOverlay?
     package var rowIndex: Int = -1
+    /// The band of a gap after this row, at the bottom of the fragment, which stays empty: no row colour reaches it.
+    package var bandBelow: CGFloat = 0
 
     package override var renderingSurfaceBounds: CGRect {
         super.renderingSurfaceBounds.union(backgroundRect(origin: .zero))
@@ -115,15 +117,15 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
     }
 
     /// Spans the whole document width (viewport or longest line, whichever is wider) for every line of the
-    /// paragraph, including wrapped continuation lines. Kept bounded because oversized fragment surfaces exceed the
-    /// maximum layer size and then draw nothing at all.
+    /// paragraph, including wrapped continuation lines, down to the band of a gap after it. Kept bounded because
+    /// oversized fragment surfaces exceed the maximum layer size and then draw nothing at all.
     private func backgroundRect(origin: CGPoint) -> CGRect {
         let width = max(metrics?.width ?? 0, layoutFragmentFrame.width) + 2 * Self.horizontalOverdraw
         return CGRect(
             x: origin.x - layoutFragmentFrame.minX - Self.horizontalOverdraw,
             y: origin.y,
             width: width,
-            height: layoutFragmentFrame.height
+            height: max(layoutFragmentFrame.height - bandBelow, 0)
         )
     }
 

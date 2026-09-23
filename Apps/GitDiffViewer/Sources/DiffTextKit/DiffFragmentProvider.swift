@@ -35,7 +35,10 @@ package final class DiffFragmentProvider: NSObject, @preconcurrency NSTextLayout
             fragment.backgroundColor = rendered.palette.rowBackground(
                 for: row.kind, side: rendered.side, isMoved: row.isMoved)
         }
-        if !rendered.rows.isEmpty { fragment.rowIndex = rendered.rowIndex(containing: offset) }
+        if !rendered.rows.isEmpty {
+            fragment.rowIndex = rendered.rowIndex(containing: offset)
+            fragment.bandBelow = rendered.bandSpacing(afterRow: fragment.rowIndex)
+        }
         return fragment
     }
 }
