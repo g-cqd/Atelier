@@ -404,3 +404,117 @@ struct DiffGutterGapHandleTests {
         #expect(fixture.gutter.visibleRect.maxY >= moved.y + GapHandleLayout.halfHeight)
     }
 }
+
+/// The gaps on the edges of a text and of its files: which boundaries the gutter finds there, and which halves it
+/// draws on them.
+@MainActor
+struct DiffGutterGapEdgeTests {
+    /// An embedded gutter over `rendered`, in an offscreen window, with the layout it reads, which it holds weakly.
+    private func gutter(over rendered: RenderedText, style: GutterStyle) -> (DiffGutterView, StaticTextLayout, NSWindow)
+    {
+        let layout = StaticTextLayout(rendered: rendered)
+        layout.layOut(mode: .none, viewportWidth: 800)
+        let gutter = DiffGutterView(clipView: nil)
+        gutter.style = style
+        gutter.source = layout
+        gutter.rendered = rendered
+        gutter.frame = NSRect(x: 0, y: 0, width: gutter.thickness, height: layout.height)
+        let window = NSWindow(
+            contentRect: gutter.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView?.addSubview(gutter)
+        return (gutter, layout, window)
+    }
+
+    /// The gutter's pixels at `points`, as it draws now.
+    private func pixels(of gutter: DiffGutterView, at points: [NSPoint]) -> [NSColor?] {
+        guard let bitmap = gutter.bitmapImageRepForCachingDisplay(in: gutter.bounds) else { return [] }
+        gutter.cacheDisplay(in: gutter.bounds, to: bitmap)
+        let scale = gutter.window?.backingScaleFactor ?? 1
+        return points.map { bitmap.colorAt(x: Int($0.x * scale), y: Int($0.y * scale)) }
+    }
+
+    /// Twenty lines changed at line 10, shown with a line of context: gaps above and below the one hunk.
+    private func changedAtLineTen() -> (old: String, new: String) {
+        let old = (1 ... 20).map { "let value\($0) = \($0)" }
+        var new = old
+        new[9] = "let value10 = ten"
+        return (old.joined(separator: "\n") + "\n", new.joined(separator: "\n") + "\n")
+    }
+
+    @Test
+    func `the gutter finds the gaps at the top and the end of the text on its own edges`() throws {
+        let text = changedAtLineTen()
+        let rendered = try #require(
+            DiffRenderer.render(
+                oldText: text.old, newText: text.new, language: .plain, layout: .changes(context: 1, expansions: [:])
+            )
+            .new)
+        let (gutter, layout, _) = gutter(over: rendered, style: .new)
+        defer { withExtendedLifetime(layout) {} }
+        var boundaries: [Int: CGFloat] = [:]
+
+        gutter.forEachGap(in: gutter.bounds) { gap, y in boundaries[gap.boundary] = y }
+
+        #expect(boundaries[0] == 0)
+        #expect(boundaries[rendered.rows.count] == gutter.bounds.maxY)
+    }
+
+    @Test
+    func `the top of the text shows a lower half under its hairline, and the end an upper half over its own`() throws {
+        let text = changedAtLineTen()
+        let rendered = try #require(
+            DiffRenderer.render(
+                oldText: text.old, newText: text.new, language: .plain, layout: .changes(context: 1, expansions: [:])
+            )
+            .new)
+        let (gutter, layout, _) = gutter(over: rendered, style: .new)
+        defer { withExtendedLifetime(layout) {} }
+        let lane = GapHandleLayout.laneWidth / 2
+        let bottom = gutter.bounds.maxY
+
+        // The gutter's background, the lower half's grip under the top edge, and the upper half's over the bottom one.
+        let samples = pixels(
+            of: gutter, at: [NSPoint(x: 0.5, y: 20), NSPoint(x: lane, y: 3.5), NSPoint(x: lane, y: bottom - 3.5)])
+
+        #expect(samples.count == 3)
+        #expect(samples.dropFirst().allSatisfy { $0 != samples.first })
+    }
+
+    @Test
+    func `a gap draws only the halves it offers, as on either side of a file's header`() throws {
+        let text = changedAtLineTen()
+        let files = ["a.txt", "b.txt"]
+            .map {
+                FileDiffInput(title: $0, oldText: text.old, newText: text.new, language: .plain)
+            }
+        let rendered = try #require(DiffRenderer.renderCombined(files: files, context: 1, expansions: [:]).unified)
+        let (gutter, layout, _) = gutter(over: rendered, style: .dual)
+        defer { withExtendedLifetime(layout) {} }
+        // The second file's header, between the first file's trailing gap and the second file's leading one.
+        let header = try #require(rendered.rows.indices.dropFirst().first { rendered.rows[$0].kind == .header })
+        var headerTop: CGFloat?
+        var headerHeight: CGFloat = 0
+        gutter.forEachFragment(in: gutter.bounds) { fragment, _, row, y in
+            guard row == header else { return }
+            headerTop = y
+            headerHeight = fragment.layoutFragmentFrame.height
+        }
+        let top = try #require(headerTop)
+        let lane = GapHandleLayout.laneWidth / 2
+
+        // Over the header, clear of both hairlines, where the halves the gaps do not offer would lie; then the
+        // trailing gap's upper half over the row above the header, and the leading gap's lower half under it.
+        let samples = pixels(
+            of: gutter,
+            at: [
+                NSPoint(x: lane, y: top + 3), NSPoint(x: lane, y: top + headerHeight - 3), NSPoint(x: 0.5, y: top + 7),
+                NSPoint(x: lane, y: top - 3.5), NSPoint(x: lane, y: top + headerHeight + 3.5)
+            ])
+
+        #expect(samples.count == 5)
+        #expect(samples[0] == samples[2])
+        #expect(samples[1] == samples[2])
+        #expect(samples[3] != samples[2])
+        #expect(samples[4] != samples[2])
+    }
+}
