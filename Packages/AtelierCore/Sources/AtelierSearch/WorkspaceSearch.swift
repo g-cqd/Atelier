@@ -6,8 +6,18 @@ import System
 
 public import class AemiRuntime.BlockingOffloadPool
 
+/// Searches `files` for `query`, each file read on `pool`.
+/// - Parameters:
+///   - query: What to find, reported back in the result; an empty query or an invalid regular expression finds nothing.
+///   - files: Absolute paths, as ``enumerateSearchableFiles(rootPath:excludeGlobs:includeHidden:gitIgnoredPaths:)``
+///     lists them.
+///   - openBuffers: The lines of the files open in the editor, searched instead of what is on disk.
+///   - pool: The threads files are read on, so that no cooperative thread waits on the disk.
+///   - maxResults: The match count past which the search stops.
+///   - onProgress: Called with each file's matches as the file is done.
+/// - Returns: The matches of every file, with the counts and the query they answer.
 public func searchWorkspace(
-    pattern: SearchPattern,
+    query: SearchQuery,
     files: [String],
     openBuffers: [String: [String]],
     pool: BlockingOffloadPool,
@@ -18,6 +28,11 @@ public func searchWorkspace(
     let startTime = clock.now
 
     let counters = SearchCounters()
+    guard let pattern = compilePattern(query) else {
+        return SearchRunResult(
+            query: query, results: [], totalMatchCount: 0, filesSearched: 0, filesMatched: 0, durationMilliseconds: 0,
+            wasCancelled: Task.isCancelled)
+    }
 
     // At least one worker, so that an empty file list divides by one.
     let workerCount = max(1, min(files.count, ProcessInfo.processInfo.activeProcessorCount))
@@ -81,7 +96,7 @@ public func searchWorkspace(
 
     let snapshot = counters.snapshot()
     return SearchRunResult(
-        query: SearchQuery(text: ""),
+        query: query,
         results: snapshot.results,
         totalMatchCount: snapshot.totalMatchCount,
         filesSearched: snapshot.filesSearched,
