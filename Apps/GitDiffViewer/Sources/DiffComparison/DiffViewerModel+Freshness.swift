@@ -1,4 +1,5 @@
 import AemiCore
+import AtelierFileTree
 import DiffGit
 import Foundation
 
@@ -6,8 +7,15 @@ import Foundation
 extension DiffViewerModel {
     /// Builds and wires this window's freshness watcher, gated by ``ViewerSettings/autoRefresh``. The watcher only
     /// attaches while the right side is the repository's own working tree.
-    package func attachFreshness() {
-        let model = RepositoryFreshness(taskProvider: taskProvider, isEnabled: settings.autoRefresh)
+    /// - Parameters:
+    ///   - clock: Drives the watcher's debounces; tests inject a virtual one.
+    ///   - makeWatcher: Builds the watcher's event source; a test substitutes a synthetic one.
+    package func attachFreshness(
+        clock: any Clock<Duration> = ContinuousClock(),
+        makeWatcher: @escaping @Sendable () -> any WatchEventSource = { FileWatcher() }
+    ) {
+        let model = RepositoryFreshness(
+            taskProvider: taskProvider, isEnabled: settings.autoRefresh, clock: clock, makeWatcher: makeWatcher)
         model.onTreeChanged = { [weak self] in self?.right.reload() }
         model.onHeadChanged = { [weak self] in self?.reloadForHeadChange() }
         model.onRefsChanged = { [weak self] in self?.refreshBothSidesRepositoryInfo() }

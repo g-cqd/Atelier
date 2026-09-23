@@ -4,42 +4,60 @@ package import DiffGit
 package import Foundation
 
 /// The ``AtelierFileTree/FileWatcher`` API ``RepositoryFreshness`` drives, as a protocol so a test can inject a
-/// synthetic source.
+/// synthetic source: one event stream over every directory watched.
 package protocol WatchEventSource: Sendable {
     var events: AsyncStream<FileWatcher.FileWatchEvent> { get }
     func watchDirectory(_ path: String) async
-    func watchFile(_ path: String) async
-    func unwatchFile(_ path: String) async
     func stop() async
 }
 
 extension FileWatcher: WatchEventSource {}
 
-/// Watches a working-tree comparison's on-disk files and `.git` metadata for changes made outside the app (a
-/// branch switch, a pull, an edit in another editor, a `git add`), and tells its owner when to reload or to re-read
-/// git's status. Each kind of change fires its callback on a trailing debounce, so a git operation touching many
-/// files produces one reload.
+/// Watches a working-tree comparison's files and git metadata for changes made outside the app (an edit in another
+/// editor, a `git add`, a commit, a checkout, a fetch) and tells its owner what to read again. One FSEvents stream
+/// covers the tree and both git dirs, which a linked worktree keeps outside the tree; git's renames of `HEAD`, the
+/// index and the refs arrive as changes to those paths, however often git replaces the files. The stream outlives
+/// every reload of the same comparison, so a save made while a reload runs keeps its pending debounce. Each kind of
+/// change fires its callback on a trailing debounce, so a git operation touching many files produces one reload.
 @MainActor
 package final class RepositoryFreshness {
-    /// The normalized paths one comparison watches, computed once at attach.
-    struct WatchedPaths: Sendable {
+    /// The paths one comparison watches, canonical as FSEvents reports them: symlinks resolved, and `/var/…`
+    /// spelled `/private/var/…`.
+    struct WatchedPaths: Sendable, Equatable {
+        /// The working tree's root.
         let root: String
+        /// This worktree's own git dir, holding its `HEAD` and index: `<root>/.git` in a plain repository.
         let gitDir: String
-        let head: String
-        let packedRefs: String
-        let refs: String
+        /// The git dir every worktree of the repository shares, holding the refs: ``gitDir`` in a plain repository.
+        let commonDir: String
 
+        var head: String { gitDir + "/HEAD" }
         /// The index, which staging, unstaging and committing rewrite.
         var index: String { gitDir + "/index" }
+        var refs: String { commonDir + "/refs" }
+        var packedRefs: String { commonDir + "/packed-refs" }
+
+        /// What the one stream watches, each directory once: the root holds both git dirs in a plain repository,
+        /// and in a linked worktree the common dir holds the private one.
+        var directories: [String] {
+            [root, gitDir, commonDir]
+                .reduce(into: []) { unique, directory in
+                    if !unique.contains(directory) { unique.append(directory) }
+                }
+        }
     }
 
-    /// Where a watched path landed, hence which callback (if any) its event feeds.
+    /// What a reported path means for the comparison, hence which callbacks its event feeds.
     enum Classification: Equatable {
-        case tree
+        /// A file or folder of the working tree, named relative to its root.
+        case tree(String)
         case head
         case refs
-        /// The index, or the git dir that holds it: what is staged moved, not what the files hold.
         case index
+        /// A directory holding what the watcher follows. FSEvents reports one when it lost track of the changes below
+        /// it, and the watcher when its buffer overflowed: anything below may have changed. `HEAD`, the refs and the
+        /// index are read again, and the tree too when it lies below.
+        case rescan(includesTree: Bool)
         case ignored
     }
 
@@ -50,12 +68,15 @@ package final class RepositoryFreshness {
     private let makeWatcher: @Sendable () -> any WatchEventSource
 
     private var watcher: (any WatchEventSource)?
+    /// The paths the running watcher follows; nil while none runs. The same paths keep the watcher, and with it the
+    /// pending debounces, across every reload of one comparison.
+    private var attachedPaths: WatchedPaths?
     private var consumerTask: Task<Void, Never>?
     private var treeTask: Task<Void, Never>?
     private var headTask: Task<Void, Never>?
     private var refsTask: Task<Void, Never>?
     private var indexTask: Task<Void, Never>?
-    /// Bumped by every ``teardown()`` and ``attach(root:)``; events and debounces from an older generation are dropped.
+    /// Bumped by every ``teardown()`` and every attach; events and debounces from an older generation are dropped.
     private var generation = 0
 
     private var lastRightSource: ComparisonSource?
@@ -64,9 +85,9 @@ package final class RepositoryFreshness {
 
     /// A tree file changed; the owner should reload the right side's entries.
     package var onTreeChanged: (() -> Void)?
-    /// `.git/HEAD` changed, so the working tree's diff base may have moved; the owner should compare afresh.
+    /// `HEAD` changed, as a checkout or a branch switch leaves it: a side on `HEAD` may now name another commit.
     package var onHeadChanged: (() -> Void)?
-    /// A loose or packed ref other than HEAD changed, such as a fetch moving a remote-tracking branch.
+    /// A loose or packed ref changed, as a commit, a fetch or a new branch or tag leaves it.
     package var onRefsChanged: (() -> Void)?
     /// The index changed, as staging, unstaging or a commit leaves it; the owner should re-read git's status, not
     /// the files, whose contents did not change.
@@ -105,7 +126,8 @@ package final class RepositoryFreshness {
         }
     }
 
-    /// Attaches to the right side when it is the working tree at `repositoryRoot`, and detaches otherwise.
+    /// Attaches to the right side when it is the working tree at `repositoryRoot`, and detaches otherwise. The same
+    /// comparison again, as every reload reports it, keeps the running watcher.
     package func comparisonChanged(rightSource: ComparisonSource?, repositoryRoot: URL?) {
         lastRightSource = rightSource
         lastRepositoryRoot = repositoryRoot
@@ -119,9 +141,11 @@ package final class RepositoryFreshness {
         refreshAttachment()
     }
 
-    /// Stops watching and cancels every pending debounce, keeping the last comparison for a later re-attach.
+    /// Stops watching and cancels every pending debounce, keeping the last comparison so a later
+    /// ``comparisonChanged(rightSource:repositoryRoot:)`` or ``setEnabled(_:)`` attaches afresh.
     package func teardown() {
         generation &+= 1
+        attachedPaths = nil
         consumerTask?.cancel()
         consumerTask = nil
         treeTask?.cancel()
@@ -137,39 +161,41 @@ package final class RepositoryFreshness {
         taskProvider.task { await watcher.stop() }
     }
 
+    /// Attaches, detaches or keeps the watcher. The check comes before ``teardown()``, which would stop the stream
+    /// and drop the pending debounces of a comparison that did not change; it compares every watched path, so a git
+    /// dir that moved attaches afresh.
     private func refreshAttachment() {
+        let desired = desiredPaths()
+        guard desired != attachedPaths else { return }
         teardown()
-        guard isEnabled, case .directory(let treeRoot) = lastRightSource, let lastRepositoryRoot,
-            treeRoot.standardizedFileURL == lastRepositoryRoot.standardizedFileURL
-        else { return }
-        attach(root: lastRepositoryRoot)
+        guard let desired else { return }
+        attach(desired)
     }
 
-    private func attach(root: URL) {
+    /// The paths to watch for the last comparison: none while disabled, or unless the right side is the
+    /// repository's own working tree.
+    private func desiredPaths() -> WatchedPaths? {
+        guard isEnabled, case .directory(let treeRoot) = lastRightSource, let repositoryRoot = lastRepositoryRoot
+        else { return nil }
+        // Git names the root by its real path, while a folder chosen through a symlink keeps the link's.
+        let root = Self.canonical(Self.normalizedPath(repositoryRoot))
+        guard Self.canonical(Self.normalizedPath(treeRoot)) == root else { return nil }
+        // In a linked worktree `.git` is a pointer file, and its HEAD and shared refs live outside the root.
+        let location = GitMetadataLocation.resolve(root: root, read: Self.readGitMetadataFile)
+        return WatchedPaths(
+            root: root, gitDir: Self.canonical(location.gitDir), commonDir: Self.canonical(location.commonDir))
+    }
+
+    private func attach(_ paths: WatchedPaths) {
         generation &+= 1
         let generation = generation
-
-        // In a linked worktree `.git` is a pointer file, and its HEAD and shared refs can live outside `root`.
-        let location = GitMetadataLocation.resolve(root: Self.normalizedPath(root), read: Self.readGitMetadataFile)
-        let paths = WatchedPaths(
-            root: Self.normalizedPath(root),
-            gitDir: location.gitDir,
-            head: location.gitDir + "/HEAD",
-            packedRefs: location.commonDir + "/packed-refs",
-            refs: location.commonDir + "/refs")
-
+        attachedPaths = paths
         let watcher = makeWatcher()
         self.watcher = watcher
-
         consumerTask = taskProvider.task(role: .observation) { [weak self] in
-            await watcher.watchDirectory(paths.root)
-            await watcher.watchFile(paths.head)
-            await watcher.watchFile(paths.packedRefs)
-            await watcher.watchDirectory(paths.refs)
-            // The git dir itself, not the index: git renames a new index over the old one, which silences a watch on
-            // the file after one change, while the directory reports every entry git adds or renames in it. The
-            // root's watch never reaches a linked worktree's git dir, which lies outside the tree.
-            await watcher.watchFile(paths.gitDir)
+            for directory in paths.directories {
+                await watcher.watchDirectory(directory)
+            }
             for await event in watcher.events {
                 guard let self, self.generation == generation else { return }
                 self.route(event, paths: paths, generation: generation)
@@ -187,41 +213,59 @@ package final class RepositoryFreshness {
         return path
     }
 
+    /// `path` as FSEvents reports it, symlinks resolved as far as the path exists.
+    private static func canonical(_ path: String) -> String {
+        FileWatcher.canonicalPaths(forFile: path).first ?? path
+    }
+
     /// Reads a small git metadata file whole, or nil when it is a directory, missing or unreadable.
     private static func readGitMetadataFile(_ path: String) -> String? {
         try? String(contentsOfFile: path, encoding: .utf8)
     }
 
     private func route(_ event: FileWatcher.FileWatchEvent, paths: WatchedPaths, generation: Int) {
-        let path: String
-        switch event {
-            case .fileChanged(let changed): path = changed
-            case .directoryChanged(let changed): path = changed
-        }
+        let path =
+            switch event {
+                case .fileChanged(let changed), .directoryChanged(let changed): changed
+            }
         switch Self.classify(path, paths: paths) {
             case .tree:
-                schedule(&treeTask, after: treeDebounce, generation: generation) { [weak self] in
-                    self?.onTreeChanged?()
-                }
+                scheduleTreeChange(generation: generation)
             case .head:
-                schedule(&headTask, after: refDebounce, generation: generation) { [weak self] in
-                    self?.onHeadChanged?()
-                }
+                scheduleHeadChange(generation: generation)
             case .refs:
-                schedule(&refsTask, after: refDebounce, generation: generation) { [weak self] in
-                    self?.onRefsChanged?()
-                }
+                scheduleRefsChange(generation: generation)
             case .index:
-                schedule(&indexTask, after: refDebounce, generation: generation) { [weak self] in
-                    self?.onIndexChanged?()
-                }
+                scheduleIndexChange(generation: generation)
+            case .rescan(let includesTree):
+                if includesTree { scheduleTreeChange(generation: generation) }
+                scheduleHeadChange(generation: generation)
+                scheduleRefsChange(generation: generation)
+                scheduleIndexChange(generation: generation)
             case .ignored: break
         }
     }
 
+    private func scheduleTreeChange(generation: Int) {
+        schedule(&treeTask, after: treeDebounce, generation: generation) { [weak self] in self?.onTreeChanged?() }
+    }
+
+    private func scheduleHeadChange(generation: Int) {
+        schedule(&headTask, after: refDebounce, generation: generation) { [weak self] in self?.onHeadChanged?() }
+    }
+
+    private func scheduleRefsChange(generation: Int) {
+        schedule(&refsTask, after: refDebounce, generation: generation) { [weak self] in self?.onRefsChanged?() }
+    }
+
+    private func scheduleIndexChange(generation: Int) {
+        schedule(&indexTask, after: refDebounce, generation: generation) { [weak self] in self?.onIndexChanged?() }
+    }
+
     /// Trailing debounce: each call cancels the wait pending in `slot`, so `fire` runs once events stop for `duration`.
     private func schedule(
-        _ slot: inout Task<Void, Never>?, after duration: Duration, generation: Int, fire: @escaping () -> Void
+        _ slot: inout Task<Void, Never>?, after duration: Duration, generation: Int,
+        fire: @escaping () -> Void
     ) {
         slot?.cancel()
         let clock = clock
@@ -232,22 +276,30 @@ package final class RepositoryFreshness {
         }
     }
 
-    /// Classifies an absolute path the watcher reported. HEAD, the refs and the index must match before the git
-    /// directory's prefix, which drops every other metadata change. The git dir itself counts as an index change:
-    /// its watch reports that some entry changed, not which, and staging or committing always rewrites the index.
-    static func classify(_ path: String, paths: WatchedPaths) -> Classification {
+    /// Classifies an absolute, canonical path the watcher reported. `HEAD`, the index and the refs match before the
+    /// git dirs' prefixes, which drop every other metadata change: objects, logs, locks, `FETCH_HEAD`. A watched
+    /// directory itself, or one above it, only arrives when the stream lost track of what changed below. A tree path
+    /// under a directory the listing always skips, or a hidden one, is dropped.
+    nonisolated static func classify(_ path: String, paths: WatchedPaths) -> Classification {
         if path == paths.head { return .head }
-        if path == paths.packedRefs || path == paths.refs || path.hasPrefix(paths.refs + "/") { return .refs }
-        if path == paths.gitDir || path == paths.index { return .index }
-        if path.hasPrefix(paths.gitDir + "/") { return .ignored }
-        guard path == paths.root || path.hasPrefix(paths.root + "/") else { return .ignored }
-        let relative = path.dropFirst(paths.root.count).drop { $0 == "/" }
+        if path == paths.index { return .index }
+        if path == paths.packedRefs || isInside(path, paths.refs) { return .refs }
+        if isInside(paths.root, path) { return .rescan(includesTree: true) }
+        if isInside(paths.gitDir, path) || isInside(paths.commonDir, path) { return .rescan(includesTree: false) }
+        if isInside(path, paths.gitDir) || isInside(path, paths.commonDir) { return .ignored }
+        guard isInside(path, paths.root) else { return .ignored }
+        let relative = String(path.dropFirst(paths.root.count + 1))
         // Mirrors the folder scan's exclusions, skipped directories and hidden paths alike: sourcekit-lsp's
         // background index writes under `.build` would otherwise turn every hover into a reload loop.
         let components = relative.split(separator: "/")
         let liesUnderExcludedComponent = components.dropLast()
             .contains { SourceLoader.skippedDirectories.contains(String($0)) || $0.hasPrefix(".") }
         let isHiddenFile = components.last?.hasPrefix(".") ?? true
-        return (liesUnderExcludedComponent || isHiddenFile) ? .ignored : .tree
+        return (liesUnderExcludedComponent || isHiddenFile) ? .ignored : .tree(relative)
+    }
+
+    /// Whether `path` is `directory` or lies below it.
+    private nonisolated static func isInside(_ path: String, _ directory: String) -> Bool {
+        path == directory || path.hasPrefix(directory + "/")
     }
 }
