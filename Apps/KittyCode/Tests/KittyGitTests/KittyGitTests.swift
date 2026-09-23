@@ -174,7 +174,7 @@ struct KittyGitTests {
     func `a base from HEAD with CRLF or CR line endings splits into lines, so only the edited line is marked`(
         base: String
     ) async {
-        let runner = FakeProcessRunner { spec in
+        let runner = FakeProcessRunner.gated { spec in
             if spec.arguments.contains("--porcelain=v2") {
                 return porcelain(["1 .M N... 100644 100644 100644 aaaa bbbb tracked.txt"])
             }
