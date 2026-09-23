@@ -5,25 +5,12 @@ import Testing
 
 @testable import KittySyntax
 
-/// Stress tests that exercise highlight repeatedly and guard against per-call
-/// accumulation in the parse / highlight / tree-drop path.
-///
-/// The default run never compares wall-clock durations or RSS (see
-/// `AGENTS.md`): the two synchronous stress tests below measure heap
-/// allocation counts with `AemiTestKit.mallocDelta` instead of resident
-/// memory, and compare two equal-sized batches to each other rather than
-/// against an absolute, hand-tuned budget — a per-call leak shows up as the
-/// second batch allocating substantially more than the first, while steady
-/// -state work allocates about the same amount every batch. The one
-/// genuinely async, RSS-based check (`ensureArtifacts` reload cost) can't be
-/// measured this way (see its doc comment) and is gated behind
-/// `ATELIER_BENCH` instead of running by default.
+/// Stress tests guarding the parse, highlight and tree-drop path against per-call accumulation. Only the bash load
+/// check runs by default; the allocation and RSS measurements are opt-in through `ATELIER_BENCH`.
 @Suite
 @MainActor
 struct MemoryLeakRegressionTests {
-    /// Returns the current process resident-memory footprint in bytes. Only
-    /// used by the `ATELIER_BENCH`-gated test below, which prints (never
-    /// asserts on) the measurement.
+    /// The process's resident-memory footprint in bytes, for the opt-in drift print; 0 when unavailable.
     private func residentBytes() -> Int {
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size) / 4
@@ -52,24 +39,13 @@ struct MemoryLeakRegressionTests {
 
     @Test
     func `bash grammar artifacts load successfully`() async {
-        // User report: opening a `.sh` file in kittycode "ends up consuming
-        // memory infinitely" — pointing the finger at bash artifact
-        // compilation. The correctness half of that regression guard (does
-        // the load complete and succeed) runs unconditionally; a genuinely
-        // runaway compilation would hang the test run itself rather than
-        // trip a duration assertion, so no wall-clock bound is needed here
-        // (and none may run by default — see `AGENTS.md`).
+        // A runaway bash compile would hang this test outright, so it needs no time bound.
         let loaded = await LanguageHighlighter.ensureArtifacts(for: "bash")
         #expect(loaded == true, "bash artifacts failed to load")
     }
 
-    /// Second call must hit the cache. If it doesn't, every artifact load
-    /// allocates fresh tables and the per-open cost compounds. `ensureArtifacts`
-    /// always hops onto a detached `Task` (see its doc comment), so this body
-    /// is inherently concurrent and can't be measured with the synchronous-only
-    /// `mallocDelta`/`expectAllocations`; RSS is the only signal available, and
-    /// RSS may not drive an assertion in the default run (`AGENTS.md`), so this
-    /// is an opt-in benchmark instead: run with `ATELIER_BENCH=1 swift test`.
+    /// Repeated loads must hit the cache. They run on a detached task, out of `mallocDelta`'s reach, so this only
+    /// prints the RSS drift and is opt-in: `ATELIER_BENCH=1`.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["ATELIER_BENCH"] != nil))
     func `bash grammar artifacts are not reloaded after warmup`() async {
         _ = await LanguageHighlighter.ensureArtifacts(for: "bash")
@@ -99,10 +75,7 @@ struct MemoryLeakRegressionTests {
         assertAllocationsDoNotAccumulate(iterationsPerBatch: 200, highlightOnce)
     }
 
-    /// Repeatedly call session-bound highlightDocument — different surface
-    /// than the static path and a candidate for leaks if internal session
-    /// state retains across parses (the historical concern was the now-
-    /// removed `previousTree` storage on `GrammarSession`).
+    /// The session path, whose state could retain parses across calls.
     /// Allocation deltas move with the allocator's arenas on shared runners, so this is opt-in: `ATELIER_BENCH=1`.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["ATELIER_BENCH"] != nil))
     func `repeated bash session highlight does not accumulate allocations`() async {
@@ -120,13 +93,10 @@ struct MemoryLeakRegressionTests {
         assertAllocationsDoNotAccumulate(iterationsPerBatch: 200, highlightOnce)
     }
 
-    /// Runs two equal-sized batches of `body` and asserts the second batch doesn't allocate
-    /// substantially more than the first. A per-call leak (state retained across calls) shows up
-    /// as super-linear growth between batches; steady-state work allocates about the same amount
-    /// every batch. This sidesteps needing a hand-tuned absolute allocation budget — the only
-    /// number here is the slack multiplier, not a per-call count nobody has actually measured.
-    /// `body` must be synchronous with no concurrent work in flight (`mallocDelta`'s requirement:
-    /// the allocation counter is process-wide).
+    /// Records an issue when a second batch of `body` allocates more than twice the first plus 1000: a per-call leak
+    /// grows between batches, steady work doesn't.
+    /// - Precondition: `body` is synchronous with no concurrent work in flight, since the allocation counter is
+    ///   process-wide.
     private func assertAllocationsDoNotAccumulate(
         iterationsPerBatch: Int,
         sourceLocation: SourceLocation = #_sourceLocation,

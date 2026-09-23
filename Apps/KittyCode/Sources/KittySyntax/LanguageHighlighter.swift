@@ -11,10 +11,7 @@ import KittyStyle
 import Synchronization
 import os
 
-/// Signpost emitter for syntax-highlighter hot paths. Audit D10 —
-/// mirrors `RenderPipeline.swift` / `EditorStateCore.swift` so Instruments
-/// can attribute frame-budget time to grammar parsing, token merging,
-/// and viewport vs full-document highlights.
+/// Highlighter signposts, so Instruments can attribute frame time to parsing, merging and each kind of highlight.
 private let highlighterSignposter = OSSignposter(
     subsystem: "com.kittytui.syntax", category: "highlight")
 
@@ -35,12 +32,7 @@ public enum LanguageHighlighter: Sendable {
             let query: Query
             let highlighter: Highlighter
             let scratch = HighlightScratch()
-            /// Cache of the most recently parsed `source` and its tree. Lets
-            /// `parseTree(for:)` short-circuit when the document hasn't
-            /// changed since the last parse — common during undo/redo
-            /// navigation, viewport scroll, and identical reflows after
-            /// `bufferingNewest(1)` coalesces a typing burst. Mismatching
-            /// the source falls through to a full re-parse.
+            /// The hash of the last parsed source, the quick check before `parseTree(for:)` reuses `lastParsedTree`.
             var lastParsedSourceHash: Int?
             var lastParsedTree: SyntaxTree?
 
@@ -54,12 +46,7 @@ public enum LanguageHighlighter: Sendable {
                 highlighter = Highlighter(theme: theme)
             }
 
-            /// Returns a parsed tree for `source`, reusing the previous parse
-            /// if `source.hashValue` matches the cached fingerprint. The
-            /// hash is `Hasher`-based so collisions across distinct source
-            /// strings are vanishingly improbable in practice; an additional
-            /// `source.utf8.count` comparison guards the cache against the
-            /// pathological case.
+            /// A parse of `source`, reusing the previous tree when the source is equal to the last one parsed.
             func parseTree(for source: String) throws(ParseError) -> SyntaxTree {
                 let sourceHash = source.hashValue
                 if let cached = lastParsedTree,
@@ -159,8 +146,8 @@ public enum LanguageHighlighter: Sendable {
             }
         }
 
-        /// Produce intermediate `HighlightToken`s preserving semantic roles.
-        /// Tokens can later be merged with semantic tokens and resolved to styles.
+        /// The grammar's unresolved structural tokens for `source`; empty without a grammar, past
+        /// `maxGrammarSourceBytes`, or when the parse fails.
         public func highlightDocumentTokens(source: String) -> [HighlightToken] {
             switch strategy {
                 case .grammar(let gs):
@@ -233,9 +220,8 @@ public enum LanguageHighlighter: Sendable {
                 utf8: utf8, resolver: RoleBasedThemeResolver(theme: theme), defaultStyle: theme.defaultStyle)
         }
 
-        /// Highlight only the visible viewport lines for fast initial render.
-        /// Converts a line range to a byte range and uses scoped query execution.
-        /// Falls back to line-by-line lexical highlighting for non-grammar sessions.
+        /// Highlights only the visible lines, querying the tree over their byte range; without a usable parse the
+        /// lexical engine scans them instead.
         public func highlightViewport(source: String, visibleLineRange: Range<Int>) -> [[StyledSpan]] {
             guard !source.isEmpty else {
                 return [[StyledSpan(text: "", style: theme.defaultStyle)]]
@@ -300,9 +286,8 @@ public enum LanguageHighlighter: Sendable {
             }
         }
 
-        /// Viewport-scoped three-layer merge highlighting.
-        /// Returns styled spans for only the visible range; caller should run
-        /// full-document `highlightDocumentMerged` in background after this returns.
+        /// The three-layer merge restricted to the visible lines, for a first render ahead of
+        /// `highlightDocumentMerged(source:)`.
         public func highlightViewportMerged(
             source: String, visibleLineRange: Range<Int>
         ) async -> [[StyledSpan]] {
@@ -470,34 +455,25 @@ public enum LanguageHighlighter: Sendable {
         Session(language: language, theme: theme, preferGrammar: preferGrammar)
     }
 
+    /// The language `filename` maps to, from the runtime registry first and the bundled manifest otherwise.
     public static func detectLanguage(for filename: String) -> String? {
-        // Audit A.4/F10 — consult the runtime registry first so ADR 8
-        // extension hosts that register additional grammars get their
-        // language detected on file open. Bundled is the fallback.
         if let registered = GrammarRegistry.shared.entry(forFilename: filename) {
             return registered.name
         }
         return BundledLanguageManifest.entry(forFilename: filename)?.name
     }
 
+    /// Every language the bundled manifest or the runtime registry names, sorted.
     public static var bundledLanguageNames: [String] {
-        // Audit A.4 — union the runtime registry with the bundled manifest
-        // so the UI's "what languages do we support" surface reflects
-        // any ADR 8 extension contributions, not just the shipped set.
         let bundled = BundledLanguageManifest.entries.map(\.name)
         let runtime = GrammarRegistry.shared.languageNames
         return Array(Set(bundled).union(runtime)).sorted()
     }
 
+    /// Whether `language` has a grammar and a highlight query: trusted for a runtime registration, checked in the
+    /// bundle otherwise.
     public static func hasBundledResources(for language: String) -> Bool {
-        // Audit A.4 — a runtime-registered language with a resource path
-        // outside the bundled manifest still counts as "has resources"
-        // (its grammar/highlights live wherever the extension host
-        // serves them). Try the runtime registry first; fall back to
-        // checking the bundled resource layout.
         if let entry = GrammarRegistry.shared.entry(forLanguage: language) {
-            // Runtime entry: trust the registration. The extension host
-            // is responsible for ensuring its `entry.path` resolves.
             _ = entry
             return true
         }
@@ -595,11 +571,7 @@ private enum SyntaxArtifactsCache {
     }
 
     private static func loadArtifacts(for language: String) -> SyntaxArtifacts? {
-        // Audit D1 — the registry is the primary dispatch path so
-        // ADR 8 extensions can register additional languages; the
-        // bundled manifest is the default source for the languages
-        // that ship with the binary. `entry.path` is treated as a
-        // bundle-relative `Grammars/<path>` directory either way.
+        // A runtime registration wins over the bundled manifest; either way `entry.path` names a `Grammars/` directory.
         let entry: GrammarRegistry.LanguageEntry
         if let registered = GrammarRegistry.shared.entry(forLanguage: language) {
             entry = registered
@@ -627,14 +599,7 @@ private enum SyntaxArtifactsCache {
             return nil
         }
 
-        // Audit B.6/E1 — route the grammar load + parse-table compile
-        // through `GrammarRegistry.shared` instead of compiling
-        // in-process every launch. The registry's three-tier cache
-        // (in-memory → on-disk `$TMPDIR/kittycode-cache/*.ptable` →
-        // fresh compile) amortises the cold-start cost across launches
-        // of the same kittycode version. The needsExternals check still
-        // gates the compile so bash et al. never trigger the LR(1)
-        // item-set expansion the prior comment warned about.
+        // Loaded through the registry, whose disk cache spares a relaunch the parse-table compile.
         let grammarsPath = "\(resourcePath)/Grammars"
         let grammar: GrammarDefinition
         do {
@@ -646,16 +611,8 @@ private enum SyntaxArtifactsCache {
 
         let needsExternals = !grammar.externals.isEmpty
 
-        // Grammars that require external scanners (e.g. bash here-docs,
-        // markdown line-break states) cannot produce correct parse trees
-        // until a concrete scanner is registered. Session always falls back
-        // to lexical highlighting in that case, so the compiled parse
-        // table would never be consulted — and the LR(1) item-set
-        // expansion for richer grammars (bash in particular) can grow into
-        // gigabytes of RAM before hitting the limit guards. Skip the
-        // compile entirely for externals grammars and store empty
-        // placeholder tables; capability reporting still sees the
-        // `needsExternalScanner` flag.
+        // Without its external scanners a grammar can't parse, so a session never reads its table, and compiling one
+        // (bash's especially) can take gigabytes: store empty tables and keep the flag for capability reporting.
         if needsExternals {
             return SyntaxArtifacts(
                 parseTable: ParseTable(

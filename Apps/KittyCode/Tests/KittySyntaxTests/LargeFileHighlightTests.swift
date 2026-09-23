@@ -4,16 +4,12 @@ import Testing
 
 @testable import KittySyntax
 
-/// Probes the syntax highlighter on inputs whose AST is deep enough to have
-/// blown the thread stack via recursive struct-array deallocation before
-/// `SyntaxTree` became a class with an iterative `deinit`. Synthesises the
-/// payload at runtime so the test stays portable.
+/// Highlights inputs whose tree is deep enough to overflow the stack if it were freed recursively, which
+/// `SyntaxTree`'s iterative `deinit` avoids.
 @Suite
 struct LargeFileHighlightTests {
-    /// Build a deeply-nested JSON payload that mirrors the structure that
-    /// surfaced the SIGBUS — a long array of small objects, which the JSON
-    /// grammar's right-recursive rules turn into an AST whose nesting depth
-    /// approaches the array length.
+    /// A long array of small objects, which the JSON grammar's right-recursive rules nest about as deep as the array
+    /// is long.
     private func deeplyNestedJSON(elementCount: Int) -> String {
         var out = "["
         for index in 0 ..< elementCount {
