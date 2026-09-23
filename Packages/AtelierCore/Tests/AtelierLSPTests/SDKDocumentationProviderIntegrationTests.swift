@@ -15,7 +15,7 @@ struct SDKDocumentationProviderIntegrationTests {
             return
         }
 
-        let service = SDKDocumentationProvider.makeScratchService(serverExecutable: serverExecutable)
+        let service = try SDKDocumentationProvider.makeScratchService(serverExecutable: serverExecutable)
         let provider = SDKDocumentationProvider(service: service)
 
         let content = "import AppKit\nlet material = NSVisualEffectView.Material.hudWindow"

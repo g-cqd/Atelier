@@ -121,6 +121,9 @@ public actor SourceKitLSPService {
         self.connectionFactory = connectionFactory ?? Self.defaultConnectionFactory
     }
 
+    /// The directory the server runs in and takes as its workspace (`rootUri`).
+    public nonisolated var workspaceRoot: URL { configuration.workspaceRoot }
+
     /// The server's hover at the position, or `nil` when the server is unavailable, times out or has nothing to
     /// show. Opens `uri` with `content` on the server first, and restarts the idle timer.
     public func hover(
