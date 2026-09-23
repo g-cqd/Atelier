@@ -17,9 +17,7 @@ struct GitDiffViewerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var settings: ViewerSettings
     @State private var recents = RecentComparisons()
-    /// Keeps `NSApp.appearance` in sync with `settings.appearanceScheme` for the app's whole life -- see
-    /// ``AppearanceApplier``. Held as `@State` purely so one instance survives every `body` re-evaluation instead
-    /// of being rebuilt (and re-subscribed) on each one; nothing here ever reads it back.
+    /// Keeps the app's appearance in sync with the settings; `@State` so one instance outlives every `body` pass.
     @State private var appearanceApplier: AppearanceApplier
 
     init() {
@@ -33,9 +31,7 @@ struct GitDiffViewerApp: App {
         // the command line skips it and opens the comparison straight away.
         Window("Welcome to Git Diff Viewer", id: WindowID.welcome) {
             WelcomeView(recents: recents, reader: appDelegate.services.loader)
-                // Explicitly opted out, not just left at the `.automatic` default: AppKit's automatic grouping
-                // can still merge windows that share a class and toolbar configuration, and the welcome window
-                // must never join the comparison windows' tab group.
+                // Disallowed outright: automatic tabbing could still merge it into the comparisons' tab group.
                 .background(
                     WindowTabbingConfigurator { window in window.tabbingMode = .disallowed }
                         .allowsHitTesting(false)
@@ -106,20 +102,8 @@ enum LaunchOptions {
     }
 }
 
-/// Applies ``ViewerSettings/appearanceScheme`` to `NSApp.appearance`, application-wide rather than per window: a
-/// pinned choice describes how the whole app's chrome should look, the same as the theme or the layout chrome
-/// already do, not a property of any one comparison window. Reads and observes the app's one shared
-/// ``ViewerSettings`` instance -- the same instance the Settings scene edits -- so a change made there takes
-/// effect at once, everywhere; every window's own hover panel already matches its own view's
-/// `effectiveAppearance` (`HoverDocPanel`), which AppKit derives from this override on its own, so there is
-/// nothing to double up there.
-///
-/// ``ViewerSettings/matchesThemeAppearance`` adds one more source for the override this applies, beneath
-/// ``ViewerSettings/appearanceScheme`` in precedence: an explicit light or dark pin always wins (it says
-/// outright how the chrome should look), and `.system` with the toggle off keeps following the system the way it
-/// always has. Only `.system` with the toggle on hands the choice to the selected theme's own background --
-/// which is why this also observes `.palette`, not just `.appearance`: a theme change alone must re-derive the
-/// override just as much as flipping either setting does.
+/// Applies the shared ``ViewerSettings``' appearance app-wide, following ``AppearancePrecedence``. A palette change
+/// re-applies it too, since a theme-matched appearance follows the theme's background.
 @MainActor
 private final class AppearanceApplier {
     private let settings: ViewerSettings
@@ -134,21 +118,14 @@ private final class AppearanceApplier {
     }
 
     private func apply() {
-        // `NSApplication.shared`, not the `NSApp` global: this runs from `GitDiffViewerApp.init()`, before
-        // SwiftUI has brought AppKit up, and `NSApp` -- an implicitly-unwrapped optional -- is still nil there.
-        // `.shared` creates the application object on first touch, so the launch-time apply is safe and every
-        // later one hits the same instance `NSApp` will point at.
+        // `NSApplication.shared`: the first apply runs from the app's `init`, while the `NSApp` global is still nil.
         NSApplication.shared.appearance = Self.resolvedAppearance(
             explicit: settings.appearanceScheme, matchesTheme: settings.matchesThemeAppearance,
             themeLuminance: settings.themePath.flatMap(XcodeThemeLibrary.theme(at:))?.backgroundLuminance)
     }
 
-    /// The override to hand `NSApplication.appearance`, or nil to leave the system's own choice alone. Pure aside
-    /// from the two `NSAppearance` literals it returns, which is all the platform gives an `NSColor`-free way to
-    /// name; ``AppearancePrecedence/resolve(explicit:matchesTheme:themeIsDark:)`` carries the actual precedence
-    /// and luminance logic where a test can reach it without AppKit. `themeLuminance` comes from
-    /// ``DiffRendering/SyntaxTheme/backgroundLuminance``, itself `NSColor`-free, so nothing here ever needs to
-    /// touch a theme's raw `ThemeColor`.
+    /// The override for `NSApplication.appearance`, or nil to follow the system; a `themeLuminance` below
+    /// ``AppearancePrecedence/darkLuminanceThreshold`` reads as a dark theme.
     static func resolvedAppearance(
         explicit: AppearanceScheme, matchesTheme: Bool, themeLuminance: Double?
     ) -> NSAppearance? {
@@ -160,8 +137,7 @@ private final class AppearanceApplier {
 }
 
 extension AppearanceScheme {
-    /// `nil` (the system default) for `.system`: AppKit already treats a `nil` override as "follow the system",
-    /// the same thing turning a pinned choice back off should leave behind.
+    /// The appearance to pin, or nil for `.system`, which AppKit reads as following the system.
     fileprivate var nsAppearance: NSAppearance? {
         switch self {
             case .system: nil
@@ -203,14 +179,13 @@ final class AppServices {
         }
     }
 
-    /// The scratch sourcekit-lsp session behind the SDK documentation tier, kept so termination can drain it
-    /// alongside the per-root registry. Double-optional: `.some(nil)` records that resolution already failed,
-    /// so a machine without sourcekit-lsp pays the lookup once, not per window.
+    /// The resolved SDK tier; `.some(nil)` records a failed resolution, so it is attempted once per app.
     private var sdkHoverState: SDKDocumentationProvider??
+    /// The scratch sourcekit-lsp session behind the SDK tier, kept so termination can drain it.
     private(set) var sdkScratchService: SourceKitLSPService?
 
-    /// The on-device Apple SDK documentation tier, built lazily over the same discovery path as the per-root
-    /// language servers and shared by every window.
+    /// The on-device Apple SDK documentation tier, built once over the language servers' discovery path and shared
+    /// by every window; nil when sourcekit-lsp is disabled or missing.
     func sdkHoverProvider() async -> SDKDocumentationProvider? {
         if let resolved = sdkHoverState { return resolved }
         let location = Self.sourceKitLSPToolLocation()
@@ -235,12 +210,8 @@ final class AppServices {
         diagnosticsPool.shutdown()
     }
 
-    /// Resolves sourcekit-lsp the same way every other tool is discovered, honoring a user-pinned custom path.
-    /// `AppServices` is created before ``ViewerSettings`` (which is per-window, `@State` in the app's scene), so
-    /// rather than wire a settings reference through app init, the pinned path is read straight out of user
-    /// defaults under the same key ``ViewerSettings`` itself stores `lspServerLocations` under -- this closure
-    /// only runs lazily, the first time a workspace root's session is requested, by which point Settings may
-    /// well have written a pin.
+    /// Resolves sourcekit-lsp for `workspaceRoot` the way every other tool is discovered, honoring a pinned custom
+    /// path; nil when it is disabled or missing.
     private static func sourceKitLSPConfiguration(workspaceRoot: URL, toolDiscovery: ToolDiscovery) async
         -> SourceKitLSPService.Configuration?
     {
@@ -254,11 +225,8 @@ final class AppServices {
         return SourceKitLSPService.Configuration(serverExecutable: located.url, workspaceRoot: workspaceRoot)
     }
 
-    /// Mirrors ``ViewerSettings/Key/lspServerLocations``'s own user-defaults key: the literal is duplicated
-    /// rather than shared because that key lives on a type this app-wide, pre-settings service has no business
-    /// depending on. Disabling sourcekit-lsp must gate discovery itself, not merely fall back to searching for it
-    /// with no custom path (which workspace and SDK-tier discovery would still happily find on `$PATH` or the
-    /// active toolchain) -- so callers check ``ToolLocation/isEnabled`` before ever calling ``ToolDiscovery/locate``.
+    /// sourcekit-lsp's persisted location, read under ``ViewerSettings``' `lspServerLocations` key directly, since
+    /// this service exists before any settings instance.
     private static func sourceKitLSPToolLocation() -> ToolLocation? {
         guard let data = UserDefaults.standard.data(forKey: "lspServerLocations"),
             let decoded = try? JSONDecoder().decode([String: ToolLocation].self, from: data)
@@ -270,12 +238,8 @@ final class AppServices {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let services = AppServices()
 
-    /// Defers termination rather than blocking the MainActor on the drain: `applicationWillTerminate` runs
-    /// synchronously on the main thread, and a `DispatchSemaphore.wait` there would freeze the run loop, so any
-    /// MainActor hop the drain (or something it calls transitively) ever needs can never happen -- the wait
-    /// exhausts its whole budget on every quit instead of returning as soon as the drain finishes. Returning
-    /// `.terminateLater` and replying once the drain (or its own bounded timeout) completes keeps the run loop
-    /// alive throughout.
+    /// Terminates later, once the language servers drain: blocking the main thread instead would stall every
+    /// main-actor hop the drain needs.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         Task { @MainActor in
             await Self.drainLSPSessions(services.lspRegistry, scratch: services.sdkScratchService)
@@ -285,10 +249,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return .terminateLater
     }
 
-    /// Best-effort graceful shutdown of every sourcekit-lsp session, bounded so a hung server can never hold
-    /// termination up: the graceful `shutdown`/`exit` conversation (itself already timeout-bounded per session)
-    /// races a fixed budget, and whatever is still running past it is abandoned -- the process exiting closes
-    /// every child's pipes right behind it, which is sourcekit-lsp's own cue to go away.
+    /// Shuts every sourcekit-lsp session down gracefully within one second; a server still running after that is
+    /// abandoned, and the app's exit closes its pipes.
     private static func drainLSPSessions(_ registry: SourceKitLSPRegistry, scratch: SourceKitLSPService?) async {
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
@@ -315,11 +277,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
-    /// The tab bar's "+" button: AppKit sends this `@IBAction`-style message up the responder chain, which for a
-    /// window with no document and no view claiming it falls through to `NSApp`, and from there to its delegate
-    /// -- this method is that fallback. Reopening Welcome, rather than launching a blank comparison, is the
-    /// existing way this app starts something new (`WelcomeCommand`, and `windowWillClose` below after the last
-    /// comparison closes), so the tab bar's plus button follows the same path instead of inventing another one.
+    /// The tab bar's "+" button, which reaches the delegate through the responder chain: it opens the welcome
+    /// window, the app's one way to start a new comparison.
     @objc func newWindowForTab(_ sender: Any?) {
         Self.performWelcomeCommand()
     }

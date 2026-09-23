@@ -4,8 +4,7 @@ import DiffComparison
 import Foundation
 import SwiftUI
 
-/// A tool or server's discovered status, keyed the same way as ``ToolsSettings/statuses``: a
-/// ``DiagnosticTool/rawValue`` or a language-server id such as `"sourcekit-lsp"`.
+/// How a tool or language server's row reads, from its discovered status and its settings.
 private enum ToolStatusRow {
     case available
     case missing
@@ -43,10 +42,8 @@ extension ToolStatusRow {
     }
 }
 
-/// The Settings ▸ Tools tab (R1): the diagnostics master toggles up top, then one list with a single summary row
-/// per tool — status dot, name, status text, an enable toggle — each disclosing its path row (Locate…/Reset) on
-/// demand rather than showing it always. A pinned path that is not usable auto-expands so the problem is visible
-/// without a click. The whole list dims while the master toggle is off, since none of it can run anyway.
+/// The Settings ▸ Tools tab: the diagnostics toggles, then one row per tool and language server whose path
+/// controls disclose on demand, and on their own while a pinned path is broken.
 struct ToolsSettings: View {
     @Bindable var settings: ViewerSettings
     let discovery: ToolDiscovery
@@ -76,8 +73,6 @@ struct ToolsSettings: View {
                     .settingsCaption()
                     Button(SettingLabel.refreshToolStatus) { Task { await refreshAll() } }
                         .disabled(isRefreshing)
-                    // R6: friction on a trust-sensitive setting — shown always, not only on first enable, since
-                    // that reads the same and costs nothing extra to keep visible.
                     Text(
                         "Enabled tools below run their own discovered executables against this project's files "
                             + "whenever a comparison changes."
@@ -116,9 +111,8 @@ struct ToolsSettings: View {
 
     private static let sourceKitLSPKey = "sourcekit-lsp"
 
-    /// One tool's row: a summary line (dot, name, status, enable toggle) always shown, and a `DisclosureGroup`
-    /// revealing the path row — the rare-use control (P5) — only when expanded, auto-expanded when the pinned
-    /// path is broken so the problem does not hide behind a click.
+    /// One tool's row: a summary line, and its path controls in a `DisclosureGroup` that expands on its own while
+    /// the pinned path is broken.
     @ViewBuilder
     private func toolDisclosure(
         key: String, title: String, executableName: String, isEnabled: Binding<Bool>, customPath: Binding<String?>,
@@ -257,9 +251,7 @@ struct ToolsSettings: View {
             executableName: "sourcekit-lsp", overrideVariable: "GDV_SOURCEKIT_LSP",
             customPath: location?.customPath, searchesToolchain: true
         ) {
-            // sourcekit-lsp has no lightweight, side-effect-free way to report its own version, so its status shows
-            // only where it was found; probing it the way ``ToolDiscovery`` probes a diagnostic tool would mean
-            // launching the language server itself just to read a banner.
+            // No version: sourcekit-lsp can only report one by launching the language server itself.
             statuses[key] = ToolStatus(tool: .swiftlint, url: located.url, origin: located.origin, version: nil)
         } else {
             statuses[key] = ToolStatus(tool: .swiftlint, url: nil, origin: nil, version: nil)
