@@ -68,8 +68,12 @@ package final class HoverDocumentationModel {
     private let taskProvider: any TaskProvider
 
     private var filesByIndex: [Int: FileEntry] = [:]
-    /// The right side's on-disk root, which the language server tier needs; nil when the right side is not on disk.
+    /// The right side's on-disk root, canonical as the language server registry keys it, so the server's workspace
+    /// and every document URI spell the root alike; nil when the right side is not on disk.
     private var repositoryRoot: URL?
+    /// The last root ``comparisonChanged(root:files:corpusReader:corpusSource:corpusEntries:)`` got, as given, so
+    /// every publish of one comparison resolves its canonical form once it resolves.
+    private var lastGivenRoot: URL?
     private var feedTask: Task<Void, Never>?
     /// Bumped by every comparison change; a superseded corpus pass drops its result, since cancellation is only
     /// checked between awaits.
@@ -90,15 +94,19 @@ package final class HoverDocumentationModel {
         docProvider = DocIndexHoverProvider(index: index)
     }
 
-    /// Re-feeds the doc-comment index with both sides of every changed Swift file, and remembers `root` for the
-    /// language server tier. Given a corpus reader, source and entries, a background pass then adds the right
-    /// side's other Swift files, within ``maxCorpusFileSize`` and ``maxCorpusFiles``. A newer call supersedes any
-    /// feed still running.
+    /// Re-feeds the doc-comment index with both sides of every changed Swift file, and remembers `root`'s canonical
+    /// form for the language server tier; a root that names no existing directory counts as not on disk. Given a
+    /// corpus reader, source and entries, a background pass then adds the right side's other Swift files, within
+    /// ``maxCorpusFileSize`` and ``maxCorpusFiles``. A newer call supersedes any feed still running.
     package func comparisonChanged(
-        root: URL?, files: [FileEntry], corpusReader: (any SourceReading)? = nil,
+        root givenRoot: URL?, files: [FileEntry], corpusReader: (any SourceReading)? = nil,
         corpusSource: ComparisonSource? = nil, corpusEntries: [GitTreeEntry] = []
     ) {
-        repositoryRoot = root
+        if givenRoot != lastGivenRoot || repositoryRoot == nil {
+            lastGivenRoot = givenRoot
+            repositoryRoot = givenRoot.flatMap(SourceKitLSPRegistry.canonicalRoot)
+        }
+        let root = repositoryRoot
         filesByIndex = Dictionary(uniqueKeysWithValues: files.map { ($0.index, $0) })
 
         let docFiles = files.filter { $0.leftPath.hasSuffix(".swift") || ($0.rightPath?.hasSuffix(".swift") ?? false) }

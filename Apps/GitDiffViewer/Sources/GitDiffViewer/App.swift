@@ -55,6 +55,7 @@ struct GitDiffViewerApp: App {
                 reader: appDelegate.services.loader, services: appDelegate.services
             )
             .frame(minWidth: 900, minHeight: 600)
+            .repositoryTrustPrompt(appDelegate.services.repositoryTrust)
         }
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1400, height: 900)
@@ -67,6 +68,7 @@ struct GitDiffViewerApp: App {
                 settings: settings, runner: appDelegate.services.runner,
                 discovery: appDelegate.services.toolDiscovery
             )
+            .environment(appDelegate.services.repositoryTrust)
         }
     }
 }
@@ -159,9 +161,11 @@ final class AppServices {
     let diagnosticsRunner: HardenedProcessRunner
     let toolDiscovery: ToolDiscovery
     let diagnosticsEngine: DiagnosticsEngine
+    /// The user's trust decision per repository, which gates sourcekit-lsp there.
+    let repositoryTrust = RepositoryTrust()
     /// Whether and how sourcekit-lsp launches, per repository and for the SDK tier.
     let languageServerPolicy: LanguageServerPolicy
-    /// One sourcekit-lsp session per workspace root, shared by every comparison window.
+    /// One sourcekit-lsp session per trusted workspace root, shared by every comparison window.
     let lspRegistry: SourceKitLSPRegistry
 
     init() {
@@ -175,11 +179,14 @@ final class AppServices {
         )
         diagnosticsEngine = DiagnosticsEngine(runner: diagnosticsRunner, discovery: toolDiscovery)
 
-        let policy = LanguageServerPolicy(locate: LanguageServerPolicy.locate(with: toolDiscovery))
+        let policy = LanguageServerPolicy(
+            trust: repositoryTrust, locate: LanguageServerPolicy.locate(with: toolDiscovery))
         languageServerPolicy = policy
-        lspRegistry = SourceKitLSPRegistry(
-            admits: { _ in true },
+        let registry = SourceKitLSPRegistry(
+            admits: { root in await policy.admitsSession(at: root) },
             makeConfiguration: { root in await policy.configuration(forRoot: root) })
+        lspRegistry = registry
+        policy.stopSessionsOnRevocation(in: registry)
     }
 
     /// The resolved SDK tier; `.some(nil)` records a failed resolution, so it is attempted once per app.
