@@ -130,6 +130,15 @@ struct DiagnosticsSidesTests {
         try await sut.spy.waitForAllTasks()
     }
 
+    /// Finishes the run `action` should start, failing within the spy's bound rather than waiting on the clock
+    /// forever when it starts none.
+    private func finishRun(of sut: SUT, after action: () -> Void) async throws {
+        let spawned = sut.spy.spawnedTaskCount
+        action()
+        try await sut.spy.waitForSpawnedTasks(atLeast: spawned + 1)
+        try await finish(sut)
+    }
+
     private static func finding(line: Int) -> Finding {
         Finding(tool: .swiftlint, ruleID: "rule", message: "message", file: "A.swift", line: line, severity: .warning)
     }
@@ -175,6 +184,38 @@ struct DiagnosticsSidesTests {
 
         #expect(await sut.runner.requests.map(\.root) == [Self.rightRoot])
         #expect(sut.exporter.materializations == 0)
+    }
+
+    @Test
+    func `trusting the repository starts its ref side's analysis`() async throws {
+        let repository = try TrustedRepository()
+        defer { repository.remove() }
+        let sut = try makeSUT(
+            mode: .both, findings: [RecordingExporter.folder: [Self.finding(line: 3)], Self.rightRoot: []])
+        sut.model.comparisonChanged(.init(left: Self.ref(repository.root), right: Self.folder(Self.rightRoot)))
+        try await finish(sut)
+
+        let trust = try #require(sut.model.trust)
+
+        try await finishRun(of: sut) { repository.trust(in: trust) }
+
+        #expect(sut.model.leftFindingsByFile["A.swift"]?.map(\.line) == [3])
+    }
+
+    @Test
+    func `revoking trust drops the ref side's findings at once`() async throws {
+        let repository = try TrustedRepository()
+        defer { repository.remove() }
+        let sut = try makeSUT(mode: .both, findings: [RecordingExporter.folder: [Self.finding(line: 3)]])
+        let trust = try #require(sut.model.trust)
+        repository.trust(in: trust)
+        sut.model.comparisonChanged(.init(left: Self.ref(repository.root), right: Self.folder(Self.rightRoot)))
+        try await finish(sut)
+
+        try await finishRun(of: sut) {
+            trust.revoke(repository.root)
+            #expect(sut.model.leftFindingsByFile.isEmpty)
+        }
     }
 
     @Test
