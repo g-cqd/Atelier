@@ -22,9 +22,12 @@ struct SideStateFetchTests {
         .success(names.map { "\($0)\tgit@example.com:\($0).git (fetch)\n" }.joined())
     }
 
+    /// The URL ``remotesOutput(_:)`` lists for `origin`, as the repository's own configuration holds it.
+    private nonisolated static let remotes = ["origin": "git@example.com:origin.git"]
+
     @Test
     func `fetch sends git fetch under the networking isolation for the primary remote`() async throws {
-        let runner = FakeProcessRunner { spec in
+        let runner = FakeProcessRunner.gated(remotes: Self.remotes) { spec in
             spec.arguments.contains("fetch") ? .success("") : Self.remotesOutput()
         }
         let sut = makeSUT(runner: runner)
@@ -33,14 +36,14 @@ struct SideStateFetchTests {
         await sut.fetch()
 
         let fetchSpec = try #require(runner.specs.last(where: { $0.arguments.contains("fetch") }))
-        #expect(fetchSpec.arguments.contains("origin"))
+        #expect(fetchSpec.arguments.contains("git@example.com:origin.git"))
         #expect(fetchSpec.environment == GitIsolation.networking.environment)
         #expect(sut.remoteNames == ["origin"])
     }
 
     @Test
     func `fetch refreshes repository info and calls onFetched on success`() async throws {
-        let runner = FakeProcessRunner { spec in
+        let runner = FakeProcessRunner.gated(remotes: Self.remotes) { spec in
             if spec.arguments.contains("fetch") { return .success("") }
             if spec.arguments.contains("remote") { return Self.remotesOutput() }
             if spec.arguments.contains("rev-parse") { return .success(Self.root.path(percentEncoded: false)) }
@@ -63,7 +66,7 @@ struct SideStateFetchTests {
 
     @Test
     func `fetch records the failure and leaves onFetched uncalled`() async throws {
-        let runner = FakeProcessRunner { spec in
+        let runner = FakeProcessRunner.gated(remotes: Self.remotes) { spec in
             spec.arguments.contains("fetch") ? .failure(1, error: "could not resolve host") : Self.remotesOutput()
         }
         let sut = makeSUT(runner: runner)
@@ -81,7 +84,7 @@ struct SideStateFetchTests {
     @Test
     func `a second fetch while one is running does nothing`() async throws {
         let gate = AsyncProbe<Void>()
-        let runner = FakeProcessRunner { spec in
+        let runner = FakeProcessRunner.gated(remotes: Self.remotes) { spec in
             if spec.arguments.contains("fetch") {
                 _ = try await gate.next()
                 return .success("")
@@ -117,7 +120,7 @@ struct SideStateFetchTests {
 
     @Test
     func `loadRemotesIfNeeded reads remotes once and is a no-op once known`() async throws {
-        let runner = FakeProcessRunner { _ in Self.remotesOutput(["origin", "upstream"]) }
+        let runner = FakeProcessRunner.gated { _ in Self.remotesOutput(["origin", "upstream"]) }
         let taskProvider = TaskProviderSpy.tolerant()
         let sut = makeSUT(runner: runner, taskProvider: taskProvider)
         sut.load(.directory(Self.root), repository: Self.info, entries: [])
@@ -126,12 +129,12 @@ struct SideStateFetchTests {
         try await taskProvider.waitForAllTasks()
 
         #expect(sut.remoteNames == ["origin", "upstream"])
-        #expect(runner.specs.count == 1)
+        #expect(runner.commandSpecs.count == 1)
 
         sut.loadRemotesIfNeeded()
         try await taskProvider.waitForAllTasks()
 
-        #expect(runner.specs.count == 1)
+        #expect(runner.commandSpecs.count == 1)
     }
 
     @Test

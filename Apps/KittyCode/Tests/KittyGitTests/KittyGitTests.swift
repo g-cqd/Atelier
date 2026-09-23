@@ -19,7 +19,7 @@ private func porcelain(_ records: [String]) -> ProcessOutput {
 struct KittyGitTests {
     @Test
     func `a refresh reads the branch, every status and the summary from one porcelain v2 status`() async {
-        let runner = FakeProcessRunner { spec in
+        let runner = FakeProcessRunner.gated { spec in
             #expect(spec.arguments.contains("--porcelain=v2"))
             return porcelain([
                 "# branch.head main", "1 .M N... 100644 100644 100644 aaaa bbbb Sources/a.swift",
@@ -38,13 +38,13 @@ struct KittyGitTests {
         #expect(provider.status(for: "/project/c.swift") == .conflicted)
         #expect(provider.status(for: "/project/other.swift") == nil)
         #expect(provider.summary == FileStatusSummary(modified: 1, added: 1, untracked: 1, deleted: 0, conflicted: 1))
-        #expect(runner.specs.count == 1)
-        guard case .exactly(let environment) = runner.specs[0].environment else {
+        #expect(runner.commandSpecs.count == 1)
+        guard case .exactly(let environment) = runner.commandSpecs[0].environment else {
             Issue.record("git must run under the strict environment")
             return
         }
         #expect(environment["GIT_CONFIG_NOSYSTEM"] == "1")
-        #expect(runner.specs[0].timeout == GitStatusProvider.gitTimeout)
+        #expect(runner.commandSpecs[0].timeout == GitStatusProvider.gitTimeout)
     }
 
     @Test
@@ -151,7 +151,7 @@ struct KittyGitTests {
 
     @Test
     func `an untracked file is marked on every line and a committed file's base comes from git show`() async {
-        let runner = FakeProcessRunner { spec in
+        let runner = FakeProcessRunner.gated { spec in
             if spec.arguments.contains("--porcelain=v2") {
                 return porcelain(["? loose.txt", "1 .M N... 100644 100644 100644 aaaa bbbb tracked.txt"])
             }
