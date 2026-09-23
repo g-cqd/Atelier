@@ -1,0 +1,12 @@
+{
+  "repository": "https://github.com/tree-sitter/tree-sitter-ruby",
+  "version": "v0.23.1",
+  "commit": "71bd32fb7607035768799732addba884a37a6210",
+  "released": "2024-11-11",
+  "license": "MIT",
+  "files": {
+    "grammar.json": "src/grammar.json",
+    "highlights.scm": "queries/highlights.scm"
+  },
+  "previous": "v0.23.1"
+}
