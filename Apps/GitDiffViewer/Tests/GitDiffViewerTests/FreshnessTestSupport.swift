@@ -87,7 +87,7 @@ struct WatcherHarness {
         source.send(event)
         try await clock.waitForSleepers()
         clock.advance(by: duration)
-        _ = try await probe.next()
+        _ = try await probe.expectNext()
     }
 
     /// Delivers a write at `path` through the stream's coverage, then advances past its debounce and waits for `probe`.
@@ -97,7 +97,7 @@ struct WatcherHarness {
         try #require(source.write(path), "\(path) lies outside every watched directory")
         try await clock.waitForSleepers()
         clock.advance(by: duration)
-        _ = try await probe.next()
+        _ = try await probe.expectNext()
     }
 
     /// Stops `sut`'s watcher and drains every task behind it: tasks left to unwind on their own pile up across the
@@ -331,15 +331,20 @@ struct ScriptedFailure: Error, LocalizedError {
 }
 
 /// Returns once `condition` holds, reading it again only when an observable property it reads changes: the wait for
-/// a model's state that a sleeping debounce keeps ``TaskProviderSpy/waitForAllTasks(timeout:)`` from reporting.
+/// a model's state that a sleeping debounce keeps ``TaskProviderSpy/waitForAllTasks(timeout:)`` from reporting. Throws
+/// ``WaitTimeout`` once ``TaskProviderSpy/failureBound`` has passed without it.
 @MainActor
-func awaitObserved(_ condition: @escaping @MainActor () -> Bool) async {
-    while !condition() {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            withObservationTracking {
-                _ = condition()
-            } onChange: {
-                continuation.resume()
+func awaitObserved(
+    sourceLocation: SourceLocation = #_sourceLocation, _ condition: @escaping @MainActor () -> Bool
+) async throws {
+    try await withFailureBound(awaiting: "The observed condition", sourceLocation: sourceLocation) { @MainActor in
+        while !condition() {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                withObservationTracking {
+                    _ = condition()
+                } onChange: {
+                    continuation.resume()
+                }
             }
         }
     }

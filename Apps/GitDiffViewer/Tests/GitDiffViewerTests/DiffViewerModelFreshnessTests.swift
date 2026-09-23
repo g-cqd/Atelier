@@ -83,7 +83,7 @@ struct DiffViewerModelFreshnessTests {
         try #require(source.write("/repo/a.swift"))
         try await clock.waitForSleepers()
         clock.advance(by: Self.treeDebounce)
-        _ = try await listing.reached.next()
+        _ = try await listing.reached.expectNext()
 
         // Save B while A's listing runs, then let A's listing land without B.
         reader.entries[Self.tree] = [Self.entry("a.swift", "2"), Self.entry("b.swift", "2")]
@@ -91,7 +91,7 @@ struct DiffViewerModelFreshnessTests {
         try #require(source.write("/repo/b.swift"))
         try await clock.waitForSleepers(1, after: mark)
         listing.open()
-        await awaitObserved { !sut.right.isLoading }
+        try await awaitObserved { !sut.right.isLoading }
         #expect(sut.right.entriesByPath["b.swift"]?.blobID == "1")
         try #require(watchers.all.count == 1)
 

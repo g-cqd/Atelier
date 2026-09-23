@@ -32,14 +32,14 @@ struct GapDragControllerTests {
         let sut = makeSUT()
         sut.handle(.began(between(), .extendsChangeAbove, lineHeight: 10))
         sut.handle(.moved(offset: 20, edgeOvershoot: GapDrag.rampDepth))
-        #expect(try await applied.next() == GapExpansion(below: 2, above: 0))
+        #expect(try await applied.expectNext() == GapExpansion(below: 2, above: 0))
 
         try await clock.waitForSleepers()
         clock.advance(by: GapDrag.fastestHold)
-        #expect(try await applied.next() == GapExpansion(below: 3, above: 0))
+        #expect(try await applied.expectNext() == GapExpansion(below: 3, above: 0))
         try await clock.waitForSleepers()
         clock.advance(by: GapDrag.fastestHold)
-        #expect(try await applied.next() == GapExpansion(below: 4, above: 0))
+        #expect(try await applied.expectNext() == GapExpansion(below: 4, above: 0))
 
         sut.handle(.ended)
         try await taskProvider.waitForAllTasks()
@@ -50,7 +50,7 @@ struct GapDragControllerTests {
         let sut = makeSUT()
         sut.handle(.began(between(), .extendsChangeAbove, lineHeight: 10))
         sut.handle(.moved(offset: 20, edgeOvershoot: GapDrag.rampDepth))
-        _ = try await applied.next()
+        _ = try await applied.expectNext()
         try await clock.waitForSleepers()
 
         sut.handle(.moved(offset: 20, edgeOvershoot: 0))
@@ -66,10 +66,10 @@ struct GapDragControllerTests {
         let sut = makeSUT()
         sut.handle(.began(between(hiding: 3), .extendsChangeAbove, lineHeight: 10))
         sut.handle(.moved(offset: 20, edgeOvershoot: GapDrag.rampDepth))
-        _ = try await applied.next()
+        _ = try await applied.expectNext()
         try await clock.waitForSleepers()
         clock.advance(by: GapDrag.fastestHold)
-        #expect(try await applied.next() == GapExpansion(below: 3, above: 0))
+        #expect(try await applied.expectNext() == GapExpansion(below: 3, above: 0))
 
         try await taskProvider.waitForAllTasks()
         #expect(sut.drag?.holdInterval == nil)
@@ -80,7 +80,7 @@ struct GapDragControllerTests {
         let sut = makeSUT()
         sut.handle(.began(between(), .extendsChangeAbove, lineHeight: 10))
         sut.handle(.moved(offset: 20, edgeOvershoot: GapDrag.rampDepth))
-        _ = try await applied.next()
+        _ = try await applied.expectNext()
         try await clock.waitForSleepers()
 
         sut.handle(.ended)
@@ -96,9 +96,9 @@ struct GapDragControllerTests {
         let sut = makeSUT(base: GapExpansion(below: 1, above: 4))
         sut.handle(.began(between(), .extendsChangeBelow, lineHeight: 10))
         sut.handle(.moved(offset: -30, edgeOvershoot: 0))
-        #expect(try await applied.next() == GapExpansion(below: 1, above: 7))
+        #expect(try await applied.expectNext() == GapExpansion(below: 1, above: 7))
         sut.handle(.moved(offset: 90, edgeOvershoot: 0))
-        #expect(try await applied.next() == GapExpansion(below: 1, above: 4))
+        #expect(try await applied.expectNext() == GapExpansion(below: 1, above: 4))
     }
 
     @Test
@@ -117,6 +117,6 @@ struct GapDragControllerTests {
     func `a double click reveals the whole gap from its handle's side`() async throws {
         let sut = makeSUT()
         sut.handle(.revealedAll(between(hiding: 10), .extendsChangeBelow))
-        #expect(try await applied.next() == GapExpansion(below: 0, above: 10))
+        #expect(try await applied.expectNext() == GapExpansion(below: 0, above: 10))
     }
 }

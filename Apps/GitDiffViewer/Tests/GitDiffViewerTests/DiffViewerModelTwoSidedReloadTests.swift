@@ -48,7 +48,7 @@ struct DiffViewerModelTwoSidedReloadTests {
         let rightListing = harness.holdListing(of: ModelTestHarness.rightURL)
 
         sut.reloadSources()
-        _ = try await leftLandings.next()
+        _ = try await leftLandings.expectNext()
 
         #expect(sut.right.isLoading)
         #expect(sut.detailState == .cards)
@@ -96,7 +96,7 @@ struct DiffViewerModelTwoSidedReloadTests {
         harness.reader.commits = ["HEAD": "c2"]
         harness.reader.entries[head] = [harness.entry("a.swift", "5"), harness.entry("b.swift", "2")]
         sut.freshness?.onRefsChanged?()
-        _ = try await leftLandings.next()
+        _ = try await leftLandings.expectNext()
 
         #expect(sut.right.isLoading)
         #expect(sut.detailState == .cards)
