@@ -180,7 +180,10 @@ let package = Package(
             name: "KittyInputTests", dependencies: ["KittyInput"],
             swiftSettings: strict),
         .testTarget(
-            name: "KittyRendererTests", dependencies: ["KittyRenderer", "KittyTerminal"],
+            name: "KittyRendererTests",
+            dependencies: [
+                "KittyRenderer", "KittyStyle", "KittyTerminal", .product(name: "AemiTestKit", package: "aemi")
+            ],
             swiftSettings: strict),
         .testTarget(
             name: "KittySyntaxTests",

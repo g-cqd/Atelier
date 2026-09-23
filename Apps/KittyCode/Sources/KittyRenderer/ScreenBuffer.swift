@@ -235,6 +235,30 @@ public struct ScreenBuffer: Sendable {
         }
     }
 
+    /// Copies cells marked dirty in `source` into this buffer without sharing either grid's storage.
+    /// - Precondition: Both buffers have the same dimensions.
+    /// - Complexity: O(columns × rows) time; O(1) extra space with unique storage, otherwise O(columns × rows).
+    mutating func adoptDirtyCells(from source: ScreenBuffer) {
+        precondition(columns == source.columns && rows == source.rows, "ScreenBuffer dimensions differ")
+        let sourceCells = source.cells.span
+        var destination = cells.mutableSpan
+        for index in 0 ..< destination.count where source.dirty.isDirty(index) {
+            destination[index] = sourceCells[index]
+        }
+    }
+
+    /// Copies every cell after a forced redraw without sharing either grid's storage.
+    /// - Precondition: Both buffers have the same dimensions.
+    /// - Complexity: O(columns × rows) time; O(1) extra space with unique storage, otherwise O(columns × rows).
+    mutating func adoptAllCells(from source: ScreenBuffer) {
+        precondition(columns == source.columns && rows == source.rows, "ScreenBuffer dimensions differ")
+        let sourceCells = source.cells.span
+        var destination = cells.mutableSpan
+        for index in 0 ..< destination.count {
+            destination[index] = sourceCells[index]
+        }
+    }
+
     /// Resizes the buffer to the new dimensions, preserving the overlapping content.
     ///
     /// Cells within the intersection of the old and new dimensions are copied over.
