@@ -16,6 +16,9 @@ extension DiffViewerModel {
     ) {
         let model = RepositoryFreshness(
             taskProvider: taskProvider, isEnabled: settings.autoRefresh, clock: clock, makeWatcher: makeWatcher)
+        model.treeChangeFilter = { [weak self] paths in
+            await self?.right.listingMayChange(at: paths) ?? false
+        }
         model.onTreeChanged = { [weak self] in self?.right.reload() }
         model.onHeadChanged = { [weak self] in self?.reloadForHeadChange() }
         model.onRefsChanged = { [weak self] in self?.refreshBothSidesRepositoryInfo() }

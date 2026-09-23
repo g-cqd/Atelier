@@ -51,9 +51,9 @@ struct RepositoryFreshnessClassificationTests {
     }
 
     @Test
-    func `classify names a tree path relative to the root, and drops a hidden one`() {
+    func `classify names a tree path relative to the root, hidden ones included for the listing filter to judge`() {
         #expect(classify("/repo/Sources/Foo.swift") == .tree("Sources/Foo.swift"))
-        #expect(classify("/repo/.build/index-build/a.o") == .ignored)
+        #expect(classify("/repo/.swiftlint.yml") == .tree(".swiftlint.yml"))
     }
 
     @Test
