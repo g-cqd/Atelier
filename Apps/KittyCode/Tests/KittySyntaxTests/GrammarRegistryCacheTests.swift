@@ -59,6 +59,35 @@ struct GrammarRegistryCacheTests {
     }
 
     @Test
+    func `tables are cached under the hash of the text they were compiled from`() throws {
+        let fixture = try GrammarFixture()
+        defer { fixture.remove() }
+        let first = fixture.registry { grammar throws(GrammarError) in try ParseTableCompiler.compile(grammar) }
+        _ = try first.grammar(for: "tiny", grammarsPath: fixture.grammarsPath)
+        try fixture.writeGrammar(keyword: "world")
+        _ = try first.compiledResult(for: "tiny", grammarsPath: fixture.grammarsPath)
+        let relaunched = fixture.registry { grammar throws(GrammarError) in try ParseTableCompiler.compile(grammar) }
+
+        let compiled = try relaunched.compiledResult(for: "tiny", grammarsPath: fixture.grammarsPath)
+
+        #expect(compiled.parseTable.terminals.contains("\"world\""))
+    }
+
+    @Test
+    func `a language registered again compiles its new grammar`() throws {
+        let fixture = try GrammarFixture()
+        defer { fixture.remove() }
+        let registry = fixture.registry { grammar throws(GrammarError) in try ParseTableCompiler.compile(grammar) }
+        _ = try registry.compiledResult(for: "tiny", grammarsPath: fixture.grammarsPath)
+        try fixture.writeGrammar(keyword: "world", directory: "tiny2")
+
+        registry.register(GrammarRegistry.LanguageEntry(name: "tiny", extensions: [".tiny"], path: "tiny2"))
+        let compiled = try registry.compiledResult(for: "tiny", grammarsPath: fixture.grammarsPath)
+
+        #expect(compiled.parseTable.terminals.contains("\"world\""))
+    }
+
+    @Test
     func `compiled tables are read back by the next registry on the same cache`() throws {
         let fixture = try GrammarFixture()
         defer { fixture.remove() }
@@ -88,8 +117,8 @@ private struct GrammarFixture {
         try writeGrammar(keyword: "hello")
     }
 
-    func writeGrammar(keyword: String) throws {
-        let directory = root.appending(path: "Grammars/tiny")
+    func writeGrammar(keyword: String, directory name: String = "tiny") throws {
+        let directory = root.appending(path: "Grammars/\(name)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let grammar = #"{"name": "tiny", "rules": {"source": {"type": "STRING", "value": "\#(keyword)"}}}"#
         try Data(grammar.utf8).write(to: directory.appending(path: "grammar.json"))
