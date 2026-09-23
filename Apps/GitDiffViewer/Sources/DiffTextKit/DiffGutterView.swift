@@ -66,7 +66,7 @@ package final class DiffGutterView: NSView {
     /// The text system whose rows are numbered; set together with `rendered`.
     package weak var source: (any GutterTextSource)?
     private weak var clipView: NSClipView?
-    private let padding: CGFloat = 8
+    private nonisolated static let padding: CGFloat = 8
     private let columnGap: CGFloat = 10
     /// One handle of one gap, as the pointer finds it.
     private struct HandleID: Equatable {
@@ -87,14 +87,19 @@ package final class DiffGutterView: NSView {
     private var hoveredHandle: HandleID?
     private var hoverTracking: NSTrackingArea?
 
-    /// The font, column width and number attributes of the current text, which every drawn row reuses.
+    /// The font, column width and number attributes of the current text, which every drawn row reuses, and where its
+    /// number columns start.
     private struct Metrics {
         let font: NSFont
         let columnWidth: CGFloat
         let contextAttributes: [NSAttributedString.Key: Any]
         let changedAttributes: [NSAttributedString.Key: Any]
+        /// The leading edge of the first number column: past the gap handles' lane when the text offers a handle.
+        /// The halves lie over the rows around their hairline, where those rows' numbers are, and a handle centred in
+        /// a gutter this narrow would cover them.
+        let numbersLeft: CGFloat
 
-        /// - Complexity: O(rows), for the widest line number.
+        /// - Complexity: O(rows), for the widest line number, and O(gaps).
         init(rendered: RenderedText?) {
             let palette = rendered?.palette ?? .system
             font = palette.gutterFont
@@ -103,6 +108,8 @@ package final class DiffGutterView: NSView {
             columnWidth = CGFloat(digits) * digitWidth
             contextAttributes = [.font: font, .foregroundColor: palette.gutterText]
             changedAttributes = [.font: font, .foregroundColor: palette.gutterChangedText]
+            let offersHandle = rendered?.gaps.contains { !$0.marker.handles.isEmpty } ?? false
+            numbersLeft = offersHandle ? max(DiffGutterView.padding, GapHandleLayout.laneWidth) : DiffGutterView.padding
         }
     }
 
@@ -132,8 +139,11 @@ package final class DiffGutterView: NSView {
 
     package var thickness: CGFloat {
         let columns: CGFloat = style == .dual ? 2 : 1
-        return padding * 2 + columns * metrics.columnWidth + (columns - 1) * columnGap
+        return numbersLeft + columns * metrics.columnWidth + (columns - 1) * columnGap + Self.padding
     }
+
+    /// Where the first number column starts: after the gap handles' lane when the text offers a handle.
+    package var numbersLeft: CGFloat { metrics.numbersLeft }
 
     package override var intrinsicContentSize: NSSize {
         NSSize(width: thickness, height: NSView.noIntrinsicMetric)
@@ -339,7 +349,8 @@ package final class DiffGutterView: NSView {
                 let label = String(number) as NSString
                 let size = label.size(withAttributes: attributes)
                 let x =
-                    padding + CGFloat(column) * (metrics.columnWidth + columnGap) + metrics.columnWidth - size.width
+                    metrics.numbersLeft + CGFloat(column) * (metrics.columnWidth + columnGap) + metrics.columnWidth
+                    - size.width
                 if let diagnostics {
                     drawUnderlay(severity: diagnostics.severity, x: x, top: top, size: size)
                 }
@@ -369,9 +380,10 @@ package final class DiffGutterView: NSView {
 // MARK: Gap handles
 
 extension DiffGutterView {
-    /// The halves `marker` offers on the hairline at `boundaryY`, across the gutter less its separator.
+    /// The halves `marker` offers on the hairline at `boundaryY`, in the lane before the numbers.
     private func halves(of marker: GapMarker, boundaryY: CGFloat) -> [GapHandleLayout.Half] {
-        GapHandleLayout.halves(marker.handles, boundaryY: boundaryY, gutterWidth: bounds.width - 1)
+        GapHandleLayout.halves(
+            marker.handles, boundaryY: boundaryY, rowHeight: rendered?.lineHeight ?? palette.defaultLineHeight)
     }
 
     /// The half of a gap's handle whose hit area holds `point`, with its gap.
@@ -407,8 +419,17 @@ extension DiffGutterView {
                 drawHalf(half, isActive: id == hoveredHandle || id == handleDrag?.id)
             }
             // The hairline, which is also the halves' flat side across their width: drawn once, the same whichever
-            // half is active, so each half's highlight stays its own.
-            let line = NSRect(x: 0, y: y - 0.5, width: width, height: 1)
+            // half is active, so each half's highlight stays its own. It straddles its boundary, but lies inside the
+            // first or the last row at the top or the end of the text, where a card's edge would cut it in half.
+            let lineY: CGFloat =
+                if gap.boundary == 0 {
+                    y
+                } else if gap.boundary == rendered?.rows.count {
+                    y - 1
+                } else {
+                    y - 0.5
+                }
+            let line = NSRect(x: 0, y: lineY, width: width, height: 1)
             palette.textColor.withAlphaComponent(Self.hairlineAlpha).setFill()
             line.divided(atDistance: span.minX, from: .minXEdge).slice.fill()
             line.divided(atDistance: width - span.maxX, from: .maxXEdge).slice.fill()
@@ -419,7 +440,7 @@ extension DiffGutterView {
         }
     }
 
-    private static let hairlineAlpha: CGFloat = 0.12
+    private static let hairlineAlpha: CGFloat = 0.1
 
     private static func strokeAlpha(isActive: Bool) -> CGFloat {
         isActive ? 0.5 : 0.22
@@ -447,7 +468,7 @@ extension DiffGutterView {
         palette.textColor.withAlphaComponent(Self.strokeAlpha(isActive: isActive)).setStroke()
         outline.lineWidth = 1
         outline.stroke()
-        palette.textColor.withAlphaComponent(isActive ? 0.75 : 0.35).setFill()
+        palette.textColor.withAlphaComponent(Self.strokeAlpha(isActive: isActive)).setFill()
         let gripWidth = min(8, rect.width - 6)
         NSRect(x: rect.midX - gripWidth / 2, y: rect.midY - 0.5, width: gripWidth, height: 1).fill()
     }
