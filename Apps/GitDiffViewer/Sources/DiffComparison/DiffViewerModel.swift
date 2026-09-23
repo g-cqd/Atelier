@@ -217,33 +217,6 @@ package final class DiffViewerModel {
         }
     }
 
-    private struct LoadedSides: Sendable {
-        let info: RepositoryInfo
-        let left: ComparisonSource
-        let right: ComparisonSource
-        let leftEntries: [SourceEntry]?
-        let rightEntries: [SourceEntry]?
-        /// The working tree's badge states, read beside its entries; nil for a ref, or when git fails.
-        let rightBadgeStates: BadgeChangeStates?
-    }
-
-    private static func loadSides(in url: URL, leftRef: String, rightRef: String?, reader: any SourceReading) async
-        -> LoadedSides?
-    {
-        guard let info = await reader.repositoryInfo(containing: url) else { return nil }
-        let leftSource = ComparisonSource.gitRef(repository: info.root, ref: leftRef)
-        let rightSource =
-            rightRef.map { ComparisonSource.gitRef(repository: info.root, ref: $0) } ?? .directory(info.root)
-        async let leftEntries = reader.entries(of: leftSource)
-        async let rightEntries = reader.entries(of: rightSource)
-        async let rightBadgeStates = SideState.readBadgeStates(of: rightSource, reader: reader)
-        let loaded = LoadedSides(
-            info: info, left: leftSource, right: rightSource, leftEntries: try? await leftEntries,
-            rightEntries: try? await rightEntries, rightBadgeStates: await rightBadgeStates)
-        PhaseTrace.log("prologue loaded")
-        return loaded
-    }
-
     /// Shows a unified diff or git patch file: the old side of every file on the left, the new side on the right.
     package func openPatch(_ url: URL) {
         sourcesTask?.cancel()
@@ -617,11 +590,4 @@ package final class DiffViewerModel {
         guard index < starts.count else { return }
         scrollRequest = ScrollRequest(row: starts[index])
     }
-}
-
-/// What a window was asked to compare: from the command line, the welcome window or the recents.
-package enum LaunchConfiguration: Hashable, Codable, Sendable {
-    case patch(URL)
-    case files(left: URL, right: URL)
-    case repository(URL, leftRef: String, rightRef: String?)
 }
