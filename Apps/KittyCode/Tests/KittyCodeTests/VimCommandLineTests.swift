@@ -1,4 +1,5 @@
 import AtelierText
+import Foundation
 import KittyCodecs
 import KittyInput
 import KittyRenderer
@@ -32,6 +33,19 @@ struct VimCommandLineTests {
             rows: rows
         )
         return (state, pipeline)
+    }
+
+    /// The standard vim editor, but on a real file in a fresh directory, so a save goes through.
+    private func makeSavableSUT() throws -> (state: EditorState, pipeline: RenderPipeline, path: String) {
+        let sut = makeSUT()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).path
+        try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: true)
+        let path = root + "/test.txt"
+        try Data("hello world\nsecond line".utf8).write(to: URL(fileURLWithPath: path))
+        sut.state.rootPath = root
+        sut.state.bufferManager.activeBuffer?.filePath = path
+        sut.state.restoreStateFromActiveBuffer()
+        return (sut.state, sut.pipeline, path)
     }
 
     private func keyEvent(
@@ -163,8 +177,10 @@ struct VimCommandLineTests {
     // MARK: - :wq (save and quit)
 
     @Test
-    func colonWQSavesAndSwitchesToTree() {
-        let sut = makeSUT()
+    func colonWQSavesAndSwitchesToTree() throws {
+        let savable = try makeSavableSUT()
+        defer { try? FileManager.default.removeItem(atPath: savable.state.rootPath) }
+        let sut = (state: savable.state, pipeline: savable.pipeline)
         enterCommandLine(sut)
         _ = sut.state.handleVimCommandLineKey(KeyEvent(keyCode: AsciiKey.w))
         _ = sut.state.handleVimCommandLineKey(KeyEvent(keyCode: AsciiKey.q))
@@ -174,6 +190,22 @@ struct VimCommandLineTests {
         #expect(result)
         #expect(sut.state.vimCommandLine == nil)
         #expect(sut.state.mode == .tree)
+        #expect(try String(contentsOfFile: savable.path, encoding: .utf8) == "hello world\nsecond line")
+    }
+
+    @Test
+    func colonWQStaysInTheEditorWhenTheSaveFails() {
+        // Root "." holds no "/test.txt", so the save is refused.
+        let sut = makeSUT()
+        enterCommandLine(sut)
+        _ = sut.state.handleVimCommandLineKey(KeyEvent(keyCode: AsciiKey.w))
+        _ = sut.state.handleVimCommandLineKey(KeyEvent(keyCode: AsciiKey.q))
+
+        let result = sut.state.handleVimCommandLineKey(KeyEvent(keyCode: Key.enter.rawValue))
+
+        #expect(result)
+        #expect(sut.state.mode == .editor)
+        #expect(sut.state.statusMessage == "Access denied: cannot save outside project root")
     }
 
     // MARK: - :q! (force quit)
@@ -196,8 +228,10 @@ struct VimCommandLineTests {
     // MARK: - :x (alias for :wq)
 
     @Test
-    func colonXSavesAndSwitchesToTree() {
-        let sut = makeSUT()
+    func colonXSavesAndSwitchesToTree() throws {
+        let savable = try makeSavableSUT()
+        defer { try? FileManager.default.removeItem(atPath: savable.state.rootPath) }
+        let sut = (state: savable.state, pipeline: savable.pipeline)
         enterCommandLine(sut)
         _ = sut.state.handleVimCommandLineKey(KeyEvent(keyCode: AsciiKey.x))
 

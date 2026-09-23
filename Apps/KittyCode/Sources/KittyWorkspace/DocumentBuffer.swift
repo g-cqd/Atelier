@@ -1,5 +1,7 @@
+public import AemiCore
 public import AtelierText
 public import Foundation
+import KittyFileTree
 public import KittyGit
 import KittyStyle
 public import KittySyntax
@@ -106,6 +108,84 @@ public final class DocumentBuffer {
     public var documentVersion: Int {
         get { document.documentVersion }
         set { document.documentVersion = newValue }
+    }
+
+    /// Whether an autosave is writing this buffer's file in the background. A save or reload of the buffer waits for
+    /// it, and a watcher event for the file sets ``hasDiskCheckPending`` instead of acting.
+    public var isSavingInBackground = false
+    /// Whether the file may have changed while ``isSavingInBackground`` held, so it is to be checked once the save
+    /// lands.
+    public var hasDiskCheckPending = false
+
+    /// Whether saving over ``filePath`` would overwrite a change made outside the editor: the watcher flagged one, or
+    /// the file's modification date differs from the one this buffer last read or wrote. A missing file conflicts
+    /// with nothing, and a buffer that never read or wrote its file has no date to compare.
+    public func conflictsWithDisk() -> Bool {
+        if externallyModified { return true }
+        guard let lastModifiedDate, let diskDate = WorkspaceFileLoading.modificationDate(ofFileAt: filePath) else {
+            return false
+        }
+        return diskDate != lastModifiedDate
+    }
+
+    /// Whether `path` names this buffer's file, symlinks and `/private` spellings resolved; never for a buffer with no
+    /// file yet.
+    public func isFile(at path: String) -> Bool {
+        guard !filePath.isEmpty else { return false }
+        return filePath == path
+            || !Set(FileWatcher.canonicalPaths(forFile: filePath))
+                .isDisjoint(with: FileWatcher.canonicalPaths(forFile: path))
+    }
+
+    /// Reads this buffer's file and makes it the text as one undo step, so undo brings back what it replaced, unsaved
+    /// against the file. A buffer that changes or starts saving while the file is read keeps its newer text.
+    /// - Parameters:
+    ///   - taskProvider: Runs the blocking read.
+    ///   - syncLiveState: Runs just before the text is replaced: an active buffer copies its live text and cursor in.
+    /// - Returns: The file's text, or nil when the buffer kept its newer text.
+    /// - Throws: The read's error.
+    public func reloadFromDisk(taskProvider: any TaskProvider, syncLiveState: () -> Void) async throws -> LoadedFile? {
+        let path = filePath
+        let version = documentVersion
+        // Read before the text, as an open does, so a change landing between the two reads as newer.
+        let date = WorkspaceFileLoading.modificationDate(ofFileAt: path)
+        let file = try await WorkspaceFileLoading.readUTF8File(at: path, taskProvider: taskProvider)
+        guard documentVersion == version, filePath == path, !isSavingInBackground else { return nil }
+        syncLiveState()
+        let replaced = BufferEditSnapshot(
+            textBuffer: textBuffer, textCursor: textCursor, lineEnding: lineEnding, selection: selection)
+        replaceContents(with: file, modifiedAt: date)
+        let reloaded = BufferEditSnapshot(textBuffer: textBuffer, textCursor: textCursor, lineEnding: lineEnding)
+        editHistory.recordChange(from: replaced, to: reloaded, coalescingWindow: nil)
+        editHistory.markSaved(reloaded)
+        isDirty = false
+        didInvalidateHistoryOnLastRefresh = false
+        return file
+    }
+
+    /// Replaces the text with `file`'s, as a reload from disk does: the caches, highlights and selection go, the
+    /// cursor is clamped into the new text, and the buffer is no longer externally modified. The edit history is the
+    /// caller's to update.
+    /// - Parameters:
+    ///   - file: The text and line ending read from disk.
+    ///   - date: The file's modification date when it was read.
+    public func replaceContents(with file: LoadedFile, modifiedAt date: Date?) {
+        postOpenProcessingTask?.cancel()
+        postOpenProcessingTask = nil
+        textBuffer = TextBuffer(file.content)
+        lineEnding = file.lineEnding
+        lastModifiedDate = date
+        externallyModified = false
+        selection = nil
+        highlightedLines = []
+        highlightSession = nil
+        document.invalidateTextSnapshotCache()
+        documentVersion += 1
+
+        let lineCount = textBuffer.lineCount
+        textCursor.row = min(textCursor.row, max(0, lineCount - 1))
+        textCursor.col = min(textCursor.col, textBuffer.line(at: textCursor.row).count)
+        textCursor.scrollRow = min(textCursor.scrollRow, max(0, lineCount - 1))
     }
 
     public init(

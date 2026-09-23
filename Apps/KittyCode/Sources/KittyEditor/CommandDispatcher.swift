@@ -22,6 +22,14 @@ public func dispatchCommand(
             state.saveFile()
             return true
 
+        case .forceSaveFile:
+            state.forceSaveFile()
+            return true
+
+        case .reloadFromDisk:
+            state.reloadActiveBufferFromDisk()
+            return true
+
         case .newFile:
             state.beginNewFile()
             return true

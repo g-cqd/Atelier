@@ -234,6 +234,15 @@ public struct KeymapResolver: Sendable {
         return "\(save): Save, \(quit): Tree/Quit"
     }
 
+    /// The status line for a save refused because `fileName` changed on disk: how to overwrite the file or reload it,
+    /// as ex commands in vim mode.
+    public func diskConflictHint(for fileName: String, keybindingMode: KittyConfig.KeybindingMode) -> String {
+        guard keybindingMode != .vim else { return "\(fileName) changed on disk: :w! overwrites it, :e! reloads it" }
+        let overwrite = shortcutLabel(for: .forceSaveFile) ?? "the force-save command"
+        let reload = shortcutLabel(for: .reloadFromDisk) ?? "the reload command"
+        return "\(fileName) changed on disk: \(overwrite) overwrites it, \(reload) reloads it"
+    }
+
     // MARK: - Default builders
 
     private static func buildNanoVimDefaults(
@@ -241,6 +250,7 @@ public struct KeymapResolver: Sendable {
     ) {
         // Global hotkeys (Ctrl+key)
         global[KeyStroke(keyCode: AsciiKey.o, modifiers: .ctrl)] = .saveFile
+        buildDiskConflictBindings(global: &global)
         global[KeyStroke(keyCode: AsciiKey.n, modifiers: .ctrl)] = .newFile
         global[KeyStroke(keyCode: AsciiKey.b, modifiers: .ctrl)] = .toggleSidebar
         global[KeyStroke(keyCode: AsciiKey.h, modifiers: .ctrl)] = .cycleFileVisibility
@@ -284,6 +294,7 @@ public struct KeymapResolver: Sendable {
 
         // Ctrl fallbacks
         global[KeyStroke(keyCode: AsciiKey.o, modifiers: .ctrl)] = .saveFile
+        buildDiskConflictBindings(global: &global)
         global[KeyStroke(keyCode: AsciiKey.n, modifiers: .ctrl)] = .newFile
         global[KeyStroke(keyCode: AsciiKey.w, modifiers: .ctrl)] = .closeTab
         global[KeyStroke(keyCode: AsciiKey.b, modifiers: .ctrl)] = .toggleSidebar
@@ -337,6 +348,16 @@ public struct KeymapResolver: Sendable {
         // Escape and force quit
         global[KeyStroke(keyCode: AsciiKey.escape)] = .escapeEditor
         global[KeyStroke(keyCode: 3)] = .forceQuit
+    }
+
+    /// Ctrl+Shift+O overwrites a file that changed on disk, like Ctrl+O saves; Ctrl+Shift+R reloads it instead.
+    private static func buildDiskConflictBindings(global: inout [KeyStroke: CommandID]) {
+        for keyCode in [AsciiKey.o, AsciiKey.o - 32] {
+            global[KeyStroke(keyCode: keyCode, modifiers: [.ctrl, .shift])] = .forceSaveFile
+        }
+        for keyCode in [UInt32(UInt8(ascii: "r")), UInt32(UInt8(ascii: "R"))] {
+            global[KeyStroke(keyCode: keyCode, modifiers: [.ctrl, .shift])] = .reloadFromDisk
+        }
     }
 
     private static func buildClipboardBindings(
