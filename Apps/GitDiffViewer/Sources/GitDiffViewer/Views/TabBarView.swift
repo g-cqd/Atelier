@@ -41,8 +41,7 @@ struct TabBarView: View {
                             isFolder: !model.comparison.isFile(tab.path),
                             glyph: model.status(ofPath: tab.path).flatMap(ChangeGlyph.init),
                             badgeScheme: model.settings.badgeScheme,
-                            badgeState: model.left.badgeState == .staged && model.right.badgeState == .staged
-                                ? .staged : .unstaged
+                            badgeState: model.badgeState(ofPath: tab.path)
                         ) {
                             model.activateTab(tab.id)
                         } pin: {
