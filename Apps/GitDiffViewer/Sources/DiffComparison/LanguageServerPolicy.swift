@@ -125,7 +125,7 @@ package final class LanguageServerPolicy {
     private func location(underKey key: String) -> ToolLocation? {
         guard let data = defaults.data(forKey: key) else { return nil }
         do {
-            return try JSONDecoder().decode([String: ToolLocation].self, from: data)[Self.serverID]
+            return try DefaultsJSON.decode([String: ToolLocation].self, from: data)[Self.serverID]
         } catch {
             PhaseTrace.log("unreadable \(key), read as its default: \(error)")
             return nil
