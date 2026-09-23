@@ -1,27 +1,48 @@
-/// The tab bar's own pure layout decisions -- kept independent of SwiftUI (even of `CGFloat`'s own home,
-/// CoreGraphics) so they are cheap to test; the app tier only draws what these decide, converting to `CGFloat` at
-/// the point of use the same way it already turns ``DiffComparison`` statuses into concrete `Color`s.
+// The tab bar's pure decisions, free of SwiftUI and CoreGraphics so they stay cheap to test; the app tier converts
+// them to `CGFloat`s and `Color`s where it draws.
 
-/// The bar's single rhythm: the gap between adjacent tabs, reused as the inset around the whole row on every side,
-/// so the negative space inside the bar reads the same everywhere -- one constant instead of two that could drift
-/// apart.
+/// The tab bar's spacing.
 package enum TabBarLayout {
+    /// The bar's single rhythm: the gap between adjacent tabs, reused as the inset around the whole row.
     package static let gap: Double = 6
 }
 
-/// What a tab's fixed-size leading slot shows: the diff badge when the pointer isn't over the tab and it carries a
-/// change, the neutral icon as that slot's fallback when it doesn't, or the close button whenever the pointer is
-/// over the tab -- one table so hover state and change status can never leave the slot showing two things, or
-/// nothing, at once.
+/// What a tab's fixed-size leading slot shows: the close button while the pointer is over the tab, otherwise the
+/// diff badge, or the neutral icon when the tab has no change to show.
 package enum TabSlotContent: Equatable, Sendable {
     case badge
     case icon
     case close
 
-    /// Hovering always wins: the close button is the one piece of chrome a pointer's presence should reveal,
-    /// whether or not the tab underneath it has a change to show.
     package static func resolve(isHovering: Bool, hasBadge: Bool) -> TabSlotContent {
         guard !isHovering else { return .close }
         return hasBadge ? .badge : .icon
+    }
+}
+
+/// How a tab draws in one state: whether it is kept open, whether it is active, and where the pointer is.
+package struct TabAppearance: Equatable, Sendable {
+    /// A preview tab, which the next single click replaces, sets its name in italics.
+    package let isItalic: Bool
+    /// A kept-open tab carries a pin after its name.
+    package let showsPin: Bool
+    /// The active tab draws in the primary ink, every other tab in the secondary one.
+    package let usesPrimaryInk: Bool
+    /// Opacity of the primary-colour outline; the active tab's is the stronger one whatever the pointer does.
+    package let outlineOpacity: Double
+    /// Opacity of the primary-colour wash inside the tab; zero unless the pointer is over the tab.
+    package let washOpacity: Double
+    /// Opacity of the disc behind the close button; zero unless the pointer is over the button and so over the tab,
+    /// which keeps a button exit that was never reported from leaving the disc on.
+    package let closeDiscOpacity: Double
+
+    /// The look of a tab in this state; `isHoveringClose` counts only while `isHovering` holds.
+    package static func resolve(isPinned: Bool, isActive: Bool, isHovering: Bool, isHoveringClose: Bool)
+        -> TabAppearance
+    {
+        TabAppearance(
+            isItalic: !isPinned, showsPin: isPinned, usesPrimaryInk: isActive,
+            outlineOpacity: isActive ? 0.28 : 0.1, washOpacity: isHovering ? 0.03 : 0,
+            closeDiscOpacity: isHovering && isHoveringClose ? 0.12 : 0)
     }
 }
