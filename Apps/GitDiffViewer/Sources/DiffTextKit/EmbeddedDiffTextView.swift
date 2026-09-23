@@ -177,6 +177,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
             layoutManager.textContentManager?.removeTextLayoutManager(layoutManager)
             layout.contentStorage.addTextLayoutManager(layoutManager)
             layoutManager.delegate = layout.fragmentProvider
+            // The layout's space above its first row, the band of a gap at the top of the file among it.
+            textView.textContainerInset = NSSize(width: 0, height: layout.inset)
             textView.backgroundColor = layout.rendered.palette.background
             textView.selectedTextAttributes = [.backgroundColor: layout.rendered.palette.selection]
             self.layout = layout

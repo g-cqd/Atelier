@@ -28,8 +28,11 @@ package final class StaticTextLayout {
     package static let verticalInset: CGFloat = 0
 
     package let rendered: RenderedText
-    /// ``verticalInset``, which the gutter and the height read from each layout.
-    package let inset = StaticTextLayout.verticalInset
+    /// The space above the first row, which the gutter and the height read from each layout: ``verticalInset``, and
+    /// the band of a gap at the top of the file (book DIFF-02). A displaying view insets its text by it.
+    package let inset: CGFloat
+    /// The space below the last row: ``verticalInset``, and the band of a gap at the end of the file.
+    package let bottomInset: CGFloat
     package let contentStorage = NSTextContentStorage()
     package let layoutManager = NSTextLayoutManager()
     /// Delegate for every layout manager on `contentStorage`, so a displaying view colours rows the same way.
@@ -48,6 +51,8 @@ package final class StaticTextLayout {
 
     package init(rendered: RenderedText) {
         self.rendered = rendered
+        inset = Self.verticalInset + rendered.bandAbove
+        bottomInset = Self.verticalInset + rendered.bandBelow
         fragmentProvider = DiffFragmentProvider(rendered: rendered)
         container.lineFragmentPadding = DiffPaneMetrics.lineFragmentPadding
         container.widthTracksTextView = false
@@ -92,16 +97,17 @@ package final class StaticTextLayout {
         fragmentProvider.metrics.width = contentWidth
     }
 
-    /// Height of the whole document at the current width and row spacing: one line per row without wrapping.
+    /// Height of the whole document at the current width and row spacing: one line per row without wrapping, and the
+    /// gaps' bands.
     /// - Complexity: O(1) once measured; measuring a wrapped text lays out whatever is not laid out yet.
     package var height: CGFloat {
         if let measuredHeight { return measuredHeight }
         let height: CGFloat
         if laidOut?.mode == WrapMode.none {
-            height = (CGFloat(max(rendered.rows.count, 1)) * rendered.lineHeight + 2 * inset).rounded(.up)
+            height = (rendered.unwrappedTextHeight + inset + bottomInset).rounded(.up)
         } else {
             layoutManager.ensureLayout(for: layoutManager.documentRange)
-            height = (layoutManager.usageBoundsForTextContainer.height + 2 * inset).rounded(.up)
+            height = (layoutManager.usageBoundsForTextContainer.height + inset + bottomInset).rounded(.up)
         }
         measuredHeight = height
         return height

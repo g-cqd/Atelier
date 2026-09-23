@@ -24,6 +24,10 @@ package struct RenderedGap: Sendable, Hashable {
     /// The boundary, counted in rows above it: 0 lies above the first row, `rows.count` below the last.
     package let boundary: Int
     package let marker: GapMarker
+
+    /// Whether the gap takes an empty band of its own on its boundary, as in Xcode, to hold its handle: one that
+    /// offers a handle does, and one hiding a whole file without a change leaves no trace.
+    package var hasBand: Bool { !marker.handles.isEmpty }
 }
 
 package struct RowMeta: Sendable {
@@ -94,6 +98,8 @@ package final class RenderedText: @unchecked Sendable {
     package let baselineOffset: CGFloat
     /// The height of one row, the font's own line height once the chosen multiple is applied.
     package let lineHeight: CGFloat
+    /// The bands between two rows, which the text holds as paragraph spacing.
+    private let bandsBetweenRows: Int
 
     package init(
         side: RenderedSide, palette: DiffPalette, attributed: NSAttributedString, rows: [RowMeta],
@@ -109,6 +115,47 @@ package final class RenderedText: @unchecked Sendable {
         self.longestLine = longestLine
         self.baselineOffset = baselineOffset
         self.lineHeight = lineHeight ?? palette.defaultLineHeight
+        bandsBetweenRows = gaps.count(where: { $0.hasBand && $0.boundary > 0 && $0.boundary < rows.count })
+    }
+
+    /// The height of the empty band a gap takes on its boundary, as in Xcode (book DIFF-02): a row, and the point of
+    /// the hairline across its middle. Xcode's is 19 points against its 18-point lines.
+    package static func gapBandHeight(lineHeight: CGFloat) -> CGFloat {
+        lineHeight + 1
+    }
+
+    /// ``gapBandHeight(lineHeight:)`` for this text's rows.
+    package var gapBandHeight: CGFloat {
+        Self.gapBandHeight(lineHeight: lineHeight)
+    }
+
+    /// The band of a gap above the first row. A view keeps it as space above the text: TextKit ignores the spacing
+    /// before a text's first paragraph.
+    package var bandAbove: CGFloat {
+        guard let first = gaps.first, first.boundary == 0, first.hasBand, !rows.isEmpty else { return 0 }
+        return gapBandHeight
+    }
+
+    /// The band of a gap below the last row. A view keeps it as space below the text: TextKit ignores the spacing
+    /// after a text's last paragraph.
+    package var bandBelow: CGFloat {
+        guard let last = gaps.last, last.boundary == rows.count, last.hasBand, !rows.isEmpty else { return 0 }
+        return gapBandHeight
+    }
+
+    /// The band between `row` and the next row, which the text holds as `row`'s paragraph spacing; zero when no gap
+    /// with a band lies between them.
+    /// - Complexity: O(log gaps)
+    package func bandSpacing(afterRow row: Int) -> CGFloat {
+        guard row >= 0, row + 1 < rows.count, gaps(on: (row + 1) ... (row + 1)).contains(where: \.hasBand) else {
+            return 0
+        }
+        return gapBandHeight
+    }
+
+    /// The height TextKit lays the rows out at without wrapping, with the bands between them: one line per row.
+    package var unwrappedTextHeight: CGFloat {
+        CGFloat(max(rows.count, 1)) * lineHeight + CGFloat(bandsBetweenRows) * gapBandHeight
     }
 
     /// The largest line number shown, which sizes the gutter; rows can be few while numbers are large.

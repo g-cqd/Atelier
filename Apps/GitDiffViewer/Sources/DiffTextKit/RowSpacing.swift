@@ -19,8 +19,9 @@ package enum RowSpacing {
         return heights
     }
 
-    /// Sets the paragraph spacing of every row to `spacing[row]` (or zero past the end), touching only rows that
-    /// change. Returns whether any row changed.
+    /// Sets the paragraph spacing of every row to `spacing[row]` (or zero past the end), on top of the band of a gap
+    /// after the row, which the spacing holds (book DIFF-02), touching only rows that change. Returns whether any row
+    /// changed.
     @discardableResult
     package static func apply(_ spacing: [Double], to contentStorage: NSTextContentStorage, rendered: RenderedText)
         -> Bool
@@ -36,7 +37,7 @@ package enum RowSpacing {
                     let current = storage.attribute(.paragraphStyle, at: start, effectiveRange: nil)
                         as? NSParagraphStyle
                 else { continue }
-                let target = row < spacing.count ? spacing[row] : 0
+                let target = (row < spacing.count ? spacing[row] : 0) + rendered.bandSpacing(afterRow: row)
                 guard current.paragraphSpacing != target, let style = current.mutableCopy() as? NSMutableParagraphStyle
                 else { continue }
                 style.paragraphSpacing = target

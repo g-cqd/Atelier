@@ -110,6 +110,8 @@ private final class GutterFixture {
     private(set) var events: [GapDragEvent] = []
     private(set) var diagnosticClicks: [Int] = []
     private var layout: StaticTextLayout
+    /// The text the gutter numbers.
+    var rendered: RenderedText { layout.rendered }
 
     /// Sixty lines changed at lines 10 and 40: a leading gap, a gap between the changes, and a trailing gap.
     init(visibleHeight: CGFloat = 1_000, expansions: [GapKey: GapExpansion] = [:]) throws {
@@ -150,21 +152,27 @@ private final class GutterFixture {
         gutter.frame = NSRect(x: 0, y: 0, width: gutter.thickness, height: layout.height)
     }
 
-    /// The gap between the two changes, the row its boundary lies above, and that boundary's y in the gutter: the top
-    /// of that row as TextKit lays it out.
-    func middleGap() -> (marker: GapMarker, row: Int, y: CGFloat)? {
-        guard let gap = layout.rendered.gaps.first(where: { !$0.marker.isLeading && !$0.marker.isTrailing }) else {
-            return nil
+    /// A gap as the gutter shows it: its marker, the row its boundary lies above, and its band in the gutter.
+    struct Gap {
+        let marker: GapMarker
+        let row: Int
+        let band: NSRect
+        /// Where its hairline crosses: the band's middle.
+        var y: CGFloat { band.midY }
+    }
+
+    /// The gap between the two changes.
+    func middleGap() -> Gap? {
+        var found: Gap?
+        gutter.forEachGap(in: gutter.bounds) { gap, band in
+            guard !gap.marker.isLeading, !gap.marker.isTrailing else { return }
+            found = Gap(marker: gap.marker, row: gap.boundary, band: band)
         }
-        var top: CGFloat?
-        gutter.forEachFragment(in: gutter.bounds) { _, _, row, y in
-            if row == gap.boundary { top = y }
-        }
-        return top.map { (gap.marker, gap.boundary, $0) }
+        return found
     }
 
     /// The halves of `gap` as the gutter lays them out.
-    func halves(of gap: (marker: GapMarker, row: Int, y: CGFloat)) -> [GapHandleLayout.Half] {
+    func halves(of gap: Gap) -> [GapHandleLayout.Half] {
         GapHandleLayout.halves(gap.marker.handles, boundaryY: gap.y, rowHeight: layout.rendered.lineHeight)
     }
 
@@ -251,8 +259,9 @@ struct DiffGutterGapHandleTests {
         ])
         let upper = try #require(fixture.halves(of: gap).first)
 
-        // On the number of the row above, level with the upper half, then on the half itself.
-        fixture.mouse(.leftMouseDown, at: NSPoint(x: fixture.gutter.numbersLeft + 2, y: upper.rect.midY))
+        // On the number of the row above the band, then on the upper half in the band.
+        let rowAbove = gap.band.minY - fixture.rendered.lineHeight / 2
+        fixture.mouse(.leftMouseDown, at: NSPoint(x: fixture.gutter.numbersLeft + 2, y: rowAbove))
         fixture.mouse(.leftMouseDown, at: NSPoint(x: upper.rect.midX, y: upper.rect.midY))
 
         #expect(fixture.diagnosticClicks == [gap.row - 1])
@@ -372,9 +381,10 @@ struct DiffGutterGapHandleTests {
     }
 
     @Test
-    func `the hairline crosses the gutter exactly on the boundary between the rows around the gap`() throws {
+    func `the hairline crosses the gutter through the middle of its gap's band`() throws {
         let fixture = try GutterFixture()
         let gap = try #require(fixture.middleGap())
+        #expect(gap.y == gap.band.midY)
         // At the gutter's leading edge, clear of the halves and of the line numbers.
         let background = fixture.pixel(at: NSPoint(x: 0.5, y: gap.y - 5))
 
@@ -385,11 +395,11 @@ struct DiffGutterGapHandleTests {
     }
 
     @Test
-    func `a half held at the bottom edge keeps its gap's boundary in view as rows open above it`() throws {
+    func `a half held at the bottom edge keeps its gap's band in view as rows open above it`() throws {
         let fixture = try GutterFixture(visibleHeight: 200)
         let gap = try #require(fixture.middleGap())
-        // The boundary sits at the bottom of what shows, and its upper half is held just past that edge.
-        fixture.gutter.scroll(NSPoint(x: 0, y: gap.y + GapHandleLayout.halfHeight - 200))
+        // The band sits at the bottom of what shows, and its upper half is held just past that edge.
+        fixture.gutter.scroll(NSPoint(x: 0, y: gap.band.maxY - 200))
         let upper = try #require(fixture.halves(of: gap).first)
         fixture.mouse(.leftMouseDown, at: NSPoint(x: upper.rect.midX, y: upper.rect.midY))
         fixture.mouse(
@@ -400,9 +410,8 @@ struct DiffGutterGapHandleTests {
         fixture.gutter.layoutSubtreeIfNeeded()
 
         let moved = try #require(fixture.middleGap())
-        #expect(moved.y > gap.y)
-        #expect(fixture.gutter.visibleRect.minY <= moved.y - GapHandleLayout.halfHeight)
-        #expect(fixture.gutter.visibleRect.maxY >= moved.y + GapHandleLayout.halfHeight)
+        #expect(moved.band.minY > gap.band.minY)
+        #expect(fixture.gutter.visibleRect.contains(moved.band))
     }
 }
 
@@ -426,6 +435,11 @@ struct DiffGutterGapEdgeTests {
         return (gutter, layout, window)
     }
 
+    /// The middle of the handles across `gutter`.
+    private func handleMidX(in gutter: DiffGutterView) -> CGFloat {
+        GapHandleLayout.laneWidth / 2
+    }
+
     /// The gutter's pixels at `points`, as it draws now.
     private func pixels(of gutter: DiffGutterView, at points: [NSPoint]) -> [NSColor?] {
         guard let bitmap = gutter.bitmapImageRepForCachingDisplay(in: gutter.bounds) else { return [] }
@@ -443,7 +457,7 @@ struct DiffGutterGapEdgeTests {
     }
 
     @Test
-    func `the gutter finds the gaps at the top and the end of the text on its own edges`() throws {
+    func `a gap at the top of the text has its band above the first row, one at the end below the last`() throws {
         let text = changedAtLineTen()
         let rendered = try #require(
             DiffRenderer.render(
@@ -452,16 +466,22 @@ struct DiffGutterGapEdgeTests {
             .new)
         let (gutter, layout, _) = gutter(over: rendered, style: .new)
         defer { withExtendedLifetime(layout) {} }
-        var boundaries: [Int: CGFloat] = [:]
+        var bands: [Int: NSRect] = [:]
+        var firstRowTop: CGFloat?
 
-        gutter.forEachGap(in: gutter.bounds) { gap, y in boundaries[gap.boundary] = y }
+        gutter.forEachGap(in: gutter.bounds) { gap, band in bands[gap.boundary] = band }
+        gutter.forEachFragment(in: gutter.bounds) { _, _, row, y in if row == 0 { firstRowTop = y } }
 
-        #expect(boundaries[0] == 0)
-        #expect(boundaries[rendered.rows.count] == gutter.bounds.maxY)
+        let height = rendered.gapBandHeight
+        let width = gutter.bounds.width - 1
+        #expect(bands[0] == NSRect(x: 0, y: 0, width: width, height: height))
+        #expect(firstRowTop == height)
+        #expect(
+            bands[rendered.rows.count] == NSRect(x: 0, y: gutter.bounds.maxY - height, width: width, height: height))
     }
 
     @Test
-    func `the top of the text shows a lower half under its hairline, and the end an upper half over its own`() throws {
+    func `the band at the top of the text shows its lower half, and the band at the end its upper half`() throws {
         let text = changedAtLineTen()
         let rendered = try #require(
             DiffRenderer.render(
@@ -470,12 +490,12 @@ struct DiffGutterGapEdgeTests {
             .new)
         let (gutter, layout, _) = gutter(over: rendered, style: .new)
         defer { withExtendedLifetime(layout) {} }
-        let lane = GapHandleLayout.laneWidth / 2
+        let x = handleMidX(in: gutter)
         let bottom = gutter.bounds.maxY
 
-        // The gutter's background, the lower half's grip under the top edge, and the upper half's over the bottom one.
+        // The gutter's background, then each half near the band's edge on the side of its change.
         let samples = pixels(
-            of: gutter, at: [NSPoint(x: 0.5, y: 20), NSPoint(x: lane, y: 3.5), NSPoint(x: lane, y: bottom - 3.5)])
+            of: gutter, at: [NSPoint(x: 0.5, y: 40), NSPoint(x: x, y: 11.5), NSPoint(x: x, y: bottom - 11.5)])
 
         #expect(samples.count == 3)
         #expect(samples.dropFirst().allSatisfy { $0 != samples.first })
@@ -491,31 +511,28 @@ struct DiffGutterGapEdgeTests {
         let rendered = try #require(DiffRenderer.renderCombined(files: files, context: 1, expansions: [:]).unified)
         let (gutter, layout, _) = gutter(over: rendered, style: .dual)
         defer { withExtendedLifetime(layout) {} }
-        // The second file's header, between the first file's trailing gap and the second file's leading one.
+        // The bands on either side of the second file's header: the first file's trailing gap above it, which offers
+        // its upper half alone, and the second file's leading gap below it, which offers its lower half alone.
         let header = try #require(rendered.rows.indices.dropFirst().first { rendered.rows[$0].kind == .header })
-        var headerTop: CGFloat?
-        var headerHeight: CGFloat = 0
-        gutter.forEachFragment(in: gutter.bounds) { fragment, _, row, y in
-            guard row == header else { return }
-            headerTop = y
-            headerHeight = fragment.layoutFragmentFrame.height
-        }
-        let top = try #require(headerTop)
-        let lane = GapHandleLayout.laneWidth / 2
+        var bands: [Int: NSRect] = [:]
+        gutter.forEachGap(in: gutter.bounds) { gap, band in bands[gap.boundary] = band }
+        let above = try #require(bands[header])
+        let below = try #require(bands[header + 1])
+        let x = handleMidX(in: gutter)
 
-        // Over the header, clear of both hairlines, where the halves the gaps do not offer would lie; then the
-        // trailing gap's upper half over the row above the header, and the leading gap's lower half under it.
+        // The background, clear of the bands; each band's empty side, where the half its gap does not offer would
+        // lie; then each band's offered half, near the band's edge on the side of its change.
         let samples = pixels(
             of: gutter,
             at: [
-                NSPoint(x: lane, y: top + 3), NSPoint(x: lane, y: top + headerHeight - 3), NSPoint(x: 0.5, y: top + 7),
-                NSPoint(x: lane, y: top - 3.5), NSPoint(x: lane, y: top + headerHeight + 3.5)
+                NSPoint(x: 0.5, y: above.maxY + 3), NSPoint(x: x, y: above.maxY - 2), NSPoint(x: x, y: below.minY + 2),
+                NSPoint(x: x, y: above.minY + 4.5), NSPoint(x: x, y: below.maxY - 4.5)
             ])
 
         #expect(samples.count == 5)
-        #expect(samples[0] == samples[2])
-        #expect(samples[1] == samples[2])
-        #expect(samples[3] != samples[2])
-        #expect(samples[4] != samples[2])
+        #expect(samples[1] == samples[0])
+        #expect(samples[2] == samples[0])
+        #expect(samples[3] != samples[0])
+        #expect(samples[4] != samples[0])
     }
 }

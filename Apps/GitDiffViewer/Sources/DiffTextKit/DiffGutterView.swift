@@ -193,8 +193,8 @@ package final class DiffGutterView: NSView {
 
     /// Each half of a gap's handle shows the one direction it drags in, over its own hit area only.
     package override func resetCursorRects() {
-        forEachGap(in: visibleRect.insetBy(dx: 0, dy: -GapHandleLayout.reach)) { gap, y in
-            for half in halves(of: gap.marker, boundaryY: y) {
+        forEachGap(in: visibleRect) { gap, band in
+            for half in halves(of: gap.marker, boundaryY: band.midY) {
                 addCursorRect(
                     half.hitArea, cursor: .rowResize(directions: half.handle == .extendsChangeAbove ? .down : .up))
             }
@@ -208,10 +208,10 @@ package final class DiffGutterView: NSView {
         guard overlay?.isEmpty == false, point.x >= 0, point.x < bounds.width else { return nil }
         var found: (Int, DiagnosticOverlay.RowDiagnostics, NSRect)?
         forEachFragment(in: Self.row(at: point)) { fragment, _, rowIndex, y in
-            let frame = fragment.layoutFragmentFrame
-            guard point.y >= y, point.y < y + frame.height, let diagnostics = overlay?.row(rowIndex)
-            else { return }
-            found = (rowIndex, diagnostics, NSRect(x: 0, y: y, width: bounds.width, height: frame.height))
+            // The row's own height: the band of a gap after it holds no line number.
+            let height = fragment.layoutFragmentFrame.height - (rendered?.bandSpacing(afterRow: rowIndex) ?? 0)
+            guard point.y >= y, point.y < y + height, let diagnostics = overlay?.row(rowIndex) else { return }
+            found = (rowIndex, diagnostics, NSRect(x: 0, y: y, width: bounds.width, height: height))
         }
         return found
     }
@@ -294,22 +294,31 @@ package final class DiffGutterView: NSView {
         }
     }
 
-    /// Visits the gaps on the boundaries of the rows intersecting `rect` of this view, each with its boundary's y in
-    /// this view.
+    /// Visits the gaps that take a band (book DIFF-02) near the rows intersecting `rect` of this view, each with its
+    /// band in this view, across the gutter less its separator. A band ends where the row below it starts: above the
+    /// first row, in the text's inset, or at the bottom of the row above it, as that row's paragraph spacing. Below
+    /// the last row, it starts where the row ends.
     /// - Complexity: O(rows in `rect` + log gaps), plus a lookup of the first fragment.
-    func forEachGap(in rect: NSRect, _ body: (RenderedGap, CGFloat) -> Void) {
+    func forEachGap(in rect: NSRect, _ body: (RenderedGap, NSRect) -> Void) {
         guard let rendered, !rendered.gaps.isEmpty else { return }
-        var boundaries: [Int: CGFloat] = [:]
-        forEachFragment(in: rect) { fragment, _, rowIndex, y in
-            // A row's top is its boundary with the row above. Its bottom stands for the next row's top until that row
-            // is visited, and is the only boundary below the last row.
-            boundaries[rowIndex] = y
-            boundaries[rowIndex + 1] = y + fragment.layoutFragmentFrame.height
+        let height = rendered.gapBandHeight
+        var edges: [Int: (top: CGFloat, bottom: CGFloat)] = [:]
+        // A band lies outside the rows it runs between, above the first or below the last: look a band further.
+        forEachFragment(in: rect.insetBy(dx: 0, dy: -height)) { fragment, _, rowIndex, y in
+            edges[rowIndex] = (y, y + fragment.layoutFragmentFrame.height)
         }
-        guard let first = boundaries.keys.min(), let last = boundaries.keys.max() else { return }
-        for gap in rendered.gaps(on: first ... last) {
-            guard let y = boundaries[gap.boundary] else { continue }
-            body(gap, y)
+        guard let first = edges.keys.min(), let last = edges.keys.max() else { return }
+        let width = max(bounds.width - 1, 0)
+        for gap in rendered.gaps(on: first ... (last + 1)) where gap.hasBand {
+            let bandTop: CGFloat
+            if gap.boundary == rendered.rows.count, let row = edges[gap.boundary - 1] {
+                bandTop = row.bottom
+            } else if let bottom = edges[gap.boundary]?.top ?? edges[gap.boundary - 1]?.bottom {
+                bandTop = bottom - height
+            } else {
+                continue
+            }
+            body(gap, NSRect(x: 0, y: bandTop, width: width, height: height))
         }
     }
 
@@ -391,9 +400,9 @@ extension DiffGutterView {
         guard point.x >= 0, point.x < bounds.width else { return nil }
         var found: (GapMarker, GapHandle)?
         let reach = GapHandleLayout.reach
-        forEachGap(in: NSRect(x: 0, y: point.y - reach, width: 1, height: 2 * reach)) { gap, y in
+        forEachGap(in: NSRect(x: 0, y: point.y - reach, width: 1, height: 2 * reach)) { gap, band in
             guard found == nil,
-                let half = halves(of: gap.marker, boundaryY: y).first(where: { $0.hitArea.contains(point) })
+                let half = halves(of: gap.marker, boundaryY: band.midY).first(where: { $0.hitArea.contains(point) })
             else { return }
             found = (gap.marker, half.handle)
         }
@@ -417,25 +426,17 @@ extension DiffGutterView {
     /// whole file without a change, leaves no trace.
     private func drawGaps(in rect: NSRect) {
         let width = bounds.width - 1
-        forEachGap(in: rect.insetBy(dx: 0, dy: -GapHandleLayout.reach)) { gap, y in
+        forEachGap(in: rect) { gap, band in
+            let y = band.midY
             let halves = halves(of: gap.marker, boundaryY: y)
             guard let span = halves.first?.rect else { return }
             for half in halves {
                 let id = HandleID(key: gap.marker.key, handle: half.handle)
                 drawHalf(half, isActive: id == hoveredHandle || id == handleDrag?.id)
             }
-            // The hairline, which is also the halves' flat side across their width: drawn once, the same whichever
-            // half is active, so each half's highlight stays its own. It straddles its boundary, but lies inside the
-            // first or the last row at the top or the end of the text, where a card's edge would cut it in half.
-            let lineY: CGFloat =
-                if gap.boundary == 0 {
-                    y
-                } else if gap.boundary == rendered?.rows.count {
-                    y - 1
-                } else {
-                    y - 0.5
-                }
-            let line = NSRect(x: 0, y: lineY, width: width, height: 1)
+            // The hairline, across the band's middle, which is also the halves' flat side across their width: drawn
+            // once, the same whichever half is active, so each half's highlight stays its own.
+            let line = NSRect(x: 0, y: y - 0.5, width: width, height: 1)
             palette.textColor.withAlphaComponent(Self.hairlineAlpha).setFill()
             line.divided(atDistance: span.minX, from: .minXEdge).slice.fill()
             line.divided(atDistance: width - span.maxX, from: .maxXEdge).slice.fill()
@@ -486,10 +487,9 @@ extension DiffGutterView {
         guard !visible.isEmpty else { return }
         let reach = 4 * (rendered?.lineHeight ?? DiffPalette.system.defaultLineHeight)
         var target: NSRect?
-        forEachGap(in: visible.insetBy(dx: 0, dy: -reach)) { gap, y in
+        forEachGap(in: visible.insetBy(dx: 0, dy: -reach)) { gap, band in
             guard gap.marker.key == id.key else { return }
-            let half = GapHandleLayout.halfHeight
-            target = NSRect(x: 0, y: y - half, width: bounds.width, height: 2 * half)
+            target = band
         }
         guard let target, !visible.contains(target) else { return }
         guard let clipView else {
