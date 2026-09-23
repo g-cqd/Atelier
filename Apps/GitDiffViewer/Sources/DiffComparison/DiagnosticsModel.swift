@@ -29,10 +29,18 @@ package final class DiagnosticsModel {
     /// The finding the Findings list last opened, until the window scrolls to its line.
     @ObservationIgnored package var pendingReveal: FindingReveal?
     /// The user's trust decisions: a side that is a git ref is analyzed only in a repository the user trusts, and in
-    /// none while no store is attached.
-    @ObservationIgnored package var trust: RepositoryTrust?
+    /// none while no store is attached. A decision plans the run again, so trusting a repository starts its ref side
+    /// and revoking it drops that side's findings at once.
+    @ObservationIgnored package var trust: RepositoryTrust? {
+        didSet {
+            trust?.addDecisionObserver(self) { [weak self] _, _ in self?.planAgain() }
+            planAgain()
+        }
+    }
     /// Exports a ref side's tree for its analysis; with none, only folders are analyzed.
-    @ObservationIgnored package var treeExporter: (any DiagnosticsTreeExporting)?
+    @ObservationIgnored package var treeExporter: (any DiagnosticsTreeExporting)? {
+        didSet { planAgain() }
+    }
 
     private let session: DiagnosticsSession
     private let settings: ViewerSettings
@@ -85,6 +93,12 @@ package final class DiagnosticsModel {
     /// changeset neither blinks the squiggles nor re-lints (GDV S9).
     package func comparisonChanged(_ sides: DiagnosticsSides) {
         self.sides = sides
+        request(plan())
+    }
+
+    /// Plans the run again for what the comparison last offered, under the current trust and exporter; an unchanged
+    /// plan keeps what runs.
+    private func planAgain() {
         request(plan())
     }
 
@@ -206,7 +220,7 @@ package final class DiagnosticsModel {
     /// sides, plans the run again.
     private func settingsChanged(_ change: ViewerSettings.Change) {
         guard change == .diagnostics else { return }
-        request(plan())
+        planAgain()
     }
 
     /// Replaces any run in flight with `plan` after the debounce: each side in turn, the right one first, each tool's

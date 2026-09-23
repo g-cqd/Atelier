@@ -42,6 +42,23 @@ package final class RepositoryTrust {
     /// Called after a root's decision changes, with its canonical root and the new decision, so the owner can stop
     /// what a trusted root had started.
     @ObservationIgnored package var onDecisionChanged: ((URL, Decision) -> Void)?
+    /// Every other party that reacts to a decision, held weakly by owner, so each window's diagnostics can plan again
+    /// without taking ``onDecisionChanged`` from the language-server policy.
+    @ObservationIgnored private var decisionObservers: [(owner: WeakOwner, handler: (URL, Decision) -> Void)] = []
+
+    private final class WeakOwner {
+        weak var object: AnyObject?
+
+        init(_ object: AnyObject) {
+            self.object = object
+        }
+    }
+
+    /// Calls `handler` after every decision change, with the canonical root and the new decision, for as long as
+    /// `owner` lives.
+    package func addDecisionObserver(_ owner: AnyObject, _ handler: @escaping (URL, Decision) -> Void) {
+        decisionObservers.append((WeakOwner(owner), handler))
+    }
 
     package init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -144,6 +161,8 @@ package final class RepositoryTrust {
         decisions[key] = decision
         defaults.set(decisions.mapValues(\.rawValue), forKey: Self.storageKey)
         onDecisionChanged?(root, decision)
+        decisionObservers.removeAll { $0.owner.object == nil }
+        for observer in decisionObservers { observer.handler(root, decision) }
     }
 
     /// The storage key of the directory at `root`: its canonical path, or nil when it names no existing directory.
