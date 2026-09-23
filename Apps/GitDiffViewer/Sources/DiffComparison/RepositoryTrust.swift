@@ -63,6 +63,12 @@ package final class RepositoryTrust {
         decision(for: root) == .trusted
     }
 
+    /// Whether Fetch may run in the repository at `root`: only in a trusted one, since a fetch runs the transports and
+    /// helpers the repository's configuration names. Nil, no repository, allows nothing.
+    package func allowsFetch(in root: URL?) -> Bool {
+        root.map(isTrusted) ?? false
+    }
+
     /// The canonical roots of every trusted repository, sorted by path.
     package var trustedRoots: [URL] {
         decisions.filter { $0.value == .trusted }.keys.sorted()

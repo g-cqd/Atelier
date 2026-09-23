@@ -66,8 +66,8 @@ private struct RepositoryTrustPrompt: ViewModifier {
             which runs code the repository controls: its package manifest and build plugins, its macros, and any \
             build server it names. Trust it only if you trust its authors.
 
-            Until you do, hovers show doc comments and Apple SDK documentation. Settings ▸ Tools lists the \
-            repositories you trust.
+            Until you do, hovers show doc comments and Apple SDK documentation, and Fetch stays off; Trust \
+            Repository… in the source menu asks again. Settings ▸ Tools lists the repositories you trust.
             """
     }
 }
