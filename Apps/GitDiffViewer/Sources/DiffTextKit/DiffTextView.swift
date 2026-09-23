@@ -225,8 +225,9 @@ package final class DiffTextViewCoordinator: NSObject {
         guard let textView, let contentStorage = textView.textContentStorage else { return }
         let previousOrigin = textView.enclosingScrollView?.contentView.bounds.origin ?? .zero
         textView.backgroundColor = rendered.palette.background
-        // The band of a gap at the top of the file sits above the text, inside the pane's own inset.
-        let inset = DiffPaneMetrics.containerInset + rendered.bandAbove
+        // The band of a gap at the top of the file sits above the text, in place of the pane's own inset, so its
+        // handle sticks to the pane's top edge.
+        let inset = max(DiffPaneMetrics.containerInset, rendered.bandAbove)
         if textView.textContainerInset.height != inset { textView.textContainerInset = NSSize(width: 0, height: inset) }
         textView.insertionPointColor = rendered.palette.textColor
         textView.selectedTextAttributes = [.backgroundColor: rendered.palette.selection]

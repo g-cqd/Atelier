@@ -83,12 +83,11 @@ struct NoWrapLayoutTests {
         sut.apply(text)
 
         let clip = scrollView.contentView.bounds
-        // The rows, the gaps' bands above, between and below them, and the pane's inset on either side.
-        let bands = text.bandAbove + (text.unwrappedTextHeight - CGFloat(text.rows.count) * text.lineHeight)
-        let rows =
-            CGFloat(text.rows.count) * text.lineHeight + bands + text.bandBelow
-            + 2 * DiffPaneMetrics.containerInset
-        #expect(bands > 0)
+        // The rows and the gaps' bands between them; above, the band of a gap at the top in place of the pane's inset;
+        // below, the band of a gap at the end, then the pane's inset.
+        let top = max(DiffPaneMetrics.containerInset, text.bandAbove)
+        let rows = top + text.unwrappedTextHeight + text.bandBelow + DiffPaneMetrics.containerInset
+        #expect(text.bandAbove > DiffPaneMetrics.containerInset)
         #expect(textView.textContainer?.widthTracksTextView == true)
         #expect(!textView.isHorizontallyResizable)
         let overscroll = max(clip.height - text.lineHeight - text.bandBelow - DiffPaneMetrics.containerInset, 0)
