@@ -1,6 +1,7 @@
 package import AppKit
 package import DiffRendering
 import Foundation
+import os
 
 /// The hover panel's sizing rules: a fixed width, a height that hugs its content up to a ceiling past which the
 /// body scrolls, and an origin under the hovered identifier that flips above it near the screen's bottom.
@@ -62,15 +63,17 @@ package final class HoverDocPanel {
     private weak var attachedWindow: NSWindow?
     private var trackingArea: NSTrackingArea?
 
-    private let declarationView = HoverDocPanel.makeCodeTextView()
+    /// The delegate of every text view the panel builds; `NSTextView.delegate` is weak, so the panel keeps it.
+    private let linkDelegate: HoverLinkDelegate
+    private let declarationView: NSTextView
     /// The declaration's backing, filled with ``HoverDocument/chipBackground``.
     private let declarationChip = HoverDocPanel.makeChip()
-    private let bodyTextView = HoverDocPanel.makeProseTextView()
+    private let bodyTextView: NSTextView
     private let bodyScrollView = NSScrollView()
     private let parametersGrid = NSGridView(numberOfColumns: 2, rows: 0)
     private let parametersHeader = HoverDocPanel.makeSectionLabel("Parameters")
     private let returnsHeader = HoverDocPanel.makeSectionLabel("Returns")
-    private let returnsView = HoverDocPanel.makeProseTextView()
+    private let returnsView: NSTextView
     private let diagnosticsStack = NSStackView()
     private let candidatesStack = NSStackView()
     private let contentStack = NSStackView()
@@ -80,7 +83,23 @@ package final class HoverDocPanel {
     private var bodyHeight: NSLayoutConstraint?
     private var returnsHeight: NSLayoutConstraint?
 
-    package init() {}
+    /// - Parameter openLink: Opens a clicked link that ``HoverDocument/openableURL(forLink:)`` allows; a refused
+    ///   link reaches nothing, not even `NSTextView`'s own fallback.
+    package init(openLink: @escaping @MainActor (URL) -> Void = HoverDocPanel.openInDefaultApp) {
+        let linkDelegate = HoverLinkDelegate(open: openLink)
+        self.linkDelegate = linkDelegate
+        declarationView = HoverDocPanel.makeCodeTextView(linkDelegate: linkDelegate)
+        bodyTextView = HoverDocPanel.makeProseTextView(linkDelegate: linkDelegate)
+        returnsView = HoverDocPanel.makeProseTextView(linkDelegate: linkDelegate)
+    }
+
+    /// Opens `url` in the user's default app for it, logging a failure.
+    package static func openInDefaultApp(_ url: URL) {
+        guard !NSWorkspace.shared.open(url) else { return }
+        logger.error("Could not open the hover link \(url.absoluteString, privacy: .private)")
+    }
+
+    private static let logger = Logger(subsystem: "fr.gcqd.GitDiffViewer", category: "HoverDocPanel")
 
     /// Shows (or repositions and re-renders, if already shown) the panel for `document`, anchored at `anchorRect`
     /// (in `textView`'s own coordinates) and attached as a child window of `textView`'s own window, whose
@@ -137,6 +156,9 @@ package final class HoverDocPanel {
 
     /// For tests: the panel's height as ``show(document:anchorRect:in:)`` last sized it; nil before it is first shown.
     package var panelHeightForTests: CGFloat? { panel?.frame.size.height }
+
+    /// For tests: the root of the panel's view hierarchy; nil before it is first shown.
+    package var contentViewForTests: NSView? { panel?.contentView }
 
     /// Hides the panel and detaches it from its host window; a no-op when it is not showing.
     package func close() {
@@ -241,14 +263,14 @@ package final class HoverDocPanel {
         let innerWidth = HoverPanelSizing.width - 2 * HoverPanelMetrics.edgeInset
         let chipInnerWidth = innerWidth - 2 * HoverPanelMetrics.chipHorizontalPadding
 
-        declarationView.textStorage?.setAttributedString(document.declaration ?? NSAttributedString())
+        let declaration = document.declaration ?? NSAttributedString()
+        declarationView.textStorage?.setAttributedString(declaration)
         declarationChip.isHidden = document.declaration == nil
         declarationChip.fillColor = document.chipBackground ?? .clear
         declarationHeight?.constant =
             declarationChip.isHidden
             ? 0
-            : Self.measuredHeight(of: declarationView.textStorage!, width: chipInnerWidth)
-                + 2 * HoverPanelMetrics.chipVerticalPadding
+            : Self.measuredHeight(of: declaration, width: chipInnerWidth) + 2 * HoverPanelMetrics.chipVerticalPadding
 
         let body = NSMutableAttributedString()
         if let summary = document.summary { body.append(summary) }
@@ -260,11 +282,11 @@ package final class HoverDocPanel {
         parametersHeader.isHidden = document.parameters.isEmpty
         parametersGrid.isHidden = document.parameters.isEmpty
 
-        returnsView.textStorage?.setAttributedString(document.returns ?? NSAttributedString())
+        let returns = document.returns ?? NSAttributedString()
+        returnsView.textStorage?.setAttributedString(returns)
         returnsHeader.isHidden = document.returns == nil
         returnsView.isHidden = document.returns == nil
-        returnsHeight?.constant =
-            returnsView.isHidden ? 0 : Self.measuredHeight(of: returnsView.textStorage!, width: innerWidth)
+        returnsHeight?.constant = returnsView.isHidden ? 0 : Self.measuredHeight(of: returns, width: innerWidth)
 
         renderCandidates(document.extraCandidates, chipBackground: document.chipBackground)
         candidatesStack.isHidden = document.extraCandidates.isEmpty
@@ -281,8 +303,7 @@ package final class HoverDocPanel {
         bodyTextView.textStorage?.setAttributedString(body)
         bodyScrollView.isHidden = body.length == 0
 
-        let bodyFullHeight =
-            bodyScrollView.isHidden ? 0 : Self.measuredHeight(of: bodyTextView.textStorage!, width: innerWidth)
+        let bodyFullHeight = bodyScrollView.isHidden ? 0 : Self.measuredHeight(of: body, width: innerWidth)
         bodyHeight?.constant = 0
         contentStack.layoutSubtreeIfNeeded()
         let chromeHeight = contentStack.fittingSize.height
@@ -332,22 +353,22 @@ extension HoverDocPanel {
         }
         for candidate in candidates where candidate.declaration != nil || candidate.summary != nil {
             if let declaration = candidate.declaration {
-                let view = HoverDocPanel.makeCodeTextView()
+                let view = HoverDocPanel.makeCodeTextView(linkDelegate: linkDelegate)
                 view.textStorage?.setAttributedString(declaration)
                 let chip = HoverDocPanel.makeChip()
                 Self.configureChip(chip, around: view)
                 chip.fillColor = chipBackground ?? .clear
                 let rowHeight =
-                    Self.measuredHeight(of: view.textStorage!, width: chipInnerWidth)
+                    Self.measuredHeight(of: declaration, width: chipInnerWidth)
                     + 2 * HoverPanelMetrics.chipVerticalPadding
                 candidatesStack.addArrangedSubview(chip)
                 chip.widthAnchor.constraint(equalToConstant: innerWidth).isActive = true
                 chip.heightAnchor.constraint(equalToConstant: rowHeight).isActive = true
             }
             if let summary = candidate.summary {
-                let view = HoverDocPanel.makeProseTextView()
+                let view = HoverDocPanel.makeProseTextView(linkDelegate: linkDelegate)
                 view.textStorage?.setAttributedString(summary)
-                let rowHeight = Self.measuredHeight(of: view.textStorage!, width: innerWidth)
+                let rowHeight = Self.measuredHeight(of: summary, width: innerWidth)
                 candidatesStack.addArrangedSubview(view)
                 view.widthAnchor.constraint(equalToConstant: innerWidth).isActive = true
                 view.heightAnchor.constraint(equalToConstant: rowHeight).isActive = true
@@ -376,14 +397,15 @@ extension HoverDocPanel {
         }
     }
 
-    fileprivate static func measuredHeight(of storage: NSTextStorage, width: CGFloat) -> CGFloat {
-        guard storage.length > 0 else { return 0 }
+    /// The height `text` lays out to at `width`, measured on a throwaway TextKit 2 stack so no slot's view is touched.
+    fileprivate static func measuredHeight(of text: NSAttributedString, width: CGFloat) -> CGFloat {
+        guard text.length > 0 else { return 0 }
         let contentStorage = NSTextContentStorage()
         let layoutManager = NSTextLayoutManager()
         let container = NSTextContainer(size: NSSize(width: width, height: .greatestFiniteMagnitude))
         layoutManager.textContainer = container
         contentStorage.addTextLayoutManager(layoutManager)
-        contentStorage.textStorage?.setAttributedString(storage)
+        contentStorage.textStorage?.setAttributedString(text)
         layoutManager.ensureLayout(for: layoutManager.documentRange)
         return layoutManager.usageBoundsForTextContainer.height
     }
@@ -414,10 +436,12 @@ extension HoverDocPanel {
         ])
     }
 
-    fileprivate static func makeCodeTextView() -> NSTextView {
+    /// A selectable, read-only text view whose link clicks go through `linkDelegate`.
+    fileprivate static func makeCodeTextView(linkDelegate: HoverLinkDelegate) -> NSTextView {
         let view = NSTextView()
         view.isEditable = false
         view.isSelectable = true
+        view.delegate = linkDelegate
         view.drawsBackground = false
         view.textContainer?.lineFragmentPadding = 0
         view.textContainerInset = .zero
@@ -425,10 +449,12 @@ extension HoverDocPanel {
         return view
     }
 
-    fileprivate static func makeProseTextView() -> NSTextView {
+    /// A selectable, read-only text view that wraps to its width, whose link clicks go through `linkDelegate`.
+    fileprivate static func makeProseTextView(linkDelegate: HoverLinkDelegate) -> NSTextView {
         let view = NSTextView()
         view.isEditable = false
         view.isSelectable = true
+        view.delegate = linkDelegate
         view.drawsBackground = false
         view.textContainer?.lineFragmentPadding = 0
         view.textContainerInset = .zero
@@ -484,5 +510,23 @@ extension HoverDocument.DiagnosticEntry.Severity {
             case .warning: .systemOrange
             case .error: .systemRed
         }
+    }
+}
+
+/// Opens a clicked link through `open` only when ``HoverDocument/openableURL(forLink:)`` allows it, and reports every
+/// click handled: `NSTextView` opens any link its delegate leaves unhandled, whatever its scheme.
+@MainActor
+private final class HoverLinkDelegate: NSObject, NSTextViewDelegate {
+    private let open: @MainActor (URL) -> Void
+
+    init(open: @escaping @MainActor (URL) -> Void) {
+        self.open = open
+    }
+
+    func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+        if let url = HoverDocument.openableURL(forLink: link) {
+            open(url)
+        }
+        return true
     }
 }

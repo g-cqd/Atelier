@@ -131,7 +131,8 @@ package struct HoverDocument: @unchecked Sendable {
     }
 
     /// Renders a prose piece through Foundation's markdown parser, as plain text where it fails. Runs without a color
-    /// get `labelColor`: on the panel's vibrant material, uncolored text blends into the glass.
+    /// get `labelColor`: on the panel's vibrant material, uncolored text blends into the glass. A link
+    /// ``openableURL(forLink:)`` refuses loses its link and keeps its text.
     private static func renderProse(_ text: String) -> NSAttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             allowsExtendedAttributes: false, interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible)
@@ -143,7 +144,26 @@ package struct HoverDocument: @unchecked Sendable {
             guard value == nil else { return }
             result.addAttribute(.foregroundColor, value: NSColor.labelColor, range: range)
         }
+        result.enumerateAttribute(.link, in: whole) { value, range, _ in
+            guard let value, Self.openableURL(forLink: value) == nil else { return }
+            result.removeAttribute(.link, range: range)
+        }
         return result
+    }
+
+    /// The URL the hover panel may open for a link, or nil to refuse it. `link` is an `NSAttributedString.Key.link`
+    /// value, a `URL` or a string, and only an absolute `https` URL is openable: a doc comment comes from the
+    /// repository under review, and every other scheme reaches something local, such as a file opened in its default
+    /// app, a mounted share, or whichever app claims a custom scheme.
+    package static func openableURL(forLink link: Any) -> URL? {
+        let url: URL? =
+            switch link {
+                case let url as URL: url
+                case let string as String: URL(string: string)
+                default: nil
+            }
+        guard let url, url.scheme?.lowercased() == "https" else { return nil }
+        return url
     }
 
     /// Gives every run an explicit font from its inline presentation intent: the markdown parser records bold,
