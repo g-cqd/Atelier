@@ -1,10 +1,6 @@
 public import KittyCodecs
 
-/// Style configuration for ScrollView's scroll indicator.
-///
-/// Defaults to a translucent gray scrollbar that blends with background content.
-/// The track is invisible (space character, default style) so only the thumb floats
-/// over the content, similar to modern overlay scrollbars.
+/// The look of `ScrollView`'s indicator; by default the track is blank, so only a dim gray thumb shows.
 public struct ScrollViewStyle: Sendable, Equatable {
     public var trackStyle: Style
     public var thumbStyle: Style
@@ -34,11 +30,8 @@ public struct ScrollViewStyle: Sendable, Equatable {
     }
 }
 
-/// A generic scrollable container that clips content to a viewport and displays
-/// a vertical scroll indicator when content overflows.
-///
-/// The scrollbar is automatically hidden when content fits within the viewport.
-/// Content is responsible for rendering the visible slice based on `scrollOffset`.
+/// A container that clips its content to the viewport and shows a vertical scroll indicator only when the content
+/// overflows; the content renders its own visible slice from `scrollOffset`.
 ///
 /// ```swift
 /// ScrollView(contentHeight: lines.count, scrollOffset: offset) {

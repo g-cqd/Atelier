@@ -45,10 +45,7 @@ struct RenderClockTests {
                 cont.resume()
             }
             Task { @MainActor in
-                // Three sync mutations in the same main-actor entry; onChange
-                // fires exactly once for the burst — the natural coalescing
-                // that lets dirty markers update freely without flooding
-                // the render scheduler.
+                // Three synchronous advances in one main-actor entry: `onChange` fires once for the burst.
                 clock.advance()
                 clock.advance()
                 clock.advance()
