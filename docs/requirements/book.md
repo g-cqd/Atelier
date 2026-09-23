@@ -1,14 +1,154 @@
 # Requirements book: Atelier (GitDiffViewer, KittyCode, AtelierCore)
 
-This book states what the user asked for between 2026-09-21 13:47 and 2026-09-23 07:59 (CEST), as testable
-requirements. It is written from the requesting side: what is needed and why, not how. `plan.md` orders the
-work; `audit.md` gives one verdict per requirement against commit `10ae905`.
+This book states what the user asked for between 2026-09-19 00:00 and 2026-09-23 13:29 (CEST), as testable
+requirements. It is written from the requesting side: what is needed and why, not how. `plan.md` maps every open
+requirement to a wave of the fix plan, the roadmap, a decision, or "unplanned"; `audit.md` gives one status per
+requirement at `main` `ebafb9f` (2026-09-23 14:26 CEST).
+
+The first revision, at `10ae905`, covered requests up to 09-23 07:59 and later answers up to 12:06. This revision,
+written between 13:40 and 14:40 on 09-23, re-reads every source from 09-19 on. It adds 18 messages and 5 rows of
+decisions (R81 to R103), 13 requirements (121 in all), a new area (REND), and amendments to 13 existing
+requirements.
+
+## Open questions (09-23)
+
+Twelve points need your answer, most important first. Each gives the requirements it settles, the context, and the
+options; the first option is the recommended default unless it says otherwise. Statuses are from `audit.md`, at
+`ebafb9f`. Already decided and not asked again: the g-cqd mirrors (D5), the hook patch (D6), the trust prompt
+on first hover (D7), Wave 1 (D4).
+
+**OQ1. Build the text renderer? (REND-02, REND-03; fix plan §7.4)**
+`docs/design/text-renderer.md` measured TextKit 2 used correctly at 12.7 ms and 25.5 ms for a new 5k and 50k-row
+document, and a CoreText prototype at 3.8 ms for both. Wrapping in a split still costs 256 ms per pass at 5k rows
+with TextKit. Your 10:01 message asked for switchable backends while the new one is built; nothing of the seam
+exists yet.
+- (a) **Recommended.** Finish TextKit's M0 fixes and build the backend seam now (M0 item 13, estimated 4 to 6 days),
+  then run M1, a drawing-only CoreText renderer, time-boxed by its exit criteria (estimated 3.5 to 5 weeks). Reason:
+  it is what you asked for, and the seam keeps TextKit as the fallback until the new renderer matches it.
+- (b) Finish M0 and the seam, then decide on M1 from M0's exit numbers.
+- (c) M0 only; TextKit stays the only backend.
+- Also confirm: macOS does not scale text with Dynamic Type, so the design maps text size to ⌘+, ⌘− and ⌘0 on the
+  Mac and follows Dynamic Type only where the platform scales text (iPadOS, visionOS). Is that what you meant by
+  "supporting dynamictypesupport in swiftui"?
+
+**OQ2. Pin aemi now? (PROC-12; fix plan §7.5, track 2O)**
+D5's option text included pointing Atelier at the aemi mirror "by pinned revision". Today the three manifests follow
+`Aemi-Studio/aemi` on `main`, which has moved from `dacd5f1` (what builds resolve and what the review read) to
+`a061a80`, so a fresh resolve would build unreviewed code.
+- (a) **Recommended.** Pin now, at `dacd5f1`, through `Aemi-Studio/aemi`, switching AemiJSON's own aemi dependency in
+  the same step; bump the pin as each aemi fix lands. Reason: reproducible builds today, on the reviewed revision.
+- (b) Pin only after the aemi fixes land in the mirror.
+- (c) Pin by tag rather than revision (the mirror would need a tag).
+
+**OQ3. Finish the hook fix and install a fixed project-hooks? (QUAL-09, PROC-12; fix plan 1K, §7.2)**
+The 12:35 patch covered the two templates and the 31 clones under `~/Developer` (backup:
+`~/project-hooks-ph6-backup.tar.gz`). Six clones elsewhere still run a repository's own binary first: under
+`~/Public`, `~/Downloads` (two), `~/.codex`, and two work-repository clones. The installed
+`~/.local/bin/project-hooks` dates from 05-12. Its pre-push tests the working tree (PH-5), which is why pushes wait
+while agents edit, and its scratch builds hold 9.1 GB in `$TMPDIR/project-hooks-build` (PH-7).
+- (a) **Recommended.** Patch the six clones now, with a backup. Then, once track 1K and the PH-5 and PH-7 fixes land
+  in `g-cqd/project-hooks` on top of its own refinements, build it, keep the old binary as a backup, replace
+  `~/.local/bin/project-hooks`, and regenerate the hooks in every clone.
+- (b) Patch the six clones only; keep the old binary.
+- (c) Leave both as they are.
+
+**OQ4. Install arcleak, dolly and deadwood on this machine? (DIAG-01, TOOL-03)**
+None of the three is installed, so their findings have never appeared in the app, and the acceptance run of track 1I
+(2 of 2 dolly and 14 of 14 deadwood findings) could not happen. `bundle.sh` skips them for the same reason.
+- (a) **Recommended.** Build each from its `g-cqd` mirror at its latest tag and install it in `~/.local/bin`,
+  where discovery finds it and the bundle script picks it up. Reason: it is the only way to verify DIAG-01 end to end.
+- (b) Build them into the app bundle only, at bundle time.
+- (c) Leave them uninstalled; the three tools stay unverified.
+
+**OQ5. Which settings are per project? (SET-03)**
+Your Q2 answer began "yes" to an either-or question. Today 9 of 27 settings can differ per project, and the Settings
+window has no Default-or-project selector. Appearance and theme matching can only be app-wide as built (one
+appearance for the whole app), and the SDK documentation tier belongs to no repository, so track 1A has it follow
+the app-wide sourcekit-lsp setting.
+- (a) **Recommended.** Everything that shapes a comparison or its tools is per project: diff options, layout,
+  wrapping, minimap, isolation, context, granularity, hover, diagnostics, analyzed sides, auto-refresh, tool and
+  server locations. The app's look stays app-wide: appearance, theme matching, badge colors. The Settings window gets
+  the scope selector and an editable list of projects. Reason: those are the settings whose right value differs by
+  repository.
+- (b) Literally every setting, which needs a per-window appearance.
+- (c) Keep today's nine and only add the selector and the list.
+
+**OQ6. Which sides do the analyzers run on? (DIAG-08)**
+The setting offers "Newer side" and "Both sides", and "Both" only copies the newer side's findings onto old rows. Your
+Q5 answer asked for both, one side or none, each run on its own files.
+- (a) **Recommended.** Four modes: Both, Left only, Right only (the default), None. A side that is a git ref is
+  exported with `git archive` into a private temporary folder, linted there with that side's own configuration, and
+  its findings shown on its rows only; in an untrusted repository, only the working tree is analyzed.
+- (b) Three modes: Newer (default), Both, None.
+- (c) Keep two modes and drop the copying onto old rows.
+
+**OQ7. What should Swap show while it reloads? (GIT-03)**
+GIT-03 says Swap never collapses the viewer, but the fix plan's track 2B treats Swap and a new ref as real source
+switches and clears the screen, so an old comparison is never shown as current.
+- (a) **Recommended.** Keep the previous cards on screen, marked as updating, until the new comparison lands; never
+  show "Comparing…". Reason: it keeps the viewer and never passes the old comparison off as current.
+- (b) Clear at once for a real source switch (Swap, another ref or folder); keep continuity only for reloads of the
+  same sources.
+- (c) Keep the old cards with no marker.
+
+**OQ8. When should the unplanned features go in? (TAB-07, DIAG-03, DUI-03, HOVER-14, HOVER-08, HOVER-05, DIFF-01 to DIFF-04)**
+The fix plan's waves hold findings, not features. Native file-tab behaviour, diagnostics in the card list, the Liquid
+Glass panel, the Quick Help title row and the four diff refinements are in no wave; the roadmap lists DIFF-01 to
+DIFF-04 as "not scheduled yet".
+- (a) **Recommended.** DIFF-02 goes with track 2B, which owns the same code. The rest forms a feature wave after Wave
+  2 and before Wave 3, in this order: TAB-07, card-list diagnostics, HOVER-08 and HOVER-05, DIFF-01, DIFF-03,
+  DIFF-04. Reason: these are gaps you reported, and Wave 2 first removes the defects under them.
+- (b) Run them now, in parallel with Wave 2, where files do not collide.
+- (c) After Wave 3.
+- Also for TAB-07: ⌃Tab already switches comparison windows, which are native window tabs (TAB-01). Recommended:
+  ⌃Tab and ⌃⇧Tab move between file tabs, and ⌘⇧] and ⌘⇧[ keep switching windows.
+
+**OQ9. How should a renamed file read? (CARD-09)**
+Xcode writes "HTTPClient.swift ← APIClient.swift", the old name grayed after an arrow (image 23). Offered at 12:06;
+not answered. Rows and card headers show only the new path today.
+- (a) **Recommended.** The `new ← old` label in the file list and in card headers; tabs and the status bar keep the
+  new name only, for width.
+- (b) The label everywhere a file name appears.
+- (c) The new name only, as today.
+
+**OQ10. The backdrop under the tabs in the single-file view (TAB-09; fix plan §7.3)**
+The card list scrolls beneath the tab bar with the system's edge effect. The single-file panes are AppKit scroll
+views and stop at a divider.
+- (a) **Recommended.** Try the AppKit route first (macOS 26's scroll edge effect for AppKit views, or handing the
+  bar's inset to the scroll view); evaluate AemiSDR only if that fails, and add no dependency without asking.
+- (b) Evaluate AemiSDR now.
+- (c) Keep the divider.
+
+**OQ11. An Xcode diff palette? (DIFF-05, SET-07)**
+The Xcode screenshots (image 12) show gray old lines without line numbers, light-blue new lines, tan and blue changed
+tokens, and a blue change bar. Nobody has asked for it yet.
+- (a) **Recommended.** Yes, later: an "Xcode" choice for the diff colors, off by default and independent of the badge
+  scheme, built with the gutter rework of DIFF-03, which shares its change bar.
+- (b) Tie it to the Xcode badge scheme.
+- (c) No.
+
+**OQ12. Commit titles (PROC-09; fix plan §7.5)**
+Before 09-21, titles read `<Scope>: <sentence>` (median 63 characters). Since then they are single long sentences
+with no scope (median 250, longest 446).
+- (a) **Recommended.** Return to `<Scope>: <sentence>`, under about 72 characters, with the detail in the body.
+  Reason: it is the repository's own form, and it reads in `git log --oneline`.
+- (b) Keep the long sentences.
+
+**Defaults kept unless you object.** These were chosen without an explicit answer:
+- A file with both staged and unstaged changes draws a stroked badge (CARD-11).
+- A folder draws stroked when git reports any unstaged or untracked file inside it, even one the list hides (CARD-11).
+- The SDK documentation tier follows the app-wide sourcekit-lsp setting, since it has no repository (track 1A, Sec L2).
+- A Findings row will also scroll to its line, with the toolbar fix of track 2D (DUI-01; GDV S18).
+- The layout shortcuts ⌘1, ⌘2 and ⌘3 stay on the toolbar picker; the View menu gets no layout items (CARD-15).
 
 ## Reading guide
 
 - **IDs** are `AREA-NN`. The areas are listed in the table below.
 - **Source** gives the local time (CEST) and the user's words. Text in quotation marks is verbatim, typos
-  included; `…` marks an omission. Everything outside quotation marks is a summary.
+  included; `…` marks an omission, and square brackets inside a quotation mark a redaction. Everything outside
+  quotation marks is a summary.
+- **Decision** marks the user's answer to a multiple-choice question from the assistant. The chosen option's label
+  is quoted; its description, when it matters, is quoted as the option's text.
 - **Derived** marks a requirement that follows from a request without being stated in it.
 - **Priority:** *Must* is a stated need or a reported bug. *Should* is a request phrased as a wish ("we might",
   "it would be nice"). *Could* is explicitly optional or research-first.
@@ -17,7 +157,7 @@ work; `audit.md` gives one verdict per requirement against commit `10ae905`.
 
 | Area | Scope |
 |---|---|
-| PROC | Delivery and process: clone, toolchain, install, mirror, main branch, roadmap |
+| PROC | Delivery and process: clone, toolchain, install, mirrors, main branch, roadmap, fix waves, machine upkeep |
 | DIAG | Diagnostics tools and what they report |
 | TOOL | Tool discovery and user-set tool locations |
 | HOVER | Hover documentation: content, tiers, languages, panel design, system API docs |
@@ -31,20 +171,25 @@ work; `audit.md` gives one verdict per requirement against commit `10ae905`.
 | JSON | AemiJSON adoption |
 | MOD | Modularization for GUI and terminal reuse |
 | QUAL | Code quality, review processes, safety |
+| DIFF | Diff interaction refinements and their Xcode reference |
+| REND | A text renderer of our own and its pluggable backends |
 
 ## Sources
 
+Counts are for this revision's window, 2026-09-19 00:00 to 2026-09-23 13:29 CEST.
+
 | Source | Read | Kept |
 |---|---|---|
-| `~/.claude/history.jsonl`, 2026-09-20 00:00 to 2026-09-23 08:00 | 145 entries in the window: 74 from `~/Developer` (no entry came from a path under `Atelier` or `GitDiffViewer`), 71 from the employer project folders | 70 prompts. 4 slash or shell commands were dropped (`/model` twice, `!pwd`, `/background`). None of the 71 employer-folder prompts mentions GitDiffViewer, Atelier or KittyCode, so none was kept. |
-| Session transcripts in `~/.claude/projects/-Users-guillaumecoquard-Developer/`, 2 files modified in the window | Main session: 49 typed turns and 19 mid-turn messages (15 carry "The user sent a new message while you were working:", 4 are image pastes). Second session: 2 turns | 70 messages, each matching a history entry. The pasted crash report (676 lines) matches history's "[Pasted text #1 +676 lines]". |
-| Screenshots (base64 image blocks in the transcript) | 8 images, numbered 02 to 10 by the user | 7 distinct images: image 10 is byte-identical to image 09. |
-| Codex sessions under `~/.codex/sessions` | 3 sessions in the window; 1 has its working directory in Atelier | 0 prompts. That session's only prompt is the coordinator-generated review prompt ("You are reviewing one day's work on this monorepo"), excluded. The user's request for that review is R48. |
-| Subagent transcripts | about 130 files | Skipped: they hold the coordinator's briefs. |
+| `~/.claude/history.jsonl` | 192 entries: 103 from `~/Developer`, 89 from the employer project folders, none from a path under `Atelier`. No entry falls between 09-19 00:00 and 09-21 09:18; the first `~/Developer` entry is 09-21 13:47. | 98 prompts. 5 commands dropped: `/model` twice, `!pwd`, `/background`, and `!open` of the Xcode playground (09-23 11:57). None of the 89 employer-folder prompts mentions GitDiffViewer, Atelier or KittyCode. |
+| Session transcripts in `~/.claude/projects/-Users-guillaumecoquard-Developer/`, 2 files modified since 09-19 | Main session: 96 messages, of which 64 typed turns, 5 sent while the assistant was busy and delivered as turns, and 27 mid-turn messages carrying "The user sent a new message while you were working:". Second session: 2 turns. | 98 messages, each matching a history entry. 3 pasted crash reports (676, 573 and 592 lines) are summarised in R31, R89 and R99, not copied. |
+| Answers to the assistant's multiple-choice questions, and plan approvals, in the main transcript | 3 question sets with 7 answers (09-21 14:30: 2; 09-23 12:34: 4; 09-23 12:37: 1), and 1 plan approval (09-21 14:45) | All 8 kept as decisions D1 to D8 (see "Decisions"). The first revision had missed D1 to D3. |
+| Screenshots (base64 image blocks, decoded to `/tmp/regather-screens`) | 20 images, numbered 02 to 10 (09-22) and 12 to 23 (09-23) by the user | 19 distinct: image 10 is byte-identical to image 09. Each was viewed. |
+| Codex sessions under `~/.codex/sessions` | 3 sessions in the window; 1 has its working directory in Atelier | 0 prompts. That session's only prompt is the coordinator-generated review prompt ("You are reviewing one day's work on this monorepo"), excluded; the user's request for it is R48. The other two sessions run in employer folders and do not mention this project. |
+| Subagent transcripts | about 210 files | Skipped: they hold the coordinator's briefs. |
 
-After deduplication: 70 unique requests. 68 concern this project. 2 concern the global agent model
-configuration and are out of scope (R69, R70). The request index at the end maps every request to its
-requirements.
+The request index at the end has 103 rows: 98 messages and 5 rows of decisions. 2 messages concern the global
+agent model configuration and are out of scope (R69, R70). What is new since the first revision's R80: R81 to R83
+(three decisions of 09-21 the first pass missed) and R84 to R103 (09-23 09:03 to 13:29).
 
 ## Screenshots
 
@@ -58,15 +203,29 @@ requirements.
 | 07 | 09-22 15:40 | "also sizing and content of hover is still not dynamic and not showing the doc content" | A dark theme's token colors washed out on a light panel, an empty area, and a "doc comment" footer | HOVER-03, HOVER-06, HOVER-07 |
 | 09 | 09-22 16:20 | the 16:19 message on spacing and fonts | A computed property declared in an extension, with two `///` lines above it in the code. The panel shows only the declaration on a white chip, empty space, and a "sourcekit-lsp" footer | HOVER-03, HOVER-07, HOVER-12, HOVER-13 |
 | 10 | 09-22 16:37 | the badge, appearance, tab and sticky-header message | The same bytes as image 09. The Xcode badge colors the message describes are not in any screenshot | CARD-09 and SET-07 rest on the text alone (see Q4) |
+| 12 | 09-23 12:00 | "[Image #12] … [Image #21]", taken in the Xcode playground the user asked for at 11:55 | Xcode's inline modification: the old line on a gray background with no line number, the new line (416) on light blue, the changed token tan on the old line (`100`) and blue on the new one (`120`), and a solid blue change bar at the gutter's leading edge | DIFF-05; the "Xcode diff palette" idea (OQ11) |
+| 13 | 09-23 12:00 | same batch | A folded `actor SyncEngine` that contains changes: a dark tab with `›` in the fold ribbon, a gray `•••` capsule between the braces, line numbers jumping from 12 to 495, and a dotted blue change bar | DIFF-03 |
+| 14 | 09-23 12:00 | same batch | A folded function: the dark `›` tab, the `•••` capsule, line numbers jumping from 53 to 72 | DIFF-03 |
+| 15 | 09-23 12:00 | same batch | Hovering a function: its scope outlined as a rounded capsule in the ribbon, `⌄` at its first line and `⌃` at its last, its braces lit in blue; two inner loops folded | DIFF-03 |
+| 16 | 09-23 12:00 | same batch | The ribbon shaded darker for each nesting level, with an inner `if` folded; the folded line wraps and keeps one ribbon segment | DIFF-03 |
+| 17 | 09-23 12:00 | same batch | Hovering the inner `if` (lines 60 to 62) outlines only that block | DIFF-03 |
+| 18 | 09-23 12:00 | same batch | The ribbon at rest: gray steps by depth, and a hairline where a scope ends | DIFF-03 |
+| 19 | 09-23 12:00 | same batch | A gap handle between lines 18 and 237: a small rounded grabber with two lines, centred on a hairline across the gutter | DIFF-02 |
+| 20 | 09-23 12:00 | same batch | A gap handle at the top of the file, above line 12 | DIFF-02 |
+| 21 | 09-23 12:00 | same batch | A gap handle above a change, above line 82 and its blue change bar | DIFF-02 |
+| 22 | 09-23 12:05 | "[Image #22] [Image #23]", after "reopen xcode for the rename thing please" | Xcode's navigator row for a staged rename, selected in a focused list: "HTTPClient.swift ← APIClient.swift" in white on the blue selection, and a white badge with a blue "M" | CARD-09, CARD-10 |
+| 23 | 09-23 12:05 | same | The same row unselected: the old name grayed after "←", and a filled blue "M" badge | CARD-09; the `new ← old` label (OQ9) |
 
-There is no image 01 (the number went to the pasted crash text) and no image 08.
+There is no image 01 (the number went to the pasted crash text), no image 08, no image 11 (the 10:42 crash
+report) and no image 24 (the 12:06 crash report). Images 12 to 21 are in the repository, re-encoded, under
+`Apps/GitDiffViewer/docs/assets/xcode-reference/`; images 22 and 23 are not.
 
 ## Changes of mind
 
 1. **Bundling became optional; discovery and user-set locations became mandatory.** TOOL-04 ("we could
-   bundle swiftlint, swift format, arcleak, dolly and deadwood", 09-21 14:22) → TOOL-03, TOOL-01 and TOOL-02
-   ("we don't necessarily have to bundle things in the app, but we definitely have to propose a way to locate
-   the binaries in the settings of the application", 09-21 15:20).
+   bundle swiftlint, swift format, arcleak, dolly and deadwood", 09-21 14:22) → decision D2, "Bundle + discovery"
+   (09-21 14:30) → TOOL-03, TOOL-01 and TOOL-02 ("we don't necessarily have to bundle things in the app, but we
+   definitely have to propose a way to locate the binaries in the settings of the application", 09-21 15:20).
 2. **The apple-docs corpus was declined for on-device Xcode documentation.** HOVER-17 (the assistant's
    proposal, 09-22 11:21) → HOVER-04 ("i truly believe we should be able to utilize the on device xcode
    documentation, preferably not apple-docs", 09-22 11:24).
@@ -76,21 +235,53 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
    bar.** TAB-06 (roadmap at `eeb7ffa`: "Tab bar styling (user-requested; needs investigation) … Native
    NSWindow tab restyling is largely private API") → TAB-02 to TAB-05 (corrected 09-23 07:51; roadmap at
    `10ae905`: "In-app tab bar styling (user-requested; shipped)").
+5. **Pinned SwiftUI sections gave way to a custom card container.** CARD-01 was built with SwiftUI's pinned
+   section headers (09-22) → CARD-12 (09-23 09:05, "maybe for the cards with sticky header in the scrollview, we
+   want to go completely custom"). CARD-01's criteria stand; only the means changed.
+6. **Cards dropped the stacked layout.** The card list offered inline, side by side and stacked → CARD-15 (09-23
+   11:44, "file list cards should only support inline or horizontal split, but not stacked split"). The
+   single-file view keeps stacked, and DIFF-01 still resizes stacked panes there.
+7. **A rename is blue but keeps its R.** Q4's answer left renamed open ("renamed is unknown", 09:37) → the Xcode
+   screenshots showed a blue "M" for a rename (images 22 and 23, 12:05) → the user kept the letter ("i'd prefer we
+   use R for renamed though", 12:05) and gave the reason ("so it's clearer than an M that means the same thing
+   than the other files", 12:06). CARD-09 records the result.
+8. **JSON verdicts per call site became AemiJSON everywhere.** JSON-02 allowed a "keep Foundation" verdict per
+   call site, and settings stayed on Foundation → JSON-04 (09-23 13:06, "can you make sure we use aemijson
+   whenever we do json interaction to accelerate performances"). JSON-02's fast-path criterion stands.
+
+## Decisions (09-21 and 09-23)
+
+The user's answers to the assistant's multiple-choice questions, and one plan approval. The first revision missed
+D1 to D3.
+
+| # | Time | Question, summarised | Answer | Requirements |
+|---|---|---|---|---|
+| D1 | 09-21 14:30 | Should the first plan land diagnostics first, everything at once, or hover first? | Typed instead of an option: "everything, incremental, atomic, fully tested, split in both parallel and sequential tracks" | PROC-09 |
+| D2 | 09-21 14:30 | Should the five tools be found only, or bundled and found? | "Bundle + discovery" | TOOL-04, superseded at 15:20 |
+| D3 | 09-21 14:45 | The written plan for diagnostics and hover | Approved (tool result: "User has approved your plan") | PROC-07 |
+| D4 | 09-23 12:34 | Start Wave 1 (security, data loss, crashes) now as parallel agents, each on its own files? | "Start Wave 1 now (Recommended)" | PROC-11 |
+| D5 | 09-23 12:34 | How to handle fixes that belong to aemi, AemiJSON, project-hooks, arcleak, dolly and deadwood? | "Mirror into g-cqd (Recommended)"; the option's text: "Create g-cqd mirrors where missing (aemi, project-hooks and the analyzers), fix there, and point Atelier at the aemi mirror by pinned revision, the way AemiJSON already works." | PROC-12 |
+| D6 | 09-23 12:34 | Patch the hook script the global git template installs, and the copies in existing clones, so a clone cannot get its own project-hooks binary run? | "Patch now (Recommended)" | QUAL-09 |
+| D7 | 09-23 12:34 | How should the app ask before starting sourcekit-lsp in an untrusted repository? | "Prompt on first hover (Recommended)"; the option's text: "The first hover in an unknown repository asks once whether to trust it. Doc comments and SDK docs keep working meanwhile. A Settings list lets you review and revoke." | QUAL-07 |
+| D8 | 09-23 12:37 | The GitHub Copilot for Xcode extension had leaked 1,809 zombie processes and made builds fail; end it? | "End it now (Recommended)" | PROC-10 |
 
 ## Answered questions (09-23 09:37)
 
-- **Q1 (TAB-01).** Answer: "native behaviour for the in-app file tabs". TAB-01 (native window tabs) stays as
-  built; the ask is recorded as TAB-07.
+- **Q1 (TAB-01).** Answer: "native behaviour for the in-app file tabs?", the second of the two options offered,
+  echoed with a question mark. TAB-01 (native window tabs) stays as built; the ask is recorded as TAB-07, whose
+  criteria (drag, shortcuts, middle click, overflow, accessibility) are the book's reading, not the user's list.
 - **Q2 (SET-03).** Answer: "yes, but i think we should keep a list shown, editable in the settings of the app to
   see and manage settings for different project and add a selector to the settings window for which
-  configuration we're changing, the default one or the project ones". Every setting becomes overridable; SET-03
-  gains a scope selector and a managed project list.
+  configuration we're changing, the default one or the project ones". Read as "every setting becomes
+  overridable"; SET-03 gains a scope selector and a managed project list. The question offered two options, so
+  "yes" is ambiguous: OQ5 asks which settings.
 - **Q3 (HOVER-08).** Answer: "i was more talking about liquid glass, but providing both options could be
   interesting". HOVER-08 now asks for Liquid Glass, with the popover material as an option.
 - **Q4 (CARD-09, SET-07).** Answer: "added green, modified blue, deleted red, renamed is unknown i didn't see xcode
-  with it for quite some time so i don't remember". Renamed stays blue until someone checks Xcode.
+  with it for quite some time so i don't remember". Renamed stays blue until someone checks Xcode. Settled at 12:05
+  and 12:06: blue, lettered R (change of mind 7).
 - **Q5 (DIAG-08).** Answer: "we should be able to have either both sides, one side or none, ran on the
-  corresponding files". DIAG-08 now asks for four modes.
+  corresponding files". DIAG-08 now asks for four modes; OQ6 confirms the reading and how a ref side is analyzed.
 
 ## Requirements
 
@@ -125,7 +316,8 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
   reopens on the repositories that were open.
 - **Source:** 09-21 13:55, "can you install the new gitdiffviewer, kill the previous ones and replace and reopen
   on the same repos/folders (re-sign locally)"; 16:39, "at the end please install re-sign the app locally and
-  open it on the 2 currently open repo".
+  open it on the 2 currently open repo"; 09-23 10:11, "please reinstall and re-sign the current version of the
+  release app and open it on [a work repository] (~/Developer)".
 - **Rationale:** The user judges each change in the installed app, on real repositories.
 - **Acceptance criteria:**
   1. The installed bundle contains the latest commit on `main`.
@@ -184,6 +376,55 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
   1. Work sessions load the skills that apply to the task.
   2. The code obeys `AGENTS.md` and the Definition of Done (audited as MOD-03 and QUAL-06).
 - **Priority:** Must. **Related:** MOD-03, QUAL-06.
+
+#### PROC-09 · Incremental, atomic, tested work in parallel and sequential tracks
+- **Statement:** Work lands in small atomic steps, each fully tested, organised as tracks that run in parallel when
+  they can and in sequence when they must.
+- **Source:** decision D1, 09-21 14:30, typed in answer to the plan's scope question: "everything, incremental,
+  atomic, fully tested, split in both parallel and sequential tracks".
+- **Rationale:** The user wanted the whole feature set at once without giving up reviewable, bisectable steps.
+- **Acceptance criteria:**
+  1. Each commit holds one coherent change together with its tests.
+  2. Parallel tracks own disjoint files; a sequential track names the track it waits for.
+  3. Each new behavior has a test that fails without the change.
+- **Priority:** Must. **Related:** PROC-05, PROC-07, PROC-11, QUAL-06.
+
+#### PROC-10 · The machine stays usable while agents work
+- **Statement:** When the machine runs short of disk space or processes, temporary files and scratch projects are
+  removed and runaway helpers are ended, with the user's consent.
+- **Source:** 09-23 10:50 (mid-turn), "please clean all temporary files and project, we're running out of space";
+  decision D8, 09-23 12:37, "End it now (Recommended)", about the GitHub Copilot for Xcode helper that had leaked
+  1,809 zombie processes.
+- **Acceptance criteria:**
+  1. Free disk space is restored; the assistant reported 3.8 GB before and 69 GB after the 10:50 cleanup.
+  2. The leaking helper is ended, and builds no longer fail on the per-user process limit.
+- **Priority:** Must.
+
+#### PROC-11 · Fix the review's findings in waves, Wave 1 first
+- **Statement:** The fixes of `docs/reviews/2026-09-23-fix-plan.md` run wave by wave, starting with Wave 1
+  (security, data loss, crashes), as parallel agents that each own a disjoint set of files.
+- **Source:** decision D4, 09-23 12:34, "Start Wave 1 now (Recommended)", answering "Should I start Wave 1
+  (security, data loss, crashes) now as parallel agents, each on its own set of files, while the card fix finishes?"
+- **Acceptance criteria:**
+  1. Tracks 1A to 1K each land on `main` with their tests and meet their acceptance criteria in the fix plan.
+  2. Each track works in its own worktree and branch, touches only its files, and merges once its checks pass.
+  3. Later waves follow in the fix plan's order.
+- **Priority:** Must. **Related:** QUAL-05, PROC-09, PROC-12.
+
+#### PROC-12 · External fixes happen in g-cqd mirrors
+- **Statement:** Findings in aemi, AemiJSON, project-hooks, arcleak, dolly and deadwood are fixed in private
+  `g-cqd` mirrors, and Atelier resolves aemi from its mirror at a pinned revision.
+- **Source:** decision D5, 09-23 12:34, "Mirror into g-cqd (Recommended)", whose text reads "Create
+  g-cqd mirrors where missing (aemi, project-hooks and the analyzers), fix there, and point Atelier at the aemi
+  mirror by pinned revision, the way AemiJSON already works."
+- **Rationale:** It extends R19 ("mirror things in the g-cqd scope please") to the dependencies the review
+  found defects in.
+- **Acceptance criteria:**
+  1. `g-cqd` holds private mirrors of aemi, arcleak, dolly, deadwood and project-hooks, next to AemiJSON.
+  2. The external findings of the fix plan (§7.1) are fixed in those mirrors.
+  3. Atelier's three manifests resolve aemi from the `g-cqd` mirror at a pinned revision, and AemiJSON's own
+     aemi dependency switches in the same step, so SwiftPM sees one aemi.
+- **Priority:** Must. **Related:** PROC-04, JSON-02, QUAL-09.
 
 ### DIAG: Diagnostics tools
 
@@ -307,7 +548,7 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
 
 #### TOOL-04 · Bundle the five analyzers into the app (Superseded)
 - **Source:** 09-21 14:22, "we could bundle swiftlint, swift format, arcleak, dolly and deadwood into
-  gitdiffviewer".
+  gitdiffviewer"; decision D2, 09-21 14:30, "Bundle + discovery".
 - **Superseded by:** TOOL-03, TOOL-01 and TOOL-02 on 09-21 15:20.
 
 ### HOVER: Hover documentation
@@ -599,10 +840,12 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
 - **Statement:** The user chooses red and green badge colors or Xcode's.
 - **Source:** 09-22 16:37, "the colors for the diff badges are different in xcode, we could have an appearance
   settings that either use the red/green kind or the xcode kind".
+- **Refined:** 09-23 11:37 (mid-turn), "btw the file headers in the list don'T match the badge color scheme tint".
 - **Acceptance criteria:**
   1. A setting chooses Classic or Xcode badge colors.
   2. It applies to every badge: explorer rows, tabs, card headers and the status bar.
   3. It applies to open windows at once (SET-05).
+  4. A card header's tint follows the same scheme as its badge.
 - **Priority:** Should. **Related:** CARD-09.
 
 #### SET-08 · Research accent colors from the theme
@@ -698,11 +941,14 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
   1. A staged change shows a filled badge; an unstaged change shows a stroked badge with colored text on a
      transparent background.
   2. In the Xcode scheme, Added is green, Modified is blue and Deleted is red (confirmed 09-23 09:37, Q4).
-     Renamed is blue too: Xcode draws a rename as a blue "M" (screenshot, 09-23 12:05), and the user chose to keep
-     the letter "R" ("i'd prefer we use R for renamed though").
+     Renamed is blue too: Xcode draws a rename as a blue "M" (images 22 and 23, 09-23 12:05), and the user chose to
+     keep the letter "R" ("i'd prefer we use R for renamed though", 12:05), "so it's clearer than an M that means
+     the same thing than the other files" (12:06).
   3. A new file that is not staged shows "A" with a stroke, not "?".
   4. The same rules apply wherever a badge appears.
-- **Priority:** Should. **Related:** CARD-11, SET-07.
+- **Open point:** Xcode writes a renamed row as "HTTPClient.swift ← APIClient.swift", the old name grayed after an
+  arrow (image 23). The assistant offered that label at 12:06; the user has not answered (OQ9).
+- **Priority:** Should. **Related:** CARD-11, SET-07, DIFF-05.
 
 #### CARD-10 · Badges follow the list's selection and focus
 - **Statement:** A selected row's badge inverts only while the list has focus.
@@ -719,13 +965,25 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
      it should be background white with corresponding text color if the file is staged". On a focused
      selection, a stroked badge draws its outline and letter in white; a staged badge inverts to a white fill
      with its status color as text.
+  4. Bug report, 09-23 11:36: "the white badge variant in the side bar file list/trees is not working when the
+     sidebar is focused and file selected, i still have plain badges with white text". Criteria 1 to 3 hold in the
+     sidebar's file list and in its file trees.
 - **Priority:** Should.
 
 #### CARD-11 · Badge states come from git's per-file state (Derived)
 - **Statement:** A file's badge state reflects git's index and worktree status for that file.
 - **Source:** derived from 09-22 16:37, "when a change is not staged" and "when a file is not added/staged yet".
-- **Acceptance criteria:** Each file's badge state (staged, unstaged, untracked) comes from git's status for that
-  file, not from which side of the comparison it is on.
+- **Refined:** 09-23 10:26, "didn't i mention in a previous prompt that staged/tracked (and i guess that includes
+  committed files) should have filled background variant of diff badges ?"
+- **Acceptance criteria:**
+  1. Each file's badge state (staged, unstaged, untracked) comes from git's status for that file, not from which
+     side of the comparison it is on.
+  2. A committed change, and a staged change with nothing left unstaged, draws filled, in working-tree and
+     ref-to-ref comparisons alike.
+- **Open point:** two choices the assistant reported at 11:15 without an answer: a file with both staged and
+  unstaged changes draws stroked, and a folder draws stroked when git reports any unstaged or untracked file inside
+  it, including files the list does not show. Both are kept as defaults unless the user objects (see the
+  open questions).
 - **Priority:** Should. **Related:** CARD-09.
 
 #### CARD-12 · A custom sticky card container
@@ -740,6 +998,8 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
   4. At rest, a card is one rounded shape with one shadow, one border and one seam line.
   5. Nothing clips the scrollbar or a neighboring card's shadow.
   6. No backdrop blur, and no SwiftUI update, happens per scroll frame.
+- **Accepted:** 09-23 09:41, on the agent's review build: "the gdv card review app does exactly what i want, but the
+  scrolling is so sluggish". The look is approved; smooth scrolling of these cards is PERF-05.
 - **Priority:** Must. **Related:** CARD-02 to CARD-07, PERF-05, PERF-07.
 
 ### TAB: Window tabs and the in-app tab bar
@@ -791,7 +1051,7 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
 
 #### TAB-07 · Native behavior for the in-app file tabs
 - **Statement:** The in-app file tabs behave like a native macOS tab bar.
-- **Source:** 09-23 09:37 (Q1), "native behaviour for the in-app file tabs".
+- **Source:** 09-23 09:37 (Q1), "native behaviour for the in-app file tabs?"
 - **Acceptance criteria:**
   1. Tabs reorder by dragging.
   2. ⌘W closes the active tab; ⌃Tab and ⌃⇧Tab (and ⌘⇧] and ⌘⇧[) move between tabs.
@@ -875,6 +1135,20 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
   3. A change of diff options re-renders everything.
 - **Priority:** Must.
 
+#### GIT-05 · The repository watcher never crashes the app (Derived)
+- **Statement:** Watching a repository can never make the app read freed memory.
+- **Source:** 09-23 10:42, a pasted crash report (573 lines) from the installed app, 18 minutes after launch:
+  `EXC_BAD_ACCESS (SIGSEGV)` on the watcher's dispatch queue (`com.kittycode.fswatcher`), inside
+  `AsyncStream.Continuation.yield` called from the FSEvents callback in `FileWatcher.watchDirectory`
+  (`AtelierFileWatcher.swift:102`), reading a garbage type-metadata pointer.
+- **Rationale:** The review had flagged the watcher box's lifetime as unproven (Core S15, Aemi #27); the crash
+  proved it.
+- **Acceptance criteria:**
+  1. An FSEvents callback still in flight when a watcher stops or is released never touches freed memory.
+  2. A watcher released without `stop()` shuts its stream down.
+  3. A stress test that stops or drops watchers while events arrive passes repeatedly.
+- **Priority:** Must. **Related:** GIT-01.
+
 ### WIN: Window chrome and stability
 
 #### WIN-01 · The toolbar customization persists
@@ -945,7 +1219,9 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
 
 #### PERF-05 · The file list scrolls smoothly
 - **Statement:** Scrolling the card list is smooth.
-- **Source:** 09-22 16:48, "and the scroll is very slow and sluggish on the file list".
+- **Source:** 09-22 16:48, "and the scroll is very slow and sluggish on the file list"; 09-23 09:41, on the custom
+  card container's review build, "the gdv card review app does exactly what i want, but the scrolling is so
+  sluggish".
 - **Acceptance criteria:**
   1. Scrolling a list of 33 or more files holds the display's frame rate, measured with Instruments.
   2. A scroll frame re-evaluates no card body unless the card's pinned state changes.
@@ -1016,6 +1292,7 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
   1. Each JSON call site has a recorded verdict (adopt, later, keep Foundation) with numbers.
   2. The hot paths (SARIF decoding, LSP envelopes and payloads) use AemiJSON's fastest correct path, with no
      redundant parse or copy.
+- **Amended:** 09-23 13:06 by JSON-04 (change of mind 8): "keep Foundation" is no longer an allowed verdict.
 - **Priority:** Should.
 
 #### JSON-03 · AtelierLSP's JSON-RPC uses AemiJSON
@@ -1023,6 +1300,20 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
 - **Source:** 09-22 14:44, "why is atelierlsp not leveraging aemijson for the jsonrpc for example".
 - **Acceptance criteria:** Every JSON-RPC envelope and payload in AtelierLSP is encoded and decoded through AemiJSON.
 - **Priority:** Must.
+
+#### JSON-04 · Every JSON read and write goes through AemiJSON
+- **Statement:** All JSON the three packages read or write goes through AemiJSON, for speed.
+- **Source:** 09-23 13:06, "can you make sure we use aemijson whenever we do json interaction to accelerate
+  performances".
+- **Acceptance criteria:**
+  1. No production code in GitDiffViewer, KittyCode or AtelierCore decodes or encodes JSON with `JSONDecoder`,
+     `JSONEncoder` or `JSONSerialization`.
+  2. Data the Foundation encoder wrote before the switch, such as settings in `UserDefaults` and on-disk caches,
+     still reads back (derived).
+  3. Each switched call site that is not trivially small has a before and after measurement, as the Definition of
+     Done asks of every performance statement (derived).
+  4. Decoders of untrusted or hand-edited JSON cap the nesting depth (derived from review finding Aemi #6).
+- **Priority:** Must. **Related:** JSON-01, JSON-02, JSON-03; amends JSON-02.
 
 ### MOD: Modularization for GUI and terminal reuse
 
@@ -1121,11 +1412,14 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
 - **Statement:** Opening, hovering or fetching in a repository runs no command that the repository's own files
   choose, unless the user trusts that repository.
 - **Source:** 09-23 07:59, "safety, security" (the review criteria).
+- **Decided:** D7, 09-23 12:34, "Prompt on first hover (Recommended)".
 - **Acceptance criteria:**
   1. The language server does not start with an untrusted repository as its workspace.
   2. git commands pin or reject every configuration key that can run a command.
   3. Hover links open only safe URL schemes.
-- **Priority:** Must. **Related:** GIT-02, HOVER-01.
+  4. The first hover in an unknown repository asks once whether to trust it; doc comments and SDK documentation
+     keep answering meanwhile; a list in Settings reviews and revokes trust (D7's option text).
+- **Priority:** Must. **Related:** GIT-02, HOVER-01, QUAL-09.
 
 #### QUAL-08 · A measured rendering-performance review
 - **Statement:** A dedicated review measures rendering speed across the GUI, the TUI and the shared engines, and
@@ -1135,6 +1429,31 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
 - **Acceptance criteria:** Reports for the GUI, the TUI and the core engines give measured costs, ranked fixes
   with expected gains, and a progressive pipeline design (PERF-09).
 - **Priority:** Must. **Related:** PERF-09.
+
+#### QUAL-09 · A cloned repository cannot get its own hook binary run
+- **Statement:** The git hooks installed on this machine never run a binary that a repository ships inside itself.
+- **Source:** decision D6, 09-23 12:34, "Patch now (Recommended)", answering "Should I patch the hook script your
+  global git template installs (and the copies already in your clones), so a cloned repository can no longer get
+  its own project-hooks binary run on your first commit?"
+- **Rationale:** Review finding PH-6 was reproduced on this machine: a fresh clone ran its own committed
+  `.build/release/project-hooks` on its first commit, through the global git template's hooks.
+- **Acceptance criteria:**
+  1. `~/.git-templates/hooks/pre-commit` and `pre-push` no longer try `$REPO_ROOT/.build/release/project-hooks`.
+  2. Neither do the hooks already copied into existing clones.
+  3. The original hooks are backed up, so the change can be undone.
+- **Priority:** Must. **Related:** QUAL-07, PROC-12 (the proper fix in project-hooks, fix plan track 1K).
+
+#### QUAL-10 · Re-gather the requests, re-assess them, and ask the open questions
+- **Statement:** Every request since 09-19 is gathered again, each requirement's status is re-assessed on the current
+  code, and the points that need the user are put to the user.
+- **Source:** 09-23 13:29, "please perform a regathering of all prompts and requirements and assess their
+  implementation or design or preparation status since 3-4 days on the whole scope of this project, and come back to
+  me with questions if there are open points".
+- **Acceptance criteria:**
+  1. The book covers every request and decision since 09-19 00:00.
+  2. Each requirement has one status at the current `main`, with evidence.
+  3. The open questions give their options and a recommended default.
+- **Priority:** Must. **Related:** QUAL-04.
 
 ### CARD (continued): Requests after the audit
 
@@ -1158,7 +1477,7 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
   1. Card heights equal their laid-out content in every layout, with wrapping on and off.
   2. No card height changes during a scroll unless its content changed.
   3. Unfolding a card in the split layout keeps the list's content on screen.
-- **Priority:** Must. **Related:** CARD-12, PERF-05.
+- **Priority:** Must. **Related:** CARD-12, CARD-16 (the NaN height behind criterion 3), PERF-05.
 
 #### CARD-15 · The card list offers inline and side by side only
 - **Statement:** The card list supports the inline and side-by-side layouts; stacked is for a single file.
@@ -1168,6 +1487,19 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
   2. While the card list shows, Stacked is disabled in the toolbar picker and the View menu, with an explanation.
   3. A single file still honours Stacked.
 - **Priority:** Must.
+
+#### CARD-16 · Card geometry is always finite (Derived)
+- **Statement:** No card ever hands SwiftUI or AppKit a size or position that is not a finite number.
+- **Source:** 09-23 12:06, a pasted crash report (592 lines) from the fold agent's review build: `EXC_BREAKPOINT
+  (SIGTRAP)` on the main thread in `_NSViewValidateGeometry`, called from `-[NSClipView setBoundsOrigin:]` inside
+  SwiftUI's `HostingScrollView.updateContext`, with the message "Invalid view geometry: y is NaN". It explains R78
+  ("expanding a file completely erases the scrollview content"): the same NaN blanked the list on earlier builds.
+- **Acceptance criteria:**
+  1. Every size and position a card reports is finite and not negative, in every layout and fold state, including
+     before the card has a width.
+  2. Unfolding a side-by-side card neither blanks the list nor crashes the app.
+  3. A regression test reproduces the conditions of the crash.
+- **Priority:** Must. **Related:** CARD-14.
 
 ### DIFF: Diff interaction refinements (roadmap, 09-23)
 
@@ -1187,7 +1519,7 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
   1. A drag against the reveal direction never discloses lines.
   2. Holding a handle at an edge keeps revealing at a bounded rate.
   3. A gap between two changes shows two handles with hover feedback.
-- **Priority:** Should. Reference: Xcode's comparison view; the user offered screenshots.
+- **Priority:** Should. Reference: Xcode's comparison view, images 19 to 21 (DIFF-05).
 
 #### DIFF-03 · A gutter scope ribbon
 - **Statement:** The gutter shows scope indicators and fold controls without growing much wider.
@@ -1197,7 +1529,7 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
   1. Hovering a line highlights its enclosing scope.
   2. A scope can be collapsed and disclosed from the gutter.
   3. The gutter's width grows by at most a few points.
-- **Priority:** Could. Reference: Xcode; the user offered screenshots.
+- **Priority:** Could. Reference: Xcode's code folding ribbon, images 13 to 18 (DIFF-05).
 
 #### DIFF-04 · A compact inline view
 - **Statement:** A setting shows only the newest content, with gutter markers that disclose each change in place.
@@ -1209,6 +1541,65 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
   2. Clicking a marker discloses that addition, removal or modification in place.
   3. It works with the isolated-changes mode.
 - **Priority:** Could.
+
+#### DIFF-05 · Xcode as the visual reference for the diff refinements
+- **Statement:** The refinements are designed from what Xcode actually shows, captured in a throwaway project and
+  kept in the repository.
+- **Source:** 09-23 11:53, "(if you open xcode on a project with big enough files that it would need to show the
+  dragging control i can give you a screenshot)" and "xcode also propose interesting things in that regard and i
+  can send you screenshot of different ways it does it"; 11:55, "create a dummy xcode project with git various
+  things, commited, staged, unstaged changes and i'll show you"; 12:00, images 12 to 21; 12:04, "reopen xcode for
+  the rename thing please"; 12:05, images 22 and 23.
+- **Acceptance criteria:**
+  1. A throwaway Xcode project outside the repository holds committed, staged, unstaged, untracked, renamed and
+     deleted changes.
+  2. The screenshots, and what each shows, are kept in the repository as the reference for DIFF-02 to DIFF-04.
+  3. The rename screenshots settle CARD-09's renamed badge.
+- **Priority:** Should. **Related:** DIFF-02, DIFF-03, DIFF-04, CARD-09.
+
+### REND: A text renderer of our own
+
+#### REND-01 · A measured design for a custom text renderer
+- **Statement:** Before building anything, a design measures TextKit 2 against a renderer of our own and says
+  whether and how to build it.
+- **Source:** 09-23 10:01, "depending on the performances results regarding textkit and rendering (do we use the
+  latest iteration of textkit btw?), we could start designing our own text renderer CoreAnimation/CoreText/Metal
+  based with a better more convenient API surface and improved rendering speed, …".
+- **Acceptance criteria:**
+  1. It answers whether the app uses the latest TextKit, with evidence.
+  2. It measures TextKit 2 as the app uses it, TextKit 2 used correctly, and a prototype of the new renderer, on
+     the same inputs.
+  3. It lists what TextKit provides that a replacement must rebuild.
+  4. It gives phases with exit criteria and the decisions that gate each phase.
+- **Priority:** Should. **Related:** QUAL-08, PERF-09.
+
+#### REND-02 · The renderer's qualities
+- **Statement:** The renderer has a typed API, handles UTF-8 and UTF-16 exactly, supports fonts and their features
+  fully, is safe under Swift 6.4's strict concurrency, is reusable outside this app, and supports Dynamic Type.
+- **Source:** 09-23 10:01, same message: "a better more convenient API surface and improved rendering speed, accuracy
+  over utf8 and utf16 full font support as well as full font feature support, strongly typed, swift 6.4 compliant,
+  concurrency safe and more usable for a generic project than textkit, supporting dynamictypesupport in swiftui".
+- **Acceptance criteria:**
+  1. Styles and attributes are Swift types, not attribute dictionaries.
+  2. Text is stored as UTF-8, converted to UTF-16 only at platform boundaries, and hit-testing snaps to grapheme
+     clusters.
+  3. Font fallback, OpenType features, variable axes and color glyphs render.
+  4. Its targets build in Swift 6 mode with warnings as errors and no `@unchecked Sendable`.
+  5. The engine knows nothing about diffs.
+  6. Text size follows Dynamic Type in SwiftUI where the platform scales text.
+  7. It renders faster than TextKit 2 used correctly, measured on the same inputs.
+- **Priority:** Could: "we could start designing". **Related:** REND-01, REND-03.
+
+#### REND-03 · Pluggable text backends, switchable during development
+- **Statement:** The app's architecture lets each window choose TextKit 2 or the new renderer while the new one is
+  being built.
+- **Source:** 09-23 10:01, same message: "and work on the app architecture to make them plug n play and have both
+  rendering be chosable while we're developing the newer one".
+- **Acceptance criteria:**
+  1. The diff panes draw through one backend seam, with a TextKit 2 backend and the new one behind it.
+  2. A developer setting chooses the backend per window.
+  3. A parity harness checks that both backends produce the same geometry and content.
+- **Priority:** Should. **Related:** REND-02, MOD-02.
 
 ## Request index
 
@@ -1287,12 +1678,35 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R69 | 09-23 07:47 | "update the model for all agents to be opus in the global agents definition files" | Out of scope (second session) |
 | R70 | 09-23 07:49 | "the opus should be 5.5" | Out of scope (second session) |
 | R71 | 09-23 09:05 | "go completely custom … the clipping, sticking and scrolling right" | CARD-12 |
-| R72 | 09-23 (mid-turn) | "if unstaged … stroke and text should be white" | CARD-10 |
-| R73 | 09-23 (mid-turn) | "reuse the backdrop effect beneath them … capsule shape … a pin symbol" | TAB-08, TAB-09 |
-| R74 | 09-23 (mid-turn) | "micro optimizations towards improving rendering speed across gui/tui" | PERF-09, QUAL-08 |
+| R72 | 09-23 09:10 (mid-turn) | "if unstaged … stroke and text should be white" | CARD-10 |
+| R73 | 09-23 09:10 (mid-turn) | "reuse the backdrop effect beneath them … capsule shape … a pin symbol" | TAB-08, TAB-09 |
+| R74 | 09-23 09:15 (mid-turn) | "micro optimizations towards improving rendering speed across gui/tui" | PERF-09, QUAL-08 |
 | R75 | 09-23 09:37 | "tab hovering background could be lighter" (and the answers to Q1-Q5) | TAB-07, TAB-08, SET-03, HOVER-08, CARD-09, DIAG-08 |
-| R76 | 09-23 (after audit) | "when collapsing the background is darker grayish" | CARD-13 |
-| R77 | 09-23 (after audit) | "when using another layout than the inline, scroll … is buggy" | CARD-14 |
-| R78 | 09-23 (after audit) | "split layout, plus expanding a file completely erases the scrollview content" | CARD-14 |
-| R79 | 09-23 (after audit) | "file list cards should only support inline or horizontal split" | CARD-15 |
-| R80 | 09-23 (after audit) | "i'd like that you add to the roadmap a few refinements" | DIFF-01 to DIFF-04 |
+| R76 | 09-23 11:42 (mid-turn) | "when collapsing the background is darker grayish" | CARD-13 |
+| R77 | 09-23 11:42 | "when using another layout than the inline, scroll … is buggy" | CARD-14 |
+| R78 | 09-23 11:43 | "split layout, plus expanding a file completely erases the scrollview content" | CARD-14 |
+| R79 | 09-23 11:44 (mid-turn) | "file list cards should only support inline or horizontal split" | CARD-15 |
+| R80 | 09-23 11:53 | "i'd like that you add to the roadmap a few refinements" | DIFF-01 to DIFF-04 |
+| R81 | 09-21 14:30 (decision D1, missed by the first pass) | "everything, incremental, atomic, fully tested, split in both parallel and sequential tracks" | PROC-09 |
+| R82 | 09-21 14:30 (decision D2, missed by the first pass) | "Bundle + discovery" | TOOL-04 |
+| R83 | 09-21 14:45 (decision D3, missed by the first pass) | the plan is approved | PROC-07 |
+| R84 | 09-23 09:03 | "continue" | Resumes the session after a network outage |
+| R85 | 09-23 09:41 | "the gdv card review app does exactly what i want, but the scrolling is so sluggish" | CARD-12, PERF-05 |
+| R86 | 09-23 10:01 | "we could start designing our own text renderer CoreAnimation/CoreText/Metal based" (and "do we use the latest iteration of textkit btw?") | REND-01, REND-02, REND-03 |
+| R87 | 09-23 10:11 | "please reinstall and re-sign the current version of the release app" | PROC-03 |
+| R88 | 09-23 10:26 | "staged/tracked (and i guess that includes committed files) should have filled background variant" | CARD-11, CARD-09 |
+| R89 | 09-23 10:42 | a pasted crash report (573 lines): use-after-free in the file watcher | GIT-05 |
+| R90 | 09-23 10:50 (mid-turn) | "please clean all temporary files and project, we're running out of space" | PROC-10 |
+| R91 | 09-23 11:36 | "the white badge variant in the side bar file list/trees is not working" | CARD-10 |
+| R92 | 09-23 11:37 (mid-turn) | "btw the file headers in the list don'T match the badge color scheme tint" | SET-07 |
+| R93 | 09-23 11:55 | "create a dummy xcode project with git various things, commited, staged, unstaged changes and i'll show you" | DIFF-05 |
+| R94 | 09-23 12:00 | images 12 to 21 (Xcode's inline change, fold ribbon and gap handles) | DIFF-05, DIFF-02, DIFF-03 |
+| R95 | 09-23 12:04 | "reopen xcode for the rename thing please" | DIFF-05, CARD-09 |
+| R96 | 09-23 12:05 | images 22 and 23 (Xcode's renamed row) | CARD-09, CARD-10 |
+| R97 | 09-23 12:05 (mid-turn) | "i'd prefer we use R for renamed though" | CARD-09 |
+| R98 | 09-23 12:06 | "so it's clearer than an M that means the same thing than the other files" | CARD-09 |
+| R99 | 09-23 12:06 | a pasted crash report (592 lines): NaN view geometry in the fold review build | CARD-16, CARD-14 |
+| R100 | 09-23 12:34 (decisions D4 to D7) | "Start Wave 1 now", "Mirror into g-cqd", "Patch now", "Prompt on first hover" | PROC-11, PROC-12, QUAL-09, QUAL-07 |
+| R101 | 09-23 12:37 (decision D8) | "End it now (Recommended)" | PROC-10 |
+| R102 | 09-23 13:06 | "can you make sure we use aemijson whenever we do json interaction" | JSON-04 |
+| R103 | 09-23 13:29 | "please perform a regathering of all prompts and requirements" | QUAL-10 |
