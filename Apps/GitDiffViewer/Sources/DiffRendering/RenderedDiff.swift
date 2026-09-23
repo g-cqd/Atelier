@@ -31,7 +31,6 @@ package struct RowMeta: Sendable {
     package let oldNumber: Int?
     package let newNumber: Int?
     package var fileIndex = 0
-    package var gap: GapMarker?
     /// The line only moved; drawn in a calmer colour than a real change.
     package var isMoved = false
 }

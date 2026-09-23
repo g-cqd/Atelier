@@ -260,7 +260,7 @@ struct DiffViewerModelReloadContinuityTests {
         sut.settings.isolatesChanges = true
         sut.select("a.swift")
         try await harness.taskProvider.waitForAllTasks()
-        let marker = try #require(sut.rendered?.old?.rows.first?.gap)
+        let marker = try #require(sut.rendered?.old?.gaps.first?.marker)
         harness.drag(sut, .extendsChangeBelow, of: marker, rows: 4)
 
         // The same line changes again, differently: a new blob with the same hunk.
@@ -272,7 +272,7 @@ struct DiffViewerModelReloadContinuityTests {
         try await harness.taskProvider.waitForAllTasks()
 
         #expect(sut.expansion(of: marker.key) == GapExpansion(below: 0, above: 4))
-        #expect(sut.rendered?.old?.rows.first?.gap?.hiddenRows == marker.hiddenRows - 4)
+        #expect(sut.rendered?.old?.gaps.first?.marker.hiddenRows == marker.hiddenRows - 4)
     }
 
     @Test
@@ -285,7 +285,7 @@ struct DiffViewerModelReloadContinuityTests {
         sut.settings.isolatesChanges = true
         sut.select("a.swift")
         try await harness.taskProvider.waitForAllTasks()
-        let marker = try #require(sut.rendered?.old?.rows.first?.gap)
+        let marker = try #require(sut.rendered?.old?.gaps.first?.marker)
         harness.drag(sut, .extendsChangeBelow, of: marker, rows: 4)
         try await harness.taskProvider.waitForAllTasks()
         #expect(sut.expansion(of: marker.key) == GapExpansion(below: 0, above: 4))

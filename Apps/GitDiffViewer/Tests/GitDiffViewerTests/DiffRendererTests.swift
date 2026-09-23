@@ -19,14 +19,60 @@ struct DiffRendererTests {
         let rendered = DiffRenderer.render(
             oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
         )
-        let rows = try #require(rendered.unified?.rows)
-        let kinds = rows.map(\.kind)
-        #expect(kinds.first == .gap)
-        #expect(rows.first?.gap?.hiddenRows == 7)
-        #expect(kinds.filter { $0 == .gap }.count == 3)
-        #expect(rows.last?.gap?.hiddenRows == 3)
+        let unified = try #require(rendered.unified)
+        #expect(unified.gaps.map(\.marker.hiddenRows) == [7, 10, 3])
         #expect(rendered.unifiedChangeStarts.count == 2)
-        #expect(rows[1].oldNumber == 8)
+        #expect(unified.rows.first?.oldNumber == 8)
+    }
+
+    @Test
+    func `a hidden run takes no row of its own`() throws {
+        let rendered = try #require(
+            DiffRenderer.render(
+                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+            )
+            .unified)
+        // Two hunks: lines 8 to 12 with line 10 changed, then lines 23 to 27 with line 25 removed.
+        #expect(rendered.rows.count == 11)
+        #expect(rendered.lineStarts.count == 11)
+        #expect(rendered.rows.allSatisfy { $0.oldNumber != nil || $0.newNumber != nil })
+        #expect(!rendered.attributed.string.contains("hidden"))
+    }
+
+    @Test
+    func `line numbers jump across a hidden run, on the boundary its gap lies on`() throws {
+        let rendered = try #require(
+            DiffRenderer.render(
+                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+            )
+            .unified)
+        let between = try #require(rendered.gaps.first { !$0.marker.isLeading && !$0.marker.isTrailing })
+        #expect(rendered.rows[between.boundary - 1].oldNumber == 12)
+        #expect(rendered.rows[between.boundary].oldNumber == 23)
+    }
+
+    @Test
+    func `a trailing gap lies on the boundary below the last row`() throws {
+        let rendered = try #require(
+            DiffRenderer.render(
+                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+            )
+            .unified)
+        let last = try #require(rendered.gaps.last)
+        #expect(last.marker.isTrailing)
+        #expect(last.boundary == rendered.rows.count)
+        #expect(rendered.rows.last?.oldNumber == 27)
+    }
+
+    @Test
+    func `changes on either side of a hidden run stay two changes`() throws {
+        let old = "line1\nline2AAAA\nline3\nline4\nline5\nline6AAAA\nline7\n"
+        let new = "line1\nline2BBBB\nline3\nline4\nline5\nline6BBBB\nline7\n"
+        let rendered = DiffRenderer.render(
+            oldText: old, newText: new, language: .plain, layout: .changes(context: 0, expansions: [:]))
+        // With no context, the rows of the two changes touch across the gap between them.
+        #expect(rendered.splitChangeStarts == [0, 1])
+        #expect(rendered.unifiedChangeStarts == [0, 2])
     }
 
     @Test
@@ -36,8 +82,8 @@ struct DiffRendererTests {
             oldText: old, newText: new, language: .plain,
             layout: .changes(context: 2, expansions: [key: GapExpansion(below: 0, above: 4)])
         )
-        #expect(rendered.unified?.rows.first?.gap?.hiddenRows == 3)
-        #expect(rendered.unified?.rows[1].oldNumber == 4)
+        #expect(rendered.unified?.gaps.first?.marker.hiddenRows == 3)
+        #expect(rendered.unified?.rows.first?.oldNumber == 4)
     }
 
     @Test

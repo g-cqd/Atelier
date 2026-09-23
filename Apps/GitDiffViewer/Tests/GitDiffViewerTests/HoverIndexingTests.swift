@@ -85,8 +85,8 @@ struct HoverIndexingTests {
     func `dragging a gap reads no corpus file`() async throws {
         let sut = try await makeLoadedSUT(isolatesChanges: true, editsLineFifteen: true)
         #expect(try await reads(3).sorted() == ["a.swift", "a.swift", "rest.swift"])
-        let rows = try #require(sut.renderedFiles.first?.rendered.old?.rows)
-        let marker = try #require(rows.lazy.compactMap(\.gap).first { !$0.handles.isEmpty })
+        let gaps = try #require(sut.renderedFiles.first?.rendered.old?.gaps)
+        let marker = try #require(gaps.lazy.map(\.marker).first { !$0.handles.isEmpty })
 
         harness.drag(sut, try #require(marker.handles.first), of: marker, rows: 4)
         try await harness.taskProvider.waitForAllTasks()
