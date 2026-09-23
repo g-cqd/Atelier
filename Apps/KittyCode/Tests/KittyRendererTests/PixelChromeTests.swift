@@ -15,8 +15,8 @@ struct PixelChromeTests {
     }
 
     @Test
-    func `a vertical line transmits a 1 by N image once and places it under the text`() {
-        var chrome = PixelChrome(cell: cell)
+    func `a vertical line transmits a 1 by N image once and places it under the text`() throws {
+        var chrome = try #require(PixelChrome(cell: cell))
         let line = ChromeLine(axis: .vertical, row: 1, column: 30, length: 3, color: grey, offset: 4)
         var bytes = ContiguousArray<UInt8>()
         chrome.render([line], into: &bytes)
@@ -36,8 +36,8 @@ struct PixelChromeTests {
     }
 
     @Test
-    func `moving a line deletes the placements and reuses the image`() {
-        var chrome = PixelChrome(cell: cell)
+    func `moving a line deletes the placements and reuses the image`() throws {
+        var chrome = try #require(PixelChrome(cell: cell))
         var bytes = ContiguousArray<UInt8>()
         chrome.render([ChromeLine(axis: .horizontal, row: 0, column: 0, length: 8, color: grey)], into: &bytes)
         bytes.removeAll()
@@ -50,8 +50,8 @@ struct PixelChromeTests {
     }
 
     @Test
-    func `invalidation re-places without retransmitting and a reset transmits afresh`() {
-        var chrome = PixelChrome(cell: cell)
+    func `invalidation re-places without retransmitting and a reset transmits afresh`() throws {
+        var chrome = try #require(PixelChrome(cell: cell))
         let line = ChromeLine(axis: .vertical, row: 0, column: 5, length: 2, color: grey)
         var bytes = ContiguousArray<UInt8>()
         chrome.render([line], into: &bytes)
@@ -70,8 +70,8 @@ struct PixelChromeTests {
     }
 
     @Test
-    func `an empty line set after lines deletes them and a zero-length line is skipped`() {
-        var chrome = PixelChrome(cell: cell)
+    func `an empty line set after lines deletes them and a zero-length line is skipped`() throws {
+        var chrome = try #require(PixelChrome(cell: cell))
         var bytes = ContiguousArray<UInt8>()
         chrome.render([ChromeLine(axis: .vertical, row: 0, column: 0, length: 1, color: grey)], into: &bytes)
         bytes.removeAll()
@@ -109,8 +109,8 @@ struct PixelChromeTests {
     }
 
     @Test
-    func `a fill is a one-pixel image scaled to its cells and a bar is placed to the pixel`() {
-        var chrome = PixelChrome(cell: cell)
+    func `a fill is a one-pixel image scaled to its cells and a bar is placed to the pixel`() throws {
+        var chrome = try #require(PixelChrome(cell: cell))
         var bytes = ContiguousArray<UInt8>()
         chrome.render(
             [
@@ -129,9 +129,19 @@ struct PixelChromeTests {
         #expect(text.contains("\u{1b}[3;5H") && text.contains("\u{1b}[1;51H"))
     }
 
+    @Test(arguments: [(0, 20), (10, 0), (-1, 20), (257, 20), (10, 513)])
+    func `no layer exists for a cell size it cannot draw at`(width: Int, height: Int) {
+        #expect(PixelChrome(cell: .init(width: width, height: height)) == nil)
+    }
+
+    @Test(arguments: [(1, 1), (256, 512)])
+    func `a layer exists for the smallest and largest drawable cell sizes`(width: Int, height: Int) {
+        #expect(PixelChrome(cell: .init(width: width, height: height))?.cell == .init(width: width, height: height))
+    }
+
     @Test
-    func `an empty fill or bar places nothing`() {
-        var chrome = PixelChrome(cell: cell)
+    func `an empty fill or bar places nothing`() throws {
+        var chrome = try #require(PixelChrome(cell: cell))
         var bytes = ContiguousArray<UInt8>()
         chrome.render(
             [
