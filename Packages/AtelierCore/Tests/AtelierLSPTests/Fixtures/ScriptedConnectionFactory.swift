@@ -5,9 +5,16 @@
 actor ScriptedConnectionFactory {
     private(set) var transports: [PipeTransport] = []
     private var waiters: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
+    /// The standing answers every new transport starts with (``PipeTransport/answer(_:with:)``).
+    private let answers: [String: JSONValue]
+
+    init(answering answers: [String: JSONValue] = [:]) {
+        self.answers = answers
+    }
 
     func make() -> LSPConnection {
         let transport = PipeTransport()
+        for (method, result) in answers { transport.answer(method, with: result) }
         transports.append(transport)
         let satisfied = waiters.filter { transports.count >= $0.count }
         waiters.removeAll { transports.count >= $0.count }
