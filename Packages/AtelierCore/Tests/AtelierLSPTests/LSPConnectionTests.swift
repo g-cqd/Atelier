@@ -228,3 +228,39 @@ struct LSPConnectionTests {
         #expect(payloadResult == Payload(value: 9))
     }
 }
+
+@Suite
+struct LSPConnectionDepthTests {
+    @Test
+    func `a 300-deep reply throws on a 512 KiB stack`() async {
+        let depth = 300
+        let reply = Data((String(repeating: #"{"a":"#, count: depth) + "1" + String(repeating: "}", count: depth)).utf8)
+
+        let outcome = await onThread {
+            Result { () throws(LSPConnectionError) in
+                try LSPConnection.decodeResult(JSONValue.self, from: reply, method: "deep")
+            }
+        }
+
+        let error = #expect(throws: LSPConnectionError.self) { try outcome.get() }
+        #expect(error?.isMalformedResponse == true)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func `a result nested past the depth cap fails its request as malformed`() async throws {
+        let transport = PipeTransport()
+        let connection = LSPConnection(transport: transport)
+        await connection.start()
+
+        let request = Task { try await connection.request("thing/get", EmptyParams(), as: JSONValue.self) }
+        await transport.sink.waitForCount(1)
+        let id = try #require(
+            try JSONDecoder().decode(SentEnvelope.self, from: unframe(await transport.sink.all[0])).id)
+        // Past the cap, yet shallow enough for the default depth to decode on a pool thread.
+        let result = nestedValue(depth: LSPConnection.maximumResultDepth + 16)
+        transport.deliver(LSPFrameCodec.frame(try JSONRPCMessage.response(id: id, result: result)))
+
+        let error = await #expect(throws: LSPConnectionError.self) { try await request.value }
+        #expect(error?.isMalformedResponse == true)
+    }
+}
