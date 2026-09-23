@@ -13,6 +13,8 @@ public struct SequenceRouter: Sendable {
         case csiLt
         case csiGt
         case csiParam
+        /// `ESC [ ?`: a private-mode reply, such as device attributes or a mode report, collected up to its final byte.
+        case csiPrivate
         case keyboard
         case mouse
         case osc
@@ -116,6 +118,8 @@ public struct SequenceRouter: Sendable {
                         routeState = .csiLt
                     case 0x3e:
                         routeState = .csiGt
+                    case 0x3f:
+                        routeState = .csiPrivate
                     case 0x49:
                         events.append(.focusIn)
                         resetRouting()
@@ -134,6 +138,21 @@ public struct SequenceRouter: Sendable {
                             events.append(.unknown(buffer))
                         }
                         resetRouting()
+                }
+
+            case .csiPrivate:
+                switch byte {
+                    case 0x20 ... 0x3f:
+                        buffer.append(byte)
+                    case 0x40 ... 0x7e:
+                        buffer.append(byte)
+                        events.append(.unknown(buffer))
+                        resetRouting()
+                    default:
+                        // No control sequence holds this byte: the reply was cut short, and the byte starts afresh.
+                        events.append(.unknown(buffer))
+                        resetRouting()
+                        feed(byte, into: &events)
                 }
 
             case .csiLt:
