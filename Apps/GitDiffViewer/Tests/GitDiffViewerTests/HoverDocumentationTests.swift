@@ -212,36 +212,50 @@ private func query(line: Int = 0, column: Int = 0) -> HoverQuery {
         #expect(content == nil)
     }
 
-    @Test func theOldSideNeverConsultsTheLanguageServer() async {
+    @Test func theOldSideNeverConsultsTheLanguageServer() async throws {
         let callCount = Locked(0)
-        let registry = SourceKitLSPRegistry { _ in
-            callCount.increment()
-            return nil
-        }
+        let registry = SourceKitLSPRegistry(
+            admits: { _ in true },
+            makeConfiguration: { _ in
+                callCount.increment()
+                return nil
+            })
         let model = HoverDocumentationModel(lspRegistry: registry)
         let entry = HoverDocumentationModel.FileEntry(
             index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift", oldText: swiftDocComment,
             newText: swiftDocComment, oldBlobID: "old", newBlobID: "new")
-        let root = URL(filePath: "/tmp/repo", directoryHint: .isDirectory)
+        let root = try makeScratchRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
         model.comparisonChanged(root: root, files: [entry])
         _ = await model.hover(fileIndex: 0, side: .old, line: 1, utf16Column: 6)
         #expect(callCount.value == 0)
     }
 
-    @Test func theNewSideOnDiskConsultsTheLanguageServerRegistry() async {
+    @Test func theNewSideOnDiskConsultsTheLanguageServerRegistry() async throws {
         let callCount = Locked(0)
-        let registry = SourceKitLSPRegistry { _ in
-            callCount.increment()
-            return nil
-        }
+        let registry = SourceKitLSPRegistry(
+            admits: { _ in true },
+            makeConfiguration: { _ in
+                callCount.increment()
+                return nil
+            })
         let model = HoverDocumentationModel(lspRegistry: registry)
         let entry = HoverDocumentationModel.FileEntry(
             index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift", oldText: swiftDocComment,
             newText: swiftDocComment, oldBlobID: "old", newBlobID: "new")
-        let root = URL(filePath: "/tmp/repo", directoryHint: .isDirectory)
+        let root = try makeScratchRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
         model.comparisonChanged(root: root, files: [entry])
         _ = await model.hover(fileIndex: 0, side: .new, line: 1, utf16Column: 6)
         #expect(callCount.value == 1)
+    }
+
+    /// A fresh directory standing in for a repository root, since the registry only admits roots that exist.
+    private func makeScratchRoot() throws -> URL {
+        let root = FileManager.default.temporaryDirectory.appending(
+            path: "gdv-hover-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+        return root
     }
 }
 
