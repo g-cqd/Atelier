@@ -194,6 +194,25 @@ struct SequenceRouterTests {
         #expect(releaseEvent.row == 8)
     }
 
+    /// The device-attributes reply that ends the palette query, a mode report and a keyboard-flags report.
+    @Test(arguments: ["\u{1B}[?62;22c", "\u{1B}[?2026;2$y", "\u{1B}[?31u"])
+    func `A private-mode reply arrives whole, with no key events`(reply: String) throws {
+        var router = makeSUT()
+        let bytes = Array(reply.utf8)
+
+        #expect(try requireUnknownEvent(router.feedAll(bytes)) == bytes)
+    }
+
+    @Test
+    func `A private-mode reply cut short by a new sequence leaves that sequence intact`() throws {
+        var router = makeSUT()
+        let events = router.feedAll(Array("\u{1B}[?62\u{1B}[A".utf8))
+
+        try #require(events.count == 2)
+        #expect(try requireUnknownEvent([events[0]]) == Array("\u{1B}[?62".utf8))
+        try assertSingleKeyEvent(in: [events[1]], expectedKeyCode: 57352)
+    }
+
     private func assertSingleKeyEvent(in events: [InputEvent], expectedKeyCode: UInt32) throws {
         let key = try requireKeyEvent(events)
         #expect(key.keyCode == expectedKeyCode)
