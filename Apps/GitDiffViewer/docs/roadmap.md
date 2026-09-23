@@ -100,8 +100,8 @@ style). Cross-consumer enum change — sequence with the FileStatusProvider/GitS
 modularization move.
 
 ## Diff interaction refinements (user-requested 09-23)
-Requested on 09-23; not scheduled yet. Xcode's comparison view is the reference for items 2 and 3, and the user
-offered screenshots of its drag handles and scope ribbon.
+Requested on 09-23; not scheduled yet. Xcode is the reference for items 2 and 3. The user's screenshots, and what
+they show, are in `xcode-reference.md`.
 
 1. **Resizable panes.** In split and stacked diffs, a divider between the old and new panes can be dragged to change
    their width (split) or height (stacked). The ratio persists per window, double-clicking the divider restores
