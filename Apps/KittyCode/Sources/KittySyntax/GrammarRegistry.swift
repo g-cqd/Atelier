@@ -11,7 +11,7 @@ public final class GrammarRegistry: Sendable {
     public static let shared = GrammarRegistry()
 
     private struct State: Sendable {
-        /// Entries keyed by file extension, dot included (`.swift`).
+        /// Entries keyed by file extension, lowercased and dot included (`.swift`).
         var entries: [String: LanguageEntry] = [:]
         /// `entries` keyed by language name, kept in step by `register(_:)`.
         var entriesByLanguage: [String: LanguageEntry] = [:]
@@ -35,15 +35,23 @@ public final class GrammarRegistry: Sendable {
 
     public init() {}
 
-    /// Registers `entry` under its name and, verbatim, under each of its extensions; lookups add a leading dot, so
-    /// an extension registered without one is never found.
+    /// Registers `entry` under its name and under each of its extensions, which it keeps in the form every lookup
+    /// asks for, lowercased with one leading dot: `json`, `.json` and `.JSON` all register `.json`.
     public func register(_ entry: LanguageEntry) {
+        var normalized = entry
+        normalized.extensions = entry.extensions.map(Self.normalizedExtension)
         state.withLock { state in
-            for ext in entry.extensions {
-                state.entries[ext] = entry
+            for ext in normalized.extensions {
+                state.entries[ext] = normalized
             }
-            state.entriesByLanguage[entry.name] = entry
+            state.entriesByLanguage[normalized.name] = normalized
         }
+    }
+
+    /// `ext` lowercased, with one leading dot.
+    private static func normalizedExtension(_ ext: String) -> String {
+        let lowercased = ext.lowercased()
+        return lowercased.hasPrefix(".") ? lowercased : ".\(lowercased)"
     }
 
     /// Registers the entries of a `languages.json` file (`name`, `extensions`, `path`), skipping malformed ones and
@@ -99,9 +107,9 @@ public final class GrammarRegistry: Sendable {
         }
     }
 
-    /// Find the language entry for a file extension.
+    /// The entry registered for a file extension, given with or without its leading dot, in any case.
     public func entry(forExtension ext: String) -> LanguageEntry? {
-        let normalized = ext.hasPrefix(".") ? ext : ".\(ext)"
+        let normalized = Self.normalizedExtension(ext)
         return state.withLock { $0.entries[normalized] }
     }
 
