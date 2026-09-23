@@ -102,17 +102,16 @@ struct ToolsSettings: View {
                         )
                     }
                 }
-                .disabled(!settings.diagnosticsEnabled)
-                .opacity(settings.diagnosticsEnabled ? 1 : 0.5)
+                // Usable whatever the other settings (TOOL-02): a tool's path can be set before diagnostics are on,
+                // and hover, on by default, runs sourcekit-lsp with diagnostics off.
                 Section("Language Servers") {
                     toolDisclosure(
                         key: Self.sourceKitLSPKey, title: "sourcekit-lsp", executableName: "sourcekit-lsp",
                         isEnabled: lspEnabledBinding(Self.sourceKitLSPKey),
-                        customPath: lspCustomPathBinding(Self.sourceKitLSPKey), footnote: nil
+                        customPath: lspCustomPathBinding(Self.sourceKitLSPKey),
+                        footnote: "Hover documentation runs it, whether or not diagnostics are on."
                     )
                 }
-                .disabled(!settings.diagnosticsEnabled)
-                .opacity(settings.diagnosticsEnabled ? 1 : 0.5)
                 if let trust {
                     TrustedRepositoriesSection(trust: trust)
                 }
