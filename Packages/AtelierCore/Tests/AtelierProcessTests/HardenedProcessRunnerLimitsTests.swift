@@ -117,8 +117,10 @@ struct HardenedProcessRunnerLimitsTests {
         let ready = directory.file("ready")
         #expect(mkfifo(ready, 0o600) == 0)
         // The shell survives `SIGTERM` through its trap and exits once its background `sleep` is gone, which only a
-        // signal to the whole group brings about before the time limit.
-        let script = "trap ':' TERM; sleep 120 & c=$!; echo ready > '\(ready)'; wait $c; wait $c"
+        // signal to the whole group brings about before the time limit. The background job reports ready itself,
+        // from a fresh shell, once the trap is gone: a fork of this shell that has not yet started `sleep` would
+        // catch the signal with the trap and then sleep on, which a loaded machine makes likely.
+        let script = "trap ':' TERM; sh -c \"echo ready > '\(ready)'; exec sleep 120\" & c=$!; wait $c; wait $c"
         let run = Task { try await runner.run(Self.shell(script, timeout: .seconds(5))) }
         try await Self.awaitReady(ready, on: pool)
         try await clock.waitForSleepers(atLeast: 1)
