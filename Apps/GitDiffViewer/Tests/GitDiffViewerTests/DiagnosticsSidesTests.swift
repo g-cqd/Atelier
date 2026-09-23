@@ -124,19 +124,14 @@ struct DiagnosticsSidesTests {
         return SUT(model: model, settings: settings, runner: runner, exporter: exporter, clock: clock, spy: spy)
     }
 
-    private func finish(_ sut: SUT) async throws {
-        try await sut.clock.waitForSleepers()
+    /// Finishes the run `action` should start, its debounce and then its analysis, failing within the failure bound
+    /// rather than waiting on the clock forever when it starts none.
+    private func finishRun(of sut: SUT, after action: () -> Void) async throws {
+        let mark = sut.clock.registrationMark()
+        action()
+        try await sut.clock.expectSleepers(after: mark)
         sut.clock.advance(by: Self.debounce)
         try await sut.spy.waitForAllTasks()
-    }
-
-    /// Finishes the run `action` should start, failing within the spy's bound rather than waiting on the clock
-    /// forever when it starts none.
-    private func finishRun(of sut: SUT, after action: () -> Void) async throws {
-        let spawned = sut.spy.spawnedTaskCount
-        action()
-        try await sut.spy.waitForSpawnedTasks(atLeast: spawned + 1)
-        try await finish(sut)
     }
 
     private static func finding(line: Int) -> Finding {
@@ -149,8 +144,9 @@ struct DiagnosticsSidesTests {
             mode: .both,
             findings: [Self.leftRoot: [Self.finding(line: 1)], Self.rightRoot: [Self.finding(line: 2)]])
 
-        sut.model.comparisonChanged(.init(left: Self.folder(Self.leftRoot), right: Self.folder(Self.rightRoot)))
-        try await finish(sut)
+        try await finishRun(of: sut) {
+            sut.model.comparisonChanged(.init(left: Self.folder(Self.leftRoot), right: Self.folder(Self.rightRoot)))
+        }
 
         #expect(sut.model.leftFindingsByFile["A.swift"]?.map(\.line) == [1])
         #expect(sut.model.findingsByFile["A.swift"]?.map(\.line) == [2])
@@ -164,8 +160,7 @@ struct DiagnosticsSidesTests {
         let sut = try makeSUT(mode: .leftOnly, findings: [RecordingExporter.folder: [Self.finding(line: 3)]])
         repository.trust(in: try #require(sut.model.trust))
 
-        sut.model.comparisonChanged(.init(left: Self.ref(repository.root, "main")))
-        try await finish(sut)
+        try await finishRun(of: sut) { sut.model.comparisonChanged(.init(left: Self.ref(repository.root, "main"))) }
 
         let request = try #require(await sut.runner.requests.first)
         #expect(request.root == RecordingExporter.folder)
@@ -179,8 +174,9 @@ struct DiagnosticsSidesTests {
         defer { repository.remove() }
         let sut = try makeSUT(mode: .both)
 
-        sut.model.comparisonChanged(.init(left: Self.ref(repository.root), right: Self.folder(Self.rightRoot)))
-        try await finish(sut)
+        try await finishRun(of: sut) {
+            sut.model.comparisonChanged(.init(left: Self.ref(repository.root), right: Self.folder(Self.rightRoot)))
+        }
 
         #expect(await sut.runner.requests.map(\.root) == [Self.rightRoot])
         #expect(sut.exporter.materializations == 0)
@@ -192,8 +188,9 @@ struct DiagnosticsSidesTests {
         defer { repository.remove() }
         let sut = try makeSUT(
             mode: .both, findings: [RecordingExporter.folder: [Self.finding(line: 3)], Self.rightRoot: []])
-        sut.model.comparisonChanged(.init(left: Self.ref(repository.root), right: Self.folder(Self.rightRoot)))
-        try await finish(sut)
+        try await finishRun(of: sut) {
+            sut.model.comparisonChanged(.init(left: Self.ref(repository.root), right: Self.folder(Self.rightRoot)))
+        }
 
         let trust = try #require(sut.model.trust)
 
@@ -209,8 +206,9 @@ struct DiagnosticsSidesTests {
         let sut = try makeSUT(mode: .both, findings: [RecordingExporter.folder: [Self.finding(line: 3)]])
         let trust = try #require(sut.model.trust)
         repository.trust(in: trust)
-        sut.model.comparisonChanged(.init(left: Self.ref(repository.root), right: Self.folder(Self.rightRoot)))
-        try await finish(sut)
+        try await finishRun(of: sut) {
+            sut.model.comparisonChanged(.init(left: Self.ref(repository.root), right: Self.folder(Self.rightRoot)))
+        }
 
         try await finishRun(of: sut) {
             trust.revoke(repository.root)
@@ -223,8 +221,9 @@ struct DiagnosticsSidesTests {
         let sut = try makeSUT(
             mode: .both,
             findings: [Self.leftRoot: [Self.finding(line: 1)], Self.rightRoot: [Self.finding(line: 2)]])
-        sut.model.comparisonChanged(.init(left: Self.folder(Self.leftRoot), right: Self.folder(Self.rightRoot)))
-        try await finish(sut)
+        try await finishRun(of: sut) {
+            sut.model.comparisonChanged(.init(left: Self.folder(Self.leftRoot), right: Self.folder(Self.rightRoot)))
+        }
 
         sut.settings.analyzedSides = .none
 
@@ -238,14 +237,16 @@ struct DiagnosticsSidesTests {
         let sut = try makeSUT(
             mode: .both,
             findings: [Self.leftRoot: [Self.finding(line: 1)], Self.rightRoot: [Self.finding(line: 2)]])
-        sut.model.comparisonChanged(.init(left: Self.folder(Self.leftRoot), right: Self.folder(Self.rightRoot)))
-        try await finish(sut)
+        try await finishRun(of: sut) {
+            sut.model.comparisonChanged(.init(left: Self.folder(Self.leftRoot), right: Self.folder(Self.rightRoot)))
+        }
 
-        sut.settings.analyzedSides = .rightOnly
+        try await finishRun(of: sut) {
+            sut.settings.analyzedSides = .rightOnly
 
-        #expect(sut.model.leftFindingsByFile.isEmpty)
-        #expect(sut.model.findingsByFile["A.swift"]?.map(\.line) == [2])
-        try await finish(sut)
+            #expect(sut.model.leftFindingsByFile.isEmpty)
+            #expect(sut.model.findingsByFile["A.swift"]?.map(\.line) == [2])
+        }
     }
 
     @Test
@@ -268,8 +269,9 @@ struct DiagnosticsSidesTests {
             engine: runner, settings: sut.settings, taskProvider: harness.taskProvider, clock: clock,
             debounce: Self.debounce)
 
+        let mark = clock.registrationMark()
         sut.updateAnalyzedSides()
-        try await clock.waitForSleepers()
+        try await clock.expectSleepers(after: mark)
         clock.advance(by: Self.debounce)
         try await harness.taskProvider.waitForAllTasks()
 
@@ -299,8 +301,9 @@ struct DiagnosticsSidesTests {
             engine: SideRecordingRunner(findingsByRoot: [ModelTestHarness.leftURL: [Self.finding(line: 1)]]),
             settings: sut.settings, taskProvider: harness.taskProvider, clock: clock, debounce: Self.debounce)
 
+        let mark = clock.registrationMark()
         sut.updateAnalyzedSides()
-        try await clock.waitForSleepers()
+        try await clock.expectSleepers(after: mark)
         clock.advance(by: Self.debounce)
         try await harness.taskProvider.waitForAllTasks()
 

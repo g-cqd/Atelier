@@ -59,8 +59,9 @@ struct DiffViewerModelFreshnessTests {
 
     /// Reports a write at `path`, lets its debounce run out, and waits until everything it started has finished.
     private func report(_ path: String, on source: FakeWatchEventSource, after debounce: Duration) async throws {
+        let mark = clock.registrationMark()
         try #require(source.write(path))
-        try await clock.waitForSleepers()
+        try await clock.expectSleepers(after: mark)
         clock.advance(by: debounce)
         try await taskProvider.waitForAllTasks()
     }
@@ -80,16 +81,17 @@ struct DiffViewerModelFreshnessTests {
         // Save A; its reload starts listing the tree, and the listing is held.
         reader.entries[Self.tree] = [Self.entry("a.swift", "2"), Self.entry("b.swift", "1")]
         let listing = reader.gateNextListing(of: Self.tree)
+        let saveA = clock.registrationMark()
         try #require(source.write("/repo/a.swift"))
-        try await clock.waitForSleepers()
+        try await clock.expectSleepers(after: saveA)
         clock.advance(by: Self.treeDebounce)
         _ = try await listing.reached.expectNext()
 
         // Save B while A's listing runs, then let A's listing land without B.
         reader.entries[Self.tree] = [Self.entry("a.swift", "2"), Self.entry("b.swift", "2")]
-        let mark = clock.registrationMark()
+        let saveB = clock.registrationMark()
         try #require(source.write("/repo/b.swift"))
-        try await clock.waitForSleepers(1, after: mark)
+        try await clock.expectSleepers(after: saveB)
         listing.open()
         try await awaitObserved { !sut.right.isLoading }
         #expect(sut.right.entriesByPath["b.swift"]?.blobID == "1")

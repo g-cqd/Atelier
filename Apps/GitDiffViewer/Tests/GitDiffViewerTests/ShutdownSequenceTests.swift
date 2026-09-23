@@ -87,8 +87,9 @@ struct ShutdownSequenceTests {
             interruptDiagnostics: {}, interruptGitWork: {}, drainLanguageServers: {},
             shutdownPools: { pool.shutdown() }, limit: .seconds(2), clock: clock, taskProvider: tasks)
 
+        let mark = clock.registrationMark()
         async let outcome = sequence.run()
-        try await clock.waitForSleepers(count: 1)
+        try await clock.expectSleepers(after: mark)
         clock.advance(by: .seconds(2))
 
         #expect(await outcome == .timedOut)
