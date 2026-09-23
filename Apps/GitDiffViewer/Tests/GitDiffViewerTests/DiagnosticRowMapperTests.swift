@@ -162,7 +162,7 @@ struct DiagnosticRowMapperTests {
     }
 
     @Test
-    func `a removed line is annotated when includesOldSide matches its old line number`() throws {
+    func `a removed row never shows the right side's findings`() throws {
         let old = "line1\nline2\nline3\n"
         let new = "line1\nline2\n"
         let rendered = try #require(DiffRenderer.render(oldText: old, newText: new, language: .plain).old)
@@ -171,9 +171,47 @@ struct DiagnosticRowMapperTests {
 
         let rows = DiagnosticRowMapper.rows(for: rendered, paths: paths, findings: findings, includesOldSide: true)
 
-        let removedRowIndex = try #require(rendered.rows.firstIndex { $0.newNumber == nil && $0.oldNumber == 3 })
-        let row = try #require(rows[removedRowIndex])
-        #expect(row.findings == [finding(line: 3)])
+        #expect(rows.isEmpty)
+    }
+
+    @Test
+    func `the old pane shows the left side's findings by old line number, and no right side's`() throws {
+        let old = "line1\nline2\nline3\n"
+        let new = "line1\nline2\n"
+        let rendered = try #require(DiffRenderer.render(oldText: old, newText: new, language: .plain).old)
+        let left = SideFindings(paths: [0: "a.swift"], findings: ["a.swift": [finding(line: 3, ruleID: "left")]])
+        let right = SideFindings(paths: [0: "a.swift"], findings: ["a.swift": [finding(line: 1, ruleID: "right")]])
+
+        let rows = DiagnosticRowMapper.rows(for: rendered, left: left, right: right)
+
+        let removedRowIndex = try #require(rendered.rows.firstIndex { $0.oldNumber == 3 })
+        #expect(rows.keys.sorted() == [removedRowIndex])
+        #expect(rows[removedRowIndex]?.findings.map(\.ruleID) == ["left"])
+    }
+
+    @Test
+    func `the new pane shows only the right side's findings`() throws {
+        let text = "line1\nline2\n"
+        let rendered = try #require(DiffRenderer.render(oldText: text, newText: text, language: .plain).new)
+        let left = SideFindings(paths: [0: "a.swift"], findings: ["a.swift": [finding(line: 1, ruleID: "left")]])
+        let right = SideFindings(paths: [0: "a.swift"], findings: ["a.swift": [finding(line: 2, ruleID: "right")]])
+
+        let rows = DiagnosticRowMapper.rows(for: rendered, left: left, right: right)
+
+        #expect(rows.values.flatMap(\.findings).map(\.ruleID) == ["right"])
+    }
+
+    @Test
+    func `an unchanged unified row shows a finding both sides report once`() throws {
+        let text = "line1\nline2\n"
+        let rendered = try #require(DiffRenderer.render(oldText: text, newText: text, language: .plain).unified)
+        let both = ["a.swift": [finding(line: 2)]]
+
+        let rows = DiagnosticRowMapper.rows(
+            for: rendered, left: SideFindings(paths: [0: "a.swift"], findings: both),
+            right: SideFindings(paths: [0: "a.swift"], findings: both))
+
+        #expect(rows.values.map(\.count) == [1])
     }
 
     @Test
