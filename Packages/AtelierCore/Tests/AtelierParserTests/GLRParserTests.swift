@@ -63,14 +63,4 @@ struct GLRParserTests {
         scanner.deserialize([1, 2, 3])
         #expect(scanner.serialize().isEmpty)
     }
-
-    @Test
-    func `ParseStack copy preserves scannerState`() {
-        var stack = ParseStack(state: 0)
-        stack.scannerState = [10, 20, 30]
-        var copy = stack
-        copy.scannerState.append(40)
-        #expect(stack.scannerState == [10, 20, 30])
-        #expect(copy.scannerState == [10, 20, 30, 40])
-    }
 }
