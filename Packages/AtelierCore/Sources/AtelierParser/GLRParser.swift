@@ -238,6 +238,9 @@ public final class GLRParser: Sendable {
     /// Replaces the top `count` nodes of `stack` with one `nonTerminal` node built by production `rule`, and moves to
     /// the table's GOTO state from the state the first of those nodes was pushed in. Without that GOTO state the
     /// reduction is an error: returns false and leaves `stack` as it was.
+    ///
+    /// The node spans its children; an empty reduction sits where the node below it ends, at the start of the input
+    /// if there is none. The nodes on a stack therefore stay in source order, so a node always ends after it starts.
     private func reduce(_ stack: inout ParseStack, rule: Int, count: Int, nonTerminal: String) -> Bool {
         guard let nonTerminalIdx = nonTerminalIndex[nonTerminal],
             let target = parseTable.gotos[stack.state(poppingNodes: count)][nonTerminalIdx]
@@ -246,10 +249,17 @@ public final class GLRParser: Sendable {
         }
         let children = stack.popNodes(count)
 
-        let byteStart = children.first?.byteRange.lowerBound ?? 0
-        let byteEnd = children.last?.byteRange.upperBound ?? 0
-        let pointStart = children.first?.pointRange.lowerBound ?? .zero
-        let pointEnd = children.last?.pointRange.upperBound ?? .zero
+        let byteRange: Range<Int>
+        let pointRange: Range<Point>
+        if let first = children.first, let last = children.last {
+            byteRange = first.byteRange.lowerBound ..< last.byteRange.upperBound
+            pointRange = first.pointRange.lowerBound ..< last.pointRange.upperBound
+        } else {
+            let byte = stack.nodes.last?.byteRange.upperBound ?? 0
+            let point = stack.nodes.last?.pointRange.upperBound ?? .zero
+            byteRange = byte ..< byte
+            pointRange = point ..< point
+        }
         var nodeFields: [String: [SyntaxNode]] = [:]
 
         for (idx, fieldName) in productionFields(for: rule) where idx < children.count {
@@ -260,8 +270,8 @@ public final class GLRParser: Sendable {
             SyntaxNode(
                 type: nonTerminal,
                 children: children,
-                byteRange: byteStart ..< byteEnd,
-                pointRange: pointStart ..< pointEnd,
+                byteRange: byteRange,
+                pointRange: pointRange,
                 fields: nodeFields,
                 isNamed: true
             ))
