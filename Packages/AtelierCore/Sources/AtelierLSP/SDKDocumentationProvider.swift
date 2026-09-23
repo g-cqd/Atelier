@@ -73,7 +73,7 @@ public actor SDKDocumentationProvider: HoverProvider {
         guard let extraction = Self.extractChain(in: query.content, line: query.line, utf16Column: query.utf16Column)
         else { return nil }
 
-        let fileImports = Self.importedModules(in: query.content, limit: Self.maximumProbeImports)
+        let fileImports = Self.importedModules(in: query.content)
         let wanted = SDKPlatform.forFile(
             importing: fileImports, inProjectDeclaring: projectPlatforms(forDocumentAt: query.documentURI))
         guard let (platform, service) = await session(preferring: wanted) else { return nil }
@@ -320,27 +320,17 @@ public actor SDKDocumentationProvider: HoverProvider {
     /// The most modules a probe document imports.
     static let maximumProbeImports = 12
 
-    /// The top-level modules `content` imports, then `defaults`: sorted, unique, and at most
-    /// ``maximumProbeImports``, the file's own first.
-    static func collectImports(in content: String, unioning defaults: [String]) -> [String] {
-        var modules = importedModules(in: content, limit: maximumProbeImports)
-        for module in defaults where modules.count < maximumProbeImports && !modules.contains(module) {
-            modules.append(module)
-        }
-        return modules.sorted()
-    }
-
-    /// The top-level module of each import declaration in `content`, in order and without repeats, at most `limit`.
+    /// The top-level module of each import declaration in `content`, in order and without repeats.
     ///
     /// Reads the text's UTF-8 once and makes a string for an imported module's name alone. A line declares an import
     /// when, past its indentation, attributes (`@testable`, `@_spi(Name)`) and an access modifier (`public`), it reads
     /// `import`; the module is the first component of the path that follows any import kind (`struct`, `func`).
-    static func importedModules(in content: String, limit: Int = .max) -> [String] {
+    static func importedModules(in content: String) -> [String] {
         var text = content
         return text.withUTF8 { bytes in
             var modules: [String] = []
             var lineStart = 0
-            while lineStart < bytes.count, modules.count < limit {
+            while lineStart < bytes.count {
                 let lineEnd = bytes[lineStart...].firstIndex(of: newline) ?? bytes.count
                 if let module = importedModule(on: bytes[lineStart ..< lineEnd]), !modules.contains(module) {
                     modules.append(module)
