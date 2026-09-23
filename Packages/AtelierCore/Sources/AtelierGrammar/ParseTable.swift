@@ -211,6 +211,11 @@ public struct LexState: Sendable, Equatable, Codable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let entries = try container.decode([TransitionEntry].self, forKey: .transitions)
+        // A range is only built from ordered bounds: a damaged cache file must fail to decode, not trap.
+        guard entries.allSatisfy({ $0.lower <= $0.upper }) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .transitions, in: container, debugDescription: "A transition's lower bound exceeds its upper")
+        }
         self.transitions = entries.map { ($0.lower ... $0.upper, $0.target) }
         self.accepting = try container.decodeIfPresent(Int.self, forKey: .accepting)
     }
