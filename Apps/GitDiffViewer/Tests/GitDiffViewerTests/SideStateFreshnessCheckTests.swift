@@ -45,7 +45,7 @@ struct SideStateFreshnessCheckTests {
         let sut = try await makeTreeWithIgnoredFiles()
         let listingsBefore = reader.ignoredListings
 
-        sut.reload(keepingIgnoredEntries: true)
+        sut.reloadAfterOutsideWrite()
         try await taskProvider.waitForAllTasks()
 
         #expect(sut.ignoredEntries?.map(\.relativePath) == ["build/out.txt"])
@@ -77,10 +77,31 @@ struct SideStateFreshnessCheckTests {
         reader.ignoredListingFailure = "fatal: unable to read the index"
         let sut = try await makeTreeWithIgnoredFiles()
 
-        sut.reload(keepingIgnoredEntries: true)
+        sut.reloadAfterOutsideWrite()
         try await taskProvider.waitForAllTasks()
 
         #expect(sut.errorMessage == "Ignored files: fatal: unable to read the index")
+    }
+
+    @Test
+    func `an outside write while a listing runs lets it land, then lists again`() async throws {
+        reader.entries[Self.tree] = [Self.entry("a.swift", "1")]
+        let sut = makeSUT()
+        sut.load(Self.tree, repository: Self.info)
+        try await taskProvider.waitForAllTasks()
+        var landed: [String?] = []
+        sut.onEntriesChanged = { landed.append(sut.entriesByPath["a.swift"]?.blobID) }
+        let listing = reader.gateNextListing(of: Self.tree)
+        reader.entries[Self.tree] = [Self.entry("a.swift", "2")]
+        sut.reloadAfterOutsideWrite()
+        _ = try await listing.reached.next()
+
+        reader.entries[Self.tree] = [Self.entry("a.swift", "3")]
+        sut.reloadAfterOutsideWrite()
+        listing.open()
+        try await taskProvider.waitForAllTasks()
+
+        #expect(landed == ["2", "3"])
     }
 
     // MARK: Ref checks (GDV S3)

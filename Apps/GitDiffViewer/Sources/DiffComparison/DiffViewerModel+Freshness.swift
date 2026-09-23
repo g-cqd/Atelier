@@ -19,7 +19,7 @@ extension DiffViewerModel {
         model.treeChangeFilter = { [weak self] paths in
             await self?.right.listingMayChange(at: paths) ?? false
         }
-        model.onTreeChanged = { [weak self] in self?.right.reload(keepingIgnoredEntries: true) }
+        model.onTreeChanged = { [weak self] in self?.right.reloadAfterOutsideWrite() }
         model.onHeadChanged = { [weak self] in self?.refsMoved() }
         model.onRefsChanged = { [weak self] in self?.refsMoved() }
         model.onIndexChanged = { [weak self] in self?.refreshBadgeStates() }

@@ -22,7 +22,7 @@ package final class SideState {
     package private(set) var repository: RepositoryInfo?
     package private(set) var entries: [SourceEntry] = []
     /// Files git ignores in a working tree, read on demand by `loadIgnoredEntries()`; nil until then. A reload after
-    /// an outside write keeps them (``reload(keepingIgnoredEntries:)``).
+    /// an outside write keeps them (``reloadAfterOutsideWrite()``).
     package private(set) var ignoredEntries: [SourceEntry]?
     package private(set) var entriesByPath: [String: SourceEntry] = [:]
     package private(set) var tree: [PathNode] = []
@@ -65,6 +65,8 @@ package final class SideState {
     private var remoteTask: Task<Void, Never>?
     /// The last ref check ``reloadIfRefMoved()`` queued; the next one waits for it.
     @ObservationIgnored private var refCheckTask: Task<Void, Never>?
+    /// Set when an outside write asks for a reload while a load runs, which then runs once that load ends.
+    @ObservationIgnored private var isOutsideWriteReloadQueued = false
     /// Called whenever a load starts, so the owner can time the comparison from the source change.
     @ObservationIgnored package var onReload: (@MainActor () -> Void)?
     /// Called whenever the entries change, so the owner can recompute the comparison.
@@ -152,6 +154,7 @@ package final class SideState {
             } catch {
                 errorMessage = "Unknown ref \(ref)"
                 isLoading = false
+                runQueuedOutsideWriteReload()
             }
         }
     }
@@ -193,6 +196,7 @@ package final class SideState {
 
     package func endLoading() {
         isLoading = false
+        runQueuedOutsideWriteReload()
     }
 
     /// Adopts entries the owner already read, with the badge states it read beside them (nil when it read none) and,
@@ -213,6 +217,7 @@ package final class SideState {
         forgetIgnoredEntries()
         ignoredEntries = ignored
         apply(entries, notifying: false)
+        runQueuedOutsideWriteReload()
     }
 
     /// Re-reads this side's repository info (branches, tags, commits) without touching its entries; a no-op without
@@ -278,11 +283,15 @@ package final class SideState {
     }
 
     /// Reads this side's files again, with git's status beside them for a folder and, for a ref, the commit it names
-    /// resolved first. With `keepingIgnoredEntries`, the ignored files already listed stay (GDV S13): a write the
-    /// watcher reports seldom changes what git ignores, and listing it again takes seconds in a tree full of build
-    /// output. A reload the user asks for lists them again.
-    package func reload(keepingIgnoredEntries: Bool = false) {
+    /// resolved first. A load already running is superseded, and the ignored files are listed anew.
+    package func reload() {
+        startReload(keepingIgnoredEntries: false)
+    }
+
+    private func startReload(keepingIgnoredEntries: Bool) {
         guard let source else { return }
+        // This listing starts after every write asked about so far.
+        isOutsideWriteReloadQueued = false
         loadTask?.cancel()
         isLoading = true
         errorMessage = keepingIgnoredEntries ? ignoredEntriesFailure : nil
@@ -310,6 +319,7 @@ package final class SideState {
                 forgetIgnoredEntries()
                 apply([], notifying: true)
             }
+            runQueuedOutsideWriteReload()
         }
     }
 
@@ -398,9 +408,28 @@ package final class SideState {
     }
 }
 
-/// What an outside change makes a side read again: its ref, when the commit it names moved (GDV S3), and its files,
-/// when a write can change what it lists (GDV S2).
+/// What an outside change makes a side read again: its files after a write that can change what it lists (GDV S2),
+/// without cutting a running listing short, and its ref when the commit it names moved (GDV S3).
 extension SideState {
+    /// The watcher's reload after an outside write. The ignored files already listed stay (GDV S13): a write seldom
+    /// changes what git ignores, and listing it again takes seconds in a tree full of build output. A load already
+    /// running is left to land and this reload follows it, rather than cancelling it, so writes that arrive faster
+    /// than a listing takes cannot keep every listing from landing.
+    package func reloadAfterOutsideWrite() {
+        guard !isLoading else {
+            isOutsideWriteReloadQueued = true
+            return
+        }
+        startReload(keepingIgnoredEntries: true)
+    }
+
+    /// Runs the reload an outside write asked for while the load that just ended ran.
+    private func runQueuedOutsideWriteReload() {
+        guard isOutsideWriteReloadQueued else { return }
+        isOutsideWriteReloadQueued = false
+        startReload(keepingIgnoredEntries: true)
+    }
+
     /// Reloads when this side's ref now names another commit than the one its entries were listed at (GDV S3); a
     /// no-op for any other source, and a reload when the commit is unknown or the ref no longer resolves. Checks run
     /// one after another, each after the load then in flight, so two notices of one move, the refs watcher's and a
