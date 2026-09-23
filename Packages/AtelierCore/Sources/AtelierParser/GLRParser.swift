@@ -103,7 +103,7 @@ public final class GLRParser: Sendable {
             }
         }
 
-        guard let best = ParseStack.takingFewestErrors(from: &stacks) else {
+        guard let best = ParseStack.takingBest(from: &stacks) else {
             throw .parsingFailed("No valid parse at the end of input")
         }
         // The lexer's tokens, extras included, cover the source, so the last one ends where the source ends.
@@ -149,9 +149,9 @@ public final class GLRParser: Sendable {
         guard !next.isEmpty else {
             throw .parsingFailed("No valid parse at token \(tokenIndex): \(token.type)")
         }
-        // Prune stacks if count exceeds limit — keep stacks with fewest errors
+        // Prune stacks if count exceeds limit — keep the preferred ones
         if next.count > Self.maxStacks {
-            next.sort { $0.errorCount < $1.errorCount }
+            next.sort { $0.isPreferred(over: $1) }
             var pruned = Array(next[Self.maxStacks...])
             next.removeSubrange(Self.maxStacks...)
             for index in pruned.indices {
@@ -325,6 +325,7 @@ public final class GLRParser: Sendable {
                 isNamed: true
             ),
             height: height)
+        stack.addDynamicPrecedence(productions.indices.contains(rule) ? productions[rule].dynamicPrecedence : 0)
         stack.state = target
         return .reduced
     }

@@ -209,17 +209,22 @@ public struct ProductionRule: Sendable, Equatable, Codable {
     public var symbolCount: Int
     public var symbols: [String]
     public var fields: [Int: String]
+    /// The production's `prec.dynamic` value: of two parses that tie on errors, the one whose reductions add up to
+    /// more wins.
+    public var dynamicPrecedence: Int
 
     public init(
         name: String,
         symbolCount: Int,
         symbols: [String] = [],
-        fields: [Int: String] = [:]
+        fields: [Int: String] = [:],
+        dynamicPrecedence: Int = 0
     ) {
         self.name = name
         self.symbolCount = symbolCount
         self.symbols = symbols
         self.fields = fields
+        self.dynamicPrecedence = dynamicPrecedence
     }
 
     // MARK: - Codable
@@ -229,6 +234,7 @@ public struct ProductionRule: Sendable, Equatable, Codable {
         case symbolCount
         case symbols
         case fields
+        case dynamicPrecedence
     }
 
     public init(from decoder: any Decoder) throws {
@@ -249,6 +255,7 @@ public struct ProductionRule: Sendable, Equatable, Codable {
             decoded[index] = pair[1]
         }
         self.fields = decoded
+        self.dynamicPrecedence = try container.decodeIfPresent(Int.self, forKey: .dynamicPrecedence) ?? 0
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -258,5 +265,6 @@ public struct ProductionRule: Sendable, Equatable, Codable {
         try container.encode(symbols, forKey: .symbols)
         let pairs = fields.sorted(by: { $0.key < $1.key }).map { [String($0.key), $0.value] }
         try container.encode(pairs, forKey: .fields)
+        try container.encode(dynamicPrecedence, forKey: .dynamicPrecedence)
     }
 }

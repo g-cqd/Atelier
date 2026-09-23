@@ -11,6 +11,8 @@ struct ParseStack: Sendable {
     private(set) var heights: [Int]
     /// The error nodes pushed so far, including those a reduction has since wrapped.
     private(set) var errorCount: Int
+    /// The sum of the dynamic precedences of the productions reduced so far.
+    private(set) var dynamicPrecedence = 0
 
     /// The current LR state.
     var state: Int {
@@ -41,6 +43,17 @@ struct ParseStack: Sendable {
         heights.append(height)
         states.append(state)
         if node.isError { errorCount += 1 }
+    }
+
+    /// Counts the dynamic precedence of a production just reduced.
+    mutating func addDynamicPrecedence(_ value: Int) {
+        dynamicPrecedence += value
+    }
+
+    /// Whether this stack's parse is better than `other`'s: fewer errors, or as many and a higher dynamic precedence.
+    func isPreferred(over other: ParseStack) -> Bool {
+        errorCount != other.errorCount
+            ? errorCount < other.errorCount : dynamicPrecedence > other.dynamicPrecedence
     }
 
     /// Pops the top `count` nodes, all of them if it holds fewer, and returns them oldest first; the current state
@@ -75,10 +88,9 @@ struct ParseStack: Sendable {
         SyntaxTree.releaseIteratively(consume deepNodes)
     }
 
-    /// Takes out the stack with the fewest errors, the first of them on a tie, and releases the others; nil when
-    /// `stacks` is empty.
-    static func takingFewestErrors(from stacks: inout [ParseStack]) -> ParseStack? {
-        guard let bestIndex = stacks.indices.min(by: { stacks[$0].errorCount < stacks[$1].errorCount }) else {
+    /// Takes out the preferred stack, the first of them on a tie, and releases the others; nil when `stacks` is empty.
+    static func takingBest(from stacks: inout [ParseStack]) -> ParseStack? {
+        guard let bestIndex = stacks.indices.min(by: { stacks[$0].isPreferred(over: stacks[$1]) }) else {
             return nil
         }
         let best = stacks.remove(at: bestIndex)
@@ -101,7 +113,7 @@ struct ParseStack: Sendable {
     }
 
     /// `stacks` with one stack per state history, in order: stacks with the same history parse the rest of the input
-    /// alike, so the first with the fewest errors stands for all of them, and the others are released.
+    /// alike, so the first preferred one stands for all of them, and the others are released.
     ///
     /// - Complexity: O(s · d) for s stacks d states deep, comparing only stacks that share a current state.
     static func mergingIdenticalHistories(_ stacks: consuming [ParseStack]) -> [ParseStack] {
@@ -114,7 +126,7 @@ struct ParseStack: Sendable {
         while var stack = pending.popLast() {
             let candidates = keptIndicesByState[stack.state, default: []]
             if let twin = candidates.first(where: { kept[$0].states == stack.states }) {
-                if stack.errorCount < kept[twin].errorCount {
+                if stack.isPreferred(over: kept[twin]) {
                     swap(&stack, &kept[twin])
                 }
                 stack.releaseNodes(sparing: kept[twin])
