@@ -10,15 +10,23 @@ Screenshots the user took on 09-23 from Xcode 26.6, of the throwaway project in
 ![Handle at the top](assets/xcode-reference/gap-handle-at-top.png)
 ![Handle above a change](assets/xcode-reference/gap-handle-above-change.png)
 
-- **Shape:** a small rounded rectangle, about 20 × 14 pt, drawn as a grabber with two horizontal lines. It sits
-  centred on a hairline that crosses the gutter where lines are hidden.
-- **Line numbers** resume after the jump (18, then 237). The hidden run leaves no other trace.
-- **Position:** the handle marks the collapsed run's boundary. It sits above a change (above line 82, where the
-  change bar starts) or at the top of the file (line 12).
+- **No row of its own:** the hidden run takes no line. A hairline across the gutter marks it, on the boundary
+  between the two visible lines around it, and line numbers jump across it (18, then 237). The run leaves no other
+  trace.
+- **Shape:** one rounded rectangle, about 20 × 14 pt, centred on that hairline, which splits it into two halves.
+  Each half carries one short grip line and is a handle of its own. The upper half is drawn over the bottom of the
+  line above the hairline, and the lower half over the top of the line below it.
+- **Which half does what:** the upper half extends the change above, and is dragged down. The lower half extends
+  the change below, and is dragged up. Each half's rounded corners face the change it extends; its flat side lies
+  on the hairline, facing the direction it is dragged.
+- **One direction only:** where a run can grow from one side alone, only that half is drawn. At the top of the file
+  (above line 12) the lower half hangs under the hairline, flat side up and rounded corners toward line 12; at the
+  end of a file the upper half sits on top of it. Above a change with a run on each side (line 82), both halves
+  show.
 
-Our version: the user asks for two handles when a run sits between two changes, one extending each neighbouring
-change, each with its own hover state. It must never disclose lines on a drag against the reveal direction, and it
-keeps revealing, at a bounded rate, while held at an edge.
+Our version: the user corrected the first build on 09-23 to exactly this geometry. Each half hovers and drags on its
+own. A drag never discloses lines against its half's direction, and a half held at an edge keeps revealing at a
+bounded rate. The count of hidden lines, which the removed row used to show, moves to the handle's tooltip.
 
 ## Inline change and intraline emphasis
 
