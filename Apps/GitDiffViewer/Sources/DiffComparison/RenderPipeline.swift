@@ -88,7 +88,6 @@ package final class RenderPipeline {
         generation += 1
         completedGeneration = generation
         isRendering = false
-        isRendering = false
         file = nil
         cards = []
         prepared = []
