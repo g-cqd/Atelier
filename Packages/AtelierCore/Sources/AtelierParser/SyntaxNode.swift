@@ -90,4 +90,10 @@ public enum ParseError: Error, Sendable, Equatable {
     case invalidInput
     case noParseTable
     case parsingFailed(String)
+    /// The source holds more tokens than a parse takes, `limit`.
+    case tooManyTokens(limit: Int)
+    /// The tree would be more than `limit` levels deep, deeper than a parse builds.
+    case tooDeep(limit: Int)
+    /// The task the parse ran in was cancelled; the parse found it so before the token at `atToken`.
+    case cancelled(atToken: Int)
 }

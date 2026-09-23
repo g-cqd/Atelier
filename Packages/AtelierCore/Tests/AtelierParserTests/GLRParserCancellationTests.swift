@@ -12,7 +12,7 @@ struct GLRParserCancellationTests {
         let parser = try BundledGrammarFixture.parser(for: BundledGrammarFixture.json)
         var checks = 0
 
-        #expect(throws: GLRParser.cancelled(atToken: GLRParser.cancellationCheckInterval)) {
+        #expect(throws: ParseError.cancelled(atToken: GLRParser.cancellationCheckInterval)) {
             // Cancelled from the second check on: the parse has passed its first check, at token 0, when it happens.
             try parser.parse(
                 Self.source,
@@ -35,7 +35,7 @@ struct GLRParserCancellationTests {
         }
         .value
 
-        #expect(error == GLRParser.cancelled(atToken: 0))
+        #expect(error == .cancelled(atToken: 0))
     }
 
     private static func parseError(_ parser: GLRParser) -> ParseError? {

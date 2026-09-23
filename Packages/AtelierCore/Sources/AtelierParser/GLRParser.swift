@@ -39,14 +39,9 @@ public final class GLRParser: Sendable {
     /// thread in a release build.
     static let maxTreeDepth = 16_384
     /// The error a parse throws instead of building a tree deeper than ``maxTreeDepth``.
-    static let treeTooDeep = ParseError.parsingFailed("Tree depth exceeds limit \(maxTreeDepth)")
-    /// Tokens between two cancellation checks: a cancelled parse stops within this many tokens.
+    static let treeTooDeep = ParseError.tooDeep(limit: maxTreeDepth)
+    /// Tokens between two cancellation checks: a cancelled parse stops within this many tokens, lexing included.
     static let cancellationCheckInterval = 256
-
-    /// The error a parse throws when it finds itself cancelled at the token at `index`.
-    static func cancelled(atToken index: Int) -> ParseError {
-        .parsingFailed("Parse cancelled at token \(index)")
-    }
 
     /// Parse source text and produce a syntax tree.
     ///
@@ -56,10 +51,11 @@ public final class GLRParser: Sendable {
     /// decline is safe on a 512 KiB thread stack.
     ///
     /// Synchronous, but it honours the cancellation of the task it runs in: it checks every 256 tokens and stops at
-    /// the first check that finds the task cancelled.
+    /// the first check that finds the task cancelled. A table with lex modes reads a token only as the parse needs
+    /// it, so a cancelled parse lexes no further either.
     ///
-    /// - Throws: `ParseError.parsingFailed` beyond 100,000 tokens, for a tree deeper than 16,384 levels, or when
-    ///   cancelled.
+    /// - Throws: `ParseError.tooManyTokens` beyond 100,000 tokens, `.tooDeep` for a tree deeper than 16,384 levels,
+    ///   and `.cancelled` when cancelled.
     /// - Complexity: O(t · s · (b + d)) for t tokens, s live stacks (at most 256), b reductions per token and stack
     ///   (at most the table's state count plus the stack's depth d), and d for merging stacks.
     public func parse(
@@ -117,11 +113,11 @@ public final class GLRParser: Sendable {
             }
             if tokenIndex.isMultiple(of: Self.cancellationCheckInterval), isCancelled() {
                 ParseStack.releaseAll(&stacks)
-                throw Self.cancelled(atToken: tokenIndex)
+                throw .cancelled(atToken: tokenIndex)
             }
             guard tokenIndex < Self.maxTokens else {
                 ParseStack.releaseAll(&stacks)
-                throw .parsingFailed("Token count exceeds limit \(Self.maxTokens)")
+                throw .tooManyTokens(limit: Self.maxTokens)
             }
             stacks = try advance(consume stacks, past: token, at: tokenIndex)
             tokenIndex += 1
