@@ -259,8 +259,9 @@ package final class DiffViewerModel {
     }
 
     /// Recomputes the comparison and the trees once both sides are loaded. While a side is still loading, every
-    /// file of the other side would look added or deleted, and populating the explorers with that transient state
-    /// costs seconds on a large repository; the explorers stay empty until the real statuses are known.
+    /// file of the other side would look added or deleted, so what is published stays as it is until both have
+    /// landed: the comparison, the explorers, the detail area, the findings and the hover corpus. A reload of both
+    /// sides always lands one side first, and must not collapse the viewer then.
     package func sourcesChanged() {
         PhaseTrace.log("sourcesChanged")
         offerRepository(from: left, to: right)
@@ -269,12 +270,7 @@ package final class DiffViewerModel {
         preparer.cancelPrefetch()
         renamesTask?.cancel()
         guard !left.isLoading, !right.isLoading else {
-            comparison = .empty
-            trees = .empty
-            updateUnifiedBadgeStates()
-            pipeline.clear()
-            diagnostics?.comparisonChanged(root: nil, files: [], corpusFingerprint: nil)
-            hoverDocs?.comparisonChanged(root: nil, files: [])
+            // The watcher still follows the right side's new source, which `load` has already set.
             updateFreshness()
             return
         }
@@ -480,10 +476,12 @@ package final class DiffViewerModel {
 
     private func render() {
         configurePipeline()
-        guard let leftSource = left.source, let rightSource = right.source, !left.isLoading, !right.isLoading else {
+        guard let leftSource = left.source, let rightSource = right.source else {
             pipeline.clear()
             return
         }
+        // A side still loading renders the selection once it lands; what is published stays until then.
+        guard !left.isLoading, !right.isLoading else { return }
         let target: RenderPipeline.Target
         if isShowingCombinedFiles {
             let paths = comparison.changedPaths(under: selectedPath, limit: Self.combinedFileLimit)

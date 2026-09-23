@@ -95,14 +95,14 @@ struct DiffViewerModelSelectionTests {
         try await harness.taskProvider.waitForSpawnedTasks(atLeast: 1)
         _ = try await harness.reader.contentRequests.next()
 
-        harness.reader.gate["/right"] = AsyncProbe<Void>()
+        let rightListing = harness.holdListing(of: ModelTestHarness.rightURL)
         sut.right.reload()
         harness.reader.gate["a.swift"]?.send(())
         harness.reader.gate["a.swift"]?.send(())
         try await harness.taskProvider.waitForSpawnedTasks(atLeast: 1)
 
         #expect(sut.detailState == .loading)
-        harness.reader.gate["/right"]?.send(())
+        rightListing.send(())
         try await harness.taskProvider.waitForAllTasks()
         #expect(sut.detailState == .cards)
     }
@@ -271,7 +271,7 @@ struct DiffViewerModelSelectionTests {
         let sut = harness.makeSUT()
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]
         harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "2")]
-        harness.reader.gate["/right"] = AsyncProbe<Void>()
+        let rightListing = harness.holdListing(of: ModelTestHarness.rightURL)
 
         sut.left.load(.directory(ModelTestHarness.leftURL), repository: nil)
         sut.right.load(.directory(ModelTestHarness.rightURL), repository: nil)
@@ -282,7 +282,7 @@ struct DiffViewerModelSelectionTests {
         #expect(sut.leftTree.isEmpty)
         #expect(sut.statuses.isEmpty)
 
-        harness.reader.gate["/right"]?.send(())
+        rightListing.send(())
         try await harness.taskProvider.waitForAllTasks()
         #expect(sut.detailState == .cards)
     }
