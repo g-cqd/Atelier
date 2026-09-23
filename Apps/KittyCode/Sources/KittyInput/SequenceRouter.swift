@@ -326,6 +326,14 @@ public struct SequenceRouter: Sendable {
         feedAll(span, into: &events)
     }
 
+    /// Ends a read: an ESC still waiting for the rest of a sequence is the Escape key, appended to `events`. A
+    /// terminal writes an escape sequence at once, so its continuation would have come in the same read.
+    mutating func flushPendingEscape(into events: inout [InputEvent]) {
+        guard routeState == .escape else { return }
+        events.append(.key(KeyEvent(keyCode: 0x1b)))
+        resetRouting()
+    }
+
     private mutating func feedSequence<S: Sequence>(
         _ bytes: S, into events: inout [InputEvent]
     ) where S.Element == UInt8 {
