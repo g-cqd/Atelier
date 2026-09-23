@@ -42,7 +42,7 @@ struct ContentView: View {
             return true
         }
         .onAppear { PhaseTrace.log("window content appeared") }
-        .background { shortcuts }
+        .background { LayoutShortcuts(settings: settings, model: model) }
     }
 
     /// The top placement keeps the column hidden; the others persist what the user chose.
@@ -187,13 +187,7 @@ struct ContentView: View {
             ExpandAllButton(model: model)
         }
         ToolbarItem(id: ToolbarID.layout, placement: .primaryAction) {
-            Picker("Layout", selection: $settings.mode) {
-                Label("Inline", systemImage: "list.bullet").tag(ViewMode.inline)
-                Label("Side by side", systemImage: "rectangle.split.2x1").tag(ViewMode.split)
-                Label("Stacked", systemImage: "rectangle.split.1x2").tag(ViewMode.stacked)
-            }
-            .pickerStyle(.segmented)
-            .help("⌘1 inline, ⌘2 side by side, ⌘3 stacked")
+            LayoutPicker(settings: settings, model: model)
         }
         ToolbarItem(id: ToolbarID.isolateChanges, placement: .primaryAction) {
             Toggle("Isolate", systemImage: "text.line.first.and.arrowtriangle.forward", isOn: $settings.isolatesChanges)
@@ -235,13 +229,51 @@ struct ContentView: View {
             ViewOptionsMenu(settings: settings)
         }
     }
+}
 
-    /// Invisible buttons that carry the layout shortcuts; toolbar items cannot own keyboard shortcuts.
-    private var shortcuts: some View {
+/// The layout picker. Reads what the detail shows in its own body, so the toolbar is not rebuilt when that changes.
+/// While the card list shows, Stacked stays in place but disabled, and the picker selects the layout the cards draw.
+private struct LayoutPicker: View {
+    @Bindable var settings: ViewerSettings
+    let model: DiffViewerModel
+
+    var body: some View {
+        let detail = model.detailState
+        let offersStacked = ViewMode.stacked.isAvailable(showing: detail)
+        Picker("Layout", selection: shownMode(showing: detail)) {
+            Label("Inline", systemImage: "list.bullet").tag(ViewMode.inline)
+            Label("Side by side", systemImage: "rectangle.split.2x1").tag(ViewMode.split)
+            Label("Stacked", systemImage: "rectangle.split.1x2").tag(ViewMode.stacked)
+                .selectionDisabled(!offersStacked)
+        }
+        .pickerStyle(.segmented)
+        .help(
+            offersStacked
+                ? "⌘1 inline, ⌘2 side by side, ⌘3 stacked"
+                : "⌘1 inline, ⌘2 side by side. \(LayoutShortcuts.stackedUnavailable)")
+    }
+
+    /// Shows the layout drawn and stores the one picked, so the card list never rewrites a stacked choice.
+    private func shownMode(showing detail: DetailState) -> Binding<ViewMode> {
+        Binding(get: { settings.mode.drawn(showing: detail) }, set: { settings.mode = $0 })
+    }
+}
+
+/// Invisible buttons that carry the layout shortcuts, since toolbar items cannot own keyboard shortcuts. Reads what
+/// the detail shows in its own body, like ``LayoutPicker``.
+private struct LayoutShortcuts: View {
+    @Bindable var settings: ViewerSettings
+    let model: DiffViewerModel
+
+    static let stackedUnavailable = "Stacked is available for a single file"
+
+    var body: some View {
+        let offersStacked = ViewMode.stacked.isAvailable(showing: model.detailState)
         Group {
             Button("Inline") { settings.mode = .inline }.keyboardShortcut("1", modifiers: .command)
             Button("Side by side") { settings.mode = .split }.keyboardShortcut("2", modifiers: .command)
             Button("Stacked") { settings.mode = .stacked }.keyboardShortcut("3", modifiers: .command)
+                .disabled(!offersStacked)
             Button("Isolate changes") { settings.isolatesChanges.toggle() }.keyboardShortcut("4", modifiers: .command)
         }
         .frame(width: 0, height: 0)

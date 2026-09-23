@@ -24,8 +24,12 @@ package enum WrapMode: Hashable {
 /// `contentStorage`, so the text and the row spacing computed here are shown without being copied.
 @MainActor
 package final class StaticTextLayout {
+    /// The space above a card's first row and below its last: none, so a card's body is its rows.
+    package static let verticalInset: CGFloat = 0
+
     package let rendered: RenderedText
-    package let inset = DiffPaneMetrics.containerInset
+    /// ``verticalInset``, which the gutter and the height read from each layout.
+    package let inset = StaticTextLayout.verticalInset
     package let contentStorage = NSTextContentStorage()
     package let layoutManager = NSTextLayoutManager()
     /// Delegate for every layout manager on `contentStorage`, so a displaying view colours rows the same way.
@@ -35,8 +39,11 @@ package final class StaticTextLayout {
     /// The width a displaying view needs: the longest line or the pane, whichever is wider, when lines do not wrap;
     /// the container width otherwise.
     package private(set) var contentWidth: CGFloat = 0
-    /// The mode of the last ``layOut(mode:viewportWidth:)``; without wrapping, sizes are known without layout.
-    private var mode: WrapMode?
+    /// The mode and pane width of the last ``layOut(mode:viewportWidth:)``; without wrapping, sizes are known
+    /// without layout.
+    private var laidOut: (mode: WrapMode, viewportWidth: CGFloat)?
+    /// ``height`` since the text was last laid out or respaced.
+    private var measuredHeight: CGFloat?
     private lazy var unwrappedWidth = rendered.measuredUnwrappedWidth()
 
     package init(rendered: RenderedText) {
@@ -47,17 +54,22 @@ package final class StaticTextLayout {
         layoutManager.textContainer = container
         layoutManager.delegate = fragmentProvider
         contentStorage.addTextLayoutManager(layoutManager)
-        contentStorage.textStorage?.setAttributedString(rendered.attributed)
+        if let storage = contentStorage.textStorage {
+            storage.setAttributedString(rendered.attributed)
+            rendered.padEmptyLastRow(in: storage)
+        }
     }
 
-    /// Lays the text out for `mode` in a pane `viewportWidth` wide.
+    /// Lays the text out for `mode` in a pane `viewportWidth` wide; a no-op when already laid out for both.
     ///
     /// Without wrapping every row is one line, so nothing is laid out: the width and ``height`` follow from the
     /// rows, and a displaying view lays out only what it shows.
-    /// - Complexity: O(1) without wrapping once ``RenderedText/measuredUnwrappedWidth()`` is known; O(rows)
-    ///   otherwise.
+    /// - Complexity: O(1) without wrapping once ``RenderedText/measuredUnwrappedWidth()`` is known, and when
+    ///   nothing changed; O(rows) otherwise.
     package func layOut(mode: WrapMode, viewportWidth: CGFloat) {
-        self.mode = mode
+        if let laidOut, laidOut.mode == mode, laidOut.viewportWidth == viewportWidth { return }
+        laidOut = (mode, viewportWidth)
+        measuredHeight = nil
         if mode == .none {
             contentWidth = max(unwrappedWidth, viewportWidth)
             fragmentProvider.metrics.width = contentWidth
@@ -80,13 +92,19 @@ package final class StaticTextLayout {
         fragmentProvider.metrics.width = contentWidth
     }
 
-    /// Height of the whole document at the current width: one line per row without wrapping.
+    /// Height of the whole document at the current width and row spacing: one line per row without wrapping.
+    /// - Complexity: O(1) once measured; measuring a wrapped text lays out whatever is not laid out yet.
     package var height: CGFloat {
-        if mode == WrapMode.none {
-            return (CGFloat(max(rendered.rows.count, 1)) * rendered.lineHeight + 2 * inset).rounded(.up)
+        if let measuredHeight { return measuredHeight }
+        let height: CGFloat
+        if laidOut?.mode == WrapMode.none {
+            height = (CGFloat(max(rendered.rows.count, 1)) * rendered.lineHeight + 2 * inset).rounded(.up)
+        } else {
+            layoutManager.ensureLayout(for: layoutManager.documentRange)
+            height = (layoutManager.usageBoundsForTextContainer.height + 2 * inset).rounded(.up)
         }
-        layoutManager.ensureLayout(for: layoutManager.documentRange)
-        return (layoutManager.usageBoundsForTextContainer.height + 2 * inset).rounded(.up)
+        measuredHeight = height
+        return height
     }
 
     /// Height of each row's lines, excluding paragraph spacing.
@@ -96,7 +114,7 @@ package final class StaticTextLayout {
 
     /// Sets each row's paragraph spacing so paired rows across two layouts share a height.
     package func apply(spacing: [Double]) {
-        RowSpacing.apply(spacing, to: contentStorage, rendered: rendered)
+        if RowSpacing.apply(spacing, to: contentStorage, rendered: rendered) { measuredHeight = nil }
     }
 }
 
@@ -141,6 +159,24 @@ package final class CardLayouts {
 extension RenderedText {
     private static let nonASCII = CharacterSet(charactersIn: Unicode.Scalar(UInt8(0)) ... Unicode.Scalar(UInt8(0x7F)))
         .inverted
+
+    /// Gives an empty last row a space, so TextKit lays it out as a paragraph of its own. A text ending with a
+    /// newline otherwise ends with the extra line TextKit adds after it, which does not take the row's line height
+    /// after an empty paragraph and draws in the previous row's colour; the row then ends short of its partner on the
+    /// other side. Offsets up to ``attributed``'s length are unchanged.
+    /// - Parameter storage: A text storage holding exactly ``attributed``.
+    package func padEmptyLastRow(in storage: NSTextStorage) {
+        guard let lastStart = lineStarts.last, lastStart == storage.length else { return }
+        let attributes: [NSAttributedString.Key: Any]
+        if storage.length > 0 {
+            attributes = storage.attributes(at: storage.length - 1, effectiveRange: nil)
+        } else {
+            let style = NSMutableParagraphStyle()
+            style.lineHeightMultiple = palette.defaultLineHeight > 0 ? lineHeight / palette.defaultLineHeight : 1
+            attributes = [.font: palette.font, .paragraphStyle: style]
+        }
+        storage.append(NSAttributedString(string: " ", attributes: attributes))
+    }
 
     /// The width a pane that never wraps needs to show every row whole, line fragment padding and a point of slack
     /// included.

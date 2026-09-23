@@ -217,6 +217,8 @@ private struct AppearanceSettings: View {
                         Text("Side by side").tag(ViewMode.split)
                         Text("Stacked").tag(ViewMode.stacked)
                     }
+                    Text("The card list shows Stacked side by side.")
+                        .settingsCaption()
                     Toggle(SettingLabel.wrapsLines, isOn: $settings.wrapsLines)
                     Toggle("Wrap at a fixed column", isOn: wrapsAtColumn)
                         .disabled(!settings.wrapsLines)

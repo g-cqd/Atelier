@@ -68,7 +68,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         textView.isRichText = false
         textView.usesFontPanel = false
         textView.drawsBackground = true
-        textView.textContainerInset = NSSize(width: 0, height: DiffPaneMetrics.containerInset)
+        textView.textContainerInset = NSSize(width: 0, height: StaticTextLayout.verticalInset)
         textView.isVerticallyResizable = false
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = []
