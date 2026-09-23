@@ -647,12 +647,20 @@ public func replaceCurrentMatch(state: EditorState, pipeline: RenderPipeline) {
         !state.readOnly
     else { return }
 
-    let replacement = buildReplacementText(
-        for: match,
-        in: state.fileLine(at: match.row),
-        pattern: search.pattern,
-        replacement: search.replaceText
-    )
+    guard
+        let replacement = buildReplacementText(
+            for: match,
+            in: state.fileLine(at: match.row),
+            pattern: search.pattern,
+            replacement: search.replaceText
+        )
+    else {
+        // The text under the match changed since the search, or the expression ran out of time: search again
+        // rather than write an unexpanded template.
+        reExecuteSearch(state: state, pipeline: pipeline)
+        state.statusMessage = "The match changed; nothing replaced"
+        return
+    }
 
     let previousSnapshot = state.activeBufferSnapshot()
 
@@ -681,27 +689,15 @@ public func replaceCurrentMatch(state: EditorState, pipeline: RenderPipeline) {
 @MainActor
 public func replaceAllInFile(state: EditorState, pipeline: RenderPipeline) {
     guard let search = state.inFileSearch,
+        let pattern = search.pattern,
         !search.matches.isEmpty,
         !state.readOnly
     else { return }
 
     let previousSnapshot = state.activeBufferSnapshot()
-    var lines = state.fileContent
-    var replaceCount = 0
-
-    // Apply replacements in reverse order to preserve positions
-    for match in search.matches.reversed() {
-        guard match.row >= 0, match.row < lines.count else { continue }
-        let line = lines[match.row]
-        let replacement = buildReplacementText(
-            for: match, in: line, pattern: search.pattern, replacement: search.replaceText)
-
-        let chars = Array(line)
-        let before = String(chars.prefix(match.colStart))
-        let after = String(chars.suffix(from: chars.index(chars.startIndex, offsetBy: match.colEnd)))
-        lines[match.row] = before + replacement + after
-        replaceCount += 1
-    }
+    // Every replacement is expanded from the lines as they were searched, never from a line already rewritten.
+    let (lines, replaceCount) = applyReplacements(
+        to: state.fileContent, matches: search.matches, pattern: pattern, replacement: search.replaceText)
 
     state.fileContent = lines
     state.textDidChange(previousSnapshot: previousSnapshot)
@@ -730,7 +726,7 @@ private func buildReplacementText(
     in line: String,
     pattern: SearchPattern?,
     replacement: String
-) -> String {
+) -> String? {
     guard let pattern else { return replacement }
     return buildReplacement(for: match, in: line, pattern: pattern, replacement: replacement)
 }

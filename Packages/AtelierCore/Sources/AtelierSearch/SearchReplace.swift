@@ -1,33 +1,26 @@
 import AemiKernel
 import Foundation
 
+/// The text that replaces `match` in `line`: `replacement` itself for a literal pattern, and for a regular expression
+/// the template expanded from the expression's match at the same columns of `line`, so a lookaround or a boundary at
+/// the match's edge sees the whole line, as it did during the search.
+/// - Returns: nil when the expression no longer matches exactly those columns, or runs out of its budget; the caller
+///   leaves that match as it is rather than write an unexpanded template.
 public func buildReplacement(
     for match: SearchMatch,
     in line: String,
     pattern: SearchPattern,
     replacement: String
-) -> String {
-    switch pattern {
-        case .literal:
-            return replacement
-
-        case .regex(let regex):
-            // Support capture group substitution ($0..$N) with proper handling
-            // for multi-digit indices and a literal `$$` escape.
-            let chars = Array(line)
-            guard match.colStart >= 0, match.colEnd <= chars.count else { return replacement }
-            let matchStr = String(chars[match.colStart ..< match.colEnd])
-
-            var result = replacement
-            let deadline = ContinuousClock.now.advanced(by: RegexMatcher.fileBudget)
-            RegexMatcher.enumerate(regex.wholeExpression, in: matchStr, deadline: deadline) { regexMatch in
-                result = expandReplacementTemplate(replacement, using: regexMatch, in: matchStr)
-                return false
-            }
-            return result
-    }
+) -> String? {
+    let deadline = ContinuousClock.now.advanced(by: RegexMatcher.fileBudget)
+    // One text per match asked for.
+    return replacements(for: [match], in: line, pattern: pattern, template: replacement, deadline: deadline)[0]
 }
 
+/// Replaces `matches` in `lines`. Every replacement is expanded from the line as it was searched, so a lookaround that
+/// reaches a neighbouring match sees the original text, not that match's replacement.
+/// - Returns: The new lines and how many matches were replaced. A match whose replacement cannot be expanded, that
+///   overlaps a replaced one or that lies outside its line is left as it is and not counted.
 public func applyReplacements(
     to lines: [String],
     matches: [SearchMatch],
@@ -36,24 +29,88 @@ public func applyReplacements(
 ) -> (newLines: [String], replacementCount: Int) {
     var result = lines
     var count = 0
+    // One budget for the file, as the search had: a per-line budget lets a backtracking pattern spend it on every line.
+    let deadline = ContinuousClock.now.advanced(by: RegexMatcher.fileBudget)
+    let ordered = matches.sorted { ($0.row, $0.colStart, $0.colEnd) < ($1.row, $1.colStart, $1.colEnd) }
+    var start = 0
+    while start < ordered.count {
+        let row = ordered[start].row
+        var end = start + 1
+        while end < ordered.count, ordered[end].row == row { end += 1 }
+        if row >= 0, row < lines.count {
+            let replaced = rewritten(
+                lines[row], replacing: ordered[start ..< end], pattern: pattern, template: replacement,
+                deadline: deadline)
+            result[row] = replaced.line
+            count += replaced.count
+        }
+        start = end
+    }
+    return (result, count)
+}
 
-    // Apply in reverse order to preserve positions
-    for match in matches.reversed() {
-        guard match.row >= 0, match.row < result.count else { continue }
-        let line = result[match.row]
-        let replacementText = buildReplacement(
-            for: match, in: line, pattern: pattern, replacement: replacement)
-
-        let chars = Array(line)
-        guard match.colStart >= 0, match.colEnd <= chars.count else { continue }
-        let before = String(chars.prefix(match.colStart))
-        let after = String(
-            chars.suffix(from: chars.index(chars.startIndex, offsetBy: match.colEnd)))
-        result[match.row] = before + replacementText + after
+/// `line` with `matches`, sorted by column, replaced in one pass from its start, and how many were replaced.
+private func rewritten(
+    _ line: String, replacing matches: ArraySlice<SearchMatch>, pattern: SearchPattern, template: String,
+    deadline: ContinuousClock.Instant
+) -> (line: String, count: Int) {
+    let texts = replacements(for: matches, in: line, pattern: pattern, template: template, deadline: deadline)
+    var rebuilt = ""
+    var count = 0
+    // Everything before `copied` is in `rebuilt`; `copiedColumn` is its column.
+    var copied = line.startIndex
+    var copiedColumn = 0
+    var previous: SearchMatch?
+    for (match, text) in zip(matches, texts) {
+        guard let text, match != previous, match.colStart >= copiedColumn, match.colEnd >= match.colStart,
+            let start = line.index(copied, offsetBy: match.colStart - copiedColumn, limitedBy: line.endIndex),
+            let end = line.index(start, offsetBy: match.colEnd - match.colStart, limitedBy: line.endIndex)
+        else { continue }
+        rebuilt += line[copied ..< start]
+        rebuilt += text
+        copied = end
+        copiedColumn = match.colEnd
+        previous = match
         count += 1
     }
+    rebuilt += line[copied...]
+    return (rebuilt, count)
+}
 
-    return (result, count)
+/// The replacement for each of `matches`, sorted by column on one line: `template` itself for a literal pattern;
+/// for a regular expression, `template` expanded from the expression's match that starts and ends at the same columns
+/// of `line`, or nil when it has none there or the budget runs out first.
+private func replacements(
+    for matches: some Collection<SearchMatch>, in line: String, pattern: SearchPattern, template: String,
+    deadline: ContinuousClock.Instant
+) -> [String?] {
+    guard case .regex(let regex) = pattern else { return matches.map { _ in template } }
+    let wanted = Array(matches)
+    var texts = [String?](repeating: nil, count: wanted.count)
+    var next = 0
+    // Columns are counted as `findMatches` counts them: in characters, skipping a match that splits one.
+    var cursor = line.startIndex
+    var cursorColumn = 0
+    RegexMatcher.enumerate(regex.expression, in: line, deadline: deadline) { found in
+        guard let range = Range(found.range, in: line),
+            range.lowerBound.samePosition(in: line) != nil,
+            range.upperBound.samePosition(in: line) != nil,
+            range.lowerBound >= cursor
+        else { return true }
+        let colStart = cursorColumn + line.distance(from: cursor, to: range.lowerBound)
+        let colEnd = colStart + line.distance(from: range.lowerBound, to: range.upperBound)
+        cursor = range.upperBound
+        cursorColumn = colEnd
+        while next < wanted.count, wanted[next].colStart < colStart { next += 1 }
+        while next < wanted.count, wanted[next].colStart == colStart {
+            if wanted[next].colEnd == colEnd {
+                texts[next] = expandReplacementTemplate(template, using: found, in: line)
+            }
+            next += 1
+        }
+        return next < wanted.count
+    }
+    return texts
 }
 
 private func captureGroup(at index: Int, in match: NSTextCheckingResult, text: String) -> String? {
