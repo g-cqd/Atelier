@@ -6,7 +6,8 @@ import Foundation
 ///   - rootPath: The folder to walk.
 ///   - excludeGlobs: Names of directories and files left out wherever they appear.
 ///   - includeHidden: Whether names starting with a dot are listed.
-///   - gitIgnoredPaths: Absolute paths of the files git ignores.
+///   - gitIgnoredPaths: Absolute paths git ignores. A directory among them is skipped whole, never walked, whether
+///     its path ends with a slash, as `git ls-files --directory` gives it, or not.
 /// - Returns: Absolute paths, symbolic links resolved.
 public func enumerateSearchableFiles(
     rootPath: String,
@@ -28,6 +29,7 @@ public func enumerateSearchableFiles(
     }
 
     let excludeSet = Set(excludeGlobs)
+    let ignored = Set(gitIgnoredPaths.map { $0.hasSuffix("/") ? String($0.dropLast()) : $0 })
     var results: [String] = []
 
     for case let fileURL as URL in enumerator {
@@ -39,14 +41,14 @@ public func enumerateSearchableFiles(
             continue
         }
 
-        let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey])
-        guard resourceValues?.isRegularFile == true else { continue }
-
+        let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey])
         let absolutePath = fileURL.resolvingSymlinksInPath().path
-
-        // Skip gitignored paths
-        if gitIgnoredPaths.contains(absolutePath) { continue }
-
+        if resourceValues?.isDirectory == true {
+            // Git ignores everything under an ignored directory, so nothing in it is worth a visit.
+            if ignored.contains(absolutePath) { enumerator.skipDescendants() }
+            continue
+        }
+        guard resourceValues?.isRegularFile == true, !ignored.contains(absolutePath) else { continue }
         results.append(absolutePath)
     }
 
