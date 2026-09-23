@@ -39,9 +39,21 @@ struct WorkingTreeWritesTests {
     }
 
     @Test
-    func `a new path in a hidden folder, sourcekit-lsp's index among them, never reaches git`() {
-        let writes = Self.writes(
-            ".build/index-build/Index/v5/records/AB/a.swift-1Q2W3E", ".swiftpm/xcode/x.plist", ".DS_Store")
+    func `a new dotfile, or a new path in a hidden folder, goes to git like any other`() {
+        let writes = Self.writes(".github/workflows/ci.yml", ".env.example")
+
+        #expect(!writes.touchesListing)
+        #expect(writes.unlisted == [".env.example", ".github/workflows/ci.yml"])
+    }
+
+    @Test
+    func `nothing under .build, where the app's own tools write, reaches git or reloads, even a listed file`() {
+        let writes = WorkingTreeWrites(
+            [
+                ".build/index-build/Index/v5/records/AB/a.swift-1Q2W3E", "Packages/Core/.build/debug/x.json",
+                ".build/b.swift"
+            ]
+        ) { $0 == ".build/b.swift" }
 
         #expect(!writes.touchesListing)
         #expect(writes.unlisted.isEmpty)
