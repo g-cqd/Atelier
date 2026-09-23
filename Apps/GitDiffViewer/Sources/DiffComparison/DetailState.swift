@@ -56,6 +56,17 @@ package enum DetailState: Equatable {
     }
 }
 
+/// How what the detail area shows relates to what the window asks for, so a previous comparison kept on screen never
+/// reads as current (book D13).
+package enum ShownComparison: Equatable {
+    /// What is shown is what the window asks for, or nothing is shown.
+    case current
+    /// What is shown is the previous comparison, or the previous selection, kept while the one asked for loads.
+    case previous
+    /// What is shown is the previous comparison, kept because the one asked for failed to load or render.
+    case previousAfterFailure(String)
+}
+
 /// How long the current operation took, counted from the change that started it: a selection, a diff option, or
 /// a source.
 package struct RenderTiming: Equatable, Sendable {
