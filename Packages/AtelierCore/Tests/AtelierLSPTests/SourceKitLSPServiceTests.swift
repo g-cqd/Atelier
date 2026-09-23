@@ -12,28 +12,6 @@ private struct SentEnvelope: Decodable {
     let params: JSONValue?
 }
 
-/// Builds a fresh ``PipeTransport`` on every ``LSPConnection`` the service asks for, as a real server restart
-/// would, and remembers each one so a test can script a whole generation of the conversation.
-private actor ScriptedConnectionFactory {
-    private(set) var transports: [PipeTransport] = []
-
-    func make() -> LSPConnection {
-        let transport = PipeTransport()
-        transports.append(transport)
-        return LSPConnection(transport: transport)
-    }
-
-    func transport(at index: Int) -> PipeTransport { transports[index] }
-    var generationCount: Int { transports.count }
-
-    /// Yields until at least `count` connections have been requested; `make()` runs on this actor, so none is missed.
-    func waitForGeneration(_ count: Int) async {
-        while transports.count < count {
-            await Task.yield()
-        }
-    }
-}
-
 /// Reads one sent frame back as a typed envelope.
 private func decodeSent(_ transport: PipeTransport, at index: Int) async throws -> SentEnvelope {
     let frames = await transport.sink.all
