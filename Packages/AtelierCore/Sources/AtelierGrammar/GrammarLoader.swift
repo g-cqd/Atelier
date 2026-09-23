@@ -1,10 +1,15 @@
-// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
-// swiftlint:disable cyclomatic_complexity
+import AemiJSONCore
 public import Foundation
 
 /// Loads and validates tree-sitter grammar.json files.
 public enum GrammarLoader: Sendable {
     private static let maxGrammarFileSize = 10_000_000  // 10MB
+
+    /// The deepest container nesting a grammar may have. It bounds the recursive rule walk: the deepest bundled
+    /// grammar nests 26 levels, and 64 stays far below what a 512 KiB cooperative-pool stack survives.
+    static let maxNestingDepth = 64
+
+    private static let parseOptions = JSONParseOptions(maxDepth: maxNestingDepth)
 
     /// Load a grammar definition from a file path.
     public static func load(from path: String) throws(GrammarError) -> GrammarDefinition {
@@ -27,57 +32,56 @@ public enum GrammarLoader: Sendable {
     }
 
     /// Load a grammar definition from raw JSON data.
+    ///
+    /// The data is UTF-8 JSON; a leading byte-order mark is skipped. Rules keep their document order, and a key
+    /// repeated in one object keeps its first value.
+    /// - Throws: `GrammarError.invalidJSON` when the data is not JSON, nests deeper than 64 levels, has no object at
+    ///   its root, or has a `rules` member that is not an object; `.missingField` or `.invalidRuleType` when a member
+    ///   a grammar needs is absent or has the wrong shape.
+    /// - Complexity: O(n) in the size of the data.
     public static func parse(_ data: Data) throws(GrammarError) -> GrammarDefinition {
-        let json: Any
+        let document: JSONDocument
         do {
-            json = try JSONSerialization.jsonObject(with: data)
+            document = try AemiJSON.parse(bytesSkippingByteOrderMark(data), options: parseOptions)
         } catch {
             throw .invalidJSON(String(describing: error))
         }
-        guard let dict = json as? [String: Any] else {
+        guard document.root.isObject else {
             throw .invalidJSON("Root must be an object")
         }
-        let ruleOrder = try extractRuleOrder(from: data)
-        return try parseGrammar(dict, ruleOrder: ruleOrder)
+        return try parseGrammar(GrammarMembers(document.root))
     }
 
     // MARK: - Private
 
-    private static func parseGrammar(_ dict: [String: Any], ruleOrder: [String])
-        throws(GrammarError) -> GrammarDefinition
-    {
-        guard let name = dict["name"] as? String else {
+    private static func bytesSkippingByteOrderMark(_ data: Data) -> [UInt8] {
+        let byteOrderMark: [UInt8] = [0xEF, 0xBB, 0xBF]
+        return data.starts(with: byteOrderMark) ? Array(data.dropFirst(byteOrderMark.count)) : Array(data)
+    }
+
+    private static func parseGrammar(_ grammar: GrammarMembers) throws(GrammarError) -> GrammarDefinition {
+        if let rules = grammar.rules, !rules.isObject {
+            throw .invalidJSON("Expected object for 'rules'")
+        }
+        guard let name = grammar.name?.string else {
             throw .missingField("name")
         }
-        guard let rulesDict = dict["rules"] as? [String: Any] else {
+        guard let rules = grammar.rules else {
             throw .missingField("rules")
         }
 
-        var rules: [(name: String, rule: Rule)] = []
-        let ruleNames = orderedRuleNames(in: rulesDict, using: ruleOrder)
-        for ruleName in ruleNames {
-            guard let ruleJSON = rulesDict[ruleName] else { continue }
-            let rule = try parseRule(ruleJSON)
-            rules.append((name: ruleName, rule: rule))
-        }
-
-        var extras: [Rule] = []
-        if let extrasArray = dict["extras"] as? [Any] {
-            for item in extrasArray { extras.append(try parseRule(item)) }
-        }
-        let conflicts = (dict["conflicts"] as? [[String]]) ?? []
-        var externals: [Rule] = []
-        if let externalsArray = dict["externals"] as? [Any] {
-            for item in externalsArray { externals.append(try parseRule(item)) }
-        }
-        let inline = (dict["inline"] as? [String]) ?? []
-        let word = dict["word"] as? String
-        let supertypes = (dict["supertypes"] as? [String]) ?? []
-        let precedences = try parsePrecedences(dict["precedences"])
+        let parsedRules = try parseNamedRules(rules)
+        let extras = try parseRuleList(grammar.extras)
+        let conflicts = grammar.conflicts.flatMap(stringLists) ?? []
+        let externals = try parseRuleList(grammar.externals)
+        let inline = grammar.inline.flatMap(strings) ?? []
+        let word = grammar.word?.string
+        let supertypes = grammar.supertypes.flatMap(strings) ?? []
+        let precedences = try parsePrecedences(grammar.precedences)
 
         return GrammarDefinition(
             name: name,
-            rules: rules,
+            rules: parsedRules,
             extras: extras,
             conflicts: conflicts,
             externals: externals,
@@ -88,443 +92,226 @@ public enum GrammarLoader: Sendable {
         )
     }
 
-    private static func parseRule(_ json: Any) throws(GrammarError) -> Rule {
-        guard let dict = json as? [String: Any] else {
-            throw .invalidRuleType("Expected object, got \(type(of: json))")
+    /// The rules of the `rules` object in document order; a repeated rule name keeps its first definition.
+    private static func parseNamedRules(_ object: JSON) throws(GrammarError) -> [(name: String, rule: Rule)] {
+        var definitions: [(name: String, node: JSON)] = []
+        definitions.reserveCapacity(object.count)
+        var seen = Set<String>()
+        object.forEachMember { name, node in
+            if seen.insert(name).inserted { definitions.append((name, node)) }
         }
-        guard let type = dict["type"] as? String else {
+        var rules: [(name: String, rule: Rule)] = []
+        rules.reserveCapacity(definitions.count)
+        for definition in definitions {
+            rules.append((name: definition.name, rule: try parseRule(definition.node)))
+        }
+        return rules
+    }
+
+    /// The rules of an array member; an absent member, or one that is not an array, holds none.
+    private static func parseRuleList(_ node: JSON?) throws(GrammarError) -> [Rule] {
+        guard let elements = node?.array else { return [] }
+        return try parseRules(elements)
+    }
+
+    private static func parseRules(_ elements: [JSON]) throws(GrammarError) -> [Rule] {
+        var rules: [Rule] = []
+        rules.reserveCapacity(elements.count)
+        for element in elements { rules.append(try parseRule(element)) }
+        return rules
+    }
+
+    /// Recurses once per nested rule, so the parse's depth limit bounds the stack it uses.
+    private static func parseRule(_ node: JSON) throws(GrammarError) -> Rule {
+        guard node.isObject else {
+            throw .invalidRuleType("Expected object, got \(kindName(of: node))")
+        }
+        let rule = RuleMembers(node)
+        guard let type = rule.type?.string else {
             throw .missingField("type in rule")
         }
 
         switch type {
             case "SYMBOL":
-                guard let name = dict["name"] as? String else { throw .missingField("name") }
-                return .symbol(name)
-
+                return .symbol(try requiredString(rule.name, "name"))
             case "STRING":
-                guard let value = dict["value"] as? String else { throw .missingField("value") }
-                return .string(value)
-
+                return .string(try requiredString(rule.value, "value"))
             case "PATTERN":
-                guard let value = dict["value"] as? String else { throw .missingField("value") }
-                return .pattern(value)
-
+                return .pattern(try requiredString(rule.value, "value"))
             case "SEQ":
-                guard let members = dict["members"] as? [Any] else { throw .missingField("members") }
-                var seqRules: [Rule] = []
-                for m in members { seqRules.append(try parseRule(m)) }
-                return .seq(seqRules)
-
+                return .seq(try parseRules(requiredArray(rule.members, "members")))
             case "CHOICE":
-                guard let members = dict["members"] as? [Any] else { throw .missingField("members") }
-                var choiceRules: [Rule] = []
-                for m in members { choiceRules.append(try parseRule(m)) }
-                return .choice(choiceRules)
-
+                return .choice(try parseRules(requiredArray(rule.members, "members")))
             case "REPEAT":
-                guard let content = dict["content"] else { throw .missingField("content") }
-                return .repeat(try parseRule(content))
-
+                return .repeat(try parseRule(requiredContent(rule)))
             case "REPEAT1":
-                guard let content = dict["content"] else { throw .missingField("content") }
-                return .repeat1(try parseRule(content))
-
+                return .repeat1(try parseRule(requiredContent(rule)))
             case "OPTIONAL":  // tree-sitter uses CHOICE with BLANK for optional
-                guard let content = dict["content"] else { throw .missingField("content") }
-                return .optional(try parseRule(content))
-
+                return .optional(try parseRule(requiredContent(rule)))
             case "PREC":
-                guard let value = dict["value"] as? Int else { throw .missingField("value") }
-                guard let content = dict["content"] else { throw .missingField("content") }
-                return .prec(value, try parseRule(content))
-
+                return .prec(try requiredInteger(rule.value), try parseRule(requiredContent(rule)))
             case "PREC_LEFT":
-                guard let value = dict["value"] as? Int else { throw .missingField("value") }
-                guard let content = dict["content"] else { throw .missingField("content") }
-                return .precLeft(value, try parseRule(content))
-
+                return .precLeft(try requiredInteger(rule.value), try parseRule(requiredContent(rule)))
             case "PREC_RIGHT":
-                guard let value = dict["value"] as? Int else { throw .missingField("value") }
-                guard let content = dict["content"] else { throw .missingField("content") }
-                return .precRight(value, try parseRule(content))
-
+                return .precRight(try requiredInteger(rule.value), try parseRule(requiredContent(rule)))
             case "PREC_DYNAMIC":
-                guard let value = dict["value"] as? Int else { throw .missingField("value") }
-                guard let content = dict["content"] else { throw .missingField("content") }
-                return .precDynamic(value, try parseRule(content))
-
+                return .precDynamic(try requiredInteger(rule.value), try parseRule(requiredContent(rule)))
             case "TOKEN":
-                guard let content = dict["content"] else { throw .missingField("content") }
-                return .token(try parseRule(content))
-
+                return .token(try parseRule(requiredContent(rule)))
             case "IMMEDIATE_TOKEN":
-                guard let content = dict["content"] else { throw .missingField("content") }
-                return .immediateToken(try parseRule(content))
-
+                return .immediateToken(try parseRule(requiredContent(rule)))
             case "FIELD":
-                guard let name = dict["name"] as? String else { throw .missingField("name") }
-                guard let content = dict["content"] else { throw .missingField("content") }
-                return .field(name, try parseRule(content))
-
+                return .field(try requiredString(rule.name, "name"), try parseRule(requiredContent(rule)))
             case "ALIAS":
-                guard let content = dict["content"] else { throw .missingField("content") }
-                guard let value = dict["value"] as? String else { throw .missingField("value") }
-                let named = dict["named"] as? Bool ?? false
-                return .alias(try parseRule(content), value, named)
-
+                let content = try requiredContent(rule)
+                let value = try requiredString(rule.value, "value")
+                return .alias(try parseRule(content), value, rule.named.flatMap(flag) ?? false)
             case "BLANK":
                 return .blank
-
             default:
                 throw .invalidRuleType(type)
         }
     }
 
-    private static func extractRuleOrder(from data: Data) throws(GrammarError) -> [String] {
-        guard let jsonString = String(data: data, encoding: .utf8) else {
-            throw .invalidJSON("Grammar JSON must be UTF-8 encoded")
-        }
-        var scanner = JSONOrderScanner(source: jsonString)
-        return try scanner.extractKeyOrder(for: "rules") ?? []
-    }
-
-    private static func orderedRuleNames(
-        in rulesDict: [String: Any],
-        using ruleOrder: [String]
-    ) -> [String] {
-        var orderedNames: [String] = []
-        var seen = Set<String>()
-        for ruleName in ruleOrder where rulesDict[ruleName] != nil {
-            if seen.insert(ruleName).inserted {
-                orderedNames.append(ruleName)
-            }
-        }
-        let remainingNames = rulesDict.keys.filter { !seen.contains($0) }.sorted()
-        return orderedNames + remainingNames
-    }
-
-    private static func parsePrecedences(_ json: Any?) throws(GrammarError) -> [[PrecedenceEntry]] {
-        guard let array = json as? [[Any]] else { return [] }
+    private static func parsePrecedences(_ node: JSON?) throws(GrammarError) -> [[PrecedenceEntry]] {
+        guard let groups = node?.array, groups.allSatisfy(\.isArray) else { return [] }
         var result: [[PrecedenceEntry]] = []
-        for group in array {
+        result.reserveCapacity(groups.count)
+        for group in groups {
             var entries: [PrecedenceEntry] = []
-            for entry in group {
-                if let str = entry as? String {
-                    entries.append(.symbol(str))
-                } else if let dict = entry as? [String: Any], let type = dict["type"] as? String {
-                    if type == "STRING", let value = dict["value"] as? String {
-                        entries.append(.literal(value))
-                    } else if type == "SYMBOL", let name = dict["name"] as? String {
-                        entries.append(.symbol(name))
-                    } else {
-                        throw .invalidRuleType("Invalid precedence entry")
-                    }
-                } else {
-                    throw .invalidRuleType("Invalid precedence entry")
-                }
-            }
+            for entry in group.arrayValue { entries.append(try precedenceEntry(entry)) }
             result.append(entries)
         }
         return result
     }
+
+    /// A precedence entry: a symbol name, or a `STRING` or `SYMBOL` rule object.
+    private static func precedenceEntry(_ node: JSON) throws(GrammarError) -> PrecedenceEntry {
+        if let symbol = node.string { return .symbol(symbol) }
+        let entry = RuleMembers(node)
+        switch entry.type?.string {
+            case "STRING":
+                if let value = entry.value?.string { return .literal(value) }
+            case "SYMBOL":
+                if let name = entry.name?.string { return .symbol(name) }
+            default:
+                break
+        }
+        throw .invalidRuleType("Invalid precedence entry")
+    }
+
+    // MARK: - Member values
+
+    private static func requiredString(_ node: JSON?, _ field: String) throws(GrammarError) -> String {
+        guard let string = node?.string else { throw .missingField(field) }
+        return string
+    }
+
+    private static func requiredArray(_ node: JSON?, _ field: String) throws(GrammarError) -> [JSON] {
+        guard let elements = node?.array else { throw .missingField(field) }
+        return elements
+    }
+
+    /// A rule's `content`, which may hold any JSON value; `parseRule` rejects one that is not a rule.
+    private static func requiredContent(_ rule: RuleMembers) throws(GrammarError) -> JSON {
+        guard let content = rule.content else { throw .missingField("content") }
+        return content
+    }
+
+    private static func requiredInteger(_ node: JSON?) throws(GrammarError) -> Int {
+        guard let value = node.flatMap(integer) else { throw .missingField("value") }
+        return value
+    }
+
+    /// `node` as an integer: a number with an exact integer value, or a boolean as 1 or 0.
+    private static func integer(_ node: JSON) -> Int? {
+        if let bool = node.bool { return bool ? 1 : 0 }
+        return node.int ?? node.double.flatMap { Int(exactly: $0) }
+    }
+
+    /// `node` as a flag: a boolean, or the number 1 or 0.
+    private static func flag(_ node: JSON) -> Bool? {
+        if let bool = node.bool { return bool }
+        guard let number = node.double, number == 1 || number == 0 else { return nil }
+        return number == 1
+    }
+
+    /// The elements of an array of strings; nil when `node` is not an array or holds anything but strings.
+    private static func strings(_ node: JSON) -> [String]? {
+        guard let elements = node.array else { return nil }
+        let strings = elements.compactMap(\.string)
+        return strings.count == elements.count ? strings : nil
+    }
+
+    /// The elements of an array of string arrays; nil when any element is not one.
+    private static func stringLists(_ node: JSON) -> [[String]]? {
+        guard let elements = node.array else { return nil }
+        let lists = elements.compactMap(strings)
+        return lists.count == elements.count ? lists : nil
+    }
+
+    /// The kind of a node that is not an object, for error messages.
+    private static func kindName(of node: JSON) -> String {
+        if node.isArray { return "array" }
+        if node.isNull { return "null" }
+        if node.bool != nil { return "boolean" }
+        if node.double != nil { return "number" }
+        return "string"
+    }
 }
 
-private struct JSONOrderScanner: Sendable {
-    private let source: String
-    private var index: String.Index
+/// The top-level members a grammar reads, each the first of its key.
+private struct GrammarMembers {
+    var name: JSON?
+    var rules: JSON?
+    var extras: JSON?
+    var conflicts: JSON?
+    var externals: JSON?
+    var inline: JSON?
+    var word: JSON?
+    var supertypes: JSON?
+    var precedences: JSON?
 
-    init(source: String) {
-        self.source = source
-        self.index = source.startIndex
-    }
-
-    mutating func extractKeyOrder(for targetKey: String) throws(GrammarError) -> [String]? {
-        skipWhitespace()
-        guard consume("{") else {
-            throw .invalidJSON("Root must be an object")
-        }
-
-        skipWhitespace()
-        if consume("}") {
-            return nil
-        }
-
-        while true {
-            let key = try parseString()
-            skipWhitespace()
-            try consumeRequired(":", message: "Expected ':' after object key")
-            skipWhitespace()
-
-            if key == targetKey {
-                return try parseObjectKeyOrder()
+    /// Visits `object`'s members once. A node that is not an object leaves every member nil.
+    init(_ object: JSON) {
+        object.forEachMember { key, value in
+            switch key {
+                case "name": name = name ?? value
+                case "rules": rules = rules ?? value
+                case "extras": extras = extras ?? value
+                case "conflicts": conflicts = conflicts ?? value
+                case "externals": externals = externals ?? value
+                case "inline": inline = inline ?? value
+                case "word": word = word ?? value
+                case "supertypes": supertypes = supertypes ?? value
+                case "precedences": precedences = precedences ?? value
+                default: break
             }
+        }
+    }
+}
 
-            try skipValue()
-            skipWhitespace()
+/// The members a rule object, or a precedence entry, reads, each the first of its key.
+private struct RuleMembers {
+    var type: JSON?
+    var name: JSON?
+    var value: JSON?
+    var content: JSON?
+    var members: JSON?
+    var named: JSON?
 
-            if consume("}") {
-                return nil
+    /// Visits `object`'s members once. A node that is not an object leaves every member nil.
+    init(_ object: JSON) {
+        object.forEachMember { key, member in
+            switch key {
+                case "type": type = type ?? member
+                case "name": name = name ?? member
+                case "value": value = value ?? member
+                case "content": content = content ?? member
+                case "members": members = members ?? member
+                case "named": named = named ?? member
+                default: break
             }
-
-            try consumeRequired(",", message: "Expected ',' between object members")
-            skipWhitespace()
         }
-    }
-
-    private mutating func parseObjectKeyOrder() throws(GrammarError) -> [String] {
-        try consumeRequired("{", message: "Expected object for 'rules'")
-
-        skipWhitespace()
-        if consume("}") {
-            return []
-        }
-
-        var keys: [String] = []
-
-        while true {
-            keys.append(try parseString())
-            skipWhitespace()
-            try consumeRequired(":", message: "Expected ':' after rule key")
-            skipWhitespace()
-            try skipValue()
-            skipWhitespace()
-
-            if consume("}") {
-                return keys
-            }
-
-            try consumeRequired(",", message: "Expected ',' between rule definitions")
-            skipWhitespace()
-        }
-    }
-
-    private mutating func skipValue() throws(GrammarError) {
-        skipWhitespace()
-
-        guard let character = currentCharacter else {
-            throw .invalidJSON("Unexpected end of JSON")
-        }
-
-        switch character {
-            case "\"":
-                _ = try parseString()
-            case "{":
-                try skipObject()
-            case "[":
-                try skipArray()
-            default:
-                skipScalarValue()
-        }
-    }
-
-    private mutating func skipObject() throws(GrammarError) {
-        try consumeRequired("{", message: "Expected object")
-        skipWhitespace()
-
-        if consume("}") {
-            return
-        }
-
-        while true {
-            _ = try parseString()
-            skipWhitespace()
-            try consumeRequired(":", message: "Expected ':' after object key")
-            skipWhitespace()
-            try skipValue()
-            skipWhitespace()
-
-            if consume("}") {
-                return
-            }
-
-            try consumeRequired(",", message: "Expected ',' between object members")
-            skipWhitespace()
-        }
-    }
-
-    private mutating func skipArray() throws(GrammarError) {
-        try consumeRequired("[", message: "Expected array")
-        skipWhitespace()
-
-        if consume("]") {
-            return
-        }
-
-        while true {
-            try skipValue()
-            skipWhitespace()
-
-            if consume("]") {
-                return
-            }
-
-            try consumeRequired(",", message: "Expected ',' between array elements")
-            skipWhitespace()
-        }
-    }
-
-    private mutating func skipScalarValue() {
-        while let character = currentCharacter, !character.isWhitespace,
-            !isValueTerminator(character)
-        {
-            advance()
-        }
-    }
-
-    private mutating func parseString() throws(GrammarError) -> String {
-        try consumeRequired("\"", message: "Expected string")
-
-        var result = String()
-
-        while let character = currentCharacter {
-            advance()
-
-            if character == "\"" {
-                return result
-            }
-
-            if character == "\\" {
-                guard let escapedCharacter = currentCharacter else {
-                    throw .invalidJSON("Unterminated escape sequence")
-                }
-                advance()
-                try appendEscapedCharacter(escapedCharacter, to: &result)
-                continue
-            }
-
-            result.append(character)
-        }
-
-        throw .invalidJSON("Unterminated string")
-    }
-
-    private mutating func appendEscapedCharacter(
-        _ escapedCharacter: Character,
-        to result: inout String
-    ) throws(GrammarError) {
-        switch escapedCharacter {
-            case "\"":
-                result.append("\"")
-            case "\\":
-                result.append("\\")
-            case "/":
-                result.append("/")
-            case "b":
-                result.append("\u{08}")
-            case "f":
-                result.append("\u{0C}")
-            case "n":
-                result.append("\n")
-            case "r":
-                result.append("\r")
-            case "t":
-                result.append("\t")
-            case "u":
-                try appendUnicodeEscape(to: &result)
-            default:
-                throw .invalidJSON("Unsupported escape sequence \\(escapedCharacter)")
-        }
-    }
-
-    private mutating func appendUnicodeEscape(to result: inout String) throws(GrammarError) {
-        let firstCodeUnit = try parseUnicodeEscapeCodeUnit()
-
-        if Self.isHighSurrogate(firstCodeUnit) {
-            try consumeRequired("\\", message: "Expected low surrogate following high surrogate")
-            try consumeRequired("u", message: "Expected unicode escape following high surrogate")
-
-            let secondCodeUnit = try parseUnicodeEscapeCodeUnit()
-            guard Self.isLowSurrogate(secondCodeUnit) else {
-                throw .invalidJSON("Invalid unicode escape surrogate pair")
-            }
-
-            let scalarValue = Self.supplementaryScalarValue(
-                highSurrogate: firstCodeUnit,
-                lowSurrogate: secondCodeUnit
-            )
-            guard let scalar = UnicodeScalar(scalarValue) else {
-                throw .invalidJSON("Invalid unicode escape surrogate pair")
-            }
-
-            result.unicodeScalars.append(scalar)
-            return
-        }
-
-        guard !Self.isLowSurrogate(firstCodeUnit), let scalar = UnicodeScalar(firstCodeUnit) else {
-            throw .invalidJSON("Invalid unicode escape surrogate pair")
-        }
-
-        result.unicodeScalars.append(scalar)
-    }
-
-    private mutating func parseUnicodeEscapeCodeUnit() throws(GrammarError) -> UInt32 {
-        let start = index
-        let end = source.index(start, offsetBy: 4, limitedBy: source.endIndex)
-        guard let end else {
-            throw .invalidJSON("Incomplete unicode escape")
-        }
-
-        let hex = String(source[start ..< end])
-        guard hex.count == 4, let codeUnit = UInt32(hex, radix: 16) else {
-            throw .invalidJSON("Invalid unicode escape \\u\(hex)")
-        }
-
-        index = end
-        return codeUnit
-    }
-
-    private mutating func consumeRequired(
-        _ expected: Character,
-        message: String
-    ) throws(GrammarError) {
-        guard consume(expected) else {
-            throw .invalidJSON(message)
-        }
-    }
-
-    private mutating func consume(_ expected: Character) -> Bool {
-        guard currentCharacter == expected else {
-            return false
-        }
-
-        advance()
-        return true
-    }
-
-    private mutating func skipWhitespace() {
-        while let character = currentCharacter, character.isWhitespace {
-            advance()
-        }
-    }
-
-    private var currentCharacter: Character? {
-        guard index < source.endIndex else {
-            return nil
-        }
-        return source[index]
-    }
-
-    private mutating func advance() {
-        index = source.index(after: index)
-    }
-
-    private func isValueTerminator(_ character: Character) -> Bool {
-        character == "," || character == "]" || character == "}"
-    }
-
-    private static func isHighSurrogate(_ value: UInt32) -> Bool {
-        value >= 0xD800 && value <= 0xDBFF
-    }
-
-    private static func isLowSurrogate(_ value: UInt32) -> Bool {
-        value >= 0xDC00 && value <= 0xDFFF
-    }
-
-    private static func supplementaryScalarValue(highSurrogate: UInt32, lowSurrogate: UInt32)
-        -> UInt32
-    {
-        let highOffset = highSurrogate - 0xD800
-        let lowOffset = lowSurrogate - 0xDC00
-        return 0x10000 + (highOffset << 10) + lowOffset
     }
 }
