@@ -1,4 +1,3 @@
-public import AemiCore
 public import AtelierText
 public import Foundation
 import KittyFileTree
@@ -140,16 +139,17 @@ public final class DocumentBuffer {
     /// Reads this buffer's file and makes it the text as one undo step, so undo brings back what it replaced, unsaved
     /// against the file. A buffer that changes or starts saving while the file is read keeps its newer text.
     /// - Parameters:
-    ///   - taskProvider: Runs the blocking read.
+    ///   - offloadFileRead: Runs the blocking read, on the app's pool.
     ///   - syncLiveState: Runs just before the text is replaced: an active buffer copies its live text and cursor in.
     /// - Returns: The file's text, or nil when the buffer kept its newer text.
     /// - Throws: The read's error.
-    public func reloadFromDisk(taskProvider: any TaskProvider, syncLiveState: () -> Void) async throws -> LoadedFile? {
+    public func reloadFromDisk(offloadFileRead: BlockingFileRead, syncLiveState: () -> Void) async throws -> LoadedFile?
+    {
         let path = filePath
         let version = documentVersion
         // Read before the text, as an open does, so a change landing between the two reads as newer.
         let date = WorkspaceFileLoading.modificationDate(ofFileAt: path)
-        let file = try await WorkspaceFileLoading.readUTF8File(at: path, taskProvider: taskProvider)
+        let file = try await WorkspaceFileLoading.readUTF8File(at: path, offload: offloadFileRead)
         guard documentVersion == version, filePath == path, !isSavingInBackground else { return nil }
         syncLiveState()
         let replaced = BufferEditSnapshot(

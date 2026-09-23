@@ -133,7 +133,8 @@ struct KittyCodeEntry {
         if config.fileWatcherEnabled {
             let watcher = FileWatcher()
             let integration = FileWatcherIntegration(
-                watcher: watcher, workspace: state.workspace, delegate: state, taskProvider: taskProvider)
+                watcher: watcher, workspace: state.workspace, delegate: state,
+                offloadFileRead: { read in try await offloadPool.run(read) }, taskProvider: taskProvider)
             integration.start()
             state.fileWatcherIntegration = integration
             fileWatcherIntegration = integration

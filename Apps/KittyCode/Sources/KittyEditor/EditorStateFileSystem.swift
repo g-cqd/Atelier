@@ -11,7 +11,15 @@ import KittyTerminal
 public import KittyWorkspace
 import System
 
+import class AemiRuntime.BlockingOffloadPool
+
 extension EditorState {
+    /// Runs a file's blocking read on ``searchPool``, the app's pool, never on a cooperative thread.
+    var offloadFileRead: BlockingFileRead {
+        let pool = searchPool
+        return { read in try await pool.run(read) }
+    }
+
     public func loadInitialTree(validateHistory: Bool = true) async {
         let expandedPaths = collectExpandedPaths(treeNodes)
         // A scan cancelled or refused by the pool keeps the tree shown.
@@ -135,12 +143,11 @@ extension EditorState {
         statusMessage = "Opening \(name)..."
         renderRefreshSource?.invalidate()
 
-        let task = taskProvider.task(role: .work) { [weak self, taskProvider] in
+        let task = taskProvider.task(role: .work) { [weak self, offloadFileRead] in
             guard let self else { return }
 
             do {
-                let loadedFile = try await WorkspaceFileLoading.readUTF8File(
-                    at: path, taskProvider: taskProvider)
+                let loadedFile = try await WorkspaceFileLoading.readUTF8File(at: path, offload: offloadFileRead)
                 guard !Task.isCancelled else { return }
                 guard self.isCurrentOpenRequest(requestID) else { return }
 
@@ -322,11 +329,11 @@ extension EditorState {
             statusMessage = "\(buffer.fileName) is being autosaved: reload again in a moment"
             return
         }
-        taskProvider.task(role: .work) { [weak self, weak buffer, taskProvider] in
+        taskProvider.task(role: .work) { [weak self, weak buffer, offloadFileRead] in
             guard let self, let buffer else { return }
             do {
                 // While the buffer is active its live text and cursor sit in the workspace: the undo step starts there.
-                let reloaded = try await buffer.reloadFromDisk(taskProvider: taskProvider) {
+                let reloaded = try await buffer.reloadFromDisk(offloadFileRead: offloadFileRead) {
                     if self.bufferManager.activeBuffer === buffer { self.saveStateToActiveBuffer() }
                 }
                 if let reloaded, self.bufferManager.activeBuffer === buffer {

@@ -78,7 +78,8 @@ struct WatchedWorkspace {
         notes = workspace.bufferManager.buffers[0]
         notes.lastModifiedDate = WorkspaceFileLoading.modificationDate(ofFileAt: path)
         integration = FileWatcherIntegration(
-            watcher: watcher, workspace: workspace, delegate: delegate, taskProvider: taskProvider)
+            watcher: watcher, workspace: workspace, delegate: delegate, offloadFileRead: { read in try read() },
+            taskProvider: taskProvider)
     }
 
     /// The path FSEvents reports for `notes.txt`: under `/private/var/...` where the buffer says `/var/...`.
