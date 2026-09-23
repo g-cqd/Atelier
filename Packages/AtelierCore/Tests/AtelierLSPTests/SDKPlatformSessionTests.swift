@@ -12,6 +12,8 @@ private actor PlatformSessions {
     private var factories: [SDKPlatform: ScriptedConnectionFactory] = [:]
     private let available: Set<SDKPlatform>
     private let gate: AsyncGate?
+    /// Opened as soon as a session starts being made.
+    let entered = AsyncLatch()
 
     /// - Parameters:
     ///   - available: The platforms that have a session; the others, as iOS without Xcode, have none.
@@ -23,6 +25,7 @@ private actor PlatformSessions {
 
     func make(_ platform: SDKPlatform) async -> SourceKitLSPService? {
         asked.append(platform)
+        entered.open()
         if let gate {
             do {
                 try await gate.waitUntilOpen()
@@ -49,16 +52,21 @@ private actor PlatformSessions {
     }
 
     /// The text of every document `platform`'s server was sent.
-    func openedTexts(on platform: SDKPlatform) async -> [String] {
+    func openedTexts(on platform: SDKPlatform) async throws -> [String] {
         guard let factory = factories[platform] else { return [] }
         var texts: [String] = []
         for index in 0 ..< (await factory.generationCount) {
             for frame in await factory.transport(at: index).sink.all {
-                let sent = try? JSONDecoder().decode(SentOpen.self, from: unframe(frame))
-                if let text = sent?.params?.textDocument.text { texts.append(text) }
+                let sent = try JSONDecoder().decode(SentOpen.self, from: unframe(frame))
+                if let text = sent.params?.textDocument?.text { texts.append(text) }
             }
         }
         return texts
+    }
+
+    /// How many servers `platform`'s session started.
+    func connectionCount(on platform: SDKPlatform) async -> Int {
+        await factories[platform]?.generationCount ?? 0
     }
 
     /// How many times `platform`'s server was closed.
@@ -72,11 +80,11 @@ private actor PlatformSessions {
     }
 }
 
-/// A sent frame, reduced to a `didOpen`'s document text.
+/// A sent frame, reduced to a `didOpen`'s document text; every other frame decodes with none.
 private struct SentOpen: Decodable {
     struct Params: Decodable {
         struct Document: Decodable { let text: String? }
-        let textDocument: Document
+        let textDocument: Document?
     }
 
     let params: Params?
@@ -101,7 +109,7 @@ struct SDKPlatformSessionTests {
 
         #expect(answer?.markdown == "Documented on iOS.")
         #expect(await sessions.asked == [.iOS])
-        let opened = try #require(await sessions.openedTexts(on: .iOS).first)
+        let opened = try #require(try await sessions.openedTexts(on: .iOS).first)
         #expect(opened.contains("import UIKit"))
         #expect(!opened.contains("import AppKit"))
         await provider.shutdown()
@@ -116,7 +124,7 @@ struct SDKPlatformSessionTests {
         let answer = try await provider.hover(query(imports + "let view = UIView()", hovering: "UIView"))
 
         #expect(answer?.markdown == "Documented on iOS.")
-        let opened = try #require(await sessions.openedTexts(on: .iOS).first)
+        let opened = try #require(try await sessions.openedTexts(on: .iOS).first)
         #expect(opened.contains("import UIKit"))
         await provider.shutdown()
     }
@@ -160,7 +168,7 @@ struct SDKPlatformSessionTests {
 
         #expect(answer?.markdown == "Documented on macOS.")
         #expect(await sessions.asked == [.iOS, .macOS])
-        let opened = try #require(await sessions.openedTexts(on: .macOS).first)
+        let opened = try #require(try await sessions.openedTexts(on: .macOS).first)
         #expect(!opened.contains("import UIKit"))
         await provider.shutdown()
     }
@@ -198,6 +206,32 @@ struct SDKPlatformSessionTests {
 
         #expect(await sessions.closeCount(on: .iOS) == 1)
         #expect(await sessions.closeCount(on: .macOS) == 1)
+    }
+
+    @Test
+    func `a hover after shutdown answers nothing`() async throws {
+        let sessions = PlatformSessions()
+        let provider = SDKDocumentationProvider(sessions: { await sessions.make($0) })
+        _ = try await provider.hover(query("import UIKit\nlet view = UIView()", hovering: "UIView"))
+
+        await provider.shutdown()
+
         #expect(try await provider.hover(query("import UIKit\nlet image = UIImage()", hovering: "UIImage")) == nil)
+    }
+
+    @Test
+    func `a session made while the provider shuts down starts no server`() async throws {
+        let gate = AsyncGate()
+        let sessions = PlatformSessions(gate: gate)
+        let provider = SDKDocumentationProvider(sessions: { await sessions.make($0) })
+
+        async let answer = provider.hover(query("import UIKit\nlet view = UIView()", hovering: "UIView"))
+        try await sessions.entered.wait()
+        await provider.shutdown()
+        gate.open()
+
+        #expect(try await answer == nil)
+        #expect(await sessions.asked == [.iOS])
+        #expect(await sessions.connectionCount(on: .iOS) == 0)
     }
 }

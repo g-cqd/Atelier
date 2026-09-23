@@ -96,6 +96,15 @@ struct FrameCodecTests {
     }
 
     @Test
+    func `a header one byte past the maximum throws before its terminator ends`() {
+        let header = Data(repeating: UInt8(ascii: "x"), count: LSPFrameCodec.maximumHeaderSize + 1)
+        var codec = LSPFrameCodec()
+        #expect(throws: LSPFramingError.headerTooLarge) {
+            _ = try codec.feed(header + Data("\r\n\r".utf8))
+        }
+    }
+
+    @Test
     func `a header of the maximum size still frames its payload when its terminator arrives last`() throws {
         let payload = Data(#"{"a":1}"#.utf8)
         let lengthLine = "Content-Length: \(payload.count)\r\n"

@@ -38,8 +38,8 @@ public struct LSPFrameCodec: Sendable {
 
     /// Feeds a chunk read from the transport; returns every complete payload now available, in order.
     ///
-    /// The header end is looked for within the first ``maximumHeaderSize`` bytes only, so a large payload that arrives
-    /// in many chunks is never rescanned whole.
+    /// The header end is looked for within the first ``maximumHeaderSize`` bytes and a terminator's only, so a large
+    /// payload that arrives in many chunks is never rescanned whole.
     /// - Throws: ``LSPFramingError/headerTooLarge`` as soon as a header runs past ``maximumHeaderSize`` bytes without
     ///   ending.
     public mutating func feed(_ chunk: Data) throws(LSPFramingError) -> [Data] {
