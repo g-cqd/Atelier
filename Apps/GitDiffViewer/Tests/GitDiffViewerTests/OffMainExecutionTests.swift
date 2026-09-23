@@ -50,8 +50,9 @@ struct OffMainExecutionTests {
         let findings = ["a.swift": [finding(line: 2)]]
 
         #expect(isOnMainThread())
-        let rows = await DiagnosticRowMapper.rowsOffMain(for: rendered, paths: paths, findings: findings)
-        let syncRows = DiagnosticRowMapper.rows(for: rendered, paths: paths, findings: findings)
+        let right = SideFindings(paths: paths, findings: findings)
+        let rows = await DiagnosticRowMapper.rowsOffMain(for: rendered, left: .none, right: right)
+        let syncRows = DiagnosticRowMapper.rows(for: rendered, left: .none, right: right)
 
         #expect(rows.keys == syncRows.keys)
         #expect(rows[1]?.severity == syncRows[1]?.severity)
