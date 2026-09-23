@@ -305,8 +305,7 @@ private final class CardHosts {
 private struct PaneContent {
     let layouts: CardLayouts
     let background: NSColor
-    let drag: (GapMarker, GapExpansion, Int) -> Void
-    let expansion: (GapKey) -> GapExpansion
+    let drag: (GapDragEvent) -> Void
     let displayed: () -> Void
     let hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)?
 
@@ -314,8 +313,7 @@ private struct PaneContent {
         let id = rendered.id
         self.layouts = layouts
         background = model.palette.background
-        drag = { marker, base, lines in model.adjustGap(marker, from: base, byLines: lines) }
-        expansion = { model.expansion(of: $0) }
+        drag = { model.handleGapDrag($0) }
         displayed = { model.noteDisplayed(id) }
         hoverResolver = Self.hoverResolver(docs: model.hoverDocs, palette: model.palette)
     }
@@ -423,7 +421,7 @@ private struct FileCardBody: View {
     {
         EmbeddedDiffTextView(
             layouts: content.layouts, side: side, gutter: gutter, width: width, wrapMode: options.wrapMode,
-            onGapDrag: content.drag, currentExpansion: content.expansion, onDisplayed: content.displayed,
+            onGapDrag: content.drag, onDisplayed: content.displayed,
             hoverEnabled: options.showsHover, hoverResolver: content.hoverResolver)
     }
 }
