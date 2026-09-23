@@ -1,0 +1,8 @@
+# The analyzers bundle.sh builds into GitDiffViewer.app/Contents/Helpers, each at one pinned commit.
+# One line per analyzer: name, repository URL, full 40-character commit SHA. bundle.sh builds exactly
+# that commit, with the dependencies its committed Package.resolved pins, and fails on anything else.
+# The commits are the fixed revisions on the atelier-review-fixes branch of each g-cqd mirror
+# (decision D15). Bump a pin in a commit of its own.
+arcleak   https://github.com/g-cqd/arcleak.git   51a40282f031a4182c316dfccc073625dc48a56c
+dolly     https://github.com/g-cqd/dolly.git     bc6b08b89575dd46df656f1616db946d21265429
+deadwood  https://github.com/g-cqd/deadwood.git  97a7a309f269283f24ee3a1015550455a4d8cd5e
