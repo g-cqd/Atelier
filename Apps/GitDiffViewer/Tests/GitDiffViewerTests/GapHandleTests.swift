@@ -251,7 +251,8 @@ struct DiffGutterGapHandleTests {
         ])
         let upper = try #require(fixture.halves(of: gap).first)
 
-        fixture.mouse(.leftMouseDown, at: NSPoint(x: upper.rect.midX, y: upper.hitArea.minY - 1))
+        // On the number of the row above, level with the upper half, then on the half itself.
+        fixture.mouse(.leftMouseDown, at: NSPoint(x: fixture.gutter.numbersLeft + 2, y: upper.rect.midY))
         fixture.mouse(.leftMouseDown, at: NSPoint(x: upper.rect.midX, y: upper.rect.midY))
 
         #expect(fixture.diagnosticClicks == [gap.row - 1])
