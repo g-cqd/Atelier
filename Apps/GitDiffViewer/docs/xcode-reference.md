@@ -30,10 +30,20 @@ Screenshots the user took on 09-23 from Xcode 26.6, of the throwaway project in
   (line 82), both halves show.
 
 Our version: the user first had the run take no row, with the handle over the lines around its hairline, then chose
-Xcode's band on 09-23. The band is one line and the hairline tall, so it scales with the theme's line height: 16 pt
-at our 15 pt lines, 19 pt at 18 pt ones. Two halves take (band − 1) / 2 each, and a lone half 13/18 of a line. Each
-half hovers and drags on its own, and its part of the band, across the gutter, is where it takes the pointer. The
-rows around the band keep their own clicks. A drag never discloses lines against its half's direction, and a half
+Xcode's band on 09-23. After using it, they asked for a tighter one on 09-24, which departs from Xcode:
+
+- **One line, exactly:** every band is one row tall, at the top of a file, at its end and between two changes, and
+  scales with the theme's line height.
+- **At the top or the end of a file:** no hairline. The one half sticks to the band's outer edge: the lower half flat
+  against the top edge, rounded toward the first line; the upper half flat against the bottom edge, rounded toward
+  the last line. Nothing else is drawn in the band.
+- **Between two changes:** a separator crosses the band's middle, from the gutter's leading edge to the text view's
+  trailing edge, in each pane of a split. The two halves sit on either side of it, their flat sides on it.
+- **Smaller:** each half is 14 pt wide and half a line tall, less the separator and a point of clearance: 6 pt at our
+  15 pt lines. Corners are 3 pt, grips 6 pt long.
+
+Each half hovers and drags on its own, and its part of the band, across the gutter, is where it takes the pointer.
+The rows around the band keep their own clicks. A drag never discloses lines against its half's direction, and a half
 held at an edge keeps revealing at a bounded rate. The count of hidden lines, which the removed row used to show,
 moves to the handle's tooltip.
 
