@@ -84,7 +84,7 @@ struct GitClientGateTests {
         "protocol.allow=never", "protocol.ext.allow=never", "protocol.file.allow=never", "gpg.program=false",
         "gpg.ssh.program=false", "gpg.x509.program=false", "core.sshCommand=/usr/bin/false", "core.fsmonitor=false",
         "core.hooksPath=/dev/null", "diff.external=", "core.pager=cat", "core.editor=false",
-        "uploadpack.packObjectsHook="
+        "uploadpack.packObjectsHook=", "diff.autoRefreshIndex=false"
     ])
     func `every read pin reaches the argv`(pin: String) async throws {
         let runner = FakeProcessRunner.gated(always: .success(""))

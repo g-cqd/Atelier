@@ -65,6 +65,9 @@ public enum GitIsolation: Sendable, Hashable {
     /// vectors from an attacker-controlled `.git/config`, and the signing programs `log` and `show` would otherwise
     /// start. `protocol.allow=never` with `protocol.ext.allow=never` beside it, because a repository's own
     /// `protocol.ext.allow=always` is the more specific key and would win over the general one alone.
+    /// `diff.autoRefreshIndex=false` because `GIT_OPTIONAL_LOCKS=0` does not stop a porcelain `git diff` against the
+    /// working tree from rewriting the user's `.git/index` when stat data is stale, which takes `index.lock` under a
+    /// `git add` or `git commit` the user runs at the same moment.
     private static let sharedConfigurationFlags: [String] = [
         "-c", "protocol.allow=never",
         "-c", "protocol.ext.allow=never",
@@ -77,7 +80,8 @@ public enum GitIsolation: Sendable, Hashable {
         "-c", "uploadpack.packObjectsHook=",
         "-c", "gpg.program=false",
         "-c", "gpg.ssh.program=false",
-        "-c", "gpg.x509.program=false"
+        "-c", "gpg.x509.program=false",
+        "-c", "diff.autoRefreshIndex=false"
     ]
 
     /// ``sharedConfigurationFlags`` with `core.sshCommand` pinned to a program that cannot run: a read command
