@@ -57,6 +57,16 @@ package final class DiffViewerModel {
     @ObservationIgnored private var treesGeneration = 0
     @ObservationIgnored var diagnosticsTask: Task<Void, Never>?
     @ObservationIgnored var diagnosticsGeneration = 0
+    /// Sides whose last listing failed. While one has, the comparison keeps what is published, and
+    /// ``shownComparison`` marks it with the failure.
+    var failedLoads: Set<Side> = []
+    /// Whether ``compareGitChanges(in:leftRef:rightRef:)`` is reading sides other than the ones on screen.
+    var isSwitching = false
+    /// Why the last ``compareGitChanges(in:leftRef:rightRef:)`` could not open its repository.
+    var switchFailure: String?
+    /// Whether what is published belongs to a selection the user left while a side was loading: the one they made
+    /// waits for the load, and what is on screen until it lands is not what they asked for.
+    var showsPreviousSelection = false
 
     /// Files shown together when a folder or nothing is selected; capped so a whole repository stays responsive.
     package static let combinedFileLimit = 200
@@ -81,8 +91,8 @@ package final class DiffViewerModel {
         right = SideState(label: "Right", reader: reader, taskProvider: taskProvider)
         left.onReload = { [weak self] in self?.timer.begin() }
         right.onReload = { [weak self] in self?.timer.begin() }
-        left.onEntriesChanged = { [weak self] in self?.sourcesChanged() }
-        right.onEntriesChanged = { [weak self] in self?.sourcesChanged() }
+        left.onEntriesChanged = { [weak self] in self?.entriesChanged(on: .left) }
+        right.onEntriesChanged = { [weak self] in self?.entriesChanged(on: .right) }
         left.onIgnoredEntriesChanged = { [weak self] in self?.ignoredEntriesChanged() }
         right.onIgnoredEntriesChanged = { [weak self] in self?.ignoredEntriesChanged() }
         left.onBadgeStatesChanged = { [weak self] in self?.updateUnifiedBadgeStates() }
@@ -154,7 +164,7 @@ package final class DiffViewerModel {
         if !renderedFiles.isEmpty { return .cards }
         if left.isLoading || right.isLoading { return .loading }
         if isRendering { return .loading }
-        if let renderError { return .error(renderError) }
+        if let failure = loadFailure ?? renderError { return .error(failure) }
         guard left.source != nil, right.source != nil else { return .noSources }
         return isShowingCombinedFiles ? .noChanges : .noSelection
     }
@@ -181,6 +191,8 @@ package final class DiffViewerModel {
     /// together, so the comparison is computed once and the explorers never see one side without the other.
     package func compareGitChanges(in url: URL, leftRef: String = "HEAD", rightRef: String? = nil) {
         timer.begin()
+        isSwitching = !alreadyCompares(url, leftRef: leftRef, rightRef: rightRef)
+        switchFailure = nil
         left.beginLoading()
         right.beginLoading()
         sourcesTask?.cancel()
@@ -196,12 +208,16 @@ package final class DiffViewerModel {
             guard let loaded = await prologue.value, !Task.isCancelled else {
                 PhaseTrace.log("prologue failed")
                 if !Task.isCancelled {
+                    isSwitching = false
+                    switchFailure = "\(Self.displayPath(of: url)) is not inside a git repository."
                     left.endLoading()
                     right.endLoading()
                 }
                 return
             }
             PhaseTrace.log("prologue done")
+            isSwitching = false
+            failedLoads = []
             if let entries = loaded.leftEntries {
                 left.load(loaded.left, repository: loaded.info, entries: entries)
             } else {
@@ -221,6 +237,7 @@ package final class DiffViewerModel {
     package func openPatch(_ url: URL) {
         sourcesTask?.cancel()
         prologueTask?.cancel()
+        isSwitching = false
         left.load(.patch(url, side: .old), repository: nil)
         right.load(.patch(url, side: .new), repository: nil)
     }
@@ -228,6 +245,7 @@ package final class DiffViewerModel {
     package func swapSides() {
         sourcesTask?.cancel()
         prologueTask?.cancel()
+        isSwitching = false
         let leftSource = left.source
         let leftRepository = left.repository
         if let rightSource = right.source { left.load(rightSource, repository: right.repository) }
@@ -245,11 +263,12 @@ package final class DiffViewerModel {
         timer.begin(onlyIfIdle: true)
         preparer.cancelPrefetch()
         renamesTask?.cancel()
-        guard !left.isLoading, !right.isLoading else {
+        guard !left.isLoading, !right.isLoading, failedLoads.isEmpty else {
             // The watcher still follows the right side's new source, which `load` has already set.
             updateFreshness()
             return
         }
+        switchFailure = nil
         comparison = Comparison(
             left: left.entries, right: right.entries, leftSource: left.source, rightSource: right.source,
             leftIgnored: left.ignoredEntries ?? [], rightIgnored: right.ignoredEntries ?? []
@@ -460,12 +479,17 @@ package final class DiffViewerModel {
             pipeline.clear()
             return
         }
-        // A side still loading renders the selection once it lands; what is published stays until then.
-        guard !left.isLoading, !right.isLoading else { return }
+        // A side still loading, or failed, renders the selection once a load lands; what is published stays until
+        // then, marked when the user asked for something else meanwhile.
+        guard !left.isLoading, !right.isLoading, failedLoads.isEmpty else {
+            if !keepingPublished { showsPreviousSelection = true }
+            return
+        }
         let target: RenderPipeline.Target
         if isShowingCombinedFiles {
             let paths = comparison.changedPaths(under: selectedPath, limit: Self.combinedFileLimit)
             guard !paths.isEmpty else {
+                showsPreviousSelection = false
                 pipeline.clear()
                 timer.finish()
                 return
@@ -474,6 +498,7 @@ package final class DiffViewerModel {
         } else if let selectedPath {
             target = .file(comparison.pair(for: selectedPath))
         } else {
+            showsPreviousSelection = false
             pipeline.clear()
             timer.finish()
             return
@@ -506,7 +531,10 @@ package final class DiffViewerModel {
     private func handle(_ event: RenderPipeline.Event) {
         switch event {
             case .published(let id, let isFirst):
-                if isFirst { timer.awaitDisplay(of: id) }
+                if isFirst {
+                    timer.awaitDisplay(of: id)
+                    showsPreviousSelection = false
+                }
                 if isShowingCombinedFiles {
                     folding.applyDefaults(to: renderedFiles.map(\.path), status: status(ofPath:))
                 } else if isFirst, let rendered, rendered.changeCount > 0, !rendered.keepsScrollPosition {

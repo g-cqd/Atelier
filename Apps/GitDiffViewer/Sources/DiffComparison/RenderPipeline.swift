@@ -38,10 +38,15 @@ package final class RenderPipeline {
         case failed(String)
     }
 
+    /// The two sources a render compares.
+    package struct Sources: Equatable, Sendable {
+        package let left: ComparisonSource
+        package let right: ComparisonSource
+    }
+
     /// The sources and diff options of one render.
     private struct RenderInputs {
-        let left: ComparisonSource
-        let right: ComparisonSource
+        let sources: Sources
         let granularity: IntralineGranularity
         let heuristics: DiffHeuristics
     }
@@ -61,6 +66,9 @@ package final class RenderPipeline {
     package private(set) var cards: [RenderedFile] = []
     /// The target of what is published; `prepared` holds its diffs, one per pair that landed, in order.
     package private(set) var target: Target?
+    /// The sources `file` or `cards` were rendered from, set in the same step as they are; nil while neither shows
+    /// anything. The model compares them with the sides' own to tell a previous comparison kept on screen.
+    package private(set) var publishedSources: Sources?
     /// Rows revealed around the gaps of what is published, keyed per file and gap.
     package private(set) var gapExpansions: [GapKey: GapExpansion] = [:]
     package private(set) var error: String?
@@ -141,7 +149,8 @@ package final class RenderPipeline {
         generation += 1
         isRendering = true
         error = nil
-        let inputs = RenderInputs(left: left, right: right, granularity: granularity, heuristics: heuristics)
+        let inputs = RenderInputs(
+            sources: Sources(left: left, right: right), granularity: granularity, heuristics: heuristics)
         let loan = self.loan(for: target, inputs: inputs)
         let keeps = keepingPublished && (file != nil || !cards.isEmpty)
         // A lent file drawn another way, a card becoming the whole file say, saves only its diff: streaming then puts
@@ -209,6 +218,7 @@ package final class RenderPipeline {
         cards = []
         prepared = []
         stamps = []
+        publishedSources = nil
         contentVersion += 1
     }
 
@@ -218,6 +228,7 @@ package final class RenderPipeline {
         let isFirst = prepared.isEmpty
         prepared += diffs
         stamps += files.map(\.stamp)
+        publishedSources = job.inputs.sources
         switch job.target {
             case .file:
                 PhaseTrace.log("publish file")
@@ -240,6 +251,7 @@ package final class RenderPipeline {
         prepared = diffs
         stamps = files.map(\.stamp)
         contentVersion += 1
+        publishedSources = job.inputs.sources
         publishedGranularity = job.inputs.granularity
         publishedHeuristics = job.inputs.heuristics
         switch job.target {
@@ -589,7 +601,7 @@ extension RenderPipeline {
         let missing = indices.filter { diffs[$0] == nil }
         if !missing.isEmpty {
             let fresh = try await preparer.prepare(
-                missing.map { pairs[$0] }, left: job.inputs.left, right: job.inputs.right,
+                missing.map { pairs[$0] }, left: job.inputs.sources.left, right: job.inputs.sources.right,
                 granularity: job.inputs.granularity, heuristics: job.inputs.heuristics)
             guard job.generation == generation else { throw CancellationError() }
             for (index, diff) in zip(missing, fresh) { diffs[index] = diff }

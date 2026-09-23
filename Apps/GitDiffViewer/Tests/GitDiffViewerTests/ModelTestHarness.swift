@@ -98,6 +98,14 @@ final class FakeSourceReader: SourceReading, Sendable {
         var gitRenames: [String: String] = [:]
         var workingTreeStatuses: [ComparisonSource: [GitStatusEntry]] = [:]
         var entriesReads = 0
+        var failingListings: [ComparisonSource: String] = [:]
+        var failingContents: [String: String] = [:]
+    }
+
+    /// The error a failing listing or read throws, with the message a test chose.
+    struct Failure: LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
     }
 
     private let state = Mutex(State())
@@ -113,6 +121,18 @@ final class FakeSourceReader: SourceReading, Sendable {
 
     /// How many times any source's entries were listed.
     var entriesReads: Int { state.withLock { $0.entriesReads } }
+
+    /// Sources whose listing throws, with the message it throws.
+    var failingListings: [ComparisonSource: String] {
+        get { state.withLock { $0.failingListings } }
+        set { state.withLock { $0.failingListings = newValue } }
+    }
+
+    /// Paths whose reads throw, with the message they throw.
+    var failingContents: [String: String] {
+        get { state.withLock { $0.failingContents } }
+        set { state.withLock { $0.failingContents = newValue } }
+    }
 
     var entries: [ComparisonSource: [SourceEntry]] {
         get { state.withLock { $0.entries } }
@@ -167,6 +187,7 @@ final class FakeSourceReader: SourceReading, Sendable {
         if case .directory(let url) = source, let gate = gate[url.path(percentEncoded: false)] {
             _ = try await gate.next()
         }
+        if let message = failingListings[source] { throw Failure(message: message) }
         return entries[source] ?? []
     }
 
@@ -190,6 +211,7 @@ final class FakeSourceReader: SourceReading, Sendable {
         if let gate = gate[entry.relativePath] {
             _ = try await gate.next()
         }
+        if let message = failingContents[entry.relativePath] { throw Failure(message: message) }
         if let blobID = entry.blobID, let content = blobContents[blobID] { return content }
         return contents[entry.relativePath] ?? "\(entry.relativePath) \(entry.blobID ?? "")\n"
     }
