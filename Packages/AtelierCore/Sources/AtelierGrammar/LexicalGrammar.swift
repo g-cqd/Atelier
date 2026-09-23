@@ -6,7 +6,7 @@
 /// `string_content` do; the parse tree then has one leaf for it instead of a node over one leaf per character.
 struct LexicalGrammar: Sendable {
     private(set) var tokens: [LexicalToken] = []
-    /// The extras that are no token: what the lexer skips before a token, whitespace when a grammar names no extras.
+    /// The extras that are no token: what the lexer skips before a token.
     private(set) var separators: [Rule] = []
     /// The grammar's rules, the first rule first, with each lexical part replaced by the symbol of its token and the
     /// rules that became tokens left out.
@@ -36,9 +36,6 @@ struct LexicalGrammar: Sendable {
 
         for extra in grammar.extras {
             markExtra(extra)
-        }
-        if grammar.extras.isEmpty {
-            separators = [.pattern(#"\s"#)]
         }
     }
 
