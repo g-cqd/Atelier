@@ -86,13 +86,7 @@ struct DiagnosticDiffTextView: View {
                 guard !rowDiagnostics.isEmpty else { return nil }
                 return HoverDocument(diagnostics: rowDiagnostics)
             }
-            var document = HoverDocument.build(from: content, palette: palette)
-            guard !rowDiagnostics.isEmpty else { return document }
-            document = HoverDocument(
-                declaration: document.declaration, summary: document.summary, discussion: document.discussion,
-                parameters: document.parameters, returns: document.returns, provenance: document.provenance,
-                extraCandidates: document.extraCandidates, diagnostics: rowDiagnostics)
-            return document
+            return HoverDocument.build(from: content, palette: palette).adding(diagnostics: rowDiagnostics)
         }
     }
 

@@ -46,6 +46,52 @@ import Testing
             chipBackground.usingColorSpace(.sRGB) == palette.background.withAlphaComponent(0.94).usingColorSpace(.sRGB))
     }
 
+    @Test
+    func `adding diagnostics keeps every other field of the document`() {
+        let declaration = NSAttributedString(string: "func run()")
+        let summary = NSAttributedString(string: "Runs.")
+        let discussion = NSAttributedString(string: "At once.")
+        let returns = NSAttributedString(string: "Nothing.")
+        let parameter = HoverDocument.Field(name: "speed", text: NSAttributedString(string: "How fast."))
+        let candidate = HoverDocument.Candidate(
+            declaration: NSAttributedString(string: "func run(fast: Bool)"), summary: nil)
+        let document = HoverDocument(
+            declaration: declaration, summary: summary, discussion: discussion, parameters: [parameter],
+            returns: returns, provenance: .docIndex, extraCandidates: [candidate],
+            diagnostics: [HoverDocument.DiagnosticEntry(severity: .note, message: "first", tool: "swiftlint")],
+            chipBackground: .textBackgroundColor)
+
+        let joined = document.adding(diagnostics: [
+            HoverDocument.DiagnosticEntry(severity: .warning, message: "second", tool: "periphery")
+        ])
+
+        #expect(joined.declaration === declaration)
+        #expect(joined.summary === summary)
+        #expect(joined.discussion === discussion)
+        #expect(joined.returns === returns)
+        #expect(joined.parameters.map(\.name) == ["speed"])
+        #expect(joined.parameters.first?.text === parameter.text)
+        #expect(joined.provenance == .docIndex)
+        #expect(joined.extraCandidates.first?.declaration === candidate.declaration)
+        #expect(joined.diagnostics.map(\.message) == ["first", "second"])
+        #expect(joined.chipBackground === NSColor.textBackgroundColor)
+    }
+
+    /// HOVER-06: the resolver joins a row's findings to the built document, and the declaration keeps its chip.
+    @Test
+    func `a declaration joined by a row's findings keeps the pane's chip background`() throws {
+        let content = HoverContent(
+            markdown: "```swift\nstruct CameraConfiguration\n```\n\nA configuration.", source: .docIndex)
+        let palette = DiffPalette.system
+        let finding = HoverDocument.DiagnosticEntry(severity: .warning, message: "unused", tool: "periphery")
+
+        let document = HoverDocument.build(from: content, palette: palette).adding(diagnostics: [finding])
+
+        let chipBackground = try #require(document.chipBackground)
+        #expect(
+            chipBackground.usingColorSpace(.sRGB) == palette.background.withAlphaComponent(0.94).usingColorSpace(.sRGB))
+    }
+
     /// A fontless run would draw in Helvetica 12; bold and italic runs also carry the matching symbolic trait.
     @Test func summaryProseAlwaysCarriesAnExplicitSystemFont() throws {
         let content = HoverContent(
