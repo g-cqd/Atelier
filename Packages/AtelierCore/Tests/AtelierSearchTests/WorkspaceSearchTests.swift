@@ -169,11 +169,8 @@ struct WorkspaceSearchTests {
         #expect(result.filesSearched == 2)
     }
 
-    /// Audit A4 — the mapped-file `readFileLines` must produce the same line splits as the
-    /// previous `String.split(omittingEmptySubsequences: false)` approach (and, before that, the
-    /// intermediate 64 KB `Data`-chunked reader). These tests cover the boundary cases a naive
-    /// scan drops on the floor: file with no trailing newline, file with a trailing `\n`, file
-    /// with a line longer than the old 64 KB chunk size, and CRLF line endings.
+    /// The mapped-file reader splits lines like `split(separator: "\n", omittingEmptySubsequences: false)`: with and
+    /// without a final newline, across a line over 64 KB, and with CRLF endings.
     @Test("file without trailing newline counts every line")
     func streamingNoTrailingNewline() async throws {
         let tmp = try makeTempDir()
@@ -194,8 +191,7 @@ struct WorkspaceSearchTests {
         let tmp = try makeTempDir()
         defer { cleanup(tmp) }
 
-        // Three lines, file ends with `\n`. Original split semantics produced
-        // ["alpha", "beta", ""]; the streaming reader must match.
+        // Ends with `\n`, which `split` turns into a final empty line: ["alpha", "beta", ""].
         try writeFile(tmp + "/a.txt", content: "alpha\nbeta\n")
         let pattern = compilePattern(SearchQuery(text: "beta"))!
         let result = await withPool { pool in
@@ -211,7 +207,7 @@ struct WorkspaceSearchTests {
         let tmp = try makeTempDir()
         defer { cleanup(tmp) }
 
-        // 80 KB single line (~1.25 × 64 KB chunk) followed by a matching marker.
+        // An 80 KB single line followed by a matching marker.
         let bigLine = String(repeating: "x", count: 80 * 1024)
         try writeFile(tmp + "/a.txt", content: bigLine + "\nNEEDLE\n")
         let pattern = compilePattern(SearchQuery(text: "NEEDLE"))!

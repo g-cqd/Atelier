@@ -54,7 +54,7 @@ import Testing
         #expect(UnicodeWidth.displayWidth(of: s) == s.count)
     }
 
-    // MARK: - Audit regressions (Unicode 15.1 gaps)
+    // MARK: - Unicode 15.1 gaps
 
     @Test func `regional indicator pair is one grapheme of width 2`() {
         // 🇫🇷 — single grapheme cluster: U+1F1EB + U+1F1F7

@@ -22,13 +22,10 @@ public enum DirectoryScanner {
     ///   - maxDepth: Maximum recursion depth. `0` returns only direct children.
     ///   - maxEntries: Hard cap on the total number of entries visited.
     ///   - visibility: Hidden-file inclusion policy.
-    ///   - withinRoot: Optional containment boundary used by the symlink-
-    ///     traversal defence. Every entry whose resolved real path escapes
-    ///     this root is silently skipped. Defaults to the scanned `path`
-    ///     (treats the scan directory as its own root). When recursive
-    ///     scans are launched for subdirectories, pass the workspace root
-    ///     here so symlinks under nested subdirectories are still checked
-    ///     against the workspace, not against the immediate parent.
+    ///   - withinRoot: The symlink containment boundary: an entry whose resolved
+    ///     path escapes it is skipped. Defaults to `path`; recursive scans of
+    ///     subdirectories pass the workspace root so deep symlinks are checked
+    ///     against the workspace.
     /// - Returns: Sorted entries — directories first, then files, each group
     ///   sorted case-insensitively by name.
     public static func scan(
@@ -72,7 +69,7 @@ public enum DirectoryScanner {
             path, root: root, maxDepth: maxDepth, visibility: visibility, counter: counter)
     }
 
-    // MARK: - Synchronous (original)
+    // MARK: - Synchronous
 
     private static func scanDirectory(
         _ path: String,

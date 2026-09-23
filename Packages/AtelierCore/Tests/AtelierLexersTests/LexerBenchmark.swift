@@ -5,8 +5,7 @@ import Testing
 
 @testable import AtelierLexers
 
-/// Opt-in throughput of the scanners over both unit types; run with ATELIER_BENCH=1. The numbers feed the engine
-/// routing table once the grammar engine sits behind the same interface.
+/// Opt-in throughput of the scanners over both unit types; run with ATELIER_BENCH=1.
 struct LexerBenchmark {
     @Test(.enabled(if: ProcessInfo.processInfo.environment["ATELIER_BENCH"] != nil))
     func `scanner throughput per language and unit`() {

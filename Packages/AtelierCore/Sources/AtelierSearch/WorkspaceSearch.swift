@@ -90,23 +90,14 @@ public func searchWorkspace(
     )
 }
 
-/// Audit A4 — `FileManager.contents(atPath:)` reads the whole file into a `Data`, then
-/// `String(data:encoding:)` re-decodes into a UTF-8 String, then `split` allocates a `[String]` of
-/// every line. Peak RSS per worker = ~3× the largest file in flight, multiplied by worker count.
-///
-/// The mapped version below opens the file through `PosixFile`, maps it read-only with
-/// `RawFileMap`, and scans for `\n` with the SIMD `AemiKernels.firstIndexOfByte` kernel instead of a
-/// byte-by-byte Swift loop or a `Data`-chunked scan. No chunk boundary bookkeeping is needed — the
-/// whole file is one mapped region — and only each line's bytes are copied into a `String`, not the
-/// whole file. This is blocking, syscall/mmap-bound work, so it always runs on `pool`
-/// (`BlockingOffloadPool`), never inline on the cooperative pool that drives this task group.
+/// The file's lines, read through a read-only mapping so only each line's bytes are copied; nil when it cannot be
+/// read. Runs on `pool`, since mapping and scanning the file block.
 private func readFileLines(at path: String, pool: BlockingOffloadPool) async -> [String]? {
     try? await pool.run { readFileLinesBlocking(at: path) }
 }
 
-/// The blocking body `readFileLines` offloads to `pool`. Returns `nil` when the file cannot be
-/// opened, measured or mapped (deleted or permission-denied between enumeration and search —
-/// matches the previous `FileHandle`-based `nil` return).
+/// The blocking body of `readFileLines`; nil when the file cannot be opened, measured or mapped, as when it
+/// vanished after enumeration.
 private func readFileLinesBlocking(at path: String) -> [String]? {
     guard let file = try? PosixFile(path: path, mode: .readOnly) else { return nil }
     defer { file.close() }
@@ -120,22 +111,14 @@ private func readFileLinesBlocking(at path: String) -> [String]? {
     }
     // The whole file is scanned once, front to back: let the kernel page it in ahead of the scan.
     map.prefetch(offset: 0, length: size)
-    // `withRegion`'s `RawSpan` is scoped to this closure (statically prevented from escaping the
-    // mapping); `splitLines` runs entirely inside that scope, so the raw pointer it derives from
-    // `withUnsafeBytes` never outlives the mapping.
+    // `splitLines` runs inside the region's scope, so its raw pointer never outlives the mapping.
     return map.withRegion(offset: 0, count: size) { region in
         region.withUnsafeBytes { splitLines($0) }
     }
 }
 
-/// Splits a mapped file's bytes on `\n`, matching `String.split(separator: "\n",
-/// omittingEmptySubsequences: false)`: a trailing `\n` produces one extra empty element at the end.
-///
-/// Invariant: `buffer` is only valid for the duration of this call (handed in from
-/// `RawFileMap.withRegion`'s scoped `RawSpan` via `withUnsafeBytes`, both of which return before this
-/// function's caller does), and every offset read here — `lineStart` and `lineStart + relativeNewline`
-/// — stays within `0...buffer.count` by construction of the loop below, so no read reaches past the
-/// mapped region.
+/// Splits a mapped file's bytes on `\n` like `String.split(separator: "\n", omittingEmptySubsequences: false)`: a
+/// trailing `\n` yields a final empty line. `buffer` is valid only during the call, and no read leaves it.
 private func splitLines(_ buffer: UnsafeRawBufferPointer) -> [String] {
     guard let base = buffer.baseAddress else { return [""] }
     let bytes = base.assumingMemoryBound(to: UInt8.self)
@@ -159,9 +142,8 @@ private func splitLines(_ buffer: UnsafeRawBufferPointer) -> [String] {
     }
 }
 
-/// Decodes `bytes[start..<end]` as UTF-8, mirroring the previous `String(data:encoding:.utf8) ?? ""`
-/// fallback for invalid byte sequences. `start` and `end` are always produced by the newline scan in
-/// `splitLines`, so `0 <= start <= end <= count` holds for the same mapped buffer.
+/// Decodes `bytes[start..<end]` as UTF-8, or an empty string when the bytes are invalid; `splitLines` only passes
+/// bounds within its buffer.
 private func decodeLine(_ bytes: UnsafePointer<UInt8>, from start: Int, to end: Int) -> String {
     guard end > start else { return "" }
     let slice = UnsafeBufferPointer(start: bytes + start, count: end - start)
@@ -169,8 +151,7 @@ private func decodeLine(_ bytes: UnsafePointer<UInt8>, from start: Int, to end: 
 }
 
 extension Duration {
-    /// Whole-and-fractional milliseconds as a `Double`. Combines the seconds and
-    /// attoseconds components in one place so call sites stay readable.
+    /// Whole and fractional milliseconds as a `Double`.
     var milliseconds: Double {
         Double(components.seconds) * 1000 + Double(components.attoseconds) / 1e15
     }
