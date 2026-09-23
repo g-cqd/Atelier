@@ -57,9 +57,8 @@ private struct FindingsNavigatorPopover: View {
                             .help(group.path)
                         ForEach(Array(group.findings.enumerated()), id: \.offset) { _, finding in
                             FindingRow(finding: finding) {
-                                // Findings are keyed by the right side's path. This opens the file; scrolling to the
-                                // finding's line needs a line-to-row mapping the pane does not expose.
-                                model.pin(finding.file, from: .right)
+                                // Opens the file, then its line once the file's render lands.
+                                model.reveal(finding)
                                 isPresented = false
                             }
                         }
