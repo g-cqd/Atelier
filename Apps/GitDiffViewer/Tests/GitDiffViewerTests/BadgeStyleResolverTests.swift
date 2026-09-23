@@ -2,8 +2,8 @@ import Testing
 
 @testable import DiffComparison
 
-/// ``BadgeStyleResolver``: filled for a committed change, stroked for an uncommitted one, inverted for a row
-/// selected in a focused list.
+/// ``BadgeStyleResolver``: filled for a committed change, stroked for an uncommitted one; on a row selected in a
+/// focused list, a filled badge inverts to white and a stroked one turns white.
 struct BadgeStyleResolverTests {
     @Test
     func `staged, unselected: filled with the scheme's colour and a white letter`() {
@@ -16,7 +16,7 @@ struct BadgeStyleResolverTests {
     func `unstaged, unselected: stroked, transparent fill, letter in the status colour`() {
         let style = BadgeStyleResolver.resolve(
             scheme: .classic, kind: .modified, state: .unstaged, isSelected: false, isFocused: false)
-        #expect(style == BadgeStyle(fill: .none, stroke: .orange, text: .token(.orange)))
+        #expect(style == BadgeStyle(fill: .none, stroke: .token(.orange), text: .token(.orange)))
     }
 
     @Test
@@ -36,10 +36,27 @@ struct BadgeStyleResolverTests {
     }
 
     @Test
-    func `unstaged, selected in a focused list: inverts the same way staged does`() {
+    func `unstaged, selected in a focused list: white outline and letter, no fill`() {
         let style = BadgeStyleResolver.resolve(
             scheme: .classic, kind: .deleted, state: .unstaged, isSelected: true, isFocused: true)
-        #expect(style == BadgeStyle(fill: .white, stroke: nil, text: .token(.red)))
+        #expect(style == BadgeStyle(fill: .none, stroke: .white, text: .white))
+    }
+
+    @Test
+    func `untracked, selected in a focused list: reads exactly like unstaged`() {
+        let unstaged = BadgeStyleResolver.resolve(
+            scheme: .xcode, kind: .added, state: .unstaged, isSelected: true, isFocused: true)
+        let untracked = BadgeStyleResolver.resolve(
+            scheme: .xcode, kind: .added, state: .untracked, isSelected: true, isFocused: true)
+        #expect(untracked == unstaged)
+        #expect(untracked == BadgeStyle(fill: .none, stroke: .white, text: .white))
+    }
+
+    @Test
+    func `unstaged, selected but unfocused keeps its coloured outline`() {
+        let style = BadgeStyleResolver.resolve(
+            scheme: .xcode, kind: .modified, state: .unstaged, isSelected: true, isFocused: false)
+        #expect(style == BadgeStyle(fill: .none, stroke: .token(.blue), text: .token(.blue)))
     }
 
     @Test
@@ -78,6 +95,6 @@ struct BadgeStyleResolverTests {
     func `xcode scheme still strokes an unstaged modification instead of filling it`() {
         let style = BadgeStyleResolver.resolve(
             scheme: .xcode, kind: .modified, state: .unstaged, isSelected: false, isFocused: false)
-        #expect(style == BadgeStyle(fill: .none, stroke: .blue, text: .token(.blue)))
+        #expect(style == BadgeStyle(fill: .none, stroke: .token(.blue), text: .token(.blue)))
     }
 }
