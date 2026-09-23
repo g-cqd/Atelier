@@ -60,6 +60,7 @@ struct ComparisonWindow: View {
                 guard !hasStarted else { return }
                 hasStarted = true
                 model.attachDiagnostics(engine: services.diagnosticsEngine, settings: settings)
+                model.attachSideAnalysis(trust: services.repositoryTrust, runner: services.runner)
                 model.attachHoverDocs(lspRegistry: services.lspRegistry)
                 model.attachFreshness()
                 model.start(configuration)
