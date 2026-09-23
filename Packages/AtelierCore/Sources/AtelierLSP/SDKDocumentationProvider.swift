@@ -42,8 +42,8 @@ public actor SDKDocumentationProvider: HoverProvider {
     private var sessions: [SDKPlatform: Session] = [:]
     /// Set by ``shutdown()``: no session is made afterwards.
     private var isShutDown = false
-    /// The platforms the project above a directory declares, keyed by the directory's path.
-    private var declaredPlatforms: [String: Set<SDKPlatform>] = [:]
+    /// The platforms each directory's own manifests declare, keyed by the directory's path.
+    private var directoryPlatforms: [String: Set<SDKPlatform>] = [:]
 
     /// Most recently used last in `order`; a `nil` value is a cached miss, which the server answered.
     private var cache: [CacheKey: HoverContent?] = [:]
@@ -148,16 +148,18 @@ public actor SDKDocumentationProvider: HoverProvider {
         }
     }
 
-    /// The platforms the project of the document at `uri` declares: empty unless it is a file on disk. Remembered per
-    /// directory, and forgotten all at once past 512 directories.
+    /// The platforms the project of the document at `uri` declares: empty unless it is a file on disk. What each
+    /// directory's manifests declare is read once, so files in sibling directories share their project's reading, and
+    /// forgotten all at once past 512 directories; a manifest edited meanwhile counts from the app's next launch.
     private func projectPlatforms(forDocumentAt uri: String) -> Set<SDKPlatform> {
         guard let url = URL(string: uri), url.isFileURL else { return [] }
-        let directory = url.deletingLastPathComponent().path(percentEncoded: false)
-        if let known = declaredPlatforms[directory] { return known }
-        if declaredPlatforms.count >= 512 { declaredPlatforms.removeAll() }
-        let platforms = ProjectPlatforms.declared(forFileAt: url)
-        declaredPlatforms[directory] = platforms
-        return platforms
+        return ProjectPlatforms.declared(forFileAt: url) { directory in
+            if let known = directoryPlatforms[directory] { return known }
+            if directoryPlatforms.count >= 512 { directoryPlatforms.removeAll() }
+            let platforms = ProjectPlatforms.declared(inDirectory: directory)
+            directoryPlatforms[directory] = platforms
+            return platforms
+        }
     }
 
     // MARK: - Probing
