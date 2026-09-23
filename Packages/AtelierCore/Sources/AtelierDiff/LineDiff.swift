@@ -108,7 +108,8 @@ public enum LineDiff {
     }
 
     /// Rounds a middle-snake search over `lines` lines on both sides may take before it settles for a heuristic
-    /// split: four times the square root of the problem size, and never fewer than 256, as git's `mxcost`.
+    /// split: four times the square root of the problem size, and never fewer than 256. git's `mxcost` takes the
+    /// square root alone; the factor of four is the limit perf-core measured.
     static func costLimit(lines: Int) -> Int {
         max(256, 4 * Int(Double(lines).squareRoot()))
     }
