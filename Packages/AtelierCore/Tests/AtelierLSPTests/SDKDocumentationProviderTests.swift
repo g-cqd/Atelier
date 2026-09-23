@@ -120,7 +120,7 @@ struct SDKDocumentationProviderTests {
     }
 
     @Test
-    func `rejects a placeholder like dollar-zero`() {
+    func `a dollar placeholder chain is extracted as is`() {
         let content = "$0.foo"
         let result = SDKDocumentationProvider.extractChain(in: content, line: 0, utf16Column: 0)
         // Dotted, "$0.foo" stays a chain for sourcekit-lsp to fail on; extraction only has to not crash.
@@ -385,7 +385,7 @@ struct SDKDocumentationProviderTests {
             transport, id: try #require(try await decodeSent(transport, at: 0).id), result: .object([:]))
         await transport.sink.waitForCount(4)
         let hoverEnvelope = try await decodeSent(transport, at: 3)
-        // Respond with an empty markdown, which the service treats as "nothing to show" -> nil.
+        // Respond with a null result, which the service treats as "nothing to show" -> nil.
         try respond(transport, id: try #require(hoverEnvelope.id), result: .null)
         // "NSView" starts uppercase, so a prose-less (here, absent) primary answer triggers the type-position
         // fallback probe on the same connection; also answer that one with nothing, so the overall result is nil.

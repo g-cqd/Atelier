@@ -136,7 +136,7 @@ public struct SDKLocation: Sendable, Equatable {
         let path = path.trimmingCharacters(in: .whitespacesAndNewlines)
         let version = version.trimmingCharacters(in: .whitespacesAndNewlines)
         let components = version.split(separator: ".", omittingEmptySubsequences: false)
-        guard path.hasPrefix("/"), !components.isEmpty,
+        guard path.hasPrefix("/"),
             components.allSatisfy({ !$0.isEmpty && $0.allSatisfy { $0.isASCII && $0.isNumber } })
         else { return nil }
         self.init(path: path, version: version)
