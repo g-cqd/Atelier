@@ -16,8 +16,12 @@ public enum LSPConnectionError: Error, Sendable, Equatable {
 /// notifications, and answers to the server's own requests. A request whose task is cancelled throws
 /// `CancellationError` and sends `$/cancelRequest`. Nothing is read until ``start()`` runs the read loop.
 public actor LSPConnection {
+    /// The deepest nesting a result is decoded to. The decode recurses once per level on this actor's executor, whose
+    /// threads have about 512 KiB of stack: a reply 300 levels deep, which the parser's own limit of 512 admits,
+    /// overflows it. The results a client reads nest a handful of levels.
+    static let maximumResultDepth = 64
+
     private let transport: any LSPTransport
-    private let decoder = AemiJSON.JSONDecoder()
 
     private var nextRequestID = 0
     private var pending: [JSONRPCID: CheckedContinuation<Data?, any Error>] = [:]
@@ -59,10 +63,21 @@ public actor LSPConnection {
     ) async throws -> R? {
         let payload = try await performRequest(method: method, params: params)
         guard let payload, payload != Self.jsonNull else { return nil }
+        return try Self.decodeResult(R.self, from: payload, method: method)
+    }
+
+    /// Decodes `payload`, the `result` of a response to `method`, as `R`, at most ``maximumResultDepth`` levels deep.
+    /// - Throws: ``LSPConnectionError/malformedResponse(_:)`` when `payload` is not an `R`, or nests deeper.
+    static func decodeResult<R: Decodable>(
+        _ type: R.Type, from payload: Data, method: String
+    ) throws(LSPConnectionError) -> R {
+        var decoder = AemiJSON.JSONDecoder()
+        // The parser itself is iterative and keeps its own limit; only the decode recurses.
+        decoder.maxDecodingDepth = maximumResultDepth
         do {
             return try decoder.decode(R.self, from: payload)
         } catch {
-            throw LSPConnectionError.malformedResponse("\(method): \(error)")
+            throw .malformedResponse("\(method): \(error)")
         }
     }
 
