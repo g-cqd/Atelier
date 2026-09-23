@@ -14,7 +14,9 @@ import Testing
 /// and a hand-advanced clock. Shared by every model suite.
 @MainActor
 struct ModelTestHarness {
-    let taskProvider = TaskProviderSpy()
+    /// The deadline only bounds a failing wait; a passing one returns the moment the last task finishes. One
+    /// second failed spuriously while parallel builds saturated the machine, so the bound is generous.
+    let taskProvider = TaskProviderSpy(defaultTimeout: .seconds(15))
     let reader = FakeSourceReader()
     let uptime = FakeUptime()
     static let leftURL = URL(filePath: "/left", directoryHint: .isDirectory)
