@@ -175,6 +175,29 @@ struct DiffViewerModelFreshnessTests {
     }
 
     @Test
+    func `a comparison opened on HEAD knows the commit it listed, so a refs change that keeps it reloads nothing`()
+        async throws
+    {
+        reader.repositories[Self.root] = Self.info()
+        reader.commits = ["HEAD": "c1"]
+        reader.entries[Self.head] = [Self.entry("a.swift", "1")]
+        reader.entries[Self.tree] = [Self.entry("a.swift", "2")]
+        let sut = makeSUT()
+        sut.compareGitChanges(in: Self.root)
+        try await taskProvider.waitForAllTasks()
+        sut.attachFreshness(clock: clock, makeWatcher: watchers.makeWatcher)
+        let source = try #require(watchers.latest)
+        try await source.waitUntilWatching(2)
+        let listings = reader.listings(of: Self.head)
+
+        try await report("/repo/.git/refs/remotes/origin/main", on: source, after: Self.refDebounce)
+
+        #expect(sut.left.resolvedCommit == "c1")
+        #expect(reader.listings(of: Self.head) == listings)
+        try await drain(sut)
+    }
+
+    @Test
     func `a commit on the checked-out branch reloads the HEAD side alone`() async throws {
         let (sut, source) = try await makeLoadedSUT()
         let treeListings = reader.listings(of: Self.tree)
