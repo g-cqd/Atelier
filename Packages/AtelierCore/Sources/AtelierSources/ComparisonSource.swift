@@ -16,8 +16,7 @@ public enum ComparisonSource: Hashable, Sendable {
         case old, new
     }
 
-    /// Backed by ``descriptor(repository:)`` (with no repository, so a directory is never mistaken for a working
-    /// tree) so this and the descriptor's fields cannot drift apart.
+    /// A one-line label drawn from ``descriptor(repository:)`` without a repository, so a directory reads as a folder.
     public var displayName: String {
         let described = descriptor(repository: nil)
         switch self {
@@ -30,7 +29,7 @@ public enum ComparisonSource: Hashable, Sendable {
         }
     }
 
-    /// Backed by ``descriptor(repository:)``, for the same reason ``displayName`` is.
+    /// The tooltip from ``descriptor(repository:)``: the full path, or a git ref and its repository's path.
     public var detail: String {
         descriptor(repository: nil).detail
     }
@@ -43,10 +42,8 @@ public enum ComparisonSource: Hashable, Sendable {
     /// Describes this source uniformly for display: what family it belongs to, the secondary text (repository or
     /// parent folder), the primary text (ref, "Working Tree", file name, or patch side), and a tooltip.
     ///
-    /// `repository`, when it is the one this source was resolved against, lets a `.directory` at that repository's
-    /// root be recognized as the working tree rather than as an ordinary folder -- without it, the working-tree
-    /// side of a repository comparison read as a folder named after the repository itself, out of step with its
-    /// ref-carrying sibling, which named the same repository as its context and a ref as its primary text.
+    /// `repository`, when it is the one this source was resolved against, marks a `.directory` at its root as the
+    /// working tree rather than an ordinary folder.
     public func descriptor(repository: RepositoryInfo?) -> SourceDescriptor {
         switch self {
             case .gitRef(let repositoryURL, let ref):
@@ -73,9 +70,7 @@ public enum ComparisonSource: Hashable, Sendable {
     }
 }
 
-/// A source described uniformly regardless of what it names, so every place that shows one -- a toolbar control,
-/// a window title, a status line -- draws from the same rules instead of each switching over ``ComparisonSource``
-/// on its own.
+/// A source described uniformly regardless of what it names, so every place that shows one follows the same rules.
 public struct SourceDescriptor: Sendable, Equatable {
     /// What family of source this is, for the app to map to an icon of its choosing.
     public enum Symbol: String, Sendable {

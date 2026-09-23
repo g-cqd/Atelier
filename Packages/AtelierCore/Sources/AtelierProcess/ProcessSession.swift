@@ -9,11 +9,10 @@ import Subprocess
 
 /// A long-lived child speaking over stdin/stdout, e.g. a language server.
 ///
-/// One unstructured task owns the child for its whole life: it holds the swift-subprocess `run` call open,
-/// forwards standard output chunks into ``output`` as they arrive, and rolls standard error into a capped tail.
-/// swift-subprocess drives the pipes itself, so no read ever occupies a blocking-pool thread. Cancelling the
-/// owning task -- what ``terminate()`` does -- runs swift-subprocess's teardown sequence: `SIGTERM`, then
-/// `SIGKILL` after ``killGracePeriod`` if the child is still alive.
+/// One unstructured task owns the child for its whole life: it holds the swift-subprocess `run` call open, forwards
+/// standard output into ``output`` and keeps a capped tail of standard error. swift-subprocess drives the pipes, so
+/// no read occupies a blocking-pool thread. ``terminate()`` cancels that task, which sends `SIGTERM`, then `SIGKILL`
+/// after ``killGracePeriod``.
 public actor ProcessSession {
     /// How long a terminated child gets to exit after `SIGTERM` before `SIGKILL`.
     private let killGracePeriod: Duration
@@ -46,17 +45,12 @@ public actor ProcessSession {
     private var exitWaiters: [CheckedContinuation<Int32, Never>] = []
     private var stderrTail = Data()
 
-    /// True while one ``send(_:)`` call holds the write slot. ``StandardInputWriter/write(_:)`` suspends across
-    /// its own retries (the pipe filling up, or a partial write), and ``send(_:)`` being actor-isolated only
-    /// keeps its *synchronous* sections exclusive -- across an `await`, a second concurrent `send(_:)` call can
-    /// still be admitted and start writing before the first one has finished, interleaving two callers' bytes
-    /// on the same stdin and corrupting whatever framing (e.g. LSP's `Content-Length`) depends on each message
-    /// arriving whole and in order. This flag, with ``writeWaiters``, turns concurrent sends into a strict FIFO
-    /// queue instead: only the slot holder writes; everyone else parks until it is their turn.
+    /// True while one ``send(_:)`` holds the write slot. A write suspends across its retries, so without this FIFO
+    /// slot concurrent sends could interleave their bytes on stdin and break the message framing.
     private var writeInFlight = false
     private var writeWaiters: [CheckedContinuation<Void, Never>] = []
 
-    /// The most stderr bytes ``stderrSnapshot()`` keeps: 64 KiB.
+    /// The most stderr bytes ``stderrSnapshot()`` keeps.
     private static let stderrCapacity = 64 * 1_024
 
     public init(
@@ -96,8 +90,7 @@ public actor ProcessSession {
         }
     }
 
-    /// Serialized write to the child's stdin: queued FIFO behind any ``send(_:)`` already in flight, and
-    /// retried until every byte of `data` has actually been accepted, not just attempted once.
+    /// Writes all of `data` to the child's stdin, queued FIFO behind any ``send(_:)`` already in flight.
     /// - Throws: ``ProcessSessionError/notRunning`` before ``start()`` has reached a running child,
     ///   ``ProcessSessionError/exited(status:stderrTail:)`` once the child has exited, or
     ///   ``ProcessSessionError/writeFailed(_:)`` when the write itself fails or stalls with no progress.
@@ -115,9 +108,7 @@ public actor ProcessSession {
         }
     }
 
-    /// Writes every byte of `data`, looping past a partial accept: ``StandardInputWriter/write(_:)`` can return
-    /// fewer bytes than it was given (e.g. the child exits mid-write) without throwing, and treating that as a
-    /// complete send would silently truncate a frame.
+    /// Writes every byte of `data`, since ``StandardInputWriter/write(_:)`` can accept fewer without throwing.
     private func writeFully(_ data: Data, using writer: StandardInputWriter) async throws {
         var remaining = data
         while !remaining.isEmpty {
@@ -135,8 +126,7 @@ public actor ProcessSession {
         }
     }
 
-    /// Blocks until this call is the only one allowed to write, handing the slot off FIFO to whoever queued up
-    /// while the previous holder was writing.
+    /// Suspends until this call holds the write slot; waiters get it in FIFO order.
     private func acquireWriteSlot() async {
         guard writeInFlight else {
             writeInFlight = true
@@ -152,8 +142,7 @@ public actor ProcessSession {
             writeInFlight = false
             return
         }
-        // Hand the slot directly to the next waiter rather than clearing `writeInFlight`, so a third concurrent
-        // send() that arrives in between still queues up behind it instead of racing it for the slot.
+        // Handing over without clearing `writeInFlight` keeps a send arriving in between from jumping the queue.
         writeWaiters.removeFirst().resume()
     }
 
@@ -178,9 +167,7 @@ public actor ProcessSession {
 
     // MARK: - The owning task
 
-    /// Runs for the child's whole life: spawns it, streams its output and error, and reports its exit. Runs on
-    /// the unstructured task ``start()`` creates; cancelling that task -- ``terminate()`` -- makes swift-subprocess
-    /// run its teardown sequence before this returns.
+    /// Spawns the child, streams its output and error, and reports its exit; runs on the task ``start()`` creates.
     private func runChild() async {
         do {
             let result = try await Subprocess.run(
@@ -240,8 +227,7 @@ public actor ProcessSession {
         for waiter in waiters { waiter.resume(returning: status) }
     }
 
-    /// Either the launch never produced an `Execution` -- so ``readyContinuation`` is still pending and `error`
-    /// is what swift-subprocess reports -- or the child had already started and this is how it ended.
+    /// Fails a pending ``start()`` when the launch produced no `Execution`; otherwise the running child has ended.
     private func failedToLaunchOrExited(with error: any Error) {
         if let readyContinuation {
             self.readyContinuation = nil
