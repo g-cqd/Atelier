@@ -168,6 +168,8 @@ final class AppServices {
     let languageServerPolicy: LanguageServerPolicy
     /// One sourcekit-lsp session per trusted workspace root, shared by every comparison window.
     let lspRegistry: SourceKitLSPRegistry
+    /// The on-device Apple SDK documentation tier, resolved once and shared by every comparison window.
+    let sdkHoverTier: SDKHoverTier
 
     init() {
         runner = HardenedProcessRunner(pool: pool)
@@ -188,33 +190,12 @@ final class AppServices {
             makeConfiguration: { root in await policy.configuration(forRoot: root) })
         lspRegistry = registry
         policy.stopSessionsOnRevocation(in: registry)
+        sdkHoverTier = SDKHoverTier { await policy.resolveSDKTier() }
     }
 
-    /// The resolved SDK tier; `.some(nil)` records a failed resolution, so it is attempted once per app.
-    private var sdkHoverState: SDKDocumentationProvider??
-    /// The scratch sourcekit-lsp session behind the SDK tier, kept so termination can drain it.
-    private(set) var sdkScratchService: SourceKitLSPService?
-
-    /// The on-device Apple SDK documentation tier, built once over the language servers' discovery path and shared
-    /// by every window; nil when the app-wide setting turns sourcekit-lsp off or it is missing.
+    /// The SDK tier's provider, which windows hover through; nil when sourcekit-lsp is off app-wide or missing.
     func sdkHoverProvider() async -> SDKDocumentationProvider? {
-        if let resolved = sdkHoverState { return resolved }
-        guard let executable = await languageServerPolicy.sdkServerExecutable() else {
-            sdkHoverState = .some(nil)
-            return nil
-        }
-        let service: SourceKitLSPService
-        do {
-            service = try SDKDocumentationProvider.makeScratchService(serverExecutable: executable)
-        } catch {
-            PhaseTrace.log("SDK documentation is off: \(error)")
-            sdkHoverState = .some(nil)
-            return nil
-        }
-        sdkScratchService = service
-        let provider = SDKDocumentationProvider(service: service)
-        sdkHoverState = provider
-        return provider
+        await sdkHoverTier.provider()
     }
 
     func shutdown() {
@@ -230,7 +211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// main-actor hop the drain needs.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         Task { @MainActor in
-            await Self.drainLSPSessions(services.lspRegistry, scratch: services.sdkScratchService)
+            await Self.drainLSPSessions(services.lspRegistry, sdkTier: services.sdkHoverTier)
             services.shutdown()
             NSApp.reply(toApplicationShouldTerminate: true)
         }
@@ -239,28 +220,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Shuts every sourcekit-lsp session down gracefully within one second; a server still running after that is
     /// abandoned, and the app's exit closes its pipes.
-    private static func drainLSPSessions(_ registry: SourceKitLSPRegistry, scratch: SourceKitLSPService?) async {
+    private static func drainLSPSessions(_ registry: SourceKitLSPRegistry, sdkTier: SDKHoverTier) async {
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
                 await registry.shutdownAll()
-                guard let scratch else { return }
-                await scratch.shutdown()
-                removeProbeDirectory(at: scratch.workspaceRoot)
+                await sdkTier.shutdown()
             }
             group.addTask {
                 try? await Task.sleep(for: .seconds(1))
             }
             await group.next()
             group.cancelAll()
-        }
-    }
-
-    /// Removes the SDK tier's private probe directory once its session has shut down.
-    nonisolated private static func removeProbeDirectory(at directory: URL) {
-        do {
-            try FileManager.default.removeItem(at: directory)
-        } catch {
-            PhaseTrace.log("the SDK probe directory stays at \(directory.path(percentEncoded: false)): \(error)")
         }
     }
 
