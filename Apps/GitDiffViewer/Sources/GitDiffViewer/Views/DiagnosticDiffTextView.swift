@@ -56,13 +56,11 @@ struct DiagnosticDiffTextView: View {
             version += 1
             return
         }
-        let paths = model.diagnosticFilePaths
-        let findings = diagnostics.findingsByFile
-        let includesOldSide = model.settings.analyzedSides == .both
+        let right = SideFindings(paths: model.diagnosticFilePaths, findings: diagnostics.findingsByFile)
+        let left = SideFindings(paths: model.diagnosticLeftFilePaths, findings: diagnostics.leftFindingsByFile)
         let rendered = rendered
         Task {
-            let rows = await DiagnosticRowMapper.rowsOffMain(
-                for: rendered, paths: paths, findings: findings, includesOldSide: includesOldSide)
+            let rows = await DiagnosticRowMapper.rowsOffMain(for: rendered, left: left, right: right)
             guard generation == recomputeGeneration else { return }
             overlay.replace(rows)
             version += 1

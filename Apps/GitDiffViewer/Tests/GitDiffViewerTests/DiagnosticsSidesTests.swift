@@ -285,6 +285,29 @@ struct DiagnosticsSidesTests {
     }
 
     @Test
+    func `a card's counts include the left side's findings`() async throws {
+        let harness = ModelTestHarness()
+        let sut = harness.makeSUT()
+        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("A.swift", "1")]
+        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("A.swift", "2")]
+        try await harness.load(sut)
+        sut.settings.diagnosticsEnabled = true
+        sut.settings.analyzedSides = .leftOnly
+        sut.settings.toolLocations = Self.onlySwiftLint
+        let clock = TestClock()
+        sut.diagnostics = DiagnosticsModel(
+            engine: SideRecordingRunner(findingsByRoot: [ModelTestHarness.leftURL: [Self.finding(line: 1)]]),
+            settings: sut.settings, taskProvider: harness.taskProvider, clock: clock, debounce: Self.debounce)
+
+        sut.updateAnalyzedSides()
+        try await clock.waitForSleepers()
+        clock.advance(by: Self.debounce)
+        try await harness.taskProvider.waitForAllTasks()
+
+        #expect(sut.diagnosticSeverityCounts(for: "A.swift").warnings == 1)
+    }
+
+    @Test
     func `a changeset without a Swift file runs no tool`() async throws {
         let sut = try makeSUT(mode: .rightOnly)
 
