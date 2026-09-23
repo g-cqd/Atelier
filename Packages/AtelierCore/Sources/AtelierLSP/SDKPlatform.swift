@@ -53,12 +53,13 @@ public enum SDKPlatform: String, Sendable, Hashable, CaseIterable {
         return declared.contains(.iOS) && !declared.contains(.macOS) ? .iOS : .macOS
     }
 
-    /// The modules a probe on this platform imports: `fileImports` less the other platform's own frameworks, which
-    /// this SDK lacks, then the platform's defaults; sorted, unique, and at most `limit`, the file's own first.
+    /// The modules a probe on this platform imports: the platform's defaults, then `fileImports` less the other
+    /// platform's own frameworks, which this SDK lacks; sorted, unique, and at most `limit`. The defaults come first so
+    /// that a file with many imports, `import UIKit` among its last, cannot crowd its platform's frameworks out.
     func probeImports(fileImports: [String], limit: Int) -> [String] {
         let foreign = Set(Self.allCases.filter { $0 != self }.flatMap(\.exclusiveModules))
         var modules: [String] = []
-        for module in fileImports + defaultImports where modules.count < limit {
+        for module in defaultImports + fileImports where modules.count < limit {
             guard !foreign.contains(module), !modules.contains(module) else { continue }
             modules.append(module)
         }

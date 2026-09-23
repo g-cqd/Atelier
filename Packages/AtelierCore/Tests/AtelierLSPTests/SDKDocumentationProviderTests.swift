@@ -144,7 +144,7 @@ struct SDKDocumentationProviderTests {
     // MARK: - Import collection
 
     @Test
-    func `collects imports from content, unions defaults, dedupes, and caps at twelve`() {
+    func `collects each imported module once, a submodule's as its module`() {
         let content = """
             import Foundation
             import AppKit
@@ -152,17 +152,17 @@ struct SDKDocumentationProviderTests {
 
             let x = 1
             """
-        let imports = SDKDocumentationProvider.collectImports(
-            in: content, unioning: ["Foundation", "AppKit", "SwiftUI"])
-        #expect(Set(imports) == ["Foundation", "AppKit", "SwiftUI"])
-        #expect(imports.count <= 12)
+        #expect(SDKDocumentationProvider.importedModules(in: content) == ["Foundation", "AppKit"])
     }
 
     @Test
-    func `caps collected imports at twelve total`() {
+    func `a probe imports its platform's defaults and caps the file's imports at twelve in all`() {
         let manyImports = (0 ..< 20).map { "import Module\($0)\n" }.joined()
-        let imports = SDKDocumentationProvider.collectImports(in: manyImports, unioning: ["Foundation"])
+        let imports = SDKPlatform.macOS.probeImports(
+            fileImports: SDKDocumentationProvider.importedModules(in: manyImports),
+            limit: SDKDocumentationProvider.maximumProbeImports)
         #expect(imports.count == 12)
+        #expect(Set(["AppKit", "Foundation", "SwiftUI"]).isSubset(of: imports))
     }
 
     @Test
@@ -175,14 +175,12 @@ struct SDKDocumentationProviderTests {
             // import Commented
             let importer = 1
             """
-        let imports = SDKDocumentationProvider.collectImports(in: content, unioning: [])
-        #expect(imports == ["Alpha", "Beta", "Delta", "Gamma"])
+        #expect(SDKDocumentationProvider.importedModules(in: content) == ["Alpha", "Beta", "Gamma", "Delta"])
     }
 
     @Test
     func `each import of a CRLF file is found`() {
-        let imports = SDKDocumentationProvider.collectImports(
-            in: "import AppKit\r\nimport SwiftUI\r\n", unioning: [])
+        let imports = SDKDocumentationProvider.importedModules(in: "import AppKit\r\nimport SwiftUI\r\n")
         #expect(imports == ["AppKit", "SwiftUI"])
     }
 
