@@ -5,8 +5,9 @@ import Testing
 @testable import DiffComparison
 @testable import DiffGit
 
-/// What one side re-reads after an outside change: the ref check that reloads only when the commit moved (GDV S3),
-/// and the listing filter that asks git about unlisted paths alone (GDV S2).
+/// What one side re-reads after an outside change: the ignored files it keeps across a watcher's reload (GDV S13),
+/// the ref check that reloads only when the commit moved (GDV S3), and the listing filter that asks git about
+/// unlisted paths alone (GDV S2).
 @MainActor
 struct SideStateFreshnessCheckTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
@@ -35,6 +36,51 @@ struct SideStateFreshnessCheckTests {
         sut.loadIgnoredEntries()
         try await taskProvider.waitForAllTasks()
         return sut
+    }
+
+    // MARK: Ignored files (GDV S13)
+
+    @Test
+    func `a reload after an outside write keeps the ignored files it listed and lists them no more`() async throws {
+        let sut = try await makeTreeWithIgnoredFiles()
+        let listingsBefore = reader.ignoredListings
+
+        sut.reload(keepingIgnoredEntries: true)
+        try await taskProvider.waitForAllTasks()
+
+        #expect(sut.ignoredEntries?.map(\.relativePath) == ["build/out.txt"])
+        #expect(reader.ignoredListings == listingsBefore)
+    }
+
+    @Test
+    func `a reload the user asks for lists the ignored files anew`() async throws {
+        let sut = try await makeTreeWithIgnoredFiles()
+
+        sut.reload()
+        try await taskProvider.waitForAllTasks()
+
+        #expect(sut.ignoredEntries == nil)
+    }
+
+    @Test
+    func `a failed listing of the ignored files says why instead of leaving a silent empty section`() async throws {
+        reader.ignoredListingFailure = "fatal: unable to read the index"
+
+        let sut = try await makeTreeWithIgnoredFiles()
+
+        #expect(sut.ignoredEntries?.isEmpty == true)
+        #expect(sut.errorMessage == "Ignored files: fatal: unable to read the index")
+    }
+
+    @Test
+    func `a reload that keeps the ignored files keeps saying why their listing failed`() async throws {
+        reader.ignoredListingFailure = "fatal: unable to read the index"
+        let sut = try await makeTreeWithIgnoredFiles()
+
+        sut.reload(keepingIgnoredEntries: true)
+        try await taskProvider.waitForAllTasks()
+
+        #expect(sut.errorMessage == "Ignored files: fatal: unable to read the index")
     }
 
     // MARK: Ref checks (GDV S3)
