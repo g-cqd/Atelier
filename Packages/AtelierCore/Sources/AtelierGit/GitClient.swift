@@ -270,7 +270,7 @@ public struct GitClient: Sendable {
         return value
     }
 
-    private func run(_ arguments: [String], input: Data? = nil) async throws -> Data {
+    func run(_ arguments: [String], input: Data? = nil) async throws -> Data {
         try await Self.run(
             arguments, input: input, in: repository, runner: runner, timeout: timeout, isolation: isolation,
             gate: gate)
