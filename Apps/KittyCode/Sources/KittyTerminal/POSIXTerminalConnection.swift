@@ -2,15 +2,10 @@ public import Darwin
 import Synchronization
 import System
 
-// SAFETY: `fd` and `writeFd` are immutable (let). `originalTermios` is guarded
-// by `termiosLock`. POSIX read/write on file descriptors are thread-safe at the
-// kernel level.
-/// A `TerminalConnection` backed by real POSIX file descriptors.
-///
-/// This type uses Darwin syscalls and `Synchronization.Mutex` for termios state protection.
-/// Typically the read descriptor is `STDIN_FILENO` and the write descriptor is
-/// `STDOUT_FILENO`, but PTY descriptors are also supported by supplying a single
-/// file descriptor for both directions.
+// SAFETY: the descriptors are immutable, the saved termios sits in a `Mutex`, and POSIX read and write on a
+// descriptor are thread-safe.
+/// A `TerminalConnection` over POSIX file descriptors: stdin and stdout by default, or one descriptor for both
+/// directions on a PTY.
 public final class POSIXTerminalConnection: TerminalConnection, @unchecked Sendable {
     private let fd: Int32
     private let writeFd: Int32
@@ -25,16 +20,11 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
     ///     or the same descriptor otherwise (suitable for PTYs).
     public init(fileDescriptor: Int32 = STDIN_FILENO, writeFileDescriptor: Int32? = nil) {
         self.fd = fileDescriptor
-        // For ptys, the same fd is used for read/write.
-        // For the default stdin case, write to stdout.
         self.writeFd =
             writeFileDescriptor ?? (fileDescriptor == STDIN_FILENO ? STDOUT_FILENO : fileDescriptor)
     }
 
-    /// Reads bytes from the file descriptor into `buffer`.
-    ///
-    /// Uses `System.FileDescriptor.read` which handles `EINTR` retries
-    /// internally — the old manual loop is no longer needed.
+    /// Reads bytes from the file descriptor into `buffer`, retrying on `EINTR`.
     ///
     /// - Parameter buffer: The destination buffer to fill with incoming bytes.
     /// - Returns: The number of bytes read.
@@ -55,10 +45,7 @@ public final class POSIXTerminalConnection: TerminalConnection, @unchecked Senda
         return n
     }
 
-    /// Writes all bytes to the write file descriptor, retrying on short writes.
-    ///
-    /// `System.FileDescriptor.writeAll` retries on `EINTR` and handles short
-    /// writes by looping internally.
+    /// Writes all bytes to the write file descriptor, retrying on `EINTR` and short writes.
     ///
     /// - Parameter bytes: The bytes to transmit.
     /// - Throws: `TerminalError.writeFailed` if the syscall returns an error.

@@ -15,11 +15,8 @@ public struct Cell: Sendable, Equatable {
     /// A blank cell with a space character, default style, and single-column width.
     public static let empty = Cell(character: " ", style: .default, width: 1)
 
-    /// A placeholder cell occupying the second column of a wide character.
-    ///
-    /// When a wide character (e.g. CJK) is placed at column `c`, the cell at column `c+1`
-    /// is set to this continuation marker. The DiffRenderer skips continuation cells since
-    /// the terminal automatically fills the second column.
+    /// The placeholder in the second column of a wide character, which the diff skips because the terminal fills
+    /// that column itself.
     public static let continuation = Cell(character: "\0", style: .default, width: 0)
 
     /// Whether this cell is the trailing half of a wide character.

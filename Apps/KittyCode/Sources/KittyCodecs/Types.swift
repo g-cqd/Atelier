@@ -1,11 +1,4 @@
-// Color / UnderlineStyle / Style moved to the `KittyStyle` target
-// (audit D2 — `Sources/KittyStyle/Style.swift`). `@_exported` re-export
-// keeps every existing `import KittyCodecs` consumer (KittyRenderer,
-// KittyWidgets, KittyCode, …) compiling unchanged — they still see
-// `Style`, `Color`, `UnderlineStyle` as if those types lived here.
-// New consumers that only need style types can import the leaner
-// `KittyStyle` directly. `KittySyntax` was switched over precisely to
-// drop its transitive dep on the terminal-codec layer.
+// Re-exported so every `import KittyCodecs` also sees `Style`, `Color` and `UnderlineStyle`.
 @_exported import KittyStyle
 
 // MARK: - Key Modifiers
