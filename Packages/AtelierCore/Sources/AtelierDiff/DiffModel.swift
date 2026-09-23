@@ -8,8 +8,6 @@ public enum RowKind: Sendable {
     case modified
     /// Empty space that keeps the two panes of the split view aligned.
     case filler
-    /// Rows hidden between two hunks in the changes-only layout.
-    case gap
     /// A file name introducing that file's hunks when several files are shown together.
     case header
 }

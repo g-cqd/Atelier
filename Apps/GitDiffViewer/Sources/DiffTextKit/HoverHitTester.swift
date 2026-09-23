@@ -27,7 +27,7 @@ package struct HoverHit: Sendable, Equatable {
 
 /// Maps a point in text-view coordinates to the identifier hovered there.
 package enum HoverHitTester {
-    /// `nil` over headers, gaps, padding, whitespace or any character that is not part of an identifier.
+    /// `nil` over headers, padding, whitespace or any character that is not part of an identifier.
     @MainActor
     package static func hit(at point: NSPoint, textView: NSTextView, rendered: RenderedText) -> HoverHit? {
         guard let layoutManager = textView.textLayoutManager,
@@ -131,12 +131,12 @@ package enum HoverHitTester {
             width: maxX - minX, height: line.typographicBounds.height)
     }
 
-    /// Content rows carry source text; gaps, headers and filler rows never do.
+    /// Content rows carry source text; headers and filler rows never do.
     private static func isContentRow(_ meta: RowMeta?) -> Bool {
         guard let meta else { return false }
         switch meta.kind {
             case .context, .added, .removed, .modified: return true
-            case .filler, .gap, .header: return false
+            case .filler, .header: return false
         }
     }
 
