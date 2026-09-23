@@ -128,8 +128,7 @@ extension ViewerSettings {
                     .flatMap { try? DefaultsJSON.decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()
                 if value != diffHeuristics { diffHeuristics = value }
             case Key.treeStyle:
-                let value =
-                    defaults.string(forKey: effectiveKey(key)).flatMap(FileTreeStyle.init(rawValue:)) ?? .hierarchy
+                let value = Self.storedTreeStyle(defaults, key: effectiveKey(key))
                 if value != treeStyle { treeStyle = value }
             case Key.wrapColumn:
                 let value = defaults.integer(forKey: effectiveKey(key))
