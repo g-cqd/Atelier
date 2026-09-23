@@ -68,9 +68,7 @@ struct HighlightTokenTests {
 
     @Test
     func `Token priority matches span-path precedence for identical ranges`() {
-        // Earlier patterns in query file should win on identical byte ranges.
-        // This test mirrors the existing "Earlier identical-range captures override
-        // later generic captures" test in HighlighterTests.
+        // Earlier query patterns win on identical byte ranges, on the token path as on the span path.
 
         var theme = Theme(defaultStyle: .default)
         let keyStyle = Style(fg: .rgb(r: 1, g: 2, b: 3))
@@ -112,10 +110,7 @@ struct HighlightTokenTests {
 
     @Test
     func `External-scanner grammar falls back to lexical not grammar-backed`() {
-        // Python has externals — even if artifacts were cached, Session should
-        // reject them because needsExternalScanner is true.
-        // We don't call ensureArtifacts to avoid slow compilation; we just
-        // verify that makeSession for Python is fallback-mode.
+        // Python's grammar needs external scanners, so its session falls back; `ensureArtifacts` is skipped as slow.
         let session = LanguageHighlighter.makeSession(language: "python")
         #expect(!session.isGrammarBacked)
         #expect(session.prefersLineInput)

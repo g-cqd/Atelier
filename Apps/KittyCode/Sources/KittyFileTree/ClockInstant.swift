@@ -1,10 +1,6 @@
-/// A point in time read from an injected `any Clock<Duration>`, stored without naming the clock's associated
-/// `Instant` type — an existential `any Clock<Duration>` cannot expose that associated type directly, so a
-/// stored timestamp has nowhere to live unless it is erased like this.
-///
-/// `duration(to:)` and the comparison operators are only meaningful between instants taken from the same
-/// clock; a comparison against an instant from a different clock returns a zero duration instead of trapping,
-/// since every use in this codebase injects one clock per owner and reads every stored instant from it.
+/// A point in time from an injected `any Clock<Duration>`, erased so a property can store it without naming the
+/// clock's `Instant` type. Durations and comparisons hold only between instants of one clock: across clocks the
+/// duration is zero, so such instants compare equal.
 public struct ClockInstant: Sendable, Comparable {
     private let instant: any Sendable
     private let distanceTo: @Sendable (any Sendable) -> Duration
@@ -41,9 +37,7 @@ public struct ClockInstant: Sendable, Comparable {
 }
 
 extension Clock where Duration == Swift.Duration {
-    /// `now`, boxed into a ``ClockInstant`` so it can be stored as a property whose declared type does not
-    /// name this clock's concrete `Instant` type. Called on an `any Clock<Duration>` value, Swift opens the
-    /// existential to call this extension method against the clock's real, underlying type.
+    /// The clock's `now`, erased into a ``ClockInstant``; callable on an `any Clock<Duration>`.
     public func erasedNow() -> ClockInstant {
         ClockInstant(now, of: Self.self)
     }

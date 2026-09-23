@@ -118,10 +118,8 @@ public final class Highlighter: Sendable {
             return [StyledSpan(text: source, style: theme.defaultStyle)]
         }
 
-        // Sort: broader ranges first, then later patterns first.
-        // Since styles are written in order and later writes win, this keeps
-        // smaller captures more specific than broader ones while still honoring
-        // query-file precedence for identical ranges.
+        // Broader ranges first, then later patterns: later writes win, so narrower captures override broader ones and
+        // earlier patterns win on identical ranges.
         scratch.rawSpans.sort { a, b in
             let aSize = a.byteRange.count
             let bSize = b.byteRange.count
@@ -149,8 +147,6 @@ public final class Highlighter: Sendable {
             }
         }
 
-        // Coalesce into spans — index comparison works because defaultStyle
-        // is always palette index 0, so unstyled and explicitly-default bytes match.
         let palette = scratch.stylePalette
         scratch.spans.removeAll(keepingCapacity: true)
         scratch.spans.reserveCapacity(min(scratch.rawSpans.count + 1, utf8.count))
@@ -173,12 +169,8 @@ public final class Highlighter: Sendable {
 
     // MARK: - Token-based highlighting
 
-    /// Build intermediate `HighlightToken`s from query matches.
-    /// These tokens preserve semantic roles and can be merged across layers.
-    ///
-    /// Priority is inverted from patternIndex: earlier patterns in the query file
-    /// get *higher* priority, matching the existing span-path convention where
-    /// earlier patterns win on identical byte ranges.
+    /// A token in `layer` for every capture in `matches`, roles unresolved; an earlier query pattern gets a higher
+    /// priority, so it wins on identical ranges as it does in `highlight(source:tree:query:)`.
     public func buildTokens(
         matches: [QueryMatch],
         layer: HighlightLayer = .structural
