@@ -154,12 +154,14 @@ extension AppearanceScheme {
 final class AppServices {
     /// Four threads: enough for the batch reads a large selection runs side by side, further runs queue.
     let pool = BlockingOffloadPool(width: 4)
-    let runner: HardenedProcessRunner
+    /// Git's runs, which quitting interrupts before the pool shuts down.
+    let runner: InterruptibleProcessRunner
     let loader: SourceLoader
 
     /// A pool of its own: a slow corpus lint must never starve git's width-4 pool.
     let diagnosticsPool = BlockingOffloadPool(width: 2)
-    let diagnosticsRunner: HardenedProcessRunner
+    /// The analyzers' runs, which quitting interrupts first.
+    let diagnosticsRunner: InterruptibleProcessRunner
     let toolDiscovery: ToolDiscovery
     let diagnosticsEngine: DiagnosticsEngine
     /// The user's trust decision per repository, which gates sourcekit-lsp there.
@@ -172,10 +174,10 @@ final class AppServices {
     let sdkHoverTier: SDKHoverTier
 
     init() {
-        runner = HardenedProcessRunner(pool: pool)
+        runner = InterruptibleProcessRunner(base: HardenedProcessRunner(pool: pool))
         loader = SourceLoader(runner: runner)
 
-        diagnosticsRunner = HardenedProcessRunner(pool: diagnosticsPool)
+        diagnosticsRunner = InterruptibleProcessRunner(base: HardenedProcessRunner(pool: diagnosticsPool))
         toolDiscovery = ToolDiscovery(
             runner: diagnosticsRunner,
             bundledDirectory: Bundle.main.bundleURL.appending(path: "Contents/Helpers")
@@ -198,40 +200,38 @@ final class AppServices {
         await sdkHoverTier.provider()
     }
 
-    func shutdown() {
-        pool.shutdown()
-        diagnosticsPool.shutdown()
+    /// How the app quits: diagnostics and git work stop first, then the language servers drain while both pools shut
+    /// down, all within two seconds.
+    func shutdownSequence() -> ShutdownSequence {
+        let (runner, diagnosticsRunner, pool, diagnosticsPool) = (runner, diagnosticsRunner, pool, diagnosticsPool)
+        let (registry, sdkHoverTier) = (lspRegistry, sdkHoverTier)
+        return ShutdownSequence(
+            interruptDiagnostics: { diagnosticsRunner.interruptAll() },
+            interruptGitWork: { runner.interruptAll() },
+            drainLanguageServers: {
+                await registry.shutdownAll()
+                await sdkHoverTier.shutdown()
+            },
+            shutdownPools: {
+                diagnosticsPool.shutdown()
+                pool.shutdown()
+            })
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let services = AppServices()
 
-    /// Terminates later, once the language servers drain: blocking the main thread instead would stall every
-    /// main-actor hop the drain needs.
+    /// Terminates later, once the shutdown sequence ends or runs out of time: blocking the main thread instead would
+    /// stall every main-actor hop the sequence needs, and a pool job that never returns would hold the quit forever.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let sequence = services.shutdownSequence()
         Task { @MainActor in
-            await Self.drainLSPSessions(services.lspRegistry, sdkTier: services.sdkHoverTier)
-            services.shutdown()
+            let outcome = await sequence.run()
+            if outcome == .timedOut { PhaseTrace.log("quitting before every shutdown step finished") }
             NSApp.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
-    }
-
-    /// Shuts every sourcekit-lsp session down gracefully within one second; a server still running after that is
-    /// abandoned, and the app's exit closes its pipes.
-    private static func drainLSPSessions(_ registry: SourceKitLSPRegistry, sdkTier: SDKHoverTier) async {
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask {
-                await registry.shutdownAll()
-                await sdkTier.shutdown()
-            }
-            group.addTask {
-                try? await Task.sleep(for: .seconds(1))
-            }
-            await group.next()
-            group.cancelAll()
-        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
