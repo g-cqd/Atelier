@@ -214,6 +214,28 @@ struct SequenceRouterTests {
     }
 
     @Test
+    func `A lone ESC at the end of a read is Escape, and the next read's key carries no Alt`() throws {
+        var router = makeSUT()
+        var events: [InputEvent] = []
+        [UInt8]([0x1B]).withUnsafeBytes { router.feedAll($0, into: &events) }
+        router.flushPendingEscape(into: &events)
+
+        try assertSingleKeyEvent(in: events, expectedKeyCode: 0x1B)
+        try assertSingleKeyEvent(in: router.feedAll([0x6A]), expectedKeyCode: 0x6A)
+    }
+
+    @Test
+    func `The end of a read leaves a sequence past its ESC pending`() throws {
+        var router = makeSUT()
+        var events: [InputEvent] = []
+        [UInt8]([0x1B, 0x5B]).withUnsafeBytes { router.feedAll($0, into: &events) }
+        router.flushPendingEscape(into: &events)
+
+        #expect(events.isEmpty)
+        try assertSingleKeyEvent(in: router.feedAll([0x41]), expectedKeyCode: 57352)
+    }
+
+    @Test
     func `A stray lead byte before an arrow key yields a replacement character, then the arrow`() throws {
         var router = makeSUT()
         let events = router.feedAll([0xC3, 0x1B, 0x5B, 0x41])
