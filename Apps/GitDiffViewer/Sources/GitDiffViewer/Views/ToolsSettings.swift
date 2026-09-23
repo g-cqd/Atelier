@@ -46,6 +46,7 @@ extension ToolStatusRow {
 /// controls disclose on demand, and on their own while a pinned path is broken.
 struct ToolsSettings: View {
     @Bindable var settings: ViewerSettings
+    let scope: SettingsScope
     let discovery: ToolDiscovery
     /// The app's trust decisions, from the environment the app sets on the Settings scene.
     @Environment(RepositoryTrust.self) private var trust: RepositoryTrust?
@@ -58,6 +59,7 @@ struct ToolsSettings: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            SettingsScopeBar(scope: scope)
             Form {
                 Section("Diagnostics") {
                     Toggle(SettingLabel.diagnosticsEnabled, isOn: $settings.diagnosticsEnabled)
@@ -108,10 +110,10 @@ struct ToolsSettings: View {
                 }
             }
             .formStyle(.grouped)
-            SettingsRestoreDefaultsFooter(settings: settings, category: .tools)
+            SettingsRestoreDefaultsFooter(settings: settings, scope: scope, category: .tools)
         }
         .navigationTitle("Tools")
-        .task { await refreshAll() }
+        .task(id: scope.selection) { await refreshAll() }
     }
 
     private static let sourceKitLSPKey = "sourcekit-lsp"
