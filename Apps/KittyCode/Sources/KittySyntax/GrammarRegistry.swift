@@ -16,11 +16,17 @@ public final class GrammarRegistry: Sendable {
         var entries: [String: LanguageEntry] = [:]
         /// `entries` keyed by language name, kept in step by `register(_:)`.
         var entriesByLanguage: [String: LanguageEntry] = [:]
-        var loadedGrammars: [String: GrammarDefinition] = [:]
-        /// Each language's cache key, made from its grammar file when first asked for.
-        var cacheKeys: [String: CompiledTableCache.Key] = [:]
+        /// Each language's grammar, read once per registration.
+        var loadedGrammars: [String: LoadedGrammar] = [:]
         /// What compiling each grammar file gave, tables or the compiler's error: the same bytes compile the same way.
         var compileOutcomes: [CompiledTableCache.Key: Result<ParseTableCompiler.CompilationResult, GrammarError>] = [:]
+    }
+
+    /// A language's grammar and the cache key of the bytes it was parsed from, so tables compiled from it are never
+    /// stored under the key of another version of its file.
+    private struct LoadedGrammar: Sendable {
+        var definition: GrammarDefinition
+        var key: CompiledTableCache.Key
     }
 
     private let state = Mutex(State())
@@ -55,7 +61,8 @@ public final class GrammarRegistry: Sendable {
     }
 
     /// Registers `entry` under its name and under each of its extensions, which it keeps in the form every lookup
-    /// asks for, lowercased with one leading dot: `json`, `.json` and `.JSON` all register `.json`.
+    /// asks for, lowercased with one leading dot: `json`, `.json` and `.JSON` all register `.json`. A grammar loaded
+    /// for the language under an earlier registration is dropped, so its next use reads the new entry's file.
     public func register(_ entry: LanguageEntry) {
         var normalized = entry
         normalized.extensions = entry.extensions.map(Self.normalizedExtension)
@@ -64,6 +71,7 @@ public final class GrammarRegistry: Sendable {
                 state.entries[ext] = normalized
             }
             state.entriesByLanguage[normalized.name] = normalized
+            state.loadedGrammars[normalized.name] = nil
         }
     }
 
@@ -149,13 +157,20 @@ public final class GrammarRegistry: Sendable {
     public func grammar(for languageName: String, grammarsPath: String) throws(GrammarError)
         -> GrammarDefinition
     {
-        if let cached = state.withLock({ $0.loadedGrammars[languageName] }) {
-            return cached
-        }
+        try loadedGrammar(for: languageName, grammarsPath: grammarsPath).definition
+    }
 
-        let grammar = try GrammarLoader.load(from: grammarPath(for: languageName, grammarsPath: grammarsPath))
-        state.withLock { $0.loadedGrammars[languageName] = grammar }
-        return grammar
+    /// `languageName`'s grammar and the cache key of its file's bytes, both from one read of the file.
+    private func loadedGrammar(for languageName: String, grammarsPath: String) throws(GrammarError) -> LoadedGrammar {
+        if let loaded = state.withLock({ $0.loadedGrammars[languageName] }) {
+            return loaded
+        }
+        let contents = try GrammarLoader.contents(ofFileAt: grammarPath(for: languageName, grammarsPath: grammarsPath))
+        let loaded = LoadedGrammar(
+            definition: try GrammarLoader.parse(contents),
+            key: CompiledTableCache.Key(language: languageName, grammar: contents))
+        state.withLock { $0.loadedGrammars[languageName] = loaded }
+        return loaded
     }
 
     /// The compiled parse tables of `languageName`: from memory, else from the disk cache, else compiled and stored
@@ -165,26 +180,24 @@ public final class GrammarRegistry: Sendable {
     /// grammar or a newer compiler compiles again. A compile that fails is remembered under the same key, in memory
     /// and on disk, and later calls, in this process or the next, throw its error at once: the same grammar fails
     /// the same way, some only after many seconds.
-    /// - Throws: `GrammarError.fileNotFound` when no entry names the language or its file can't be read; else the
-    ///   error of loading the grammar, or of compiling it, whether now or when first tried.
+    /// - Throws: The error of loading the grammar, or of compiling it, whether now or when first tried.
     public func compiledResult(
         for languageName: String,
         grammarsPath: String
     ) throws(GrammarError) -> ParseTableCompiler.CompilationResult {
-        let key = try cacheKey(for: languageName, grammarsPath: grammarsPath)
-        if let outcome = state.withLock({ $0.compileOutcomes[key] }) {
+        let grammar = try loadedGrammar(for: languageName, grammarsPath: grammarsPath)
+        if let outcome = state.withLock({ $0.compileOutcomes[grammar.key] }) {
             return try outcome.get()
         }
 
         let outcome: Result<ParseTableCompiler.CompilationResult, GrammarError>
-        if let stored = diskCache.outcome(for: key) {
+        if let stored = diskCache.outcome(for: grammar.key) {
             outcome = stored
         } else {
-            let grammar = try grammar(for: languageName, grammarsPath: grammarsPath)
-            outcome = Result { () throws(GrammarError) in try compile(grammar) }
-            diskCache.store(outcome, for: key)
+            outcome = Result { () throws(GrammarError) in try compile(grammar.definition) }
+            diskCache.store(outcome, for: grammar.key)
         }
-        state.withLock { $0.compileOutcomes[key] = outcome }
+        state.withLock { $0.compileOutcomes[grammar.key] = outcome }
         return try outcome.get()
     }
 
@@ -200,25 +213,6 @@ public final class GrammarRegistry: Sendable {
             throw .fileNotFound("No entry for language: \(languageName)")
         }
         return "\(grammarsPath)/\(resolvedEntry.path)/grammar.json"
-    }
-
-    /// The cache key of `languageName`'s grammar file, read once per registry.
-    /// - Throws: `GrammarError.fileNotFound` when no entry names the language or its file can't be read.
-    private func cacheKey(for languageName: String, grammarsPath: String) throws(GrammarError) -> CompiledTableCache.Key
-    {
-        if let key = state.withLock({ $0.cacheKeys[languageName] }) {
-            return key
-        }
-        let path = try grammarPath(for: languageName, grammarsPath: grammarsPath)
-        let contents: Data
-        do {
-            contents = try Data(contentsOf: URL(fileURLWithPath: path))
-        } catch {
-            throw .fileNotFound(path)
-        }
-        let key = CompiledTableCache.Key(language: languageName, grammar: contents)
-        state.withLock { $0.cacheKeys[languageName] = key }
-        return key
     }
 
     /// All registered language names.

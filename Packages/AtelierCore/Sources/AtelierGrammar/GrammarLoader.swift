@@ -13,7 +13,12 @@ public enum GrammarLoader: Sendable {
 
     /// Load a grammar definition from a file path.
     public static func load(from path: String) throws(GrammarError) -> GrammarDefinition {
-        let url = URL(fileURLWithPath: path)
+        try parse(contents(ofFileAt: path))
+    }
+
+    /// The bytes of the grammar file at `path`, for a caller that also needs them, to hash them, before ``parse(_:)``.
+    /// - Throws: `GrammarError.invalidJSON` for a file over 10 MB, `.fileNotFound` when it can't be read.
+    public static func contents(ofFileAt path: String) throws(GrammarError) -> Data {
         // Check file size before loading
         if let attrs = try? FileManager.default.attributesOfItem(atPath: path),
             let fileSize = attrs[.size] as? Int,
@@ -22,13 +27,11 @@ public enum GrammarLoader: Sendable {
             throw .invalidJSON(
                 "Grammar file too large (\(fileSize) bytes, limit \(maxGrammarFileSize))")
         }
-        let data: Data
         do {
-            data = try Data(contentsOf: url)
+            return try Data(contentsOf: URL(fileURLWithPath: path))
         } catch {
             throw .fileNotFound(path)
         }
-        return try parse(data)
     }
 
     /// Load a grammar definition from raw JSON data.
