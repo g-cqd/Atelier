@@ -72,6 +72,69 @@ struct StickyCardGeometryTests {
         #expect(sut.clipFrame.height == 0)
     }
 
+    @Test(arguments: [(300, 270), (120, 90), (30, 0), (20, 0)] as [(CGFloat, CGFloat)])
+    func `the body's clip is the card below its header, and nothing once only the header is left`(
+        height: CGFloat, clip: CGFloat
+    ) {
+        let sut = makeSUT(pinY: 0, size: CGSize(width: 400, height: height))
+        #expect(sut.bodyClipHeight == clip)
+        #expect(sut.showsBody == (clip > 0))
+    }
+
+    @Test
+    func `a pinned header leaves the body's clip as tall as at rest`() {
+        #expect(makeSUT(pinY: 100).bodyClipHeight == makeSUT(pinY: 0).bodyClipHeight)
+    }
+
+    @Test
+    func `a folding body keeps its own height for the card's edge to clip`() {
+        let sut = makeSUT(pinY: 0, size: CGSize(width: 400, height: 120))
+        #expect(sut.bodyFrameHeight(bodyHeight: 270) == 270)
+    }
+
+    @Test(arguments: [0, 100, -5, .nan, .infinity] as [CGFloat])
+    func `a body measured short or malformed still covers its clip`(bodyHeight: CGFloat) {
+        #expect(makeSUT(pinY: 0).bodyFrameHeight(bodyHeight: bodyHeight) == 270)
+    }
+
+    @Test(
+        arguments: [(0, 300), (0.25, 232.5), (0.5, 165), (1, 30), (-0.5, 300), (1.5, 30), (.nan, 300)]
+            as [(CGFloat, CGFloat)])
+    func `a folding card is its header and the part of the body the fold has not clipped yet`(
+        progress: CGFloat, height: CGFloat
+    ) {
+        #expect(StickyCardGeometry.cardHeight(headerHeight: 30, bodyHeight: 270, foldProgress: progress) == height)
+    }
+
+    @Test
+    func `a folding card with a malformed measurement stays finite`() {
+        #expect(StickyCardGeometry.cardHeight(headerHeight: .nan, bodyHeight: 270, foldProgress: 0.5) == 135)
+        #expect(StickyCardGeometry.cardHeight(headerHeight: 30, bodyHeight: .infinity, foldProgress: 0.5) == 30)
+    }
+
+    @Test(arguments: [0, 34, 1_024.5, StickyCardGeometry.maximumLength] as [CGFloat])
+    func `a finite length within bounds is reported as measured`(length: CGFloat) {
+        #expect(StickyCardGeometry.isAcceptable(length))
+        #expect(StickyCardGeometry.length(length, fallback: 216) == length)
+    }
+
+    @Test(
+        arguments: [
+            .nan, .infinity, -.infinity, -1, .greatestFiniteMagnitude, StickyCardGeometry.maximumLength + 1
+        ] as [CGFloat])
+    func `a non-finite, negative or unbounded length falls back to the last good one`(length: CGFloat) {
+        #expect(!StickyCardGeometry.isAcceptable(length))
+        #expect(StickyCardGeometry.length(length, fallback: 216) == 216)
+    }
+
+    @Test
+    func `a malformed fallback still yields a finite length within bounds`() {
+        #expect(StickyCardGeometry.length(.nan, fallback: .nan) == 0)
+        #expect(
+            StickyCardGeometry.length(.infinity, fallback: .greatestFiniteMagnitude)
+                == StickyCardGeometry.maximumLength)
+    }
+
     @Test
     func `the pin line sits the gap below the top inset whichever way the clip view's axis points`() {
         let bounds = CGRect(x: 0, y: 100, width: 400, height: 300)

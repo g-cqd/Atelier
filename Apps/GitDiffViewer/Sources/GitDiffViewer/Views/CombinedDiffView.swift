@@ -6,6 +6,7 @@ import DiffRendering
 import DiffTextKit
 import Foundation
 import SwiftUI
+import os
 
 /// Every changed file of the selection as a card, in the current layout. Each card's header sticks below the
 /// window's top bars while the card scrolls past them, so a half-scrolled file can still be folded.
@@ -70,7 +71,7 @@ private struct CardTitle: Equatable {
 
 /// How a card's panes lay out and behave.
 private struct PaneOptions: Equatable {
-    let mode: ViewMode
+    let layout: CardLayout
     let wrapMode: WrapMode
     let showsHover: Bool
 }
@@ -83,74 +84,118 @@ private struct FileCardFrame: View {
 
     var body: some View {
         let settings = model.settings
-        StickyCard(
-            file: file, title: title, isCollapsed: model.collapsedFiles.contains(file.path),
-            options: PaneOptions(
-                mode: settings.mode, wrapMode: WrapMode(wrapsLines: settings.wrapsLines, column: settings.wrapColumn),
-                showsHover: settings.showsHoverDocumentation && model.hoverDocs != nil),
-            model: model)
+        let isCollapsed = model.collapsedFiles.contains(file.path)
+        FoldingCard(
+            foldProgress: isCollapsed ? 1 : 0,
+            card: StickyCard(
+                file: file, title: title, isCollapsed: isCollapsed,
+                options: PaneOptions(
+                    layout: settings.mode.cardLayout,
+                    wrapMode: WrapMode(wrapsLines: settings.wrapsLines, column: settings.wrapColumn),
+                    showsHover: settings.showsHoverDocumentation && model.hoverDocs != nil),
+                model: model)
+        )
+        // Set here, in the list's own graph, so a fold animates wherever it starts: an animation begun in the
+        // header's hosting view or in the toolbar does not reliably reach this graph.
+        .animation(StickyCard.fold, value: isCollapsed)
+    }
+}
+
+/// A card whose height follows its fold frame by frame. SwiftUI interpolates `foldProgress` and evaluates this view on
+/// every frame of a fold, so the list lays out again at each height and the cards below follow the card's edge. A
+/// representable's own animatable data is not interpolated.
+@Animatable
+private struct FoldingCard: View {
+    /// 0 unfolded, 1 folded.
+    var foldProgress: CGFloat
+    @AnimatableIgnored var card: StickyCard
+
+    var body: some View {
+        var card = card
+        card.foldProgress = foldProgress
+        return card
     }
 }
 
 /// Hosts a card's header and body in a ``StickyCardView``. Every input that changes the card's height is a
 /// property here, so SwiftUI measures the card again whenever one changes.
 private struct StickyCard: NSViewRepresentable {
+    /// How a card folds and unfolds: its bottom edge, and every card below it, ease out together.
+    static let fold: Animation = .easeOut(duration: 0.2)
+
     let file: RenderedFile
     let title: CardTitle
     let isCollapsed: Bool
     let options: PaneOptions
     let model: DiffViewerModel
+    /// How far the card has folded, from 0 to 1; its height shrinks from the whole card to the header alone.
+    var foldProgress: CGFloat = 0
 
     func makeCoordinator() -> CardHosts {
         CardHosts(card: self)
     }
 
     func makeNSView(context: Context) -> StickyCardView {
-        let view = StickyCardView(header: context.coordinator.header.view, body: context.coordinator.body.view)
+        let hosts = context.coordinator
+        let view = StickyCardView(header: hosts.header.view, body: hosts.body.view)
         view.stickyGap = CombinedDiffView.topInset
+        view.onBodyHidden = { [weak hosts] in hosts?.bodyDidHide() }
         return view
     }
 
     func updateNSView(_ view: StickyCardView, context: Context) {
+        view.bodyBackground = model.palette.background
         if context.coordinator.update(to: self) { view.invalidateIntrinsicContentSize() }
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView view: StickyCardView, context: Context) -> CGSize? {
-        guard let width = proposal.width, width.isFinite, width > 0 else { return nil }
-        let heights = context.coordinator.heights(forWidth: width)
+        guard let width = proposal.width, width.isFinite else { return nil }
+        let hosts = context.coordinator
+        // No width to lay the panes out at yet: the last height keeps the list's geometry finite meanwhile.
+        guard width > 0 else { return hosts.lastHeight.map { CGSize(width: 0, height: $0) } }
+        let heights = hosts.heights(forWidth: width)
         view.headerHeight = heights.header
-        return CGSize(width: width, height: heights.header + heights.body)
+        view.bodyHeight = heights.body
+        return CGSize(
+            width: width,
+            height: StickyCardGeometry.cardHeight(
+                headerHeight: heights.header, bodyHeight: heights.body, foldProgress: foldProgress))
     }
 }
 
 /// A card's header and body heights at one width.
 private struct CardHeights: Equatable {
     let header: CGFloat
+    /// The body's own height; zero while it is unmounted. A card folding still reports it, for the body to keep.
     let body: CGFloat
 }
 
-/// A card's two hosting controllers and its text systems, which it builds once per render.
+/// A card's two hosting controllers and its text systems, which it builds once per render. A folded card holds no
+/// panes, but its body goes only once the fold has clipped it away: see ``CardBodyMount``.
 private final class CardHosts {
     let header: NSHostingController<FileCardHeader>
     let body: NSHostingController<FileCardBody>
     private var card: StickyCard
     private var layouts: CardLayouts?
     private var width: CGFloat = 0
-    private var bodyInputs: BodyInputs?
+    private var mount = CardBodyMount<BodyInputs>()
     private var measured: (key: MeasureKey, heights: CardHeights)?
 
     /// What the body is built from; the body is rebuilt only when these change.
     private struct BodyInputs: Equatable {
         let renderID: RenderedDiff.ID
-        let isCollapsed: Bool
         let options: PaneOptions
         let width: CGFloat
     }
 
     private struct MeasureKey: Equatable {
-        let body: BodyInputs
+        let mounted: BodyInputs?
+        let isCollapsed: Bool
         let title: CardTitle
+        let width: CGFloat
     }
+
+    private static let log = Logger(subsystem: "fr.gcqd.GitDiffViewer", category: "cards")
 
     init(card: StickyCard) {
         self.card = card
@@ -174,53 +219,84 @@ private final class CardHosts {
         }
         refreshBody()
         return previous.title != card.title || previous.isCollapsed != card.isCollapsed
-            || previous.options != card.options || previous.file.rendered.id != card.file.rendered.id
+            || previous.foldProgress != card.foldProgress || previous.options != card.options
+            || previous.file.rendered.id != card.file.rendered.id
+    }
+
+    /// The card's height when it was last measured, or nil before any width came.
+    var lastHeight: CGFloat? {
+        measured.map {
+            StickyCardGeometry.cardHeight(
+                headerHeight: $0.heights.header, bodyHeight: $0.heights.body, foldProgress: card.foldProgress)
+        }
     }
 
     /// The header's and the body's heights at `width`, rounded up to whole points so the seam stays on the pixel
-    /// grid; measured again only when `width` or an input changes.
+    /// grid; measured again only when `width` or an input changes. Every height is finite and at most
+    /// ``StickyCardGeometry/maximumLength``.
     func heights(forWidth width: CGFloat) -> CardHeights {
         if width != self.width {
             self.width = width
             refreshBody()
         }
-        let key = MeasureKey(body: currentBodyInputs(), title: card.title)
+        let key = MeasureKey(mounted: mount.mounted, isCollapsed: card.isCollapsed, title: card.title, width: width)
         if let measured, measured.key == key { return measured.heights }
         let fitting = CGSize(width: width, height: .greatestFiniteMagnitude)
-        let heights = CardHeights(
-            header: header.sizeThatFits(in: fitting).height.rounded(.up),
-            body: card.isCollapsed ? 0 : body.sizeThatFits(in: fitting).height.rounded(.up))
+        let headerHeight = accepted(
+            header.sizeThatFits(in: fitting).height, of: "header", fallback: measured?.heights.header ?? 0)
+        let bodyHeight =
+            mount.mounted == nil
+            ? 0 : accepted(body.sizeThatFits(in: fitting).height, of: "body", fallback: measured?.heights.body ?? 0)
+        let heights = CardHeights(header: headerHeight, body: bodyHeight)
         measured = (key, heights)
         return heights
     }
 
-    private func currentBodyInputs() -> BodyInputs {
-        BodyInputs(
-            renderID: card.file.rendered.id, isCollapsed: card.isCollapsed, options: card.options, width: width)
+    /// Takes the card's report that it shows none of its body, which unmounts a folded card's body.
+    func bodyDidHide() {
+        apply(mount.bodyHidden(isCollapsed: card.isCollapsed))
     }
 
-    private func refreshBody() {
-        let inputs = currentBodyInputs()
-        guard inputs != bodyInputs else { return }
-        bodyInputs = inputs
-        guard !card.isCollapsed else {
-            body.rootView = FileCardBody(content: nil, width: width, options: card.options)
-            return
+    /// A measured length rounded up to a whole point, or, when it is not finite or past
+    /// ``StickyCardGeometry/maximumLength``, the length measured last: SwiftUI's scroll view turns such a height into
+    /// a NaN offset, which AppKit traps on.
+    private func accepted(_ length: CGFloat, of part: String, fallback: CGFloat) -> CGFloat {
+        guard StickyCardGeometry.isAcceptable(length) else {
+            Self.log.fault("A card's \(part) measured \(Double(length)) for \(self.card.file.path, privacy: .private)")
+            assertionFailure("A card's \(part) measured \(length)")
+            return StickyCardGeometry.length(length, fallback: fallback)
         }
-        let rendered = card.file.rendered
-        let layouts = layouts.flatMap { $0.renderID == rendered.id ? $0 : nil } ?? CardLayouts(rendered: rendered)
-        self.layouts = layouts
-        body.rootView = FileCardBody(
-            content: PaneContent(layouts: layouts, rendered: rendered, model: card.model), width: width,
-            options: card.options)
+        return length.rounded(.up)
+    }
+
+    /// Follows the card's inputs and fold. The body waits for a width, since its panes lay their text out for it.
+    private func refreshBody() {
+        let inputs = width > 0 ? BodyInputs(renderID: card.file.rendered.id, options: card.options, width: width) : nil
+        apply(mount.update(to: inputs, isCollapsed: card.isCollapsed))
+    }
+
+    private func apply(_ change: CardBodyMount<BodyInputs>.Change) {
+        switch change {
+            case .none:
+                break
+            case .mount:
+                let rendered = card.file.rendered
+                let layouts =
+                    layouts.flatMap { $0.renderID == rendered.id ? $0 : nil } ?? CardLayouts(rendered: rendered)
+                self.layouts = layouts
+                body.rootView = FileCardBody(
+                    content: PaneContent(layouts: layouts, rendered: rendered, model: card.model), width: width,
+                    options: card.options)
+            case .unmount:
+                body.rootView = FileCardBody(content: nil, width: width, options: card.options)
+        }
     }
 
     private static func header(for card: StickyCard) -> FileCardHeader {
         let model = card.model
         let path = card.file.path
         return FileCardHeader(
-            title: card.title, isCollapsed: card.isCollapsed,
-            toggle: { withAnimation(.easeOut(duration: 0.12)) { model.toggleCollapsed(path) } },
+            title: card.title, isCollapsed: card.isCollapsed, toggle: { model.toggleCollapsed(path) },
             open: { model.pin(path) })
     }
 }
@@ -326,24 +402,17 @@ private struct FileCardBody: View {
     }
 
     @ViewBuilder private func panes(_ content: PaneContent) -> some View {
-        switch options.mode {
+        switch options.layout {
             case .inline:
                 if content.layouts.unified != nil {
                     pane(content, side: .unified, gutter: .dual, width: width)
                 }
-            case .split, .stacked:
+            case .split:
                 if content.layouts.old != nil, content.layouts.new != nil {
-                    let isStacked = options.mode == .stacked
-                    let paneWidth = isStacked ? width : max((width - 1) / 2, 0)
-                    let stack =
-                        isStacked
-                        ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(alignment: .top, spacing: 0))
-                    stack {
+                    SideBySidePanes(width: width) { paneWidth in
                         pane(content, side: .old, gutter: .old, width: paneWidth)
-                            .frame(maxWidth: .infinity)
-                        Divider()
+                    } trailing: { paneWidth in
                         pane(content, side: .new, gutter: .new, width: paneWidth)
-                            .frame(maxWidth: .infinity)
                     }
                 }
         }
