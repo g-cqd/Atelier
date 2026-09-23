@@ -166,6 +166,7 @@ package enum DiffRenderer {
     private static func render(rows: [RenderRow], side: RenderedSide, options: Options) -> RenderedText {
         var text = ""
         var metas: [RowMeta] = []
+        var gaps: [RenderedGap] = []
         var lineStarts: [Int] = []
         var spans = RenderSpans()
         metas.reserveCapacity(rows.count)
@@ -203,6 +204,7 @@ package enum DiffRenderer {
                             newNumber: diffRow.new.map { $0.index + 1 }, fileIndex: fileIndex, isMoved: diffRow.isMoved)
                     )
                 case .gap(let marker):
+                    gaps.append(RenderedGap(boundary: metas.count, marker: marker))
                     let label = "⋯ \(marker.hiddenRows) hidden \(marker.hiddenRows == 1 ? "line" : "lines")"
                     text.append(label)
                     length = label.utf16.count
@@ -229,8 +231,9 @@ package enum DiffRenderer {
 
         let styled = attributed(text, spans: spans, metas: metas, lineStarts: lineStarts, side: side, options: options)
         return RenderedText(
-            side: side, palette: options.palette, attributed: styled.attributed, rows: metas, lineStarts: lineStarts,
-            longestLine: longestLine, baselineOffset: styled.baselineOffset, lineHeight: styled.lineHeight
+            side: side, palette: options.palette, attributed: styled.attributed, rows: metas, gaps: gaps,
+            lineStarts: lineStarts, longestLine: longestLine, baselineOffset: styled.baselineOffset,
+            lineHeight: styled.lineHeight
         )
     }
 
