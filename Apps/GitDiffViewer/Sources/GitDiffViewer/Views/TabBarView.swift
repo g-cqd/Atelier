@@ -145,9 +145,7 @@ private struct TabItem: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.6)))
             case .badge:
                 if let glyph {
-                    // Scaled, since the badge lays itself out at `ChangeGlyph.size`, which the explorer keeps.
-                    ChangeGlyphBadge(glyph: glyph, scheme: badgeScheme, state: badgeState)
-                        .scaleEffect(tabBadgeSize / ChangeGlyph.size)
+                    ChangeGlyphBadge(glyph: glyph, scheme: badgeScheme, state: badgeState, size: tabBadgeSize)
                         .transition(.opacity.combined(with: .scale(scale: 0.6)))
                 }
             case .icon:
