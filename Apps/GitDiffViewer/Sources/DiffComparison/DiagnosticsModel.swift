@@ -12,27 +12,9 @@ package final class DiagnosticsModel {
     package private(set) var findingsByFile: [String: [Finding]] = [:]
     package private(set) var runStates: [DiagnosticTool: DiagnosticsEngine.RunStatus] = [:]
     package private(set) var isRunning = false
-
-    package var summary: DiagnosticsSummary {
-        var errors = 0
-        var warnings = 0
-        var byTool: [DiagnosticTool: DiagnosticsSummary.ToolCounts] = [:]
-        for (tool, findings) in findingsByTool {
-            var counts = DiagnosticsSummary.ToolCounts(errors: 0, warnings: 0)
-            for finding in findings {
-                switch finding.severity {
-                    case .error: counts.errors += 1
-                    case .warning: counts.warnings += 1
-                    case .note: break
-                }
-            }
-            byTool[tool] = counts
-            errors += counts.errors
-            warnings += counts.warnings
-        }
-        return DiagnosticsSummary(
-            errors: errors, warnings: warnings, byTool: byTool, isEmpty: errors == 0 && warnings == 0)
-    }
+    /// The totals the window's chrome shows. Stored, not derived from the unobserved per-tool findings, so the
+    /// toolbar and the status bar redraw as soon as findings land or clear (GDV B9).
+    package private(set) var summary = DiagnosticsSummary.empty
 
     /// Called with every path whose findings changed, so the owner can invalidate just those rows.
     @ObservationIgnored package var onFindingsChanged: ((Set<String>) -> Void)?
@@ -69,7 +51,8 @@ package final class DiagnosticsModel {
     }
 
     /// Builds a request for the enabled tools and runs it; a nil `root`, diagnostics turned off or no enabled tool
-    /// clears the findings instead.
+    /// clears the findings instead. A request equal to the one already run, or running, keeps what is shown and asks
+    /// no tool again, so a reload of an unchanged changeset neither blinks the squiggles nor re-lints (GDV S9).
     package func comparisonChanged(root: URL?, files: [DiagnosticsEngine.FileTarget], corpusFingerprint: String?) {
         guard let root else {
             lastRequest = nil
@@ -78,15 +61,24 @@ package final class DiagnosticsModel {
             return
         }
         let tools = settings.toolLocations.filter(\.value.isEnabled)
-        let request = DiagnosticsEngine.Request(
-            root: root, files: files, corpusFingerprint: corpusFingerprint, tools: tools)
+        request(
+            DiagnosticsEngine.Request(root: root, files: files, corpusFingerprint: corpusFingerprint, tools: tools))
+    }
+
+    /// Runs `request` unless diagnostics are off, it enables no tool, or it is the request already run or running.
+    private func request(_ request: DiagnosticsEngine.Request) {
+        let isUnchanged = request == lastRequest && task != nil
+        let isAnotherRoot = lastRequest.map { $0.root != request.root } ?? false
         lastRequest = request
-        guard settings.diagnosticsEnabled, !tools.isEmpty else {
+        guard settings.diagnosticsEnabled, !request.tools.isEmpty else {
             cancel()
             clear()
             return
         }
-        resetForNewRun()
+        guard !isUnchanged else { return }
+        // Another repository's findings mean nothing here; within one, each tool's stay until it reports again.
+        if isAnotherRoot { clear() }
+        dropFindings(ofToolsOutside: Set(request.tools.keys))
         run(request)
     }
 
@@ -96,60 +88,61 @@ package final class DiagnosticsModel {
         runStates = [:]
         isRunning = false
         let previousPaths = Set(findingsByFile.keys)
-        findingsByFile = [:]
+        recomputeFindings()
         guard !previousPaths.isEmpty else { return }
         onFindingsChanged?(previousPaths)
     }
 
     /// Checks `generation` and applies `update` in one isolated step, so a superseded run never repopulates cleared
-    /// findings.
+    /// findings. The tool's result replaces its own findings and nothing else.
     private func apply(_ update: DiagnosticsSession.Update, generation: Int) {
         guard self.generation == generation else { return }
         let previousPaths = Set(findingsByTool[update.result.tool]?.map(\.file) ?? [])
         findingsByTool[update.result.tool] = update.result.findings
         runStates[update.result.tool] = update.result.status
-        recomputeFindingsByFile()
+        recomputeFindings()
         let newPaths = Set(update.result.findings.map(\.file))
         onFindingsChanged?(previousPaths.union(newPaths))
     }
 
-    private func recomputeFindingsByFile() {
+    /// Rebuilds ``findingsByFile`` and ``summary`` from each tool's latest findings.
+    private func recomputeFindings() {
         var byFile: [String: [Finding]] = [:]
         for findings in findingsByTool.values {
             for finding in findings { byFile[finding.file, default: []].append(finding) }
         }
         findingsByFile = byFile
+        let updated = DiagnosticsSummary(findingsByTool)
+        if updated != summary { summary = updated }
     }
 
-    /// Clears accumulated state ahead of a fresh run, notifying every path that is about to lose its findings.
-    private func resetForNewRun() {
-        findingsByTool = [:]
-        runStates = [:]
-        let previousPaths = Set(findingsByFile.keys)
-        findingsByFile = [:]
-        guard !previousPaths.isEmpty else { return }
-        onFindingsChanged?(previousPaths)
+    /// Drops the findings and run states of every tool a new run will not run, notifying the paths they covered;
+    /// the other tools keep theirs until their new result replaces them.
+    private func dropFindings(ofToolsOutside tools: Set<DiagnosticTool>) {
+        let dropped = findingsByTool.keys.filter { !tools.contains($0) }
+        let staleStates = runStates.keys.filter { !tools.contains($0) }
+        guard !dropped.isEmpty || !staleStates.isEmpty else { return }
+        let paths = Set(dropped.flatMap { findingsByTool[$0]?.map(\.file) ?? [] })
+        for tool in dropped { findingsByTool[tool] = nil }
+        for tool in staleStates { runStates[tool] = nil }
+        recomputeFindings()
+        guard !paths.isEmpty else { return }
+        onFindingsChanged?(paths)
     }
 
-    /// Turning diagnostics off cancels and clears; any other diagnostics change re-runs the last request.
+    /// Turning diagnostics off cancels and clears; any other diagnostics change re-runs the last request with the
+    /// tools now enabled.
     private func settingsChanged(_ change: ViewerSettings.Change) {
         guard change == .diagnostics else { return }
-        guard settings.diagnosticsEnabled else {
-            cancel()
-            clear()
+        guard var request = lastRequest else {
+            if !settings.diagnosticsEnabled {
+                cancel()
+                clear()
+            }
             return
         }
-        guard var request = lastRequest else { return }
-        let tools = settings.toolLocations.filter(\.value.isEnabled)
-        guard !tools.isEmpty else {
-            cancel()
-            clear()
-            return
-        }
-        request.tools = tools
-        lastRequest = request
-        resetForNewRun()
-        run(request)
+        request.tools = settings.toolLocations.filter(\.value.isEnabled)
+        self.request(request)
     }
 
     /// Replaces any run in flight with `request` after the debounce, applying each tool's update as it streams back.
@@ -185,6 +178,9 @@ package final class DiagnosticsModel {
 
 /// The current totals shown in the window's chrome: overall counts and each tool's own.
 package struct DiagnosticsSummary: Equatable, Sendable {
+    /// No finding at all.
+    package static let empty = DiagnosticsSummary(errors: 0, warnings: 0, byTool: [:], isEmpty: true)
+
     package struct ToolCounts: Equatable, Sendable {
         package var errors: Int
         package var warnings: Int
@@ -205,5 +201,17 @@ package struct DiagnosticsSummary: Equatable, Sendable {
         self.warnings = warnings
         self.byTool = byTool
         self.isEmpty = isEmpty
+    }
+
+    /// The totals of `findingsByTool`, overall and per tool; notes count toward neither.
+    init(_ findingsByTool: [DiagnosticTool: [Finding]]) {
+        var byTool: [DiagnosticTool: ToolCounts] = [:]
+        for (tool, findings) in findingsByTool {
+            byTool[tool] = ToolCounts(
+                errors: findings.count { $0.severity == .error }, warnings: findings.count { $0.severity == .warning })
+        }
+        let errors = byTool.values.reduce(0) { $0 + $1.errors }
+        let warnings = byTool.values.reduce(0) { $0 + $1.warnings }
+        self.init(errors: errors, warnings: warnings, byTool: byTool, isEmpty: errors == 0 && warnings == 0)
     }
 }
