@@ -47,13 +47,27 @@ struct FindingRevealTests {
     @Test
     func `a line hidden in a gap reveals the last row shown before it`() throws {
         let long = (1 ... 30).map { "line \($0)\n" }.joined()
+        let changed = long.replacingOccurrences(of: "line 5\n", with: "line five\n")
+            .replacingOccurrences(of: "line 30\n", with: "line thirty\n")
+        let rendered = DiffRenderer.render(
+            oldText: long, newText: changed, language: .plain, layout: .changes(context: 1, expansions: [:]))
+
+        let row = try #require(FindingReveal(leftPath: "a.swift", line: 12).row(in: rendered, inline: false))
+
+        #expect(rendered.new?.rows[row].newNumber == 6)
+    }
+
+    @Test
+    func `a line hidden before every shown line reveals the first row`() throws {
+        let long = (1 ... 30).map { "line \($0)\n" }.joined()
         let changed = long.replacingOccurrences(of: "line 30\n", with: "line thirty\n")
         let rendered = DiffRenderer.render(
             oldText: long, newText: changed, language: .plain, layout: .changes(context: 1, expansions: [:]))
 
         let row = try #require(FindingReveal(leftPath: "a.swift", line: 12).row(in: rendered, inline: false))
 
-        #expect(rendered.new?.rows[row].kind == .gap)
+        #expect(row == 0)
+        #expect(rendered.new?.rows[row].newNumber == 29)
     }
 
     @Test
