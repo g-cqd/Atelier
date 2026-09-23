@@ -1,5 +1,16 @@
 public import AtelierSyntaxModel
 
+/// A syntax token provider that can return ranges for only the lines paired by a diff.
+public protocol SelectedSyntaxTokenRanging: SyntaxTokenRanging {
+    /// - Parameters:
+    ///   - text: The whole side, lines separated by `\n`.
+    ///   - language: The language the text is written in.
+    ///   - lineIndices: Indices of paired lines whose UTF-16 token ranges are needed; invalid indices are ignored.
+    /// - Returns: Ranges relative to each valid requested line, keyed by its zero-based index.
+    /// - Complexity: O(text + returned ranges), excluding parsing.
+    func tokenRangesByLine(text: String, language: Language, lineIndices: [Int]) -> [Int: [Range<Int>]]
+}
+
 public enum RowKind: Sendable {
     case context
     case added
@@ -78,15 +89,14 @@ public struct DiffModel: Sendable {
         self.newLines = newLines
 
         var layout = Layout(oldLines: oldLines, newLines: newLines, granularity: granularity, pipeline: pipeline)
-        if granularity == .syntax {
-            layout.oldTokens = tokenRanges.tokenRangesByLine(text: oldText, language: language)
-            layout.newTokens = tokenRanges.tokenRangesByLine(text: newText, language: language)
-        }
         let edits = LineDiff.diffLines(oldLines, newLines, pipeline: pipeline)
         for edit in edits {
             layout.append(edit)
         }
         layout.flushChange()
+        if granularity == .syntax {
+            layout.applySyntaxEmphasis(oldText: oldText, newText: newText, language: language, tokenRanges: tokenRanges)
+        }
         if pipeline.detectsMovedBlocks {
             layout.markMovedBlocks(edits)
         }
@@ -104,8 +114,6 @@ public struct DiffModel: Sendable {
         let newLines: [Substring]
         let granularity: IntralineGranularity
         let pipeline: DiffPipeline
-        var oldTokens: [[Range<Int>]] = []
-        var newTokens: [[Range<Int>]] = []
         var unified: [DiffRow] = []
         var split: [DiffRow] = []
         var unifiedStarts: [Int] = []
@@ -114,6 +122,15 @@ public struct DiffModel: Sendable {
         var splitRanges: [Range<Int>] = []
         private var pendingOld: [Int] = []
         private var pendingNew: [Int] = []
+        private var syntaxPairs: [SyntaxPair] = []
+
+        private struct SyntaxPair {
+            let oldIndex: Int
+            let newIndex: Int
+            let oldUnifiedRow: Int
+            let newUnifiedRow: Int
+            let splitRow: Int
+        }
 
         init(oldLines: [Substring], newLines: [Substring], granularity: IntralineGranularity, pipeline: DiffPipeline) {
             self.oldLines = oldLines
@@ -147,27 +164,39 @@ public struct DiffModel: Sendable {
                 removed: pendingOld.map { oldLines[$0] }, added: pendingNew.map { newLines[$0] })
             var oldRefs = pendingOld.map { DiffLineRef(index: $0) }
             var newRefs = pendingNew.map { DiffLineRef(index: $0) }
-            for pair in pairs {
-                guard let oldOffset = pair.old, let newOffset = pair.new else { continue }
-                let oldIndex = pendingOld[oldOffset]
-                let newIndex = pendingNew[newOffset]
-                let emphasis = IntralineDiff.emphasis(
-                    old: oldLines[oldIndex],
-                    new: newLines[newIndex],
-                    granularity: granularity,
-                    oldTokens: oldIndex < oldTokens.count ? oldTokens[oldIndex] : nil,
-                    newTokens: newIndex < newTokens.count ? newTokens[newIndex] : nil,
-                    refiners: pipeline.intralineRefiners
-                )
-                guard let emphasis else { continue }
-                oldRefs[oldOffset] = DiffLineRef(index: oldIndex, emphasis: emphasis.old)
-                newRefs[newOffset] = DiffLineRef(index: newIndex, emphasis: emphasis.new)
+            if granularity != .syntax {
+                for pair in pairs {
+                    guard let oldOffset = pair.old, let newOffset = pair.new else { continue }
+                    let oldIndex = pendingOld[oldOffset]
+                    let newIndex = pendingNew[newOffset]
+                    let emphasis = IntralineDiff.emphasis(
+                        old: oldLines[oldIndex], new: newLines[newIndex], granularity: granularity,
+                        refiners: pipeline.intralineRefiners)
+                    guard let emphasis else { continue }
+                    oldRefs[oldOffset] = DiffLineRef(index: oldIndex, emphasis: emphasis.old)
+                    newRefs[newOffset] = DiffLineRef(index: newIndex, emphasis: emphasis.new)
+                }
             }
 
+            let unifiedStart = unified.count
             for ref in oldRefs { unified.append(DiffRow(kind: .removed, old: ref, new: nil)) }
             for ref in newRefs { unified.append(DiffRow(kind: .added, old: nil, new: ref)) }
 
             for pair in pairs {
+                if granularity == .syntax, let oldOffset = pair.old, let newOffset = pair.new {
+                    let oldIndex = pendingOld[oldOffset]
+                    let newIndex = pendingNew[newOffset]
+                    if oldLines[oldIndex].utf16.count <= IntralineDiff.maximumLineLength,
+                        newLines[newIndex].utf16.count <= IntralineDiff.maximumLineLength
+                    {
+                        syntaxPairs.append(
+                            SyntaxPair(
+                                oldIndex: oldIndex, newIndex: newIndex,
+                                oldUnifiedRow: unifiedStart + oldOffset,
+                                newUnifiedRow: unifiedStart + oldRefs.count + newOffset,
+                                splitRow: split.count))
+                    }
+                }
                 let old = pair.old.map { oldRefs[$0] }
                 let new = pair.new.map { newRefs[$0] }
                 let kind: RowKind =
@@ -182,6 +211,44 @@ public struct DiffModel: Sendable {
             splitRanges.append(splitStarts[splitStarts.count - 1] ..< split.count)
             pendingOld.removeAll(keepingCapacity: true)
             pendingNew.removeAll(keepingCapacity: true)
+        }
+
+        mutating func applySyntaxEmphasis(
+            oldText: String, newText: String, language: Language, tokenRanges: any SyntaxTokenRanging
+        ) {
+            guard !syntaxPairs.isEmpty else { return }
+            let oldTokens = selectedTokens(
+                text: oldText, indices: syntaxPairs.map(\.oldIndex), language: language, provider: tokenRanges)
+            let newTokens = selectedTokens(
+                text: newText, indices: syntaxPairs.map(\.newIndex), language: language, provider: tokenRanges)
+            for pair in syntaxPairs {
+                guard
+                    let emphasis = IntralineDiff.emphasis(
+                        old: oldLines[pair.oldIndex], new: newLines[pair.newIndex], granularity: .syntax,
+                        oldTokens: oldTokens[pair.oldIndex], newTokens: newTokens[pair.newIndex],
+                        refiners: pipeline.intralineRefiners)
+                else { continue }
+                let oldRef = DiffLineRef(index: pair.oldIndex, emphasis: emphasis.old)
+                let newRef = DiffLineRef(index: pair.newIndex, emphasis: emphasis.new)
+                unified[pair.oldUnifiedRow] = DiffRow(kind: .removed, old: oldRef, new: nil)
+                unified[pair.newUnifiedRow] = DiffRow(kind: .added, old: nil, new: newRef)
+                split[pair.splitRow] = DiffRow(kind: .modified, old: oldRef, new: newRef)
+            }
+        }
+
+        private func selectedTokens(
+            text: String, indices: [Int], language: Language, provider: any SyntaxTokenRanging
+        ) -> [Int: [Range<Int>]] {
+            if let provider = provider as? any SelectedSyntaxTokenRanging {
+                return provider.tokenRangesByLine(text: text, language: language, lineIndices: indices)
+            }
+            let byLine = provider.tokenRangesByLine(text: text, language: language)
+            var selected: [Int: [Range<Int>]] = [:]
+            selected.reserveCapacity(indices.count)
+            for index in indices where index < byLine.count {
+                selected[index] = byLine[index]
+            }
+            return selected
         }
 
         /// Flags rows whose lines only moved, comparing lines by their normalized text.
