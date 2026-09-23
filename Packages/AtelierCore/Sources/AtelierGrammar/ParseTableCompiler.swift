@@ -41,6 +41,10 @@ public enum ParseTableCompiler: Sendable {
         public var productions: [ProductionRule]
     }
 
+    /// The version of what ``compile(_:limits:)`` produces, for caches of compiled tables to key on: bumped whenever
+    /// the tables compiled from the same grammar change, so no cache hands out tables an older compiler made.
+    public static let formatVersion = 2
+
     /// Compile a grammar definition into parse tables.
     public static func compile(
         _ grammar: GrammarDefinition,

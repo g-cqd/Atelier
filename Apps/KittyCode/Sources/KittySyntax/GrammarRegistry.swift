@@ -4,8 +4,9 @@ public import AtelierGrammar
 import Foundation
 import Synchronization
 
-/// The runtime registry of language grammars: registered entries, loaded grammars, and compiled parse tables cached
-/// in memory and on disk. Its state sits behind a `Mutex`, so synchronous callers on any thread can use it.
+/// The runtime registry of language grammars: registered entries, loaded grammars, and compiled parse tables and
+/// failed compiles, cached in memory and on disk. Its state sits behind a `Mutex`, so synchronous callers on any
+/// thread can use it.
 public final class GrammarRegistry: Sendable {
     /// The process-wide registry, which the highlighter consults before `BundledLanguageManifest`.
     public static let shared = GrammarRegistry()
@@ -16,10 +17,15 @@ public final class GrammarRegistry: Sendable {
         /// `entries` keyed by language name, kept in step by `register(_:)`.
         var entriesByLanguage: [String: LanguageEntry] = [:]
         var loadedGrammars: [String: GrammarDefinition] = [:]
-        var compiledTables: [String: ParseTableCompiler.CompilationResult] = [:]
+        /// Each language's cache key, made from its grammar file when first asked for.
+        var cacheKeys: [String: CompiledTableCache.Key] = [:]
+        /// What compiling each grammar file gave, tables or the compiler's error: the same bytes compile the same way.
+        var compileOutcomes: [CompiledTableCache.Key: Result<ParseTableCompiler.CompilationResult, GrammarError>] = [:]
     }
 
     private let state = Mutex(State())
+    private let diskCache: CompiledTableCache
+    private let compile: @Sendable (GrammarDefinition) throws(GrammarError) -> ParseTableCompiler.CompilationResult
 
     public struct LanguageEntry: Sendable, Equatable {
         public var name: String
@@ -33,7 +39,20 @@ public final class GrammarRegistry: Sendable {
         }
     }
 
-    public init() {}
+    public convenience init() {
+        self.init(cacheDirectory: CompiledTableCache.defaultDirectory) { grammar throws(GrammarError) in
+            try ParseTableCompiler.compile(grammar)
+        }
+    }
+
+    /// A registry that keeps its disk cache in `cacheDirectory` and compiles grammars with `compile`.
+    init(
+        cacheDirectory: URL,
+        compile: @escaping @Sendable (GrammarDefinition) throws(GrammarError) -> ParseTableCompiler.CompilationResult
+    ) {
+        self.diskCache = CompiledTableCache(directory: cacheDirectory)
+        self.compile = compile
+    }
 
     /// Registers `entry` under its name and under each of its extensions, which it keeps in the form every lookup
     /// asks for, lowercased with one leading dot: `json`, `.json` and `.JSON` all register `.json`.
@@ -134,6 +153,44 @@ public final class GrammarRegistry: Sendable {
             return cached
         }
 
+        let grammar = try GrammarLoader.load(from: grammarPath(for: languageName, grammarsPath: grammarsPath))
+        state.withLock { $0.loadedGrammars[languageName] = grammar }
+        return grammar
+    }
+
+    /// The compiled parse tables of `languageName`: from memory, else from the disk cache, else compiled and stored
+    /// there.
+    ///
+    /// Both caches key a grammar by the SHA-256 of its file and ``ParseTableCompiler/formatVersion``, so an edited
+    /// grammar or a newer compiler compiles again. A compile that fails is remembered under the same key, in memory
+    /// and on disk, and later calls, in this process or the next, throw its error at once: the same grammar fails
+    /// the same way, some only after many seconds.
+    /// - Throws: `GrammarError.fileNotFound` when no entry names the language or its file can't be read; else the
+    ///   error of loading the grammar, or of compiling it, whether now or when first tried.
+    public func compiledResult(
+        for languageName: String,
+        grammarsPath: String
+    ) throws(GrammarError) -> ParseTableCompiler.CompilationResult {
+        let key = try cacheKey(for: languageName, grammarsPath: grammarsPath)
+        if let outcome = state.withLock({ $0.compileOutcomes[key] }) {
+            return try outcome.get()
+        }
+
+        let outcome: Result<ParseTableCompiler.CompilationResult, GrammarError>
+        if let stored = diskCache.outcome(for: key) {
+            outcome = stored
+        } else {
+            let grammar = try grammar(for: languageName, grammarsPath: grammarsPath)
+            outcome = Result { () throws(GrammarError) in try compile(grammar) }
+            diskCache.store(outcome, for: key)
+        }
+        state.withLock { $0.compileOutcomes[key] = outcome }
+        return try outcome.get()
+    }
+
+    /// The path of `languageName`'s grammar file, from its registered entry, else its bundled one.
+    /// - Throws: `GrammarError.fileNotFound` when neither names the language.
+    private func grammarPath(for languageName: String, grammarsPath: String) throws(GrammarError) -> String {
         let resolvedEntry: LanguageEntry
         if let registered = entry(forLanguage: languageName) {
             resolvedEntry = registered
@@ -142,35 +199,26 @@ public final class GrammarRegistry: Sendable {
         } else {
             throw .fileNotFound("No entry for language: \(languageName)")
         }
-
-        let grammarPath = "\(grammarsPath)/\(resolvedEntry.path)/grammar.json"
-        let grammar = try GrammarLoader.load(from: grammarPath)
-        state.withLock { $0.loadedGrammars[languageName] = grammar }
-        return grammar
+        return "\(grammarsPath)/\(resolvedEntry.path)/grammar.json"
     }
 
-    /// The compiled parse tables of `languageName`: from memory, else from `<tmp>/kittycode-cache/<name>.ptable`,
-    /// else compiled from the grammar and saved there.
-    /// - Throws: The `GrammarError` of loading or compiling the grammar.
-    public func compiledResult(
-        for languageName: String,
-        grammarsPath: String
-    ) throws(GrammarError) -> ParseTableCompiler.CompilationResult {
-        if let cached = state.withLock({ $0.compiledTables[languageName] }) {
-            return cached
+    /// The cache key of `languageName`'s grammar file, read once per registry.
+    /// - Throws: `GrammarError.fileNotFound` when no entry names the language or its file can't be read.
+    private func cacheKey(for languageName: String, grammarsPath: String) throws(GrammarError) -> CompiledTableCache.Key
+    {
+        if let key = state.withLock({ $0.cacheKeys[languageName] }) {
+            return key
         }
-
-        let cacheURL = Self.cacheDirectory.appendingPathComponent("\(languageName).ptable")
-        if let result = try? loadFromDisk(at: cacheURL) {
-            state.withLock { $0.compiledTables[languageName] = result }
-            return result
+        let path = try grammarPath(for: languageName, grammarsPath: grammarsPath)
+        let contents: Data
+        do {
+            contents = try Data(contentsOf: URL(fileURLWithPath: path))
+        } catch {
+            throw .fileNotFound(path)
         }
-
-        let grammarDefinition = try grammar(for: languageName, grammarsPath: grammarsPath)
-        let result = try ParseTableCompiler.compile(grammarDefinition)
-        state.withLock { $0.compiledTables[languageName] = result }
-        try? saveToDisk(result, at: cacheURL)
-        return result
+        let key = CompiledTableCache.Key(language: languageName, grammar: contents)
+        state.withLock { $0.cacheKeys[languageName] = key }
+        return key
     }
 
     /// All registered language names.
@@ -178,22 +226,7 @@ public final class GrammarRegistry: Sendable {
         state.withLock { Array(Set($0.entries.values.map(\.name))).sorted() }
     }
 
-    // MARK: - Private disk-cache helpers
-
-    private static let cacheDirectory: URL =
-        FileManager.default.temporaryDirectory.appendingPathComponent("kittycode-cache")
-
-    private func loadFromDisk(at url: URL) throws -> ParseTableCompiler.CompilationResult {
-        try Self.decodeCompiledTables(from: Data(contentsOf: url))
-    }
-
-    private func saveToDisk(_ result: ParseTableCompiler.CompilationResult, at url: URL) throws {
-        try FileManager.default.createDirectory(
-            at: Self.cacheDirectory,
-            withIntermediateDirectories: true
-        )
-        try Self.encodeCompiledTables(result).write(to: url, options: .atomic)
-    }
+    // MARK: - Cache file contents
 
     /// The compiled tables a cache file holds, whether AemiJSON or Foundation's `JSONEncoder` wrote it.
     /// - Throws: `JSONError` or `DecodingError` when `data` is not a cache file.
