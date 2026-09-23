@@ -45,7 +45,8 @@ struct DiffViewerModelRefsChangedTests {
         let defaults = UserDefaults(suiteName: suite) ?? .standard
         defaults.removePersistentDomain(forName: suite)
         let model = DiffViewerModel(
-            settings: ViewerSettings(defaults: defaults), reader: SourceLoader(runner: runner),
+            settings: ViewerSettings(defaults: defaults),
+            reader: SourceLoader(runner: runner, pool: LoaderTestPool.shared),
             taskProvider: taskProvider)
         return (model, { defaults.removePersistentDomain(forName: suite) })
     }

@@ -1,4 +1,5 @@
 import AemiIO
+public import AemiRuntime
 public import AtelierDiff
 public import AtelierGit
 public import AtelierProcess
@@ -7,21 +8,48 @@ import CryptoKit
 public import Foundation
 import Synchronization
 
-import func AemiRuntime.mapConcurrently
-
 /// Reads comparison targets through one provider per kind of source; renames need both sides so they stay here.
 public struct SourceLoader: SourceReading {
     /// How git is spawned; the app owns the pool behind it.
     public let runner: any ProcessRunner
+    /// Where the loader's own blocking calls run: file reads, hashing, `stat` passes and folder scans.
+    let offload: any BlockingOffload
+    /// Hashes one listed file, on a pool thread.
+    let hashFile: FileHasher
 
-    public init(runner: any ProcessRunner) {
+    /// - Parameters:
+    ///   - runner: How git is spawned; the app owns the pool behind it, tests inject a fake.
+    ///   - pool: The threads the loader reads, hashes and scans files on, so that no cooperative thread ever waits
+    ///     on the disk; the app's own pool.
+    public init(runner: any ProcessRunner, pool: BlockingOffloadPool) {
+        self.init(runner: runner, offload: pool)
+    }
+
+    init(
+        runner: any ProcessRunner, offload: any BlockingOffload,
+        hashFile: @escaping FileHasher = SourceLoader.readableBlobID(atPath:)
+    ) {
         self.runner = runner
+        self.offload = offload
+        self.hashFile = hashFile
+        patches = PatchCache(offload: offload)
+    }
+
+    /// Hashes the file at a path, blocking: its git blob id, or nil when it cannot be read. The loader's own is
+    /// ``readableBlobID(atPath:)``; a test counts the calls and where they run.
+    typealias FileHasher = @Sendable (_ path: String) -> String?
+
+    /// The git blob id of the file at `path`, or nil when it cannot be read to its end: it vanished, shrank or is
+    /// not readable since it was listed.
+    static func readableBlobID(atPath path: String) -> String? {
+        try? blobID(atPath: path)
     }
 
     /// Files above this size are listed but not hashed, so they always count as different.
     public static let maximumHashedSize = 8 * 1024 * 1024
     public static let skippedDirectories: Set<String> = ["node_modules", "DerivedData", "Pods", "Carthage"]
-    /// Files hashed at once during a folder scan; hashing is I/O bound so it scales past the core count.
+    /// Files a folder listing hands the pool to hash at once: enough to keep every pool thread busy while results
+    /// come back, few enough that a large folder queues a handful of jobs rather than one per file.
     public static let hashingConcurrency = 16
     /// Blobs per `cat-file --batch` process; a few processes run side by side for very large selections.
     public static let blobBatchSize = 256
@@ -36,7 +64,7 @@ public struct SourceLoader: SourceReading {
         "woff2", "eot", "ttc", "mtl", "obj", "usdz", "scn", "reality"
     ]
 
-    private let patches = PatchCache()
+    private let patches: PatchCache
 
     public static func isSupported(path: String) -> Bool {
         !binaryExtensions.contains(URL(filePath: path).pathExtension.lowercased())
@@ -74,8 +102,9 @@ public struct SourceLoader: SourceReading {
 
     private func provider(for source: ComparisonSource) -> any SourceProvider {
         switch source {
-            case .file(let url): FileSource(url: url)
-            case .directory(let url): DirectorySource(root: url, runner: runner)
+            case .file(let url): FileSource(url: url, offload: offload)
+            case .directory(let url):
+                DirectorySource(root: url, runner: runner, offload: offload, hashFile: hashFile)
             case .gitRef(let repository, let ref): GitRefSource(repository: repository, ref: ref, runner: runner)
             case .patch(let url, let side): PatchSource(url: url, side: side, cache: patches)
         }
@@ -169,53 +198,64 @@ extension SourceProvider {
 
 public struct FileSource: SourceProvider {
     public let url: URL
+    let offload: any BlockingOffload
 
+    /// The file as one entry, sized and hashed in one blocking call on the pool; a file that cannot be hashed is
+    /// listed without a blob id, as a folder lists it.
     public func entries() async throws -> [GitTreeEntry] {
-        let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-        let blobID =
-            size <= SourceLoader.maximumHashedSize
-            ? try await Self.blobID(atPath: url.path(percentEncoded: false)) : nil
-        return [GitTreeEntry(relativePath: url.lastPathComponent, blobID: blobID, size: size)]
+        let url = url
+        return [
+            try await offload.run {
+                let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                let blobID =
+                    size <= SourceLoader.maximumHashedSize
+                    ? SourceLoader.readableBlobID(atPath: url.path(percentEncoded: false)) : nil
+                return GitTreeEntry(relativePath: url.lastPathComponent, blobID: blobID, size: size)
+            }
+        ]
     }
 
     public func content(of entry: GitTreeEntry) async throws -> String {
-        SourceLoader.text(from: try await Self.read(url))
+        SourceLoader.text(from: try await Self.read(url, on: offload))
     }
 
-    @concurrent
-    public static func blobID(atPath path: String) async throws -> String {
-        try SourceLoader.blobID(atPath: path)
-    }
-
-    /// The file's bytes, copied with `pread`; see ``SourceLoader/blobID(atPath:)`` for why not mapped.
-    @concurrent
-    public static func read(_ url: URL) async throws -> Data {
-        try SourceLoader.contents(atPath: url.path(percentEncoded: false))
+    /// The file's bytes, copied with `pread` on `offload`; see ``SourceLoader/blobID(atPath:)`` for why not mapped.
+    static func read(_ url: URL, on offload: any BlockingOffload) async throws -> Data {
+        let path = url.path(percentEncoded: false)
+        return try await offload.run { try SourceLoader.contents(atPath: path) }
     }
 }
 
 public struct DirectorySource: SourceProvider {
     public let root: URL
     public let runner: any ProcessRunner
+    let offload: any BlockingOffload
+    let hashFile: SourceLoader.FileHasher
 
     /// Inside a repository, the folder as git sees it: tracked and untracked files, dotfiles included, nothing
-    /// git ignores. Elsewhere, a folder scan that leaves hidden files out.
+    /// git ignores. Elsewhere, a folder scan that leaves hidden files out. The `stat` pass, the scan and every hash
+    /// run on the pool.
     ///
     /// A file that cannot be hashed, because it vanished, shrank or is not readable since it was listed, is listed
     /// without a blob id, so it counts as changed and is read when shown, instead of failing the whole folder.
+    /// - Throws: `CancellationError` when the task is cancelled, even after the last file is hashed: a cancelled
+    ///   listing never passes for a finished one, empty or partial.
     @concurrent
     public func entries() async throws -> [GitTreeEntry] {
         let files =
             if let git = await gitClient() {
-                try Self.stat(try await git.workingTreePaths(), under: root)
+                try await Self.stat(try await git.workingTreePaths(), under: root, on: offload)
             } else {
-                try Self.scan(root)
+                try await Self.scan(root, on: offload)
             }
-        return try await mapConcurrently(files, limit: SourceLoader.hashingConcurrency) { file in
+        let entries = try await mapConcurrently(files, limit: SourceLoader.hashingConcurrency) {
+            [offload, hashFile] file in
             let blobID =
-                file.size <= SourceLoader.maximumHashedSize ? try? SourceLoader.blobID(atPath: file.fullPath) : nil
+                file.size <= SourceLoader.maximumHashedSize ? try await offload.run { hashFile(file.fullPath) } : nil
             return GitTreeEntry(relativePath: file.relativePath, blobID: blobID, size: file.size)
         }
+        try Task.checkCancellation()
+        return entries
     }
 
     /// Files git ignores, listed but neither hashed nor sized: they exist on this side alone, so there is nothing
@@ -229,7 +269,7 @@ public struct DirectorySource: SourceProvider {
     }
 
     public func content(of entry: GitTreeEntry) async throws -> String {
-        SourceLoader.text(from: try await FileSource.read(root.appending(path: entry.relativePath)))
+        SourceLoader.text(from: try await FileSource.read(root.appending(path: entry.relativePath), on: offload))
     }
 
     private struct File: Sendable {
@@ -238,20 +278,34 @@ public struct DirectorySource: SourceProvider {
         let size: Int
     }
 
+    /// Paths `stat`ed per blocking job: one job for most folders, and a cancellation lands between two jobs.
+    private static let statBatchSize = 1024
+
     /// Git run in this folder, when it lies in a repository: `ls-files` then lists paths relative to the folder.
     private func gitClient() async -> GitClient? {
         await GitClient.repositoryRoot(containing: root, runner: runner) == nil
             ? nil : GitClient(repository: root, runner: runner)
     }
 
+    /// ``stat(_:under:)`` on `offload`, in batches of ``statBatchSize`` paths.
+    private static func stat(_ paths: [String], under root: URL, on offload: any BlockingOffload) async throws
+        -> [File]
+    {
+        let batches = stride(from: 0, to: paths.count, by: statBatchSize)
+            .map { Array(paths[$0 ..< min($0 + statBatchSize, paths.count)]) }
+        return try await mapConcurrently(batches, limit: 2) { batch in
+            try await offload.run { stat(batch, under: root) }
+        }
+        .flatMap(\.self)
+    }
+
     /// Keeps the regular, supported files among `paths`: an index entry whose file is gone, a submodule or an
     /// unsupported extension is left out, as is anything under a directory the folder scan would skip.
-    private static func stat(_ paths: [String], under root: URL) throws -> [File] {
+    private static func stat(_ paths: [String], under root: URL) -> [File] {
         let keys: Set<URLResourceKey> = [.isRegularFileKey, .fileSizeKey]
         var files: [File] = []
         files.reserveCapacity(paths.count)
         for path in paths {
-            try Task.checkCancellation()
             guard SourceLoader.isSupported(path: path), !liesUnderSkippedDirectory(path) else { continue }
             let url = root.appending(path: path)
             guard let values = try? url.resourceValues(forKeys: keys), values.isRegularFile == true else { continue }
@@ -267,7 +321,19 @@ public struct DirectorySource: SourceProvider {
         path.split(separator: "/").dropLast().contains { SourceLoader.skippedDirectories.contains(String($0)) }
     }
 
-    private static func scan(_ root: URL) throws -> [File] {
+    /// ``scan(_:until:)`` on `offload`; cancelling the task stops the scan at its next entry.
+    private static func scan(_ root: URL, on offload: any BlockingOffload) async throws -> [File] {
+        let cancellation = CancellationFlag()
+        return try await withTaskCancellationHandler {
+            try await offload.run { try scan(root, until: cancellation) }
+        } onCancel: {
+            cancellation.raise()
+        }
+    }
+
+    /// The supported regular files under `root`, hidden files, package contents and skipped directories left out.
+    /// - Throws: `CancellationError` once `cancellation` is raised.
+    private static func scan(_ root: URL, until cancellation: CancellationFlag) throws -> [File] {
         let keys: Set<URLResourceKey> = [.isDirectoryKey, .isRegularFileKey, .fileSizeKey, .nameKey]
         guard
             let enumerator = FileManager.default.enumerator(
@@ -282,7 +348,7 @@ public struct DirectorySource: SourceProvider {
         let rootPath = root.standardizedFileURL.path(percentEncoded: false)
         var files: [File] = []
         while let url = enumerator.nextObject() as? URL {
-            try Task.checkCancellation()
+            if cancellation.isRaised { throw CancellationError() }
             let values = try url.resourceValues(forKeys: keys)
             if values.isDirectory == true {
                 if SourceLoader.skippedDirectories.contains(values.name ?? "") { enumerator.skipDescendants() }
@@ -391,6 +457,12 @@ public final class PatchCache: Sendable {
     }
 
     private let entries = Mutex<[URL: (modified: Date?, entry: Entry)]>([:])
+    /// Where a patch file is read.
+    private let offload: any BlockingOffload
+
+    init(offload: any BlockingOffload) {
+        self.offload = offload
+    }
 
     public func patch(at url: URL) async throws -> UnifiedPatch {
         try await entry(at: url).patch
@@ -399,13 +471,14 @@ public final class PatchCache: Sendable {
     public func entry(at url: URL) async throws -> Entry {
         let modified = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
         if let cached = entries.withLock({ $0[url] }), cached.modified == modified { return cached.entry }
-        let parsed = try await Self.parse(at: url)
+        let parsed = try await Self.parse(at: url, readingOn: offload)
         entries.withLock { $0[url] = (modified, parsed) }
         return parsed
     }
 
+    /// The patch is read on the pool and parsed here, off the caller's actor.
     @concurrent
-    private static func parse(at url: URL) async throws -> Entry {
-        Entry(patch: UnifiedPatch(parsing: try String(contentsOf: url, encoding: .utf8)))
+    private static func parse(at url: URL, readingOn offload: any BlockingOffload) async throws -> Entry {
+        Entry(patch: UnifiedPatch(parsing: try await offload.run { try String(contentsOf: url, encoding: .utf8) }))
     }
 }

@@ -16,10 +16,10 @@ struct WorkingTreeReloadBenchmark {
     @Test(.enabled(if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil))
     func `a reload of a working tree lists and hashes it again`() async throws {
         let root = ProcessInfo.processInfo.environment["GDV_BENCH_ROOT"].map { URL(filePath: $0) } ?? Self.checkout
-        // The app's own shape: one width-4 pool for git runs.
+        // The app's own shape: one width-4 pool for git runs and file reads.
         let pool = BlockingOffloadPool(width: 4)
         defer { pool.shutdown() }
-        let loader = SourceLoader(runner: HardenedProcessRunner(pool: pool))
+        let loader = SourceLoader(runner: HardenedProcessRunner(pool: pool), pool: pool)
         let clock = ContinuousClock()
 
         var entries: [GitTreeEntry] = []
