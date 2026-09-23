@@ -70,19 +70,51 @@ public struct FileStatusSummary: Sendable, Equatable {
     }
 }
 
+/// One letter of the `XY` field git status reports per path: what changed between `HEAD` and the index (X), or
+/// between the index and the working tree (Y).
+public enum GitStatusCode: Character, Sendable, Hashable {
+    /// `.`: nothing changed on this side.
+    case unmodified = "."
+    case modified = "M"
+    /// `T`: the file changed type, such as a regular file becoming a symbolic link.
+    case typeChanged = "T"
+    case added = "A"
+    case deleted = "D"
+    case renamed = "R"
+    case copied = "C"
+    /// `U`: one side of an unresolved merge conflict.
+    case unmerged = "U"
+    /// `?`: a path the index does not track; only ever the working-tree side.
+    case untracked = "?"
+    /// `!`: a path git ignores; only ever the working-tree side.
+    case ignored = "!"
+}
+
 /// One path git reports, relative to the repository root.
 public struct GitStatusEntry: Sendable, Hashable {
     public let path: String
     /// Where a renamed or copied path came from.
     public let originalPath: String?
+    /// The index and working-tree changes folded into one status; ``indexStatus`` and ``worktreeStatus`` keep them
+    /// apart.
     public let status: FileStatus
     public let isSubmodule: Bool
+    /// What changed between `HEAD` and the index: the change staged for the next commit.
+    public let indexStatus: GitStatusCode
+    /// What changed between the index and the working tree: the change not staged yet.
+    public let worktreeStatus: GitStatusCode
 
-    public init(path: String, originalPath: String? = nil, status: FileStatus, isSubmodule: Bool = false) {
+    /// Both columns default to ``GitStatusCode/unmodified``, for an entry built without git's `XY` field.
+    public init(
+        path: String, originalPath: String? = nil, status: FileStatus, isSubmodule: Bool = false,
+        indexStatus: GitStatusCode = .unmodified, worktreeStatus: GitStatusCode = .unmodified
+    ) {
         self.path = path
         self.originalPath = originalPath
         self.status = status
         self.isSubmodule = isSubmodule
+        self.indexStatus = indexStatus
+        self.worktreeStatus = worktreeStatus
     }
 }
 
