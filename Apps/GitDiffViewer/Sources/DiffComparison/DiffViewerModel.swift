@@ -225,14 +225,16 @@ package final class DiffViewerModel {
             PhaseTrace.log("prologue done")
             isSwitching = false
             failedLoads = []
-            if let entries = loaded.leftEntries {
-                left.load(loaded.left, repository: loaded.info, entries: entries)
+            if let listing = loaded.leftListing {
+                left.load(
+                    loaded.left, repository: loaded.info, entries: listing.entries, resolvedCommit: listing.commit)
             } else {
                 left.load(loaded.left, repository: loaded.info)
             }
-            if let entries = loaded.rightEntries {
+            if let listing = loaded.rightListing {
                 right.load(
-                    loaded.right, repository: loaded.info, entries: entries, badgeStates: loaded.rightBadgeStates)
+                    loaded.right, repository: loaded.info, entries: listing.entries,
+                    badgeStates: loaded.rightBadgeStates, resolvedCommit: listing.commit)
             } else {
                 right.load(loaded.right, repository: loaded.info)
             }

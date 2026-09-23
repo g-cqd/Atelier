@@ -8,8 +8,9 @@ extension DiffViewerModel {
         let info: RepositoryInfo
         let left: ComparisonSource
         let right: ComparisonSource
-        let leftEntries: [SourceEntry]?
-        let rightEntries: [SourceEntry]?
+        /// Each side's files, with the commit a ref side named when they were listed.
+        let leftListing: SideState.Listing?
+        let rightListing: SideState.Listing?
         /// The working tree's badge states, read beside its entries; nil for a ref, or when git fails.
         let rightBadgeStates: BadgeChangeStates?
     }
@@ -21,12 +22,12 @@ extension DiffViewerModel {
         let leftSource = ComparisonSource.gitRef(repository: info.root, ref: leftRef)
         let rightSource =
             rightRef.map { ComparisonSource.gitRef(repository: info.root, ref: $0) } ?? .directory(info.root)
-        async let leftEntries = reader.entries(of: leftSource)
-        async let rightEntries = reader.entries(of: rightSource)
+        async let leftListing = SideState.listing(of: leftSource, reader: reader)
+        async let rightListing = SideState.listing(of: rightSource, reader: reader)
         async let rightBadgeStates = SideState.readBadgeStates(of: rightSource, reader: reader)
         let loaded = LoadedSides(
-            info: info, left: leftSource, right: rightSource, leftEntries: try? await leftEntries,
-            rightEntries: try? await rightEntries, rightBadgeStates: await rightBadgeStates)
+            info: info, left: leftSource, right: rightSource, leftListing: try? await leftListing,
+            rightListing: try? await rightListing, rightBadgeStates: await rightBadgeStates)
         PhaseTrace.log("prologue loaded")
         return loaded
     }
