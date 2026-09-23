@@ -62,9 +62,7 @@ extension GitClient {
     private func export(
         _ tree: String, including includes: @Sendable (String) -> Bool, into folder: URL
     ) async throws {
-        let paths = try await self.tree(at: tree, isSupported: includes).map(\.relativePath)
-            // A path git itself would refuse on the command line cannot be exported, and no analyzer reads one.
-            .filter { !$0.utf8.contains(0) && !$0.utf8.contains(0x0A) }
+        let paths = Self.exportablePaths(try await self.tree(at: tree, isSupported: includes).map(\.relativePath))
         guard !paths.isEmpty else { return }
         let configuration = try await exportConfiguration(emptyTree: Self.emptyTree(matching: tree))
         for start in stride(from: 0, to: paths.count, by: Self.archiveBatchSize) {
@@ -74,6 +72,21 @@ extension GitClient {
                     + batch.map { ":(literal)\($0)" })
             try TarExtractor.extract(archive, into: folder)
         }
+    }
+
+    /// The listed paths an export can write faithfully, which leaves out: a path git would refuse on its command line,
+    /// with a NUL or a newline; a name that is not UTF-8, which reads back with a replacement character and so names
+    /// no file of the tree; and every path that names one file with another on a volume that ignores case or Unicode
+    /// normalization, since a tool would read the one written first under the other's name.
+    static func exportablePaths(_ paths: [String]) -> [String] {
+        let usable = paths.filter { !$0.utf8.contains(0) && !$0.utf8.contains(0x0A) && !$0.contains("\u{FFFD}") }
+        let sharing = Dictionary(grouping: usable, by: foldedPath).mapValues(\.count)
+        return usable.filter { sharing[foldedPath($0)] == 1 }
+    }
+
+    /// `path` as a volume that ignores case and Unicode normalization compares it.
+    private static func foldedPath(_ path: String) -> String {
+        path.precomposedStringWithCanonicalMapping.lowercased()
     }
 
     /// The `-c` flags that keep an export from converting a file or running a filter: every filter driver defined in
