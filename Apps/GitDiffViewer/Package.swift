@@ -24,7 +24,10 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../../Packages/AtelierCore"),
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main")
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
+        // AtelierCore's own pin, URL and revision alike: SwiftPM rejects one package identity at two locations or
+        // versions in the same graph.
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "b98f139b2aa0581b6103ce0943662fc54e28a193")
     ],
     targets: [
         // Re-exports the core diff, lexers and language vocabulary under the app's own module name.
@@ -67,6 +70,7 @@ let package = Package(
             swiftSettings: strict
         ),
         // App-tier models spawn through AemiCore's task provider; fan-out and the clock seam come from AemiRuntime.
+        // Settings and recents persist as JSON through AemiJSON.
         .target(
             name: "DiffComparison",
             dependencies: [
@@ -74,13 +78,17 @@ let package = Package(
                 .product(name: "AtelierDiagnostics", package: "AtelierCore"),
                 .product(name: "AtelierLSP", package: "AtelierCore"),
                 .product(name: "AtelierDocIndex", package: "AtelierCore"),
-                .product(name: "AemiCore", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
+                .product(name: "AemiCore", package: "aemi"), .product(name: "AemiRuntime", package: "aemi"),
+                .product(name: "AemiJSON", package: "AemiJSON")
             ],
             swiftSettings: strict
         ),
         .executableTarget(
             name: "GitDiffViewer",
-            dependencies: ["DiffCore", "DiffComparison", "DiffGit", "DiffRendering", "DiffTextKit"],
+            dependencies: [
+                "DiffCore", "DiffComparison", "DiffGit", "DiffRendering", "DiffTextKit",
+                .product(name: "AemiJSON", package: "AemiJSON")
+            ],
             // Views, coordinators and panels all live on the main actor; nothing in the app target runs elsewhere.
             swiftSettings: strict + [.defaultIsolation(MainActor.self)]
         ),
