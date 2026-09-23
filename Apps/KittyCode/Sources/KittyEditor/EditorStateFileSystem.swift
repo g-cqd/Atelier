@@ -7,6 +7,7 @@ import KittyApp
 import KittyFileTree
 import KittyStyle
 import KittySyntax
+import KittyTerminal
 public import KittyWorkspace
 import System
 
@@ -125,7 +126,8 @@ extension EditorState {
         saveStateToActiveBuffer()
 
         let language = Self.detectLanguage(for: name)
-        let modDate = attributes?[.modificationDate] as? Date
+        // Read before the text, so a change landing between the two reads as newer than the buffer, never older.
+        let modDate = WorkspaceFileLoading.modificationDate(ofFileAt: path)
         statusMessage = "Opening \(name)..."
         renderRefreshSource?.invalidate()
 
@@ -161,21 +163,38 @@ extension EditorState {
         LanguageHighlighter.detectLanguage(for: filename)
     }
 
-    public func saveFile() {
+    /// Saves the active buffer over its file, or opens the Save As prompt for a buffer with no file yet.
+    /// - Parameter overwritingDiskChanges: Saves even when the file changed on disk since the buffer last read or
+    ///   wrote it, which is otherwise refused.
+    /// - Returns: Whether the buffer was written.
+    @discardableResult
+    public func saveFile(overwritingDiskChanges: Bool = false) -> Bool {
         if bufferManager.activeBuffer == nil {
             beginNewFile()
         }
 
         if filePath.isEmpty {
             beginSavePrompt()
-            return
+            return false
         }
 
-        _ = writeBufferToDisk(at: filePath)
+        return writeBufferToDisk(at: filePath, overwritingDiskChanges: overwritingDiskChanges)
     }
 
+    /// Saves the active buffer over its file even when the file changed on disk since the buffer last read or wrote
+    /// it: `:w!` and the force-save command.
+    /// - Returns: Whether the buffer was written.
     @discardableResult
-    public func writeBufferToDisk(at destinationPath: String) -> Bool {
+    public func forceSaveFile() -> Bool {
+        saveFile(overwritingDiskChanges: true)
+    }
+
+    /// Writes the active buffer to `destinationPath`, in the buffer's line ending, and makes that path the buffer's
+    /// file. Saving over the buffer's own file is refused while that file changed on disk since the buffer last read
+    /// or wrote it, unless `overwritingDiskChanges`; a Save As over another existing file is never refused.
+    /// - Returns: Whether the buffer was written; a refusal or failure explains itself in the status bar.
+    @discardableResult
+    public func writeBufferToDisk(at destinationPath: String, overwritingDiskChanges: Bool = false) -> Bool {
         guard !readOnly else {
             statusMessage = "Read-only mode"
             return false
@@ -203,6 +222,19 @@ extension EditorState {
             return false
         }
 
+        if activeBuffer.isFile(at: destinationPath) {
+            // An autosave still writing this file would land after this save and bring back the older text.
+            guard !activeBuffer.isSavingInBackground else {
+                statusMessage = "\(activeBuffer.fileName) is being autosaved: save again in a moment"
+                return false
+            }
+            guard overwritingDiskChanges || !activeBuffer.conflictsWithDisk() else {
+                statusMessage = KeymapResolver(config: config)
+                    .diskConflictHint(for: activeBuffer.fileName, keybindingMode: config.keybindingMode)
+                return false
+            }
+        }
+
         let targetURL = URL(fileURLWithPath: destinationPath)
         let targetDirectory = targetURL.deletingLastPathComponent()
         let previousPath = activeBuffer.filePath
@@ -219,7 +251,6 @@ extension EditorState {
             fileWatcherIntegration?.suppressForSave(destinationPath)
             try content.write(to: targetURL, atomically: true, encoding: .utf8)
 
-            let savedDate = Date()
             let savedName = targetURL.lastPathComponent
             let savedLanguage = Self.detectLanguage(for: savedName)
 
@@ -237,7 +268,9 @@ extension EditorState {
             activeBuffer.fileName = savedName
             activeBuffer.language = savedLanguage
             activeBuffer.lineEnding = currentLineEnding
-            activeBuffer.lastModifiedDate = savedDate
+            // The file's own date, read back: the next comparison with the disk then sees this save as the buffer's.
+            activeBuffer.lastModifiedDate = WorkspaceFileLoading.modificationDate(ofFileAt: destinationPath)
+            activeBuffer.externallyModified = false
             activeBuffer.didInvalidateHistoryOnLastRefresh = false
             if let currentSnapshot = activeBufferSnapshot() {
                 activeBuffer.editHistory.markSaved(currentSnapshot)
@@ -269,7 +302,40 @@ extension EditorState {
             activeBuffer.fileName = previousName
             activeBuffer.language = previousLanguage
             statusMessage = "Error saving: \(error.localizedDescription)"
+            KittyLogger.error("Saving \(destinationPath) failed: \(error)")
             return false
+        }
+    }
+
+    /// Replaces the active buffer's text with its file's, discarding unsaved edits: `:e!` and the reload command. The
+    /// reload is one undo step, so undo brings the edits back, unsaved against the file.
+    public func reloadActiveBufferFromDisk() {
+        guard let buffer = bufferManager.activeBuffer, !buffer.filePath.isEmpty else {
+            statusMessage = "No file to reload"
+            return
+        }
+        guard !buffer.isSavingInBackground else {
+            statusMessage = "\(buffer.fileName) is being autosaved: reload again in a moment"
+            return
+        }
+        taskProvider.task(role: .work) { [weak self, weak buffer, taskProvider] in
+            guard let self, let buffer else { return }
+            do {
+                // While the buffer is active its live text and cursor sit in the workspace: the undo step starts there.
+                let reloaded = try await buffer.reloadFromDisk(taskProvider: taskProvider) {
+                    if self.bufferManager.activeBuffer === buffer { self.saveStateToActiveBuffer() }
+                }
+                if let reloaded, self.bufferManager.activeBuffer === buffer {
+                    self.fileWatcherDidReloadActiveBuffer(buffer: buffer, content: reloaded.content)
+                } else if let reloaded {
+                    self.fileWatcherDidReloadInactiveBuffer(buffer: buffer, content: reloaded.content)
+                } else {
+                    self.statusMessage = "\(buffer.fileName) changed while reloading: reload again to discard it"
+                }
+            } catch {
+                self.statusMessage = "Cannot reload \(buffer.fileName): \(error.localizedDescription)"
+            }
+            self.renderRefreshSource?.invalidate()
         }
     }
 

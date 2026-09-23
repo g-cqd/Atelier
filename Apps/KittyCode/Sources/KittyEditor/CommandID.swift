@@ -1,6 +1,10 @@
 public enum CommandID: String, CaseIterable, Sendable {
     // Global
     case saveFile
+    /// Saves over a file that changed on disk since the buffer last read or wrote it.
+    case forceSaveFile
+    /// Replaces the buffer's text with its file's, discarding unsaved edits.
+    case reloadFromDisk
     case newFile
     case closeTab
     case toggleSidebar

@@ -1,6 +1,6 @@
 public import AemiCore
 public import AtelierText
-import Foundation
+public import Foundation
 
 public struct LoadedFile: Sendable {
     public let content: String
@@ -42,5 +42,11 @@ public enum WorkspaceFileLoading {
             throw CocoaError(.fileReadInapplicableStringEncoding)
         }
         return LoadedFile(content: TextDocument.normalizingLineBreaks(content), lineEnding: lineEnding)
+    }
+
+    /// The modification date of the file at `path`, or nil when it cannot be read, a missing file included. Every
+    /// comparison of a buffer with its file reads the date here, so an untouched file always reads back the same date.
+    public static func modificationDate(ofFileAt path: String) -> Date? {
+        try? URL(fileURLWithPath: path).resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
 }
