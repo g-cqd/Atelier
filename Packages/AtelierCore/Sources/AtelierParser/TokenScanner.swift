@@ -114,12 +114,15 @@ struct TokenScanner: Sendable {
         return Int32(transitions[low].target) << 1 | (transitions[low].skips ? 1 : 0)
     }
 
-    /// The scalar at `offset` and its length in bytes; U+FFFD for one byte of a malformed sequence.
+    /// The scalar at `offset` and its length in bytes; U+FFFD for one byte of a sequence with no valid lead byte or
+    /// too few continuation bytes. A `String`'s bytes are always well formed; the check keeps a bad buffer from
+    /// reading as a scalar that spans the bytes after it.
     static func decode(_ utf8: UnsafeBufferPointer<UInt8>, at offset: Int) -> (scalar: UInt32, length: Int) {
         let lead = utf8[offset]
         guard lead >= 0x80 else { return (UInt32(lead), 1) }
         let length =
             switch lead {
+                case 0xF8...: 1
                 case 0xF0...: 4
                 case 0xE0...: 3
                 case 0xC0...: 2
@@ -128,6 +131,7 @@ struct TokenScanner: Sendable {
         guard length > 1, offset + length <= utf8.count else { return (0xFFFD, 1) }
         var value = UInt32(lead) & (0x7F >> length)
         for index in offset + 1 ..< offset + length {
+            guard utf8[index] & 0xC0 == 0x80 else { return (0xFFFD, 1) }
             value = value << 6 | UInt32(utf8[index] & 0x3F)
         }
         return (value, length)
