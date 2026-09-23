@@ -115,6 +115,29 @@ public struct GitClient: Sendable {
             ]))
     }
 
+    /// The paths among `paths`, relative to ``repository``, that git ignores, judged by one `git check-ignore`
+    /// reading them all from its standard input, where no path can pass for an option and glob characters match
+    /// themselves. A tracked path is never reported, since the index outranks every ignore rule, and a path need not
+    /// exist: the rules match names. A path no record can carry (a NUL) or that git would read as pathspec magic (a
+    /// leading `:`, which `check-ignore` either refuses or reads as another path) is never judged, so never ignored.
+    /// - Throws: ``GitError`` when git fails, for example outside a repository.
+    public func ignored(among paths: [String]) async throws -> Set<String> {
+        let names = paths.filter { !$0.isEmpty && !$0.hasPrefix(":") && !$0.utf8.contains(0) }
+        guard !names.isEmpty else { return [] }
+        let verdict = try await Self.approvedConfiguration(
+            in: repository, runner: runner, timeout: timeout, isolation: isolation, gate: gate)
+        let output = try await Self.execute(
+            ["check-ignore", "-z", "--stdin"],
+            input: Data((names.joined(separator: "\0") + "\0").utf8), in: repository, runner: runner, timeout: timeout,
+            isolation: isolation, extraConfiguration: Self.mitigationFlags(for: verdict, isolation: isolation))
+        // check-ignore exits with 1 when it ignores none of the paths, and with 128 when it fails.
+        switch output.terminationStatus {
+            case 0: return Set(GitParsers.paths(output.standardOutput))
+            case 1: return []
+            default: throw GitError.commandFailed(output.errorText)
+        }
+    }
+
     /// Files of the working tree as git sees it: tracked files plus untracked ones that are not ignored. Index
     /// entries whose file is gone are listed too; the caller drops what it cannot stat.
     public func workingTreePaths() async throws -> [String] {
@@ -310,21 +333,31 @@ public struct GitClient: Sendable {
         _ arguments: [String], input: Data? = nil, in directory: URL, runner: any ProcessRunner,
         timeout: Duration? = nil, isolation: GitIsolation = .strict, extraConfiguration: [String] = []
     ) async throws -> Data {
+        let output = try await execute(
+            arguments, input: input, in: directory, runner: runner, timeout: timeout, isolation: isolation,
+            extraConfiguration: extraConfiguration)
+        guard output.succeeded else { throw GitError.commandFailed(output.errorText) }
+        return output.standardOutput
+    }
+
+    /// Runs git with the isolation's flags and environment and returns how it exited, for the caller to judge; a
+    /// runner failure becomes a ``GitError`` naming it, and cancelling the task terminates git.
+    private static func execute(
+        _ arguments: [String], input: Data? = nil, in directory: URL, runner: any ProcessRunner,
+        timeout: Duration? = nil, isolation: GitIsolation = .strict, extraConfiguration: [String] = []
+    ) async throws -> ProcessOutput {
         PhaseTrace.log("git \(arguments.prefix(2).joined(separator: " "))")
         defer { PhaseTrace.log("git done \(arguments.prefix(2).joined(separator: " "))") }
         let spec = ProcessSpec(
             executable: executable, arguments: isolation.configurationFlags + extraConfiguration + arguments,
             currentDirectory: directory, environment: isolation.environment, standardInput: input, timeout: timeout)
-        let output: ProcessOutput
         do {
-            output = try await runner.run(spec)
+            return try await runner.run(spec)
         } catch let cancellation as CancellationError {
             throw cancellation
         } catch {
             throw GitError.commandFailed("could not run git: \(error)")
         }
-        guard output.succeeded else { throw GitError.commandFailed(output.errorText) }
-        return output.standardOutput
     }
 }
 
