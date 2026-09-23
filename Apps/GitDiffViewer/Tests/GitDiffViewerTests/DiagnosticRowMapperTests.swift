@@ -39,8 +39,8 @@ struct DiagnosticRowMapperTests {
         let diff = DiffRenderer.render(
             oldText: old, newText: new, language: .plain, layout: .changes(context: 0, expansions: [:]))
         let rendered = try #require(diff.new)
-        // Row 0 is the leading gap that hid "line1".
-        #expect(rendered.rows[0].kind == .gap)
+        // The leading gap that hid "line1" takes no row: row 0 is line 2.
+        #expect(rendered.rows[0].newNumber == 2)
         let paths = [0: "a.swift"]
         let findings = ["a.swift": [finding(line: 1)]]
 

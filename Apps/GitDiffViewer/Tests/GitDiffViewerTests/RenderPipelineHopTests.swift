@@ -55,7 +55,7 @@ struct PipelineHarness {
     func leadingGap(ofCard index: Int) -> GapMarker? {
         guard sut.cards.indices.contains(index) else { return nil }
         let rendered = sut.cards[index].rendered
-        return (rendered.new ?? rendered.unified)?.rows.first?.gap
+        return (rendered.new ?? rendered.unified)?.gaps.first?.marker
     }
 
     /// Drags the leading gap of the card at `index` to reveal `rows` more rows above its hunk: one gap step.

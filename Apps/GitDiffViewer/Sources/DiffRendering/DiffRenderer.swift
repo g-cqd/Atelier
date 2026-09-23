@@ -90,7 +90,7 @@ package enum DiffRenderer {
         case header(String, fileIndex: Int)
     }
 
-    /// The rows of a file for a layout: everything, or hunks separated by gap rows. Gap `i` precedes hunk `i`.
+    /// The rows of a file for a layout: everything, or hunks separated by gaps. Gap `i` precedes hunk `i`.
     private static func rows(of file: PreparedDiff, fileIndex: Int, layout: RenderLayout, header: String?, split: Bool)
         -> [RenderRow]
     {
@@ -139,10 +139,20 @@ package enum DiffRenderer {
     private static func changeStarts(in rows: [RenderRow]) -> [Int] {
         var starts: [Int] = []
         var inChange = false
-        for (index, row) in rows.enumerated() {
-            let isChange = if case .diff(let diff, _, _) = row { diff.kind != .context } else { false }
+        var index = 0
+        for row in rows {
+            let isChange: Bool
+            switch row {
+                case .diff(let diff, _, _): isChange = diff.kind != .context
+                case .header: isChange = false
+                case .gap:
+                    // A gap takes no row, but the changes on either side of it are still two.
+                    inChange = false
+                    continue
+            }
             if isChange, !inChange { starts.append(index) }
             inChange = isChange
+            index += 1
         }
         return starts
     }
@@ -204,14 +214,10 @@ package enum DiffRenderer {
                             newNumber: diffRow.new.map { $0.index + 1 }, fileIndex: fileIndex, isMoved: diffRow.isMoved)
                     )
                 case .gap(let marker):
+                    // The rows it hides take none of their own: the gap lies on the boundary between the rows
+                    // around them (book DIFF-02).
                     gaps.append(RenderedGap(boundary: metas.count, marker: marker))
-                    let label = "⋯ \(marker.hiddenRows) hidden \(marker.hiddenRows == 1 ? "line" : "lines")"
-                    text.append(label)
-                    length = label.utf16.count
-                    spans.secondary.append(NSRange(location: offset, length: length))
-                    metas.append(
-                        RowMeta(
-                            kind: .gap, oldNumber: nil, newNumber: nil, fileIndex: marker.key.fileIndex, gap: marker))
+                    continue
                 case .header(let title, let fileIndex):
                     text.append(title)
                     length = title.utf16.count
@@ -237,15 +243,13 @@ package enum DiffRenderer {
         )
     }
 
-    /// Applies the palette to the assembled text: font, paragraph style, token colours, emphasis, dimmed gap
-    /// labels and bold headers.
     /// The coloured stretches of an assembled text, in UTF-16 ranges over the whole text.
     private struct RenderSpans {
         var tokens: [(NSRange, HighlightRole)] = []
         var emphasis: [(NSRange, RowKind)] = []
-        var secondary: [NSRange] = []
     }
 
+    /// Applies the palette to the assembled text: font, paragraph style, token colours, emphasis and bold headers.
     private static func attributed(
         _ text: String, spans: RenderSpans, metas: [RowMeta], lineStarts: [Int], side: RenderedSide, options: Options
     ) -> (attributed: NSMutableAttributedString, baselineOffset: CGFloat, lineHeight: CGFloat) {
@@ -273,9 +277,6 @@ package enum DiffRenderer {
         }
         for (range, kind) in spans.emphasis {
             attributed.addAttribute(.diffEmphasis, value: palette.emphasis(for: kind, side: side), range: range)
-        }
-        for range in spans.secondary {
-            attributed.addAttribute(.foregroundColor, value: palette.textColor.withAlphaComponent(0.5), range: range)
         }
         let boldFont =
             NSFont(descriptor: palette.font.fontDescriptor.withSymbolicTraits(.bold), size: palette.font.pointSize)

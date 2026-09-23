@@ -33,7 +33,7 @@ struct DiffViewerModelGapDragTests {
     }
 
     private func gaps(ofCard index: Int, in sut: DiffViewerModel) -> [GapMarker] {
-        sut.renderedFiles[index].rendered.new?.rows.compactMap(\.gap) ?? []
+        sut.renderedFiles[index].rendered.new?.gaps.map(\.marker) ?? []
     }
 
     @Test

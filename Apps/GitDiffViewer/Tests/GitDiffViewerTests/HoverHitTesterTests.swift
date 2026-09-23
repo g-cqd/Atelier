@@ -109,21 +109,23 @@ struct HoverHitTesterTests {
     }
 
     @Test
-    func `a gap row misses`() throws {
-        // Seven unchanged lines with the second and sixth edited: with zero context the renderer collapses the
-        // untouched runs into gap rows around and between the two changes.
+    func `rows after hidden runs hover as their own lines`() throws {
+        // Seven lines with the second and sixth edited: with zero context the untouched runs around and between the
+        // two changes are hidden, and take no row.
         let old = "line1\nline2AAAA\nline3\nline4\nline5\nline6AAAA\nline7\n"
         let new = "line1\nline2BBBB\nline3\nline4\nline5\nline6BBBB\nline7\n"
         let diff = DiffRenderer.render(
             oldText: old, newText: new, language: .plain, layout: .changes(context: 0, expansions: [:]))
         let rendered = try #require(diff.new)
-        // Row 0 is the leading gap (line1 hidden).
-        #expect(rendered.rows[0].kind == .gap)
         let textView = makeTextView(rendered: rendered)
 
-        #expect(
-            HoverHitTester.hit(at: point(row: 0, column: 2, in: rendered), textView: textView, rendered: rendered)
-                == nil)
+        let first = HoverHitTester.hit(
+            at: point(row: 0, column: 2, in: rendered), textView: textView, rendered: rendered)
+        let second = HoverHitTester.hit(
+            at: point(row: 1, column: 2, in: rendered), textView: textView, rendered: rendered)
+
+        #expect(first?.line == 1)
+        #expect(second?.line == 5)
     }
 
     // MARK: Cards-mode hosting (EmbeddedDiffTextView's real text stack)
