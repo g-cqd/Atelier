@@ -130,8 +130,8 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
         }
     }
 
-    /// The hairline that separates the two halves of a gap's handle (book DIFF-02): Xcode's, 241 on its white
-    /// gutter.
+    /// The hairline that separates the two halves of a gap's handle, across the gutter and the text alike (book
+    /// DIFF-02): Xcode's, 241 on its white gutter.
     package var gapSeparator: NSColor {
         textColor.withAlphaComponent(0.055)
     }

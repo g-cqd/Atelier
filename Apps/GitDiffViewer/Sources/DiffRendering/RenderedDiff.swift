@@ -28,6 +28,11 @@ package struct RenderedGap: Sendable, Hashable {
     /// Whether the gap takes an empty band of its own on its boundary, to hold its handle: one that offers a handle
     /// does, and one hiding a whole file without a change leaves no trace.
     package var hasBand: Bool { !marker.handles.isEmpty }
+
+    /// Whether the gap's band carries a separator, a hairline across its middle from the gutter's leading edge to the
+    /// text's trailing one. Only a gap between two changes has one, between its two halves; a gap at the top or the
+    /// end of a file shows its one half alone.
+    package var hasSeparator: Bool { marker.handles.count == 2 }
 }
 
 package struct RowMeta: Sendable {
@@ -142,14 +147,17 @@ package final class RenderedText: @unchecked Sendable {
         return gapBandHeight
     }
 
-    /// The band between `row` and the next row, which the text holds as `row`'s paragraph spacing; zero when no gap
-    /// with a band lies between them.
+    /// The gap whose band lies between `row` and the next row, which the text holds as `row`'s paragraph spacing.
+    /// - Complexity: O(log gaps)
+    package func bandedGap(afterRow row: Int) -> RenderedGap? {
+        guard row >= 0, row + 1 < rows.count else { return nil }
+        return gaps(on: (row + 1) ... (row + 1)).first(where: \.hasBand)
+    }
+
+    /// The band between `row` and the next row; zero when no gap with a band lies between them.
     /// - Complexity: O(log gaps)
     package func bandSpacing(afterRow row: Int) -> CGFloat {
-        guard row >= 0, row + 1 < rows.count, gaps(on: (row + 1) ... (row + 1)).contains(where: \.hasBand) else {
-            return 0
-        }
-        return gapBandHeight
+        bandedGap(afterRow: row) == nil ? 0 : gapBandHeight
     }
 
     /// The height TextKit lays the rows out at without wrapping, with the bands between them: one line per row.

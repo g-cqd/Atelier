@@ -37,7 +37,10 @@ package final class DiffFragmentProvider: NSObject, @preconcurrency NSTextLayout
         }
         if !rendered.rows.isEmpty {
             fragment.rowIndex = rendered.rowIndex(containing: offset)
-            fragment.bandBelow = rendered.bandSpacing(afterRow: fragment.rowIndex)
+            if let gap = rendered.bandedGap(afterRow: fragment.rowIndex) {
+                fragment.bandBelow = rendered.gapBandHeight
+                fragment.separatorColor = gap.hasSeparator ? rendered.palette.gapSeparator : nil
+            }
         }
         return fragment
     }
