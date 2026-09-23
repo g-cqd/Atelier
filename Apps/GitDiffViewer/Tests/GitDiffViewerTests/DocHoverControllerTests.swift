@@ -180,7 +180,7 @@ struct DocHoverControllerTests {
         try await taskProvider.waitForAllTasks()
 
         #expect(spy.calls.isEmpty)
-        #expect(controller.isPopoverVisible == false)
+        #expect(controller.isPanelVisible == false)
     }
 
     /// Hovering a pane whose render has gone away costs nothing: no hit-test, no task, no resolver call. A lookup
@@ -196,7 +196,7 @@ struct DocHoverControllerTests {
 
         #expect(taskProvider.spawnedTaskCount == 0)
         #expect(spy.started.isEmpty)
-        #expect(controller.isPopoverVisible == false)
+        #expect(controller.isPanelVisible == false)
     }
 
     /// A lookup runs only inside a spawned task, so no spawn proves no call, now or later.
@@ -230,13 +230,13 @@ struct DocHoverControllerTests {
 
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
         try await taskProvider.waitForAllTasks()
-        #expect(controller.isPopoverVisible == true)
+        #expect(controller.isPanelVisible == true)
 
         // A small scroll: row 0's anchor stays within the 100pt-tall viewport.
         scrollView.contentView.scroll(to: NSPoint(x: 0, y: 5))
         scrollView.reflectScrolledClipView(scrollView.contentView)
 
-        #expect(controller.isPopoverVisible == true)
+        #expect(controller.isPanelVisible == true)
     }
 
     @Test
@@ -248,13 +248,13 @@ struct DocHoverControllerTests {
 
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
         try await taskProvider.waitForAllTasks()
-        #expect(controller.isPopoverVisible == true)
+        #expect(controller.isPanelVisible == true)
 
         // Scroll far enough that row 0 is nowhere near the 100pt-tall viewport any more.
         scrollView.contentView.scroll(to: NSPoint(x: 0, y: rendered.lineHeight * 30))
         scrollView.reflectScrolledClipView(scrollView.contentView)
 
-        #expect(controller.isPopoverVisible == false)
+        #expect(controller.isPanelVisible == false)
     }
 
     @Test
@@ -266,13 +266,13 @@ struct DocHoverControllerTests {
 
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
         try await taskProvider.waitForAllTasks()
-        #expect(controller.isPopoverVisible == true)
+        #expect(controller.isPanelVisible == true)
 
         // Same origin as already reflected: a spurious notification, not a scroll.
         NotificationCenter.default.post(
             name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
 
-        #expect(controller.isPopoverVisible == true)
+        #expect(controller.isPanelVisible == true)
     }
 
     /// The older lookup ignores its cancellation and runs on, as a slow language server may; the newer hover's lookup
@@ -296,6 +296,6 @@ struct DocHoverControllerTests {
 
         #expect(spy.maxInFlight == 1)
         #expect(spy.calls.map(\.row) == [0, 1])
-        #expect(controller.isPopoverVisible == true)
+        #expect(controller.isPanelVisible == true)
     }
 }
