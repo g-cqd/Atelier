@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import AtelierGrammar
@@ -57,6 +58,28 @@ struct LexAutomatonTests {
         let table = try Self.table([quote, content, comment], separators: [.pattern(#"\s"#)])
 
         #expect(Self.firstToken(of: text, in: table) == Lexed(token: 1, range: range))
+    }
+
+    @Test
+    func `A token that matches the empty string fails the compile`() throws {
+        // `word` would end before reading anything, and a mode it is valid in could then read no other token.
+        let json = """
+            {
+                "name": "empty",
+                "rules": {
+                    "source": {
+                        "type": "SEQ",
+                        "members": [{"type": "STRING", "value": "a"}, {"type": "SYMBOL", "name": "word"}]
+                    },
+                    "word": {"type": "PATTERN", "value": "[a-z]*"}
+                }
+            }
+            """
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+
+        #expect(throws: GrammarError.invalidRuleType("Token `word` matches the empty string")) {
+            try ParseTableCompiler.compile(grammar)
+        }
     }
 
     private struct Lexed: Equatable {
