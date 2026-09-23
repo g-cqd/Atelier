@@ -40,6 +40,20 @@ struct SDKPlatformTests {
     }
 
     @Test
+    func `a file whose imports decide never reads its project`() {
+        var projectRead = false
+        let platform = SDKPlatform.forFile(
+            importing: ["UIKit"],
+            inProjectDeclaring: {
+                projectRead = true
+                return []
+            }())
+
+        #expect(platform == .iOS)
+        #expect(!projectRead)
+    }
+
+    @Test
     func `an iOS probe drops the Mac's own frameworks and imports UIKit`() {
         let imports = SDKPlatform.iOS.probeImports(fileImports: ["AppKit", "Combine"], limit: 12)
         #expect(imports == ["Combine", "Foundation", "SwiftUI", "UIKit"])
@@ -118,6 +132,26 @@ struct ProjectPlatformsTests {
         let toolFile = tree.root.appending(path: "repo/Tools/Sources/Tool/main.swift")
         #expect(ProjectPlatforms.declared(forFileAt: appFile) == [.iOS])
         #expect(ProjectPlatforms.declared(forFileAt: toolFile) == [.macOS])
+    }
+
+    @Test
+    func `the lookup reads each directory from the file's own up to the repository root`() throws {
+        let tree = ScratchTree()
+        try tree.makeDirectory("repo/.git")
+        try tree.makeDirectory("repo/App/Sources")
+        let repository = tree.root.appending(path: "repo").standardizedFileURL.path(percentEncoded: false)
+        var visited: [String] = []
+
+        let platforms = ProjectPlatforms.declared(forFileAt: tree.root.appending(path: "repo/App/Sources/View.swift")) {
+            visited.append($0)
+            return []
+        }
+
+        #expect(platforms == [])
+        #expect(
+            visited.map { $0.hasSuffix("/") ? String($0.dropLast()) : $0 } == [
+                repository + "/App/Sources", repository + "/App", repository
+            ])
     }
 
     @Test
