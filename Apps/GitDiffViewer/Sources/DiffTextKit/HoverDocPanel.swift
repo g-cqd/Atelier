@@ -2,43 +2,28 @@ package import AppKit
 package import DiffRendering
 import Foundation
 
-/// The panel's fixed sizing rules, pulled out of ``HoverDocPanel`` itself so they are testable without an actual
-/// window: a fixed width, a height that hugs its measured content up to a ceiling (past which only the body
-/// scrolls), and where the panel opens relative to the hovered identifier, flipping above it when it would
-/// otherwise run off the bottom of the screen.
+/// The hover panel's sizing rules: a fixed width, a height that hugs its content up to a ceiling past which the
+/// body scrolls, and an origin under the hovered identifier that flips above it near the screen's bottom.
 package enum HoverPanelSizing {
     package static let width: CGFloat = 440
-    /// A floor only for the degenerate case (a document with nothing to show at all, not even a declaration):
-    /// real content is never clamped up to this -- see ``clampedHeight(forContentHeight:)``. Xcode's own Quick
-    /// Help panel has no fixed minimum either; a panel that hugs a two-line declaration and a one-line footer
-    /// should read as exactly that, not pad itself out to a floor sized for a full doc with parameters and a
-    /// multi-paragraph discussion.
+    /// The panel's smallest height; taller content up to ``maxHeight`` is hugged exactly.
     package static let minHeight: CGFloat = 40
     package static let maxHeight: CGFloat = 420
 
-    /// The panel's own height for `contentHeight` of measured content, and whether the body needs its own inner
-    /// scroll to show the rest: the chrome around it (header, declaration, parameters, footer) is always shown in
-    /// full, only the body's prose ever scrolls. Hugs `contentHeight` exactly between the degenerate floor and the
-    /// ceiling -- no fixed minimum beyond that floor, so a short answer (a declaration and a footer, say) gets a
-    /// short panel instead of empty space padded out to what a full one would need.
+    /// The panel's height for `contentHeight` of measured content, between ``minHeight`` and ``maxHeight``, and
+    /// whether the body must scroll to show the rest.
     package static func clampedHeight(forContentHeight contentHeight: CGFloat) -> (height: CGFloat, scrolls: Bool) {
         guard contentHeight > maxHeight else { return (max(contentHeight, minHeight), false) }
         return (maxHeight, true)
     }
 
-    /// The body's own height budget within `maxHeight`, once every other chrome slot (declaration, parameters,
-    /// returns, candidates, diagnostics, footer, and the spacing between them) has taken `chromeHeight`: what is
-    /// left over, floored at 60pt so the body is never squeezed to nothing even when the chrome alone already
-    /// exceeds the cap. Without this floor the body's own height constraint would ask for more room than the
-    /// clamped window actually has, and the excess would be clipped outside the window instead of reachable by
-    /// the body's own scroll.
+    /// The body's height within ``maxHeight`` once the rest of the panel takes `chromeHeight`, never under 60pt.
     package static func bodyHeightBudget(chromeHeight: CGFloat) -> CGFloat {
         max(maxHeight - chromeHeight, 60)
     }
 
-    /// The panel's origin, in screen coordinates: below and left-aligned with `anchorRect` when it fits on
-    /// `screenFrame`, flipped above the identifier when it would run off the bottom, and clamped horizontally so
-    /// it never runs off either side.
+    /// The panel's screen origin: below `anchorRect` and left-aligned with it, flipped above it when it would run
+    /// off `screenFrame`'s bottom, and clamped horizontally inside `screenFrame`.
     package static func origin(anchorRect: NSRect, panelSize: NSSize, screenFrame: NSRect) -> NSPoint {
         let belowY = anchorRect.minY - panelSize.height
         let y = belowY >= screenFrame.minY ? belowY : anchorRect.maxY
@@ -49,20 +34,15 @@ package enum HoverPanelSizing {
     }
 }
 
-/// The panel's own spacing and padding scale, gathered in one place so every slot agrees on the same rhythm
-/// instead of each guessing its own constant: read together, tight around a declaration chip, a little more
-/// breathing room between unrelated sections, and a section header sitting close to the content it introduces
-/// rather than floating in its own paragraph.
+/// The hover panel's spacing and padding scale, shared by every slot.
 package enum HoverPanelMetrics {
     /// The content stack's own inset from the panel's edge, on every side.
     package static let edgeInset: CGFloat = 12
-    /// Between two sibling sections at the content stack's own top level (a declaration and the body, a
-    /// candidates group and the diagnostics list, ...).
+    /// Between two sibling sections of the content stack.
     package static let sectionSpacing: CGFloat = 10
-    /// Between a section header ("Parameters", "Returns") and the content it introduces -- tighter than
-    /// ``sectionSpacing`` so the header reads as attached to what follows it rather than as its own section.
+    /// Between a section header and its content, tighter than ``sectionSpacing`` so the header reads as attached.
     package static let headerToContentSpacing: CGFloat = 4
-    /// A declaration (or candidate) chip's own inset between its background and the code it backs.
+    /// A declaration chip's inset between its background and its code.
     package static let chipHorizontalPadding: CGFloat = 8
     package static let chipVerticalPadding: CGFloat = 6
     /// The chip's own corner radius, a notch smaller than the panel's own so it reads as set into the glass.
@@ -70,15 +50,12 @@ package enum HoverPanelMetrics {
 }
 
 /// The rich hover panel: an arrow-less, non-activating child window styled like Xcode's Quick Help, sized to its
-/// content and anchored under the hovered identifier. A `NSVisualEffectView` gives it the system's popover
-/// material and corner radius; everything else is a plain `NSStackView` of slots, some of them hidden when the
-/// document has nothing for them.
+/// content and anchored under the hovered identifier.
 @MainActor
 package final class HoverDocPanel {
     /// Whether the panel is currently on screen.
     package private(set) var isVisible = false
-    /// Whether the pointer is currently over the panel itself, tracked so the text view's own `mouseExited` can
-    /// tell "the pointer left for the panel" from "the pointer left the pane" and not dismiss for the former.
+    /// Whether the pointer is over the panel, so leaving the pane for the panel does not dismiss it.
     package private(set) var pointerIsInside = false
 
     private var panel: NSPanel?
@@ -86,14 +63,7 @@ package final class HoverDocPanel {
     private var trackingArea: NSTrackingArea?
 
     private let declarationView = HoverDocPanel.makeCodeTextView()
-    /// The declaration's own inset backing, filled with the pane's palette background (see
-    /// ``HoverDocument/chipBackground``) rather than left on the panel's vibrancy glass -- a theme's role colors
-    /// are chosen to read against the pane they render in, which is not necessarily the same light/dark appearance
-    /// as the panel's own popover material. An `NSBox` rather than a raw layer-backed `NSView`: its `fillColor`
-    /// and `borderColor` are resolved against the view's effective appearance at every draw, so the chip's own
-    /// hairline border and background stay correct across a light/dark appearance change on their own, with no
-    /// `viewDidChangeEffectiveAppearance` bookkeeping needed -- a plain `CALayer.borderColor`/`backgroundColor`
-    /// bakes in whatever `NSColor` resolved to at the moment it was set, and goes stale otherwise.
+    /// The declaration's backing, filled with ``HoverDocument/chipBackground``.
     private let declarationChip = HoverDocPanel.makeChip()
     private let bodyTextView = HoverDocPanel.makeProseTextView()
     private let bodyScrollView = NSScrollView()
@@ -105,12 +75,7 @@ package final class HoverDocPanel {
     private let candidatesStack = NSStackView()
     private let contentStack = NSStackView()
 
-    // The text-bearing slots (`declarationView`, `bodyScrollView`, `returnsView`) have no usable intrinsic
-    // content size of their own -- an `NSTextView` reports `NSViewNoIntrinsicMetric` for both dimensions, and an
-    // `NSScrollView` wrapping one is no different -- so `contentStack` cannot sizeto-fit them from their content the
-    // way it can a label or a grid. Without an explicit height constraint they collapse to their initial zero-size
-    // frame and the panel renders with the text set but invisible; these are computed and kept up to date every
-    // ``render(_:)`` pass.
+    // `NSTextView` has no intrinsic size, so the text slots need explicit heights, recomputed by every render.
     private var declarationHeight: NSLayoutConstraint?
     private var bodyHeight: NSLayoutConstraint?
     private var returnsHeight: NSLayoutConstraint?
@@ -142,9 +107,8 @@ package final class HoverDocPanel {
         attachedWindow = hostWindow
     }
 
-    /// Repositions an already-visible panel to a freshly recomputed `anchorRect` (in `textView`'s own
-    /// coordinates), without re-rendering or resizing it -- what ``DocHoverController`` calls on every scroll to
-    /// keep the panel tracking the identifier it documents. A no-op if the panel is not currently showing.
+    /// Moves a visible panel to `anchorRect`, in `textView`'s coordinates, without re-rendering or resizing it; a
+    /// no-op when the panel is not showing.
     package func reposition(anchorRect: NSRect, in textView: NSTextView) {
         guard isVisible, let panel, let hostWindow = textView.window, let screen = hostWindow.screen else { return }
         setOrigin(
@@ -152,8 +116,7 @@ package final class HoverDocPanel {
             screen: screen)
     }
 
-    /// The shared origin math ``show(document:anchorRect:in:)`` and ``reposition(anchorRect:in:)`` both need:
-    /// converts `anchorRect` to screen coordinates and places the panel per ``HoverPanelSizing/origin``.
+    /// Converts `anchorRect` to screen coordinates and places the panel per ``HoverPanelSizing``.
     private func setOrigin(
         forAnchorRect anchorRect: NSRect, panelSize: NSSize, in textView: NSTextView, hostWindow: NSWindow,
         screen: NSScreen
@@ -165,19 +128,14 @@ package final class HoverDocPanel {
         panel.setFrameOrigin(origin)
     }
 
-    /// The content stack's own Auto Layout fitting height at the panel's fixed width, after a fresh layout pass --
-    /// for tests only, the ground truth ``show(document:anchorRect:in:)`` sizes the window against: any drift
-    /// between the two is exactly the "wasted space" a stale hand-tallied height estimate would otherwise leave
-    /// at the bottom of the panel. `nil` before the panel has ever been shown once (nothing to measure yet).
+    /// For tests: the content stack's fitting height after a layout pass; nil before the panel is first shown.
     package var laidOutContentHeightForTests: CGFloat? {
         guard let panel else { return nil }
         panel.contentView?.layoutSubtreeIfNeeded()
         return contentStack.fittingSize.height
     }
 
-    /// The window's own current content height -- for tests only, what ``show(document:anchorRect:in:)`` most
-    /// recently sized the panel to, compared against ``laidOutContentHeightForTests`` to catch any daylight
-    /// between the two.
+    /// For tests: the panel's height as ``show(document:anchorRect:in:)`` last sized it; nil before it is first shown.
     package var panelHeightForTests: CGFloat? { panel?.frame.size.height }
 
     /// Hides the panel and detaches it from its host window; a no-op when it is not showing.
@@ -212,10 +170,7 @@ package final class HoverDocPanel {
         effectView.layer?.cornerRadius = 8
         effectView.layer?.cornerCurve = .continuous
         effectView.layer?.masksToBounds = true
-        // `.behindWindow` blending samples what is behind the window directly, bypassing the layer mask above for
-        // that sampled material -- the canonical AppKit fix is a `maskImage`: a resizable rounded-rect template
-        // whose alpha channel clips the *material itself*, not just the layer's drawn content, so the glass never
-        // bleeds square past the panel's rounded corners.
+        // `.behindWindow` material ignores the layer mask; only a `maskImage` clips it to the rounded corners.
         effectView.maskImage = Self.roundedMaskImage(cornerRadius: 8)
 
         contentStack.orientation = .vertical
@@ -252,8 +207,6 @@ package final class HoverDocPanel {
             contentStack.addArrangedSubview(view)
             view.widthAnchor.constraint(equalToConstant: HoverPanelSizing.width - 24).isActive = true
         }
-        // Tighter than the stack's own `sectionSpacing` between every other pair of siblings: a header reads as
-        // attached to the content it introduces, not as a section of its own.
         contentStack.setCustomSpacing(HoverPanelMetrics.headerToContentSpacing, after: parametersHeader)
         contentStack.setCustomSpacing(HoverPanelMetrics.headerToContentSpacing, after: returnsHeader)
 
@@ -282,20 +235,8 @@ package final class HoverDocPanel {
 
     // MARK: Rendering
 
-    /// Renders `document` into every slot and sizes their height constraints, returning the content height
-    /// ``show(document:anchorRect:in:)`` feeds to ``HoverPanelSizing/clampedHeight(forContentHeight:)`` to decide
-    /// the window's own size and whether the body needs to scroll.
-    ///
-    /// The chrome's own total height -- every slot but the body -- is measured by running a real Auto Layout pass
-    /// over `contentStack` with the body's height constraint pinned to zero, rather than hand-tallying each slot's
-    /// height and the stack's spacing between them as this used to: that shadow arithmetic drifted from what the
-    /// stack view actually laid out to (a fixed per-row guess for the parameters grid that did not match its real
-    /// row height, a candidates group double-counted as two of the stack's own top-level slots when its hairline
-    /// separator is nested *inside* the candidates stack rather than a sibling of it, ...), and every drift in that
-    /// direction only ever overshoots, padding the window out with real, visible empty space at the bottom past
-    /// where `contentStack`'s own `bottomAnchor` (pinned `lessThanOrEqualTo`) actually lets it draw. Asking
-    /// `contentStack` for its own `fittingSize` instead makes this the single source of truth for both the sizing
-    /// decision and the eventual layout, so the two can never disagree.
+    /// Renders `document` into every slot and sizes them, returning the content height the panel is sized from. The
+    /// height comes from `contentStack`'s own fitting size, so sizing and layout never disagree.
     private func render(_ document: HoverDocument) -> CGFloat {
         let innerWidth = HoverPanelSizing.width - 2 * HoverPanelMetrics.edgeInset
         let chipInnerWidth = innerWidth - 2 * HoverPanelMetrics.chipHorizontalPadding
@@ -331,9 +272,7 @@ package final class HoverDocPanel {
         renderDiagnostics(document.diagnostics)
         diagnosticsStack.isHidden = document.diagnostics.isEmpty
 
-        // A declaration with nothing else to show (no prose from any tier, no parameters, no returns, no other
-        // candidates, no diagnostics) is a real, checked answer -- "nobody wrote anything about this" -- not a
-        // loading gap or a bug; saying so plainly keeps an otherwise-empty panel from reading as broken.
+        // A bare declaration says so, so an otherwise empty panel does not read as broken.
         if body.length == 0, !declarationChip.isHidden, parametersGrid.isHidden, returnsView.isHidden,
             candidatesStack.isHidden, diagnosticsStack.isHidden
         {
@@ -348,9 +287,7 @@ package final class HoverDocPanel {
         contentStack.layoutSubtreeIfNeeded()
         let chromeHeight = contentStack.fittingSize.height
 
-        // Budgeted against every other slot's own height, not the panel's full cap outright -- otherwise a long
-        // discussion alongside a full declaration/parameters/diagnostics chrome could ask for more height than
-        // the clamped window actually has, clipping content the body's own scroller can never reach.
+        // Budgeted against the rest of the panel, so a long body never outgrows the clamped window.
         let budget = HoverPanelSizing.bodyHeightBudget(chromeHeight: chromeHeight)
         bodyHeight?.constant = bodyScrollView.isHidden ? 0 : min(bodyFullHeight, budget)
 
@@ -366,10 +303,7 @@ package final class HoverDocPanel {
 }
 
 // MARK: - Slot rendering, measurement, and view factories
-//
-// Pulled out of the class body itself (rather than merely organized within it) so the class's own body stays
-// well clear of SwiftLint's `type_body_length`: `private` in Swift already extends to every extension of a type
-// in the same file, so nothing here loses access to the class's stored properties.
+// Kept outside the class body so it stays under `type_body_length`.
 extension HoverDocPanel {
     fileprivate func renderParameters(_ parameters: [HoverDocument.Field]) {
         while parametersGrid.numberOfRows > 0 {
@@ -387,17 +321,12 @@ extension HoverDocPanel {
         }
     }
 
-    /// Rebuilds the candidates group's rows; each row's own height constraint is set from its real measured
-    /// content (a candidate's declaration wraps to however many lines its own text needs), but the group's total
-    /// contribution to the panel's own height is never hand-tallied here -- ``render(_:)`` reads it straight back
-    /// off `contentStack`'s own Auto Layout fitting size once every row is in place, so it can never drift from
-    /// what actually gets drawn.
+    /// Rebuilds the candidates group: a chip per declaration and a prose row per summary, each sized to its text.
     fileprivate func renderCandidates(_ candidates: [HoverDocument.Candidate], chipBackground: NSColor?) {
         candidatesStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let innerWidth = HoverPanelSizing.width - 2 * HoverPanelMetrics.edgeInset
         let chipInnerWidth = innerWidth - 2 * HoverPanelMetrics.chipHorizontalPadding
-        // A hairline rule ahead of the first candidate, so overloads/other declarations read as a distinct
-        // group rather than floating ambiguously after the main declaration's body.
+        // A hairline rule sets the candidates apart from the main declaration's body.
         if !candidates.isEmpty {
             candidatesStack.addArrangedSubview(HoverDocPanel.makeCandidatesSeparator())
         }
@@ -415,11 +344,6 @@ extension HoverDocPanel {
                 chip.widthAnchor.constraint(equalToConstant: innerWidth).isActive = true
                 chip.heightAnchor.constraint(equalToConstant: rowHeight).isActive = true
             }
-            // A candidate's own prose (its summary), the same content ``HoverMarkdownStructurer`` parsed for it --
-            // dropping it here, as the panel used to, silently threw away real documentation for any doc-comment-
-            // index answer that resolved to more than one same-named declaration (a common shape for a small,
-            // frequently reused type name declared in several files), even though the tier that answered still
-            // resolved it correctly.
             if let summary = candidate.summary {
                 let view = HoverDocPanel.makeProseTextView()
                 view.textStorage?.setAttributedString(summary)
@@ -464,12 +388,8 @@ extension HoverDocPanel {
         return layoutManager.usageBoundsForTextContainer.height
     }
 
-    /// A declaration (or candidate) chip: a custom `NSBox`, filled and stroked rather than left flat, so it reads
-    /// as a distinct surface set into the panel's own glass. `NSBox`'s `fillColor` and `borderColor` are resolved
-    /// against the view's effective appearance at draw time, unlike a `CALayer`'s `backgroundColor`/`borderColor`
-    /// (both plain `CGColor`s, which bake in whatever the `NSColor` resolved to the moment they were set) -- the
-    /// box needs no `viewDidChangeEffectiveAppearance` bookkeeping to stay correct across a light/dark appearance
-    /// change the way the panel's previous layer-backed chip would have.
+    /// A declaration chip: an `NSBox`, whose fill and border colors resolve at draw time and so follow appearance
+    /// changes, unlike a layer's baked `CGColor`s.
     fileprivate static func makeChip() -> NSBox {
         let box = NSBox()
         box.boxType = .custom
@@ -480,9 +400,7 @@ extension HoverDocPanel {
         return box
     }
 
-    /// Pins `textView` inside `chip`, inset by ``HoverPanelMetrics``' own chip padding on every edge, so the
-    /// chip's filled background (set later, in ``render(_:)``, from ``HoverDocument/chipBackground``) reads as an
-    /// inset backing behind the code rather than a flush rectangle.
+    /// Pins `textView` inside `chip`, inset by the chip padding on every edge.
     fileprivate static func configureChip(_ chip: NSBox, around textView: NSTextView) {
         chip.addSubview(textView)
         NSLayoutConstraint.activate([
@@ -528,11 +446,11 @@ extension HoverDocPanel {
 }
 
 extension HoverDocPanel {
-    /// `NSTrackingArea` dispatch by owner selector, the same idiom ``DocHoverController`` itself relies on.
+    /// `NSTrackingArea` calls its owner by selector, so the Objective-C names are pinned.
     @objc(mouseEntered:) fileprivate func mouseEntered(with event: NSEvent) { pointerIsInside = true }
     @objc(mouseExited:) fileprivate func mouseExited(with event: NSEvent) { pointerIsInside = false }
 
-    /// A hairline separator sized to the panel's inner width, used ahead of ``renderCandidates(_:)``'s first row.
+    /// A hairline separator sized to the panel's inner width, set ahead of the first candidate.
     fileprivate static func makeCandidatesSeparator() -> NSBox {
         let box = NSBox()
         box.boxType = .separator
@@ -543,10 +461,7 @@ extension HoverDocPanel {
 }
 
 extension HoverDocPanel {
-    /// A resizable, all-black rounded-rect template image sized just past `cornerRadius` on each edge, with cap
-    /// insets equal to the radius: stretched over any rect via `NSImageResizingMode.stretch`, its corners keep
-    /// their curvature while its edges and center tile flat, the standard shape an `NSVisualEffectView.maskImage`
-    /// needs to clip `.behindWindow` material to a rounded rect at any size.
+    /// A stretchable rounded-rect mask with cap insets of `cornerRadius`, so its corners keep their curve at any size.
     fileprivate static func roundedMaskImage(cornerRadius: CGFloat) -> NSImage {
         let edge = cornerRadius * 2 + 1
         let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in

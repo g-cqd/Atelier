@@ -70,9 +70,8 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
         }
     }
 
-    /// The row's diagnostics, underlined beneath its first line fragment: a dashed line the width of a column range
-    /// (or the whole line, for a whole-row diagnostic that carries no column). Wrapped continuation lines are not
-    /// annotated: `SquiggleRange` columns are relative to the row's own text, not to any one wrapped line of it.
+    /// Underlines the row's diagnostics beneath its first line fragment, across their column range or the whole
+    /// line. Wrapped lines stay bare: `SquiggleRange` columns are relative to the row, not to a wrapped line.
     private func drawDiagnostics(at point: CGPoint, in context: CGContext) {
         guard let overlay, rowIndex >= 0, let row = overlay.row(rowIndex), let line = textLineFragments.first else {
             return
