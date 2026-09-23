@@ -192,7 +192,7 @@ package enum DiffRenderer {
                     let shown = shownLine(of: diffRow, in: file, side: side)
                     let kind = displayedKind(of: diffRow, side: side, hasLine: shown != nil)
                     if let shown {
-                        text.append(contentsOf: shown.line)
+                        text.append(contentsOf: spans.placeholders.reveal(shown.line, at: offset))
                         length = shown.line.utf16.count
                         for unit in shown.line.utf16 where unit == 9 { tabs += 1 }
                         for token in shown.tokens {
@@ -219,7 +219,7 @@ package enum DiffRenderer {
                     gaps.append(RenderedGap(boundary: metas.count, marker: marker))
                     continue
                 case .header(let title, let fileIndex):
-                    text.append(title)
+                    text.append(contentsOf: spans.placeholders.reveal(Substring(title), at: offset))
                     length = title.utf16.count
                     for unit in title.utf16 where unit == 9 { tabs += 1 }
                     metas.append(RowMeta(kind: .header, oldNumber: nil, newNumber: nil, fileIndex: fileIndex))
@@ -248,9 +248,12 @@ package enum DiffRenderer {
     private struct RenderSpans {
         var tokens: [(NSRange, HighlightRole)] = []
         var emphasis: [(NSRange, RowKind)] = []
+        /// The bidi controls the rows show as placeholders, which keep the source's offsets.
+        var placeholders = BidiControls.Placeholders()
     }
 
-    /// Applies the palette to the assembled text: font, paragraph style, token colours, emphasis and bold headers.
+    /// Applies the palette to the assembled text: font, paragraph style, token colours, emphasis, bidi control
+    /// placeholders and bold headers.
     private static func attributed(
         _ text: String, spans: RenderSpans, metas: [RowMeta], lineStarts: [Int], side: RenderedSide, options: Options
     ) -> (attributed: NSMutableAttributedString, baselineOffset: CGFloat, lineHeight: CGFloat) {
@@ -279,6 +282,7 @@ package enum DiffRenderer {
         for (range, kind) in spans.emphasis {
             attributed.addAttribute(.diffEmphasis, value: palette.emphasis(for: kind, side: side), range: range)
         }
+        spans.placeholders.apply(to: attributed, palette: palette)
         let boldFont =
             NSFont(descriptor: palette.font.fontDescriptor.withSymbolicTraits(.bold), size: palette.font.pointSize)
             ?? palette.font
