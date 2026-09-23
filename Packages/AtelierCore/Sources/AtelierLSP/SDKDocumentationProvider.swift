@@ -163,9 +163,9 @@ public actor SDKDocumentationProvider: HoverProvider {
     // MARK: - Probing
 
     /// The value-position probe's answer or, when it has no prose and the chain starts uppercase, a type-position
-    /// probe's answer if that one has prose. Settled only when every probe it sent was answered, since a probe that
-    /// got none might have had prose. A first probe that gets no answer sends no second one: the server is not
-    /// answering yet.
+    /// probe's answer if that one has prose, or if the first found nothing, as for a protocol, which is no value.
+    /// Settled only when every probe it sent was answered, since a probe that got none might have had prose. A first
+    /// probe that gets no answer sends no second one: the server is not answering yet.
     private func probeWithFallback(
         on service: SourceKitLSPService, chain: String, chainStartsUppercase: Bool, imports: [String]
     ) async -> (content: HoverContent?, isSettled: Bool) {
@@ -182,8 +182,8 @@ public actor SDKDocumentationProvider: HoverProvider {
         {
             case .answered(let secondary?) where HoverContentQuality.hasProse(secondary.markdown):
                 return (secondary, true)
-            case .answered:
-                return (primary, true)
+            case .answered(let secondary):
+                return (primary ?? secondary, true)
             case .unavailable:
                 return (primary, false)
         }
