@@ -93,14 +93,18 @@ public struct SourceLoader: SourceReading {
         return pathExtension.contains(" ") ? "" : pathExtension
     }
 
-    /// Text of a file's bytes; a binary file, recognised by a NUL among its first bytes, becomes one line
-    /// naming its size so the diff still shows that it changed.
+    /// Text of a file's bytes, decoded as UTF-8 in one pass: an invalid sequence becomes U+FFFD, and a leading
+    /// byte-order mark is dropped, as Foundation's UTF-8 decoding drops it. A binary file, recognised by a NUL among
+    /// its first bytes, becomes one line naming its size so the diff still shows that it changed.
     public static func text(from data: Data) -> String {
         if data.prefix(8192).contains(0) {
             return "(binary file, \(data.count.formatted(.byteCount(style: .file))))\n"
         }
-        return String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+        let body = data.starts(with: utf8ByteOrderMark) ? data.dropFirst(utf8ByteOrderMark.count) : data
+        return String(decoding: body, as: UTF8.self)
     }
+
+    private static let utf8ByteOrderMark: [UInt8] = [0xEF, 0xBB, 0xBF]
 
     public func repositoryInfo(containing url: URL) async -> RepositoryInfo? {
         guard let root = await Self.repositoryRoot(containing: url, runner: runner) else { return nil }
