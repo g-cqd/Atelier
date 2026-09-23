@@ -10,7 +10,7 @@ import Testing
 /// Opt-in timing of the two blob hashing paths over a generated folder; run with GDV_BENCH=1.
 struct BlobHashingBenchmark {
     @Test(.enabled(if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil))
-    func `memory mapped hashing versus Data hashing`() async throws {
+    func `chunked pread hashing versus Data hashing`() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "gdv-bench-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -32,13 +32,13 @@ struct BlobHashingBenchmark {
                 dataHashes.append(SourceLoader.blobID(of: try Data(contentsOf: URL(filePath: file.path))))
             }
         }
-        var mappedHashes: [String] = []
-        let mappedDuration = try clock.measure {
-            for file in files { mappedHashes.append(try SourceLoader.blobID(atPath: file.path, size: file.size)) }
+        var readHashes: [String] = []
+        let readDuration = try clock.measure {
+            for file in files { readHashes.append(try SourceLoader.blobID(atPath: file.path)) }
         }
 
-        #expect(dataHashes == mappedHashes)
-        print("BENCH blob hashing of \(files.count) files: Data \(dataDuration), mmap \(mappedDuration)")
+        #expect(dataHashes == readHashes)
+        print("BENCH blob hashing of \(files.count) files: Data \(dataDuration), chunked pread \(readDuration)")
 
         let loader = TestProcesses.loader
         let start = clock.now
