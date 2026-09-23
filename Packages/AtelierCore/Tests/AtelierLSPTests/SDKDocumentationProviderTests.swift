@@ -4,27 +4,6 @@ import Testing
 
 @testable import AtelierLSP
 
-/// Mirrors ``ScriptedConnectionFactory`` in `SourceKitLSPServiceTests.swift`: builds a fresh ``PipeTransport``
-/// per connection attempt, so a test can script an entire generation's frames.
-private actor ScriptedConnectionFactory {
-    private(set) var transports: [PipeTransport] = []
-
-    func make() -> LSPConnection {
-        let transport = PipeTransport()
-        transports.append(transport)
-        return LSPConnection(transport: transport)
-    }
-
-    func transport(at index: Int) -> PipeTransport { transports[index] }
-    var generationCount: Int { transports.count }
-
-    func waitForGeneration(_ count: Int) async {
-        while transports.count < count {
-            await Task.yield()
-        }
-    }
-}
-
 private func decodeSent(_ transport: PipeTransport, at index: Int) async throws -> SentEnvelope {
     let frames = await transport.sink.all
     return try JSONDecoder().decode(SentEnvelope.self, from: unframe(frames[index]))
