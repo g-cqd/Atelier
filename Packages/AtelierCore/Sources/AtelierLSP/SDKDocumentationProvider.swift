@@ -334,7 +334,8 @@ public actor SDKDocumentationProvider: HoverProvider {
         var text = content
         return text.withUTF8 { bytes in
             var modules: [String] = []
-            var lineStart = 0
+            // A byte-order mark would read as the first line's first character, hiding that line's import.
+            var lineStart = bytes.starts(with: [0xEF, 0xBB, 0xBF]) ? 3 : 0
             while lineStart < bytes.count {
                 let lineEnd = bytes[lineStart...].firstIndex(of: newline) ?? bytes.count
                 if let module = importedModule(on: bytes[lineStart ..< lineEnd]), !modules.contains(module) {

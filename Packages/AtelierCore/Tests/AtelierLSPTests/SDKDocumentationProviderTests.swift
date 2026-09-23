@@ -184,6 +184,12 @@ struct SDKDocumentationProviderTests {
         #expect(imports == ["AppKit", "SwiftUI"])
     }
 
+    @Test
+    func `a byte-order mark does not hide the first import`() {
+        let imports = SDKDocumentationProvider.importedModules(in: "\u{FEFF}import UIKit\nimport SwiftUI\n")
+        #expect(imports == ["UIKit", "SwiftUI"])
+    }
+
     // MARK: - Fast nil path (no LSP traffic)
 
     @Test
