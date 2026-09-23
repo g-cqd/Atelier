@@ -210,13 +210,13 @@ struct DiffViewerModelReloadContinuityTests {
         try await harness.load(sut)
         #expect(sut.detailState == .cards)
 
-        // The gated reload leaves the side loading; the published cards must stay mounted meanwhile.
-        harness.reader.gate["/right"] = AsyncProbe<Void>()
+        // The held reload leaves the side loading; the published cards must stay mounted meanwhile.
+        let rightListing = harness.holdListing(of: ModelTestHarness.rightURL)
         sut.right.reload()
         #expect(sut.right.isLoading)
         #expect(sut.detailState == .cards)
 
-        harness.reader.gate["/right"]?.send(())
+        rightListing.send(())
         try await harness.taskProvider.waitForAllTasks()
         #expect(sut.detailState == .cards)
     }
