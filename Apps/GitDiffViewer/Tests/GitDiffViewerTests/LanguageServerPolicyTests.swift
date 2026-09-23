@@ -62,6 +62,18 @@ struct LanguageServerPolicyTests {
         ViewerSettings(defaults: defaults).lspServerLocations = [LanguageServerPolicy.serverID: location]
     }
 
+    /// A policy over `defaults` whose user trusts every one of `roots`, as answering their prompts does.
+    private func makePolicy(
+        defaults: UserDefaults, locate: @escaping LanguageServerPolicy.Locate, trusting roots: [URL]
+    ) throws -> LanguageServerPolicy {
+        let trust = RepositoryTrust(defaults: defaults)
+        for root in roots {
+            trust.requestTrust(for: root)
+            trust.answer(try #require(trust.claimNextRequest()), trusts: true)
+        }
+        return LanguageServerPolicy(trust: trust, defaults: defaults, locate: locate)
+    }
+
     @Test
     func `a project-level disable stops the launch for that project only`() async throws {
         let repositories = try ScratchRepositories()
@@ -70,7 +82,7 @@ struct LanguageServerPolicyTests {
         let defaults = try makeDefaults()
         setProjectLocation(ToolLocation(isEnabled: false), root: disabled, defaults: defaults)
         let spy = LocateSpy()
-        let policy = LanguageServerPolicy(defaults: defaults, locate: spy.locate)
+        let policy = try makePolicy(defaults: defaults, locate: spy.locate, trusting: [disabled, other])
 
         #expect(await policy.configuration(forRoot: disabled) == nil)
         #expect(spy.requestCount == 0)
@@ -88,8 +100,7 @@ struct LanguageServerPolicyTests {
         setAppWideLocation(ToolLocation(isEnabled: false), defaults: defaults)
         let pinned = ToolLocation(isEnabled: true, customPath: "/opt/sourcekit-lsp")
         setProjectLocation(pinned, root: root, defaults: defaults)
-        let spy = LocateSpy()
-        let policy = LanguageServerPolicy(defaults: defaults, locate: spy.locate)
+        let policy = try makePolicy(defaults: defaults, locate: LocateSpy().locate, trusting: [root])
 
         #expect(policy.sourceKitLSPLocation(forRoot: root) == pinned)
         #expect(await policy.configuration(forRoot: root) != nil)
@@ -103,7 +114,7 @@ struct LanguageServerPolicyTests {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let defaults = try makeDefaults()
         setProjectLocation(ToolLocation(isEnabled: false), root: root, defaults: defaults)
-        let policy = LanguageServerPolicy(defaults: defaults, locate: LocateSpy().locate)
+        let policy = try makePolicy(defaults: defaults, locate: LocateSpy().locate, trusting: [root, folder])
 
         #expect(policy.sourceKitLSPLocation(forRoot: folder)?.isEnabled == false)
         #expect(await policy.configuration(forRoot: folder) == nil)
@@ -117,7 +128,7 @@ struct LanguageServerPolicyTests {
         let defaults = try makeDefaults()
         let appWide = ToolLocation(isEnabled: true, customPath: "/opt/sourcekit-lsp")
         setAppWideLocation(appWide, defaults: defaults)
-        let policy = LanguageServerPolicy(defaults: defaults, locate: LocateSpy().locate)
+        let policy = try makePolicy(defaults: defaults, locate: LocateSpy().locate, trusting: [])
 
         #expect(policy.sourceKitLSPLocation(forRoot: root) == appWide)
         #expect(policy.sourceKitLSPLocation(forRoot: outside) == appWide)
@@ -130,7 +141,7 @@ struct LanguageServerPolicyTests {
         let defaults = try makeDefaults()
         setProjectLocation(ToolLocation(isEnabled: false), root: root, defaults: defaults)
         let spy = LocateSpy()
-        let policy = LanguageServerPolicy(defaults: defaults, locate: spy.locate)
+        let policy = try makePolicy(defaults: defaults, locate: spy.locate, trusting: [])
 
         #expect(await policy.sdkServerExecutable() == LocateSpy.executable)
 

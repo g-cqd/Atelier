@@ -47,6 +47,8 @@ extension ToolStatusRow {
 struct ToolsSettings: View {
     @Bindable var settings: ViewerSettings
     let discovery: ToolDiscovery
+    /// The app's trust decisions, from the environment the app sets on the Settings scene.
+    @Environment(RepositoryTrust.self) private var trust: RepositoryTrust?
 
     /// Keyed by ``DiagnosticTool/rawValue`` for a static-analysis tool, or the server id for a language server.
     @State private var statuses: [String: ToolStatus] = [:]
@@ -101,6 +103,9 @@ struct ToolsSettings: View {
                 }
                 .disabled(!settings.diagnosticsEnabled)
                 .opacity(settings.diagnosticsEnabled ? 1 : 0.5)
+                if let trust {
+                    TrustedRepositoriesSection(trust: trust)
+                }
             }
             .formStyle(.grouped)
             SettingsRestoreDefaultsFooter(settings: settings, category: .tools)
