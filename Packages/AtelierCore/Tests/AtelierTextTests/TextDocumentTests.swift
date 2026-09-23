@@ -47,6 +47,22 @@ struct TextDocumentTests {
         #expect(document.serializedByteCount == "alpha\r\nbeta\r\n".utf8.count)
     }
 
+    @Test(arguments: [TextDocument.LineEnding.lineFeed, .carriageReturnLineFeed, .carriageReturn])
+    func `serializing serialized text changes nothing`(lineEnding: TextDocument.LineEnding) {
+        let once = TextDocument.serializedText(from: "alpha\nbeta\r\ngamma\rdelta\n", lineEnding: lineEnding)
+        #expect(TextDocument.serializedText(from: once, lineEnding: lineEnding) == once)
+    }
+
+    @Test func `serializing writes every kind of line break in the target ending`() {
+        let serialized = TextDocument.serializedText(from: "a\nb\r\nc\rd", lineEnding: .carriageReturnLineFeed)
+        #expect(Array(serialized.utf8) == Array("a\r\nb\r\nc\r\nd".utf8))
+    }
+
+    @Test func `normalizing turns CRLF and lone CR into LF and leaves LF text as it is`() {
+        #expect(Array(TextDocument.normalizingLineBreaks("a\r\nb\rc\n\r\n").utf8) == Array("a\nb\nc\n\n".utf8))
+        #expect(TextDocument.normalizingLineBreaks("a\nb\n") == "a\nb\n")
+    }
+
     @Test func `detectLineEnding recognizes common newline sequences`() {
         #expect(TextDocument.detectLineEnding(in: Data("alpha\nbeta\n".utf8)) == .lineFeed)
         #expect(TextDocument.detectLineEnding(in: Data("alpha\r\nbeta\r\n".utf8)) == .carriageReturnLineFeed)
