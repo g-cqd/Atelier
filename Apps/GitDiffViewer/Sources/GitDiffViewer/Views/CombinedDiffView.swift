@@ -55,11 +55,16 @@ private struct CardTitle: Equatable {
     let summary: FileChangeSummary
     /// Nil while diagnostics are off.
     let diagnostics: DiagnosticSeverityCounts?
+    let badgeScheme: BadgeScheme
+    /// Where this file's change stands in git: filled when committed or staged, stroked when unstaged or untracked.
+    let badgeState: BadgeChangeState
 
     init(file: RenderedFile, model: DiffViewerModel) {
         displayPath = model.displayPath(for: file.path)
         summary = model.changeSummary(for: file.path, rendered: file.rendered)
         diagnostics = model.settings.diagnosticsEnabled ? model.diagnosticSeverityCounts(for: file.path) : nil
+        badgeScheme = model.settings.badgeScheme
+        badgeState = model.badgeState(ofPath: file.path)
     }
 }
 
@@ -282,7 +287,7 @@ private struct FileCardHeader: View {
             if let diagnostics = title.diagnostics {
                 DiagnosticCountBadge(counts: diagnostics)
             }
-            ChangeBadge(summary: title.summary)
+            ChangeBadge(summary: title.summary, scheme: title.badgeScheme, state: title.badgeState)
         }
         .padding(.leading, 12)
         // The badge sits as far from the card's edge as from its top and bottom.

@@ -110,6 +110,8 @@ extension BadgeColorToken {
 /// A letter badge for the kind of change, with line counts where they mean something.
 struct ChangeBadge: View {
     let summary: FileChangeSummary
+    var scheme: BadgeScheme = .classic
+    var state: BadgeChangeState = .staged
 
     var body: some View {
         let glyph = ChangeGlyph(summary.kind)
@@ -120,7 +122,7 @@ struct ChangeBadge: View {
                 Text("−\(summary.removedLines)")
                     .foregroundStyle(.red)
             }
-            ChangeGlyphBadge(glyph: glyph)
+            ChangeGlyphBadge(glyph: glyph, scheme: scheme, state: state)
                 .help(title)
         }
         .font(.caption.monospacedDigit())
