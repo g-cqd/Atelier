@@ -207,9 +207,9 @@ package final class DiffGutterView: NSView {
     )? {
         guard overlay?.isEmpty == false, point.x >= 0, point.x < bounds.width else { return nil }
         var found: (Int, DiagnosticOverlay.RowDiagnostics, NSRect)?
-        forEachFragment(in: Self.row(at: point)) { fragment, row, rowIndex, y in
+        forEachFragment(in: Self.row(at: point)) { fragment, _, rowIndex, y in
             let frame = fragment.layoutFragmentFrame
-            guard row.kind != .gap, point.y >= y, point.y < y + frame.height, let diagnostics = overlay?.row(rowIndex)
+            guard point.y >= y, point.y < y + frame.height, let diagnostics = overlay?.row(rowIndex)
             else { return }
             found = (rowIndex, diagnostics, NSRect(x: 0, y: y, width: bounds.width, height: frame.height))
         }

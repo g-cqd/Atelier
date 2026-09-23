@@ -158,7 +158,7 @@ package final class MinimapView: NSView {
 
     private static func priority(of kind: RowKind) -> Int {
         switch kind {
-            case .filler, .gap: 0
+            case .filler: 0
             case .context: 1
             case .header: 2
             case .modified: 3
