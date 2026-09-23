@@ -18,6 +18,8 @@ package final class DiagnosticsModel {
 
     /// Called with every path whose findings changed, so the owner can invalidate just those rows.
     @ObservationIgnored package var onFindingsChanged: ((Set<String>) -> Void)?
+    /// The finding the Findings list last opened, until the window scrolls to its line.
+    @ObservationIgnored package var pendingReveal: FindingReveal?
 
     private let session: DiagnosticsSession
     private let settings: ViewerSettings
