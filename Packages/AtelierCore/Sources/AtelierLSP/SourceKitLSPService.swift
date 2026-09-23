@@ -2,8 +2,7 @@ import AtelierProcess
 public import AtelierSyntaxModel
 public import Foundation
 
-/// Races `operation` against a timeout, whichever finishes first; the loser is cancelled when the task group
-/// scope exits.
+/// `operation`'s result, or `LSPServiceError.timedOut` when `timeout` elapses first; the loser is cancelled.
 private func raceAgainstTimeout<T: Sendable>(
     clock: any Clock<Duration>,
     timeout: Duration,
@@ -23,20 +22,16 @@ private func raceAgainstTimeout<T: Sendable>(
     }
 }
 
-/// Internal failure modes that never escape ``SourceKitLSPService``'s public API; every public entry point
-/// turns them (and everything else) into `nil`.
+/// Failures internal to ``SourceKitLSPService``; its public API reports every failure as `nil`.
 private enum LSPServiceError: Error, Sendable {
     case timedOut
 }
 
 /// A long-lived sourcekit-lsp session, kept warm across hovers and shut down when idle.
 ///
-/// One actor owns the whole lifecycle: it lazily spawns the server and performs the `initialize` handshake on
-/// first use, tracks which documents it has told the server about (opening, reopening on content changes, and
-/// closing the least-recently-used past a cap), times out and recovers from a server that stops answering, and
-/// shuts itself down -- gracefully, and after a period with no hovers -- so nothing keeps sourcekit-lsp alive
-/// forever. A hover after either kind of shutdown reconnects lazily; only a *failed* connection attempt spends
-/// the restart budget.
+/// The server is spawned and initialized on first use, keeps at most ``Configuration/openDocumentLimit`` documents
+/// open, and is shut down after ``Configuration/idleShutdown`` without a hover. A hover after any shutdown
+/// reconnects; only a failed connection attempt spends the restart budget.
 public actor SourceKitLSPService {
     /// How to reach the server, and the policy for keeping the session alive.
     public struct Configuration: Sendable {
@@ -71,9 +66,7 @@ public actor SourceKitLSPService {
         }
     }
 
-    /// Builds an unstarted connection for a session. ``SourceKitLSPService`` calls ``LSPConnection/start()`` and
-    /// performs the `initialize` handshake itself, so a test factory only needs to hand back a connection over
-    /// whatever transport it likes -- a real child process, or a scripted double.
+    /// Builds an unstarted connection for a session; the service starts it and performs the `initialize` handshake.
     public typealias ConnectionFactory = @Sendable (Configuration) async throws -> LSPConnection
 
     private struct OpenDocument {
@@ -86,13 +79,10 @@ public actor SourceKitLSPService {
     private let connectionFactory: ConnectionFactory
 
     private var connection: LSPConnection?
-    /// Non-nil while a connection is being created and handshaken: a first caller does the work, every other
-    /// concurrent caller for the same session parks its continuation here instead of racing its own
-    /// ``connectionFactory``/`initialize` and clobbering the stored ``connection``.
+    /// Non-nil while a connection is being established; concurrent callers wait here for the first caller's result.
     private var establishingWaiters: [CheckedContinuation<LSPConnection?, Never>]?
-    /// Bumped by every teardown path (``shutdown()``, the abrupt teardown on a dead transport, an idle
-    /// timeout). An in-flight ``ensureConnection()`` that started before the bump must not publish its result
-    /// (or leave a connection nobody will stop) once the session has moved on without it.
+    /// Bumped by ``shutdown()`` and by the teardown after a dead transport, so a connection established across either
+    /// is stopped rather than published.
     private var connectionGeneration = 0
     private var restartsUsed = 0
     private var permanentlyUnavailable = false
@@ -101,8 +91,7 @@ public actor SourceKitLSPService {
     /// Least-recently-used order, oldest first.
     private var openOrder: [String] = []
 
-    /// Bumped on every ``hover(uri:languageID:content:line:utf16Column:)`` call; an idle-shutdown task that
-    /// fires after the generation has moved on knows a later hover kept the session alive and does nothing.
+    /// Bumped per scheduled idle shutdown; a timer that fires with a stale generation does nothing.
     private var idleGeneration = 0
     private var idleTask: Task<Void, Never>?
 
@@ -116,8 +105,8 @@ public actor SourceKitLSPService {
         self.connectionFactory = connectionFactory ?? Self.defaultConnectionFactory
     }
 
-    /// Answers a hover query, or `nil` when the server is unavailable, times out, or has nothing to show.
-    /// Never throws: every failure mode this session can hit collapses to `nil`.
+    /// The server's hover at the position, or `nil` when the server is unavailable, times out or has nothing to
+    /// show. Opens `uri` with `content` on the server first, and restarts the idle timer.
     public func hover(
         uri: String, languageID: String, content: String, line: Int, utf16Column: Int
     ) async -> HoverContent? {
@@ -137,12 +126,11 @@ public actor SourceKitLSPService {
             guard let hover, !hover.markdown.isEmpty else { return nil }
             return HoverContent(markdown: hover.markdown, source: .languageServer)
         } catch LSPConnectionError.transportClosed {
-            // The connection actually died; drop it so the next hover reconnects from scratch.
+            // A dead connection is dropped so the next hover reconnects.
             await abruptTeardown()
             return nil
         } catch {
-            // A timeout, a server error response, or a malformed response: the connection itself may still be
-            // fine, so leave it up for the next hover.
+            // A timeout or a bad response leaves a connection that may still be fine.
             return nil
         }
     }
@@ -170,9 +158,7 @@ public actor SourceKitLSPService {
                 if establishingWaiters != nil {
                     establishingWaiters?.append(continuation)
                 } else {
-                    // The in-flight attempt finished (and cleared the waiters list) between the check above and
-                    // this closure running; both steps are actor-isolated and synchronous, so this cannot
-                    // actually happen, but resume rather than leak the continuation if it ever does.
+                    // Unreachable without a suspension since the check above; resumed rather than leaked all the same.
                     continuation.resume(returning: connection)
                 }
             }
@@ -188,8 +174,7 @@ public actor SourceKitLSPService {
             newConnection = created
             try await performHandshake(created)
             guard connectionGeneration == startedGeneration else {
-                // A teardown ran while this was establishing: the session has already moved on without it, so
-                // this connection must not become the stored one -- stop it instead of leaking it.
+                // A teardown ran meanwhile: stop this connection instead of publishing it.
                 await created.stop()
                 resumeEstablishingWaiters(with: nil)
                 return nil
@@ -198,8 +183,7 @@ public actor SourceKitLSPService {
             resumeEstablishingWaiters(with: created)
             return created
         } catch {
-            // A connection that was created but never finished (or never started) `initialize` still has a
-            // running reader/process behind it; stop it before giving up so a failed attempt does not leak.
+            // A created connection has a running process behind it even when `initialize` failed.
             if let newConnection {
                 await newConnection.stop()
             }
@@ -233,8 +217,7 @@ public actor SourceKitLSPService {
         try await connection.notify("initialized", InitializedParams())
     }
 
-    /// The transport is already gone (or as good as); drop it without wasting time on the `shutdown`/`exit`
-    /// protocol over a connection that cannot answer.
+    /// Drops a connection whose transport is gone, skipping the `shutdown`/`exit` exchange it cannot answer.
     private func abruptTeardown() async {
         connectionGeneration += 1
         guard let connection else { return }
@@ -244,8 +227,7 @@ public actor SourceKitLSPService {
         await connection.stop()
     }
 
-    /// `shutdown`, then `exit`, then close the transport -- the well-behaved way to end a session that might
-    /// still be listening. Used by both the public ``shutdown()`` and an idle timeout.
+    /// Ends a session that may still be listening: `shutdown`, then `exit`, then the transport closes.
     private func gracefulTeardown(_ connection: LSPConnection) async {
         _ = try? await raceAgainstTimeout(clock: clock, timeout: .milliseconds(500)) {
             try await connection.requestOptional("shutdown", JSONValue.null, as: JSONValue.self)
@@ -258,9 +240,6 @@ public actor SourceKitLSPService {
 
     private func scheduleIdleShutdown() {
         idleTask?.cancel()
-        // Each scheduling call gets its own, strictly increasing generation, distinct from every earlier one:
-        // an older timer's generation can then never match the latest one, even if two overlapping hovers both
-        // reach here between the same pair of awaits.
         idleGeneration += 1
         let generation = idleGeneration
         let duration = configuration.idleShutdown
@@ -269,10 +248,7 @@ public actor SourceKitLSPService {
             do {
                 try await sessionClock.sleep(for: duration)
             } catch {
-                // Cancelled by a later call to scheduleIdleShutdown (or by shutdown()/deinit): the session is
-                // either still alive under a newer timer or already being torn down some other way. Firing
-                // idleFire here regardless of cancellation is exactly what let a fresher timer's cancellation
-                // of a stale one still shut the live connection down; must return without touching it.
+                // Cancelled: a newer timer or a teardown owns the session now.
                 return
             }
             await self?.idleFire(generation: generation)

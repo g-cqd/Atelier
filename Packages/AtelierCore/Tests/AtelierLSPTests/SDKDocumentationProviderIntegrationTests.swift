@@ -4,9 +4,8 @@ import Testing
 
 @testable import AtelierLSP
 
-/// Real-toolchain probe against the machine's own `sourcekit-lsp`, skipped by default. Set
-/// `ATELIER_LSP_INTEGRATION=1` to run it -- it spawns an actual sourcekit-lsp process and exercises the SDK
-/// tier end to end, the same shape as the manual verification this feature's design doc records.
+/// A probe against the machine's own `sourcekit-lsp`, run only with `ATELIER_LSP_INTEGRATION=1`: it spawns a real
+/// server and exercises the SDK tier end to end.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["ATELIER_LSP_INTEGRATION"] == "1"))
 struct SDKDocumentationProviderIntegrationTests {
     @Test

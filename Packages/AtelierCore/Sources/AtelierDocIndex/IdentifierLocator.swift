@@ -6,8 +6,7 @@ import SwiftSyntax
 public enum IdentifierLocator {
     /// The identifier token covering `(line, utf16Column)`, zero-based; `nil` for keywords, literals, operators,
     /// trivia (including surrounding whitespace), or a position outside the document.
-    /// - Note: parses on every call. A small per-content cache would avoid repeated parses for hover queries
-    ///   against the same document, but is deferred to keep this first version free of shared mutable state.
+    /// - Complexity: O(n) in the length of `content`, which is parsed on every call.
     public static func identifier(in content: String, line: Int, utf16Column: Int) -> String? {
         guard let offset = utf8Offset(in: content, line: line, utf16Column: utf16Column) else { return nil }
         let tree = Parser.parse(source: content)

@@ -26,8 +26,7 @@ private actor ScriptedConnectionFactory {
     func transport(at index: Int) -> PipeTransport { transports[index] }
     var generationCount: Int { transports.count }
 
-    /// Spins (yielding, not sleeping) until at least `count` connections have been requested. `make()` runs
-    /// on this same actor, so there's no missed-wakeup risk here -- just a wait for the next hop.
+    /// Yields until at least `count` connections have been requested; `make()` runs on this actor, so none is missed.
     func waitForGeneration(_ count: Int) async {
         while transports.count < count {
             await Task.yield()
@@ -220,8 +219,7 @@ struct SourceKitLSPServiceTests {
             serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
         configuration.requestTimeout = .milliseconds(10)
         configuration.maximumRestarts = 2
-        // Idle shutdown isn't under test here; resolving instantly (rather than parking) keeps its sleeps out
-        // of the clock's sleeper bookkeeping entirely, so they can't be mistaken for the timeouts below.
+        // Zero, so idle-shutdown sleeps resolve at once and are never mistaken for the timeouts below.
         configuration.idleShutdown = .zero
         let clock = TestClock()
         let service = SourceKitLSPService(configuration: configuration, clock: clock) { _ in await factory.make() }
@@ -231,9 +229,7 @@ struct SourceKitLSPServiceTests {
         for attempt in 0 ..< 3 {
             async let hover = service.hover(
                 uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
-            // Waiting for a *further* registration (rather than "at least one parked") matters once earlier
-            // iterations have left an idle-shutdown sleeper parked far in the future: an "at least one" check
-            // would be satisfied by that stale sleeper instead of this attempt's fresh timeout.
+            // This attempt's own timeout sleeper, whatever sleepers are already parked.
             try await clock.waitForAdditionalSleepers(1)
             clock.advance(by: .milliseconds(10))
             if attempt < 2 {
@@ -335,16 +331,11 @@ struct SourceKitLSPServiceTests {
             transport, id: try #require(try await decodeSent(transport, at: 3).id), result: hoverResult(markdown: "a"))
         _ = try #require(await hover)
 
-        // By the time hover() has returned, the timeout sleepers its own `initialize`/`hover` requests raced
-        // against have already been cancelled and unparked, so "at least one parked" can only mean the
-        // deferred idle-shutdown sleep -- unlike a loop of repeated hovers, there's no stale sleeper here that
-        // an "at least" check could be fooled by.
+        // The request timeouts were unparked when hover() returned, so the parked sleeper is the idle shutdown.
         try await clock.waitForSleepers(atLeast: 1)
         clock.advance(by: .milliseconds(10))
 
-        // Graceful teardown: a `shutdown` request, answered promptly here, then `exit`. (A `shutdown` that
-        // goes unanswered would time out and cancel-request its way to the same place, but answering it keeps
-        // this assertion about the happy path uncluttered by that separate behavior.)
+        // Graceful teardown: a `shutdown` request, answered here, then `exit`.
         await transport.sink.waitForCount(5)
         let shutdownEnvelope = try await decodeSent(transport, at: 4)
         #expect(shutdownEnvelope.method == "shutdown")

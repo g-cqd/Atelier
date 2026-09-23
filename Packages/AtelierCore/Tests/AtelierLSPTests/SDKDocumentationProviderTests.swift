@@ -78,9 +78,8 @@ private func driveOneProbe(
     return transport
 }
 
-/// Drives a follow-up probe's `didOpen` + `hover` on an already-connected transport (no handshake needed),
-/// starting right after `startIndex` frames already sent -- used for the type-position fallback probe, which
-/// reuses the live connection from the primary probe.
+/// Drives a follow-up probe's `didOpen` and `hover` on a connected transport, after its first `startIndex` frames;
+/// the type-position probe reuses the primary probe's connection.
 private func driveFollowUpProbe(
     _ transport: PipeTransport, afterFrameCount startIndex: Int, markdown: JSONValue
 ) async throws {
@@ -135,9 +134,7 @@ struct SDKDocumentationProviderTests {
     func `rejects a placeholder like dollar-zero`() {
         let content = "$0.foo"
         let result = SDKDocumentationProvider.extractChain(in: content, line: 0, utf16Column: 0)
-        // "$0" is a valid chain-unit run and starts with a non-letter, non-uppercase character; dotted with
-        // "foo" it's accepted as a chain (sourcekit-lsp itself will simply fail to resolve it), but standalone
-        // "$0" with no following member must not crash extraction.
+        // Dotted, "$0.foo" stays a chain for sourcekit-lsp to fail on; extraction only has to not crash.
         #expect(result?.chain == "$0.foo")
     }
 
@@ -238,8 +235,7 @@ struct SDKDocumentationProviderTests {
         let hoverEnvelope = try await decodeSent(transport, at: 3)
         let hoverData = try JSONEncoder().encode(try #require(hoverEnvelope.params))
         let decodedHover = try JSONDecoder().decode(DecodedHoverParams.self, from: hoverData)
-        // "let _ = " is 8 UTF-16 units, then "NSVisualEffectView.Material." is 28 more -> the chain's tail
-        // segment, "hudWindow", starts at 36; hovering the head (8) would land on "NSVisualEffectView" instead.
+        // "let _ = " (8 units) plus "NSVisualEffectView.Material." (28): the tail segment "hudWindow" starts at 36.
         #expect(decodedHover.position.character == 36)
     }
 

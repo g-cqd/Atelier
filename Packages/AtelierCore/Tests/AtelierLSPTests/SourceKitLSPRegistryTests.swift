@@ -72,8 +72,7 @@ private actor ConfigurationSpy {
         let gate = AsyncLatch()
         let entered = AsyncLatch()
         let registry = SourceKitLSPRegistry { root in
-            // Only the winning first caller ever reaches here; a duplicate-initialization bug would call
-            // this twice concurrently, which `spy.callCount` below would then catch as 2 instead of 1.
+            // Only the first caller gets here; `spy.callCount` below catches a second initialization.
             entered.open()
             try? await gate.wait()
             return await spy.makeConfiguration(for: root)

@@ -103,10 +103,6 @@ struct DocIndexHoverProviderTests {
 }
 
 extension DocIndexHoverProviderTests {
-    /// A focused repro at the hover-provider layer, one level up from `DocCommentIndexTests`' own repro of the
-    /// same shape: hovering the property's own *name*, on its declaration line, inside an `extension`, with an
-    /// explicit `get` accessor block -- exactly the position a user hovering `displayName` in
-    /// `var displayName: String { get { ... } }` lands on.
     @Test
     func `hovering a computed property's own name on its declaration line resolves its doc comment`() async throws {
         let content = """

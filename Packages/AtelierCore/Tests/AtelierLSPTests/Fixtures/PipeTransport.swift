@@ -31,8 +31,7 @@ final class PipeTransport: LSPTransport, Sendable {
     let incoming: AsyncThrowingStream<Data, any Error>
     private let incomingContinuation: AsyncThrowingStream<Data, any Error>.Continuation
     let sink = FrameSink()
-    /// How many times ``close()`` ran, so a test can prove ``LSPConnection/stop()`` disposed the transport even
-    /// when the read loop had already marked the connection closed on its own.
+    /// How many times ``close()`` ran.
     let closeCount = CloseCounter()
 
     init() {

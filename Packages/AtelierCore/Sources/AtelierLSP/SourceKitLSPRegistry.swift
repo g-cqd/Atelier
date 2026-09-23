@@ -1,39 +1,26 @@
 public import Foundation
 
 /// One language-server session per workspace root; sessions start lazily and are shut down together.
-///
-/// Hoisted into ``AtelierLSP`` rather than kept app-side so KittyCode -- or any other client that wants one
-/// warm sourcekit-lsp session per workspace -- can reuse it verbatim.
 public actor SourceKitLSPRegistry {
     private let makeConfiguration: @Sendable (URL) async -> SourceKitLSPService.Configuration?
 
-    /// What ``service(forRoot:)`` knows about one root: a resolved answer, or a first caller's initialization
-    /// still running with every other concurrent caller's continuation parked on it.
+    /// A root's resolved session, or the callers waiting on its first initialization.
     private enum Entry {
         case ready(SourceKitLSPService?)
         case inProgress([CheckedContinuation<SourceKitLSPService?, Never>])
     }
 
-    /// `nil` values inside ``Entry/ready(_:)`` are meaningful entries: a root for which no server executable
-    /// could be resolved, cached so a later lookup does not re-run discovery. `shutdownAll()` drops the whole
-    /// table, so a fresh lookup after it re-resolves from scratch.
+    /// A `nil` ready entry caches a root with no resolvable server until ``shutdownAll()``.
     private var entries: [URL: Entry] = [:]
-    /// Bumped by every ``shutdownAll()``; an initialization started before a call publishes its result only if
-    /// this generation has not moved since, so a session ``shutdownAll()`` already tore the table down for
-    /// cannot resurrect itself into it afterward.
+    /// Bumped by every ``shutdownAll()``, so an initialization that spans one is stopped rather than published.
     private var generation = 0
 
     public init(makeConfiguration: @Sendable @escaping (URL) async -> SourceKitLSPService.Configuration?) {
         self.makeConfiguration = makeConfiguration
     }
 
-    /// The session for `root`, creating it on first request. `nil` when no server executable could be resolved
-    /// for this root; that failure is cached too, so a repeated lookup does not keep re-running discovery.
-    ///
-    /// Concurrent first requests for the same root do not each start their own service: the first caller runs
-    /// ``makeConfiguration`` and constructs the service, and every other concurrent caller parks until that
-    /// result is ready, so a root never ends up with two live services -- only one of which the table (and
-    /// therefore ``shutdownAll()``) would ever know about.
+    /// The session for `root`, created on the first request; `nil`, cached as well, when no server executable
+    /// resolves for it. Concurrent first requests share one initialization, so a root never gets two services.
     public func service(forRoot root: URL) async -> SourceKitLSPService? {
         switch entries[root] {
             case .ready(let service):
@@ -45,9 +32,7 @@ public actor SourceKitLSPRegistry {
                         waiters.append(continuation)
                         entries[root] = .inProgress(waiters)
                     } else {
-                        // The in-flight attempt finished (and published) between the switch above and this
-                        // closure running; both steps are actor-isolated and synchronous, so this cannot
-                        // actually happen, but resume rather than leak the continuation if it ever does.
+                        // Unreachable without a suspension since the switch; resumed rather than leaked all the same.
                         continuation.resume(returning: nil)
                     }
                 }
@@ -60,10 +45,8 @@ public actor SourceKitLSPRegistry {
         }
     }
 
-    /// Publishes the outcome of one initialization, unless ``shutdownAll()`` ran while it was in flight -- in
-    /// which case the table has already moved on without it, so this stops the freshly built service (if any)
-    /// instead of resurrecting a stale entry or leaving a live connection untracked by any future
-    /// ``shutdownAll()``.
+    /// Publishes one initialization's outcome to its waiters, or shuts the new service down when ``shutdownAll()``
+    /// ran meanwhile.
     private func publish(
         _ service: SourceKitLSPService?, forRoot root: URL, startedGeneration: Int
     ) async -> SourceKitLSPService? {
@@ -83,10 +66,8 @@ public actor SourceKitLSPRegistry {
         return service
     }
 
-    /// Shuts down every session this registry has started, then forgets them: the next ``service(forRoot:)``
-    /// re-resolves and starts fresh. Any initialization still in flight is cut loose too -- its waiters are
-    /// resumed with `nil` immediately rather than left parked until an initialization racing a now-cleared
-    /// table happens to finish.
+    /// Shuts down every session this registry started and forgets every root, so the next ``service(forRoot:)``
+    /// resolves afresh. Callers waiting on an initialization in flight get `nil` at once.
     public func shutdownAll() async {
         generation += 1
         var readyServices: [SourceKitLSPService] = []
