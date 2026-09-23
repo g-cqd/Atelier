@@ -85,14 +85,14 @@ struct DiffRendererTests {
     }
 
     @Test(arguments: [0.0, 1.4])
-    func `a gap's band is a line and its hairline tall, whatever the line height`(multiple: Double) throws {
+    func `a gap's band is exactly one row tall, whatever the line height`(multiple: Double) throws {
         let rendered = try #require(
             DiffRenderer.render(
                 oldText: old, newText: new, language: .plain, lineHeightMultiple: multiple,
                 layout: .changes(context: 2, expansions: [:])
             )
             .unified)
-        #expect(rendered.gapBandHeight == rendered.lineHeight + 1)
+        #expect(rendered.gapBandHeight == rendered.lineHeight)
     }
 
     @Test
