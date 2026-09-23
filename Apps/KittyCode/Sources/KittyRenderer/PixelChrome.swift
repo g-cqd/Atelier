@@ -47,6 +47,7 @@ public enum ChromeElement: Sendable, Hashable {
 /// Image ids live in a range of their own (`1 << 20` upwards) so they cannot collide with any other image the
 /// app places. Every command is quiet, so nothing comes back on the input stream.
 public struct PixelChrome: Sendable, Equatable {
+    /// The cell size the elements are drawn at; always ``TerminalCapabilities/CellPixelSize/isDrawable``.
     public let cell: TerminalCapabilities.CellPixelSize
     private var imageIDs: [ImageKey: UInt32] = [:]
     private var nextImageID: UInt32 = 1 << 20
@@ -64,7 +65,10 @@ public struct PixelChrome: Sendable, Equatable {
         var color: ColorRGB
     }
 
-    public init(cell: TerminalCapabilities.CellPixelSize) {
+    /// A layer drawing at `cell`, or nil when `cell` is not drawable: a zero side would divide by zero, and a huge one
+    /// would transmit huge images.
+    public init?(cell: TerminalCapabilities.CellPixelSize) {
+        guard cell.isDrawable else { return nil }
         self.cell = cell
     }
 

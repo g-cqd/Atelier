@@ -446,8 +446,7 @@ public enum ViewRenderer {
                                 if char != " " && char != "\t" { wrapIsLeading = false }
                             }
 
-                            let isControl =
-                                displayChar.asciiValue.map({ $0 < 0x20 && $0 != 0 }) == true
+                            let isControl = isShownAsBlank(displayChar)
                             if isControl {
                                 displayChar = " "
                                 if width == 0 { width = 1 }
@@ -945,7 +944,7 @@ public enum ViewRenderer {
 
                 // Control characters (tab, CR, etc.) must never reach the terminal
                 // output — they'd cause cursor jumps and corrupt the display.
-                let isControl = displayChar.asciiValue.map({ $0 < 0x20 && $0 != 0 }) == true
+                let isControl = isShownAsBlank(displayChar)
                 if isControl {
                     displayChar = " "
                     if width == 0 { width = 1 }
@@ -1001,6 +1000,12 @@ public enum ViewRenderer {
             buffer[row, currentCol] = Cell(character: " ", style: fillStyle)
             currentCol += 1
         }
+    }
+
+    /// Whether the editor draws `char` as blank columns: a C0 control, DEL or a C1 control, but not NUL, which the
+    /// editor's layout gives no column.
+    private static func isShownAsBlank(_ char: Character) -> Bool {
+        char != "\0" && ScreenBuffer.isControl(char)
     }
 
     private static func renderCharacter(

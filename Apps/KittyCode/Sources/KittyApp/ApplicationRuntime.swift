@@ -14,10 +14,22 @@ import Observation
 public final class ApplicationRuntime {
     private let connection: any TerminalConnection
     private let taskProvider: any TaskProvider
+    private let environment: [String: String]
 
-    public init(connection: any TerminalConnection, taskProvider: any TaskProvider = .default) {
+    /// A runtime whose pixel chrome follows the process environment.
+    public convenience init(connection: any TerminalConnection, taskProvider: any TaskProvider = .default) {
+        self.init(connection: connection, taskProvider: taskProvider, environment: ProcessInfo.processInfo.environment)
+    }
+
+    /// A runtime whose pixel chrome follows `environment` rather than the process environment.
+    /// - Parameters:
+    ///   - connection: The terminal the session reads from and draws to.
+    ///   - taskProvider: Starts the render clock's observation task.
+    ///   - environment: The variables that decide pixel chrome.
+    init(connection: any TerminalConnection, taskProvider: any TaskProvider, environment: [String: String]) {
         self.connection = connection
         self.taskProvider = taskProvider
+        self.environment = environment
     }
 
     /// The cell size pixel chrome draws with, when the terminal supports it. `KITTYCODE_PIXEL_CHROME=0`
@@ -34,17 +46,41 @@ public final class ApplicationRuntime {
         }
     }
 
-    /// Gives `pipeline` a pixel chrome layer sized for `size` when the terminal supports one. When `replacing`,
-    /// only a pipeline that already had chrome gets a new layer (a resize may change the cell size), and the
-    /// new layer starts by deleting what the old one placed.
-    private static func attachPixelChrome(to pipeline: RenderPipeline, size: TerminalSize, replacing: Bool) {
-        if replacing {
-            guard pipeline.chrome != nil, let cell = TerminalCapabilities.cellPixelSize(of: size) else { return }
-            var chrome = PixelChrome(cell: cell)
+    /// Replaces the pixel chrome of `pipeline` after a resize to `size`. A drawable cell size gets a new layer, which
+    /// starts by deleting what the old one placed. Any other size deletes the old layer's placements and leaves no
+    /// layer, until a later resize brings a drawable cell size back.
+    private func replacePixelChrome(of pipeline: RenderPipeline, for size: TerminalSize) {
+        if let cell = TerminalCapabilities.cellPixelSize(of: size), var chrome = PixelChrome(cell: cell) {
             chrome.reset()
             pipeline.chrome = chrome
-        } else if let cell = pixelChromeCell(environment: ProcessInfo.processInfo.environment, size: size) {
-            pipeline.chrome = PixelChrome(cell: cell)
+        } else if pipeline.chrome != nil {
+            pipeline.chrome = nil
+            do {
+                try connection.write(PixelChrome.deleteAllBytes)
+            } catch {
+                KittyLogger.warning("Deleting the pixel chrome failed: \(error)")
+            }
+        }
+    }
+
+    /// Resizes `pipeline` to `reportedSize`, clamped again since an event can be injected without passing through the
+    /// signal handler, gives it the pixel chrome for the new size when the session draws pixel chrome, then renders
+    /// and redraws the whole screen.
+    private func resize(
+        _ pipeline: RenderPipeline, to reportedSize: TerminalSize, drawsPixelChrome: Bool,
+        render: @MainActor (RenderPipeline) -> Void
+    ) {
+        let newSize = TerminalCapabilities.clampedSize(reportedSize)
+        pipeline.resize(columns: newSize.columns, rows: newSize.rows)
+        if drawsPixelChrome {
+            replacePixelChrome(of: pipeline, for: newSize)
+        }
+        pipeline.buffer.clear()
+        render(pipeline)
+        do {
+            try pipeline.forceRedraw()
+        } catch {
+            KittyLogger.error("Redraw after resize failed: \(error)")
         }
     }
 
@@ -106,10 +142,10 @@ public final class ApplicationRuntime {
             throw .terminalSetupFailed(String(describing: error))
         }
 
-        // Get terminal size
+        // Get terminal size, limited so that an absurd report cannot size the cell buffers
         let size: TerminalSize
         do {
-            size = try connection.getSize()
+            size = TerminalCapabilities.clampedSize(try connection.getSize())
         } catch {
             throw .terminalSetupFailed("Could not get terminal size")
         }
@@ -119,7 +155,9 @@ public final class ApplicationRuntime {
             columns: size.columns,
             rows: size.rows
         )
-        Self.attachPixelChrome(to: pipeline, size: size, replacing: false)
+        // Whether the session draws pixel chrome is decided once; a resize only changes the layer's cell size.
+        pipeline.chrome = Self.pixelChromeCell(environment: environment, size: size).flatMap(PixelChrome.init(cell:))
+        let drawsPixelChrome = pipeline.chrome != nil
 
         let inputSource = InputSource(connection: connection)
         configureInputSource(inputSource)
@@ -151,7 +189,7 @@ public final class ApplicationRuntime {
             onResize: { [inputSource] in
                 // Query new size and inject resize event
                 if let newSize = try? conn.getSize() {
-                    inputSource.inject(.resize(newSize))
+                    inputSource.inject(.resize(TerminalCapabilities.clampedSize(newSize)))
                 } else {
                     KittyLogger.debug(public: "Failed to query terminal size on SIGWINCH")
                 }
@@ -184,16 +222,8 @@ public final class ApplicationRuntime {
             }
 
             switch event {
-                case .resize(let newSize):
-                    pipeline.resize(columns: newSize.columns, rows: newSize.rows)
-                    Self.attachPixelChrome(to: pipeline, size: newSize, replacing: true)
-                    pipeline.buffer.clear()
-                    render(pipeline)
-                    do {
-                        try pipeline.forceRedraw()
-                    } catch {
-                        KittyLogger.error("Redraw after resize failed: \(error)")
-                    }
+                case .resize(let reportedSize):
+                    resize(pipeline, to: reportedSize, drawsPixelChrome: drawsPixelChrome, render: render)
                 default:
                     break
             }
