@@ -37,8 +37,14 @@ public enum IntralineDiff {
             .compactMap { Self.trimmed($0, lead: oldLead) }
         let newRanges = ranges(of: newUnits, granularity: granularity, tokens: newTokens)
             .compactMap { Self.trimmed($0, lead: newLead) }
-        var edits = LineDiff.diff(
-            oldRanges.map { oldUnits[$0] }, newRanges.map { newUnits[$0] }, anchoringRareLines: false)
+        let total = max(oldUnits.count + newUnits.count, 1)
+        // Every token holds a unit or more, so any script over them changes at least as many units as the shortest
+        // one has edits: once that passes the share, the pair can only read as replaced, and the search stops there.
+        guard
+            var edits = LineDiff.diff(
+                oldRanges.map { oldUnits[$0] }, newRanges.map { newUnits[$0] },
+                maximumEdits: Int(Double(total) * maximumChangedShare))
+        else { return nil }
         for refiner in refiners {
             edits = refiner.refine(edits, oldRanges: oldRanges, newRanges: newRanges)
         }
@@ -59,15 +65,16 @@ public enum IntralineDiff {
             }
         }
 
-        let total = max(oldUnits.count + newUnits.count, 1)
         guard Double(changed) / Double(total) <= maximumChangedShare,
             oldEmphasis.count <= maximumRangesPerSide, newEmphasis.count <= maximumRangesPerSide
         else { return nil }
         return (oldEmphasis, newEmphasis)
     }
 
+    /// `range` past the indentation, or nil when nothing of it is left.
     private static func trimmed(_ range: Range<Int>, lead: Int) -> Range<Int>? {
-        range.upperBound <= lead ? nil : max(range.lowerBound, lead) ..< range.upperBound
+        let start = max(range.lowerBound, lead)
+        return start < range.upperBound ? start ..< range.upperBound : nil
     }
 
     private static func ranges(of units: [UInt16], granularity: IntralineGranularity, tokens: [Range<Int>]?) -> [Range<
