@@ -10,23 +10,32 @@ Screenshots the user took on 09-23 from Xcode 26.6, of the throwaway project in
 ![Handle at the top](assets/xcode-reference/gap-handle-at-top.png)
 ![Handle above a change](assets/xcode-reference/gap-handle-above-change.png)
 
-- **No row of its own:** the hidden run takes no line. A hairline across the gutter marks it, on the boundary
-  between the two visible lines around it, and line numbers jump across it (18, then 237). The run leaves no other
-  trace.
-- **Shape:** one rounded rectangle, about 20 × 14 pt, centred on that hairline, which splits it into two halves.
-  Each half carries one short grip line and is a handle of its own. The upper half is drawn over the bottom of the
-  line above the hairline, and the lower half over the top of the line below it.
+- **A band of its own:** the hidden run takes an empty band between the two visible lines around it, with no text,
+  no tint and no line number. It is 19 pt tall against Xcode's 18 pt lines, one line and its hairline. Measured at
+  2× on these screenshots: lines 18 and 237 lie 37 pt apart, against 18 pt between 237 and 238, and the handle fills
+  exactly the 19 pt between them. In the inline change screenshot, the lower half ends on the pixel where the
+  changed line begins. Line numbers jump across the band (18, then 237).
+- **Shape:** one rounded rectangle, 18 × 19 pt, as tall as the band and centred across the gutter. A 1 pt hairline
+  crosses the band's middle and the whole gutter, and splits the rectangle into two halves of 9 pt. The corners are
+  4 pt, the outline 1 pt. Each half carries one 8 pt grip line, 5 pt and 14 pt below the band's top. On the white
+  gutter, the outline and the grips are 221, the fill 245 and the hairline 241.
 - **Which half does what:** the upper half extends the change above, and is dragged down. The lower half extends
   the change below, and is dragged up. Each half's rounded corners face the change it extends; its flat side lies
   on the hairline, facing the direction it is dragged.
-- **One direction only:** where a run can grow from one side alone, only that half is drawn. At the top of the file
-  (above line 12) the lower half hangs under the hairline, flat side up and rounded corners toward line 12; at the
-  end of a file the upper half sits on top of it. Above a change with a run on each side (line 82), both halves
-  show.
+- **One direction only:** where a run can grow from one side alone, only that half is drawn, 13 pt tall, and the
+  hairline moves near the band's far edge. At the top of the file (above line 12), the lower half hangs under the
+  hairline, flat side up with its own outline, rounded corners toward line 12. The capture shows 5 pt of empty
+  space above the hairline, which makes the band 19 pt again. No capture shows the end of a file; ours mirrors the
+  top, with the upper half on a hairline 5 pt above the band's bottom. Above a change with a run on each side
+  (line 82), both halves show.
 
-Our version: the user corrected the first build on 09-23 to exactly this geometry. Each half hovers and drags on its
-own. A drag never discloses lines against its half's direction, and a half held at an edge keeps revealing at a
-bounded rate. The count of hidden lines, which the removed row used to show, moves to the handle's tooltip.
+Our version: the user first had the run take no row, with the handle over the lines around its hairline, then chose
+Xcode's band on 09-23. The band is one line and the hairline tall, so it scales with the theme's line height: 16 pt
+at our 15 pt lines, 19 pt at 18 pt ones. Two halves take (band − 1) / 2 each, and a lone half 13/18 of a line. Each
+half hovers and drags on its own, and its part of the band, across the gutter, is where it takes the pointer. The
+rows around the band keep their own clicks. A drag never discloses lines against its half's direction, and a half
+held at an edge keeps revealing at a bounded rate. The count of hidden lines, which the removed row used to show,
+moves to the handle's tooltip.
 
 ## Inline change and intraline emphasis
 
