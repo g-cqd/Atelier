@@ -76,6 +76,13 @@ struct XcodeTextParserTests {
         #expect(findings[0].file == "/elsewhere/D.swift")
     }
 
+    @Test
+    func `a path under a sibling whose name extends the root is kept whole`() {
+        let text = "/repo-other/D.swift:1:1: warning: [X] msg"
+        let findings = XcodeTextParser.findings(from: text, tool: .swiftFormat, root: Self.root)
+        #expect(findings.map(\.file) == ["/repo-other/D.swift"])
+    }
+
     @Test(arguments: ["error", "warning", "note"])
     func `each severity token maps to its Finding severity`(token: String) {
         let text = "/repo/E.swift:1:1: \(token): msg"

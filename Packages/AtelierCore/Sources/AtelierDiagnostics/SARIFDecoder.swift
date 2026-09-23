@@ -10,8 +10,9 @@ public enum SARIFDecoder {
         case invalidJSON(String)
     }
 
-    /// Parses `data` as a SARIF log and returns its findings for `tool`, with locations made relative to `root`.
-    /// Results with no resolvable location are dropped; they carry nothing a `Finding` can anchor on.
+    /// Parses `data` as a SARIF log and returns its findings for `tool`, with locations made relative to `root` under
+    /// any of its spellings (see ``RootRelativePath``). Results with no resolvable location are dropped; they carry
+    /// nothing a `Finding` can anchor on.
     public static func findings(from data: Data, tool: DiagnosticTool, root: URL) throws(DecodeError) -> [Finding] {
         let doc: JSONDocument
         do {
@@ -23,18 +24,19 @@ public enum SARIFDecoder {
         guard runs.isArray else {
             throw DecodeError.invalidJSON("expected a SARIF log with a top-level 'runs' array")
         }
+        let paths = RootRelativePath(root: root)
         var findings: [Finding] = []
         runs.forEachElement { run in
             run["results"]
                 .forEachElement { result in
-                    guard let finding = Self.finding(from: result, tool: tool, root: root) else { return }
+                    guard let finding = Self.finding(from: result, tool: tool, paths: paths) else { return }
                     findings.append(finding)
                 }
         }
         return findings
     }
 
-    private static func finding(from result: JSON, tool: DiagnosticTool, root: URL) -> Finding? {
+    private static func finding(from result: JSON, tool: DiagnosticTool, paths: RootRelativePath) -> Finding? {
         let physical = result["locations"][index: 0]["physicalLocation"]
         guard let uri = physical["artifactLocation"]["uri"].string else { return nil }
         let region = physical["region"]
@@ -45,7 +47,7 @@ public enum SARIFDecoder {
                 guard let relatedURI = relatedPhysical["artifactLocation"]["uri"].string else { return }
                 related.append(
                     RelatedLocation(
-                        file: relativePath(of: relatedURI, root: root),
+                        file: paths.relativePath(of: relatedURI),
                         line: relatedPhysical["region"]["startLine"].int ?? 1,
                         message: relatedLocation["message"]["text"].string
                     ))
@@ -54,7 +56,7 @@ public enum SARIFDecoder {
             tool: tool,
             ruleID: result["ruleId"].string ?? "",
             message: result["message"]["text"].string ?? "",
-            file: relativePath(of: uri, root: root),
+            file: paths.relativePath(of: uri),
             line: region["startLine"].int ?? 1,
             column: region["startColumn"].int,
             endLine: region["endLine"].int,
@@ -71,22 +73,5 @@ public enum SARIFDecoder {
             case "note", "none": .note
             default: .warning
         }
-    }
-
-    /// Turns a SARIF artifact URI into an analysis-root-relative path: an absolute `file://` URI is stripped of
-    /// `root`'s prefix, or kept whole when it falls outside `root`; a relative URI is used as-is.
-    private static func relativePath(of uri: String, root: URL) -> String {
-        if uri.hasPrefix("file://") {
-            let path = URL(string: uri)?.path ?? String(uri.dropFirst("file://".count))
-            let rootPath = root.path
-            if path.hasPrefix(rootPath) {
-                var relative = String(path.dropFirst(rootPath.count))
-                while relative.hasPrefix("/") { relative.removeFirst() }
-                return relative
-            }
-            return path
-        }
-        if uri.hasPrefix("./") { return String(uri.dropFirst(2)) }
-        return uri
     }
 }
