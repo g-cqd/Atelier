@@ -8,37 +8,51 @@ import Foundation
 import SwiftUI
 
 /// The settings window: one tab per concern, each a grouped form that scrolls, in a window of a fixed size so it
-/// never outgrows the screen. It reopens on the last-viewed tab, ``ViewerSettings/settingsPane``.
+/// never outgrows the screen. It reopens on the last-viewed tab, ``ViewerSettings/settingsPane``. A selector at the
+/// top of each tab chooses what the tab edits: the defaults, or one project's own settings (``SettingsScope``).
 struct SettingsView: View {
     @Bindable var settings: ViewerSettings
     let runner: any ProcessRunner
     let discovery: ToolDiscovery
+    @State private var scope: SettingsScope
+
+    init(settings: ViewerSettings, runner: any ProcessRunner, discovery: ToolDiscovery) {
+        self.settings = settings
+        self.runner = runner
+        self.discovery = discovery
+        _scope = State(initialValue: SettingsScope(appSettings: settings))
+    }
 
     var body: some View {
         TabView(selection: $settings.settingsPane) {
             Tab("General", systemImage: "gearshape", value: SettingsPane.general) {
-                GeneralSettings(settings: settings)
+                GeneralSettings(settings: scope.edited, scope: scope)
             }
             Tab("Diff", systemImage: "text.line.first.and.arrowtriangle.forward", value: SettingsPane.diff) {
-                DiffSettings(settings: settings)
+                DiffSettings(settings: scope.edited, scope: scope)
             }
             Tab("Appearance", systemImage: "paintpalette", value: SettingsPane.appearance) {
-                AppearanceSettings(settings: settings, runner: runner)
+                AppearanceSettings(settings: scope.edited, scope: scope, runner: runner)
             }
             Tab("Tools", systemImage: "wrench.and.screwdriver", value: SettingsPane.tools) {
-                ToolsSettings(settings: settings, discovery: discovery)
+                ToolsSettings(settings: scope.edited, scope: scope, discovery: discovery)
+            }
+            Tab("Projects", systemImage: "folder.badge.gearshape", value: SettingsPane.projects) {
+                ProjectsSettings(scope: scope)
             }
         }
-        .frame(width: 560, height: 520)
+        .frame(width: 560, height: 560)
     }
 }
 
 /// General: how the window and its files are arranged, independent of any one diff.
 private struct GeneralSettings: View {
     @Bindable var settings: ViewerSettings
+    let scope: SettingsScope
 
     var body: some View {
         VStack(spacing: 0) {
+            SettingsScopeBar(scope: scope)
             Form {
                 Section("File Explorers") {
                     Picker(SettingLabel.explorerPlacement, selection: $settings.explorerPlacement) {
@@ -46,10 +60,9 @@ private struct GeneralSettings: View {
                         Text("Two explorers in a sidebar").tag(ExplorerPlacement.sidebar)
                         Text("One merged tree in a sidebar").tag(ExplorerPlacement.unifiedSidebar)
                     }
+                    .appWide(\.explorerPlacement, in: scope)
                     Picker(SettingLabel.treeStyle, selection: $settings.treeStyle) {
-                        Text("Tree").tag(FileTreeStyle.hierarchy)
-                        Text("Tree with compact folders").tag(FileTreeStyle.compact)
-                        Text("Flat list of paths").tag(FileTreeStyle.flat)
+                        ForEach(FileTreeStyle.allCases) { Text($0.displayName).tag($0) }
                     }
                     Toggle(SettingLabel.showsChangesOnly, isOn: $settings.showsChangesOnly)
                     Toggle(SettingLabel.showsIgnoredFiles, isOn: $settings.showsIgnoredFiles)
@@ -60,8 +73,10 @@ private struct GeneralSettings: View {
                 }
                 Section("Window") {
                     Toggle(SettingLabel.syncScrolling, isOn: $settings.syncsScrolling)
+                        .appWide(\.syncsScrolling, in: scope)
                     Toggle(SettingLabel.showsMinimap, isOn: $settings.showsMinimap)
                     Toggle(SettingLabel.showsStatusBar, isOn: $settings.showsStatusBar)
+                        .appWide(\.showsStatusBar, in: scope)
                     Toggle(SettingLabel.autoRefresh, isOn: $settings.autoRefresh)
                     Text(
                         "Watches the working tree and the repository's HEAD and refs, and reloads this window on its own."
@@ -70,7 +85,7 @@ private struct GeneralSettings: View {
                 }
             }
             .formStyle(.grouped)
-            SettingsRestoreDefaultsFooter(settings: settings, category: .general)
+            SettingsRestoreDefaultsFooter(settings: settings, scope: scope, category: .general)
         }
         .navigationTitle("General")
     }
@@ -80,9 +95,11 @@ private struct GeneralSettings: View {
 /// advanced matching heuristics.
 private struct DiffSettings: View {
     @Bindable var settings: ViewerSettings
+    let scope: SettingsScope
 
     var body: some View {
         VStack(spacing: 0) {
+            SettingsScopeBar(scope: scope)
             Form {
                 Section("Changes") {
                     Toggle(SettingLabel.isolatesChanges, isOn: $settings.isolatesChanges)
@@ -96,19 +113,14 @@ private struct DiffSettings: View {
                 }
                 Section("Matching") {
                     Picker(SettingLabel.granularity, selection: $settings.granularity) {
-                        Text("Characters").tag(IntralineGranularity.character)
-                        Text("Words").tag(IntralineGranularity.word)
-                        Text("Syntax").tag(IntralineGranularity.syntax)
+                        ForEach(IntralineGranularity.allCases) { Text($0.displayName).tag($0) }
                     }
                     Text(
                         "Syntax uses swift-syntax tokens for Swift files and a code-aware lexer for the other languages."
                     )
                     .settingsCaption()
                     Picker(SettingLabel.whitespace, selection: $settings.diffHeuristics.whitespace) {
-                        Text("Exactly").tag(WhitespaceMode.exact)
-                        Text("Ignoring trailing whitespace").tag(WhitespaceMode.ignoreTrailing)
-                        Text("Ignoring leading and trailing whitespace").tag(WhitespaceMode.ignoreLeadingAndTrailing)
-                        Text("Ignoring all whitespace").tag(WhitespaceMode.ignoreAll)
+                        ForEach(WhitespaceMode.allCases) { Text($0.displayName).tag($0) }
                     }
                     DisclosureGroup(SettingLabel.advancedMatching) {
                         VStack(alignment: .leading, spacing: 8) {
@@ -144,7 +156,7 @@ private struct DiffSettings: View {
                 }
             }
             .formStyle(.grouped)
-            SettingsRestoreDefaultsFooter(settings: settings, category: .diff)
+            SettingsRestoreDefaultsFooter(settings: settings, scope: scope, category: .diff)
         }
         .navigationTitle("Diff")
     }
@@ -161,61 +173,36 @@ private struct DiffSettings: View {
 /// Appearance: colors and line height, badge colors, and the diff's layout and wrapping.
 private struct AppearanceSettings: View {
     @Bindable var settings: ViewerSettings
+    let scope: SettingsScope
     let runner: any ProcessRunner
     @State private var themes: [XcodeThemeLibrary.Entry] = []
 
     var body: some View {
         VStack(spacing: 0) {
+            SettingsScopeBar(scope: scope)
             Form {
-                Section("Colors") {
-                    Picker(SettingLabel.appearanceScheme, selection: $settings.appearanceScheme) {
-                        Text("System").tag(AppearanceScheme.system)
-                        Text("Light").tag(AppearanceScheme.light)
-                        Text("Dark").tag(AppearanceScheme.dark)
-                    }
-                    .pickerStyle(.segmented)
-                    Text(
-                        "Match the system, or pin the window chrome light or dark — useful when the diff theme is "
-                            + "the other way."
-                    )
-                    .settingsCaption()
-                    Toggle(SettingLabel.matchesThemeAppearance, isOn: $settings.matchesThemeAppearance)
-                        .disabled(settings.appearanceScheme != .system)
-                    Text("Switch the window light or dark to match the selected color scheme.")
-                        .settingsCaption()
-                    Picker("Color scheme", selection: $settings.themePath) {
-                        Text("System").tag(String?.none)
-                        ForEach(themes) { theme in
-                            Text(theme.name).tag(String?.some(theme.url.path(percentEncoded: false)))
-                        }
-                    }
-                    Text(
-                        "Xcode themes from ~/Library/Developer/Xcode/UserData/FontAndColorThemes and the selected Xcode."
-                    )
-                    .settingsCaption()
-                    Picker("Line height", selection: $settings.lineHeightMultiple) {
-                        Text("Theme").tag(0.0)
-                        ForEach([0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.5, 1.75, 2.0], id: \.self) { multiple in
-                            Text(multiple.formatted(.number.precision(.fractionLength(0 ... 2))) + "×").tag(multiple)
-                        }
-                    }
-                    Text("Theme follows the selected Xcode theme's line spacing, or 1× with the system colors.")
-                        .settingsCaption()
+                Section {
+                    colors
+                } header: {
+                    Text("Colors")
+                } footer: {
+                    if scope.isEditingProject { Text("The same in every project.").settingsCaption() }
                 }
-                Section("Badges") {
+                Section {
                     Picker(SettingLabel.badgeScheme, selection: $settings.badgeScheme) {
                         Text("Classic").tag(BadgeScheme.classic)
                         Text("Xcode").tag(BadgeScheme.xcode)
                     }
                     .pickerStyle(.segmented)
+                    .appWide(\.badgeScheme, in: scope)
                     Text("Xcode's scheme reads a modification and a rename both as blue.")
                         .settingsCaption()
+                } header: {
+                    Text("Badges")
                 }
                 Section("Layout") {
-                    Picker("Diff layout", selection: $settings.mode) {
-                        Text("Inline").tag(ViewMode.inline)
-                        Text("Side by side").tag(ViewMode.split)
-                        Text("Stacked").tag(ViewMode.stacked)
+                    Picker(SettingLabel.diffLayout, selection: $settings.mode) {
+                        ForEach(ViewMode.allCases) { Text($0.displayName).tag($0) }
                     }
                     Text("The card list shows Stacked side by side.")
                         .settingsCaption()
@@ -231,9 +218,46 @@ private struct AppearanceSettings: View {
             }
             .formStyle(.grouped)
             .task { themes = await XcodeThemeLibrary.entries(runner: runner) }
-            SettingsRestoreDefaultsFooter(settings: settings, category: .appearance)
+            SettingsRestoreDefaultsFooter(settings: settings, scope: scope, category: .appearance)
         }
         .navigationTitle("Appearance")
+    }
+
+    @ViewBuilder private var colors: some View {
+        Picker(SettingLabel.appearanceScheme, selection: $settings.appearanceScheme) {
+            Text("System").tag(AppearanceScheme.system)
+            Text("Light").tag(AppearanceScheme.light)
+            Text("Dark").tag(AppearanceScheme.dark)
+        }
+        .pickerStyle(.segmented)
+        .appWide(\.appearanceScheme, in: scope)
+        Text(
+            "Match the system, or pin the window chrome light or dark — useful when the diff theme is the other way."
+        )
+        .settingsCaption()
+        Toggle(SettingLabel.matchesThemeAppearance, isOn: $settings.matchesThemeAppearance)
+            .disabled(settings.appearanceScheme != .system)
+            .appWide(\.matchesThemeAppearance, in: scope)
+        Text("Switch the window light or dark to match the selected color scheme.")
+            .settingsCaption()
+        Picker("Color scheme", selection: $settings.themePath) {
+            Text("System").tag(String?.none)
+            ForEach(themes) { theme in
+                Text(theme.name).tag(String?.some(theme.url.path(percentEncoded: false)))
+            }
+        }
+        .appWide(\.themePath, in: scope)
+        Text("Xcode themes from ~/Library/Developer/Xcode/UserData/FontAndColorThemes and the selected Xcode.")
+            .settingsCaption()
+        Picker("Line height", selection: $settings.lineHeightMultiple) {
+            Text("Theme").tag(0.0)
+            ForEach([0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.5, 1.75, 2.0], id: \.self) { multiple in
+                Text(multiple.formatted(.number.precision(.fractionLength(0 ... 2))) + "×").tag(multiple)
+            }
+        }
+        .appWide(\.lineHeightMultiple, in: scope)
+        Text("Theme follows the selected Xcode theme's line spacing, or 1× with the system colors.")
+            .settingsCaption()
     }
 
     private var wrapsAtColumn: Binding<Bool> {
@@ -244,19 +268,63 @@ private struct AppearanceSettings: View {
     }
 }
 
-/// A tab's footer: how many settings differ from their coded default, a button that resets the tab, and, for a tab
-/// with project-scoped settings, how many projects override them, with a "Review…" button to clear those.
+/// The selector at the top of every tab that chooses what the tab edits: the defaults, or one known project's own
+/// settings, with a line saying which values the edits reach.
+struct SettingsScopeBar: View {
+    let scope: SettingsScope
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Picker(SettingLabel.settingsScope, selection: selection) {
+                Text("Default").tag(SettingsScope.Selection.defaults)
+                if !scope.entries.isEmpty { Divider() }
+                ForEach(scope.entries) { entry in
+                    Text(entry.project.name).tag(SettingsScope.Selection.project(entry.project))
+                        .help(entry.project.displayPath)
+                }
+            }
+            Text(caption).settingsCaption()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+    }
+
+    private var selection: Binding<SettingsScope.Selection> {
+        Binding(get: { scope.selection }, set: { scope.select($0) })
+    }
+
+    private var caption: String {
+        switch scope.selection {
+            case .defaults:
+                "Every project uses these values unless it has its own."
+            case .project(let project):
+                "Changes apply to \(project.name) only. Greyed-out settings are the same in every project."
+        }
+    }
+}
+
+extension View {
+    /// Greys out a control whose setting is the same in every project while the Settings window edits a project.
+    func appWide(_ property: PartialKeyPath<ViewerSettings>, in scope: SettingsScope) -> some View {
+        disabled(scope.isEditingProject && !ViewerSettings.isProjectScoped(property))
+    }
+}
+
+/// A tab's footer. For the defaults: how many settings differ from their coded default, a button that resets the tab,
+/// and how many projects override the tab's settings, with a button to the Projects tab. For a project: how many of
+/// the tab's settings it overrides, and a button that drops those overrides.
 struct SettingsRestoreDefaultsFooter: View {
     @Bindable var settings: ViewerSettings
+    let scope: SettingsScope
     let category: SettingsCategory
-    @State private var isReviewingOverrides = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                let count = settings.settingsDiffCount(category)
+                let count =
+                    scope.isEditingProject ? settings.overrideCount(category) : settings.settingsDiffCount(category)
                 if count > 0 {
-                    Text("\(count) setting\(count == 1 ? "" : "s") differ\(count == 1 ? "s" : "") from defaults")
+                    Text(countText(count))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -264,69 +332,29 @@ struct SettingsRestoreDefaultsFooter: View {
                 Button("Restore Defaults") { settings.restoreDefaults(category) }
                     .disabled(count == 0)
             }
-            let overriddenProjects = settings.projectsWithOverrides(in: category)
-            if !overriddenProjects.isEmpty {
-                HStack {
-                    Text(
-                        "Overridden in \(overriddenProjects.count) project\(overriddenProjects.count == 1 ? "" : "s")"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Review…") { isReviewingOverrides = true }
+            if !scope.isEditingProject {
+                let overriddenProjects = settings.projectsWithOverrides(in: category)
+                if !overriddenProjects.isEmpty {
+                    HStack {
+                        let count = overriddenProjects.count
+                        Text("Overridden in \(count) project\(count == 1 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Review…") { scope.appSettings.settingsPane = .projects }
+                    }
                 }
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
-        .sheet(isPresented: $isReviewingOverrides) {
-            ProjectOverridesReview(settings: settings, category: category)
+    }
+
+    private func countText(_ count: Int) -> String {
+        guard case .project(let project) = scope.selection else {
+            return "\(count) setting\(count == 1 ? "" : "s") differ\(count == 1 ? "s" : "") from defaults"
         }
-    }
-}
-
-/// Lists every project overriding one of `category`'s settings, each with a "Clear" button, plus "Clear All". The
-/// registry lives in user defaults, which observation cannot see, so `projects` reloads after every clear.
-private struct ProjectOverridesReview: View {
-    let settings: ViewerSettings
-    let category: SettingsCategory
-    @Environment(\.dismiss) private var dismiss
-    @State private var projects: [(key: String, displayPath: String)] = []
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Project Overrides").font(.headline).padding([.horizontal, .top], 16)
-            List(projects, id: \.key) { project in
-                HStack {
-                    Text(project.displayPath).lineLimit(1).truncationMode(.middle)
-                    Spacer()
-                    Button("Clear") { clear(project.key) }
-                }
-            }
-            .frame(minHeight: 120)
-            HStack {
-                Button("Clear All") {
-                    for project in projects { settings.clearOverrides(projectKey: project.key, category: category) }
-                    refresh()
-                }
-                .disabled(projects.isEmpty)
-                Spacer()
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
-            }
-            .padding(16)
-        }
-        .frame(width: 420, height: 280)
-        .onAppear(perform: refresh)
-    }
-
-    private func clear(_ projectKey: String) {
-        settings.clearOverrides(projectKey: projectKey, category: category)
-        refresh()
-    }
-
-    private func refresh() {
-        projects = settings.projectsWithOverrides(in: category)
+        return "\(count) setting\(count == 1 ? "" : "s") overridden in \(project.name)"
     }
 }
 
