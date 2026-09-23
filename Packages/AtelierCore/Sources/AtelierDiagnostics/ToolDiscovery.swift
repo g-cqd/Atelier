@@ -1,11 +1,9 @@
 public import AtelierProcess
 public import Foundation
 
-/// Locates diagnostic tools (and other executables searched the same way, such as `sourcekit-lsp`) on disk, in a
-/// fixed precedence, and probes their version. Every rung but the environment override and a caller-supplied
-/// custom path is cached for the discovery's lifetime, so repeated lookups cost nothing after the first: an
-/// `xcrun --find` per executable name, a login shell's `$PATH` once total, and a version probe per executable path
-/// until its file's modification date changes.
+/// Locates diagnostic tools, and executables searched the same way such as `sourcekit-lsp`, in a fixed precedence,
+/// and probes their version. `xcrun` answers, the login shell's `$PATH` and versions are cached until
+/// ``invalidate()``, a version only while its executable's modification date holds.
 public actor ToolDiscovery {
     private let runner: any ProcessRunner
     private let bundledDirectory: URL?
@@ -13,8 +11,7 @@ public actor ToolDiscovery {
     private let environment: [String: String]
     private let fileManager: FileManager
 
-    /// Negative results are cached too: `xcrunCache[name]` holds `.some(nil)` for a name `xcrun` could not find,
-    /// distinct from an absent key, which has never been probed.
+    /// `.some(nil)` caches a name `xcrun` could not find; an absent key has never been probed.
     private var xcrunCache: [String: URL?] = [:]
     /// nil until the login shell's `$PATH` has been probed once; an empty array is a valid, cached result.
     private var shellPathDirectoriesCache: [String]?

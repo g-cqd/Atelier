@@ -2,9 +2,7 @@
 public enum DiagnosticTool: String, CaseIterable, Sendable, Codable, Identifiable {
     case swiftlint
     case swiftFormat = "swift-format"
-    /// Nick Lockwood's SwiftFormat (github.com/nicklockwood/SwiftFormat), distinct from Apple's ``swiftFormat``:
-    /// a different binary, a different configuration file (`.swiftformat`), and a different rule set. Some
-    /// projects adopt this one instead of Apple's, so both are offered as independent tools.
+    /// Nick Lockwood's SwiftFormat: a separate tool from Apple's ``swiftFormat``, with its own binary and config.
     case swiftformat
     case arcleak
     case dolly
@@ -24,9 +22,7 @@ public enum DiagnosticTool: String, CaseIterable, Sendable, Codable, Identifiabl
         }
     }
 
-    /// The name shown in UI. Apple's and Lockwood's formatters share a name closely enough (`swift-format` vs
-    /// `swiftformat`) that the Tools tab spells the second out fully, with its author, to keep the two
-    /// unambiguous at a glance.
+    /// The name shown in UI; Lockwood's formatter carries its author's name to tell it apart from Apple's.
     public var displayName: String {
         switch self {
             case .swiftlint: "SwiftLint"
@@ -93,10 +89,8 @@ public enum DiagnosticTool: String, CaseIterable, Sendable, Codable, Identifiabl
         self == .swiftFormat
     }
 
-    /// The configuration file name whose absence at the analyzed root means the tool has not been adopted by the
-    /// project, so ``DiagnosticsEngine`` skips running it there rather than reporting findings from a config the
-    /// project never opted into. `nil` for a tool that is still useful without a project-specific configuration
-    /// (swiftlint's curated defaults, for instance) or that has no dedicated configuration file of its own.
+    /// The configuration file a project must have at the analyzed root for ``DiagnosticsEngine`` to run the tool
+    /// there; `nil` when the tool runs without one.
     public var requiredConfigurationFile: String? {
         switch self {
             case .swiftFormat: ".swift-format"

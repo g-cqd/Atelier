@@ -8,15 +8,13 @@ import Testing
 
 @testable import AtelierDiagnostics
 
-/// Whether the calling thread is the process' main thread; a private copy of the same probe the production
-/// `@concurrent` seams assert with, so these tests can observe the same executor contract from the outside.
+/// Whether the calling thread is the process' main thread, the same probe the production code asserts with.
 private func isOnMainThread() -> Bool {
     pthread_main_np() != 0
 }
 
-/// Proves the CPU-bound work `DiagnosticsEngine` does per tool-run stays off the main actor: `run(_:request:)`
-/// is called from a `@MainActor` test, and the fake runner — invoked from inside `run`, on the same path that
-/// leads to the now-`@concurrent` `parsedFindings` — records the thread it executed on.
+/// `DiagnosticsEngine`'s per-run work stays off the main actor: a `@MainActor` test calls `run(_:request:)` and the
+/// fake runner records the thread it runs on.
 @MainActor
 struct OffMainExecutionTests {
     private static let sarif = """

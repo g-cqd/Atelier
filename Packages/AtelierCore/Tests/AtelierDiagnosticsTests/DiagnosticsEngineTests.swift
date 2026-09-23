@@ -17,8 +17,7 @@ struct DiagnosticsEngineTests {
         ]}]}
         """
 
-    /// Writes an executable script at `url`; its contents are irrelevant since a ``FakeProcessRunner`` never
-    /// actually spawns it, but discovery still needs a real, executable file on disk to find.
+    /// An executable file at `url` for discovery to find; the fake runner never spawns it.
     static func makeExecutable(at url: URL) throws {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -30,8 +29,7 @@ struct DiagnosticsEngineTests {
         .success(Self.sarif.replacingOccurrences(of: "ROOT", with: root.path))
     }
 
-    /// A discovery that resolves `tool` to `executable` through a custom path, with every other rung starved of a
-    /// runner call by disabling the toolchain search and leaving `PATH` unconsulted (nothing to find there anyway).
+    /// A discovery with no bundle and an empty environment, so the request's custom path is what finds the tool.
     static func discovery(runner: any ProcessRunner, executable: URL, home: URL) -> ToolDiscovery {
         ToolDiscovery(runner: runner, bundledDirectory: nil, homeDirectory: home, environment: [:])
     }
@@ -76,8 +74,7 @@ struct DiagnosticsEngineTests {
 
     @Test
     func `a changed content hash busts the cache`() async throws {
-        // arcleak, not swiftlint: swiftlint is corpus-scoped, and its cache payload keys off the corpus
-        // fingerprint rather than any one file's content hash.
+        // arcleak, not swiftlint: a corpus tool's cache keys off the corpus fingerprint, not a file's content hash.
         let temp = TemporaryDirectory(prefix: "diageng")
         defer { temp.cleanup() }
         let root = URL(filePath: temp.file("root"))
@@ -262,7 +259,7 @@ struct DiagnosticsEngineTests {
 
     @Test
     func `a per-file tool with no files is skipped`() async throws {
-        // arcleak, not swiftlint: swiftlint is now corpus-scoped, so an empty file list is not what makes it skip.
+        // arcleak, not swiftlint: a corpus tool does not skip on an empty file list.
         let temp = TemporaryDirectory(prefix: "diageng")
         defer { temp.cleanup() }
         let root = URL(filePath: temp.file("root"))
@@ -280,7 +277,7 @@ struct DiagnosticsEngineTests {
 
     @Test
     func `a per-file tool with only blobs not on disk is skipped`() async throws {
-        // arcleak, not swiftlint: swiftlint is now corpus-scoped and never reads a file's on-disk URL.
+        // arcleak, not swiftlint: a corpus tool never reads a file's on-disk URL.
         let temp = TemporaryDirectory(prefix: "diageng")
         defer { temp.cleanup() }
         let root = URL(filePath: temp.file("root"))

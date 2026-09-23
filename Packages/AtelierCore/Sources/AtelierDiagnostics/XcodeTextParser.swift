@@ -38,9 +38,8 @@ public enum XcodeTextParser {
         guard let severity = severities[severityToken] else { return nil }
         var message = String(fields[3]).trimmingCharacters(in: .whitespaces)
 
-        // Apple's swift-format leads a rule's message with `[RuleName]`; Lockwood's swiftformat leads with
-        // `(ruleName)` instead. Either way, the rule name becomes the finding's ruleID and is stripped from the
-        // message that is left.
+        // swift-format leads a message with `[RuleName]`, Lockwood's swiftformat with `(ruleName)`; either becomes
+        // the rule ID and leaves the message.
         var ruleID = tool.rawValue
         if message.hasPrefix("["), let closing = message.firstIndex(of: "]") {
             ruleID = String(message[message.index(after: message.startIndex) ..< closing])
@@ -61,8 +60,7 @@ public enum XcodeTextParser {
         )
     }
 
-    /// When `scalars[colon]` starts a `:<digits>:` run, returns the index right after that run's closing colon
-    /// (the position of the second separating colon before the line number field), else nil.
+    /// `colon` when it starts a `:<digits>:` run, else nil.
     private static func matchLineNumber(_ scalars: [Character], from colon: Int) -> Int? {
         var index = colon + 1
         var sawDigit = false

@@ -3,10 +3,8 @@ public import Foundation
 
 /// Decodes SARIF 2.1.0 logs into ``Finding``s. Only the subset of the schema the diagnostic tools emit is read.
 ///
-/// Extraction walks AemiJSON's lazy tape directly (no Codable mirror, no intermediate structs): the parse is a
-/// single pass over the bytes, and only the handful of fields a ``Finding`` keeps are ever materialized.
-/// Measured on synthesized corpus-scale logs (50k results, ~19 MB): 45 ms vs 331 ms for the previous
-/// Foundation `JSONDecoder` mirror — ~7x — with the same findings produced.
+/// Walks AemiJSON's lazy tape in one pass and materializes only the fields a ``Finding`` keeps; a Codable mirror
+/// is about seven times slower on corpus-scale logs.
 public enum SARIFDecoder {
     public enum DecodeError: Error, Equatable {
         case invalidJSON(String)
