@@ -151,8 +151,9 @@ public enum QueryMatcher: Sendable {
                 return true
 
             case .literal(let value, let capture):
-                let nodeText = node.text(from: source)
-                guard nodeText == value else { return false }
+                // A quoted pattern names an anonymous node, as in tree-sitter; a named node that reads the same, such
+                // as a JSON string's content `:`, or a node built over one, is not it.
+                guard !node.isNamed, node.text(from: source) == value else { return false }
                 if let captureName = capture {
                     captures.append((node: node, name: captureName))
                 }
