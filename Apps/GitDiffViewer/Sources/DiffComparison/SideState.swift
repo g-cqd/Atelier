@@ -21,7 +21,8 @@ package final class SideState {
     package private(set) var source: ComparisonSource?
     package private(set) var repository: RepositoryInfo?
     package private(set) var entries: [SourceEntry] = []
-    /// Files git ignores in a working tree, read on demand by `loadIgnoredEntries()`; nil until then.
+    /// Files git ignores in a working tree, read on demand by `loadIgnoredEntries()`; nil until then. A reload after
+    /// an outside write keeps them (``reload(keepingIgnoredEntries:)``).
     package private(set) var ignoredEntries: [SourceEntry]?
     package private(set) var entriesByPath: [String: SourceEntry] = [:]
     package private(set) var tree: [PathNode] = []
@@ -52,6 +53,9 @@ package final class SideState {
 
     private var loadTask: Task<Void, Never>?
     private var ignoredTask: Task<Void, Never>?
+    /// Why the listing behind ``ignoredEntries`` failed, leaving it empty; kept with the list across a reload that
+    /// keeps it, so the side goes on saying why the section is empty.
+    @ObservationIgnored private var ignoredEntriesFailure: String?
     private var remoteTask: Task<Void, Never>?
     /// The last ref check ``reloadIfRefMoved()`` queued; the next one waits for it.
     @ObservationIgnored private var refCheckTask: Task<Void, Never>?
@@ -185,7 +189,9 @@ package final class SideState {
         errorMessage = nil
         self.resolvedCommit = resolvedCommit
         publish(badgeStates, generation: beginBadgeStatesRead())
-        apply(entries, ignored: ignored, notifying: false)
+        forgetIgnoredEntries()
+        ignoredEntries = ignored
+        apply(entries, notifying: false)
     }
 
     /// Re-reads this side's repository info (branches, tags, commits) without touching its entries; a no-op without
@@ -250,12 +256,14 @@ package final class SideState {
     }
 
     /// Reads this side's files again, with git's status beside them for a folder and, for a ref, the commit it names
-    /// resolved first.
-    package func reload() {
+    /// resolved first. With `keepingIgnoredEntries`, the ignored files already listed stay (GDV S13): a write the
+    /// watcher reports seldom changes what git ignores, and listing it again takes seconds in a tree full of build
+    /// output. A reload the user asks for lists them again.
+    package func reload(keepingIgnoredEntries: Bool = false) {
         guard let source else { return }
         loadTask?.cancel()
         isLoading = true
-        errorMessage = nil
+        errorMessage = keepingIgnoredEntries ? ignoredEntriesFailure : nil
         onReload?()
         let generation = beginBadgeStatesRead()
         let reader = reader
@@ -269,14 +277,16 @@ package final class SideState {
                 isLoading = false
                 resolvedCommit = listing.commit
                 publish(states, generation: generation)
-                apply(listing.entries, ignored: nil, notifying: true)
+                if !keepingIgnoredEntries { forgetIgnoredEntries() }
+                apply(listing.entries, notifying: true)
             } catch is CancellationError {
                 return
             } catch {
                 errorMessage = error.localizedDescription
                 isLoading = false
                 resolvedCommit = nil
-                apply([], ignored: nil, notifying: true)
+                forgetIgnoredEntries()
+                apply([], notifying: true)
             }
         }
     }
@@ -324,24 +334,42 @@ package final class SideState {
         gitBadgeStates = states
     }
 
-    /// Reads the files git ignores, once per source and only when asked: the listing takes seconds on a tree
-    /// full of build output, so the comparison never waits for it.
+    /// Reads the files git ignores, once per source and only when asked: the listing takes seconds on a tree full
+    /// of build output, so the comparison never waits for it. A failed listing leaves the list empty and says why on
+    /// this side's error line (GDV S13), since an empty section alone reads as "nothing ignored".
     package func loadIgnoredEntries() {
         guard let source, ignoredEntries == nil, ignoredTask == nil else { return }
+        let reader = reader
         ignoredTask = taskProvider.task {
-            let ignored = (try? await reader.ignoredEntries(of: source)) ?? []
+            let listed: [SourceEntry]
+            var failure: String?
+            do {
+                listed = try await reader.ignoredEntries(of: source)
+            } catch is CancellationError {
+                return
+            } catch {
+                listed = []
+                failure = "Ignored files: \(error.localizedDescription)"
+            }
             guard !Task.isCancelled else { return }
-            ignoredEntries = ignored
+            ignoredEntries = listed
+            ignoredEntriesFailure = failure
+            if let failure { errorMessage = failure }
             ignoredTask = nil
             onIgnoredEntriesChanged?()
         }
     }
 
-    private func apply(_ entries: [SourceEntry], ignored: [SourceEntry]?, notifying: Bool) {
+    /// Drops the ignored files and any listing of them still running, for a source or a reload that lists them anew.
+    private func forgetIgnoredEntries() {
         ignoredTask?.cancel()
         ignoredTask = nil
+        ignoredEntries = nil
+        ignoredEntriesFailure = nil
+    }
+
+    private func apply(_ entries: [SourceEntry], notifying: Bool) {
         self.entries = entries
-        ignoredEntries = ignored
         entriesByPath = Dictionary(entries.map { ($0.relativePath, $0) }, uniquingKeysWith: { first, _ in first })
         tree = PathNode.tree(from: entries.map(\.relativePath))
         if notifying { onEntriesChanged?() }
