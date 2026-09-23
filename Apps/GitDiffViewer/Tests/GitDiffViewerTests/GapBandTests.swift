@@ -130,7 +130,7 @@ struct GapBandTests {
     }
 
     @Test
-    func `a file pane insets its text by its own inset and the band above its first row`() throws {
+    func `a file pane's band above its first row takes the place of its own inset`() throws {
         let rendered = try #require(text(sides: DiffRenderer.Options(sides: [.unified])).unified)
         let scrollView = NSTextView.scrollableTextView()
         let textView = try #require(scrollView.documentView as? NSTextView)
@@ -139,7 +139,7 @@ struct GapBandTests {
 
         sut.apply(rendered)
 
-        #expect(textView.textContainerInset.height == DiffPaneMetrics.containerInset + rendered.gapBandHeight)
+        #expect(textView.textContainerInset.height == max(DiffPaneMetrics.containerInset, rendered.gapBandHeight))
     }
 
     @Test

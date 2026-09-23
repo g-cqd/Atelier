@@ -25,8 +25,8 @@ package struct RenderedGap: Sendable, Hashable {
     package let boundary: Int
     package let marker: GapMarker
 
-    /// Whether the gap takes an empty band of its own on its boundary, as in Xcode, to hold its handle: one that
-    /// offers a handle does, and one hiding a whole file without a change leaves no trace.
+    /// Whether the gap takes an empty band of its own on its boundary, to hold its handle: one that offers a handle
+    /// does, and one hiding a whole file without a change leaves no trace.
     package var hasBand: Bool { !marker.handles.isEmpty }
 }
 
@@ -118,10 +118,9 @@ package final class RenderedText: @unchecked Sendable {
         bandsBetweenRows = gaps.count(where: { $0.hasBand && $0.boundary > 0 && $0.boundary < rows.count })
     }
 
-    /// The height of the empty band a gap takes on its boundary, as in Xcode (book DIFF-02): a row, and the point of
-    /// the hairline across its middle. Xcode's is 19 points against its 18-point lines.
+    /// The height of the empty band a gap takes on its boundary (book DIFF-02): exactly one row, whatever it holds.
     package static func gapBandHeight(lineHeight: CGFloat) -> CGFloat {
-        lineHeight + 1
+        lineHeight
     }
 
     /// ``gapBandHeight(lineHeight:)`` for this text's rows.

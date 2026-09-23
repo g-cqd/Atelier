@@ -379,7 +379,7 @@ package final class DiffGutterView: NSView {
 extension DiffGutterView {
     /// The handle `marker` shows in its `band`.
     private func handle(of marker: GapMarker, in band: NSRect) -> GapHandleLayout.Handle {
-        GapHandleLayout.handle(marker.handles, in: band, lineHeight: rendered?.lineHeight ?? palette.defaultLineHeight)
+        GapHandleLayout.handle(marker.handles, in: band)
     }
 
     /// The half of a gap's handle whose part of the band holds `point`, with its gap.
@@ -407,22 +407,24 @@ extension DiffGutterView {
         needsDisplay = true
     }
 
-    /// The bands of the gaps near `rect`, each with its handle: a hairline across the gutter, and the halves the gap
-    /// offers, highlighted under the pointer or while dragged. The band itself stays empty.
+    /// The bands of the gaps near `rect`, each with its handle: the halves the gap offers, highlighted under the
+    /// pointer or while dragged, and between two of them the separator across the gutter. Nothing else is drawn in a
+    /// band.
     private func drawGaps(in rect: NSRect) {
         forEachGap(in: rect) { gap, band in
             let handle = handle(of: gap.marker, in: band)
-            palette.textColor.withAlphaComponent(Self.hairlineAlpha).setFill()
-            handle.hairline.fill()
-            let isPair = handle.halves.count == 2
+            if let separator = handle.separator {
+                palette.gapSeparator.setFill()
+                separator.fill()
+            }
             for half in handle.halves {
                 let id = HandleID(key: gap.marker.key, handle: half.handle)
-                drawHalf(half, closed: !isPair, isActive: id == hoveredHandle || id == handleDrag?.id)
+                drawHalf(half, isActive: id == hoveredHandle || id == handleDrag?.id)
             }
-            // Between two halves, the hairline is their shared flat side, in the outline's colour whichever half is
-            // active, so each half's highlight stays its own.
-            guard isPair, let span = handle.halves.first?.rect else { return }
-            let side = NSRect(x: span.minX, y: handle.hairline.minY, width: span.width, height: 1)
+            // The separator is the two halves' shared flat side, in the outline's colour whichever half is active, so
+            // each half's highlight stays its own.
+            guard let separator = handle.separator, let span = handle.halves.first?.rect else { return }
+            let side = NSRect(x: span.minX, y: separator.minY, width: span.width, height: 1)
             palette.gutterBackground.setFill()
             side.fill()
             palette.textColor.withAlphaComponent(Self.outlineAlpha(isActive: false)).setFill()
@@ -430,23 +432,19 @@ extension DiffGutterView {
         }
     }
 
-    /// Xcode's hairline: 241 on its white gutter.
-    private static let hairlineAlpha: CGFloat = 0.055
-
     /// Xcode's outline and grip: 221 on its white gutter; stronger under the pointer or while dragged.
     private static func outlineAlpha(isActive: Bool) -> CGFloat {
         isActive ? 0.4 : 0.135
     }
 
-    /// One half of a gap's handle: rounded on the side of the change it extends, flat on the hairline, with its grip
-    /// line; drawn stronger while it is hovered or dragged. Two halves leave their flat side to the hairline they share;
-    /// a lone half, whose hairline lies apart from it, outlines its own.
-    private func drawHalf(_ half: GapHandleLayout.Half, closed: Bool, isActive: Bool) {
+    /// One half of a gap's handle: rounded on the side of the change it extends, and open on its flat side, which the
+    /// separator or the band's edge closes, with its grip line; drawn stronger while it is hovered or dragged.
+    private func drawHalf(_ half: GapHandleLayout.Half, isActive: Bool) {
         let rect = half.rect
         // The outline lies inside the half, half a point in from its edges.
         let radius = min(GapHandleLayout.cornerRadius - 0.5, rect.height - 1, rect.width / 2)
         let isUpper = half.handle == .extendsChangeAbove
-        let flatY = isUpper ? rect.maxY - (closed ? 0.5 : 0) : rect.minY + (closed ? 0.5 : 0)
+        let flatY = isUpper ? rect.maxY : rect.minY
         let roundY = isUpper ? rect.minY + 0.5 : rect.maxY - 0.5
         let left = rect.minX + 0.5
         let right = rect.maxX - 0.5
@@ -455,7 +453,6 @@ extension DiffGutterView {
         outline.appendArc(from: NSPoint(x: left, y: roundY), to: NSPoint(x: right, y: roundY), radius: radius)
         outline.appendArc(from: NSPoint(x: right, y: roundY), to: NSPoint(x: right, y: flatY), radius: radius)
         outline.line(to: NSPoint(x: right, y: flatY))
-        if closed { outline.close() }
         palette.gutterBackground.setFill()
         outline.fill()
         palette.textColor.withAlphaComponent(isActive ? 0.1 : 0.04).setFill()

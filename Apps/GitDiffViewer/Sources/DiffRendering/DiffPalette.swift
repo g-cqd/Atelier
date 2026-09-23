@@ -130,6 +130,12 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
         }
     }
 
+    /// The hairline that separates the two halves of a gap's handle (book DIFF-02): Xcode's, 241 on its white
+    /// gutter.
+    package var gapSeparator: NSColor {
+        textColor.withAlphaComponent(0.055)
+    }
+
     /// The pane's monospaced face, two points smaller, so numbers line up in columns and read as part of the text.
     package var gutterFont: NSFont {
         let size = max(font.pointSize - 2, 9)
