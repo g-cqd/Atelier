@@ -4,6 +4,7 @@ public import AtelierProcess
 import Foundation
 public import KittyFileTree
 import Synchronization
+import os
 
 /// The working tree's git statuses and per-line change markers for open buffers, read through the core git
 /// client under strict isolation, cached until the next refresh.
@@ -13,20 +14,33 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         case text(String, lines: [Substring])
     }
 
+    /// A base from the cache, or the read that will produce it and the refresh generation it started under.
+    private enum BaseLookup: Sendable {
+        case cached(BaseContent)
+        case reading(Task<BaseContent, Never>, generation: UInt64)
+    }
+
     private struct State: Sendable {
         var statuses: [String: FileStatus] = [:]
         var branch: String?
         var summary = FileStatusSummary()
         var baseContents: [String: BaseContent] = [:]
+        /// The base reads in flight under `appliedGeneration`, which concurrent requests for a path join.
+        var baseReads: [String: Task<BaseContent, Never>] = [:]
+        /// The last refresh started, and the newest whose result is applied: refreshes run concurrently, so an
+        /// older one can finish after a newer one.
+        var startedGeneration: UInt64 = 0
+        var appliedGeneration: UInt64 = 0
     }
 
     /// A hung `git` must never freeze the editor: every run gets this long on the runner's clock.
     public static let gitTimeout: Duration = .seconds(10)
 
+    private static let logger = Logger(subsystem: "com.kittytui", category: "git")
+
     private let rootPath: String
     private let client: GitClient
     private let lock: Mutex<State>
-    private let inFlightLock = Mutex([String: Task<BaseContent, Never>]())
 
     /// - Parameters:
     ///   - rootPath: The repository root every git invocation runs in.
@@ -53,19 +67,37 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         lock.withLock { $0.summary }
     }
 
-    /// Reads the branch and every status in one `git status`; a failing git leaves everything clean.
+    /// Reads the branch and every status in one `git status`. A failing git keeps the last statuses it read, and a
+    /// refresh that finishes after a newer one is dropped, so neither can blank or roll back the decorations.
     public func refresh() async {
-        let snapshot = (try? await client.status()) ?? GitStatusSnapshot(branch: nil, entries: [])
+        let generation = lock.withLock { state in
+            state.startedGeneration += 1
+            return state.startedGeneration
+        }
+        let snapshot: GitStatusSnapshot
+        do {
+            snapshot = try await client.status()
+        } catch is CancellationError {
+            return
+        } catch {
+            Self.logger.error(
+                "git status failed; the last statuses stay: \(error.localizedDescription, privacy: .private)")
+            return
+        }
         let root = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
         var statuses: [String: FileStatus] = [:]
         for (relative, status) in snapshot.statusesByPath(includingDirectories: true) {
             statuses[Self.normalizePath(root + relative)] = status
         }
         lock.withLock { state in
+            guard generation > state.appliedGeneration else { return }
+            state.appliedGeneration = generation
             state.branch = snapshot.branch?.head
             state.statuses = statuses
             state.summary = snapshot.summary
+            // HEAD may have moved: bases cached or still being read under the previous status are dropped.
             state.baseContents.removeAll(keepingCapacity: true)
+            state.baseReads.removeAll(keepingCapacity: true)
         }
     }
 
@@ -139,18 +171,30 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
 
     // MARK: - Base contents
 
+    /// The base of `normalizedPath` from the cache, else from a read, joined if one is in flight. A read that a
+    /// refresh overtakes is returned to its callers but never cached, since HEAD may have moved under it.
     private func readBaseContent(for normalizedPath: String, relativePath: String) async -> BaseContent {
-        if let cached = lock.withLock({ $0.baseContents[normalizedPath] }) { return cached }
-        let task: Task<BaseContent, Never> = inFlightLock.withLock { inFlight in
-            if let existing = inFlight[normalizedPath] { return existing }
-            let newTask = Task<BaseContent, Never> { await self.loadBaseContent(relativePath: relativePath) }
-            inFlight[normalizedPath] = newTask
-            return newTask
+        let lookup = lock.withLock { state -> BaseLookup in
+            if let cached = state.baseContents[normalizedPath] { return .cached(cached) }
+            if let read = state.baseReads[normalizedPath] {
+                return .reading(read, generation: state.appliedGeneration)
+            }
+            let read = Task<BaseContent, Never> { await self.loadBaseContent(relativePath: relativePath) }
+            state.baseReads[normalizedPath] = read
+            return .reading(read, generation: state.appliedGeneration)
         }
-        let content = await task.value
-        lock.withLock { $0.baseContents[normalizedPath] = content }
-        inFlightLock.withLock { $0[normalizedPath] = nil }
-        return content
+        switch lookup {
+            case .cached(let content):
+                return content
+            case .reading(let read, let generation):
+                let content = await read.value
+                lock.withLock { state in
+                    guard state.appliedGeneration == generation else { return }
+                    state.baseContents[normalizedPath] = content
+                    if state.baseReads[normalizedPath] == read { state.baseReads[normalizedPath] = nil }
+                }
+                return content
+        }
     }
 
     private func loadBaseContent(relativePath: String) async -> BaseContent {
