@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/tree-sitter-grammars/tree-sitter-markdown",
+  "version": "v0.5.3",
+  "commit": "f969cd3ae3f9fbd4e43205431d0ae286014c05b5",
+  "released": "2026-02-26",
+  "license": "MIT",
+  "files": {
+    "grammar.json": "tree-sitter-markdown/src/grammar.json",
+    "highlights.scm": "tree-sitter-markdown/queries/highlights.scm"
+  },
+  "previous": "v0.5.3",
+  "localChanges": {
+    "highlights.scm": "KittyCode's own query, kept over upstream's, which captures less"
+  }
+}

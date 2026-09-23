@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/tree-sitter/tree-sitter-typescript",
+  "version": "v0.23.2",
+  "commit": "f975a621f4e7f532fe322e13c4f79495e0a7b2e7",
+  "released": "2024-11-11",
+  "license": "MIT",
+  "files": {
+    "grammar.json": "typescript/src/grammar.json",
+    "highlights.scm": "queries/highlights.scm"
+  },
+  "previous": "v0.23.2",
+  "localChanges": {
+    "highlights.scm": "KittyCode's own query, kept over upstream's, which captures less"
+  }
+}

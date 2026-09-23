@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/tree-sitter-grammars/tree-sitter-yaml",
+  "version": "v0.7.2",
+  "commit": "7708026449bed86239b1cd5bce6e3c34dbca6415",
+  "released": "2025-10-07",
+  "license": "MIT",
+  "files": {
+    "grammar.json": "src/grammar.json",
+    "highlights.scm": "queries/highlights.scm"
+  },
+  "previous": "v0.7.2",
+  "localChanges": {
+    "highlights.scm": "KittyCode's own query, kept over upstream's, which captures less"
+  }
+}
