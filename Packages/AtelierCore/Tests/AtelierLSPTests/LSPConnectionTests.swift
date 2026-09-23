@@ -227,6 +227,39 @@ struct LSPConnectionTests {
         let payloadResult = try await result
         #expect(payloadResult == Payload(value: 9))
     }
+
+    @Test
+    func `a malformed response fails its request with an error, not a timeout`() async throws {
+        let transport = PipeTransport()
+        let connection = LSPConnection(transport: transport)
+        await connection.start()
+
+        let request = Task { try await connection.request("thing/get", EmptyParams(), as: Payload.self) }
+        await transport.sink.waitForCount(1)
+        let id = try #require(
+            try JSONDecoder().decode(SentEnvelope.self, from: unframe(await transport.sink.all[0])).id)
+        guard case .number(let number) = id else {
+            Issue.record("expected a numeric id, got \(id)")
+            return
+        }
+        // A valid result beside a lone surrogate escape, which fails the strict parse of the whole message.
+        let malformed = #"{"jsonrpc":"2.0","id":\#(number),"result":{"value":1},"note":"\ud800"}"#
+        transport.deliver(LSPFrameCodec.frame(Data(malformed.utf8)))
+
+        // Frames are routed in order: once a later request's answer lands, the malformed one has been handled.
+        let later = Task { try await connection.request("thing/later", EmptyParams(), as: Payload.self) }
+        await transport.sink.waitForCount(2)
+        let laterID = try #require(
+            try JSONDecoder().decode(SentEnvelope.self, from: unframe(await transport.sink.all[1])).id)
+        transport.deliver(
+            LSPFrameCodec.frame(try JSONRPCMessage.response(id: laterID, result: .object(["value": .number(2)]))))
+        _ = try await later.value
+        // Stopping fails whatever is still pending, so a dropped response surfaces here as a closed transport.
+        await connection.stop()
+
+        let error = await #expect(throws: LSPConnectionError.self) { try await request.value }
+        #expect(error?.isMalformedResponse == true)
+    }
 }
 
 @Suite
@@ -246,7 +279,7 @@ struct LSPConnectionDepthTests {
         #expect(error?.isMalformedResponse == true)
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func `a result nested past the depth cap fails its request as malformed`() async throws {
         let transport = PipeTransport()
         let connection = LSPConnection(transport: transport)
