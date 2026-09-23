@@ -27,6 +27,11 @@ extension GapMarker {
             case (true, true): []
         }
     }
+
+    /// What a handle's tooltip says: how many lines the gap hides, which no row shows, and how to reveal them.
+    package var handleHelp: String {
+        "\(hiddenRows) hidden \(hiddenRows == 1 ? "line" : "lines"). Drag to reveal; double-click to reveal all"
+    }
 }
 
 /// What the view tracking a gap handle reports to the model that owns the drag. The view only measures the pointer;

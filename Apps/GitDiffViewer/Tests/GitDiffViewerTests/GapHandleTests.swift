@@ -83,6 +83,23 @@ struct GapHandleLayoutTests {
     }
 }
 
+/// What a gap's handle says in its tooltip, now that no row shows the lines it hides.
+struct GapHandleHelpTests {
+    private let key = GapKey(fileIndex: 0, gapIndex: 1)
+
+    @Test
+    func `a handle's help counts the lines its gap hides and tells how to reveal them`() {
+        let marker = GapMarker(key: key, hiddenRows: 12, isLeading: false, isTrailing: false)
+        #expect(marker.handleHelp == "12 hidden lines. Drag to reveal; double-click to reveal all")
+    }
+
+    @Test
+    func `a handle's help counts a single hidden line in the singular`() {
+        let marker = GapMarker(key: key, hiddenRows: 1, isLeading: false, isTrailing: false)
+        #expect(marker.handleHelp == "1 hidden line. Drag to reveal; double-click to reveal all")
+    }
+}
+
 /// A gutter over an embedded text with a gap between two changes, in a scroll view of an offscreen window, and the
 /// drag events and diagnostic clicks it reports.
 @MainActor
@@ -303,6 +320,20 @@ struct DiffGutterGapHandleTests {
 
         #expect(fixture.pixels(in: hovered.rect) != hoveredBefore)
         #expect(fixture.pixels(in: other.rect) == otherBefore)
+    }
+
+    @Test
+    func `the tooltip tells the hidden lines of the gap whose half is under the pointer`() throws {
+        let fixture = try GutterFixture()
+        let gap = try #require(fixture.middleGap())
+        let lower = try #require(fixture.halves(of: gap).last)
+
+        fixture.mouse(.mouseMoved, at: NSPoint(x: lower.rect.midX, y: lower.rect.midY))
+        let over = fixture.gutter.toolTip
+        fixture.mouse(.mouseMoved, at: NSPoint(x: fixture.gutter.bounds.width - 1.5, y: gap.y + 2))
+
+        #expect(over == "\(gap.marker.hiddenRows) hidden lines. Drag to reveal; double-click to reveal all")
+        #expect(fixture.gutter.toolTip == nil)
     }
 
     @Test
