@@ -83,7 +83,7 @@ package final class DiffGutterView: NSView {
     }
 
     private var handleDrag: HandleDrag?
-    /// The handle under the pointer, drawn highlighted.
+    /// The handle under the pointer, drawn highlighted. The view's tooltip tells its gap's hidden lines meanwhile.
     private var hoveredHandle: HandleID?
     private var hoverTracking: NSTrackingArea?
 
@@ -153,7 +153,7 @@ package final class DiffGutterView: NSView {
 
     @objc private func clipViewDidScroll(_ notification: Notification) {
         // The row under a still pointer changed; the next move finds its handle again.
-        hoveredHandle = nil
+        setHoveredHandle(nil)
         needsDisplay = true
         window?.invalidateCursorRects(for: self)
     }
@@ -170,7 +170,7 @@ package final class DiffGutterView: NSView {
 
     package override func mouseMoved(with event: NSEvent) {
         let hit = gapHalf(at: convert(event.locationInWindow, from: nil))
-        setHoveredHandle(hit.map { HandleID(key: $0.marker.key, handle: $0.handle) })
+        setHoveredHandle(hit)
     }
 
     package override func mouseExited(with event: NSEvent) {
@@ -400,7 +400,13 @@ extension DiffGutterView {
         return found
     }
 
-    private func setHoveredHandle(_ id: HandleID?) {
+    /// Highlights the half of a gap's handle under the pointer, if any, and shows its gap's hidden lines, which no
+    /// row shows, in the tooltip.
+    private func setHoveredHandle(_ hit: (marker: GapMarker, handle: GapHandle)?) {
+        // A drag changes the count under a pointer that stays on the same half: the next move tells the new one.
+        let help = hit?.marker.handleHelp
+        if toolTip != help { toolTip = help }
+        let id = hit.map { HandleID(key: $0.marker.key, handle: $0.handle) }
         guard id != hoveredHandle else { return }
         hoveredHandle = id
         needsDisplay = true
