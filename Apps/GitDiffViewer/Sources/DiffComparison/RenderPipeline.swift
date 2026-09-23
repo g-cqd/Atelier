@@ -6,8 +6,12 @@ import Foundation
 import Observation
 
 /// Turns the selection into what the detail area shows: one document for a file, one card per file for a folder.
-/// Every publish carries the generation it belongs to, so a superseded render can never overwrite a newer one, and
-/// re-layouts never cancel a load that is still streaming cards in.
+///
+/// A render either starts from nothing, publishing the first file as soon as it lands and the rest behind it, or keeps
+/// what is published on screen until the whole replacement lands in one step. Every render carries its generation, so
+/// a superseded one never overwrites a newer one. What is published stays interactive meanwhile, gap drags and
+/// relayouts included: each published file keeps the stamp it was rendered under, and work that lands under a stamp
+/// that moved on is rendered again rather than shown out of date.
 @MainActor
 @Observable
 package final class RenderPipeline {
@@ -34,7 +38,7 @@ package final class RenderPipeline {
         case failed(String)
     }
 
-    /// The sources and diff options of one render, bundled to keep the helpers under the parameter-count limit.
+    /// The sources and diff options of one render.
     private struct RenderInputs {
         let left: ComparisonSource
         let right: ComparisonSource
@@ -42,27 +46,44 @@ package final class RenderPipeline {
         let heuristics: DiffHeuristics
     }
 
+    /// What a published file was rendered under: the rendering configuration, whether it shows changes only, and its
+    /// own gap expansions by gap index. A file whose stamp is no longer the current one shows something stale.
+    private struct Stamp: Equatable {
+        let configuration: Int
+        let showsChangesOnly: Bool
+        let expansions: [Int: GapExpansion]
+    }
+
+    /// A rendered file with the stamp it was rendered under.
+    private typealias Stamped = (file: RenderedDiff, stamp: Stamp)
+
     package private(set) var file: RenderedDiff?
     package private(set) var cards: [RenderedFile] = []
+    /// The target of what is published; `prepared` holds its diffs, one per pair that landed, in order.
     package private(set) var target: Target?
-    /// Rows revealed around gaps of the current document, keyed per file and gap.
+    /// Rows revealed around the gaps of what is published, keyed per file and gap.
     package private(set) var gapExpansions: [GapKey: GapExpansion] = [:]
     package private(set) var error: String?
-    /// Diffs of the current target, kept so layout changes and gap drags re-render without reloading or re-diffing.
+    /// Diffs of what is published, kept so layout changes and gap drags re-render without reloading or re-diffing.
     @ObservationIgnored package private(set) var prepared: [PreparedDiff] = []
     @ObservationIgnored package var onEvent: ((Event) -> Void)?
+    /// The stamp each published file was rendered under, parallel to `prepared`.
+    @ObservationIgnored private var stamps: [Stamp] = []
 
-    /// Bumped by every fresh render; work from an older generation is dropped when it lands.
+    /// Bumped by every render; work from an older generation is dropped when it lands.
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var completedGeneration = 0
     /// Whether a render is in flight: `completedGeneration < generation`, mirrored into an observed store so an
     /// observer sees both edges, since `generation` is bumped inside update passes and cannot be observed itself.
+    /// It stays true until the replacement of what is kept on screen has landed, so kept content never reads as final.
     package private(set) var isRendering = false
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var options: DiffRenderer.Options
     @ObservationIgnored private var layout: (context: Int, isolates: Bool) = (3, false)
+    /// Bumped whenever `configure` changes how diffs render, which leaves every stamp before it stale.
+    @ObservationIgnored private var configuration = 0
 
-    /// Granularity and heuristics of what is published; a render reuses published work only when they match.
+    /// Granularity and heuristics of what is published; a render borrows published work only when they match.
     @ObservationIgnored private var publishedGranularity: IntralineGranularity?
     @ObservationIgnored private var publishedHeuristics: DiffHeuristics?
 
@@ -80,8 +101,13 @@ package final class RenderPipeline {
         self.renderer = renderer
     }
 
-    /// Options for the next renders; re-renders of prepared diffs happen through `relayout`.
+    /// Options for the next renders. A change to how diffs render leaves what is published stale until `relayout`
+    /// renders it again; a render in flight picks the change up by itself.
     package func configure(options: DiffRenderer.Options, context: Int, isolatesChanges: Bool) {
+        if !Self.rendersAlike(options, self.options) || context != layout.context || isolatesChanges != layout.isolates
+        {
+            configuration += 1
+        }
         self.options = options
         layout = (context, isolatesChanges)
     }
@@ -91,67 +117,53 @@ package final class RenderPipeline {
         generation += 1
         completedGeneration = generation
         isRendering = false
-        file = nil
-        cards = []
-        prepared = []
+        unpublish()
         target = nil
         error = nil
     }
 
-    /// Renders `target`. Whatever is already prepared is published in this very update, before any task hop. A pair
-    /// with the same path, blobs and diff options as a published one reuses its prepared and rendered diff, so the
-    /// views keyed on them never rebuild.
+    /// Renders `target`. With `keepingPublished`, what is on screen stays there, and interactive, until the whole of
+    /// `target` replaces it in one step; otherwise it goes at once and `target` streams in, first file first. Either
+    /// way a pair with the same path, blobs and diff options as a published one borrows its prepared diff, and its
+    /// rendered file when it keeps its place under a current stamp, so the views keyed on it never rebuild.
     package func render(
         _ target: Target, left: ComparisonSource, right: ComparisonSource, granularity: IntralineGranularity,
-        heuristics: DiffHeuristics
+        heuristics: DiffHeuristics, keepingPublished: Bool
     ) {
-        let inputs = RenderInputs(left: left, right: right, granularity: granularity, heuristics: heuristics)
         task?.cancel()
-        let reuse = reuse(for: target, granularity: granularity, heuristics: heuristics)
+        preparer.cancelPrefetch()
         generation += 1
         isRendering = true
-        let generation = generation
-        self.target = target
-        publishedGranularity = granularity
-        publishedHeuristics = heuristics
-        file = nil
-        cards = []
-        prepared = []
         error = nil
-        gapExpansions = reusableGapExpansions(gapExpansions, target: target, reuse: reuse)
-        preparer.cancelPrefetch()
-
-        switch target {
-            case .file(let pair):
-                if let reused = reuse.file {
-                    prepared = reuse.preparedByIdentity[PairIdentity(pair)].map { [$0] } ?? []
-                    file = reused
-                    finish(generation)
-                    return
-                }
-                renderFresh(target, inputs: inputs, keepingScroll: reuse.sameFilePath, generation: generation)
-            case .cards(let pairs):
-                guard !reuse.cardsByIdentity.isEmpty else {
-                    renderFresh(target, inputs: inputs, keepingScroll: false, generation: generation)
-                    return
-                }
-                renderCardsDifferentially(pairs, reuse: reuse, inputs: inputs, generation: generation)
+        let inputs = RenderInputs(left: left, right: right, granularity: granularity, heuristics: heuristics)
+        let loan = self.loan(for: target, inputs: inputs)
+        let keeps = keepingPublished && (file != nil || !cards.isEmpty)
+        // A lent file drawn another way, a card becoming the whole file say, saves only its diff: streaming then puts
+        // the first file on screen sooner than one step would.
+        let lendsFiles = loan.rendered.contains { $0.value.stamp == currentStamp(forIndex: $0.key, in: target) }
+        if !keeps {
+            gapExpansions = carriedExpansions(into: target)
+            unpublish()
+            self.target = target
+            publishedGranularity = granularity
+            publishedHeuristics = heuristics
+        }
+        let job = RenderJob(
+            target: target, inputs: inputs, generation: generation, keepingScroll: loan.sameFilePath,
+            loan: keeps ? nil : loan)
+        if keeps || lendsFiles {
+            renderWhole(job)
+        } else {
+            stream(job)
         }
     }
 
-    /// Re-lays out what is prepared with the current options; a load still streaming in keeps going and renders
-    /// its remaining cards with the same options when they land.
+    /// Renders everything published again with the current configuration; without `keepingScroll`, every gap folds
+    /// back too. A render in flight renders its own files again when it lands.
     package func relayout(keepingScroll: Bool) {
         guard let target, !prepared.isEmpty else { return }
         if !keepingScroll { gapExpansions = [:] }
-        let rendered = Self.render(
-            prepared, target: target, options: options, layout: renderLayout, keepingScroll: keepingScroll)
-        switch target {
-            case .file:
-                file = rendered.file
-            case .cards:
-                cards = rendered.cards
-        }
+        rerender(Array(prepared.indices), of: target, keepingScroll: keepingScroll)
         if !isRendering { onEvent?(.finished) }
     }
 
@@ -177,29 +189,76 @@ package final class RenderPipeline {
         gapExpansions[key] ?? GapExpansion()
     }
 
-    private var renderLayout: RenderLayout {
-        layout.isolates || target?.isCards == true
-            ? .changes(context: layout.context, expansions: gapExpansions) : .full
+    // MARK: Publishing
+
+    /// Takes everything published off screen.
+    private func unpublish() {
+        file = nil
+        cards = []
+        prepared = []
+        stamps = []
     }
 
-    private func publish(_ rendered: Rendered, generation: Int, appending: Bool) {
-        guard generation == self.generation else { return }
-        switch rendered {
-            case .file(let diff):
+    /// Publishes files that landed behind those already published, in target order.
+    private func append(_ diffs: [PreparedDiff], _ files: [Stamped], for job: RenderJob) {
+        guard job.generation == generation, let first = files.first else { return }
+        let isFirst = prepared.isEmpty
+        prepared += diffs
+        stamps += files.map(\.stamp)
+        switch job.target {
+            case .file:
                 PhaseTrace.log("publish file")
+                var diff = first.file
+                diff.keepsScrollPosition = job.keepingScroll
                 file = diff
-                onEvent?(.published(diff.id, isFirst: true))
-            case .cards(let files):
-                guard !files.isEmpty else { return }
-                PhaseTrace.log("publish \(files.count) cards\(appending ? " more" : "")")
-                if appending {
-                    cards += files
-                    onEvent?(.published(files[0].rendered.id, isFirst: false))
-                } else {
-                    cards = files
-                    onEvent?(.published(files[0].rendered.id, isFirst: true))
-                }
+            case .cards:
+                PhaseTrace.log("publish \(files.count) cards\(isFirst ? "" : " more")")
+                cards += zip(diffs, files).map { RenderedFile(path: $0.title, rendered: $1.file) }
         }
+        onEvent?(.published(first.file.id, isFirst: isFirst))
+    }
+
+    /// Replaces everything published with the whole of `job`'s target, in one step.
+    private func publishWhole(_ diffs: [PreparedDiff], _ files: [Stamped], for job: RenderJob) {
+        guard job.generation == generation, let first = files.first else { return }
+        PhaseTrace.log("publish \(files.count) whole")
+        gapExpansions = carriedExpansions(into: job.target)
+        target = job.target
+        prepared = diffs
+        stamps = files.map(\.stamp)
+        publishedGranularity = job.inputs.granularity
+        publishedHeuristics = job.inputs.heuristics
+        switch job.target {
+            case .file:
+                var diff = first.file
+                diff.keepsScrollPosition = job.keepingScroll
+                file = diff
+                cards = []
+            case .cards:
+                cards = zip(diffs, files).map { RenderedFile(path: $0.title, rendered: $1.file) }
+                file = nil
+        }
+        onEvent?(.published(first.file.id, isFirst: true))
+    }
+
+    /// Renders the published files at `indices` again, inline, under the current stamp.
+    private func rerender(_ indices: [Int], of target: Target, keepingScroll: Bool) {
+        let layout = renderLayout(for: target)
+        var updated = cards
+        for index in indices where prepared.indices.contains(index) {
+            var diff = PaneRenderer.renderInline(
+                PaneRenderer.Job(index: index, diff: prepared[index]), options: options, layout: layout)
+            diff.keepsScrollPosition = keepingScroll
+            stamps[index] = currentStamp(forIndex: index, in: target)
+            switch target {
+                case .file:
+                    file = diff
+                case .cards:
+                    guard updated.indices.contains(index) else { continue }
+                    updated[index] = RenderedFile(path: updated[index].path, rendered: diff)
+            }
+        }
+        if target.isCards { cards = updated }
     }
 
     private func finish(_ generation: Int) {
@@ -210,59 +269,55 @@ package final class RenderPipeline {
         onEvent?(.finished)
     }
 
-    private enum Rendered {
-        case file(RenderedDiff)
-        case cards([RenderedFile])
-
-        var file: RenderedDiff? { if case .file(let diff) = self { diff } else { nil } }
-        var cards: [RenderedFile] { if case .cards(let files) = self { files } else { [] } }
+    private func fail(_ error: any Error, generation: Int) {
+        guard generation == self.generation else { return }
+        self.error = error.localizedDescription
+        completedGeneration = generation
+        isRendering = false
+        onEvent?(.failed(error.localizedDescription))
     }
 
-    /// Pure, so it runs inline for a cache hit and off the main actor for a batch.
-    nonisolated private static func render(
-        _ prepared: [PreparedDiff], target: Target, options: DiffRenderer.Options, layout: RenderLayout,
-        keepingScroll: Bool, firstIndex: Int = 0
-    ) -> Rendered {
-        switch target {
-            case .file:
-                var rendered = DiffRenderer.render(
-                    prepared: prepared, options: options, layout: layout, withHeaders: false)
-                rendered.keepsScrollPosition = keepingScroll
-                return .file(rendered)
-            case .cards:
-                return .cards(
-                    prepared.enumerated()
-                        .map { offset, file in
-                            var rendered = DiffRenderer.render(
-                                prepared: [file], options: options, layout: layout, withHeaders: false,
-                                firstFileIndex: firstIndex + offset)
-                            rendered.keepsScrollPosition = keepingScroll
-                            return RenderedFile(path: file.title, rendered: rendered)
-                        })
-        }
+    // MARK: Stamps
+
+    /// Whether two option sets render any diff the same way.
+    private static func rendersAlike(_ lhs: DiffRenderer.Options, _ rhs: DiffRenderer.Options) -> Bool {
+        lhs.granularity == rhs.granularity && lhs.palette == rhs.palette
+            && lhs.lineHeightMultiple == rhs.lineHeightMultiple && lhs.sides == rhs.sides
     }
 
-    /// Renders `prepared` off the main actor through ``renderer``, the way `render` does inline.
-    private func renderOffMain(
-        _ prepared: [PreparedDiff], target: Target, options: DiffRenderer.Options, layout: RenderLayout,
-        keepingScroll: Bool, firstIndex: Int = 0
-    ) async throws -> Rendered {
-        let jobs = prepared.enumerated().map { PaneRenderer.Job(index: firstIndex + $0.offset, diff: $0.element) }
-        let panes = try await renderer.render(jobs, options: options, layout: layout)
-        switch target {
-            case .file:
-                guard var pane = panes.first else { throw IncompleteRender() }
-                pane.keepsScrollPosition = keepingScroll
-                return .file(pane)
-            case .cards:
-                return .cards(
-                    zip(prepared, panes)
-                        .map { diff, pane in
-                            var pane = pane
-                            pane.keepsScrollPosition = keepingScroll
-                            return RenderedFile(path: diff.title, rendered: pane)
-                        })
+    /// Whether `target` renders its changes only, between gaps, rather than whole files.
+    private func showsChangesOnly(_ target: Target) -> Bool {
+        layout.isolates || target.isCards
+    }
+
+    private func renderLayout(for target: Target) -> RenderLayout {
+        showsChangesOnly(target)
+            ? .changes(context: layout.context, expansions: carriedExpansions(into: target)) : .full
+    }
+
+    /// The stamp the file at `index` of `target` is current under.
+    private func currentStamp(forIndex index: Int, in target: Target) -> Stamp {
+        let changesOnly = showsChangesOnly(target)
+        var expansions: [Int: GapExpansion] = [:]
+        if changesOnly, carries(index, into: target) {
+            for (key, expansion) in gapExpansions where key.fileIndex == index { expansions[key.gapIndex] = expansion }
         }
+        return Stamp(configuration: configuration, showsChangesOnly: changesOnly, expansions: expansions)
+    }
+
+    /// The gap expansions `target` keeps: those of every file that stays at its index under the same path, even when
+    /// its content changed, so revealed lines survive a reload. Gaps are matched by index, so a change that adds a
+    /// hunk above an expanded gap moves its revealed lines to the gap before it.
+    private func carriedExpansions(into target: Target) -> [GapKey: GapExpansion] {
+        gapExpansions.filter { carries($0.key.fileIndex, into: target) }
+    }
+
+    /// Whether the file at `index` of `target` is, by path, the one published at that index.
+    private func carries(_ index: Int, into target: Target) -> Bool {
+        guard let published = self.target, published.pairs.indices.contains(index),
+            target.pairs.indices.contains(index)
+        else { return false }
+        return published.pairs[index].path == target.pairs[index].path
     }
 
     /// A renderer that answered fewer panes than it was given diffs.
@@ -271,7 +326,7 @@ package final class RenderPipeline {
     }
 }
 
-/// Reuse of the published state across renders, so a reload leaves unchanged files untouched.
+/// How a render gets from its target to what it publishes, borrowing from the published state what it can.
 extension RenderPipeline {
     /// A pair's rendering identity: its path and both blob ids. Pairs with the same identity produce the same diff.
     private struct PairIdentity: Hashable {
@@ -296,176 +351,191 @@ extension RenderPipeline {
         }
     }
 
-    /// What the published state lends the next render: prepared diffs and cards by identity, or the rendered file.
-    private struct Reuse {
-        var file: RenderedDiff?
-        /// Whether the previous `.file` target had the same path, whatever its blobs, so a reload keeps the scroll.
-        var sameFilePath = false
+    /// What the published state lends a render: prepared diffs by identity, and the rendered files that keep their
+    /// place and identity, with the stamps they were rendered under.
+    private struct Loan {
         var preparedByIdentity: [PairIdentity: PreparedDiff] = [:]
-        var cardsByIdentity: [PairIdentity: RenderedFile] = [:]
+        var rendered: [Int: Stamped] = [:]
+        /// Whether the published target was a file at the same path, whatever its blobs, so a reload keeps the scroll.
+        var sameFilePath = false
     }
 
-    /// What the next render can reuse from the published state; nothing when the granularity or heuristics differ.
-    /// A render still streaming lends the prefix that landed. Call before clearing the published state.
-    private func reuse(for target: Target, granularity: IntralineGranularity, heuristics: DiffHeuristics) -> Reuse {
-        var reuse = Reuse()
-        guard granularity == publishedGranularity, heuristics == publishedHeuristics, let previousTarget = self.target
-        else { return reuse }
-        let oldPairs = previousTarget.pairs
-        switch previousTarget {
-            case .file(let pair):
-                guard let oldPrepared = prepared.first else { return reuse }
-                let identity = PairIdentity(pair)
-                if case .file(let newPair) = target { reuse.sameFilePath = newPair.path == pair.path }
-                guard identity.isReusable else { return reuse }
-                reuse.preparedByIdentity[identity] = oldPrepared
-                if case .file(let newPair) = target, PairIdentity(newPair) == identity { reuse.file = file }
-            case .cards:
-                // A card's rows bake in its `firstFileIndex`, which hover maps hits back by, so only a pair that
-                // kept its position is reused.
-                guard case .cards(let newPairs) = target else { return reuse }
-                let landed = min(oldPairs.count, prepared.count, cards.count)
-                for index in 0 ..< landed where index < newPairs.count {
-                    let identity = PairIdentity(oldPairs[index])
-                    guard identity.isReusable, identity == PairIdentity(newPairs[index]) else { continue }
-                    reuse.preparedByIdentity[identity] = prepared[index]
-                    reuse.cardsByIdentity[identity] = cards[index]
-                }
+    /// One render: its target, what it compares, and what it borrowed from the published state when it started.
+    private struct RenderJob {
+        let target: Target
+        let inputs: RenderInputs
+        let generation: Int
+        let keepingScroll: Bool
+        /// What a render that takes the published state off screen borrowed from it first; nil for a render that keeps
+        /// it, which borrows from whatever is on screen when it lands.
+        let loan: Loan?
+    }
+
+    /// What the published state lends a render of `target`; nothing when the granularity or heuristics differ. A
+    /// render still streaming lends the prefix that landed.
+    private func loan(for target: Target, inputs: RenderInputs) -> Loan {
+        var loan = Loan()
+        guard let published = self.target else { return loan }
+        if case .file(let old) = published, case .file(let new) = target { loan.sameFilePath = old.path == new.path }
+        guard inputs.granularity == publishedGranularity, inputs.heuristics == publishedHeuristics else { return loan }
+        let oldPairs = published.pairs
+        let newPairs = target.pairs
+        for index in prepared.indices where index < oldPairs.count {
+            let identity = PairIdentity(oldPairs[index])
+            guard identity.isReusable else { continue }
+            loan.preparedByIdentity[identity] = prepared[index]
+            // A card's rows bake in its file index, which hover maps hits back by, so only a pair that kept its place
+            // lends its rendered file.
+            guard index < newPairs.count, PairIdentity(newPairs[index]) == identity,
+                let rendered = publishedFile(at: index), stamps.indices.contains(index)
+            else { continue }
+            loan.rendered[index] = (rendered, stamps[index])
         }
-        return reuse
+        return loan
     }
 
-    /// The gap expansions to carry into this render: only those of files reused as is, whose rows already have them
-    /// baked in. A freshly rendered file starts with every gap collapsed.
-    private func reusableGapExpansions(_ current: [GapKey: GapExpansion], target: Target, reuse: Reuse)
-        -> [GapKey: GapExpansion]
-    {
+    /// The published file or card at `index`.
+    private func publishedFile(at index: Int) -> RenderedDiff? {
         switch target {
-            case .file:
-                return reuse.file != nil ? current : [:]
-            case .cards(let pairs):
-                let reusedIndices = Set(pairs.indices.filter { reuse.cardsByIdentity[PairIdentity(pairs[$0])] != nil })
-                guard !reusedIndices.isEmpty else { return [:] }
-                return current.filter { reusedIndices.contains($0.key.fileIndex) }
+            case .file: index == 0 ? file : nil
+            case .cards: cards.indices.contains(index) ? cards[index].rendered : nil
+            case nil: nil
         }
     }
 
-    /// Prepares and renders every pair of `target`, publishing the first as soon as it lands and the rest in one
-    /// batch behind it.
-    private func renderFresh(_ target: Target, inputs: RenderInputs, keepingScroll: Bool, generation: Int) {
-        let pairs = target.pairs
+    /// Publishes `job`'s first file as soon as it lands, at once when it is cached, then the rest in one batch behind
+    /// it. What was published went at the start.
+    private func stream(_ job: RenderJob) {
+        let pairs = job.target.pairs
+        var headLanded = false
         if let head = pairs.first,
-            let cached = preparer.cached(head, granularity: inputs.granularity, heuristics: inputs.heuristics)
+            let diff = job.loan?.preparedByIdentity[PairIdentity(head)]
+                ?? preparer.cached(head, granularity: job.inputs.granularity, heuristics: job.inputs.heuristics)
         {
-            prepared = [cached]
-            publish(
-                Self.render(
-                    prepared, target: target, options: options, layout: renderLayout, keepingScroll: keepingScroll),
-                generation: generation, appending: false)
+            let stamp = currentStamp(forIndex: 0, in: job.target)
+            let file = PaneRenderer.renderInline(
+                PaneRenderer.Job(index: 0, diff: diff), options: options, layout: renderLayout(for: job.target))
+            append([diff], [(file, stamp)], for: job)
+            headLanded = true
             if pairs.count == 1 {
-                finish(generation)
+                finish(job.generation)
                 return
             }
         }
         task = taskProvider.task {
             do {
-                if prepared.isEmpty {
-                    let head = try await preparer.prepare(
-                        Array(pairs.prefix(1)), left: inputs.left, right: inputs.right,
-                        granularity: inputs.granularity, heuristics: inputs.heuristics)
-                    guard generation == self.generation else { return }
-                    prepared = head
-                    publish(
-                        try await renderOffMain(
-                            head, target: target, options: options, layout: renderLayout,
-                            keepingScroll: keepingScroll),
-                        generation: generation, appending: false)
-                }
-                if pairs.count > 1 {
-                    let tail = try await preparer.prepare(
-                        Array(pairs.dropFirst()), left: inputs.left, right: inputs.right,
-                        granularity: inputs.granularity, heuristics: inputs.heuristics)
-                    guard generation == self.generation else { return }
-                    prepared += tail
-                    publish(
-                        try await renderOffMain(
-                            tail, target: target, options: options, layout: renderLayout,
-                            keepingScroll: keepingScroll, firstIndex: 1), generation: generation, appending: true)
-                }
-                finish(generation)
+                if !headLanded { try await self.prepareAndAppend(0 ..< 1, for: job) }
+                if pairs.count > 1 { try await self.prepareAndAppend(1 ..< pairs.count, for: job) }
+                self.finish(job.generation)
             } catch is CancellationError {
                 return
             } catch {
-                guard generation == self.generation else { return }
-                self.error = error.localizedDescription
-                completedGeneration = generation
-                isRendering = false
-                onEvent?(.failed(error.localizedDescription))
+                self.fail(error, generation: job.generation)
             }
         }
     }
 
-    /// Renders a card list, preparing and rendering only the pairs `reuse` cannot lend. Publishes once, in the
-    /// target's order.
-    private func renderCardsDifferentially(
-        _ pairs: [FilePair], reuse: Reuse, inputs: RenderInputs, generation: Int
-    ) {
-        let identities = pairs.map(PairIdentity.init)
-        let missingIndices = identities.indices.filter { reuse.cardsByIdentity[identities[$0]] == nil }
+    /// Prepares the pairs of `job`'s target at `indices`, renders them until current, and publishes them behind what
+    /// landed before them.
+    private func prepareAndAppend(_ indices: Range<Int>, for job: RenderJob) async throws {
+        let diffs = try await prepare(Array(indices), for: job)
+        let jobs = zip(indices, diffs).map { PaneRenderer.Job(index: $0, diff: $1) }
+        let files = try await renderCurrent(jobs, for: job)
+        append(diffs, files, for: job)
+    }
 
-        guard !missingIndices.isEmpty else {
-            prepared = identities.compactMap { reuse.preparedByIdentity[$0] }
-            publish(
-                .cards(identities.compactMap { reuse.cardsByIdentity[$0] }), generation: generation, appending: false)
-            finish(generation)
+    /// Renders the whole of `job`'s target and publishes it in one step, borrowing every file the published state
+    /// lends under a current stamp; at once when it lends them all.
+    private func renderWhole(_ job: RenderJob) {
+        let loan = job.loan ?? self.loan(for: job.target, inputs: job.inputs)
+        let pairs = job.target.pairs
+        let diffs = pairs.compactMap { loan.preparedByIdentity[PairIdentity($0)] }
+        if diffs.count == pairs.count,
+            pairs.indices.allSatisfy({ loan.rendered[$0]?.stamp == currentStamp(forIndex: $0, in: job.target) })
+        {
+            publishWhole(diffs, pairs.indices.compactMap { loan.rendered[$0] }, for: job)
+            finish(job.generation)
             return
         }
-
-        let missingPairs = missingIndices.map { pairs[$0] }
-        // Each missing card renders at its own index: missing pairs are not contiguous, so no block offset applies.
-        let options = self.options
-        let layout = renderLayout
         task = taskProvider.task {
             do {
-                let freshPrepared = try await self.preparer.prepare(
-                    missingPairs, left: inputs.left, right: inputs.right, granularity: inputs.granularity,
-                    heuristics: inputs.heuristics)
-                guard generation == self.generation else { return }
-                let jobs = zip(missingIndices, freshPrepared).map { PaneRenderer.Job(index: $0, diff: $1) }
-                let freshCards = zip(
-                    freshPrepared, try await self.renderer.render(jobs, options: options, layout: layout)
-                )
-                .map { RenderedFile(path: $0.title, rendered: $1) }
-                guard generation == self.generation else { return }
-                let freshPreparedByIdentity = Dictionary(
-                    zip(missingPairs.map(PairIdentity.init), freshPrepared), uniquingKeysWith: { first, _ in first })
-                let freshCardsByIdentity = Dictionary(
-                    zip(missingPairs.map(PairIdentity.init), freshCards), uniquingKeysWith: { first, _ in first })
-                var mergedPrepared: [PreparedDiff] = []
-                var mergedCards: [RenderedFile] = []
-                mergedPrepared.reserveCapacity(identities.count)
-                mergedCards.reserveCapacity(identities.count)
-                for identity in identities {
-                    if let kept = reuse.preparedByIdentity[identity], let card = reuse.cardsByIdentity[identity] {
-                        mergedPrepared.append(kept)
-                        mergedCards.append(card)
-                    } else if let fresh = freshPreparedByIdentity[identity], let card = freshCardsByIdentity[identity] {
-                        mergedPrepared.append(fresh)
-                        mergedCards.append(card)
-                    }
-                }
-                self.prepared = mergedPrepared
-                self.publish(.cards(mergedCards), generation: generation, appending: false)
-                self.finish(generation)
+                let diffs = try await self.prepare(Array(pairs.indices), for: job)
+                try await self.completeWhole(job, diffs: diffs)
             } catch is CancellationError {
                 return
             } catch {
-                guard generation == self.generation else { return }
-                self.error = error.localizedDescription
-                self.completedGeneration = generation
-                self.isRendering = false
-                self.onEvent?(.failed(error.localizedDescription))
+                self.fail(error, generation: job.generation)
             }
         }
+    }
+
+    /// Renders every file of `job`'s target the published state no longer lends under a current stamp, again for any
+    /// whose stamp moved on while it rendered, then publishes the whole target. What is lent is decided when the
+    /// render lands, from what is on screen then, so a gap drag or a relayout meanwhile is never lost.
+    private func completeWhole(_ job: RenderJob, diffs: [PreparedDiff]) async throws {
+        var results: [Int: Stamped] = [:]
+        while true {
+            let lent = (job.loan ?? loan(for: job.target, inputs: job.inputs)).rendered
+            var files: [Stamped] = []
+            var stale: [PaneRenderer.Job] = []
+            for (index, diff) in diffs.enumerated() {
+                let current = currentStamp(forIndex: index, in: job.target)
+                if let file = lent[index], file.stamp == current {
+                    files.append(file)
+                } else if let file = results[index], file.stamp == current {
+                    files.append(file)
+                } else {
+                    stale.append(PaneRenderer.Job(index: index, diff: diff))
+                }
+            }
+            guard !stale.isEmpty else {
+                publishWhole(diffs, files, for: job)
+                finish(job.generation)
+                return
+            }
+            for (index, file) in try await renderStep(stale, for: job) { results[index] = file }
+        }
+    }
+
+    /// Renders `jobs` off the main actor, again for any whose stamp moved on while they rendered, so a relayout or a
+    /// gap drag meanwhile is never lost; returns each rendered under the stamp still current when it lands.
+    private func renderCurrent(_ jobs: [PaneRenderer.Job], for job: RenderJob) async throws -> [Stamped] {
+        var results: [Int: Stamped] = [:]
+        while true {
+            let stale = jobs.filter { results[$0.index]?.stamp != currentStamp(forIndex: $0.index, in: job.target) }
+            guard !stale.isEmpty else { break }
+            for (index, file) in try await renderStep(stale, for: job) { results[index] = file }
+        }
+        return jobs.compactMap { results[$0.index] }
+    }
+
+    /// One render step: `jobs` rendered off the main actor with the options and expansions current as it starts, each
+    /// with the stamp it was rendered under.
+    private func renderStep(_ jobs: [PaneRenderer.Job], for job: RenderJob) async throws -> [(Int, Stamped)] {
+        let stamps = jobs.map { currentStamp(forIndex: $0.index, in: job.target) }
+        let files = try await renderer.render(jobs, options: options, layout: renderLayout(for: job.target))
+        guard job.generation == generation else { throw CancellationError() }
+        guard files.count == jobs.count else { throw IncompleteRender() }
+        return zip(jobs, zip(files, stamps)).map { ($0.index, ($1.0, $1.1)) }
+    }
+
+    /// The prepared diffs of `job`'s target at `indices`: borrowed from the published state, else cached or read and
+    /// diffed now.
+    private func prepare(_ indices: [Int], for job: RenderJob) async throws -> [PreparedDiff] {
+        let pairs = job.target.pairs
+        let loan = job.loan ?? self.loan(for: job.target, inputs: job.inputs)
+        var diffs: [Int: PreparedDiff] = [:]
+        for index in indices { diffs[index] = loan.preparedByIdentity[PairIdentity(pairs[index])] }
+        let missing = indices.filter { diffs[$0] == nil }
+        if !missing.isEmpty {
+            let fresh = try await preparer.prepare(
+                missing.map { pairs[$0] }, left: job.inputs.left, right: job.inputs.right,
+                granularity: job.inputs.granularity, heuristics: job.inputs.heuristics)
+            guard job.generation == generation else { throw CancellationError() }
+            for (index, diff) in zip(missing, fresh) { diffs[index] = diff }
+        }
+        let ordered = indices.compactMap { diffs[$0] }
+        guard ordered.count == indices.count else { throw IncompleteRender() }
+        return ordered
     }
 }
