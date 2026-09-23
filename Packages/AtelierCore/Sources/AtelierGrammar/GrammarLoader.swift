@@ -37,7 +37,8 @@ public enum GrammarLoader: Sendable {
     /// Load a grammar definition from raw JSON data.
     ///
     /// The data is UTF-8 JSON; a leading byte-order mark is skipped. Rules keep their document order, and a key
-    /// repeated in one object keeps its first value.
+    /// repeated in one object keeps its first value. A grammar without an `extras` member gets
+    /// ``GrammarDefinition/defaultExtras``, as the grammar DSL gives it; an empty one keeps none.
     /// - Throws: `GrammarError.invalidJSON` when the data is not JSON, nests deeper than 64 levels, has no object at
     ///   its root, or has a `rules` member that is not an object; `.missingField` or `.invalidRuleType` when a member
     ///   a grammar needs is absent or has the wrong shape.
@@ -74,7 +75,8 @@ public enum GrammarLoader: Sendable {
         }
 
         let parsedRules = try parseNamedRules(rules)
-        let extras = try parseRuleList(grammar.extras)
+        // A grammar.json always lists its extras; one written by hand without them gets the DSL's whitespace.
+        let extras = grammar.extras == nil ? GrammarDefinition.defaultExtras : try parseRuleList(grammar.extras)
         let conflicts = grammar.conflicts.flatMap(stringLists) ?? []
         let externals = try parseRuleList(grammar.externals)
         let inline = grammar.inline.flatMap(strings) ?? []

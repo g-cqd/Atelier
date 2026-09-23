@@ -3,8 +3,13 @@ import Foundation
 // MARK: - Grammar Definition (tree-sitter grammar.json format)
 
 public struct GrammarDefinition: Sendable, Equatable {
+    /// The extras of a grammar that names none: whitespace, as tree-sitter's grammar DSL gives such a grammar.
+    public static let defaultExtras: [Rule] = [.pattern(#"\s"#)]
+
     public var name: String
     public var rules: [(name: String, rule: Rule)]
+    /// What may appear between any two tokens: separators such as whitespace, which the lexer skips, and tokens such
+    /// as comments, which the parser sets aside. Empty, nothing may.
     public var extras: [Rule]
     public var conflicts: [[String]]
     public var externals: [Rule]
@@ -16,7 +21,7 @@ public struct GrammarDefinition: Sendable, Equatable {
     public init(
         name: String,
         rules: [(name: String, rule: Rule)],
-        extras: [Rule] = [],
+        extras: [Rule] = defaultExtras,
         conflicts: [[String]] = [],
         externals: [Rule] = [],
         inline: [String] = [],
