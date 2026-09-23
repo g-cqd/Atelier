@@ -551,6 +551,8 @@ package final class DiffViewerModel {
                     navigator.focusFirst()
                     requestScrollToCurrentChange()
                 }
+                // A Findings row opened this file: its line wins over the first change.
+                if let row = takeFindingReveal() { scrollRequest = ScrollRequest(row: row) }
                 updateHoverDocs()
             case .finished:
                 folding.listCompleted()

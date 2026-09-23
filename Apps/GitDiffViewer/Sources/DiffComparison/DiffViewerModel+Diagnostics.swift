@@ -7,11 +7,6 @@ import DiffGit
 import DiffRendering
 import Foundation
 
-/// Whether the calling thread is the main thread, for asserting that work runs off it.
-private func isOnMainThread() -> Bool {
-    pthread_main_np() != 0
-}
-
 /// Diagnostics and hover documentation wiring for ``DiffViewerModel``.
 extension DiffViewerModel {
     // MARK: Diagnostics
@@ -72,57 +67,16 @@ extension DiffViewerModel {
             root: root, files: files, corpusReader: reader, corpusSource: right.source, corpusEntries: right.entries)
     }
 
-    /// The severity counts of the file at `leftPath`, whose findings are keyed by its right path.
+    /// The severity counts of the file at `leftPath`: the right side's findings, keyed by its right path, and the left
+    /// side's, keyed by `leftPath`, whichever sides were analyzed.
     package func diagnosticSeverityCounts(for leftPath: String) -> DiagnosticSeverityCounts {
-        DiagnosticSeverityCounts(diagnostics?.findingsByFile[counterpartPath(of: leftPath, in: .left)] ?? [])
+        let right = diagnostics?.findingsByFile[counterpartPath(of: leftPath, in: .left)] ?? []
+        let left = diagnostics?.leftFindingsByFile[leftPath] ?? []
+        return DiagnosticSeverityCounts(right + left)
     }
 
-    /// Tells ``diagnostics`` the right side's changed Swift files and a changeset fingerprint; a right side that is
-    /// not a directory reports no root, which clears the findings.
+    /// Tells ``diagnostics`` what each side of the comparison offers the analyzers (DIAG-08, D12).
     func updateDiagnostics() {
-        diagnosticsTask?.cancel()
-        diagnosticsGeneration += 1
-        guard let diagnostics else { return }
-        guard case .directory(let rightRoot) = right.source else {
-            diagnostics.comparisonChanged(root: nil, files: [], corpusFingerprint: nil)
-            return
-        }
-        let changedPaths = comparison.changedPaths(under: nil, limit: Self.combinedFileLimit)
-        let swiftFiles: [DiagnosticsEngine.FileTarget] = changedPaths.filter { $0.hasSuffix(".swift") }
-            .compactMap { leftPath in
-                let rightPath = comparison.counterpartPath(of: leftPath, in: .left)
-                guard let entry = right.entriesByPath[rightPath] else { return nil }
-                // A file too large to hash falls back to its size, enough to notice a length change.
-                let contentHash = entry.blobID ?? "size:\(entry.size)"
-                return DiagnosticsEngine.FileTarget(
-                    path: rightPath, contentHash: contentHash, url: rightRoot.appending(path: rightPath))
-            }
-        let leftEntries = left.entriesByPath
-        let rightEntries = right.entriesByPath
-        let comparison = comparison
-        let generation = diagnosticsGeneration
-        diagnosticsTask = taskProvider.task {
-            let corpusFingerprint = await Self.corpusFingerprint(
-                changedPaths: changedPaths, comparison: comparison, leftEntries: leftEntries,
-                rightEntries: rightEntries)
-            guard generation == diagnosticsGeneration else { return }
-            diagnostics.comparisonChanged(root: rightRoot, files: swiftFiles, corpusFingerprint: corpusFingerprint)
-        }
-    }
-
-    /// A hash of every changed path with its content hash, in sorted order, computed off the main actor.
-    @concurrent
-    private static func corpusFingerprint(
-        changedPaths: [String], comparison: Comparison, leftEntries: [String: SourceEntry],
-        rightEntries: [String: SourceEntry]
-    ) async -> String {
-        assert(!isOnMainThread(), "corpusFingerprint must run off the main actor")
-        let fingerprintEntries = changedPaths.sorted()
-            .map { leftPath -> String in
-                let rightPath = comparison.counterpartPath(of: leftPath, in: .left)
-                let hash = rightEntries[rightPath]?.blobID ?? leftEntries[leftPath]?.blobID ?? "-"
-                return "\(rightPath)=\(hash)"
-            }
-        return SourceLoader.blobID(of: Data(fingerprintEntries.joined(separator: "\n").utf8))
+        updateAnalyzedSides()
     }
 }

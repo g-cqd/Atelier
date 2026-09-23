@@ -57,7 +57,7 @@ struct FindingRevealTests {
     }
 
     @Test
-    func `revealing a finding opens its file and hands over its row once the file is rendered`() async throws {
+    func `a Findings row scrolls the window to its finding's line once the file is rendered`() async throws {
         let sut = harness.makeSUT()
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]
         harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "2")]
@@ -69,8 +69,8 @@ struct FindingRevealTests {
 
         sut.reveal(finding)
         try await harness.taskProvider.waitForAllTasks()
-        let row = try #require(sut.takeFindingReveal())
 
+        let row = try #require(sut.scrollRequest?.row)
         #expect(sut.selectedPath == "a.swift")
         #expect(sut.rendered?.new?.rows[row].newNumber == 1)
         #expect(sut.takeFindingReveal() == nil)

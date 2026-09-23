@@ -98,23 +98,6 @@ package enum DiagnosticRowMapper {
         return rows(for: rendered, left: left, right: right)
     }
 
-    /// The right side's findings alone, by `paths`, for a pane that has only those; `includesOldSide` no longer does
-    /// anything, since no side's findings show on the other side's rows. Kept until every pane passes both sides.
-    @concurrent
-    package static func rowsOffMain(
-        for rendered: RenderedText, paths: [Int: String], findings: [String: [Finding]], includesOldSide: Bool = false
-    ) async -> [Int: DiagnosticOverlay.RowDiagnostics] {
-        assert(!isOnMainThread(), "rowsOffMain must run off the main actor")
-        return rows(for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
-    }
-
-    /// The right side's findings alone; see ``rowsOffMain(for:paths:findings:includesOldSide:)``.
-    package static func rows(
-        for rendered: RenderedText, paths: [Int: String], findings: [String: [Finding]], includesOldSide: Bool = false
-    ) -> [Int: DiagnosticOverlay.RowDiagnostics] {
-        rows(for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
-    }
-
     package static func rows(
         for rendered: RenderedText, left: SideFindings, right: SideFindings
     ) -> [Int: DiagnosticOverlay.RowDiagnostics] {
