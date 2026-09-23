@@ -79,9 +79,8 @@ struct ViewerSettingsTests {
         #expect(reloaded.diagnosticsEnabled)
         #expect(!reloaded.showsHoverDocumentation)
         #expect(
-            reloaded.toolLocations == [
-                .swiftlint: ToolLocation(isEnabled: false, customPath: "/usr/local/bin/swiftlint")
-            ])
+            reloaded.toolLocations[.swiftlint] == ToolLocation(isEnabled: false, customPath: "/usr/local/bin/swiftlint")
+        )
         #expect(reloaded.lspServerLocations == ["sourcekit-lsp": ToolLocation(customPath: "/usr/bin/sourcekit-lsp")])
     }
 
@@ -98,6 +97,19 @@ struct ViewerSettingsTests {
         sut.lspServerLocations = [:]
 
         #expect(changes == [.diagnostics, .diagnostics, .diagnostics])
+    }
+
+    @Test
+    func `a tool missing from the saved tool settings reads as enabled`() throws {
+        let defaults = try makeDefaults()
+        let saved: [String: ToolLocation] = ["swiftlint": ToolLocation(isEnabled: false)]
+        defaults.set(try DefaultsJSON.encode(saved), forKey: "diagnosticToolLocations")
+
+        let sut = ViewerSettings(defaults: defaults)
+
+        #expect(sut.toolLocations[.swiftlint] == ToolLocation(isEnabled: false))
+        #expect(sut.toolLocations[.swiftformat] == ToolLocation())
+        #expect(sut.toolLocations.count == DiagnosticTool.allCases.count)
     }
 
     @Test

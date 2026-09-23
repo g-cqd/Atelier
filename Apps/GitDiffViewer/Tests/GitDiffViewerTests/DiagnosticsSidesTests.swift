@@ -15,6 +15,9 @@ struct DiagnosticsSidesTests {
     private static let leftRoot = URL(filePath: "/left", directoryHint: .isDirectory)
     private static let rightRoot = URL(filePath: "/right", directoryHint: .isDirectory)
     private static let tools: [DiagnosticTool: ToolLocation] = [.swiftlint: ToolLocation()]
+    /// Every tool named, SwiftLint alone enabled: a tool the settings do not name runs.
+    private static let onlySwiftLint = Dictionary(
+        uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation(isEnabled: $0 == .swiftlint)) })
     private static let debounce: Duration = .milliseconds(250)
 
     private static func folder(_ root: URL, files: [String] = ["A.swift"]) -> DiagnosticsSideTarget {
@@ -109,7 +112,7 @@ struct DiagnosticsSidesTests {
         let settings = ViewerSettings(defaults: defaults)
         settings.diagnosticsEnabled = true
         settings.analyzedSides = mode
-        settings.toolLocations = Self.tools
+        settings.toolLocations = Self.onlySwiftLint
         let runner = SideRecordingRunner(findingsByRoot: findings)
         let clock = TestClock()
         let spy = TaskProviderSpy.tolerant()
@@ -214,7 +217,7 @@ struct DiagnosticsSidesTests {
         try await harness.load(sut)
         sut.settings.diagnosticsEnabled = true
         sut.settings.analyzedSides = .both
-        sut.settings.toolLocations = Self.tools
+        sut.settings.toolLocations = Self.onlySwiftLint
         let runner = SideRecordingRunner(findingsByRoot: [:])
         let clock = TestClock()
         sut.diagnostics = DiagnosticsModel(

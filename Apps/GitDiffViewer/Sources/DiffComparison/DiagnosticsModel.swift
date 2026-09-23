@@ -91,7 +91,7 @@ package final class DiagnosticsModel {
     private func plan() -> DiagnosticsPlan {
         let trust = trust
         return DiagnosticsPlan(
-            sides: sides, mode: settings.analyzedSides, tools: settings.toolLocations.filter(\.value.isEnabled),
+            sides: sides, mode: settings.analyzedSides, tools: settings.enabledToolLocations,
             canExport: treeExporter != nil, isTrusted: { trust?.isTrusted($0) ?? false })
     }
 

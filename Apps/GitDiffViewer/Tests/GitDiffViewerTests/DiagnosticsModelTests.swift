@@ -144,9 +144,8 @@ struct DiagnosticsModelTests {
     func `comparisonChanged only asks the session to run enabled tools`() async throws {
         let runner = FakeDiagnosticsRunner()
         let sut = try makeSUT(runner: runner)
-        sut.settings.toolLocations = [
-            .swiftlint: ToolLocation(isEnabled: true), .arcleak: ToolLocation(isEnabled: false)
-        ]
+        sut.settings.toolLocations = Dictionary(
+            uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation(isEnabled: $0 == .swiftlint)) })
 
         sut.model.comparisonChanged(
             root: Self.root, files: [.init(path: "A.swift", contentHash: "a", url: nil)], corpusFingerprint: nil)
@@ -154,6 +153,30 @@ struct DiagnosticsModelTests {
 
         let calls = await sut.runner.calls
         #expect(calls == [.swiftlint])
+    }
+
+    @Test
+    func `a tool missing from the saved tool settings runs`() async throws {
+        let name = "GitDiffViewerTests.diagnostics.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defaults.removePersistentDomain(forName: name)
+        let saved: [String: ToolLocation] = ["swiftlint": ToolLocation(isEnabled: false)]
+        defaults.set(try DefaultsJSON.encode(saved), forKey: "diagnosticToolLocations")
+        let settings = ViewerSettings(defaults: defaults)
+        settings.diagnosticsEnabled = true
+        let runner = FakeDiagnosticsRunner()
+        let clock = TestClock()
+        let spy = TaskProviderSpy.tolerant()
+        let model = DiagnosticsModel(
+            engine: runner, settings: settings, taskProvider: spy, clock: clock, debounce: Self.debounce)
+
+        model.comparisonChanged(root: Self.root, files: [target("A.swift")], corpusFingerprint: "fp")
+        // Bounded: with no tool enabled no run starts, and the clock would wait for it forever.
+        try await spy.waitForSpawnedTasks(atLeast: 1)
+        try await startRun(on: clock)
+        try await spy.waitForAllTasks()
+
+        #expect(await Set(runner.calls) == Set(DiagnosticTool.allCases).subtracting([.swiftlint]))
     }
 
     // MARK: - Observed summary (GDV B9)
