@@ -33,9 +33,8 @@ struct DiffTotalsLabel: View {
     }
 }
 
-/// Static-analysis totals for the working tree: warnings and errors from every enabled tool, hidden entirely
-/// while diagnostics are off or nothing has been found. Mirrors ``DiffTotalsLabel``'s shape so the two sit
-/// naturally beside each other in the toolbar.
+/// Static-analysis totals for the working tree, warnings and errors from every enabled tool; hidden while
+/// diagnostics are off or nothing was found.
 struct DiagnosticsLabel: View {
     let model: DiffViewerModel
 
@@ -56,7 +55,6 @@ struct DiagnosticsLabel: View {
             .font(.callout.monospacedDigit())
             .fixedSize()
             .toolbarItemMetrics()
-            // One name in the customization sheet: the numbers would otherwise be read out as the item's name.
             .accessibilityLabel("Diagnostics")
             .help(
                 DiagnosticsBreakdown.lines(summary: summary, runStates: diagnostics.runStates).joined(separator: "\n"))
@@ -87,7 +85,7 @@ struct SelectedFileLabel: View {
     }
 }
 
-/// Folds every file of the list; it lived above the list and took a strip of its height.
+/// Folds every file of the list.
 struct CollapseAllButton: View {
     let model: DiffViewerModel
 

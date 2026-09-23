@@ -6,12 +6,8 @@ import DiffRendering
 import DiffTextKit
 import SwiftUI
 
-/// ``DiffTextView`` plus the diagnostics squiggles and gutter badges for its own rendered text, and the popover a
-/// badge click opens. Kept apart from ``DiffTextView`` itself, which knows nothing of the model or the settings
-/// that gate diagnostics.
-///
-/// One instance owns one ``DiagnosticOverlay``: `unified`, `old` and `new` each lay their rows out on their own, so
-/// each needs its own row-to-finding mapping even though they all show the same file.
+/// ``DiffTextView`` plus the diagnostics of its own rendered text: squiggles, tinted gutter line numbers, and the
+/// findings popover a click on one opens. Each pane owns its ``DiagnosticOverlay``, since its rows are its own.
 struct DiagnosticDiffTextView: View {
     let model: DiffViewerModel
     let rendered: RenderedText
@@ -29,8 +25,7 @@ struct DiagnosticDiffTextView: View {
 
     @State private var overlay = DiagnosticOverlay()
     @State private var version = 0
-    /// Kept alive for as long as it is on screen: `NSPopover.show` does not itself retain the popover past this
-    /// scope, and it is transient (dismisses on an outside click) so there is never more than one at a time.
+    /// Retains the transient findings popover, which `NSPopover.show` does not.
     @State private var diagnosticPopover: NSPopover?
     /// Bumped by every ``recompute()``; a mapping that lands after a newer one started is dropped.
     @State private var recomputeGeneration = 0
@@ -53,9 +48,7 @@ struct DiagnosticDiffTextView: View {
         .onChange(of: model.settings.analyzedSides) { recompute() }
     }
 
-    /// Maps this pane's findings off the main actor and applies the result, guarded by generation so a slower,
-    /// superseded mapping (an older render, or diagnostics that have since moved on) can never overwrite a newer
-    /// one that already landed.
+    /// Maps this pane's findings off the main actor and applies the result unless a newer mapping started.
     private func recompute() {
         recomputeGeneration &+= 1
         let generation = recomputeGeneration
@@ -77,11 +70,8 @@ struct DiagnosticDiffTextView: View {
         }
     }
 
-    /// Resolves a hover hit through ``DiffComparison/HoverDocumentationModel`` and structures and colors its
-    /// markdown for the panel, using this pane's own palette; nil while no hover documentation model is attached,
-    /// so ``DiffTextView`` never asks. When the hovered row also carries diagnostics, they join the same document
-    /// (``HoverDocument/diagnostics``), so the unified panel shows the issue the squiggle pointed at alongside
-    /// whatever documentation resolved for the identifier under it -- one hover, one surface.
+    /// Resolves a hover hit into a document styled with this pane's palette and joined by the hovered row's
+    /// diagnostics; nil while no hover documentation model is attached.
     private var hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? {
         guard let hoverDocs = model.hoverDocs else { return nil }
         let palette = rendered.palette
@@ -106,10 +96,8 @@ struct DiagnosticDiffTextView: View {
         }
     }
 
-    /// Presents ``DiagnosticFindingsList`` as an `NSPopover` anchored on the row's own frame, the same way Xcode's
-    /// issue navigator opens off a line -- the fix for the popover that used to anchor to the whole pane
-    /// (SwiftUI's `.popover(item:)` has no notion of "this row", only "this view"), which put it at the pane's own
-    /// origin instead of next to whatever was clicked.
+    /// Presents ``DiagnosticFindingsList`` in an `NSPopover` anchored on the clicked row, which SwiftUI's `.popover`
+    /// cannot anchor to.
     private func showDiagnosticPopover(rowIndex: Int, findings: [Finding], anchorRect: NSRect, in view: NSView) {
         let popover = NSPopover()
         popover.behavior = .transient

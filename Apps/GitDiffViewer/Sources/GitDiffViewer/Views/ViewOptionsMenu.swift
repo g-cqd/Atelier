@@ -84,7 +84,7 @@ struct ViewOptionsMenu: NSViewRepresentable {
             return menu
         }
 
-        /// The window-chrome toggles that show up first, most-used items nearest the top (P2).
+        /// The window-chrome toggles that show up first, most-used items nearest the top.
         private func topItems(for snapshot: Snapshot) -> [NSMenuItem] {
             [
                 toggle(SettingLabel.wrapsLines, snapshot.wrapsLines, #selector(toggleWrap)),

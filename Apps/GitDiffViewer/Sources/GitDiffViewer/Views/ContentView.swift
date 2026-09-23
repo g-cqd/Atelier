@@ -24,13 +24,8 @@ struct ContentView: View {
                     .ignoresSafeArea(.container, edges: .top)
                     .scrollEdgeEffectStyle(.soft, for: .top)
                     .navigationSplitViewColumnWidth(min: 260, ideal: 340)
-                // The sidebar toggle stays in the toolbar's default item set for every placement: removing it
-                // conditionally made the default set itself depend on `explorerPlacement`, so two launches (or
-                // this window and one restored under a different placement) could disagree on what "default"
-                // means under the same autosave name, corrupting a saved customization. For the top placement,
-                // `columnVisibility` below always reports `.detailOnly` and ignores the toggle's writes, so the
-                // button is present but a no-op rather than absent -- identity stays constant, only its effect
-                // changes with the setting.
+                // The sidebar toggle stays in the default item set for every placement, since a default set that
+                // varies corrupts the saved customization; the top placement leaves it a no-op instead.
             } detail: {
                 detail
                     .toolbar(id: ToolbarID.toolbar) { toolbar }
@@ -111,8 +106,7 @@ struct ContentView: View {
     }
 
     /// The window's toolbar, customizable: every item has an identity of its own, so View ▸ Customize Toolbar
-    /// lets people choose which ones to show, in what order, and how much space to put between them. The items
-    /// shown by default are the ones the app had before; the rest are there for the taking.
+    /// lets people choose which ones to show, in what order, and how much space to put between them.
     ///
     /// The builder reads no model value of its own on purpose: a change to one would regenerate every item, which
     /// takes a noticeable moment. Items that show live values read them inside their own view instead.
@@ -274,16 +268,6 @@ extension SidebarVisibility {
 enum ToolbarID {
     /// The name macOS files the customization under. Bumped when the set of items changes in a way a saved
     /// arrangement cannot survive: a stale one naming items that no longer exist crashes AppKit as it restores it.
-    // A `swift run` build and the app bundle Xcode/`swift build --product` produce read different `defaults`
-    // domains (different bundle identifiers), so a customization saved under one is never seen by the other;
-    // that split is environmental, not a bug in this file, and is not addressed here.
-    //
-    // Bumped again to "main.3": items have been added to the declared set since "main.2" was last saved (both
-    // the bundled and unbundled `defaults` domains hold a "main.2" customization whose "TB Item Identifiers"
-    // roster is missing several of them, e.g. `reload`/`fileStats`/`diagnostics`/`totals`), and one domain's
-    // saved default items even name an id ("viewOptions") absent from its own item roster. AppKit trapped while
-    // reconciling that drift against the current declaration; a fresh autosave name is the only way to shed a
-    // config this out of sync rather than trying to patch it back into agreement item by item.
     static let toolbar = "main.3"
     static let compareRepository = "compareRepository"
     static let openPatch = "openPatch"

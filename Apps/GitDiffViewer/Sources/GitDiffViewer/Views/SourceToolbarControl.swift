@@ -58,7 +58,7 @@ struct SourceToolbarControl: NSViewRepresentable {
         let primaryRemoteName: String?
         let fetchError: String?
 
-        /// A ref or a file name keeps its last path component, ellipsized in the middle past 32 characters; the
+        /// A ref or a file name keeps its last path component, ellipsized in the middle past 30 characters; the
         /// full name stays in the tooltip and the menu.
         private static func shortened(_ text: String) -> String {
             let name = text.split(separator: "/").last.map(String.init) ?? text
@@ -84,10 +84,7 @@ struct SourceToolbarControl: NSViewRepresentable {
             return title
         }
 
-        /// The SF Symbol for each family a descriptor can name. `workingTree` gets a symbol of its own --
-        /// distinct from `folder`'s plain directory and `branch`'s fork -- because a working tree is a git
-        /// concept sharing the repository as its context, not an ordinary folder; "pencil.and.outline" reads as
-        /// "uncommitted work in progress", which is what the working tree is.
+        /// The SF Symbol for each family a descriptor can name; the working tree's reads as uncommitted work.
         private static func symbolName(for symbol: SourceDescriptor.Symbol) -> String {
             switch symbol {
                 case .file: "doc"
@@ -201,8 +198,7 @@ struct SourceToolbarControl: NSViewRepresentable {
             return item
         }
 
-        /// "Fetch origin…", disabled and renamed "Fetching origin…" while one runs, with a second, disabled line
-        /// naming the last failure, if any -- the fetch feature's whole presence in the menu is this one call.
+        /// The fetch item, disabled while a fetch runs, and a disabled line naming the last failure, if any.
         private func addFetchItems(to menu: NSMenu, snapshot: Snapshot) {
             let state = RepositoryFetch.MenuItem(
                 remoteName: snapshot.primaryRemoteName, isFetching: snapshot.isFetching, lastError: snapshot.fetchError
