@@ -33,15 +33,27 @@ extension DiffViewerModel {
     // MARK: Hover documentation
 
     /// Builds this window's hover documentation: a doc-comment index shared by every pane, tiered behind
-    /// `lspRegistry` for on-disk Swift files on the new side.
+    /// `lspRegistry` for on-disk Swift files on the new side. It indexes only while the setting shows hover
+    /// documentation, and indexes the comparison on screen when the setting turns it on.
     package func attachHoverDocs(lspRegistry: SourceKitLSPRegistry?) {
-        hoverDocs = HoverDocumentationModel(lspRegistry: lspRegistry, taskProvider: taskProvider)
+        let hoverDocs = HoverDocumentationModel(lspRegistry: lspRegistry, taskProvider: taskProvider)
+        hoverDocs.isEnabled = settings.showsHoverDocumentation
+        self.hoverDocs = hoverDocs
+        // The setting is an appearance change, which the model's own observer passes over.
+        settings.addObserver(self) { [weak self] _ in self?.followHoverDocumentationSetting() }
+    }
+
+    /// Turns ``hoverDocs`` on or off with the setting, feeding it the comparison on screen when it turns on.
+    private func followHoverDocumentationSetting() {
+        guard let hoverDocs, hoverDocs.isEnabled != settings.showsHoverDocumentation else { return }
+        hoverDocs.isEnabled = settings.showsHoverDocumentation
+        updateHoverDocs()
     }
 
     /// Feeds ``hoverDocs`` both sides of every file prepared so far behind the render target, and the right side's
-    /// on-disk root when there is one.
+    /// on-disk root when there is one; nothing while hover documentation is off.
     func updateHoverDocs() {
-        guard let hoverDocs else { return }
+        guard let hoverDocs, hoverDocs.isEnabled else { return }
         let allPairs = pipeline.target?.pairs ?? []
         let prepared = pipeline.prepared
         // Feed the prefix that landed: waiting for every card would starve the index until the last one lands.
