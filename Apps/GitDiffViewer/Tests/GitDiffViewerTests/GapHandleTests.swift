@@ -6,68 +6,101 @@ import Testing
 @testable import DiffRendering
 @testable import DiffTextKit
 
-/// Where the halves of a gap's handle sit around its hairline (book DIFF-02).
+/// Where a gap's handle sits in its band (book DIFF-02), checked against Xcode's measured on its reference screenshots:
+/// two halves of 9 points around a 1-point hairline in a 19-point band, a lone half of 13 points, 18 points wide, with
+/// 8-point grips, against 18-point lines.
 @MainActor
 struct GapHandleLayoutTests {
     private let key = GapKey(fileIndex: 0, gapIndex: 1)
     private let both: [GapHandle] = [.extendsChangeAbove, .extendsChangeBelow]
 
-    @Test
-    func `the halves of a gap between two changes make one rectangle centred on its hairline`() {
-        let halves = GapHandleLayout.halves(both, boundaryY: 100, rowHeight: 15)
-
-        #expect(halves.map(\.handle) == [.extendsChangeAbove, .extendsChangeBelow])
-        #expect(halves[0].rect == CGRect(x: 2, y: 93, width: 18, height: 7))
-        #expect(halves[1].rect == CGRect(x: 2, y: 100, width: 18, height: 7))
-        #expect(halves[0].rect.union(halves[1].rect).midY == 100)
+    /// A band a line of `lineHeight` and its hairline tall, at `y`, across a gutter 40 points wide less its
+    /// separator.
+    private func band(y: CGFloat = 0, lineHeight: CGFloat = 18) -> CGRect {
+        CGRect(x: 0, y: y, width: 39, height: RenderedText.gapBandHeight(lineHeight: lineHeight))
     }
 
     @Test
-    func `a gap at the top of the file offers the lower half alone, hanging under its hairline`() {
+    func `two halves fill their band around a hairline across its middle, as Xcode's 9, 1 and 9 points`() {
+        let handle = GapHandleLayout.handle(both, in: band(y: 100), lineHeight: 18)
+
+        #expect(handle.halves.map(\.handle) == both)
+        #expect(handle.hairline == CGRect(x: 0, y: 109, width: 39, height: 1))
+        #expect(handle.halves[0].rect == CGRect(x: 11, y: 100, width: 18, height: 9))
+        #expect(handle.halves[1].rect == CGRect(x: 11, y: 110, width: 18, height: 9))
+    }
+
+    @Test
+    func `the halves scale with the line height, around the band's middle`() {
+        let handle = GapHandleLayout.handle(both, in: band(lineHeight: 15), lineHeight: 15)
+
+        #expect(handle.hairline.minY == 7.5)
+        #expect(handle.halves.map(\.rect.height) == [7.5, 7.5])
+    }
+
+    @Test
+    func `a gap at the top of the file shows its lower half alone, 13 points under a hairline near the top`() {
         let marker = GapMarker(key: key, hiddenRows: 11, isLeading: true, isTrailing: false)
-        let halves = GapHandleLayout.halves(marker.handles, boundaryY: 0, rowHeight: 15)
+        let handle = GapHandleLayout.handle(marker.handles, in: band(), lineHeight: 18)
 
-        #expect(halves.map(\.handle) == [.extendsChangeBelow])
-        #expect(halves.first?.rect == CGRect(x: 2, y: 0, width: 18, height: 7))
+        #expect(handle.halves.map(\.handle) == [.extendsChangeBelow])
+        #expect(handle.hairline.minY == 5)
+        #expect(handle.halves.first?.rect == CGRect(x: 11, y: 6, width: 18, height: 13))
     }
 
     @Test
-    func `a gap at the end of a file offers the upper half alone, sitting on its hairline`() {
+    func `a gap at the end of a file shows its upper half alone, 13 points over a hairline near the bottom`() {
         let marker = GapMarker(key: key, hiddenRows: 9, isLeading: false, isTrailing: true)
-        let halves = GapHandleLayout.halves(marker.handles, boundaryY: 300, rowHeight: 15)
+        let handle = GapHandleLayout.handle(marker.handles, in: band(y: 300), lineHeight: 18)
 
-        #expect(halves.map(\.handle) == [.extendsChangeAbove])
-        #expect(halves.first?.rect == CGRect(x: 2, y: 293, width: 18, height: 7))
+        #expect(handle.halves.map(\.handle) == [.extendsChangeAbove])
+        #expect(handle.hairline.minY == 313)
+        #expect(handle.halves.first?.rect == CGRect(x: 11, y: 300, width: 18, height: 13))
+    }
+
+    @Test
+    func `a lone half scales with the line height`() {
+        let handle = GapHandleLayout.handle([.extendsChangeBelow], in: band(lineHeight: 15), lineHeight: 15)
+        #expect(handle.halves.first?.rect.height == 11)
     }
 
     @Test
     func `a gap with no change on either side offers no half`() {
         let marker = GapMarker(key: key, hiddenRows: 40, isLeading: true, isTrailing: true)
-        #expect(GapHandleLayout.halves(marker.handles, boundaryY: 0, rowHeight: 15).isEmpty)
+        #expect(GapHandleLayout.handle(marker.handles, in: band(), lineHeight: 18).halves.isEmpty)
     }
 
     @Test
-    func `each half's hit area is its rectangle, a little taller on its rounded side only`() {
-        let halves = GapHandleLayout.halves(both, boundaryY: 100, rowHeight: 15)
-        let slop = GapHandleLayout.hitSlop
+    func `each grip is 8 points long, centred across its half, where Xcode's lie`() {
+        let pair = GapHandleLayout.handle(both, in: band(), lineHeight: 18)
+        let lone = GapHandleLayout.handle([.extendsChangeBelow], in: band(), lineHeight: 18)
 
-        #expect(halves[0].hitArea == CGRect(x: 2, y: 93 - slop, width: 18, height: 7 + slop))
-        #expect(halves[1].hitArea == CGRect(x: 2, y: 100, width: 18, height: 7 + slop))
+        #expect(pair.halves.map(\.grip.minY) == [5, 14])
+        #expect(lone.halves.map(\.grip.minY) == [12])
+        #expect((pair.halves + lone.halves).allSatisfy { $0.grip.width == 8 && $0.grip.midX == $0.rect.midX })
     }
 
     @Test
-    func `the halves lie in the lane at the gutter's leading edge`() {
-        let halves = GapHandleLayout.halves(both, boundaryY: 100, rowHeight: 15)
-        #expect(halves.allSatisfy { $0.rect.minX > 0 && $0.hitArea.maxX < GapHandleLayout.laneWidth })
+    func `the handle is centred across the gutter on whole points, and narrowed to fit a narrow one`() {
+        let wide = GapHandleLayout.handle(both, in: CGRect(x: 0, y: 0, width: 62.5, height: 19), lineHeight: 18)
+        let narrow = GapHandleLayout.handle(both, in: CGRect(x: 0, y: 0, width: 20, height: 19), lineHeight: 18)
+
+        #expect(wide.halves.allSatisfy { $0.rect.minX == 22 && $0.rect.width == 18 })
+        #expect(narrow.halves.allSatisfy { $0.rect.minX >= 0 && $0.rect.maxX <= 20 && $0.rect.midX == 10 })
     }
 
     @Test
-    func `rows too short for the rectangle shorten its halves, so a row between two gaps keeps them apart`() {
-        let upper = GapHandleLayout.halves([.extendsChangeAbove], boundaryY: 111, rowHeight: 11)
-        let lower = GapHandleLayout.halves([.extendsChangeBelow], boundaryY: 100, rowHeight: 11)
+    func `each of two halves hits in its part of the band, across the gutter, split at the hairline`() {
+        let handle = GapHandleLayout.handle(both, in: band(y: 100), lineHeight: 18)
 
-        #expect(upper.first?.rect.height == 5)
-        #expect((lower.first?.rect.maxY ?? .infinity) < (upper.first?.rect.minY ?? 0))
+        #expect(handle.halves[0].hitArea == CGRect(x: 0, y: 100, width: 39, height: 9.5))
+        #expect(handle.halves[1].hitArea == CGRect(x: 0, y: 109.5, width: 39, height: 9.5))
+    }
+
+    @Test
+    func `a lone half hits in its whole band`() {
+        let handle = GapHandleLayout.handle([.extendsChangeAbove], in: band(y: 100), lineHeight: 18)
+        #expect(handle.halves.first?.hitArea == band(y: 100))
     }
 
     @Test
@@ -171,9 +204,9 @@ private final class GutterFixture {
         return found
     }
 
-    /// The halves of `gap` as the gutter lays them out.
+    /// The halves of `gap` as the gutter lays them out in its band.
     func halves(of gap: Gap) -> [GapHandleLayout.Half] {
-        GapHandleLayout.halves(gap.marker.handles, boundaryY: gap.y, rowHeight: layout.rendered.lineHeight)
+        GapHandleLayout.handle(gap.marker.handles, in: gap.band, lineHeight: layout.rendered.lineHeight).halves
     }
 
     func mouse(_ type: NSEvent.EventType, at point: NSPoint, clicks: Int = 1) {
@@ -232,22 +265,32 @@ struct DiffGutterGapHandleTests {
     }
 
     @Test
-    func `a press on the rows' gutter outside the halves starts no drag`() throws {
+    func `a press anywhere across a band's part grabs that part's half`() throws {
         let fixture = try GutterFixture()
         let gap = try #require(fixture.middleGap())
-        let upper = try #require(fixture.halves(of: gap).first)
-        let width = fixture.gutter.bounds.width
 
-        // Beside the halves on the hairline, and in the half's column but past its hit area.
-        fixture.mouse(.leftMouseDown, at: NSPoint(x: width - 1.5, y: gap.y - 2))
-        fixture.mouse(.leftMouseDown, at: NSPoint(x: width - 1.5, y: gap.y + 2))
-        fixture.mouse(.leftMouseDown, at: NSPoint(x: upper.rect.midX, y: upper.hitArea.minY - 1))
+        fixture.mouse(.leftMouseDown, at: NSPoint(x: fixture.gutter.bounds.width - 2, y: gap.band.minY + 1))
+
+        guard case .began(_, .extendsChangeAbove, _) = fixture.events.first else {
+            Issue.record("expected a press on the upper half, got \(fixture.events)")
+            return
+        }
+    }
+
+    @Test
+    func `a press in the rows around a band starts no drag`() throws {
+        let fixture = try GutterFixture()
+        let gap = try #require(fixture.middleGap())
+        let middle = (fixture.gutter.bounds.width - 1) / 2
+
+        fixture.mouse(.leftMouseDown, at: NSPoint(x: middle, y: gap.band.minY - 1))
+        fixture.mouse(.leftMouseDown, at: NSPoint(x: middle, y: gap.band.maxY + 1))
 
         #expect(fixture.events.isEmpty)
     }
 
     @Test
-    func `a line number beside a half keeps its diagnostic click`() throws {
+    func `the row above a band keeps its line number's click`() throws {
         let fixture = try GutterFixture()
         let gap = try #require(fixture.middleGap())
         let finding = Finding(
@@ -261,7 +304,7 @@ struct DiffGutterGapHandleTests {
 
         // On the number of the row above the band, then on the upper half in the band.
         let rowAbove = gap.band.minY - fixture.rendered.lineHeight / 2
-        fixture.mouse(.leftMouseDown, at: NSPoint(x: fixture.gutter.numbersLeft + 2, y: rowAbove))
+        fixture.mouse(.leftMouseDown, at: NSPoint(x: fixture.gutter.bounds.width - 10, y: rowAbove))
         fixture.mouse(.leftMouseDown, at: NSPoint(x: upper.rect.midX, y: upper.rect.midY))
 
         #expect(fixture.diagnosticClicks == [gap.row - 1])
@@ -340,7 +383,7 @@ struct DiffGutterGapHandleTests {
 
         fixture.mouse(.mouseMoved, at: NSPoint(x: lower.rect.midX, y: lower.rect.midY))
         let over = fixture.gutter.toolTip
-        fixture.mouse(.mouseMoved, at: NSPoint(x: fixture.gutter.bounds.width - 1.5, y: gap.y + 2))
+        fixture.mouse(.mouseMoved, at: NSPoint(x: fixture.gutter.bounds.width - 1.5, y: gap.band.maxY + 2))
 
         #expect(over == "\(gap.marker.hiddenRows) hidden lines. Drag to reveal; double-click to reveal all")
         #expect(fixture.gutter.toolTip == nil)
@@ -353,22 +396,13 @@ struct DiffGutterGapHandleTests {
         let halves = fixture.halves(of: gap)
         let before = halves.map { fixture.pixels(in: $0.rect) }
 
-        fixture.mouse(.mouseMoved, at: NSPoint(x: fixture.gutter.bounds.width - 1.5, y: gap.y + 2))
+        fixture.mouse(.mouseMoved, at: NSPoint(x: fixture.gutter.bounds.width - 1.5, y: gap.band.maxY + 2))
 
         #expect(halves.map { fixture.pixels(in: $0.rect) } == before)
     }
 
     @Test
-    func `line numbers start past the lane that holds the halves`() throws {
-        let fixture = try GutterFixture()
-        let gap = try #require(fixture.middleGap())
-        let numbersLeft = fixture.gutter.numbersLeft
-
-        #expect(fixture.halves(of: gap).allSatisfy { $0.hitArea.maxX < numbersLeft })
-    }
-
-    @Test
-    func `a gutter widens by the handles' lane only while its text offers a handle`() throws {
+    func `a gutter keeps its width whether or not its text offers a handle`() throws {
         let fixture = try GutterFixture()
         let text = (1 ... 60).map { "let value\($0) = \($0)" }.joined(separator: "\n") + "\n"
         let rendered = try #require(DiffRenderer.render(oldText: text, newText: text, language: .plain).new)
@@ -376,8 +410,16 @@ struct DiffGutterGapHandleTests {
         whole.style = .new
         whole.rendered = rendered
 
-        #expect(whole.numbersLeft < GapHandleLayout.laneWidth)
-        #expect(fixture.gutter.thickness - whole.thickness == fixture.gutter.numbersLeft - whole.numbersLeft)
+        #expect(fixture.gutter.thickness == whole.thickness)
+    }
+
+    @Test
+    func `the handle is centred across the gutter`() throws {
+        let fixture = try GutterFixture()
+        let gap = try #require(fixture.middleGap())
+        let middle = (fixture.gutter.bounds.width - 1) / 2
+
+        #expect(fixture.halves(of: gap).allSatisfy { abs($0.rect.midX - middle) <= 0.5 })
     }
 
     @Test
@@ -437,7 +479,7 @@ struct DiffGutterGapEdgeTests {
 
     /// The middle of the handles across `gutter`.
     private func handleMidX(in gutter: DiffGutterView) -> CGFloat {
-        GapHandleLayout.laneWidth / 2
+        (gutter.bounds.width - 1) / 2
     }
 
     /// The gutter's pixels at `points`, as it draws now.
