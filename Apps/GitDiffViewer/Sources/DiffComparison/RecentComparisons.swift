@@ -16,9 +16,7 @@ package final class RecentComparisons {
 
     package init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        entries =
-            defaults.data(forKey: Key.entries)
-            .flatMap { try? JSONDecoder().decode([LaunchConfiguration].self, from: $0) } ?? []
+        entries = defaults.data(forKey: Key.entries).flatMap { try? Self.decodeEntries(from: $0) } ?? []
     }
 
     package func record(_ configuration: LaunchConfiguration) {
@@ -39,7 +37,12 @@ package final class RecentComparisons {
     }
 
     private func save() {
-        defaults.set(try? JSONEncoder().encode(entries), forKey: Key.entries)
+        defaults.set(try? DefaultsJSON.encode(entries.map(StoredLaunchConfiguration.init)), forKey: Key.entries)
+    }
+
+    /// - Throws: When `data` is not a stored list, or when one of its URLs does not parse.
+    private static func decodeEntries(from data: Data) throws -> [LaunchConfiguration] {
+        try DefaultsJSON.decode([StoredLaunchConfiguration].self, from: data).map { try $0.configuration() }
     }
 
     private enum Key {

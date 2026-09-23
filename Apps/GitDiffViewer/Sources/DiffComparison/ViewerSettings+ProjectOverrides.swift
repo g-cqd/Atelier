@@ -93,7 +93,7 @@ extension ViewerSettings {
             case Key.diffHeuristics:
                 let value =
                     defaults.data(forKey: effectiveKey(key))
-                    .flatMap { try? JSONDecoder().decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()
+                    .flatMap { try? DefaultsJSON.decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()
                 if value != diffHeuristics { diffHeuristics = value }
             case Key.treeStyle:
                 let value =
@@ -134,7 +134,7 @@ extension ViewerSettings {
             case Key.lspServerLocations:
                 let value =
                     defaults.data(forKey: effectiveKey(key))
-                    .flatMap { try? JSONDecoder().decode([String: ToolLocation].self, from: $0) } ?? [
+                    .flatMap { try? DefaultsJSON.decode([String: ToolLocation].self, from: $0) } ?? [
                         "sourcekit-lsp": ToolLocation()
                     ]
                 if value != lspServerLocations { lspServerLocations = value }

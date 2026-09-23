@@ -181,7 +181,7 @@ package final class ViewerSettings {
     package var granularity: IntralineGranularity { didSet { store(granularity.rawValue, Key.granularity, .diff) } }
     /// Which diff heuristics are wired in; any change re-diffs the selection.
     package var diffHeuristics: DiffHeuristics {
-        didSet { store(try? JSONEncoder().encode(diffHeuristics), Key.diffHeuristics, .diff) }
+        didSet { store(try? DefaultsJSON.encode(diffHeuristics), Key.diffHeuristics, .diff) }
     }
     package var showsMinimap: Bool { didSet { store(showsMinimap, Key.showsMinimap, .appearance) } }
     package var showsStatusBar: Bool { didSet { store(showsStatusBar, Key.showsStatusBar, .appearance) } }
@@ -208,12 +208,12 @@ package final class ViewerSettings {
     package var toolLocations: [DiagnosticTool: ToolLocation] {
         didSet {
             let encoded = Dictionary(uniqueKeysWithValues: toolLocations.map { ($0.key.rawValue, $0.value) })
-            store(try? JSONEncoder().encode(encoded), Key.toolLocations, .diagnostics)
+            store(try? DefaultsJSON.encode(encoded), Key.toolLocations, .diagnostics)
         }
     }
     /// Per-server overrides for language servers outside ``DiagnosticTool``, such as `sourcekit-lsp`, by server id.
     package var lspServerLocations: [String: ToolLocation] {
-        didSet { store(try? JSONEncoder().encode(lspServerLocations), Key.lspServerLocations, .diagnostics) }
+        didSet { store(try? DefaultsJSON.encode(lspServerLocations), Key.lspServerLocations, .diagnostics) }
     }
     /// Which side(s) of a comparison diagnostics findings are mapped onto.
     package var analyzedSides: AnalyzedSides {
@@ -281,7 +281,7 @@ package final class ViewerSettings {
         granularity = defaults.string(forKey: Key.granularity).flatMap(IntralineGranularity.init(rawValue:)) ?? .word
         diffHeuristics =
             defaults.data(forKey: Key.diffHeuristics)
-            .flatMap { try? JSONDecoder().decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()
+            .flatMap { try? DefaultsJSON.decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()
         showsMinimap = defaults.object(forKey: Key.showsMinimap) as? Bool ?? true
         showsStatusBar = defaults.object(forKey: Key.showsStatusBar) as? Bool ?? true
         treeStyle =
@@ -297,7 +297,7 @@ package final class ViewerSettings {
         toolLocations = Self.decodeToolLocations(defaults.data(forKey: Key.toolLocations))
         lspServerLocations =
             defaults.data(forKey: Key.lspServerLocations)
-            .flatMap { try? JSONDecoder().decode([String: ToolLocation].self, from: $0) }
+            .flatMap { try? DefaultsJSON.decode([String: ToolLocation].self, from: $0) }
             ?? ["sourcekit-lsp": ToolLocation()]
         analyzedSides =
             defaults.string(forKey: Key.analyzedSides).flatMap(AnalyzedSides.init(rawValue:)) ?? .newer
@@ -352,7 +352,7 @@ package final class ViewerSettings {
                 granularity = .word
                 diffHeuristics = restoredValue(Key.diffHeuristics, appDefault: DiffHeuristics()) {
                     defaults.data(forKey: Key.diffHeuristics)
-                        .flatMap { try? JSONDecoder().decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()
+                        .flatMap { try? DefaultsJSON.decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()
                 }
             case .appearance:
                 themePath = nil
@@ -379,7 +379,7 @@ package final class ViewerSettings {
                     Key.lspServerLocations, appDefault: ["sourcekit-lsp": ToolLocation()]
                 ) {
                     defaults.data(forKey: Key.lspServerLocations)
-                        .flatMap { try? JSONDecoder().decode([String: ToolLocation].self, from: $0) }
+                        .flatMap { try? DefaultsJSON.decode([String: ToolLocation].self, from: $0) }
                         ?? ["sourcekit-lsp": ToolLocation()]
                 }
         }
@@ -395,7 +395,7 @@ package final class ViewerSettings {
 
     static func decodeToolLocations(_ data: Data?) -> [DiagnosticTool: ToolLocation] {
         data
-            .flatMap { try? JSONDecoder().decode([String: ToolLocation].self, from: $0) }
+            .flatMap { try? DefaultsJSON.decode([String: ToolLocation].self, from: $0) }
             .map { decoded in
                 Dictionary(
                     uniqueKeysWithValues: decoded.compactMap { key, value in
