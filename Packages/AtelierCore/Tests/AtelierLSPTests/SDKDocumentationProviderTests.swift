@@ -133,6 +133,14 @@ struct SDKDocumentationProviderTests {
         #expect(result == nil)
     }
 
+    @Test
+    func `extracts the chain on a line of a CRLF file`() {
+        let content = "import UIKit\r\nlet view = UIView\r\n"
+        let result = SDKDocumentationProvider.extractChain(
+            in: content, line: 1, utf16Column: "let view = UIV".utf16.count)
+        #expect(result?.chain == "UIView")
+    }
+
     // MARK: - Import collection
 
     @Test
@@ -155,6 +163,27 @@ struct SDKDocumentationProviderTests {
         let manyImports = (0 ..< 20).map { "import Module\($0)\n" }.joined()
         let imports = SDKDocumentationProvider.collectImports(in: manyImports, unioning: ["Foundation"])
         #expect(imports.count == 12)
+    }
+
+    @Test
+    func `attributed, access-level and kind imports each name their module`() {
+        let content = """
+            @testable import Alpha
+            public import Beta
+            @_spi(Internal) @preconcurrency package import Gamma
+            import struct Delta.Thing
+            // import Commented
+            let importer = 1
+            """
+        let imports = SDKDocumentationProvider.collectImports(in: content, unioning: [])
+        #expect(imports == ["Alpha", "Beta", "Delta", "Gamma"])
+    }
+
+    @Test
+    func `each import of a CRLF file is found`() {
+        let imports = SDKDocumentationProvider.collectImports(
+            in: "import AppKit\r\nimport SwiftUI\r\n", unioning: [])
+        #expect(imports == ["AppKit", "SwiftUI"])
     }
 
     // MARK: - Fast nil path (no LSP traffic)
