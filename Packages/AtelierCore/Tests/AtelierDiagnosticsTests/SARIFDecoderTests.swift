@@ -95,6 +95,48 @@ struct SARIFDecoderTests {
     }
 
     @Test
+    func `a plain absolute path, as the analyzers write it, is made relative with its related locations`() throws {
+        let data = Self.sarif(
+            runs: """
+                {"results": [
+                    {"ruleId": "exact-clone", "level": "warning",
+                     "message": {"text": "Duplicate block"},
+                     "locations": [{"physicalLocation": {
+                         "artifactLocation": {"uri": "\\/repo\\/Sources\\/C.swift"},
+                         "region": {"startLine": 1, "startColumn": 5}
+                     }}],
+                     "relatedLocations": [
+                         {"physicalLocation": {"artifactLocation": {"uri": "\\/repo\\/Sources\\/D.swift"},
+                             "region": {"startLine": 20, "startColumn": 5}}, "message": {"text": "duplicate region"}}
+                     ]}
+                ]}
+                """
+        )
+        let findings = try SARIFDecoder.findings(from: data, tool: .dolly, root: Self.root)
+        #expect(findings.map(\.file) == ["Sources/C.swift"])
+        #expect(
+            findings.first?.related == [RelatedLocation(file: "Sources/D.swift", line: 20, message: "duplicate region")]
+        )
+    }
+
+    @Test
+    func `an absolute URI under a sibling whose name extends the root is kept whole`() throws {
+        let data = Self.sarif(
+            runs: """
+                {"results": [
+                    {"level": "warning", "message": {"text": "Sibling"},
+                     "locations": [{"physicalLocation": {
+                         "artifactLocation": {"uri": "file:///repo-other/A.swift"},
+                         "region": {"startLine": 1}
+                     }}]}
+                ]}
+                """
+        )
+        let findings = try SARIFDecoder.findings(from: data, tool: .deadwood, root: Self.root)
+        #expect(findings.map(\.file) == ["/repo-other/A.swift"])
+    }
+
+    @Test
     func `a relative URI is used as-is with a leading dot-slash stripped`() throws {
         let data = Self.sarif(
             runs: """

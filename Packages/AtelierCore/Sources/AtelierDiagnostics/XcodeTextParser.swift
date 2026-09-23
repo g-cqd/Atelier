@@ -2,11 +2,13 @@ public import Foundation
 
 /// Parses the "path:line:col: severity: message" lines a tool emits on stderr in Xcode's diagnostic text format.
 public enum XcodeTextParser {
-    /// Parses every matching line of `text`; lines that do not fit the format are ignored.
+    /// Parses every matching line of `text`, with paths made relative to `root` under any of its spellings (see
+    /// ``RootRelativePath``); lines that do not fit the format are ignored.
     public static func findings(from text: String, tool: DiagnosticTool, root: URL) -> [Finding] {
-        text.split(separator: "\n", omittingEmptySubsequences: false)
+        let paths = RootRelativePath(root: root)
+        return text.split(separator: "\n", omittingEmptySubsequences: false)
             .compactMap {
-                finding(from: String($0), tool: tool, root: root)
+                finding(from: String($0), tool: tool, paths: paths)
             }
     }
 
@@ -14,7 +16,7 @@ public enum XcodeTextParser {
         "error": .error, "warning": .warning, "note": .note
     ]
 
-    private static func finding(from line: String, tool: DiagnosticTool, root: URL) -> Finding? {
+    private static func finding(from line: String, tool: DiagnosticTool, paths: RootRelativePath) -> Finding? {
         // Scan for ":<digits>:<digits>: <severity>: " starting after the path, since the path itself may contain
         // colons on some filesystems but never digit-colon-digit-colon in the middle of a component.
         let scalars = Array(line)
@@ -53,7 +55,7 @@ public enum XcodeTextParser {
             tool: tool,
             ruleID: ruleID,
             message: message,
-            file: relativePath(of: path, root: root),
+            file: paths.relativePath(of: path),
             line: lineNumber,
             column: column,
             severity: severity
@@ -70,13 +72,5 @@ public enum XcodeTextParser {
         }
         guard sawDigit, index < scalars.count, scalars[index] == ":" else { return nil }
         return colon
-    }
-
-    private static func relativePath(of path: String, root: URL) -> String {
-        let rootPath = root.path
-        guard path.hasPrefix(rootPath) else { return path }
-        var relative = String(path.dropFirst(rootPath.count))
-        while relative.hasPrefix("/") { relative.removeFirst() }
-        return relative
     }
 }

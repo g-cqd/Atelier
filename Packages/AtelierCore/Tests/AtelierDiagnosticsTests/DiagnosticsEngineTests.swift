@@ -302,13 +302,12 @@ struct DiagnosticsEngineTests {
         let executable = URL(filePath: temp.file("tool/swiftlint"))
         try Self.makeExecutable(at: executable)
         let started = AsyncLatch()
+        // Never opened: the run ends only when cancelling the calling task makes this wait throw.
+        let neverFinishes = AsyncLatch()
         let runner = FakeProcessRunner { _ in
             started.open()
-            try Task.checkCancellation()
-            while !Task.isCancelled {
-                try await Task.sleep(for: .milliseconds(5))
-            }
-            throw CancellationError()
+            try await neverFinishes.wait()
+            return .success("")
         }
         let discovery = Self.discovery(runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
