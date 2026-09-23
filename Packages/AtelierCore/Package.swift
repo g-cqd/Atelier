@@ -134,7 +134,7 @@ let package = Package(
         // tree built from relative paths with chain compaction, as a comparison's explorer shows it.
         .target(
             name: "AtelierFileTree",
-            dependencies: ["AtelierGit", "AtelierProcess"],
+            dependencies: ["AtelierGit", "AtelierProcess", .product(name: "AemiRuntime", package: "aemi")],
             swiftSettings: strict
         ),
         // Workspace search: file enumeration, literal and regex matching over files read on the blocking pool, and
@@ -162,7 +162,10 @@ let package = Package(
         .testTarget(name: "AtelierSyntaxModelTests", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
         .testTarget(
             name: "AtelierFileTreeTests",
-            dependencies: ["AtelierFileTree", .product(name: "AemiTestKit", package: "aemi")],
+            dependencies: [
+                "AtelierFileTree", .product(name: "AemiRuntime", package: "aemi"),
+                .product(name: "AemiTestKit", package: "aemi")
+            ],
             swiftSettings: strict),
         .testTarget(
             name: "AtelierSearchTests",
