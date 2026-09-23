@@ -468,6 +468,12 @@ final class FileCellView: NSTableCellView {
 
     private let badge = ChangeBadgeView()
 
+    /// The row's selection look, forwarded to the badge by hand: NSTableCellView passes it on to its text field and
+    /// image view only, so without this the badge never learns it sits on a focused selection.
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { badge.backgroundStyle = backgroundStyle }
+    }
+
     override init(frame: NSRect) {
         super.init(frame: frame)
         identifier = Self.identifier

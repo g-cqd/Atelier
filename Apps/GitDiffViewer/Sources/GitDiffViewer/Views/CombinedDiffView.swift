@@ -294,7 +294,7 @@ private struct FileCardHeader: View {
         .padding(.trailing, 8)
         .padding(.vertical, 8)
         // Opaque, so nothing behind the header needs a blur; the card's clip rounds it.
-        .background(ChangeGlyph(title.summary.kind).color.opacity(0.08))
+        .background(ChangeGlyph(title.summary.kind).color(in: title.badgeScheme).opacity(0.08))
         .background(Color(nsColor: .windowBackgroundColor))
         .contentShape(Rectangle())
         // The single click must not wait for a double click: it folds at once, and the double click then opens.
