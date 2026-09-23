@@ -28,13 +28,21 @@ public final class GLRParser: Sendable {
 
     private static let maxStacks = 256
     private static let maxTokens = 100_000
+    /// The deepest tree a parse builds: well past 5,000 levels of JSON nesting, which take about 15,000 levels of
+    /// objects or 10,000 of arrays, and well within what a consumer that still recurses survives on the 8 MB main
+    /// thread in a release build.
+    static let maxTreeDepth = 16_384
+    /// The error a parse throws instead of building a tree deeper than ``maxTreeDepth``.
+    static let treeTooDeep = ParseError.parsingFailed("Tree depth exceeds limit \(maxTreeDepth)")
 
     /// Parse source text and produce a syntax tree.
     ///
     /// A token the table cannot take on a stack becomes an ERROR node there, and the parse goes on. Every token runs
-    /// its reductions with a budget, so a table that reduces in a cycle cannot hang the parse.
+    /// its reductions with a budget, so a table that reduces in a cycle cannot hang the parse. A parse that would
+    /// build a tree more than 16,384 levels deep declines instead; what it built is freed without recursion, so the
+    /// decline is safe on a 512 KiB thread stack.
     ///
-    /// - Throws: `ParseError.parsingFailed` beyond 100,000 tokens.
+    /// - Throws: `ParseError.parsingFailed` beyond 100,000 tokens, or for a tree deeper than 16,384 levels.
     /// - Complexity: O(t · s · (b + d)) for t tokens, s live stacks (at most 256), b reductions per token and stack
     ///   (at most the table's state count plus the stack's depth d), and d for merging stacks.
     public func parse(
@@ -63,15 +71,15 @@ public final class GLRParser: Sendable {
             stacks = try advance(consume stacks, past: token, at: tokenIdx)
         }
         if let endIdx = terminalIndex["$end"] {
-            stacks = applyReduces(to: consume stacks, lookahead: endIdx)
+            var exceededDepth = false
+            stacks = applyReduces(to: consume stacks, lookahead: endIdx, exceededDepth: &exceededDepth)
+            guard !exceededDepth else {
+                Self.release(&stacks)
+                throw Self.treeTooDeep
+            }
         }
 
-        // Pick the best stack (prefer one with fewer errors)
-        guard let best = stacks.min(by: { $0.errorCount < $1.errorCount }) else {
-            throw .parsingFailed("No valid parse at the end of input")
-        }
-
-        var root = buildRootNode(from: best, source: source)
+        var root = try buildRootNode(from: Self.takeBest(from: &stacks), source: source)
 
         // Insert extra comment tokens into the tree so query matchers can find them
         let extraComments = tokens.filter { $0.isExtra && $0.type == "comment" }
@@ -94,7 +102,8 @@ public final class GLRParser: Sendable {
 
     // MARK: - Private
 
-    /// Moves every stack past `token`: its reductions, then its shift, then merging and pruning.
+    /// Moves every stack past `token`: its reductions, then its shift, then merging and pruning. Throws
+    /// ``treeTooDeep`` when a reduction would build a node deeper than ``maxTreeDepth``, after releasing every stack.
     private func advance(
         _ stacks: consuming [ParseStack],
         past token: Lexer.Token,
@@ -116,17 +125,50 @@ public final class GLRParser: Sendable {
             return marked
         }
 
-        var next = ParseStack.mergingIdenticalHistories(
-            shift(applyReduces(to: consume stacks, lookahead: lookahead), token: token, lookahead: lookahead))
+        var exceededDepth = false
+        var reduced = applyReduces(to: consume stacks, lookahead: lookahead, exceededDepth: &exceededDepth)
+        guard !exceededDepth else {
+            Self.release(&reduced)
+            throw Self.treeTooDeep
+        }
+        var next = ParseStack.mergingIdenticalHistories(shift(consume reduced, token: token, lookahead: lookahead))
         guard !next.isEmpty else {
             throw .parsingFailed("No valid parse at token \(tokenIndex): \(token.type)")
         }
         // Prune stacks if count exceeds limit — keep stacks with fewest errors
         if next.count > Self.maxStacks {
             next.sort { $0.errorCount < $1.errorCount }
-            next.removeLast(next.count - Self.maxStacks)
+            var pruned = Array(next[Self.maxStacks...])
+            next.removeSubrange(Self.maxStacks...)
+            for index in pruned.indices {
+                pruned[index].releaseNodes(sparing: next[0])
+            }
         }
         return next
+    }
+
+    /// Takes out the stack with the fewest errors, the first of them on a tie, and releases the others.
+    private static func takeBest(from stacks: inout [ParseStack]) throws(ParseError) -> ParseStack {
+        guard let bestIndex = stacks.indices.min(by: { stacks[$0].errorCount < stacks[$1].errorCount }) else {
+            throw .parsingFailed("No valid parse at the end of input")
+        }
+        let best = stacks.remove(at: bestIndex)
+        for index in stacks.indices {
+            stacks[index].releaseNodes(sparing: best)
+        }
+        return best
+    }
+
+    /// Empties every stack in `stacks` without recursing into a deep subtree. A stack that shares nodes with the first
+    /// spares them, so only the first frees them.
+    private static func release(_ stacks: inout [ParseStack]) {
+        guard !stacks.isEmpty else { return }
+        var first = stacks.removeFirst()
+        for index in stacks.indices {
+            stacks[index].releaseNodes(sparing: first)
+        }
+        stacks.removeAll()
+        first.releaseNodes()
     }
 
     /// Runs every reduction `lookahead` calls for and returns the stacks ready to shift it or, at the end of the
@@ -139,7 +181,14 @@ public final class GLRParser: Sendable {
     ///
     /// Stacks are popped off the worklist, so each is the only owner of its arrays and a reduction rewrites them in
     /// place; only a fork copies them.
-    private func applyReduces(to stacks: consuming [ParseStack], lookahead: Int) -> [ParseStack] {
+    ///
+    /// A reduction that would build a node taller than ``maxTreeDepth`` sets `exceededDepth` and stops all reducing:
+    /// every stack comes out as it is, for the caller to release.
+    private func applyReduces(
+        to stacks: consuming [ParseStack],
+        lookahead: Int,
+        exceededDepth: inout Bool
+    ) -> [ParseStack] {
         var origins = consume stacks
         origins.reverse()
         var ready: [ParseStack] = []
@@ -150,13 +199,19 @@ public final class GLRParser: Sendable {
             // Stacks that can shift the lookahead after their forks are done reducing.
             var waiting: [ParseStack] = []
             while var stack = pending.popLast() {
+                guard !exceededDepth else {
+                    ready.append(stack)
+                    continue
+                }
                 switch parseTable.actions[stack.state][lookahead] {
                     case .reduce(let rule, let count, let nonTerminal) where budget > 0:
                         budget -= 1
-                        if reduce(&stack, rule: rule, count: count, nonTerminal: nonTerminal) {
-                            pending.append(stack)
-                        } else {
-                            ready.append(stack)
+                        switch reduce(&stack, rule: rule, count: count, nonTerminal: nonTerminal) {
+                            case .reduced: pending.append(stack)
+                            case .missingGoto: ready.append(stack)
+                            case .tooDeep:
+                                exceededDepth = true
+                                ready.append(stack)
                         }
 
                     case .conflict(let actions) where budget > 0:
@@ -164,8 +219,10 @@ public final class GLRParser: Sendable {
                         for case .reduce(let rule, let count, let nonTerminal) in actions where budget > 0 {
                             budget -= 1
                             var fork = stack
-                            if reduce(&fork, rule: rule, count: count, nonTerminal: nonTerminal) {
-                                forks.append(fork)
+                            switch reduce(&fork, rule: rule, count: count, nonTerminal: nonTerminal) {
+                                case .reduced: forks.append(fork)
+                                case .missingGoto: break
+                                case .tooDeep: exceededDepth = true
                             }
                         }
                         let canShift = actions.contains { if case .shift = $0 { true } else { false } }
@@ -235,18 +292,29 @@ public final class GLRParser: Sendable {
         return shifted
     }
 
+    /// What `reduce` did to a stack.
+    private enum Reduction {
+        case reduced
+        /// The table has no GOTO state for the reduction, an error; the stack is as it was.
+        case missingGoto
+        /// The node would be taller than ``GLRParser/maxTreeDepth``; the stack is as it was.
+        case tooDeep
+    }
+
     /// Replaces the top `count` nodes of `stack` with one `nonTerminal` node built by production `rule`, and moves to
     /// the table's GOTO state from the state the first of those nodes was pushed in. Without that GOTO state the
-    /// reduction is an error: returns false and leaves `stack` as it was.
+    /// reduction is an error.
     ///
     /// The node spans its children; an empty reduction sits where the node below it ends, at the start of the input
     /// if there is none. The nodes on a stack therefore stay in source order, so a node always ends after it starts.
-    private func reduce(_ stack: inout ParseStack, rule: Int, count: Int, nonTerminal: String) -> Bool {
+    private func reduce(_ stack: inout ParseStack, rule: Int, count: Int, nonTerminal: String) -> Reduction {
         guard let nonTerminalIdx = nonTerminalIndex[nonTerminal],
             let target = parseTable.gotos[stack.state(poppingNodes: count)][nonTerminalIdx]
         else {
-            return false
+            return .missingGoto
         }
+        let height = stack.height(ofTop: count) + 1
+        guard height <= Self.maxTreeDepth else { return .tooDeep }
         let children = stack.popNodes(count)
 
         let byteRange: Range<Int>
@@ -274,9 +342,10 @@ public final class GLRParser: Sendable {
                 pointRange: pointRange,
                 fields: nodeFields,
                 isNamed: true
-            ))
+            ),
+            height: height)
         stack.state = target
-        return true
+        return .reduced
     }
 
     private func productionFields(for ruleIndex: Int) -> [Int: String] {
@@ -284,9 +353,15 @@ public final class GLRParser: Sendable {
         return productions[ruleIndex].fields
     }
 
-    private func buildRootNode(from stack: ParseStack, source: String) -> SyntaxNode {
+    /// The stack's only node, or a node spanning the source above its nodes. That extra level must not take the
+    /// tree past ``maxTreeDepth``: then the parse declines, freeing the stack.
+    private func buildRootNode(from stack: consuming ParseStack, source: String) throws(ParseError) -> SyntaxNode {
         if stack.nodes.count == 1 {
             return stack.nodes[0]
+        }
+        guard stack.height(ofTop: stack.nodes.count) < Self.maxTreeDepth else {
+            stack.releaseNodes()
+            throw Self.treeTooDeep
         }
         let byteEnd = source.utf8.count
         return SyntaxNode(
