@@ -5,4 +5,4 @@
 # g-cqd mirror (decision D15). Bump a pin in a commit of its own.
 arcleak   https://github.com/g-cqd/arcleak.git   f57f5a88899923a153e1251ebe69ef3d67ed1093
 dolly     https://github.com/g-cqd/dolly.git     245482b077f78fdc814458b5b8a4861d194f85c5
-deadwood  https://github.com/g-cqd/deadwood.git  97a7a309f269283f24ee3a1015550455a4d8cd5e
+deadwood  https://github.com/g-cqd/deadwood.git  e2152d799638cf3fdb84c56b7587791575f2892b
