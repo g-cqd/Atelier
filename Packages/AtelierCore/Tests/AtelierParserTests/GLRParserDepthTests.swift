@@ -17,6 +17,38 @@ struct GLRParserDepthTests {
         #expect(error == GLRParser.treeTooDeep)
     }
 
+    @Test(arguments: [(16_381, false), (16_382, true)])
+    func `The node an unfinished parse adds above its stack counts toward the depth cap`(
+        repetitions: Int,
+        declines: Bool
+    ) async throws {
+        // Without `tail`, the parse ends holding `item`, n + 2 levels tall, and `end`, under one more level.
+        let json = """
+            {
+                "name": "unfinished",
+                "rules": {
+                    "s": {
+                        "type": "SEQ",
+                        "members": [
+                            {"type": "SYMBOL", "name": "item"},
+                            {"type": "STRING", "value": "end"},
+                            {"type": "STRING", "value": "tail"}
+                        ]
+                    },
+                    "item": {"type": "REPEAT1", "content": {"type": "STRING", "value": "x"}}
+                }
+            }
+            """
+        let compiled = try ParseTableCompiler.compile(GrammarLoader.parse(Data(json.utf8)))
+        let parser = GLRParser(
+            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+        let source = String(repeating: "x", count: repetitions) + "end"
+
+        let error = await onThread { Self.parseError(parser, source) }
+
+        #expect(error == (declines ? GLRParser.treeTooDeep : nil))
+    }
+
     @Test
     func `A fork merged away frees its deep subtree on a pool-sized stack`() async throws {
         // `left` and `right` both repeat `x`, so the parse forks at the first `x` and each fork builds its own chain
