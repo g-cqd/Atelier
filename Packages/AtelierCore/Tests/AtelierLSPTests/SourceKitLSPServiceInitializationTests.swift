@@ -1,0 +1,68 @@
+import AemiTestKit
+import Foundation
+import Testing
+
+@testable import AtelierLSP
+
+/// The `initialize` request as the server receives it, reduced to what these tests read.
+private struct InitializeEnvelope: Decodable {
+    struct Params: Decodable {
+        let rootUri: String?
+        let initializationOptions: JSONValue?
+    }
+
+    let method: String
+    let params: Params
+}
+
+/// Captures the first `initialize` a service sends over an in-process transport, then ends the conversation so the
+/// hover that triggered it returns.
+private func capturedInitialize(configuration: SourceKitLSPService.Configuration) async throws -> InitializeEnvelope {
+    var configuration = configuration
+    // No restart budget, so the failed handshake gives up at once instead of backing off on the virtual clock.
+    configuration.maximumRestarts = 0
+    let transport = PipeTransport()
+    let service = SourceKitLSPService(configuration: configuration, clock: TestClock()) { _ in
+        LSPConnection(transport: transport)
+    }
+
+    async let hover = service.hover(
+        uri: "file:///workspace/a.swift", languageID: "swift", content: "let x = 1", line: 0, utf16Column: 4)
+    await transport.sink.waitForCount(1)
+    let frames = await transport.sink.all
+    let envelope = try JSONDecoder().decode(InitializeEnvelope.self, from: unframe(frames[0]))
+
+    // A server that goes away fails the handshake at once, without a timeout to wait out.
+    transport.endIncoming()
+    _ = await hover
+    await service.shutdown()
+    return envelope
+}
+
+@Suite
+struct SourceKitLSPServiceInitializationTests {
+    @Test
+    func `the initialize request turns background indexing off by default`() async throws {
+        let configuration = SourceKitLSPService.Configuration(
+            serverExecutable: URL(filePath: "/usr/bin/true"),
+            workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory))
+
+        let envelope = try await capturedInitialize(configuration: configuration)
+
+        #expect(envelope.method == "initialize")
+        #expect(envelope.params.initializationOptions == .object(["backgroundIndexing": .bool(false)]))
+        #expect(envelope.params.rootUri == "file:///workspace/")
+    }
+
+    @Test
+    func `a configuration without initialization options sends none`() async throws {
+        var configuration = SourceKitLSPService.Configuration(
+            serverExecutable: URL(filePath: "/usr/bin/true"),
+            workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory))
+        configuration.initializationOptions = nil
+
+        let envelope = try await capturedInitialize(configuration: configuration)
+
+        #expect(envelope.params.initializationOptions == nil)
+    }
+}

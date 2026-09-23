@@ -27,6 +27,14 @@ private enum LSPServiceError: Error, Sendable {
     case timedOut
 }
 
+/// `initialize`'s parameters with sourcekit-lsp's `initializationOptions`, which ``InitializeParams`` does not carry.
+private struct SessionInitializeParams: Encodable, Sendable {
+    let processId: Int?
+    let rootUri: String?
+    let capabilities: ClientCapabilities
+    let initializationOptions: JSONValue?
+}
+
 /// A long-lived sourcekit-lsp session, kept warm across hovers and shut down when idle.
 ///
 /// The server is spawned and initialized on first use, keeps at most ``Configuration/openDocumentLimit`` documents
@@ -46,6 +54,12 @@ public actor SourceKitLSPService {
         public var maximumRestarts: Int
         /// How many documents stay open on the server at once; the least-recently-used is closed past this.
         public var openDocumentLimit: Int
+        /// sourcekit-lsp's options for the session, sent as `initialize`'s `initializationOptions`; nil sends none.
+        public var initializationOptions: JSONValue?
+
+        /// The options a hover session starts with: no background indexing, since a hover needs no index of the
+        /// workspace and indexing builds the project.
+        public static let hoverInitializationOptions: JSONValue = .object(["backgroundIndexing": .bool(false)])
 
         public init(
             serverExecutable: URL,
@@ -54,7 +68,8 @@ public actor SourceKitLSPService {
             idleShutdown: Duration = .seconds(180),
             requestTimeout: Duration = .seconds(2),
             maximumRestarts: Int = 2,
-            openDocumentLimit: Int = 32
+            openDocumentLimit: Int = 32,
+            initializationOptions: JSONValue? = Configuration.hoverInitializationOptions
         ) {
             self.serverExecutable = serverExecutable
             self.serverArguments = serverArguments
@@ -63,6 +78,7 @@ public actor SourceKitLSPService {
             self.requestTimeout = requestTimeout
             self.maximumRestarts = maximumRestarts
             self.openDocumentLimit = openDocumentLimit
+            self.initializationOptions = initializationOptions
         }
     }
 
@@ -208,9 +224,10 @@ public actor SourceKitLSPService {
 
     private func performHandshake(_ connection: LSPConnection) async throws {
         await connection.start()
-        let params = InitializeParams(
+        let params = SessionInitializeParams(
             processId: Int(ProcessInfo.processInfo.processIdentifier),
-            rootUri: configuration.workspaceRoot.absoluteString)
+            rootUri: configuration.workspaceRoot.absoluteString, capabilities: ClientCapabilities(),
+            initializationOptions: configuration.initializationOptions)
         _ = try await raceAgainstTimeout(clock: clock, timeout: configuration.requestTimeout) {
             try await connection.request("initialize", params, as: JSONValue.self)
         }
