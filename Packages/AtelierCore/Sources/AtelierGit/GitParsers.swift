@@ -57,9 +57,8 @@ public enum GitParsers {
         String(decoding: data, as: UTF8.self).split(separator: "\n").map(String.init).filter { !$0.hasSuffix("/HEAD") }
     }
 
-    /// Splits `remote -v` output: `<name>\t<url> (fetch|push)` per line, kept in first-seen order and de-duplicated
-    /// by name; only the `(fetch)` line of each remote is kept; a name with no fetch line at all (push-only) is
-    /// left out.
+    /// Splits `remote -v` output: `<name>\t<url> (fetch|push)` per line. Each remote's `(fetch)` URL is kept once, in
+    /// first-seen order; a push-only remote is left out.
     public static func remotes(_ data: Data) -> [GitRemote] {
         var order: [String] = []
         var fetchURLs: [String: String] = [:]

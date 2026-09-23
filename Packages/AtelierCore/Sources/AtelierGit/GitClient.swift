@@ -131,8 +131,7 @@ public struct GitClient: Sendable {
             try await run(["for-each-ref", "--format=%(refname:short)", "--sort=-committerdate"] + pattern))
     }
 
-    /// Local and remote-tracking branches, most recently committed first; a thin, reusable wrapper over
-    /// ``references(pattern:)`` so a caller can refresh branches alone, without the full cost of ``info()``.
+    /// Local and remote-tracking branches, most recently committed first, without the rest of ``info()``.
     public func branches() async throws -> [String] {
         try await references(pattern: "refs/heads", "refs/remotes")
     }
@@ -161,10 +160,8 @@ public struct GitClient: Sendable {
             ]))
     }
 
-    /// Fetches from `remote`, `refspecs` when given, pruning stale remote-tracking branches on request. Always runs
-    /// under ``GitIsolation/networking`` regardless of the client's own isolation, because it must authenticate
-    /// against a real remote; `timeout` overrides the client's own budget for this one call, since a network fetch
-    /// can reasonably take longer than a local command.
+    /// Fetches from `remote`, `refspecs` when given, pruning stale remote-tracking branches on request. Runs under
+    /// ``GitIsolation/networking`` whatever the client's isolation, with `timeout` in place of the client's budget.
     public func fetch(
         remote: String = "origin", refspecs: [String] = [], prune: Bool = false, timeout: Duration = .seconds(120)
     ) async throws {

@@ -218,9 +218,7 @@ struct GitClientRunnerTests {
         let client = GitClient(repository: Self.repository, runner: runner)
         try await client.fetch()
         let spec = try #require(runner.specs.first)
-        // A `-c` pin must be present, and it must be the last occurrence of the key on the command line, because
-        // git resolves a repeated key (across `-c` and the repository's own config file) to its last value; an
-        // *absent* `-c` here would let a hostile `.git/config` set `core.sshCommand` to an arbitrary command.
+        // The same count as the strict flags: the key is replaced, never dropped.
         #expect(spec.arguments.contains("core.sshCommand=ssh"))
         #expect(
             GitIsolation.networkingConfigurationFlags.count == GitIsolation.strictConfigurationFlags.count)

@@ -126,7 +126,6 @@ public struct SourceLoader: SourceReading {
         return String(decoding: bytes, as: UTF8.self)
     }
 
-    /// Hashes a file through a read-only memory mapping, so no copy of the contents is made.
     /// Hashes a file through a read-only memory mapping, so no copy of its contents is made. The length comes from
     /// the open descriptor, not from `size`: a file truncated between the directory scan and this hash would
     /// otherwise be mapped past its end, and touching such a page raises SIGBUS. A truncation after the descriptor
