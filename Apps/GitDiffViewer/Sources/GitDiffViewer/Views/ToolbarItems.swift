@@ -71,7 +71,11 @@ struct SelectedFileLabel: View {
         let path = model.selectedPath.flatMap { model.comparison.isFile($0) ? $0 : nil }
         let summary = path.map { model.changeSummary(for: $0, rendered: model.rendered) }
         HStack(spacing: 6) {
-            if let summary { ChangeGlyphBadge(glyph: ChangeGlyph(summary.kind)) }
+            if let path, let summary {
+                ChangeGlyphBadge(
+                    glyph: ChangeGlyph(summary.kind), scheme: model.settings.badgeScheme,
+                    state: model.badgeState(ofPath: path))
+            }
             Text(path.map { (model.displayPath(for: $0) as NSString).lastPathComponent } ?? "No file")
                 .font(.callout)
                 .foregroundStyle(path == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
