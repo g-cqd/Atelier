@@ -140,6 +140,22 @@ struct SideStateFetchTests {
     }
 
     @Test
+    func `loadRemotesIfNeeded asks a repository without a remote once`() async throws {
+        let runner = FakeProcessRunner.gated { _ in .success("") }
+        let taskProvider = TaskProviderSpy.tolerant()
+        let sut = makeSUT(runner: runner, taskProvider: taskProvider)
+        sut.load(.directory(Self.root), repository: Self.info, entries: [])
+
+        sut.loadRemotesIfNeeded()
+        try await taskProvider.waitForAllTasks()
+        sut.loadRemotesIfNeeded()
+        try await taskProvider.waitForAllTasks()
+
+        #expect(sut.remoteNames.isEmpty)
+        #expect(runner.commandSpecs.count == 1)
+    }
+
+    @Test
     func `fetch never publishes remote names read for a repository this side has since moved away from`()
         async throws
     {
