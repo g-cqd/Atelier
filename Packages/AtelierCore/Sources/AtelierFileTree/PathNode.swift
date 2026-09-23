@@ -15,7 +15,13 @@ public struct PathNode: Identifiable, Hashable, Sendable {
         self.children = children
     }
 
-    /// Builds a tree from relative paths. Directories sort before files, both case-insensitively.
+    /// The most components a path is shown with; a deeper one, which only a crafted patch names, becomes one leaf named
+    /// by the whole path. Every walk over a tree recurses once per level, and this keeps them within a worker's stack.
+    public static let maximumDepth = 256
+
+    /// Builds a tree from relative paths. Directories sort before files, both case-insensitively. A path that is a file
+    /// in one listing and a directory in another, as two sides of a comparison can be, shows as both, the directory's
+    /// id taking a trailing slash so the two stay apart.
     /// - Complexity: O(paths * depth)
     public static func tree(from paths: [String]) -> [PathNode] {
         final class Builder {
@@ -25,8 +31,10 @@ public struct PathNode: Identifiable, Hashable, Sendable {
 
         let root = Builder()
         for path in paths {
+            var components = path.split(separator: "/")
+            if components.count > maximumDepth { components = [Substring(path)] }
             var node = root
-            for component in path.split(separator: "/") {
+            for component in components {
                 let key = String(component)
                 if let child = node.children[key] {
                     node = child
@@ -39,15 +47,22 @@ public struct PathNode: Identifiable, Hashable, Sendable {
             node.isFile = true
         }
 
+        // Recurses once per level, which `maximumDepth` bounds.
         func nodes(of builder: Builder, prefix: String) -> [PathNode] {
             builder.children
-                .map { name, child in
+                .flatMap { name, child in
                     let id = prefix.isEmpty ? name : "\(prefix)/\(name)"
-                    return if child.isFile {
-                        PathNode(id: id, name: name, isDirectory: false, children: nil)
-                    } else {
-                        PathNode(id: id, name: name, isDirectory: true, children: nodes(of: child, prefix: id))
+                    var made: [PathNode] = []
+                    if child.isFile {
+                        made.append(PathNode(id: id, name: name, isDirectory: false, children: nil))
                     }
+                    if !child.children.isEmpty {
+                        made.append(
+                            PathNode(
+                                id: child.isFile ? id + "/" : id, name: name, isDirectory: true,
+                                children: nodes(of: child, prefix: id)))
+                    }
+                    return made
                 }
                 .sorted { lhs, rhs in
                     if lhs.isDirectory != rhs.isDirectory { return lhs.isDirectory }
