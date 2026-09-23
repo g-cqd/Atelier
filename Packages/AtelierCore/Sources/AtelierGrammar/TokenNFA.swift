@@ -40,13 +40,18 @@ struct TokenNFA: Sendable {
 
     private var patterns: [String: PatternNode] = [:]
 
-    /// - Throws: `GrammarError.invalidRuleType` for a token that names a rule or has a pattern it can't parse;
-    ///   `.resourceLimitExceeded` past ``maxStates``.
+    /// - Throws: `GrammarError.invalidRuleType` for a token that names a rule, has a pattern it can't parse or
+    ///   matches the empty string, as tree-sitter refuses one: it would end in every mode it is valid in before
+    ///   anything is read, and the automaton would then read no other token there. `.resourceLimitExceeded` past
+    ///   ``maxStates``.
     init(tokens: [LexicalToken], separators: [Rule]) throws(GrammarError) {
         let separatorLoop: Rule? = separators.isEmpty ? nil : .repeat(.choice(separators))
         for (index, token) in tokens.enumerated() {
             let accept = add(.accept(token: index, precedence: token.completionPrecedence), owner: index)
             var start = try expand(token.rule, next: accept, in: Context(owner: index))
+            guard !closure(of: [start]).contains(accept) else {
+                throw .invalidRuleType("Token `\(token.name)` matches the empty string")
+            }
             if !token.isImmediate, let separatorLoop {
                 start = try expand(separatorLoop, next: start, in: Context(owner: index, isSeparator: true))
             }
