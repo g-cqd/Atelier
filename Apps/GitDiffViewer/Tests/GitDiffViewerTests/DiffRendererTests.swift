@@ -1,4 +1,5 @@
 import AemiRuntime
+import AppKit
 import DiffCore
 import Foundation
 import Testing
@@ -73,6 +74,90 @@ struct DiffRendererTests {
         // With no context, the rows of the two changes touch across the gap between them.
         #expect(rendered.splitChangeStarts == [0, 1])
         #expect(rendered.unifiedChangeStarts == [0, 2])
+    }
+
+    /// The paragraph spacing after each row of `text`, and before its first.
+    private func spacings(of text: RenderedText) -> (before: CGFloat, after: [CGFloat]) {
+        let style = { (offset: Int) in
+            text.attributed.attribute(.paragraphStyle, at: offset, effectiveRange: nil) as? NSParagraphStyle
+        }
+        return (style(0)?.paragraphSpacingBefore ?? -1, text.lineStarts.map { style($0)?.paragraphSpacing ?? -1 })
+    }
+
+    @Test(arguments: [0.0, 1.4])
+    func `a gap's band is a line and its hairline tall, whatever the line height`(multiple: Double) throws {
+        let rendered = try #require(
+            DiffRenderer.render(
+                oldText: old, newText: new, language: .plain, lineHeightMultiple: multiple,
+                layout: .changes(context: 2, expansions: [:])
+            )
+            .unified)
+        #expect(rendered.gapBandHeight == rendered.lineHeight + 1)
+    }
+
+    @Test
+    func `a gap between two rows takes its band as the paragraph spacing of the row above`() throws {
+        let rendered = try #require(
+            DiffRenderer.render(
+                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+            )
+            .unified)
+        let between = try #require(rendered.gaps.first { !$0.marker.isLeading && !$0.marker.isTrailing })
+        let after = spacings(of: rendered).after
+
+        #expect(after[between.boundary - 1] == rendered.gapBandHeight)
+        #expect(after.enumerated().allSatisfy { $0.offset == between.boundary - 1 || $0.element == 0 })
+        #expect(rendered.bandSpacing(afterRow: between.boundary - 1) == rendered.gapBandHeight)
+    }
+
+    @Test
+    func `the bands of the gaps at the top and the end of the file lie outside the text`() throws {
+        let rendered = try #require(
+            DiffRenderer.render(
+                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+            )
+            .unified)
+        let spacing = spacings(of: rendered)
+
+        #expect(rendered.bandAbove == rendered.gapBandHeight)
+        #expect(rendered.bandBelow == rendered.gapBandHeight)
+        #expect(spacing.before == 0)
+        #expect(spacing.after.last == 0)
+    }
+
+    @Test
+    func `the rows' unwrapped height counts the bands between them`() throws {
+        let rendered = try #require(
+            DiffRenderer.render(
+                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+            )
+            .unified)
+        #expect(
+            rendered.unwrappedTextHeight == CGFloat(rendered.rows.count) * rendered.lineHeight + rendered.gapBandHeight)
+    }
+
+    @Test
+    func `a gap offering no handle takes no band`() throws {
+        let rendered = try #require(
+            DiffRenderer.render(
+                oldText: old, newText: old, language: .plain, layout: .changes(context: 2, expansions: [:])
+            )
+            .unified)
+        #expect(rendered.gaps.map(\.hasBand) == [false])
+        #expect(rendered.bandAbove == 0)
+        #expect(rendered.unwrappedTextHeight == rendered.lineHeight)
+    }
+
+    @Test
+    func `both split panes take the same bands`() throws {
+        let diff = DiffRenderer.render(
+            oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:]))
+        let oldSide = try #require(diff.old)
+        let newSide = try #require(diff.new)
+
+        #expect(spacings(of: oldSide).after == spacings(of: newSide).after)
+        #expect(oldSide.bandAbove == newSide.bandAbove)
+        #expect(oldSide.bandBelow == newSide.bandBelow)
     }
 
     @Test

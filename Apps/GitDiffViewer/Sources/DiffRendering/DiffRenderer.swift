@@ -236,6 +236,7 @@ package enum DiffRenderer {
         }
 
         let styled = attributed(text, spans: spans, metas: metas, lineStarts: lineStarts, side: side, options: options)
+        addBands(of: gaps, lineStarts: lineStarts, lineHeight: styled.lineHeight, to: styled.attributed)
         return RenderedText(
             side: side, palette: options.palette, attributed: styled.attributed, rows: metas, gaps: gaps,
             lineStarts: lineStarts, longestLine: longestLine, baselineOffset: styled.baselineOffset,
@@ -289,6 +290,25 @@ package enum DiffRenderer {
         attributed.endEditing()
 
         return (attributed, baselineOffset, multiple * palette.defaultLineHeight)
+    }
+
+    /// Gives each gap between two rows its empty band (book DIFF-02), as the paragraph spacing of the row above it,
+    /// newline and all. The bands above the first row and below the last are the views' to keep: TextKit ignores the
+    /// spacing before a text's first paragraph and after its last.
+    private static func addBands(
+        of gaps: [RenderedGap], lineStarts: [Int], lineHeight: CGFloat, to text: NSMutableAttributedString
+    ) {
+        for gap in gaps where gap.hasBand && gap.boundary > 0 && gap.boundary < lineStarts.count {
+            // A row before another ends with its newline, so it has a unit to read its style from.
+            let start = lineStarts[gap.boundary - 1]
+            guard let style = text.attribute(.paragraphStyle, at: start, effectiveRange: nil) as? NSParagraphStyle,
+                let banded = style.mutableCopy() as? NSMutableParagraphStyle
+            else { continue }
+            banded.paragraphSpacing = RenderedText.gapBandHeight(lineHeight: lineHeight)
+            text.addAttribute(
+                .paragraphStyle, value: banded,
+                range: NSRange(location: start, length: lineStarts[gap.boundary] - start))
+        }
     }
 
     private struct ShownLine {

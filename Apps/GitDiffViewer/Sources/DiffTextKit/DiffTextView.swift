@@ -225,6 +225,9 @@ package final class DiffTextViewCoordinator: NSObject {
         guard let textView, let contentStorage = textView.textContentStorage else { return }
         let previousOrigin = textView.enclosingScrollView?.contentView.bounds.origin ?? .zero
         textView.backgroundColor = rendered.palette.background
+        // The band of a gap at the top of the file sits above the text, inside the pane's own inset.
+        let inset = DiffPaneMetrics.containerInset + rendered.bandAbove
+        if textView.textContainerInset.height != inset { textView.textContainerInset = NSSize(width: 0, height: inset) }
         textView.insertionPointColor = rendered.palette.textColor
         textView.selectedTextAttributes = [.backgroundColor: rendered.palette.selection]
         contentStorage.performEditingTransaction {
@@ -359,19 +362,23 @@ package final class DiffTextViewCoordinator: NSObject {
     }
 
     /// Lets the last line scroll up to the top of the pane, and no further, by giving the text view trailing space
-    /// below its content: scrolled to its end, the pane shows its last line whole at its top. The space is part of
-    /// the view, not a scroll inset, so nothing else has to account for it.
+    /// below its content: scrolled to its end, the pane shows its last line whole at its top, and the band of a gap
+    /// at the end of the file under it. The space is part of the view, not a scroll inset, so nothing else has to
+    /// account for it.
     package func updateOverscroll(in clipView: NSClipView) {
         guard let textView, let layoutManager = textView.textLayoutManager else { return }
         // The row's own height, not the font's: a taller line height would otherwise leave the last row short
         // of the top of the pane, half of it hidden under whatever sits above.
         let lineHeight = rendered?.lineHeight ?? DiffPalette.system.defaultLineHeight
+        // Above the text, the pane's inset and any band of a gap at the top of the file; below it, any band at the
+        // end, then the pane's inset.
         let inset = textView.textContainerInset.height
-        // Less the inset below the text, which the last line would otherwise scroll past the top by.
-        let overscroll = max(clipView.bounds.height - lineHeight - inset, 0)
+        let below = (rendered?.bandBelow ?? 0) + DiffPaneMetrics.containerInset
+        // Less what lies below the text, which the last line would otherwise scroll past the top by.
+        let overscroll = max(clipView.bounds.height - lineHeight - below, 0)
         if !wrapsLines, let rendered {
             // One line per row: the document's size needs no layout.
-            let contentHeight = CGFloat(max(rendered.rows.count, 1)) * lineHeight + 2 * inset
+            let contentHeight = inset + rendered.unwrappedTextHeight + below
             let size = NSSize(
                 width: max(clipView.bounds.width, unwrappedWidth(of: rendered)),
                 height: (contentHeight + overscroll).rounded(.up))
@@ -380,7 +387,7 @@ package final class DiffTextViewCoordinator: NSObject {
             textView.setFrameSize(size)
             return
         }
-        let contentHeight = layoutManager.usageBoundsForTextContainer.height + 2 * inset
+        let contentHeight = inset + layoutManager.usageBoundsForTextContainer.height + below
         let minimumHeight = (contentHeight + overscroll).rounded(.up)
         let minimumWidth: CGFloat =
             if textView.textContainer?.widthTracksTextView == true {
