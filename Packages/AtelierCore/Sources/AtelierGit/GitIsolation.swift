@@ -7,17 +7,12 @@ import Foundation
 /// submodules) and the parent's environment can carry `GIT_*` overrides; ``strict`` refuses both, the way an
 /// editor opening an unknown checkout should. ``inheriting`` keeps the caller's environment and only stops
 /// prompts and optional locks, the way a viewer the user pointed at a repository of their own expects.
-/// ``networking`` sits between the two: a command that must reach a remote (`fetch`) needs the caller's `HOME`,
-/// `SSH_AUTH_SOCK` and git credential configuration to authenticate, so it cannot scrub the environment the way
-/// ``strict`` does, but it still pins every dangerous configuration key that does not stand in the way of a
-/// legitimate transport.
+/// ``networking`` sits between the two, for commands that reach a remote.
 public enum GitIsolation: Sendable, Hashable {
     case inheriting
     case strict
-    /// For commands that must talk to a remote: keeps the caller's environment (so `SSH_AUTH_SOCK`, `HOME` and
-    /// credential helpers work) while still refusing hooks, pagers, editors and `packObjectsHook`; pins
-    /// `core.sshCommand` to the plain trusted `ssh` binary instead of scrubbing it, because a bare removal would
-    /// leave the repository's own `.git/config` free to name an arbitrary command that `fetch` then executes.
+    /// The caller's environment without repository-selection variables, so `HOME`, `SSH_AUTH_SOCK` and credential
+    /// helpers work, and the strict configuration pins with `core.sshCommand` set to the plain `ssh`.
     case networking
 
     /// The variables the child sees: ``GitClient/hardeningEnvironment`` on top of the parent's, the same but with
@@ -36,20 +31,14 @@ public enum GitIsolation: Sendable, Hashable {
         }
     }
 
-    /// `GIT_*` variables that redirect git away from discovering the repository from its working directory: a
-    /// caller whose own process happens to run with one of these set (for instance because it is itself launched
-    /// from inside another checkout) must not have ``networking`` silently fetch into, or read out of, a different
-    /// repository than the one the command's `currentDirectory` names. Authentication variables (`HOME`,
-    /// `SSH_AUTH_SOCK`, credential helpers, `PATH`) are deliberately left alone; only repository-selection is
-    /// stripped.
+    /// `GIT_*` variables that redirect git away from the repository its working directory names; ``networking``
+    /// strips them so an inherited one cannot point `fetch` at a different repository.
     public static let repositorySelectionVariables: Set<String> = [
         "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
         "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "GIT_NAMESPACE", "GIT_CEILING_DIRECTORIES"
     ]
 
-    /// `-c key=value` flags put before every command; empty when inheriting, every ``strictConfigurationFlags``
-    /// key when ``networking``, but with `core.sshCommand` pinned to the trusted `ssh` binary instead of the
-    /// blocking value ``strict`` uses.
+    /// `-c key=value` flags put before every command; empty when inheriting.
     public var configurationFlags: [String] {
         switch self {
             case .inheriting: []
@@ -81,12 +70,8 @@ public enum GitIsolation: Sendable, Hashable {
         "-c", "uploadpack.packObjectsHook="
     ]
 
-    /// ``strictConfigurationFlags`` with `-c core.sshCommand=/usr/bin/false` replaced by `-c core.sshCommand=ssh`:
-    /// a networking run still needs the caller's real SSH transport to authenticate against a remote, but it must
-    /// never let a repository-supplied `.git/config` win that key by leaving it unset — `-c` flags are placed
-    /// before the subcommand on the command line, and git lets the last occurrence of a key win across `-c` and
-    /// config-file settings combined, so an *omitted* `-c` here would let the repository's own `core.sshCommand`
-    /// take effect instead of this pinned, trusted binary.
+    /// ``strictConfigurationFlags`` with `core.sshCommand` pinned to the plain `ssh` so a fetch can authenticate;
+    /// pinned rather than omitted, since an omitted key lets the repository's own `.git/config` choose the command.
     public static let networkingConfigurationFlags: [String] = stride(
         from: 0, to: strictConfigurationFlags.count, by: 2
     )

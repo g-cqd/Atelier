@@ -83,8 +83,7 @@ struct ProcessSessionTests {
     func `concurrent sends do not interleave and each arrives whole`() async throws {
         let session = Self.session("/bin/cat")
         try await session.start()
-        // Larger than any plausible pipe buffer, so an unserialized send would almost certainly interleave
-        // the two payloads' bytes rather than happening to get lucky with single-syscall writes.
+        // Larger than any pipe buffer, so unserialized sends would interleave their bytes.
         let sizeEach = 2 * 1_024 * 1_024
         let payloadA = Data(repeating: 0x41, count: sizeEach)
         let payloadB = Data(repeating: 0x42, count: sizeEach)
@@ -101,8 +100,7 @@ struct ProcessSessionTests {
         _ = try await (sendA, sendB)
 
         #expect(collected.count == expectedTotal)
-        // The collected stream must be two unbroken, same-byte runs -- one full payload followed by the
-        // other, in either order -- never a mix of 'A' and 'B' bytes within a run.
+        // Two unbroken single-byte runs, one whole payload each, in either order.
         let firstByte = collected[collected.startIndex]
         guard let boundary = collected.firstIndex(where: { $0 != firstByte }) else {
             Issue.record("expected two distinct payloads, got one uniform run")
