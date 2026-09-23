@@ -180,11 +180,50 @@ public final class TextDocument {
         buffer.serializedByteCount(lineEndingSize: lineEnding.sequence.lengthOfBytes(using: .utf8))
     }
 
+    /// `text` with every line break, whichever of LF, CRLF or a lone CR it is, written as `lineEnding`. Idempotent:
+    /// serializing serialized text changes nothing, so saving a CRLF file never adds a CR.
+    /// - Complexity: O(n) in the UTF-8 length of `text`.
     nonisolated public static func serializedText(from text: String, lineEnding: LineEnding)
         -> String
     {
-        guard lineEnding != .lineFeed else { return text }
-        return text.replacingOccurrences(of: "\n", with: lineEnding.sequence)
+        replacingLineBreaks(in: text, with: lineEnding)
+    }
+
+    /// `text` with every CRLF and every lone CR turned into LF, the one line break a ``TextBuffer`` holds, as a file's
+    /// text is loaded.
+    /// - Complexity: O(n) in the UTF-8 length of `text`; a text with no CR comes back as is.
+    nonisolated public static func normalizingLineBreaks(_ text: String) -> String {
+        replacingLineBreaks(in: text, with: .lineFeed)
+    }
+
+    /// `text` with each line break, a CRLF pair, a lone CR or a lone LF, replaced by `lineEnding`'s sequence.
+    private nonisolated static func replacingLineBreaks(in text: String, with lineEnding: LineEnding) -> String {
+        let carriageReturn = UInt8(ascii: "\r")
+        let lineFeed = UInt8(ascii: "\n")
+        let utf8 = text.utf8
+        if lineEnding == .lineFeed, !utf8.contains(carriageReturn) {
+            return text
+        }
+        let separator = Array(lineEnding.sequence.utf8)
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(utf8.count)
+        var followsCarriageReturn = false
+        for byte in utf8 {
+            switch byte {
+                case carriageReturn:
+                    bytes.append(contentsOf: separator)
+                    followsCarriageReturn = true
+                case lineFeed where followsCarriageReturn:
+                    // The CR of this CRLF pair already wrote the separator.
+                    followsCarriageReturn = false
+                case lineFeed:
+                    bytes.append(contentsOf: separator)
+                default:
+                    followsCarriageReturn = false
+                    bytes.append(byte)
+            }
+        }
+        return String(decoding: bytes, as: UTF8.self)
     }
 
     nonisolated public static func detectLineEnding(in data: Data) -> LineEnding {
