@@ -1,0 +1,168 @@
+import AtelierDiagnostics
+import DiffCore
+import Foundation
+
+/// Restoring defaults and counting deviations, per Settings tab.
+extension ViewerSettings {
+    /// Resets `category`'s settings through the same setters as a user edit. With no project adopted, every setting
+    /// returns to its coded default. Once a project is adopted, only its overrides go, each scoped setting falling
+    /// back to the app-wide value, and the app-wide settings stay as they are: restoring a project's tab must not
+    /// reset what every other project shares.
+    package func restoreDefaults(_ category: SettingsCategory) {
+        applyWithoutRecreatingScopedOverrides {
+            switch category {
+                case .general: restoreGeneral()
+                case .diff: restoreDiff()
+                case .appearance: restoreAppearance()
+                case .tools: restoreTools()
+            }
+        }
+    }
+
+    private func restoreGeneral() {
+        restoreAppWide {
+            explorerPlacement = .top
+            syncsScrolling = true
+            showsStatusBar = true
+        }
+        treeStyle = restoredValue(Key.treeStyle, appDefault: FileTreeStyle.hierarchy) {
+            defaults.string(forKey: Key.treeStyle).flatMap(FileTreeStyle.init(rawValue:)) ?? .hierarchy
+        }
+        showsChangesOnly = restoredValue(Key.showsChangesOnly, appDefault: false) {
+            defaults.bool(forKey: Key.showsChangesOnly)
+        }
+        showsIgnoredFiles = restoredValue(Key.showsIgnoredFiles, appDefault: false) {
+            defaults.bool(forKey: Key.showsIgnoredFiles)
+        }
+        showsMinimap = restoredValue(Key.showsMinimap, appDefault: true) {
+            defaults.object(forKey: Key.showsMinimap) as? Bool ?? true
+        }
+        autoRefresh = restoredValue(Key.autoRefresh, appDefault: true) {
+            defaults.object(forKey: Key.autoRefresh) as? Bool ?? true
+        }
+    }
+
+    private func restoreDiff() {
+        isolatesChanges = restoredValue(Key.isolatesChanges, appDefault: false) {
+            defaults.bool(forKey: Key.isolatesChanges)
+        }
+        contextLines = restoredValue(Key.contextLines, appDefault: 3) {
+            defaults.object(forKey: Key.contextLines) as? Int ?? 3
+        }
+        granularity = restoredValue(Key.granularity, appDefault: IntralineGranularity.word) {
+            defaults.string(forKey: Key.granularity).flatMap(IntralineGranularity.init(rawValue:)) ?? .word
+        }
+        diffHeuristics = restoredValue(Key.diffHeuristics, appDefault: DiffHeuristics()) {
+            defaults.data(forKey: Key.diffHeuristics)
+                .flatMap { try? DefaultsJSON.decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()
+        }
+    }
+
+    private func restoreAppearance() {
+        restoreAppWide {
+            themePath = nil
+            lineHeightMultiple = 0
+            appearanceScheme = .system
+            badgeScheme = .classic
+            matchesThemeAppearance = false
+        }
+        mode = restoredValue(Key.mode, appDefault: ViewMode.split) {
+            defaults.string(forKey: Key.mode).flatMap(ViewMode.init(rawValue:)) ?? .split
+        }
+        wrapsLines = restoredValue(Key.wrapsLines, appDefault: true) {
+            defaults.object(forKey: Key.wrapsLines) as? Bool ?? true
+        }
+        wrapColumn = restoredValue(Key.wrapColumn, appDefault: 0) { defaults.integer(forKey: Key.wrapColumn) }
+    }
+
+    private func restoreTools() {
+        diagnosticsEnabled = restoredValue(Key.diagnosticsEnabled, appDefault: false) {
+            defaults.bool(forKey: Key.diagnosticsEnabled)
+        }
+        showsHoverDocumentation = restoredValue(Key.showsHoverDocumentation, appDefault: true) {
+            defaults.object(forKey: Key.showsHoverDocumentation) as? Bool ?? true
+        }
+        analyzedSides = restoredValue(Key.analyzedSides, appDefault: AnalyzedSides.newer) {
+            defaults.string(forKey: Key.analyzedSides).flatMap(AnalyzedSides.init(rawValue:)) ?? .newer
+        }
+        toolLocations = restoredValue(Key.toolLocations, appDefault: Self.defaultToolLocations) {
+            Self.decodeToolLocations(defaults.data(forKey: Key.toolLocations))
+        }
+        lspServerLocations = restoredValue(Key.lspServerLocations, appDefault: Self.defaultLSPServerLocations) {
+            defaults.data(forKey: Key.lspServerLocations)
+                .flatMap { try? DefaultsJSON.decode([String: ToolLocation].self, from: $0) }
+                ?? Self.defaultLSPServerLocations
+        }
+    }
+
+    /// Runs `body`, which resets app-wide settings, only when no project is adopted.
+    private func restoreAppWide(_ body: () -> Void) {
+        guard projectID == nil else { return }
+        body()
+    }
+
+    /// Clears `key`'s project override (if any) and returns what the property should become: the base value,
+    /// decoded by `decodeBase`, when a project is adopted, or the coded app-wide default otherwise.
+    private func restoredValue<Value>(_ key: String, appDefault: Value, decodeBase: () -> Value) -> Value {
+        guard let projectID else { return appDefault }
+        clearOverride(key, projectKey: projectID.key)
+        return decodeBase()
+    }
+
+    /// Every tool enabled, at no custom path.
+    static var defaultToolLocations: [DiagnosticTool: ToolLocation] {
+        Dictionary(uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation()) })
+    }
+
+    /// sourcekit-lsp enabled, at no custom path.
+    static var defaultLSPServerLocations: [String: ToolLocation] { ["sourcekit-lsp": ToolLocation()] }
+
+    static func decodeToolLocations(_ data: Data?) -> [DiagnosticTool: ToolLocation] {
+        data
+            .flatMap { try? DefaultsJSON.decode([String: ToolLocation].self, from: $0) }
+            .map { decoded in
+                Dictionary(
+                    uniqueKeysWithValues: decoded.compactMap { key, value in
+                        DiagnosticTool(rawValue: key).map { ($0, value) }
+                    })
+            }
+            ?? defaultToolLocations
+    }
+
+    /// How many settings in `category` differ from their coded default, for the tab footer's deviation indicator.
+    package func settingsDiffCount(_ category: SettingsCategory) -> Int {
+        switch category {
+            case .general:
+                return [
+                    explorerPlacement != .top, treeStyle != .hierarchy, showsChangesOnly != false,
+                    showsIgnoredFiles != false, syncsScrolling != true, showsMinimap != true,
+                    showsStatusBar != true, autoRefresh != true
+                ]
+                .count { $0 }
+            case .diff:
+                return [
+                    isolatesChanges != false, contextLines != 3, granularity != .word,
+                    diffHeuristics != DiffHeuristics()
+                ]
+                .count { $0 }
+            case .appearance:
+                return [
+                    themePath != nil, lineHeightMultiple != 0, mode != .split, wrapsLines != true, wrapColumn != 0,
+                    appearanceScheme != .system, badgeScheme != .classic, matchesThemeAppearance != false
+                ]
+                .count { $0 }
+            case .tools:
+                return [
+                    diagnosticsEnabled != false, showsHoverDocumentation != true, analyzedSides != .newer,
+                    toolLocations != Self.defaultToolLocations, lspServerLocations != Self.defaultLSPServerLocations
+                ]
+                .count { $0 }
+        }
+    }
+
+    /// How many of `category`'s settings the adopted project overrides; zero with no project adopted.
+    package func overrideCount(_ category: SettingsCategory) -> Int {
+        guard let projectID else { return 0 }
+        return Self.scopedKeys(for: category).count { defaults.object(forKey: scopedKey($0, for: projectID)) != nil }
+    }
+}

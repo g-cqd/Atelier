@@ -102,6 +102,41 @@ struct ProjectSettingsTests {
         #expect(defaults.string(forKey: "intralineGranularity") == nil)  // the base was never written
     }
 
+    // MARK: - Which settings a project can override (D11)
+
+    @Test
+    func `every setting decision D11 lists can differ per project`() {
+        let perProject: [PartialKeyPath<ViewerSettings>] = [
+            \.diffHeuristics, \.mode, \.wrapsLines, \.wrapColumn, \.showsMinimap, \.isolatesChanges, \.contextLines,
+            \.granularity, \.showsHoverDocumentation, \.diagnosticsEnabled, \.analyzedSides, \.autoRefresh,
+            \.toolLocations, \.lspServerLocations
+        ]
+
+        #expect(perProject.allSatisfy { ViewerSettings.isProjectScoped($0) })
+    }
+
+    @Test
+    func `appearance, theme matching and badge colors stay app-wide`() {
+        let appWide: [PartialKeyPath<ViewerSettings>] = [\.appearanceScheme, \.matchesThemeAppearance, \.badgeScheme]
+
+        #expect(!appWide.contains { ViewerSettings.isProjectScoped($0) })
+    }
+
+    @Test
+    func `restoring a project's tab leaves the app-wide settings alone`() throws {
+        let defaults = try makeDefaults()
+        let sut = ViewerSettings(defaults: defaults)
+        sut.badgeScheme = .xcode  // an app-wide value, set before any project
+        sut.adoptProject(ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory)))
+        sut.mode = .inline  // the project's own layout
+
+        sut.restoreDefaults(.appearance)
+
+        #expect(sut.mode == .split)
+        #expect(sut.badgeScheme == .xcode)
+        #expect(defaults.string(forKey: "badgeScheme") == "xcode")
+    }
+
     // MARK: - Overrides only the user makes
 
     @Test

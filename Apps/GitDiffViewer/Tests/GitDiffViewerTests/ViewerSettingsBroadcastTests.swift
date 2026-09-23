@@ -147,6 +147,34 @@ struct ViewerSettingsBroadcastTests {
     }
 
     @Test
+    func `a project's own value edited on one instance reaches another window on that project`() throws {
+        let defaults = try makeDefaults()
+        let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
+        let settingsWindow = ViewerSettings(defaults: defaults)
+        settingsWindow.adoptProject(project)
+        let window = ViewerSettings(defaults: defaults)
+        window.adoptProject(project)
+
+        settingsWindow.contextLines = 9
+
+        #expect(window.contextLines == 9)
+    }
+
+    @Test
+    func `clearing a project's override falls a window on that project back to the default`() throws {
+        let defaults = try makeDefaults()
+        let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
+        let window = ViewerSettings(defaults: defaults)
+        window.adoptProject(project)
+        window.contextLines = 9
+        let settingsWindow = ViewerSettings(defaults: defaults)
+
+        settingsWindow.clearOverride("contextLines", projectKey: project.key)
+
+        #expect(window.contextLines == 3)
+    }
+
+    @Test
     func `a project-scoped write on one instance does not broadcast to another instance's base value`() throws {
         let defaults = try makeDefaults()
         let a = ViewerSettings(defaults: defaults)
