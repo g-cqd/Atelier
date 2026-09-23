@@ -7,23 +7,17 @@ import DiffGit
 import DiffRendering
 import Foundation
 
-/// Whether the calling thread is the process' main thread; used to assert the executor contract of
-/// ``DiffViewerModel/corpusFingerprint(changedPaths:comparison:leftEntries:rightEntries:)`` stays off it, in
-/// debug builds and under tests.
+/// Whether the calling thread is the main thread, for asserting that work runs off it.
 private func isOnMainThread() -> Bool {
     pthread_main_np() != 0
 }
 
-/// Diagnostics and hover documentation wiring for ``DiffViewerModel``, split out of the main file to keep it under
-/// the `file_length` limit. `pipeline`, `taskProvider` and `diagnosticsVersion`'s setter are widened from `private`
-/// to `internal` on the main type so this extension can reach them; everything else it touches was already
-/// `package`.
+/// Diagnostics and hover documentation wiring for ``DiffViewerModel``.
 extension DiffViewerModel {
     // MARK: Diagnostics
 
-    /// Builds and wires this window's diagnostics: a session over `engine` sharing this model's own task provider,
-    /// and a model bridging it to `settings`. Safe to call for every comparison window, a patch's included: a
-    /// comparison with no working-tree root simply reports nothing to the engine, so diagnostics stay idle.
+    /// Builds this window's ``DiagnosticsModel`` over `engine` and `settings`; diagnostics stay idle unless the right
+    /// side is a directory.
     package func attachDiagnostics(engine: DiagnosticsEngine, settings: ViewerSettings) {
         let diagnosticsModel = DiagnosticsModel(engine: engine, settings: settings, taskProvider: taskProvider)
         diagnosticsModel.onFindingsChanged = { [weak self] _ in self?.diagnosticsVersion &+= 1 }
@@ -38,24 +32,19 @@ extension DiffViewerModel {
 
     // MARK: Hover documentation
 
-    /// Builds and wires this window's hover documentation: a doc-comment index shared by every pane, tiered
-    /// behind `lspRegistry` for on-disk Swift files on the new side. Safe to call for every comparison window;
-    /// a comparison with no on-disk right side simply never has a language server to try.
+    /// Builds this window's hover documentation: a doc-comment index shared by every pane, tiered behind
+    /// `lspRegistry` for on-disk Swift files on the new side.
     package func attachHoverDocs(lspRegistry: SourceKitLSPRegistry?) {
         hoverDocs = HoverDocumentationModel(lspRegistry: lspRegistry, taskProvider: taskProvider)
     }
 
-    /// Feeds ``hoverDocs`` both sides of every file currently prepared behind the render target, and the right
-    /// side's on-disk root when there is one. Called whenever the pipeline publishes, so hover keeps up with
-    /// whatever has actually been diffed, streaming in as more cards of a combined view finish preparing.
+    /// Feeds ``hoverDocs`` both sides of every file prepared so far behind the render target, and the right side's
+    /// on-disk root when there is one.
     func updateHoverDocs() {
         guard let hoverDocs else { return }
         let allPairs = pipeline.target?.pairs ?? []
         let prepared = pipeline.prepared
-        // Feed whatever has landed so far, not all-or-nothing: `prepared` streams in card by card on a combined
-        // view, and gating on the full count starved the doc-comment index for every file — including ones long
-        // since on screen — until the very last card finished. Each `.published` event re-enters here, so the
-        // index grows with the stream and the final call carries the complete set.
+        // Feed the prefix that landed: waiting for every card would starve the index until the last one lands.
         let pairs = allPairs.prefix(prepared.count)
         guard !pairs.isEmpty else { return }
         let root: URL? = if case .directory(let rightRoot) = right.source { rightRoot } else { nil }
@@ -71,16 +60,13 @@ extension DiffViewerModel {
             root: root, files: files, corpusReader: reader, corpusSource: right.source, corpusEntries: right.entries)
     }
 
-    /// This file's diagnostics, by its own left path: looked up under the right path ``findingsByFile`` keys them
-    /// with, since that is the side diagnostics actually scanned.
+    /// The severity counts of the file at `leftPath`, whose findings are keyed by its right path.
     package func diagnosticSeverityCounts(for leftPath: String) -> DiagnosticSeverityCounts {
         DiagnosticSeverityCounts(diagnostics?.findingsByFile[counterpartPath(of: leftPath, in: .left)] ?? [])
     }
 
-    /// Tells ``diagnostics`` what changed: the right side's changed Swift files, on disk when the right side is a
-    /// working tree, plus a fingerprint of the whole changeset for corpus-scoped tools. Diagnostics only make
-    /// sense against a working tree the tools can actually run over, so anything else (two arbitrary refs, a
-    /// patch) reports no root and clears whatever was showing.
+    /// Tells ``diagnostics`` the right side's changed Swift files and a changeset fingerprint; a right side that is
+    /// not a directory reports no root, which clears the findings.
     func updateDiagnostics() {
         diagnosticsTask?.cancel()
         diagnosticsGeneration += 1
@@ -94,8 +80,7 @@ extension DiffViewerModel {
             .compactMap { leftPath in
                 let rightPath = comparison.counterpartPath(of: leftPath, in: .left)
                 guard let entry = right.entriesByPath[rightPath] else { return nil }
-                // A file too large to have been hashed during the scan (see `SourceLoader.maximumHashedSize`)
-                // falls back to its size: rare, and still enough to notice a length change between runs.
+                // A file too large to hash falls back to its size, enough to notice a length change.
                 let contentHash = entry.blobID ?? "size:\(entry.size)"
                 return DiagnosticsEngine.FileTarget(
                     path: rightPath, contentHash: contentHash, url: rightRoot.appending(path: rightPath))
@@ -113,12 +98,7 @@ extension DiffViewerModel {
         }
     }
 
-    /// The sorted (path, content hash) fingerprint of every changed file, hashed off the main actor (SE-0461's
-    /// `@concurrent`): cheap for a handful of files, but a large changeset is enough sorting and hashing to be
-    /// worth keeping off the window's own actor. A precise fingerprint would read HEAD's commit and
-    /// `git status --porcelain`, but nothing downstream of `Comparison` exposes a `GitClient` to do that with;
-    /// this list already changes exactly when the working tree does, which is the property a corpus-scoped
-    /// tool's cache key needs.
+    /// A hash of every changed path with its content hash, in sorted order, computed off the main actor.
     @concurrent
     private static func corpusFingerprint(
         changedPaths: [String], comparison: Comparison, leftEntries: [String: SourceEntry],

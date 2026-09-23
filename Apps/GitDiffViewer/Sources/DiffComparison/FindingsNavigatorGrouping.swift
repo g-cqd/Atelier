@@ -1,8 +1,7 @@
 package import AtelierDiagnostics
 
-/// Groups every finding of a comparison by file, for the findings navigator's toolbar popover: one entry per
-/// file (sorted by path), its own findings sorted by line then column so the list reads top to bottom the way the
-/// file itself does. Pure so the grouping and sort order are testable without a view or a model.
+/// Groups a comparison's findings by file for the findings navigator: files sorted by path, each file's findings
+/// by line then column.
 package enum FindingsNavigatorGrouping {
     package struct FileGroup: Equatable {
         package let path: String

@@ -1,4 +1,4 @@
-// Git, source loading and process tracing now live in AtelierCore; this module keeps the app's names for them.
+// Re-exports AtelierCore's git, source loading and process tracing under the app's own module name.
 @_exported public import AtelierGit
 @_exported public import AtelierProcess
 @_exported public import AtelierSources

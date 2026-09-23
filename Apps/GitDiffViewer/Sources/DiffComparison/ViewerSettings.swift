@@ -49,22 +49,17 @@ package enum SidebarVisibility: String, CaseIterable, Identifiable {
     package var id: String { rawValue }
 }
 
-/// Which side of a comparison diagnostics tools analyze. Findings come from the tools running against the newer
-/// (on-disk) side, so the old side's rows only ever get a best-effort echo of a finding that also names the same
-/// line number on the old side — never an independent analysis of the old content itself.
+/// Which side of a comparison diagnostics are shown on. Tools only ever analyze the newer (on-disk) side.
 package enum AnalyzedSides: String, CaseIterable, Identifiable, Codable {
     /// Only the newer side is analyzed; the older side never shows diagnostics.
     case newer
-    /// The newer side is analyzed as usual, and its findings are echoed onto old-side rows that share the same
-    /// line number — useful context on a removed or changed line, not a genuine analysis of the old content.
+    /// The newer side's findings are also echoed onto old-side rows with the same line number.
     case both
 
     package var id: String { rawValue }
 }
 
-/// Whether the window chrome follows the system's own light/dark choice or is pinned to one, independent of the
-/// diff theme itself -- useful when a theme's own colours read best against the window frame going the other way
-/// than the system currently is.
+/// Whether the window chrome follows the system's light/dark choice or is pinned to one, independently of the theme.
 package enum AppearanceScheme: String, CaseIterable, Identifiable, Codable {
     case system
     case light
@@ -129,14 +124,10 @@ package final class ViewerSettings {
         }
     }
 
-    /// The project (repository root) this instance currently overlays, or nil while it still only speaks the app
-    /// defaults — set once, shortly after a comparison window resolves its launch configuration's root, through
-    /// ``adoptProject(_:)``.
+    /// The project whose overrides overlay the app defaults; nil until ``adoptProject(_:)``.
     package internal(set) var projectID: ProjectIdentity?
 
-    /// Settings whose value may genuinely vary from one project to the next — see docs/settings-design.md R5.
-    /// Everything else (theme, layout chrome, fonts) stays a single, app-wide value no matter which window last
-    /// touched it.
+    /// Settings whose value may vary from one project to the next; everything else stays app-wide.
     static let projectScopedKeys: Set<String> = [
         Key.diagnosticsEnabled, Key.analyzedSides, Key.toolLocations, Key.lspServerLocations, Key.contextLines,
         Key.showsChangesOnly, Key.showsIgnoredFiles, Key.diffHeuristics, Key.treeStyle
@@ -152,18 +143,16 @@ package final class ViewerSettings {
         Self.scopedKey(key, projectKey: projectID.key)
     }
 
-    /// Which key a read of `key` should actually hit right now: the project-scoped key once something has been
-    /// written there for the adopted project, the base (app-wide) key otherwise — so a project inherits the app
-    /// default until its own first override, exactly like `defaults.set`/`defaults.object` already behave for the
-    /// base key alone.
+    /// The key a read of `key` hits: the adopted project's scoped key once it holds an override, the base key
+    /// otherwise, so a project inherits the app default until its first override.
     func effectiveKey(_ key: String) -> String {
         guard let projectID, Self.projectScopedKeys.contains(key) else { return key }
         let scoped = scopedKey(key, for: projectID)
         return defaults.object(forKey: scoped) != nil ? scoped : key
     }
 
-    /// Records `id` in the cross-project registry (id → display path) the first time one of its settings is
-    /// overridden, so the Settings review affordance can enumerate projects without scanning every defaults key.
+    /// Records `id` in the project registry (key to display path), so Settings can list the projects with overrides
+    /// without scanning every defaults key.
     func registerProject(_ id: ProjectIdentity) {
         var registry = (defaults.dictionary(forKey: Self.projectRegistryKey) as? [String: String]) ?? [:]
         guard registry[id.key] != id.displayPath else { return }
@@ -186,14 +175,8 @@ package final class ViewerSettings {
     package var showsChangesOnly: Bool { didSet { store(showsChangesOnly, Key.showsChangesOnly, .trees) } }
     /// Lists the files git ignores in a section of their own, so their content can be looked at on demand.
     package var showsIgnoredFiles: Bool { didSet { store(showsIgnoredFiles, Key.showsIgnoredFiles, .trees) } }
-    /// Whether the window watches the working tree and the repository's `.git` metadata for external changes
-    /// (another editor's save, a `git pull` or checkout run in a terminal) and reloads on its own.
-    ///
-    /// Global, not project-scoped: `projectScopedKeys` below holds settings whose *right value* genuinely differs
-    /// from one repository to the next (how many context lines, which tools run). Whether this window watches for
-    /// outside changes isn't a property of the repository being compared — it's a workflow preference ("do I want
-    /// this to update itself while I work") the user carries from one project to the next, the same way the theme
-    /// or the layout chrome does, so it stays a single app-wide value like those.
+    /// Whether the window watches the working tree and the repository's `.git` metadata for external changes and
+    /// reloads on its own.
     package var autoRefresh: Bool { didSet { store(autoRefresh, Key.autoRefresh, .freshness) } }
     package var granularity: IntralineGranularity { didSet { store(granularity.rawValue, Key.granularity, .diff) } }
     /// Which diff heuristics are wired in; any change re-diffs the selection.
@@ -217,8 +200,7 @@ package final class ViewerSettings {
     package var diagnosticsEnabled: Bool {
         didSet { store(diagnosticsEnabled, Key.diagnosticsEnabled, .diagnostics) }
     }
-    /// Shown as its own setting rather than folded into `.diagnostics`: it toggles a hover popover the same way
-    /// every other appearance flag toggles a piece of chrome, with nothing to re-run or recompute.
+    /// Whether hovering a symbol shows its documentation.
     package var showsHoverDocumentation: Bool {
         didSet { store(showsHoverDocumentation, Key.showsHoverDocumentation, .appearance) }
     }
@@ -229,8 +211,7 @@ package final class ViewerSettings {
             store(try? JSONEncoder().encode(encoded), Key.toolLocations, .diagnostics)
         }
     }
-    /// Per-server overrides for tools discovered the same way but not in ``DiagnosticTool``, such as
-    /// `sourcekit-lsp`; keyed by a server id rather than a typed enum since the set is open-ended.
+    /// Per-server overrides for language servers outside ``DiagnosticTool``, such as `sourcekit-lsp`, by server id.
     package var lspServerLocations: [String: ToolLocation] {
         didSet { store(try? JSONEncoder().encode(lspServerLocations), Key.lspServerLocations, .diagnostics) }
     }
@@ -242,9 +223,7 @@ package final class ViewerSettings {
     package var settingsPane: SettingsPane {
         didSet { store(settingsPane.rawValue, Key.settingsPane, .appearance) }
     }
-    /// Whether the window chrome (title bar, controls, the Settings window itself) follows the system's own
-    /// light/dark choice or is pinned to one. App-wide, not project-scoped, like every other piece of chrome: it
-    /// describes how the app should look, not a property of any one repository.
+    /// The light/dark appearance of the window chrome, the Settings window included.
     package var appearanceScheme: AppearanceScheme {
         didSet { store(appearanceScheme.rawValue, Key.appearanceScheme, .appearance) }
     }
@@ -258,11 +237,8 @@ package final class ViewerSettings {
 
     let defaults: UserDefaults
 
-    /// Set around a block that must assign scoped properties to their (already-decoded) base value without
-    /// recreating the project override that block just removed: `restoreDefaults` and clearing a project's own
-    /// overrides both remove a scoped key and then run the property through its normal setter purely to update
-    /// the in-memory value and notify observers, which would otherwise write straight back to the scoped key it
-    /// was just cleared from.
+    /// Set while scoped properties are reassigned their base value after their override was removed, so `store`
+    /// notifies observers without writing the override back.
     @ObservationIgnored private var isFallingBackToBase = false
 
     func applyWithoutRecreatingScopedOverrides(_ body: () -> Void) {
@@ -271,14 +247,9 @@ package final class ViewerSettings {
         body()
     }
 
-    /// Set for the duration of applying a base-key change received from another instance's broadcast, so the
-    /// normal setter that reload runs through doesn't turn straight around and re-broadcast the very value it was
-    /// just handed -- the same discipline ``isFallingBackToBase`` uses to keep `store` from writing back to a key
-    /// a caller is only reading from right now. Not `private`: ``baseSettingChanged(posterID:key:)`` (in
-    /// `ViewerSettings+ProjectOverrides.swift`, alongside every other reload path) needs it too.
+    /// Set while another instance's broadcast base-key change is applied, so `store` doesn't re-broadcast it.
     @ObservationIgnored var isApplyingBroadcast = false
-    /// `nonisolated(unsafe)`: only ever written once, at the end of `init`, and read once, in `deinit` -- which,
-    /// unlike every other member here, cannot itself be `@MainActor`-isolated -- to remove the very same token.
+    /// `nonisolated(unsafe)`: written once at the end of `init` and read once in the nonisolated `deinit`.
     @ObservationIgnored private nonisolated(unsafe) var baseSettingObserver: (any NSObjectProtocol)?
 
     private func store(_ value: Any?, _ key: String, _ change: Change) {
@@ -350,14 +321,8 @@ package final class ViewerSettings {
         if let baseSettingObserver { NotificationCenter.default.removeObserver(baseSettingObserver) }
     }
 
-    /// Resets every setting in `category` to its coded default, going through the same setters as a user edit so
-    /// each one stores to user defaults and fires its observers exactly as it would for a manual change.
-    ///
-    /// For a scoped setting, "restore defaults" means something different once a project has been adopted: rather
-    /// than force every project back to the coded default, it clears this project's own override and falls back
-    /// to whatever the base (app-wide) value currently is -- the same thing turning the override off by hand
-    /// would leave behind. A project-less instance (the Settings window itself) still resets straight to the
-    /// coded default, exactly as before.
+    /// Resets every setting in `category` to its coded default through the same setters as a user edit. Once a
+    /// project is adopted, a scoped setting instead drops the project's override and falls back to the base value.
     package func restoreDefaults(_ category: SettingsCategory) {
         applyWithoutRecreatingScopedOverrides { restoreDefaultsUnguarded(category) }
     }
@@ -440,9 +405,7 @@ package final class ViewerSettings {
             ?? Dictionary(uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation()) })
     }
 
-    /// How many settings in `category` currently differ from their coded default, for the tab footer's subtle
-    /// deviation indicator (P6): cheap enough to recompute on every render since each category is a handful of
-    /// comparisons.
+    /// How many settings in `category` differ from their coded default, for the tab footer's deviation indicator.
     package func settingsDiffCount(_ category: SettingsCategory) -> Int {
         switch category {
             case .general:
@@ -476,9 +439,7 @@ package final class ViewerSettings {
     }
 }
 
-// The user-defaults keys behind every property above, kept in an extension rather than the class body itself:
-// nothing but string constants, so there is no reason for it to count against `type_body_length`'s budget for the
-// logic the class body actually holds.
+// The user-defaults keys, kept outside the class body so they don't count against `type_body_length`.
 extension ViewerSettings {
     enum Key {
         static let mode = "viewMode"

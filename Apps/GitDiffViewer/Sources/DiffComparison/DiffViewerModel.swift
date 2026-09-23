@@ -20,19 +20,14 @@ package final class DiffViewerModel {
     package let left: SideState
     package let right: SideState
     package let settings: ViewerSettings
-    /// Injected after init since it is optional and owns no state this model depends on; nil keeps diagnostics
-    /// out of the picture entirely, as in a test that has no use for them.
+    /// Injected after init; nil leaves diagnostics off entirely.
     package var diagnostics: DiagnosticsModel?
-    /// Bumped whenever ``diagnostics``' findings change, so a view holding a ``DiffTextKit/DiagnosticOverlay``
-    /// (an ``Observable`` cannot see change on its own) knows to recompute it.
-    // Widened from `private(set)` to `internal(set)` so `DiffViewerModel+Diagnostics.swift`'s
-    // `attachDiagnostics(engine:settings:)` can bump it from its findings-changed callback.
+    /// Bumped whenever ``diagnostics``' findings change, so a view holding a ``DiffTextKit/DiagnosticOverlay``,
+    /// which observation cannot see into, knows to recompute it.
     package internal(set) var diagnosticsVersion = 0
-    /// Injected after init, mirroring ``diagnostics``: nil keeps hover documentation out of the picture
-    /// entirely, as in a test that has no use for it.
+    /// Injected after init; nil leaves hover documentation off entirely.
     package var hoverDocs: HoverDocumentationModel?
-    /// Injected after init, mirroring ``diagnostics``: nil keeps freshness watching out of the picture entirely,
-    /// as in a test that has no use for it. See ``DiffViewerModel/attachFreshness()``.
+    /// Injected after init by ``attachFreshness()``; nil leaves freshness watching off entirely.
     package var freshness: RepositoryFreshness?
 
     package private(set) var selectedPath: String?
@@ -47,11 +42,8 @@ package final class DiffViewerModel {
     private var timer: OperationTimer
     private var navigator = ChangeNavigator()
 
-    // Widened from `private` to `internal` so `DiffViewerModel+Diagnostics.swift` can read them.
     let pipeline: RenderPipeline
     private let preparer: DiffPreparer
-    // Widened from `private` to `internal` so `DiffViewerModel+Diagnostics.swift`'s `updateHoverDocs()` can feed
-    // it the right side's own reader for the background corpus-broadening pass.
     let reader: any SourceReading
     let taskProvider: any TaskProvider
     @ObservationIgnored private var sourcesTask: Task<Void, Never>?
@@ -60,8 +52,6 @@ package final class DiffViewerModel {
     @ObservationIgnored private var treesTask: Task<Void, Never>?
     /// Bumped by every ``rebuildTrees()``; a build that lands after a newer one started is dropped.
     @ObservationIgnored private var treesGeneration = 0
-    // Widened from `private` to `internal` so `DiffViewerModel+Diagnostics.swift`'s `updateDiagnostics()` can
-    // guard its own async fingerprint hop against a newer call superseding it.
     @ObservationIgnored var diagnosticsTask: Task<Void, Never>?
     @ObservationIgnored var diagnosticsGeneration = 0
 
@@ -118,12 +108,8 @@ package final class DiffViewerModel {
         guard settings.showsIgnoredFiles else { return [compared] }
         return [compared, ExplorerSection(kind: .ignored, title: "Ignored Files", nodes: ignored)]
     }
-    /// The repository root the comparison currently belongs to, for the window's per-project settings identity:
-    /// the left side's, or the right's when only it resolved one (a patch, or two arbitrary folders neither
-    /// inside a repository, leaves both nil). Each side's ``SideState/repository`` already resolves the same way
-    /// `git` itself would (up from whatever path was chosen to the repository root containing it) as soon as it
-    /// loads, and updates again on every later switch through the source toolbar — so this reflects the
-    /// comparison's *current* project, not just the one it launched with.
+    /// The repository root the comparison currently belongs to, for the per-project settings identity: the left
+    /// side's, else the right's; nil for a patch or for folders outside any repository.
     package var currentProjectRoot: URL? { left.repository?.root ?? right.repository?.root }
 
     package var rendered: RenderedDiff? { pipeline.file }
@@ -153,14 +139,8 @@ package final class DiffViewerModel {
         return !comparison.isFile(selectedPath)
     }
 
-    /// What the detail area shows, derived from the model so the view has no logic of its own.
-    ///
-    /// Whatever is already published takes priority over a source reload in flight: `left.isLoading` or
-    /// `right.isLoading` only switches to `.loading` when there is nothing to show yet (the very first load, or a
-    /// comparison ``RenderPipeline/clear()`` actually emptied). A reload of an already-shown comparison keeps
-    /// showing it -- ``RenderPipeline`` keeps its previous `file`/`cards` published throughout a side's reload and
-    /// only replaces what actually changed once it lands -- rather than unmounting the detail views into a
-    /// `ProgressView` and back, which would drop their scroll position and any in-progress selection.
+    /// What the detail area shows, derived from the model so the view has no logic of its own. Content already
+    /// published outranks a side reload in flight, so a reload keeps the detail views and their scroll position.
     package var detailState: DetailState {
         if isShowingCombinedFiles, !renderedFiles.isEmpty { return .cards }
         if let rendered { return .file(rendered) }
@@ -292,9 +272,7 @@ package final class DiffViewerModel {
             left: left.entries, right: right.entries, leftSource: left.source, rightSource: right.source,
             leftIgnored: left.ignoredEntries ?? [], rightIgnored: right.ignoredEntries ?? []
         )
-        // Not `folding.reset()`: a reload or an auto-refresh re-comparison keeps the user's folds. `CardFolding`
-        // is keyed by path, so a fold made before a reload still applies to the same file after it; a path that
-        // stops existing simply never matches a card again, `collapsed` holding a stale entry for it or not.
+        // No `folding.reset()`: folds are keyed by path, so they survive a reload or re-comparison.
         detectRenames()
         rebuildTrees()
         updateDiagnostics()
@@ -336,9 +314,7 @@ package final class DiffViewerModel {
     }
 
     /// Applies the changed-files filter and the tree style from the settings to the explorer trees, off the main
-    /// actor: a large repository's tree is expensive enough to build that doing it inline would stall the window.
-    /// Generation-guarded like ``RenderPipeline``'s renders, so a rebuild started before a stale one lands never
-    /// overwrites it with older trees (no flash back to a previous state).
+    /// actor. Showing the ignored files asks each side for them; they join the comparison when they arrive.
     package func rebuildTrees() {
         treesTask?.cancel()
         treesGeneration += 1
