@@ -43,4 +43,41 @@ struct ExecutableResolverTests {
         let resolver = ExecutableResolver(searchPaths: ["/nonexistent"], searchesPath: false, fallbackPath: "/opt/x")
         #expect(resolver.resolve("tool", environment: [:]).path == "/opt/x/tool")
     }
+
+    /// `path`, absolute, spelled relative to the process's working directory: enough `..` to reach `/`, then the rest,
+    /// so it names the same file wherever the tests run.
+    private static func relativeSpelling(of path: String) -> String {
+        let depth = FileManager.default.currentDirectoryPath.split(separator: "/").count
+        return String(repeating: "../", count: depth) + path.dropFirst()
+    }
+
+    @Test
+    func `a relative, empty or dot PATH entry is never searched, even when it reaches the tool`() throws {
+        try TemporaryDirectory.withTemporaryDirectory { directory in
+            let bin = directory.file("bin")
+            try FileManager.default.createDirectory(atPath: bin, withIntermediateDirectories: true)
+            try Data("#!/bin/sh\n".utf8).write(to: URL(filePath: bin + "/tool"))
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: bin + "/tool")
+            let relative = Self.relativeSpelling(of: bin)
+            #expect(FileManager.default.isExecutableFile(atPath: relative + "/tool"))
+
+            let resolver = ExecutableResolver(searchPaths: [relative], fallbackPath: "/opt/x")
+            #expect(resolver.resolve("tool", environment: ["PATH": ".::\(relative)"]).path == "/opt/x/tool")
+        }
+    }
+
+    @Test
+    func `a relative override is never used, even when it names the tool`() throws {
+        try TemporaryDirectory.withTemporaryDirectory { directory in
+            let tool = directory.file("tool")
+            try Data("#!/bin/sh\n".utf8).write(to: URL(filePath: tool))
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tool)
+            let relative = Self.relativeSpelling(of: tool)
+            #expect(FileManager.default.isExecutableFile(atPath: relative))
+
+            let resolver = ExecutableResolver(
+                overrideVariable: "TOOL_OVERRIDE", searchesPath: false, fallbackPath: "/opt/x")
+            #expect(resolver.resolve("tool", environment: ["TOOL_OVERRIDE": relative]).path == "/opt/x/tool")
+        }
+    }
 }
