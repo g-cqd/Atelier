@@ -88,6 +88,27 @@ struct GrammarRegistryCacheTests {
     }
 
     @Test
+    func `cached tables that point outside themselves are compiled again`() throws {
+        let fixture = try GrammarFixture()
+        defer { fixture.remove() }
+        let first = fixture.registry { grammar throws(GrammarError) in try ParseTableCompiler.compile(grammar) }
+        let compiled = try first.compiledResult(for: "tiny", grammarsPath: fixture.grammarsPath)
+        var damaged = compiled
+        damaged.parseTable.actions[0][0] = .shift(compiled.parseTable.stateCount)
+        try fixture.overwriteCachedTables(with: damaged)
+        let compiles = Mutex(0)
+        let relaunched = fixture.registry { grammar throws(GrammarError) in
+            compiles.withLock { $0 += 1 }
+            return try ParseTableCompiler.compile(grammar)
+        }
+
+        let reloaded = try relaunched.compiledResult(for: "tiny", grammarsPath: fixture.grammarsPath)
+
+        #expect(reloaded.parseTable == compiled.parseTable)
+        #expect(compiles.withLock { $0 } == 1)
+    }
+
+    @Test
     func `compiled tables are read back by the next registry on the same cache`() throws {
         let fixture = try GrammarFixture()
         defer { fixture.remove() }
@@ -122,6 +143,14 @@ private struct GrammarFixture {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let grammar = #"{"name": "tiny", "rules": {"source": {"type": "STRING", "value": "\#(keyword)"}}}"#
         try Data(grammar.utf8).write(to: directory.appending(path: "grammar.json"))
+    }
+
+    /// Replaces the cached tables of the current `tiny` grammar with `tables`.
+    func overwriteCachedTables(with tables: ParseTableCompiler.CompilationResult) throws {
+        let grammar = try Data(contentsOf: root.appending(path: "Grammars/tiny/grammar.json"))
+        let key = CompiledTableCache.Key(language: "tiny", grammar: grammar)
+        try GrammarRegistry.encodeCompiledTables(tables)
+            .write(to: root.appending(path: "cache/\(key.fileStem).ptable"))
     }
 
     /// A registry that knows `tiny`, caches under the fixture and compiles with `compile`.
