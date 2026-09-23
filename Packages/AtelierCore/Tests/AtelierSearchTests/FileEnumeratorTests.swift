@@ -91,6 +91,21 @@ struct FileEnumeratorTests {
         #expect(Set(files.map { URL(fileURLWithPath: $0).lastPathComponent }) == ["text.txt", "binary.bin"])
     }
 
+    @Test(arguments: ["", "/"])
+    func `an ignored directory is not walked`(suffix: String) throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+        try writeFile(tmp + "/keep.swift", content: "hello")
+        try FileManager.default.createDirectory(
+            atPath: tmp + "/Generated/Deep", withIntermediateDirectories: true)
+        try writeFile(tmp + "/Generated/a.swift", content: "hello")
+        try writeFile(tmp + "/Generated/Deep/b.swift", content: "hello")
+
+        let files = enumerateSearchableFiles(rootPath: tmp, gitIgnoredPaths: [tmp + "/Generated" + suffix])
+
+        #expect(files == [tmp + "/keep.swift"])
+    }
+
     @Test("excludes .git directory")
     func excludesGitDirectory() throws {
         let tmp = try makeTempDir()
