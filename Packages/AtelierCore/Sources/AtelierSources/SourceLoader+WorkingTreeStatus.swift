@@ -14,6 +14,14 @@ extension SourceLoader {
         return Self.entries(try await GitClient(repository: root, runner: runner).status().entries, under: prefix)
     }
 
+    /// The paths among `paths`, relative to the folder `source` names, that git ignores, through one
+    /// ``GitClient/ignored(among:)`` run in that folder. Empty for any other source.
+    /// - Throws: ``GitError`` when git fails, for example for a folder outside every repository.
+    public func ignoredPaths(among paths: [String], in source: ComparisonSource) async throws -> Set<String> {
+        guard case .directory(let folder) = source else { return [] }
+        return try await GitClient(repository: folder, runner: runner).ignored(among: paths)
+    }
+
     /// `folder`'s path below `root`, ending in `/`, or empty for `root` itself; nil when `folder` lies outside it.
     /// Both sides are compared with their symbolic links resolved, since git names the root by its real path:
     /// `/private/tmp/repo` for a folder chosen as `/tmp/repo`.

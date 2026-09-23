@@ -22,6 +22,10 @@ public protocol SourceReading: Sendable {
     /// outside it left out; nil for a source that is not a folder inside a repository.
     /// - Throws: When git cannot run or fails.
     func workingTreeStatus(of source: ComparisonSource) async throws -> [GitStatusEntry]?
+    /// The paths among `paths`, relative to the folder `source` names, that git ignores there, judged in one go;
+    /// empty for any other kind of source.
+    /// - Throws: When git cannot run or fails, for example for a folder outside every repository.
+    func ignoredPaths(among paths: [String], in source: ComparisonSource) async throws -> Set<String>
 }
 
 /// Concurrent file reads for sources without batch reads; bounded so a large folder does not open a file storm.
@@ -40,6 +44,11 @@ extension SourceReading {
     /// A source with no git behind it has no working-tree status.
     public func workingTreeStatus(of source: ComparisonSource) async throws -> [GitStatusEntry]? {
         nil
+    }
+
+    /// A source with no git behind it ignores nothing.
+    public func ignoredPaths(among paths: [String], in source: ComparisonSource) async throws -> Set<String> {
+        []
     }
 
     public func contents(of entries: [GitTreeEntry], in source: ComparisonSource) async throws -> [String: String] {
