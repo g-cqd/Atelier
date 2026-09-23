@@ -155,6 +155,18 @@ struct DiffViewerModelFreshnessTests {
         try await drain(sut)
     }
 
+    @Test
+    func `a new dotfile git does not ignore reloads the working tree`() async throws {
+        let (sut, source) = try await makeLoadedSUT()
+        reader.entries[Self.tree] = [Self.entry("a.swift", "1"), Self.entry(".github/workflows/ci.yml", "1")]
+
+        try await report("/repo/.github/workflows/ci.yml", on: source, after: Self.treeDebounce)
+
+        #expect(sut.right.entriesByPath[".github/workflows/ci.yml"] != nil)
+        #expect(reader.ignoreChecks == [[".github/workflows/ci.yml"]])
+        try await drain(sut)
+    }
+
     // MARK: Refs and HEAD
 
     @Test
