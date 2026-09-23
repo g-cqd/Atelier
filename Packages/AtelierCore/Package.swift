@@ -34,6 +34,7 @@ let package = Package(
         .library(name: "AtelierGrammar", targets: ["AtelierGrammar"]),
         .library(name: "AtelierParser", targets: ["AtelierParser"]),
         .library(name: "AtelierQuery", targets: ["AtelierQuery"]),
+        .library(name: "AtelierScanners", targets: ["AtelierScanners"]),
         .library(name: "AtelierTheme", targets: ["AtelierTheme"]),
         .library(name: "AtelierFileTree", targets: ["AtelierFileTree"]),
         .library(name: "AtelierSearch", targets: ["AtelierSearch"]),
@@ -156,6 +157,8 @@ let package = Package(
         .target(name: "AtelierParser", dependencies: ["AtelierGrammar"], swiftSettings: strict),
         // tree-sitter .scm query parsing and matching over syntax trees.
         .target(name: "AtelierQuery", dependencies: ["AtelierParser"], swiftSettings: strict),
+        // External scanners ported from each grammar's tree-sitter scanner.c, one file per language.
+        .target(name: "AtelierScanners", dependencies: ["AtelierParser"], swiftSettings: strict),
         .testTarget(
             name: "AtelierDiffTests", dependencies: ["AtelierDiff", .product(name: "AemiTestKit", package: "aemi")],
             swiftSettings: strict),
@@ -182,6 +185,8 @@ let package = Package(
         .testTarget(name: "AtelierGrammarTests", dependencies: ["AtelierGrammar"], swiftSettings: strict),
         .testTarget(name: "AtelierParserTests", dependencies: ["AtelierParser"], swiftSettings: strict),
         .testTarget(name: "AtelierQueryTests", dependencies: ["AtelierQuery"], swiftSettings: strict),
+        .testTarget(
+            name: "AtelierScannersTests", dependencies: ["AtelierScanners", "AtelierParser"], swiftSettings: strict),
         .testTarget(
             name: "AtelierSourcesTests",
             dependencies: [
