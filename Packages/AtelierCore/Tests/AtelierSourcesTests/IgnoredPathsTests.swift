@@ -6,7 +6,7 @@ import Testing
 @testable import AtelierSources
 
 /// What a working-tree folder's watcher asks git through ``SourceLoader``: which of the paths that changed git
-/// ignores.
+/// ignores, and a status for the badges that skips the ignored files altogether.
 struct IgnoredPathsTests {
     /// A repository whose `.gitignore` names `build/`, with one committed file edited and one build product.
     private struct Repository {
@@ -45,6 +45,17 @@ struct IgnoredPathsTests {
         private func write(_ path: String, _ text: String) throws {
             try text.write(to: root.appending(path: path), atomically: true, encoding: .utf8)
         }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func `the working tree's status for badges leaves the ignored files out`() async throws {
+        let repository = try await Repository()
+        defer { repository.remove() }
+
+        let status = try #require(try await TestProcesses.loader.workingTreeStatus(of: .directory(repository.root)))
+
+        #expect(status.map(\.path) == ["a.swift"])
+        #expect(!status.contains { $0.worktreeStatus == .ignored })
     }
 
     @Test(.timeLimit(.minutes(1)))

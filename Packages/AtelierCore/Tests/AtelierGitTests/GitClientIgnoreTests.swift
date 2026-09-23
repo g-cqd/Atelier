@@ -6,10 +6,34 @@ import Testing
 
 @testable import AtelierGit
 
-/// What `GitClient` asks git when a caller only needs to know which paths git ignores: `check-ignore` over many paths
-/// at once, whose exit status 1 means "none of them".
+/// What `GitClient` asks git when a caller only needs to know which paths git ignores: a status without the ignored
+/// files, and `check-ignore` over many paths at once, whose exit status 1 means "none of them".
 struct GitClientIgnoreTests {
     private static let repository = URL(filePath: "/repo", directoryHint: .isDirectory)
+
+    // MARK: Status
+
+    @Test
+    func `a status without ignored files asks git to skip them`() async throws {
+        let runner = FakeProcessRunner.gated(always: .success(""))
+        let client = GitClient(repository: Self.repository, runner: runner, gate: GitConfigGate())
+
+        _ = try await client.status(includingIgnored: false)
+
+        let arguments = try #require(runner.commandSpecs.first?.arguments)
+        #expect(arguments.contains("--ignored=no"))
+        #expect(!arguments.contains("--ignored=matching"))
+    }
+
+    @Test
+    func `a status lists the ignored files unless asked not to`() async throws {
+        let runner = FakeProcessRunner.gated(always: .success(""))
+        let client = GitClient(repository: Self.repository, runner: runner, gate: GitConfigGate())
+
+        _ = try await client.status()
+
+        #expect(runner.commandSpecs.first?.arguments.contains("--ignored=matching") == true)
+    }
 
     // MARK: check-ignore, scripted
 
