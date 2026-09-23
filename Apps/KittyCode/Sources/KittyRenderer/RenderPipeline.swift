@@ -29,7 +29,9 @@ private let signposter = OSSignposter(subsystem: "com.kittytui.render", category
 public final class RenderPipeline {
     private let connection: any TerminalConnection
     private var front: ScreenBuffer
-    private var back: ScreenBuffer
+
+    /// The back buffer staging the next frame, stored so cell writes mutate its storage in place.
+    public var buffer: ScreenBuffer
 
     /// Persistent output buffer reused across frames to avoid allocation.
     private var outputBuffer = ContiguousArray<UInt8>()
@@ -39,10 +41,10 @@ public final class RenderPipeline {
     private var activeFrameInterval: OSSignpostIntervalState?
 
     /// The current number of columns in the render viewport.
-    public var columns: Int { back.columns }
+    public var columns: Int { buffer.columns }
 
     /// The current number of rows in the render viewport.
-    public var rows: Int { back.rows }
+    public var rows: Int { buffer.rows }
 
     /// The zero-based row at which the cursor should be positioned after each flush.
     ///
@@ -86,13 +88,7 @@ public final class RenderPipeline {
     public init(connection: any TerminalConnection, columns: Int, rows: Int) {
         self.connection = connection
         self.front = ScreenBuffer(columns: columns, rows: rows)
-        self.back = ScreenBuffer(columns: columns, rows: rows)
-    }
-
-    /// The back buffer staging the next frame, shown by the next `flush()` or `forceRedraw()`.
-    public var buffer: ScreenBuffer {
-        get { back }
-        set { back = newValue }
+        self.buffer = ScreenBuffer(columns: columns, rows: rows)
     }
 
     /// Starts a frame with no cursor position, so the cursor stays hidden unless set again. The back buffer keeps
@@ -127,8 +123,8 @@ public final class RenderPipeline {
     ///
     /// The output is wrapped in synchronized-update markers to prevent tearing. When there are
     /// dirty cells, the cursor is hidden during the update and then repositioned according to
-    /// `cursorRow`/`cursorCol`. After writing, `back` is copied into `front` and the dirty
-    /// tracker is cleared.
+    /// `cursorRow`/`cursorCol`. After writing, only marked cells are copied into `front` and the
+    /// dirty tracker is cleared.
     ///
     /// - Throws: `TerminalError` if the underlying connection write fails.
     public func flush() throws(TerminalError) {
@@ -178,14 +174,14 @@ public final class RenderPipeline {
 
             // The scroll moved every column, including ones this frame never wrote (sidebar, separators): mark any
             // cell where the shifted front differs from back so the diff re-emits it.
-            let cols = back.columns
+            let cols = buffer.columns
             let regionEnd = hint.regionTop + hint.regionHeight
             for row in hint.regionTop ..< regionEnd {
                 let base = row &* cols
                 for col in 0 ..< cols {
                     let idx = base &+ col
-                    if front.cells[idx] != back.cells[idx] {
-                        back.dirty.mark(idx)
+                    if front.cells[idx] != buffer.cells[idx] {
+                        buffer.dirty.mark(idx)
                     }
                 }
             }
@@ -196,10 +192,10 @@ public final class RenderPipeline {
         }
 
         // Render diff directly into our persistent buffer
-        let hasDirty = !back.dirty.isEmpty
+        let hasDirty = !buffer.dirty.isEmpty
         if hasDirty {
             KittySequences.appendHideCursor(to: &outputBuffer)
-            DiffRenderer.render(front: front, back: back, into: &outputBuffer)
+            DiffRenderer.render(front: front, back: buffer, into: &outputBuffer)
         }
 
         chrome?.render(chromeElements, into: &outputBuffer)
@@ -217,15 +213,14 @@ public final class RenderPipeline {
             try connection.writeContiguous(outputBuffer)
         }
 
-        // Swap: copy back → front, clear dirty bits
-        front = back
-        back.dirty.clear()
+        front.adoptDirtyCells(from: buffer)
+        buffer.dirty.clear()
     }
 
     /// Redraws every cell in the back buffer unconditionally and writes the result to the terminal.
     ///
     /// Use this after a resize event or any situation where the terminal display may be in an
-    /// unknown state. The dirty tracker is cleared and `back` is copied into `front` on success.
+    /// unknown state. The dirty tracker is cleared and every cell is copied into `front` on success.
     ///
     /// - Throws: `TerminalError` if the underlying connection write fails.
     public func forceRedraw() throws(TerminalError) {
@@ -241,7 +236,7 @@ public final class RenderPipeline {
 
         KittySequences.appendBeginSyncUpdate(to: &outputBuffer)
         KittySequences.appendHideCursor(to: &outputBuffer)
-        DiffRenderer.renderFull(back, into: &outputBuffer)
+        DiffRenderer.renderFull(buffer, into: &outputBuffer)
         chrome?.invalidate()
         chrome?.render(chromeElements, into: &outputBuffer)
 
@@ -252,8 +247,8 @@ public final class RenderPipeline {
 
         KittySequences.appendEndSyncUpdate(to: &outputBuffer)
         try connection.writeContiguous(outputBuffer)
-        front = back
-        back.dirty.clear()
+        front.adoptAllCells(from: buffer)
+        buffer.dirty.clear()
     }
 
     /// Resizes both the front and back buffers to the new viewport dimensions.
@@ -266,7 +261,7 @@ public final class RenderPipeline {
     ///   - rows: The new number of rows.
     public func resize(columns: Int, rows: Int) {
         front.resize(columns: columns, rows: rows)
-        back.resize(columns: columns, rows: rows)
+        buffer.resize(columns: columns, rows: rows)
         chrome?.reset()
     }
 }
