@@ -1,7 +1,5 @@
-/// Canonical, user-facing strings for settings that appear on more than one surface — the Settings window, the
-/// toolbar's View options menu, and the Tools tab — so the three read identically (R3: labels diverging across
-/// surfaces is pure extraneous load per Sweller/P1). One constant per *setting*, not per enum case: a setting's
-/// picker options stay local to whichever surface renders them.
+/// The user-facing label of every setting shown on more than one surface, so they all read identically. One
+/// constant per setting; picker options stay local to the surface that renders them.
 package enum SettingLabel {
     // MARK: General / Window & files
 

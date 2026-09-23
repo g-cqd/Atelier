@@ -5,11 +5,8 @@ package import AtelierSyntaxModel
 package import DiffGit
 package import Foundation
 
-/// LSP first when available; the doc-comment index answers otherwise and for git-blob content.
-///
-/// A `primary` failure (a `nil` answer, a thrown error, or a timeout the language server itself already
-/// collapsed to `nil`) falls back to the doc-comment index; a genuine cancellation propagates instead, since
-/// nothing downstream should show content for a query nobody is waiting on anymore.
+/// LSP first when available; the doc-comment index answers otherwise and for git-blob content. Any `primary`
+/// failure falls back to the index; a cancellation propagates.
 struct TieredHoverProvider: HoverProvider {
     let primary: (any HoverProvider)?
     let fallback: any HoverProvider
@@ -28,8 +25,7 @@ struct TieredHoverProvider: HoverProvider {
     }
 }
 
-/// Which side of a diff a hover query falls on. Mirrors ``DiffTextKit/HoverSide`` without depending on
-/// `DiffTextKit`, which this target has no need of otherwise.
+/// Which side of a diff a hover query falls on; mirrors ``DiffTextKit/HoverSide`` without depending on it.
 package enum HoverQuerySide: Sendable, Equatable {
     case old
     case new
@@ -43,8 +39,7 @@ package final class HoverDocumentationModel {
     /// One prepared file's identity and full text, as behind the current render.
     package struct FileEntry: Sendable {
         package let index: Int
-        /// The path this file is diffed under (the comparison's own key), used for the old side and as a
-        /// fallback URI when there is no separate new-side path.
+        /// The path the comparison keys this file by, used for the old side and when there is no new-side path.
         package let leftPath: String
         /// The new side's own path, when the file has one (nil for a file deleted on the right).
         package let rightPath: String?
@@ -73,25 +68,20 @@ package final class HoverDocumentationModel {
     private let taskProvider: any TaskProvider
 
     private var filesByIndex: [Int: FileEntry] = [:]
-    /// The right side's working-tree root; non-nil only for a repository (or plain folder) comparison whose
-    /// right side is on disk, i.e. exactly when the language server tier is ever worth trying.
+    /// The right side's on-disk root, which the language server tier needs; nil when the right side is not on disk.
     private var repositoryRoot: URL?
     private var feedTask: Task<Void, Never>?
-    /// Bumped by every ``comparisonChanged(root:files:corpusReader:corpusSource:corpusEntries:)``; the background
-    /// corpus-broadening pass checks this before it publishes, so a slower, superseded pass can never land after
-    /// a newer comparison already replaced it (`feedTask?.cancel()` alone is not enough: cancellation is
-    /// cooperative, and the broadening pass checks it only between awaits).
+    /// Bumped by every comparison change; a superseded corpus pass drops its result, since cancellation is only
+    /// checked between awaits.
     private var generation = 0
 
-    /// A corpus file too large to be worth parsing for a hover fallback that only serves documentation, not code
-    /// intelligence.
+    /// The largest corpus file, in bytes, the background pass parses.
     static let maxCorpusFileSize = 512 * 1024
-    /// Caps how many files beyond the changeset the background pass reads, so a huge repository comparison never
-    /// turns into an unbounded read storm.
+    /// The most files beyond the changeset the background pass reads.
     static let maxCorpusFiles = 2000
 
-    /// The on-device Apple SDK tier, injected after construction (it resolves asynchronously, once per app);
-    /// nil leaves hovers answered by the language server and doc-comment index alone.
+    /// The on-device Apple SDK tier, injected once it resolves; nil leaves hovers to the language server and the
+    /// doc-comment index.
     package var sdkProvider: (any HoverProvider)?
 
     package init(lspRegistry: SourceKitLSPRegistry?, taskProvider: any TaskProvider = .default) {
@@ -100,19 +90,10 @@ package final class HoverDocumentationModel {
         docProvider = DocIndexHoverProvider(index: index)
     }
 
-    /// Re-feeds the doc-comment index with both sides of every prepared (changed) Swift file, and remembers the
-    /// working tree root (if any) hovers over the new side may resolve a language server against. Fire-and-forget:
-    /// a superseded comparison cancels whatever re-index was still running, so a slower, older update can never
-    /// land after a newer one.
-    ///
-    /// Coverage contract: the fast pass above only ever indexes symbols *declared* in a changed file, so a hover
-    /// over a symbol declared elsewhere (a type from an unchanged file, say) answers nothing from it alone. When
-    /// `corpusReader`, `corpusSource` and `corpusEntries` are given, a second pass follows in the background,
-    /// reading every other Swift file the right side already listed (skipping anything over
-    /// ``maxCorpusFileSize``, and capped at ``maxCorpusFiles`` files total) and adding it to the index. This is
-    /// still best-effort, not exhaustive: a repository with more than ``maxCorpusFiles`` eligible files, or a
-    /// symbol declared only in a file the cap skipped, will not resolve through the doc-comment index (the LSP
-    /// tier, when one is available for the new side, is unaffected by this cap).
+    /// Re-feeds the doc-comment index with both sides of every changed Swift file, and remembers `root` for the
+    /// language server tier. Given a corpus reader, source and entries, a background pass then adds the right
+    /// side's other Swift files, within ``maxCorpusFileSize`` and ``maxCorpusFiles``. A newer call supersedes any
+    /// feed still running.
     package func comparisonChanged(
         root: URL?, files: [FileEntry], corpusReader: (any SourceReading)? = nil,
         corpusSource: ComparisonSource? = nil, corpusEntries: [GitTreeEntry] = []
@@ -159,8 +140,7 @@ package final class HoverDocumentationModel {
         }
     }
 
-    /// The right side's other Swift files a background pass should add to the corpus: everything not already fed
-    /// by the changeset, small enough to be worth parsing, up to ``maxCorpusFiles``.
+    /// The Swift files outside the changeset within ``maxCorpusFileSize``, at most ``maxCorpusFiles`` of them.
     private static func corpusCandidates(entries: [GitTreeEntry], excluding changed: Set<String>) -> [GitTreeEntry] {
         Array(
             entries.filter {
@@ -170,9 +150,8 @@ package final class HoverDocumentationModel {
             .prefix(maxCorpusFiles))
     }
 
-    /// Answers a hover hit at `fileIndex`/`side`/`line`/`utf16Column` (the same coordinates
-    /// ``DiffTextKit/HoverHit`` carries): the language server first when the hit is on the new side of an
-    /// on-disk Swift file, the doc-comment index otherwise.
+    /// Answers a hover hit, in ``DiffTextKit/HoverHit``'s coordinates, through ``AtelierLSP/TieredHoverProviders``:
+    /// the language server (new side of an on-disk Swift file only), the doc-comment index, then the SDK tier.
     package func hover(fileIndex: Int, side: HoverQuerySide, line: Int, utf16Column: Int) async -> HoverContent? {
         guard let file = filesByIndex[fileIndex] else { return nil }
         let content = side == .new ? file.newText : file.oldText
@@ -196,10 +175,8 @@ package final class HoverDocumentationModel {
         return LSPHoverProvider(service: service)
     }
 
-    /// A `file://` URI under `onDiskRoot` when given, or a synthetic `atelier-blob://<oid>/<path>` URI otherwise
-    /// -- the shape ``HoverQuery/documentURI`` documents, so both an on-disk file and a git blob (or a missing
-    /// hash, which falls back to a fixed placeholder oid) can be told apart and cached by a language server.
-    /// Internal rather than private so a test can check the shape directly.
+    /// A `file://` URI under `onDiskRoot` when given, or a synthetic `atelier-blob://<oid>/<path>` URI otherwise,
+    /// the shape ``HoverQuery/documentURI`` documents.
     static func uri(path: String, blobID: String?, onDiskRoot: URL?) -> String {
         if let onDiskRoot {
             return onDiskRoot.appending(path: path).absoluteString

@@ -1,6 +1,4 @@
-/// The vocabulary and pure resolver behind a change badge's look: what colour it names, whether it is filled or
-/// stroked, and how selection and focus invert it -- kept independent of AppKit/SwiftUI so it is cheap to test and
-/// so the app tier (which owns the concrete `NSColor`/`Color` mapping) is the only place that needs to draw.
+/// The vocabulary and pure resolver behind a change badge's look; the app tier maps it to concrete colours.
 
 /// Which colour scheme a change badge's letter is drawn in.
 package enum BadgeScheme: String, CaseIterable, Identifiable, Codable {
@@ -13,8 +11,7 @@ package enum BadgeScheme: String, CaseIterable, Identifiable, Codable {
     package var id: String { rawValue }
 }
 
-/// The kind of change a badge names, independent of the app tier's own `ChangeGlyph`/`FileChangeSummary.Kind`
-/// vocabulary so this file has nothing AppKit- or SwiftUI-flavoured to import.
+/// The kind of change a badge names, independent of the app tier's `FileChangeSummary.Kind`.
 package enum BadgeChangeKind: Equatable, Sendable {
     case added
     case deleted
@@ -69,10 +66,9 @@ package struct BadgeStyle: Equatable, Sendable {
 }
 
 /// Resolves a change badge's look from the scheme, the kind of change, where it stands against the index, and the
-/// file list row's selection/focus -- one pure function so every combination is a table, not a view's `if`/`else`.
+/// row's selection and focus.
 package enum BadgeStyleResolver {
-    /// The colour a kind of change names under a scheme. Xcode's own scheme reads a modification and a rename both
-    /// as blue; everything else matches the app's classic mapping.
+    /// The colour `kind` names under `scheme`; ``BadgeScheme`` describes each mapping.
     package static func colorToken(for kind: BadgeChangeKind, scheme: BadgeScheme) -> BadgeColorToken {
         switch scheme {
             case .classic:
@@ -92,17 +88,8 @@ package enum BadgeStyleResolver {
         }
     }
 
-    /// The badge's look for one row.
-    ///
-    /// - A ``BadgeChangeState/staged`` change (or any change in a committed, ref-to-ref comparison) keeps the
-    ///   filled look: a coloured background, white letter.
-    /// - An ``BadgeChangeState/unstaged`` or ``BadgeChangeState/untracked`` change strokes instead: a transparent
-    ///   fill, a 1pt border and letter in the status colour.
-    /// - A row that is selected in a focused (key, active) list inverts whatever the state above produced: a white
-    ///   fill, no stroke, the letter in the status colour -- matching how a native list's own selection tints its
-    ///   content.
-    /// - A row selected in an unfocused list, or not selected at all, keeps the badge exactly as the state alone
-    ///   would draw it; only the row's own background changes.
+    /// The badge's look for one row: filled for a ``BadgeChangeState/staged`` change, stroked otherwise, and
+    /// inverted to a white fill while the row is selected in a focused list.
     package static func resolve(
         scheme: BadgeScheme, kind: BadgeChangeKind, state: BadgeChangeState, isSelected: Bool, isFocused: Bool
     ) -> BadgeStyle {
@@ -116,22 +103,13 @@ package enum BadgeStyleResolver {
     }
 }
 
-/// The precedence between a pinned light/dark appearance and one derived from the selected syntax theme's own
-/// background luminance -- pure, and framework-free, so it is testable with no `NSColor`/theme in sight; the app
-/// tier turns a theme's actual colour into the `themeIsDark` this takes.
+/// The precedence between a pinned light/dark appearance and one derived from the theme's background luminance.
 package enum AppearancePrecedence {
     /// A background whose relative luminance (0 black, 1 white) falls below this reads as a dark theme.
     package static let darkLuminanceThreshold: Double = 0.5
 
-    /// Resolves what ``AppearanceScheme`` the window should actually present.
-    ///
-    /// - An explicit ``AppearanceScheme/light`` or ``AppearanceScheme/dark`` pin always wins outright: it says
-    ///   how the chrome should look, and nothing about the theme overrides a direct instruction.
-    /// - ``AppearanceScheme/system`` with `matchesTheme` off (the conservative, opt-in default) or with no theme
-    ///   selected (`themeIsDark` nil, the system palette) stays `.system`, following the platform exactly as it
-    ///   always has.
-    /// - ``AppearanceScheme/system`` with `matchesTheme` on and a theme selected takes the theme's own
-    ///   luminance: a dark background pins dark chrome, a light one pins light chrome.
+    /// The appearance the window presents: an explicit light or dark pin wins, and `.system` follows the theme's
+    /// luminance only when `matchesTheme` is on and a theme is selected (`themeIsDark` non-nil).
     package static func resolve(
         explicit: AppearanceScheme, matchesTheme: Bool, themeIsDark: Bool?
     ) -> AppearanceScheme {

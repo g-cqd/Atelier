@@ -36,8 +36,7 @@ package final class RenderPipeline {
         case failed(String)
     }
 
-    /// The sources and the diff options a render happens against, bundled so the pipeline's private helpers stay
-    /// under the file's parameter-count limit.
+    /// The sources and diff options of one render, bundled to keep the helpers under the parameter-count limit.
     private struct RenderInputs {
         let left: ComparisonSource
         let right: ComparisonSource
@@ -65,8 +64,7 @@ package final class RenderPipeline {
     @ObservationIgnored private var options: DiffRenderer.Options
     @ObservationIgnored private var layout: (context: Int, isolates: Bool) = (3, false)
 
-    /// Granularity and heuristics of whatever is currently published, so the next `render` can tell whether they
-    /// still match and a pair kept from before was diffed the same way.
+    /// Granularity and heuristics of what is published; a render reuses published work only when they match.
     @ObservationIgnored private var publishedGranularity: IntralineGranularity?
     @ObservationIgnored private var publishedHeuristics: DiffHeuristics?
 
@@ -98,14 +96,9 @@ package final class RenderPipeline {
         error = nil
     }
 
-    /// Renders `target` afresh. Whatever is already prepared is published in this very update, before any task hop.
-    ///
-    /// A pair kept from the previously-published target — same path, same blobs on both sides, same granularity
-    /// and heuristics — is neither re-prepared nor re-rendered: the very `PreparedDiff` and `RenderedFile` it had
-    /// are reused, so the array published to the UI reuses the same object references and a view keyed on them
-    /// (a card's `RenderedDiff.id`, a pane's `RenderedText`) never rebuilds. This is what makes a reload or an
-    /// auto-refresh re-comparison leave untouched files exactly where they were, fold and scroll included: only
-    /// pairs whose identity actually changed go through prepare-and-render again.
+    /// Renders `target`. Whatever is already prepared is published in this very update, before any task hop. A pair
+    /// with the same path, blobs and diff options as a published one reuses its prepared and rendered diff, so the
+    /// views keyed on them never rebuild.
     package func render(
         _ target: Target, left: ComparisonSource, right: ComparisonSource, granularity: IntralineGranularity,
         heuristics: DiffHeuristics
@@ -270,12 +263,9 @@ package final class RenderPipeline {
     }
 }
 
-/// Reuse of the previously-published state across a `render`: what makes a reload or an auto-refresh
-/// re-comparison leave already-loaded files untouched. Kept out of the class body, which otherwise grows past the
-/// house style's length limit for one type.
+/// Reuse of the published state across renders, so a reload leaves unchanged files untouched.
 extension RenderPipeline {
-    /// A pair's rendering identity: the path and both blob ids. Two pairs with the same identity produce the same
-    /// diff, so whichever one is already prepared or rendered can stand in for the other without redoing any work.
+    /// A pair's rendering identity: its path and both blob ids. Pairs with the same identity produce the same diff.
     private struct PairIdentity: Hashable {
         let path: String
         let oldBlob: String?
@@ -291,31 +281,24 @@ extension RenderPipeline {
             newPresent = pair.new != nil
         }
 
-        /// False when a side that exists lacks a content hash -- `SourceLoader` does not hash working-tree files
-        /// past its size limit, so `nil` there means "unknown", not "same as last time". Such a pair can never
-        /// prove its content is unchanged, so its identity must never be reused, even against itself.
+        /// False when a present side has no blob id: `SourceLoader` skips hashing large working-tree files, so such
+        /// a pair can never prove its content unchanged.
         var isReusable: Bool {
             (!oldPresent || oldBlob != nil) && (!newPresent || newBlob != nil)
         }
     }
 
-    /// Whatever the currently-published cards or file can lend to the next render: prepared diffs and rendered
-    /// cards, keyed by identity, plus the currently rendered file when its target renders a single file.
+    /// What the published state lends the next render: prepared diffs and cards by identity, or the rendered file.
     private struct Reuse {
         var file: RenderedDiff?
-        /// Whether the previous `.file` target named the same path as the one about to render, whatever its blobs:
-        /// a reload of the selected file keeps the pane's scroll even though its content changed.
+        /// Whether the previous `.file` target had the same path, whatever its blobs, so a reload keeps the scroll.
         var sameFilePath = false
         var preparedByIdentity: [PairIdentity: PreparedDiff] = [:]
         var cardsByIdentity: [PairIdentity: RenderedFile] = [:]
     }
 
-    /// What the next render can reuse from the currently-published state: nothing when the granularity or the
-    /// heuristics differ, since only a like-for-like diff can stand in for another. A render still streaming in
-    /// (two reloads racing, one of both sides) is fine to reuse from too: `prepared` and `cards` only ever grow as
-    /// a prefix of their target's pairs, in order, so whatever prefix has actually landed is safe to lend as is,
-    /// and whatever has not is simply treated the same as a pair that is missing outright. Call before bumping
-    /// `generation` or clearing published state.
+    /// What the next render can reuse from the published state; nothing when the granularity or heuristics differ.
+    /// A render still streaming lends the prefix that landed. Call before clearing the published state.
     private func reuse(for target: Target, granularity: IntralineGranularity, heuristics: DiffHeuristics) -> Reuse {
         var reuse = Reuse()
         guard granularity == publishedGranularity, heuristics == publishedHeuristics, let previousTarget = self.target
@@ -330,10 +313,8 @@ extension RenderPipeline {
                 reuse.preparedByIdentity[identity] = oldPrepared
                 if case .file(let newPair) = target, PairIdentity(newPair) == identity { reuse.file = file }
             case .cards:
-                // A reused card keeps whatever `firstFileIndex` it was rendered with (baked into its rows, and
-                // relied on by hover to map a hit back to its file), so only a pair that stayed at the very same
-                // position, not merely somewhere in the new list, can be reused as is. A pair that moved is
-                // rendered afresh, at its new position, like a genuinely new one.
+                // A card's rows bake in its `firstFileIndex`, which hover maps hits back by, so only a pair that
+                // kept its position is reused.
                 guard case .cards(let newPairs) = target else { return reuse }
                 let landed = min(oldPairs.count, prepared.count, cards.count)
                 for index in 0 ..< landed where index < newPairs.count {
@@ -346,12 +327,8 @@ extension RenderPipeline {
         return reuse
     }
 
-    /// Gap expansions to carry into this render: only those whose file is being reused as is, since a reused
-    /// `RenderedDiff`/`RenderedFile` already has those rows baked in at the position its `GapKey.fileIndex` names.
-    /// A freshly rendered file starts collapsed regardless of what was expanded before, and an expansion kept for
-    /// a `fileIndex` no reused pair claims this render would otherwise dangle -- ready to misapply to whatever
-    /// ends up at that position next, or make ``resetGaps()`` a no-op for content that visually still shows
-    /// revealed rows nothing here still tracks.
+    /// The gap expansions to carry into this render: only those of files reused as is, whose rows already have them
+    /// baked in. A freshly rendered file starts with every gap collapsed.
     private func reusableGapExpansions(_ current: [GapKey: GapExpansion], target: Target, reuse: Reuse)
         -> [GapKey: GapExpansion]
     {
@@ -365,8 +342,8 @@ extension RenderPipeline {
         }
     }
 
-    /// The original, unconditional render: every pair of `target` prepared and rendered afresh, streaming the
-    /// first pair in as soon as it lands and the rest in one batch behind it.
+    /// Prepares and renders every pair of `target`, publishing the first as soon as it lands and the rest in one
+    /// batch behind it.
     private func renderFresh(_ target: Target, inputs: RenderInputs, keepingScroll: Bool, generation: Int) {
         let pairs = target.pairs
         if let head = pairs.first,
@@ -420,10 +397,8 @@ extension RenderPipeline {
         }
     }
 
-    /// Renders a card list against what the previously-published cards can lend it: pairs whose identity is
-    /// unchanged are neither prepared nor rendered again, only the rest go through ``DiffPreparer`` and
-    /// ``DiffRenderer``. Published once, in the target's order, whether that takes one main-actor turn (every pair
-    /// reused) or a task hop (some pairs need work).
+    /// Renders a card list, preparing and rendering only the pairs `reuse` cannot lend. Publishes once, in the
+    /// target's order.
     private func renderCardsDifferentially(
         _ pairs: [FilePair], reuse: Reuse, inputs: RenderInputs, generation: Int
     ) {
@@ -439,10 +414,7 @@ extension RenderPipeline {
         }
 
         let missingPairs = missingIndices.map { pairs[$0] }
-        // Rendered one by one, each at its own position in `pairs`: a card's rows bake in the `firstFileIndex`
-        // hover keys its lookups by, and a missing pair does not sit in one contiguous run within `pairs` (the
-        // reused ones around it keep their own slots), so the block-plus-offset shared with `renderFresh` does
-        // not apply here.
+        // Each missing card renders at its own index: missing pairs are not contiguous, so no block offset applies.
         let options = self.options
         let layout = renderLayout
         task = taskProvider.task {

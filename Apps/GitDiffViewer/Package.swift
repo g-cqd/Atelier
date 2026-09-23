@@ -27,7 +27,7 @@ let package = Package(
         .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main")
     ],
     targets: [
-        // Re-exports the core diff, lexers, language vocabulary and swift-syntax provider under the old name.
+        // Re-exports the core diff, lexers and language vocabulary under the app's own module name.
         .target(
             name: "DiffCore",
             dependencies: [

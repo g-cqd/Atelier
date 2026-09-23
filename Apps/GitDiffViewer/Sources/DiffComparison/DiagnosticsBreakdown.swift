@@ -1,8 +1,7 @@
 package import AtelierDiagnostics
 
-/// The lines a status bar or toolbar breakdown shows for the current diagnostics run: one per tool that reported
-/// findings, then one for each tool diagnostics tried but could not get a clean answer from. Pure so the status
-/// bar's `.help()` text can be tested without a view.
+/// The lines a diagnostics breakdown shows: one per tool that reported findings, then one per tool that was
+/// missing, failed or skipped.
 package enum DiagnosticsBreakdown {
     package static func lines(summary: DiagnosticsSummary, runStates: [DiagnosticTool: DiagnosticsEngine.RunStatus])
         -> [String]

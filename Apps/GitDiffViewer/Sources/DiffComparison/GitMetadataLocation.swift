@@ -1,39 +1,24 @@
 import Foundation
 
-/// Where a repository's git metadata actually lives, resolved from its root's `.git` entry: an ordinary
-/// repository's `.git` is a directory holding everything (`HEAD`, `refs`, `packed-refs`, objects); a linked
-/// worktree's `.git` is instead a *file* naming its own private git dir elsewhere (`gitdir: <path>`) -- that
-/// private dir holds the worktree's own `HEAD` and index, and in turn names the common dir every worktree of the
-/// same repository shares (`commondir: <path>`, usually relative) for `refs`, `packed-refs` and objects.
-///
-/// A watcher that only ever looks under `<root>/.git` never sees a linked worktree's real `HEAD` or refs moving:
-/// both live outside `root` entirely.
+/// Where a repository's git metadata lives. A linked worktree's `.git` is a file pointing (`gitdir:`) to a private
+/// git dir holding its `HEAD`, which in turn points (`commondir`) to the refs every worktree shares.
 package struct GitMetadataLocation: Equatable, Sendable {
-    /// This worktree's own git dir: where its private `HEAD` lives. The repository root's `.git` directory itself
-    /// for a plain (non-worktree) repository, so `gitDir == commonDir` there.
+    /// This worktree's own git dir, where its `HEAD` lives; in a plain repository, `<root>/.git` and equal to
+    /// ``commonDir``.
     package let gitDir: String
     /// Where the refs every worktree of the same repository shares live.
     package let commonDir: String
 }
 
 extension GitMetadataLocation {
-    /// Resolves `root`'s actual git metadata locations by reading its `.git` entry and, for a linked worktree,
-    /// the `commondir` file inside the git dir it points to. Pure and disk-access-free -- `read` is the only seam
-    /// touching storage, so a test substitutes an in-memory map instead of real files -- and every returned path
-    /// is absolute and slash-normalized (no trailing `/`), matching ``RepositoryFreshness``'s own path convention.
-    ///
-    /// Falls back to treating `.git` as an ordinary directory (`gitDir == commonDir == "<root>/.git"`) whenever
-    /// `.git` cannot be read as a worktree pointer file: it truly is a directory, it does not exist yet, or its
-    /// first line is not a `gitdir:` pointer. The same fallback applies one level in when a resolved worktree git
-    /// dir has no readable `commondir` file, so a repository layout this cannot make sense of never loses its
-    /// working-tree watch entirely, only the (best-effort) worktree-specific correction.
+    /// Resolves `root`'s metadata from its `.git` entry and, for a linked worktree, the `commondir` file of the git
+    /// dir it points to, touching storage only through `read`. A `.git` that is no `gitdir:` pointer resolves both
+    /// locations to `<root>/.git`, and a worktree without a readable `commondir` shares its own git dir.
     ///
     /// - Parameters:
-    ///   - root: The repository's working-tree root, absolute, whose `.git` entry is resolved.
-    ///   - read: Returns a file's full text contents, or nil when it cannot be read (missing, a directory,
-    ///     unreadable) — the same seam ``RepositoryFreshness``'s production resolver backs with
-    ///     `String(contentsOfFile:)`.
-    /// - Returns: Where this repository's metadata actually lives, per the fallbacks described above.
+    ///   - root: The repository's absolute working-tree root.
+    ///   - read: A file's full text, or nil when it is missing, a directory or unreadable.
+    /// - Returns: The resolved locations, as absolute paths without a trailing `/`.
     package static func resolve(root: String, read: (String) -> String?) -> GitMetadataLocation {
         let dotGitPath = Self.normalized(root + "/.git")
         guard let pointer = Self.gitdirPointer(in: read(dotGitPath)) else {
@@ -49,9 +34,7 @@ extension GitMetadataLocation {
         return GitMetadataLocation(gitDir: gitDir, commonDir: commonDir)
     }
 
-    /// The path after `gitdir:` on the first line that starts with it, trimmed -- or nil when `contents` is nil
-    /// (unreadable, or `.git` is a plain directory) or has no such line (an unrecognized `.git` file, treated the
-    /// same as a plain directory rather than guessed at).
+    /// The trimmed path after `gitdir:` on the first line starting with it, or nil when there is none.
     private static func gitdirPointer(in contents: String?) -> String? {
         guard let contents else { return nil }
         for line in contents.split(separator: "\n", omittingEmptySubsequences: true) {
@@ -70,9 +53,7 @@ extension GitMetadataLocation {
             : Self.normalized(base + "/" + path)
     }
 
-    /// Collapses `.`/`..` components and drops a trailing slash, the way ``RepositoryFreshness``'s own
-    /// `normalizedPath(_:)` does for every other path it compares — every path this resolves is compared against
-    /// (or used to build children of) paths normalized that same way.
+    /// Collapses `.` and `..` components and drops a trailing slash, matching ``RepositoryFreshness``'s paths.
     private static func normalized(_ path: String) -> String {
         var normalized = URL(filePath: path).standardizedFileURL.path(percentEncoded: false)
         if normalized.count > 1, normalized.hasSuffix("/") {
