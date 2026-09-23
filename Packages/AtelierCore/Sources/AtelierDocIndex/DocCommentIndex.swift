@@ -1,14 +1,21 @@
 import SwiftParser
 import SwiftSyntax
 
+import func AemiRuntime.mapConcurrently
+import class Foundation.ProcessInfo
+
 /// One source file to index, keyed by a stable URI so re-indexing can skip unchanged content.
 public struct DocIndexFile: Sendable, Hashable {
     public let uri: String
     public let content: String
+    /// The git blob id of `content`, when known: a file indexed at the same blob id keeps its entries without its
+    /// content being hashed or parsed again. Nil never matches, so the content is hashed instead.
+    public let blobID: String?
 
-    public init(uri: String, content: String) {
+    public init(uri: String, content: String, blobID: String? = nil) {
         self.uri = uri
         self.content = content
+        self.blobID = blobID
     }
 }
 
@@ -24,43 +31,110 @@ public struct DocEntry: Sendable, Equatable {
 }
 
 /// Documentation extracted from Swift doc comments, kept current by re-indexing only the files whose content
-/// changed since the last `update`.
+/// changed. Files parse side by side, off the actor, so lookups carry on while an update runs, and a lookup reads
+/// one name's entries rather than every file's.
 public actor DocCommentIndex {
     private struct FileState {
-        let contentHash: Int
+        /// The blob id the file was indexed at, when the caller gave one.
+        let blobID: String?
+        /// The content's hash, when the file was indexed without a blob id.
+        let contentHash: Int?
         let entries: [DocEntry]
     }
 
     private var files: [String: FileState] = [:]
+    /// Every file's entries by name, then by URI.
+    private var byName: [String: [String: [DocEntry]]] = [:]
+    /// Turns one file's content into its entries.
+    private nonisolated let extractor: @Sendable (_ uri: String, _ content: String) -> [DocEntry]
 
-    public init() {}
+    public init() {
+        self.init(extractor: Self.extractEntries(uri:content:))
+    }
 
-    /// Replaces the corpus. Files whose content hash is unchanged since the previous `update` are not re-parsed.
-    public func update(files: [DocIndexFile]) {
-        var next: [String: FileState] = [:]
-        next.reserveCapacity(files.count)
+    /// An index that extracts entries with `extractor`, such as a spy counting the files parsed.
+    public init(extractor: @escaping @Sendable (_ uri: String, _ content: String) -> [DocEntry]) {
+        self.extractor = extractor
+    }
+
+    /// How many files the index holds.
+    public var fileCount: Int { files.count }
+
+    /// Replaces the corpus with `files`: every other file is dropped, and a file whose blob id or content is
+    /// unchanged keeps its entries.
+    /// - Throws: `CancellationError` when the calling task is cancelled; the files dropped by then stay dropped.
+    public func update(files: [DocIndexFile]) async throws {
+        try keepOnly(Set(files.map(\.uri)))
+        try await upsert(files)
+    }
+
+    /// Adds `files`, or replaces the ones already indexed, keeping every other file. A file indexed at the same blob
+    /// id, or without one and with the same content, keeps its entries; the others are parsed side by side, off the
+    /// actor.
+    /// - Throws: `CancellationError` when the calling task is cancelled, parsing or not. Nothing lands then, so a
+    ///   superseded update never overwrites a newer one.
+    public func upsert(_ files: [DocIndexFile]) async throws {
+        try Task.checkCancellation()
+        var changed: [(file: DocIndexFile, contentHash: Int?)] = []
         for file in files {
-            let hash = Self.hash(of: file.content)
-            if let existing = self.files[file.uri], existing.contentHash == hash {
-                next[file.uri] = existing
+            let indexed = self.files[file.uri]
+            if let blobID = file.blobID {
+                if indexed?.blobID != blobID { changed.append((file, nil)) }
             } else {
-                next[file.uri] = FileState(
-                    contentHash: hash, entries: Self.extractEntries(uri: file.uri, content: file.content))
+                let hash = Self.hash(of: file.content)
+                if indexed?.contentHash != hash { changed.append((file, hash)) }
             }
         }
-        self.files = next
+        guard !changed.isEmpty else { return }
+        let extractor = extractor
+        let limit = ProcessInfo.processInfo.activeProcessorCount
+        let parsed = try await mapConcurrently(changed, limit: limit) { change in
+            try Task.checkCancellation()
+            return extractor(change.file.uri, change.file.content)
+        }
+        // The last check before anything lands, with no suspension until the files are in.
+        try Task.checkCancellation()
+        for (change, entries) in zip(changed, parsed) {
+            replace(
+                change.file.uri,
+                with: FileState(blobID: change.file.blobID, contentHash: change.contentHash, entries: entries))
+        }
+    }
+
+    /// Keeps only the files at `uris`, dropping every other file and its entries.
+    /// - Throws: `CancellationError` when the calling task is cancelled, and then drops nothing.
+    public func keepOnly(_ uris: Set<String>) throws {
+        try Task.checkCancellation()
+        for uri in files.keys.filter({ !uris.contains($0) }) {
+            replace(uri, with: nil)
+        }
+    }
+
+    /// Those of `blobIDs`, URI to blob id, that are indexed at that blob id, so a caller can skip reading them.
+    public func urisIndexed(atBlobIDs blobIDs: [String: String]) -> Set<String> {
+        Set(blobIDs.compactMap { uri, blobID in files[uri]?.blobID == blobID ? uri : nil })
+    }
+
+    /// Puts `state` in place of the file at `uri`, or drops the file when `state` is nil, with its entries by name.
+    private func replace(_ uri: String, with state: FileState?) {
+        if let indexed = files[uri] {
+            for name in Set(indexed.entries.map(\.name)) {
+                byName[name]?[uri] = nil
+                if byName[name]?.isEmpty == true { byName[name] = nil }
+            }
+        }
+        files[uri] = state
+        guard let state else { return }
+        for (name, entries) in Dictionary(grouping: state.entries, by: \.name) {
+            byName[name, default: [:]][uri] = entries
+        }
     }
 
     /// Entries named exactly `name`, those of `preferringURI` first, the rest in a stable order. Other URIs' entries
     /// are deduplicated (see `collapsingHistoricalDuplicates`); `preferringURI`'s own are kept as they are, since a
     /// hover on an old blob asks about the revision it names.
     public func documentation(forIdentifier name: String, preferringURI uri: String?) -> [DocEntry] {
-        var matches: [DocEntry] = []
-        for state in files.values {
-            for entry in state.entries where entry.name == name {
-                matches.append(entry)
-            }
-        }
+        let matches = matches(named: name)
         let sameURI = uri.map { queryURI in matches.filter { $0.uri == queryURI } } ?? []
         let otherURIs = uri == nil ? matches : matches.filter { $0.uri != uri }
         var combined = sameURI + Self.collapsingHistoricalDuplicates(otherURIs)
@@ -75,6 +149,11 @@ public actor DocCommentIndex {
             return lhs.signature < rhs.signature
         }
         return combined
+    }
+
+    /// Every entry named exactly `name`, from its bucket alone.
+    func matches(named name: String) -> [DocEntry] {
+        byName[name]?.values.flatMap(\.self) ?? []
     }
 
     /// Drops an `atelier-blob://` entry, which is history, when a `file://` entry has the same underlying path, then
@@ -144,7 +223,8 @@ public actor DocCommentIndex {
         return hasher.finalize()
     }
 
-    private static func extractEntries(uri: String, content: String) -> [DocEntry] {
+    /// The documented declarations of one Swift file, parsed with swift-syntax.
+    public static func extractEntries(uri: String, content: String) -> [DocEntry] {
         let tree = Parser.parse(source: content)
         let visitor = DocCommentVisitor(uri: uri)
         visitor.walk(tree)

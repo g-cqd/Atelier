@@ -101,13 +101,14 @@ let package = Package(
             swiftSettings: strict
         ),
         // Documentation from source alone: doc comments indexed over swift-syntax trees, and the identifier under a
-        // position, for hover content that needs no build context.
+        // position, for hover content that needs no build context. Files parse side by side through AemiRuntime.
         .target(
             name: "AtelierDocIndex",
             dependencies: [
                 "AtelierSyntaxModel",
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
-                .product(name: "SwiftParser", package: "swift-syntax")
+                .product(name: "SwiftParser", package: "swift-syntax"),
+                .product(name: "AemiRuntime", package: "aemi")
             ],
             swiftSettings: strict
         ),
