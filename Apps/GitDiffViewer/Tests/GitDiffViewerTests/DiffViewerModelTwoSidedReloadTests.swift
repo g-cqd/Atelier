@@ -79,9 +79,10 @@ struct DiffViewerModelTwoSidedReloadTests {
         let root = ModelTestHarness.rightURL
         let head = ComparisonSource.gitRef(repository: root, ref: "HEAD")
         let repository = RepositoryInfo(root: root, branches: ["main"], tags: [], commits: [])
+        harness.reader.commits = ["HEAD": "c1"]
         harness.reader.entries[head] = [harness.entry("a.swift", "1"), harness.entry("b.swift", "2")]
         harness.reader.entries[.directory(root)] = [harness.entry("a.swift", "3"), harness.entry("b.swift", "4")]
-        sut.attachFreshness()
+        sut.attachFreshness(clock: harness.clock, makeWatcher: WatcherFactory().makeWatcher)
         sut.left.load(head, repository: repository)
         sut.right.load(.directory(root), repository: repository)
         try await harness.taskProvider.waitForAllTasks()
@@ -89,7 +90,11 @@ struct DiffViewerModelTwoSidedReloadTests {
         let leftLandings = landings(of: sut.left)
         let rightListing = harness.holdListing(of: root)
 
-        // A ref moved while the left side is parked on HEAD, so both sides reload.
+        // A checkout rewrites the working tree, whose reload is held, and moves HEAD to another commit: the refs
+        // change reloads the HEAD side, which lands first.
+        sut.freshness?.onTreeChanged?()
+        harness.reader.commits = ["HEAD": "c2"]
+        harness.reader.entries[head] = [harness.entry("a.swift", "5"), harness.entry("b.swift", "2")]
         sut.freshness?.onRefsChanged?()
         _ = try await leftLandings.next()
 
@@ -100,5 +105,8 @@ struct DiffViewerModelTwoSidedReloadTests {
         rightListing.send(())
         try await harness.taskProvider.waitForAllTasks()
         #expect(sut.detailState == .cards)
+        sut.freshness?.teardown()
+        try await harness.taskProvider.waitForAllTasks()
+        try await harness.taskProvider.waitForObservationsToFinish()
     }
 }
