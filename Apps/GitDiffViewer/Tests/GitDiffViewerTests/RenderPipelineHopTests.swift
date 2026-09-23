@@ -58,10 +58,11 @@ struct PipelineHarness {
         return (rendered.new ?? rendered.unified)?.rows.first?.gap
     }
 
-    /// Drags the leading gap of the card at `index` to reveal `rows` rows above its hunk.
+    /// Drags the leading gap of the card at `index` to reveal `rows` more rows above its hunk: one gap step.
     func revealAbove(_ rows: Int, inCard index: Int) throws {
         let marker = try #require(leadingGap(ofCard: index))
-        sut.adjustGap(marker, from: sut.expansion(of: marker.key), byLines: -rows)
+        let current = sut.expansion(of: marker.key)
+        sut.setExpansion(GapExpansion(below: current.below, above: current.above + rows), for: marker.key)
     }
 }
 

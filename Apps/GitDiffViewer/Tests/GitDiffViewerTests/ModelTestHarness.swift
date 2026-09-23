@@ -11,12 +11,13 @@ import Testing
 @testable import DiffTextKit
 
 /// The model under test with its doubles: an in-memory source reader, a task provider spy the tests settle on,
-/// and a hand-advanced clock. Shared by every model suite.
+/// a hand-advanced uptime and a test clock. Shared by every model suite.
 @MainActor
 struct ModelTestHarness {
     let taskProvider = TaskProviderSpy.tolerant()
     let reader = FakeSourceReader()
     let uptime = FakeUptime()
+    let clock = TestClock()
     static let leftURL = URL(filePath: "/left", directoryHint: .isDirectory)
     static let rightURL = URL(filePath: "/right", directoryHint: .isDirectory)
 
@@ -30,7 +31,7 @@ struct ModelTestHarness {
         defaultsCleanup.register(suite)
         return DiffViewerModel(
             settings: ViewerSettings(defaults: defaults), reader: reader, taskProvider: taskProvider,
-            uptime: uptime.provider)
+            uptime: uptime.provider, clock: clock)
     }
 
     func entry(_ path: String, _ blob: String) -> SourceEntry {
@@ -42,6 +43,23 @@ struct ModelTestHarness {
         sut.left.load(.directory(Self.leftURL), repository: nil)
         sut.right.load(.directory(Self.rightURL), repository: nil)
         try await taskProvider.waitForAllTasks()
+    }
+
+    /// Drags `handle` of `marker` by `rows` rows along its direction and lets go, as the gutter reports a drag.
+    func drag(_ sut: DiffViewerModel, _ handle: GapHandle, of marker: GapMarker, rows: Int) {
+        sut.handleGapDrag(.began(marker, handle, lineHeight: 10))
+        sut.handleGapDrag(.moved(offset: CGFloat(rows) * 10 * handle.revealDirection, edgeOvershoot: 0))
+        sut.handleGapDrag(.ended)
+    }
+
+    /// Thirty lines on each side of `a.swift`, blob 1 against blob 2, which differ at line 15 alone: a file with one
+    /// hunk between a leading and a trailing gap.
+    func serveOneChangeInTheMiddle() {
+        let lines = (1 ... 30).map { "line \($0)" }
+        var changed = lines
+        changed[14] = "line fifteen"
+        reader.blobContents["1"] = lines.joined(separator: "\n") + "\n"
+        reader.blobContents["2"] = changed.joined(separator: "\n") + "\n"
     }
 
     /// Holds every listing of the folder at `url` until the returned gate gets one element per listing. Keyed the
