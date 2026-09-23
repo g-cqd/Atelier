@@ -4,6 +4,9 @@ public import KittyTerminal
 
 /// Async stream of input events from a terminal connection.
 public final class InputSource: Sendable {
+    /// The most bytes one read takes from the terminal.
+    static let readSize = 4096
+
     private let connection: any TerminalConnection
     private let _events: AsyncStream<InputEvent>
     private let continuation: AsyncStream<InputEvent>.Continuation
@@ -28,8 +31,7 @@ public final class InputSource: Sendable {
         let task = Task { [connection, continuation] in
             var router = SequenceRouter()
             var routedEvents: [InputEvent] = []
-            let bufferSize = 4096
-            let buffer = UnsafeMutableRawBufferPointer.allocate(byteCount: bufferSize, alignment: 1)
+            let buffer = UnsafeMutableRawBufferPointer.allocate(byteCount: Self.readSize, alignment: 1)
             defer {
                 buffer.deallocate()
                 continuation.finish()
@@ -42,6 +44,10 @@ public final class InputSource: Sendable {
                     let raw = UnsafeRawBufferPointer(start: buffer.baseAddress, count: count)
                     let span: Span<UInt8> = raw.bytes._unsafeView(as: UInt8.self)
                     router.feedAll(span, into: &routedEvents)
+                    // A full read may have cut a sequence short; any other ends where the terminal's writes did.
+                    if count < Self.readSize {
+                        router.flushPendingEscape(into: &routedEvents)
+                    }
                     for event in routedEvents {
                         if Task.isCancelled { return }
                         continuation.yield(event)
