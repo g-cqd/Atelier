@@ -205,6 +205,40 @@ struct GitArchiveTests {
         #expect(files[path] == "let deep = true\n")
     }
 
+    @Test
+    func `two paths that name one file on a case-insensitive volume are both left out`() async throws {
+        let lab = try ArchiveLab()
+        defer { lab.cleanup() }
+        let blob = try lab.git("hash-object", "-w", "--stdin", input: Data("let a = 1\n".utf8))
+        let listing = ["A.swift", "a.swift", "B.swift"].map { "100644 blob \(blob)\t\($0)\n" }.joined()
+        let tree = try lab.git("mktree", input: Data(listing.utf8))
+        let client = lab.client()
+
+        let files = try await client.withExportedTree(tree, including: Self.swiftAndYAML) { folder in
+            try ArchiveLab.files(under: folder)
+        }
+
+        #expect(files.keys.sorted() == ["B.swift"])
+    }
+
+    @Test
+    func `a path that is not UTF-8 is left out and the rest still exports`() async throws {
+        let lab = try ArchiveLab()
+        defer { lab.cleanup() }
+        let blob = try lab.git("hash-object", "-w", "--stdin", input: Data("let a = 1\n".utf8))
+        var listing = Data("100644 blob \(blob)\tcaf".utf8)
+        listing.append(0xE9)
+        listing.append(Data(".swift\n100644 blob \(blob)\tB.swift\n".utf8))
+        let tree = try lab.git("mktree", input: listing)
+        let client = lab.client()
+
+        let files = try await client.withExportedTree(tree, including: Self.swiftAndYAML) { folder in
+            try ArchiveLab.files(under: folder)
+        }
+
+        #expect(files.keys.sorted() == ["B.swift"])
+    }
+
     // MARK: - The tar reader
 
     @Test
