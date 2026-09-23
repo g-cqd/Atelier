@@ -126,6 +126,8 @@ public actor ToolDiscovery {
 
     // MARK: - xcrun
 
+    /// `xcrun`'s answer for `name`, cached; a probe cancelled with its lookup answers nil without being cached, so
+    /// the next lookup asks again instead of reporting the tool missing for the rest of the session.
     private func xcrunFind(_ name: String) async -> URL? {
         if let cached = xcrunCache[name] { return cached }
         let spec = ProcessSpec(
@@ -140,6 +142,8 @@ public actor ToolDiscovery {
             } else {
                 found = nil
             }
+        } catch is CancellationError {
+            return nil
         } catch {
             found = nil
         }
@@ -222,6 +226,8 @@ public actor ToolDiscovery {
 
     // MARK: - Version probe
 
+    /// The first line `tool --version` prints, cached while the executable's modification date holds; a probe
+    /// cancelled with its lookup is not cached.
     private func probeVersion(tool: DiagnosticTool, url: URL) async -> String? {
         let mtime = modificationDate(ofItemAt: url.path)
         let key = url.path
@@ -234,6 +240,8 @@ public actor ToolDiscovery {
             let firstLine = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             version = (firstLine?.isEmpty ?? true) ? nil : firstLine
+        } catch is CancellationError {
+            return nil
         } catch {
             version = nil
         }
