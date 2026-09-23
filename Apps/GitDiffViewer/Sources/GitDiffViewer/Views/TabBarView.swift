@@ -8,19 +8,31 @@ import SwiftUI
 
 /// ``TabBarLayout/gap``, converted once to the `CGFloat` SwiftUI's layout APIs take.
 private let tabBarGap = CGFloat(TabBarLayout.gap)
+/// A tab's inset above and below its content and before its leading slot; one value on all three centres the slot
+/// on the capsule's leading curve.
+private let tabInset: CGFloat = 5
+/// A tab's inset after its name or pin, wider than ``tabInset`` so text keeps clear of the capsule's rounded end.
+private let tabTrailingInset: CGFloat = 10
+/// The close button's hover disc, a point inside the slot on every side, so it is concentric with the capsule's
+/// leading curve.
+private let closeDiscDiameter = ChangeGlyph.size - 2
+/// The close button's cross, in a fixed point size so it centres in its fixed-size disc.
+private let closeGlyphSize: CGFloat = 8
+/// The diff badge inside a tab: smaller than the explorer's and centred in the slot, so it keeps as much room from
+/// the capsule's leading end as from its top and bottom.
+private let tabBadgeSize: CGFloat = 14
+/// How the tab and its close button answer the pointer's arrival and departure.
+private let hoverAnimation = Animation.easeInOut(duration: 0.12)
 
-/// Editor-style tabs over the detail area. A temporary tab shows its name in italics, like an editor preview.
-///
-/// Every tab draws its own Liquid Glass shape, but all of them share the one ``GlassEffectContainer`` the system
-/// needs to render a row of glass efficiently: this bar used to carry its own `.ultraThinMaterial` backdrop *and*
-/// let every tab draw a second, tinted fill on top of it -- one more live blur than a scrolling row of tabs should
-/// ever need. The bar itself no longer draws a background at all; ``DiffDetailView`` already places a `Divider()`
-/// right below it, which is all the visual closure the bottom edge needs.
+/// Editor-style tabs over the detail area, each a Liquid Glass capsule. The bar draws no background:
+/// ``DiffDetailView`` hosts it as a safe-area bar, so a scroll view running beneath it supplies the system's scroll
+/// edge effect.
 struct TabBarView: View {
     let model: DiffViewerModel
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
+            // One container for the whole row: several glass shapes render best inside a shared container.
             GlassEffectContainer(spacing: tabBarGap) {
                 HStack(spacing: tabBarGap) {
                     ForEach(model.tabs.tabs) { tab in
@@ -52,6 +64,7 @@ struct TabBarView: View {
     }
 }
 
+/// One tab: its leading slot, its name, and a pin when it is kept open. ``TabAppearance`` decides how it draws.
 private struct TabItem: View {
     let tab: DiffTab
     let isActive: Bool
@@ -66,54 +79,75 @@ private struct TabItem: View {
     let close: () -> Void
 
     @State private var isHovering = false
+    /// Whether the pointer is over the close button. Cleared when the pointer leaves the tab: the button leaves with
+    /// it and may never report its own exit.
+    @State private var isHoveringClose = false
 
     var body: some View {
+        let appearance = TabAppearance.resolve(
+            isPinned: tab.isPinned, isActive: isActive, isHovering: isHovering, isHoveringClose: isHoveringClose)
         HStack(spacing: 5) {
-            slot
+            slot(closeDiscOpacity: appearance.closeDiscOpacity)
                 .frame(width: ChangeGlyph.size, height: ChangeGlyph.size)
                 .contentTransition(.symbolEffect)
             Text(URL(filePath: tab.path).lastPathComponent)
-                .italic(!tab.isPinned)
+                .italic(appearance.isItalic)
                 .lineLimit(1)
+            if appearance.showsPin {
+                Image(systemName: "pin.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help("Kept open")
+                    .accessibilityLabel("Kept open")
+            }
         }
         .font(.callout)
-        .foregroundStyle(isActive ? .primary : .secondary)
-        .padding(.leading, 6)
-        .padding(.trailing, 10)
-        .padding(.vertical, 5)
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: tabBarGap))
-        .overlay(
-            RoundedRectangle(cornerRadius: tabBarGap)
-                .strokeBorder(Color.primary.opacity(isActive ? 0.28 : 0.1))
-        )
+        .foregroundStyle(appearance.usesPrimaryInk ? .primary : .secondary)
+        .padding(.leading, tabInset)
+        .padding(.trailing, tabTrailingInset)
+        .padding(.vertical, tabInset)
+        // Wash and outline precede the glass, which captures the content before it and draws over anything after.
+        // A wash rather than a glass tint, since a tint marks prominence, not hover.
+        .background(Capsule().fill(Color.primary.opacity(appearance.washOpacity)))
+        .overlay(Capsule().strokeBorder(Color.primary.opacity(appearance.outlineOpacity)))
+        .glassEffect(.regular.interactive(), in: .capsule)
         .shadow(color: .black.opacity(0.12), radius: 1.5, y: 1)
-        .contentShape(Rectangle())
+        .contentShape(Capsule())
         .onTapGesture(perform: activate)
         .simultaneousGesture(TapGesture(count: 2).onEnded(pin))
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.12)) { isHovering = hovering }
+            withAnimation(hoverAnimation) {
+                isHovering = hovering
+                if !hovering { isHoveringClose = false }
+            }
         }
         .help(tab.path + (tab.isPinned ? "" : " (double-click to keep)"))
     }
 
-    /// The tab's fixed-size leading visual: the diff badge, its neutral icon fallback, or -- on hover -- the close
-    /// button, always in the same place so nothing else in the tab has to shift to make room for it. See
-    /// ``TabSlotContent`` for the pure decision behind which one this is.
+    /// The tab's fixed-size leading visual, always in the same place so nothing else in the tab shifts: see
+    /// ``TabSlotContent`` for which one shows. The close button takes the whole slot as its hit area.
     @ViewBuilder
-    private var slot: some View {
+    private func slot(closeDiscOpacity: Double) -> some View {
         switch TabSlotContent.resolve(isHovering: isHovering, hasBadge: glyph != nil) {
             case .close:
                 Button(action: close) {
                     Image(systemName: "xmark")
-                        .font(.caption2.bold())
+                        .font(.system(size: closeGlyphSize, weight: .bold))
+                        .frame(width: closeDiscDiameter, height: closeDiscDiameter, alignment: .center)
+                        .background(Circle().fill(Color.primary.opacity(closeDiscOpacity)))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .onHover { hovering in
+                    withAnimation(hoverAnimation) { isHoveringClose = hovering }
+                }
                 .transition(.opacity.combined(with: .scale(scale: 0.6)))
             case .badge:
                 if let glyph {
+                    // Scaled, since the badge lays itself out at `ChangeGlyph.size`, which the explorer keeps.
                     ChangeGlyphBadge(glyph: glyph, scheme: badgeScheme, state: badgeState)
+                        .scaleEffect(tabBadgeSize / ChangeGlyph.size)
                         .transition(.opacity.combined(with: .scale(scale: 0.6)))
                 }
             case .icon:
