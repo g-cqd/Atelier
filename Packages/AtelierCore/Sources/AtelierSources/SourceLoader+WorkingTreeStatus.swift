@@ -2,16 +2,18 @@ public import AtelierGit
 import Foundation
 
 extension SourceLoader {
-    /// Git's status of a folder inside a repository, through the hardened ``GitClient/status()``: every path
-    /// relative to the folder, every entry outside it left out. Nil for any other source, and for a folder outside
-    /// every repository.
+    /// Git's status of a folder inside a repository, through the hardened ``GitClient/status(includingIgnored:)``:
+    /// every path relative to the folder, every entry outside it left out. Nil for any other source, and for a
+    /// folder outside every repository. Ignored files are left out: a status is read for badges, which draw none,
+    /// and listing them makes git walk every ignored directory.
     /// - Throws: ``GitError`` when git fails; `CancellationError` when the task is cancelled, which terminates git.
     public func workingTreeStatus(of source: ComparisonSource) async throws -> [GitStatusEntry]? {
         guard case .directory(let folder) = source,
             let root = await GitClient.repositoryRoot(containing: folder, runner: runner),
             let prefix = Self.prefix(of: folder, under: root)
         else { return nil }
-        return Self.entries(try await GitClient(repository: root, runner: runner).status().entries, under: prefix)
+        let status = try await GitClient(repository: root, runner: runner).status(includingIgnored: false)
+        return Self.entries(status.entries, under: prefix)
     }
 
     /// The paths among `paths`, relative to the folder `source` names, that git ignores, through one

@@ -102,16 +102,18 @@ public struct GitClient: Sendable {
             isSupported: isSupported)
     }
 
-    /// The branch and every path that is not clean, ignored files included, untracked files listed one by one.
+    /// The branch and every path that is not clean, untracked files listed one by one, and ignored files unless
+    /// `includingIgnored` is false. Leaving them out spares git its walk through every ignored directory, the
+    /// costliest part of the read in a tree full of build output.
     ///
     /// Changes inside a submodule's own working tree are left out: reading them makes git enter the submodule and
     /// obey *its* `.git/config`, which ``GitConfigPolicy`` never saw. A submodule whose recorded commit moved is
     /// still reported.
-    public func status() async throws -> GitStatusSnapshot {
+    public func status(includingIgnored: Bool = true) async throws -> GitStatusSnapshot {
         GitParsers.porcelainV2(
             try await run([
-                "status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all", "--ignored=matching",
-                "--ignore-submodules=dirty"
+                "status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all",
+                includingIgnored ? "--ignored=matching" : "--ignored=no", "--ignore-submodules=dirty"
             ]))
     }
 
