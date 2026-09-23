@@ -137,11 +137,15 @@ extension EditorState {
         return Theme(.derived(from: palette))
     }
 
-    /// Feeds one undecoded terminal reply to the palette collector. Returns whether the bytes were a palette
-    /// reply; the device-attributes reply that ends the round applies the derived theme when the config asks
-    /// for it and no Xcode theme is set.
+    /// Feeds one undecoded terminal reply to what waits for it: a clipboard reply to the paste request it answers,
+    /// a palette reply to the palette collector. Returns whether something took the bytes; the device-attributes
+    /// reply that ends a palette round applies the derived theme when the config asks for it and no Xcode theme is
+    /// set.
     @discardableResult
     public func receiveTerminalReply(_ bytes: [UInt8]) -> Bool {
+        if let clipboard = OSCClipboard.parse(bytes) {
+            return receiveClipboardReply(clipboard, state: self)
+        }
         guard let reply = OSCPalette.parse(bytes) else { return false }
         switch reply {
             case .foreground(let color):

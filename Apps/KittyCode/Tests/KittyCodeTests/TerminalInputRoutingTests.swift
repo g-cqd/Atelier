@@ -43,6 +43,11 @@ struct TerminalInputRoutingTests {
         return Editor(state: state, pipeline: pipeline)
     }
 
+    /// An OSC 52 clipboard reply carrying `payload`, base64 already applied.
+    private func clipboardReply(_ payload: String) -> [UInt8] {
+        Array("\u{1B}]52;c;\(payload)\u{1B}\\".utf8)
+    }
+
     @Test
     func `Palette replies from the terminal apply the derived theme and type nothing`() {
         let editor = makeEditor(themeFromTerminal: true)
@@ -51,5 +56,37 @@ struct TerminalInputRoutingTests {
 
         #expect(editor.state.syntaxTheme.style(for: "keyword").fg == .rgb(r: 200, g: 30, b: 200))
         #expect(editor.state.fileContent == [""])
+    }
+
+    @Test
+    func `The clipboard reply to a paste request is pasted`() {
+        let editor = makeEditor()
+        editor.state.terminalWriter = { _ in }
+        handlePasteRequest(state: editor.state)
+
+        editor.receive(clipboardReply(Data("hello".utf8).base64EncodedString()))
+
+        #expect(editor.state.fileContent == ["hello"])
+    }
+
+    @Test
+    func `A clipboard reply that no paste request waits on is ignored`() {
+        let editor = makeEditor()
+
+        editor.receive(clipboardReply(Data("hello".utf8).base64EncodedString()))
+
+        #expect(editor.state.fileContent == [""])
+    }
+
+    @Test
+    func `An empty clipboard reply pastes nothing and says why`() {
+        let editor = makeEditor()
+        editor.state.terminalWriter = { _ in }
+        handlePasteRequest(state: editor.state)
+
+        editor.receive(clipboardReply(""))
+
+        #expect(editor.state.fileContent == [""])
+        #expect(editor.state.statusMessage == "Nothing to paste: the clipboard is empty or the terminal declined")
     }
 }
