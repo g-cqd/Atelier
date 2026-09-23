@@ -84,6 +84,12 @@ public struct JSONRPCError: Error, Sendable, Equatable, Codable {
     }
 }
 
+/// A result the client does not read, such as `initialize`'s capabilities: its decode reads nothing, so a large or
+/// deeply nested reply costs no work beyond the parse, and cannot fail on a shape the client has no use for.
+struct DiscardedResult: Decodable, Sendable {
+    init(from decoder: any Decoder) {}
+}
+
 /// Failure to classify a decoded JSON-RPC payload.
 public enum JSONRPCDecodingError: Error, Sendable, Equatable {
     /// Neither a `method` nor an `id` was present, so the payload is not a valid JSON-RPC message.

@@ -232,7 +232,7 @@ public actor SourceKitLSPService {
             rootUri: configuration.workspaceRoot.absoluteString, capabilities: ClientCapabilities(),
             initializationOptions: configuration.initializationOptions)
         _ = try await raceAgainstTimeout(clock: clock, timeout: configuration.requestTimeout) {
-            try await connection.request("initialize", params, as: JSONValue.self)
+            try await connection.request("initialize", params, as: DiscardedResult.self)
         }
         try await connection.notify("initialized", InitializedParams())
     }
@@ -250,7 +250,7 @@ public actor SourceKitLSPService {
     /// Ends a session that may still be listening: `shutdown`, then `exit`, then the transport closes.
     private func gracefulTeardown(_ connection: LSPConnection) async {
         _ = try? await raceAgainstTimeout(clock: clock, timeout: .milliseconds(500)) {
-            try await connection.requestOptional("shutdown", JSONValue.null, as: JSONValue.self)
+            try await connection.requestOptional("shutdown", JSONValue.null, as: DiscardedResult.self)
         }
         try? await connection.notify("exit", JSONValue.null)
         await connection.stop()
