@@ -180,16 +180,6 @@ package final class RenderPipeline {
         refresh(keepingScroll: keepingScroll)
     }
 
-    /// Reveals rows around a gap on top of `base`: dragging down pulls rows from the hunk above, dragging up from the
-    /// hunk below; a gap at the top or bottom of a file reveals in its only possible direction whichever way it is
-    /// dragged.
-    package func adjustGap(_ marker: GapMarker, from base: GapExpansion, byLines delta: Int) {
-        let effective = marker.isLeading ? -abs(delta) : marker.isTrailing ? abs(delta) : delta
-        setExpansion(
-            GapExpansion(below: base.below + max(effective, 0), above: base.above + max(-effective, 0)),
-            for: marker.key)
-    }
-
     /// Reveals `expansion` around one gap and renders only the file it belongs to, at once on the main actor: one
     /// file's cost per drag step, and no `.finished`, since nothing else changed.
     package func setExpansion(_ expansion: GapExpansion, for key: GapKey) {

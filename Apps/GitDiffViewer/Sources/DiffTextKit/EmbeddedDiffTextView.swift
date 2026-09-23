@@ -1,5 +1,5 @@
 package import AppKit
-package import DiffCore
+import DiffCore
 package import DiffRendering
 package import Foundation
 package import SwiftUI
@@ -14,8 +14,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     /// Width of the pane, measured by the card.
     package let width: CGFloat
     package var wrapMode: WrapMode = .viewport
-    package var onGapDrag: ((GapMarker, GapExpansion, Int) -> Void)?
-    package var currentExpansion: ((GapKey) -> GapExpansion)?
+    package var onGapDrag: ((GapDragEvent) -> Void)?
     /// Called once the pane shows a new render.
     package var onDisplayed: (() -> Void)?
     /// Shows documentation for the identifier under the pointer after it rests there, the same as ``DiffTextView``.
@@ -24,7 +23,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
 
     package init(
         layouts: CardLayouts, side: RenderedSide, gutter: GutterStyle, width: CGFloat, wrapMode: WrapMode = .viewport,
-        onGapDrag: ((GapMarker, GapExpansion, Int) -> Void)? = nil, currentExpansion: ((GapKey) -> GapExpansion)? = nil,
+        onGapDrag: ((GapDragEvent) -> Void)? = nil,
         onDisplayed: (() -> Void)? = nil, hoverEnabled: Bool = false,
         hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil
     ) {
@@ -34,7 +33,6 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         self.width = width
         self.wrapMode = wrapMode
         self.onGapDrag = onGapDrag
-        self.currentExpansion = currentExpansion
         self.onDisplayed = onDisplayed
         self.hoverEnabled = hoverEnabled
         self.hoverResolver = hoverResolver
@@ -104,7 +102,6 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     /// first, the text view never lays the text out for a stale frame.
     private func update(_ pane: DiffPaneView, context: Context) {
         pane.gutterView.onGapDrag = onGapDrag
-        pane.gutterView.currentExpansion = currentExpansion
         guard let layout, let textView = context.coordinator.textView, width > 0 else { return }
         let coordinator = context.coordinator
         let isNewLayout = coordinator.layout !== layout

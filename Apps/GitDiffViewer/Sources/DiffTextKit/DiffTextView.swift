@@ -1,6 +1,6 @@
 package import AppKit
 package import AtelierDiagnostics
-package import DiffCore
+import DiffCore
 package import DiffRendering
 package import Foundation
 package import SwiftUI
@@ -17,8 +17,8 @@ package struct DiffTextView: NSViewRepresentable {
     package var syncsScrolling = true
     package var scrollRequest: ScrollRequest?
     package var splitController: SplitPaneController?
-    package var onGapDrag: ((GapMarker, GapExpansion, Int) -> Void)?
-    package var currentExpansion: ((GapKey) -> GapExpansion)?
+    /// Reports a gap handle's drag in the gutter.
+    package var onGapDrag: ((GapDragEvent) -> Void)?
     /// Called once the pane shows a new render.
     package var onDisplayed: (() -> Void)?
     /// Shows documentation for the identifier under the pointer after it rests there.
@@ -38,7 +38,7 @@ package struct DiffTextView: NSViewRepresentable {
         wrapColumn: Int = 0,
         showsMinimap: Bool = true, syncsScrolling: Bool = true, scrollRequest: ScrollRequest? = nil,
         splitController: SplitPaneController? = nil,
-        onGapDrag: ((GapMarker, GapExpansion, Int) -> Void)? = nil, currentExpansion: ((GapKey) -> GapExpansion)? = nil,
+        onGapDrag: ((GapDragEvent) -> Void)? = nil,
         onDisplayed: (() -> Void)? = nil, hoverEnabled: Bool = false,
         hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil,
         diagnosticOverlay: DiagnosticOverlay? = nil, diagnosticsVersion: Int = 0,
@@ -54,7 +54,6 @@ package struct DiffTextView: NSViewRepresentable {
         self.scrollRequest = scrollRequest
         self.splitController = splitController
         self.onGapDrag = onGapDrag
-        self.currentExpansion = currentExpansion
         self.onDisplayed = onDisplayed
         self.hoverEnabled = hoverEnabled
         self.hoverResolver = hoverResolver
@@ -94,7 +93,6 @@ package struct DiffTextView: NSViewRepresentable {
         gutterView.source = textView
         gutterView.style = gutter
         gutterView.onGapDrag = onGapDrag
-        gutterView.currentExpansion = currentExpansion
         gutterView.overlay = diagnosticOverlay
         gutterView.onDiagnosticClick = onDiagnosticClick
         context.coordinator.fragmentProvider.overlay = diagnosticOverlay
@@ -162,7 +160,6 @@ package struct DiffTextView: NSViewRepresentable {
             pane.needsLayout = true
         }
         coordinator.gutterView?.onGapDrag = onGapDrag
-        coordinator.gutterView?.currentExpansion = currentExpansion
         coordinator.gutterView?.onDiagnosticClick = onDiagnosticClick
         splitController?.syncsScrolling = syncsScrolling
         coordinator.hoverController.isEnabled = hoverEnabled

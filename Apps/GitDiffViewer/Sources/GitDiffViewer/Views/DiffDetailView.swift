@@ -67,8 +67,7 @@ struct DiffDetailView: View {
                         wrapColumn: model.settings.wrapColumn,
                         showsMinimap: model.settings.showsMinimap,
                         scrollRequest: model.scrollRequest,
-                        onGapDrag: { marker, base, lines in model.adjustGap(marker, from: base, byLines: lines) },
-                        currentExpansion: { model.expansion(of: $0) },
+                        onGapDrag: { model.handleGapDrag($0) },
                         onDisplayed: { model.noteDisplayed(rendered.id) }
                     )
                 }
@@ -85,8 +84,7 @@ struct DiffDetailView: View {
                         showsMinimap: model.settings.showsMinimap,
                         syncsScrolling: model.settings.syncsScrolling,
                         scrollRequest: model.scrollRequest,
-                        onGapDrag: { marker, base, lines in model.adjustGap(marker, from: base, byLines: lines) },
-                        currentExpansion: { model.expansion(of: $0) },
+                        onGapDrag: { model.handleGapDrag($0) },
                         onDisplayed: { model.noteDisplayed(rendered.id) }
                     )
                 }
@@ -105,8 +103,7 @@ private struct SplitDiffView: View {
     let showsMinimap: Bool
     let syncsScrolling: Bool
     let scrollRequest: ScrollRequest?
-    let onGapDrag: (GapMarker, GapExpansion, Int) -> Void
-    let currentExpansion: (GapKey) -> GapExpansion
+    let onGapDrag: (GapDragEvent) -> Void
     let onDisplayed: () -> Void
 
     @State private var controller = SplitPaneController()
@@ -118,14 +115,14 @@ private struct SplitDiffView: View {
                 model: model, rendered: old, gutter: .old, keepsScrollPosition: keepsScrollPosition,
                 wrapsLines: wrapsLines, wrapColumn: wrapColumn, showsMinimap: showsMinimap,
                 syncsScrolling: syncsScrolling, scrollRequest: scrollRequest, splitController: controller,
-                onGapDrag: onGapDrag, currentExpansion: currentExpansion
+                onGapDrag: onGapDrag
             )
             Divider()
             DiagnosticDiffTextView(
                 model: model, rendered: new, gutter: .new, keepsScrollPosition: keepsScrollPosition,
                 wrapsLines: wrapsLines, wrapColumn: wrapColumn, showsMinimap: showsMinimap,
                 syncsScrolling: syncsScrolling, scrollRequest: scrollRequest, splitController: controller,
-                onGapDrag: onGapDrag, currentExpansion: currentExpansion
+                onGapDrag: onGapDrag
             )
         }
         .onAppear { controller.wrapsLines = wrapsLines }
