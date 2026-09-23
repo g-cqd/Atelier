@@ -49,10 +49,10 @@ private let requestTimeout =
     )
     .requestTimeout
 
-/// Drives the handshake + `didOpen` + `hover` sequence for one probe, responding with `markdown`, and returns
-/// the connected transport for further inspection.
+/// Drives the handshake + `didOpen` + `hover` sequence for one probe, responding with `markdown`, or with a null
+/// result for nil, and returns the connected transport for further inspection.
 private func driveOneProbe(
-    factory: ScriptedConnectionFactory, generation: Int, markdown: String
+    factory: ScriptedConnectionFactory, generation: Int, markdown: String?
 ) async throws -> PipeTransport {
     await factory.waitForGeneration(generation)
     let transport = await factory.transport(at: generation - 1)
@@ -63,7 +63,7 @@ private func driveOneProbe(
     #expect(try await decodeSent(transport, at: 2).method == "textDocument/didOpen")
     let hoverEnvelope = try await decodeSent(transport, at: 3)
     #expect(hoverEnvelope.method == "textDocument/hover")
-    try respond(transport, id: try #require(hoverEnvelope.id), result: hoverResult(markdown: markdown))
+    try respond(transport, id: try #require(hoverEnvelope.id), result: markdown.map(hoverResult(markdown:)) ?? .null)
     return transport
 }
 
@@ -293,6 +293,23 @@ struct SDKDocumentationProviderTests {
         let framesAfter = await transport.sink.all.count
         #expect(framesAfter == framesBefore)
         #expect(await factory.generationCount == 1)
+    }
+
+    @Test
+    func `a type-position declaration answers when the value-position probe finds nothing`() async throws {
+        let factory = ScriptedConnectionFactory()
+        let provider = SDKDocumentationProvider(service: makeService(factory: factory))
+        let content = "import Foundation\nlet x: NSCopying"
+        let query = HoverQuery(
+            documentURI: "file:///a.swift", content: content, line: 1, utf16Column: "let x: NSCop".utf16.count)
+
+        // A protocol is no value, so `let _ = NSCopying` resolves nothing, while its `typealias` target does.
+        async let result = provider.hover(query)
+        let transport = try await driveOneProbe(factory: factory, generation: 1, markdown: nil)
+        try await driveFollowUpProbe(
+            transport, afterFrameCount: 4, markdown: hoverResult(markdown: "```swift\nprotocol NSCopying\n```"))
+
+        #expect(try await result?.markdown == "```swift\nprotocol NSCopying\n```")
     }
 
     @Test
