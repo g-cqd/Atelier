@@ -379,9 +379,7 @@ package final class ViewerSettings {
             .flatMap { try? DefaultsJSON.decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()
         showsMinimap = defaults.object(forKey: Key.showsMinimap) as? Bool ?? true
         showsStatusBar = defaults.object(forKey: Key.showsStatusBar) as? Bool ?? true
-        treeStyle =
-            defaults.string(forKey: Key.treeStyle).flatMap(FileTreeStyle.init(rawValue:))
-            ?? (defaults.bool(forKey: Key.compactsFolders) ? .compact : .hierarchy)
+        treeStyle = Self.storedTreeStyle(defaults, key: Key.treeStyle)
         wrapColumn = defaults.integer(forKey: Key.wrapColumn)
         themePath = defaults.string(forKey: Key.themePath)
         lineHeightMultiple = defaults.double(forKey: Key.lineHeightMultiple)
@@ -420,6 +418,13 @@ package final class ViewerSettings {
 
 // The user-defaults keys, kept outside the class body so they don't count against `type_body_length`.
 extension ViewerSettings {
+    /// The tree style stored under `key`, or, with none there, the one the older `compactsFolders` flag stood for, so
+    /// every reader of the setting, adopting a project or restoring one included, keeps the flag's meaning.
+    static func storedTreeStyle(_ defaults: UserDefaults, key: String) -> FileTreeStyle {
+        defaults.string(forKey: key).flatMap(FileTreeStyle.init(rawValue:))
+            ?? (defaults.bool(forKey: Key.compactsFolders) ? .compact : .hierarchy)
+    }
+
     enum Key {
         static let mode = "viewMode"
         static let explorerPlacement = "explorerPlacement"
