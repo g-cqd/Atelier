@@ -163,13 +163,10 @@ struct DirectoryScannerTests {
         #expect(file.path == "\(tree.root)/check.swift")
     }
 
-    // MARK: Symlink containment (NF4 regression)
+    // MARK: Symlink containment
 
-    /// Regression: `isWithinRoot` used to do `hasPrefix` on resolved paths,
-    /// so a symlink to a sibling whose name shared a prefix with the parent
-    /// (e.g. workspace `/tmp/root` → symlink target `/tmp/root-evil`) would
-    /// be accepted. Now SecurePath.isValid does component-by-component
-    /// containment so the prefix-only match no longer passes.
+    /// A symlink to a sibling whose name extends the root's (`/tmp/root` → `/tmp/root-evil`) lies outside the root:
+    /// containment is checked by path component, not by prefix.
     @Test func `scan rejects symlink whose target shares a prefix with sibling under root`()
         throws
     {
@@ -194,11 +191,8 @@ struct DirectoryScannerTests {
         #expect(!names.contains("link"), "symlink escaping the workspace must not appear")
     }
 
-    /// Regression: recursion used to pass the immediate parent directory as
-    /// `root`, so a symlink several levels deep pointing outside the
-    /// workspace was checked against the wrong root and incorrectly passed.
-    /// With workspace-root threading via `withinRoot:`, the check root stays
-    /// at the workspace level at every depth.
+    /// A symlink several levels deep that points outside the workspace is checked against the workspace root, not
+    /// against its parent directory.
     @Test func `scanAsync rejects deep symlink that escapes workspace`() async throws {
         let tree = try TempTree()
         try tree.createDirectory(named: "level1")
@@ -229,10 +223,7 @@ struct DirectoryScannerTests {
             "deep symlink escaping the workspace must not appear at any depth")
     }
 
-    /// Sanity: a symlink that resolves to a path inside the workspace is
-    /// still allowed (the defence rejects only escapes, not internal
-    /// references). Without workspace-root threading, this would be
-    /// incorrectly rejected when the link sits inside a nested subdirectory.
+    /// A symlink into another part of the workspace is kept, even from a nested directory it does not point into.
     @Test func `scan accepts symlink whose target stays inside the workspace`() throws {
         let tree = try TempTree()
         try tree.createDirectory(named: "siblingA")

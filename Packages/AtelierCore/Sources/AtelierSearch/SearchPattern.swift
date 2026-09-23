@@ -15,12 +15,8 @@ public func compilePattern(_ query: SearchQuery) -> SearchPattern? {
     return SearchPatternCache.shared.pattern(for: query)
 }
 
-/// Audit A7 — `compilePattern` used to allocate a fresh regular expression
-/// for every find-field keystroke. A 20-character regex query paid 20 compile
-/// passes on the way in. This cache keeps the most recent compilations
-/// keyed by `(text, isRegex, isCaseSensitive, wholeWord)`. LRU 4 entries
-/// is small enough that the dictionary lookup stays cheap and large enough
-/// to cover the realistic "user types, deletes, retypes" pattern.
+/// The four most recent compilations, keyed by `(text, isRegex, isCaseSensitive, wholeWord)`, so a query typed,
+/// deleted and retyped in the find field is not recompiled on every keystroke.
 private final class SearchPatternCache: Sendable {
     static let shared = SearchPatternCache()
 
@@ -39,10 +35,8 @@ private final class SearchPatternCache: Sendable {
 
     private let storage = Mutex(State())
 
-    /// Returns the cached `SearchPattern` for `query`, compiling on miss.
-    /// `nil` if the regex doesn't compile (cached as absent? no — only
-    /// successful compilations live in the cache so a typo doesn't pin
-    /// a negative entry).
+    /// The cached `SearchPattern` for `query`, compiled on a miss; `nil`, never cached, when the regex does not
+    /// compile.
     func pattern(for query: SearchQuery) -> SearchPattern? {
         let key = Key(
             text: query.text,

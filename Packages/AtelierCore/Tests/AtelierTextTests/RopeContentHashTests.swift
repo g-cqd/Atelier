@@ -3,11 +3,7 @@ import Testing
 
 @testable import AtelierText
 
-/// Audit A1 — `Rope.contentHash` used to walk the whole tree and allocate
-/// a `Data` of size `byteCount` per call (~1 MB transient + ~1 ms per
-/// keystroke on a 1 MB document). The new implementation combines
-/// `(byteCount, lineCount, root.nodeHash)` in O(1) at read time; every
-/// leaf and branch carries its own hash precomputed at construction.
+/// ``Rope/contentHash``: stable across reads and copies, changed by an edit, and O(1) per read.
 @Suite
 struct RopeContentHashTests {
     @Test
@@ -29,18 +25,13 @@ struct RopeContentHashTests {
         let after = mutated.contentHash
         #expect(before != after, "single-byte insertion must change the hash")
 
-        // Removing the inserted byte restores the original content;
-        // depending on tree shape the hash may or may not equal `before`
-        // (different leaf composition). The strict invariant is just
-        // that different content has different hashes — which the
-        // `before != after` check above already pins.
+        // Removing the byte again restores the bytes but not necessarily the leaves, so the hash need not return to
+        // `before`.
     }
 
     @Test
     func `hash is content-equivalent across different construction paths`() {
-        // Same string built directly versus assembled via insertions must
-        // produce the same contentHash, because the hash combines node
-        // hashes that ultimately fold every leaf's bytes.
+        // Short enough to stay one leaf either way, so both ropes hold the same leaves.
         let direct = Rope("hello world")
 
         var assembled = Rope("hello")
@@ -72,10 +63,8 @@ struct RopeContentHashTests {
 
     @Test
     func `read-only hash does not allocate per call (microbenchmark sanity)`() {
-        // After A1 the hash should be O(1) per call. Spec a loose budget
-        // (1 000 reads on a 100 KB rope must complete in well under 10 ms
-        // even in debug) so a regression to the O(N) implementation
-        // surfaces in CI rather than silently in production.
+        // O(1) per read: a loose budget, 1,000 reads of a 100 KB rope in under 10 ms even in debug, catches an O(n)
+        // regression.
         var content = ""
         content.reserveCapacity(100_000)
         for _ in 0 ..< 2_000 { content += "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" }

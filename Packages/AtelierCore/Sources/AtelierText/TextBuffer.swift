@@ -7,8 +7,7 @@ import Foundation
 /// regardless of where they occur in the document. Line metadata is cached in
 /// the rope's tree, so line lookups are also O(log n).
 ///
-/// The public API stays line-oriented for backward compatibility with the
-/// many call sites that index by `(row, col)`.
+/// The API is line-oriented, indexed by `(row, col)`.
 public struct TextBuffer: Sendable {
     private var rope: Rope
 
@@ -74,17 +73,13 @@ public struct TextBuffer: Sendable {
         rope.text
     }
 
-    /// Stable hash of the buffer content. Cached on the rope storage —
-    /// O(1) for repeated reads of the same content, O(n) on first read after
-    /// a mutation.
+    /// The rope's ``Rope/contentHash``: O(1), and sensitive to how the bytes are split into leaves.
     public var contentHash: Int {
         rope.contentHash
     }
 
-    /// Drops the underlying rope's materialised `text`/`lines`/`contentHash`
-    /// caches. Used by `BufferEditHistory` so undo-stack snapshots don't
-    /// retain multi-megabyte cached strings. Tree structure is untouched;
-    /// reads recompute on demand.
+    /// Drops the underlying rope's cached `text` and `lines`, so an undo snapshot does not retain multi-megabyte
+    /// strings; the tree is untouched and reads recompute on demand.
     public mutating func invalidateSnapshotCaches() {
         rope.invalidateSnapshotCaches()
     }
@@ -109,7 +104,7 @@ extension TextBuffer: DocumentSource {
     }
 
     /// The rope stores one `\n` per line break, so the serialized size is its byte count plus what a longer line
-    /// ending adds per break: O(1), where walking every line cost a full pass on each status-bar read.
+    /// ending adds per break: O(1).
     public func serializedByteCount(lineEndingSize: Int) -> Int {
         byteCount + max(0, lineCount - 1) * (lineEndingSize - 1)
     }

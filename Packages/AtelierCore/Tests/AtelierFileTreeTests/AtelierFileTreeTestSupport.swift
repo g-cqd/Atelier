@@ -11,10 +11,7 @@ extension Tag {
     @Tag static var securePath: Self
 }
 
-/// Creates a temporary directory subtree for scanner tests and removes it on deinit. A thin
-/// `createFile`/`createDirectory` convenience layer over `AemiTestKit.TemporaryDirectory`, whose
-/// own cleanup is an explicit `cleanup()` call rather than a `deinit` — this wrapper calls it from
-/// its own `deinit` so every existing call site keeps a create-and-forget lifetime.
+/// A temporary directory subtree for scanner tests over `AemiTestKit.TemporaryDirectory`, removed on deinit.
 final class TempTree: Sendable {
     private let directory: TemporaryDirectory
     var root: String { directory.path }
