@@ -41,8 +41,11 @@ struct StatusBarView: View {
             case .file(let rendered):
                 if let path = model.selectedPath {
                     let summary = model.changeSummary(for: path, rendered: rendered)
-                    ChangeGlyphBadge(glyph: ChangeGlyph(summary.kind))
-                        .help(ChangeGlyph(summary.kind).title)
+                    ChangeGlyphBadge(
+                        glyph: ChangeGlyph(summary.kind), scheme: model.settings.badgeScheme,
+                        state: model.badgeState(ofPath: path)
+                    )
+                    .help(ChangeGlyph(summary.kind).title)
                     Text(model.displayPath(for: path))
                         .font(.system(.caption, design: .monospaced))
                         .truncationMode(.middle)
