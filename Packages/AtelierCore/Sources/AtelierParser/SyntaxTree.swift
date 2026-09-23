@@ -1,30 +1,66 @@
+import Synchronization
+
 // MARK: - Syntax Tree
 
 /// An immutable syntax tree produced by parsing.
 ///
-/// A class so `deinit` can release deep trees iteratively: destroying nested `SyntaxNode` arrays recursively
-/// overflows the thread stack at about 2,000 levels. `@unchecked Sendable` holds because `root` and `source` are
-/// set once at init and never mutated.
-public final class SyntaxTree: @unchecked Sendable {
-    public let root: SyntaxNode
+/// A class so `deinit` can take the tree apart without recursion: freeing nested `SyntaxNode` arrays recursively
+/// overflows a 512 KiB thread stack between 2,000 and 3,000 levels.
+public final class SyntaxTree: Sendable {
+    /// The root node, a copy sharing the tree's storage. Only the tree frees nodes without recursion: the last holder
+    /// of a copy of a deep node frees that node recursively, so keep the tree alive longer than such copies.
+    public var root: SyntaxNode { storedRoot.withLock { $0 } }
     public let source: String
+    /// Behind a lock only so `deinit` can take the nodes apart while the class stays checked `Sendable`; nothing else
+    /// writes it, so the lock is never contended.
+    private let storedRoot: Mutex<SyntaxNode>
 
     public init(root: SyntaxNode, source: String) {
-        self.root = root
+        self.storedRoot = Mutex(root)
         self.source = source
     }
 
     deinit {
-        // Children move to an explicit stack before their parent is released, so no destructor recurses.
-        var stack: [SyntaxNode] = [root]
-        while !stack.isEmpty {
-            var node = stack.removeLast()
-            stack.append(contentsOf: node.children)
-            node.children = []
-            for fieldChildren in node.fields.values {
-                stack.append(contentsOf: fieldChildren)
+        Self.releaseIteratively(
+            storedRoot.withLock { root in
+                let taken = root
+                root = SyntaxNode(type: taken.type)
+                return [taken]
+            })
+    }
+
+    /// Frees `nodes` and every node below them in a loop, so no depth of tree can overflow the stack.
+    ///
+    /// A node held elsewhere as well is walked but survives: its last owner frees it. A field node that is a copy of
+    /// one of its parent's children, as the parser records fields, is freed through that child.
+    ///
+    /// - Complexity: O(n) in the nodes reachable from `nodes`, a node counting once per path to it, plus, per node,
+    ///   its field nodes times its children.
+    static func releaseIteratively(_ nodes: consuming [SyntaxNode]) {
+        // Sibling lists this loop alone holds, each emptied from its end. A node hands its subtrees to `lists` before
+        // it is dropped, so freeing one of its buffers only drops references `lists` still holds.
+        var lists = [consume nodes]
+        while let last = lists.indices.last {
+            guard var node = lists[last].popLast() else {
+                lists.removeLast()
+                continue
             }
-            node.fields = [:]
+            if !node.fields.isEmpty {
+                let fields = node.fields
+                node.fields = [:]
+                for fieldNodes in fields.values {
+                    for fieldNode in fieldNodes
+                    where !fieldNode.children.isEmpty
+                        && !node.children.contains(where: { $0.children.isTriviallyIdentical(to: fieldNode.children) })
+                    {
+                        lists.append([fieldNode])
+                    }
+                }
+            }
+            if !node.children.isEmpty {
+                lists.append(node.children)
+                node.children = []
+            }
         }
     }
 
