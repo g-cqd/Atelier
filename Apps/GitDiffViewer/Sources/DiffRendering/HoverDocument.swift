@@ -135,37 +135,36 @@ package struct HoverDocument: @unchecked Sendable {
     private static func renderProse(_ text: String) -> NSAttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             allowsExtendedAttributes: false, interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible)
-        var parsed = (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
-        Self.materializeFonts(in: &parsed)
+        let parsed = (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
         let result = NSMutableAttributedString(parsed)
-        result.enumerateAttribute(
-            .foregroundColor, in: NSRange(location: 0, length: result.length)
-        ) { value, range, _ in
+        let whole = NSRange(location: 0, length: result.length)
+        Self.materializeFonts(in: result, range: whole)
+        result.enumerateAttribute(.foregroundColor, in: whole) { value, range, _ in
             guard value == nil else { return }
             result.addAttribute(.foregroundColor, value: NSColor.labelColor, range: range)
         }
         return result
     }
 
-    /// Gives every run of `text` an explicit font from its `inlinePresentationIntent`: the markdown parser records
-    /// bold, italic and code only as intent, and a fontless run draws in `NSTextView`'s default Helvetica 12.
-    private static func materializeFonts(in text: inout AttributedString) {
+    /// Gives every run an explicit font from its inline presentation intent: the markdown parser records bold,
+    /// italic and code only as intent, and a fontless run draws in `NSTextView`'s default Helvetica 12. Set on the
+    /// `NSAttributedString`, whose attribute values need not be `Sendable` the way `AttributedString`'s typed font
+    /// attribute requires.
+    private static func materializeFonts(in text: NSMutableAttributedString, range: NSRange) {
         let base = NSFont.systemFont(ofSize: 12)
-        for run in text.runs {
-            let intent = run.inlinePresentationIntent
-            if let intent, intent.contains(.code) {
-                text[run.range].font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-                continue
+        let code = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        text.enumerateAttribute(.inlinePresentationIntent, in: range) { value, runRange, _ in
+            let intent = (value as? NSNumber).map { InlinePresentationIntent(rawValue: $0.uintValue) } ?? []
+            guard !intent.contains(.code) else {
+                text.addAttribute(.font, value: code, range: runRange)
+                return
             }
             var traits: NSFontDescriptor.SymbolicTraits = []
-            if let intent, intent.contains(.stronglyEmphasized) { traits.insert(.bold) }
-            if let intent, intent.contains(.emphasized) { traits.insert(.italic) }
-            guard !traits.isEmpty else {
-                text[run.range].font = base
-                continue
-            }
-            let descriptor = base.fontDescriptor.withSymbolicTraits(traits)
-            text[run.range].font = NSFont(descriptor: descriptor, size: 12) ?? base
+            if intent.contains(.stronglyEmphasized) { traits.insert(.bold) }
+            if intent.contains(.emphasized) { traits.insert(.italic) }
+            let font =
+                traits.isEmpty ? base : NSFont(descriptor: base.fontDescriptor.withSymbolicTraits(traits), size: 12)
+            text.addAttribute(.font, value: font ?? base, range: runRange)
         }
     }
 }
