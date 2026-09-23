@@ -18,6 +18,10 @@ public protocol SourceReading: Sendable {
     /// The commit hash `ref` names in `repository`.
     /// - Throws: When the ref names nothing, or git cannot run.
     func resolve(ref: String, in repository: URL) async throws -> String
+    /// Git's status of the working tree `source` names, every path relative to the source's root and every entry
+    /// outside it left out; nil for a source that is not a folder inside a repository.
+    /// - Throws: When git cannot run or fails.
+    func workingTreeStatus(of source: ComparisonSource) async throws -> [GitStatusEntry]?
 }
 
 /// Concurrent file reads for sources without batch reads; bounded so a large folder does not open a file storm.
@@ -31,6 +35,11 @@ extension SourceReading {
     /// A source with no git behind it names every ref by itself.
     public func resolve(ref: String, in repository: URL) async throws -> String {
         ref
+    }
+
+    /// A source with no git behind it has no working-tree status.
+    public func workingTreeStatus(of source: ComparisonSource) async throws -> [GitStatusEntry]? {
+        nil
     }
 
     public func contents(of entries: [GitTreeEntry], in source: ComparisonSource) async throws -> [String: String] {

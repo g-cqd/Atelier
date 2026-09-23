@@ -130,17 +130,19 @@ public enum GitParsers {
             let rest = record.dropFirst(2)
             switch kind {
                 case "?":
-                    entries.append(GitStatusEntry(path: String(rest), status: .untracked))
+                    entries.append(GitStatusEntry(path: String(rest), status: .untracked, worktreeStatus: .untracked))
                 case "!":
-                    entries.append(GitStatusEntry(path: String(rest), status: .ignored))
+                    entries.append(GitStatusEntry(path: String(rest), status: .ignored, worktreeStatus: .ignored))
                 case "1":
                     // XY sub mH mI mW hH hI path
                     let fields = rest.split(separator: " ", maxSplits: 7, omittingEmptySubsequences: false)
                     guard fields.count == 8 else { continue }
+                    let xy = columns(fields[0])
                     entries.append(
                         GitStatusEntry(
                             path: String(fields[7]), status: ordinaryStatus(fields[0]),
-                            isSubmodule: fields[1].first == "S"))
+                            isSubmodule: fields[1].first == "S", indexStatus: xy.index,
+                            worktreeStatus: xy.worktree))
                 case "2":
                     // XY sub mH mI mW hH hI Xscore path, then the original path as the next record.
                     let fields = rest.split(separator: " ", maxSplits: 8, omittingEmptySubsequences: false)
@@ -148,23 +150,37 @@ public enum GitParsers {
                     let original = records[index]
                     index += 1
                     let isCopy = fields[7].first == "C"
+                    let xy = columns(fields[0])
                     entries.append(
                         GitStatusEntry(
                             path: String(fields[8]), originalPath: original, status: isCopy ? .added : .renamed,
-                            isSubmodule: fields[1].first == "S"))
+                            isSubmodule: fields[1].first == "S", indexStatus: xy.index,
+                            worktreeStatus: xy.worktree))
                 case "u":
                     // XY sub m1 m2 m3 mW h1 h2 h3 path
                     let fields = rest.split(separator: " ", maxSplits: 9, omittingEmptySubsequences: false)
                     guard fields.count == 10 else { continue }
+                    let xy = columns(fields[0])
                     entries.append(
                         GitStatusEntry(
-                            path: String(fields[9]), status: .conflicted, isSubmodule: fields[1].first == "S"))
+                            path: String(fields[9]), status: .conflicted, isSubmodule: fields[1].first == "S",
+                            indexStatus: xy.index, worktreeStatus: xy.worktree))
                 default:
                     continue
             }
         }
         let branch = sawBranch ? GitBranchStatus(head: head, upstream: upstream, ahead: ahead, behind: behind) : nil
         return GitStatusSnapshot(branch: branch, entries: entries)
+    }
+
+    /// The two sides of a record's `XY` field. A missing letter reads as unmodified, as ``ordinaryStatus(_:)`` reads
+    /// it, and a letter the format does not document as a modification, the most general change.
+    private static func columns(_ xy: Substring) -> (index: GitStatusCode, worktree: GitStatusCode) {
+        func code(_ letter: Character?) -> GitStatusCode {
+            guard let letter else { return .unmodified }
+            return GitStatusCode(rawValue: letter) ?? .modified
+        }
+        return (code(xy.first), code(xy.dropFirst().first))
     }
 
     /// The status of an ordinary (`1`) record from its `XY` field: deletion and addition on either side win over a

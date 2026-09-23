@@ -45,7 +45,55 @@ struct GitStatusParserTests {
     ])
     func `each record kind maps to one file status`(record: String, path: String, status: FileStatus) {
         let snapshot = GitParsers.porcelainV2(Self.records([record]))
-        #expect(snapshot.entries == [GitStatusEntry(path: path, originalPath: nil, status: status)])
+        #expect(snapshot.entries.map(\.path) == [path])
+        #expect(snapshot.entries.map(\.status) == [status])
+        #expect(snapshot.entries.allSatisfy { $0.originalPath == nil })
+    }
+
+    @Test(arguments: [
+        ("1 .M N... 100644 100644 100644 aaaa aaaa a.swift", GitStatusCode.unmodified, GitStatusCode.modified),
+        ("1 M. N... 100644 100644 100644 aaaa bbbb a.swift", .modified, .unmodified),
+        ("1 MM N... 100644 100644 100644 aaaa bbbb a.swift", .modified, .modified),
+        ("1 A. N... 000000 100644 100644 0000 bbbb a.swift", .added, .unmodified),
+        ("1 AM N... 000000 100644 100644 0000 bbbb a.swift", .added, .modified),
+        ("1 .D N... 100644 100644 000000 aaaa aaaa a.swift", .unmodified, .deleted),
+        ("1 .T N... 100644 100644 120000 aaaa aaaa a.swift", .unmodified, .typeChanged),
+        ("? a.swift", .unmodified, .untracked),
+        ("! a.swift", .unmodified, .ignored),
+        ("u UU N... 100644 100644 100644 100644 aaaa bbbb cccc a.swift", .unmerged, .unmerged),
+        ("u AA N... 000000 100644 100644 100644 0000 bbbb cccc a.swift", .added, .added)
+    ])
+    func `each record keeps what changed in the index and in the working tree apart`(
+        record: String, index: GitStatusCode, worktree: GitStatusCode
+    ) throws {
+        let entry = try #require(GitParsers.porcelainV2(Self.records([record])).entries.first)
+        #expect(entry.path == "a.swift")
+        #expect(entry.indexStatus == index)
+        #expect(entry.worktreeStatus == worktree)
+    }
+
+    @Test(arguments: [
+        ("2 R. N... 100644 100644 100644 aaaa aaaa R100 new.swift", GitStatusCode.renamed, GitStatusCode.unmodified),
+        ("2 RM N... 100644 100644 100644 aaaa bbbb R100 new.swift", .renamed, .modified),
+        ("2 C. N... 100644 100644 100644 aaaa aaaa C90 new.swift", .copied, .unmodified)
+    ])
+    func `a rename or copy record keeps its columns next to its original path`(
+        record: String, index: GitStatusCode, worktree: GitStatusCode
+    ) throws {
+        let entry = try #require(GitParsers.porcelainV2(Self.records([record, "old.swift"])).entries.first)
+        #expect(entry.path == "new.swift")
+        #expect(entry.originalPath == "old.swift")
+        #expect(entry.indexStatus == index)
+        #expect(entry.worktreeStatus == worktree)
+    }
+
+    @Test
+    func `a column letter git does not document reads as a modification and a missing one as unmodified`() throws {
+        let entry = try #require(
+            GitParsers.porcelainV2(Self.records(["1 X N... 100644 100644 100644 aaaa bbbb a.swift"])).entries.first)
+        #expect(entry.indexStatus == .modified)
+        #expect(entry.worktreeStatus == .unmodified)
+        #expect(entry.status == .modified)
     }
 
     @Test
@@ -54,7 +102,9 @@ struct GitStatusParserTests {
         let snapshot = GitParsers.porcelainV2(data)
         #expect(
             snapshot.entries == [
-                GitStatusEntry(path: "new name.swift", originalPath: "old name.swift", status: .renamed)
+                GitStatusEntry(
+                    path: "new name.swift", originalPath: "old name.swift", status: .renamed, indexStatus: .renamed,
+                    worktreeStatus: .unmodified)
             ])
         let copy = Self.records(["2 C. N... 100644 100644 100644 aaaa aaaa C90 copy.swift", "source.swift"])
         #expect(GitParsers.porcelainV2(copy).entries.first?.status == .added)
@@ -118,18 +168,25 @@ struct GitStatusParserTests {
         try await git("init", "-q", "-b", "main")
         try write("kept.txt", "kept\n")
         try write("changed.txt", "one\n")
+        try write("staged.txt", "one\n")
+        try write("both.txt", "one\n")
         try write("removed.txt", "bye\n")
         try write("moved.txt", String(repeating: "same line\n", count: 20))
         try write(".gitignore", "ignored.txt\n")
         try await git("add", ".")
         try await git("commit", "-q", "-m", "base")
         try write("changed.txt", "two\n")
+        try write("staged.txt", "two\n")
+        try write("both.txt", "two\n")
         try write("added.txt", "new\n")
+        try write("added-then-edited.txt", "new\n")
         try write("untracked.txt", "loose\n")
         try write("ignored.txt", "junk\n")
         try FileManager.default.removeItem(at: root.appending(path: "removed.txt"))
         try FileManager.default.moveItem(at: root.appending(path: "moved.txt"), to: root.appending(path: "renamed.txt"))
-        try await git("add", "added.txt", "moved.txt", "renamed.txt")
+        try await git("add", "staged.txt", "both.txt", "added.txt", "added-then-edited.txt", "moved.txt", "renamed.txt")
+        try write("both.txt", "three\n")
+        try write("added-then-edited.txt", "newer\n")
 
         let client = GitClient(repository: root, runner: runner)
         let snapshot = try await client.status()
@@ -144,5 +201,16 @@ struct GitStatusParserTests {
         #expect(statuses["untracked.txt"] == .untracked)
         #expect(statuses["ignored.txt"] == .ignored)
         #expect(statuses["kept.txt"] == nil)
+        let columns = Dictionary(
+            uniqueKeysWithValues: snapshot.entries.map { ($0.path, [$0.indexStatus, $0.worktreeStatus]) })
+        #expect(columns["changed.txt"] == [.unmodified, .modified])
+        #expect(columns["staged.txt"] == [.modified, .unmodified])
+        #expect(columns["both.txt"] == [.modified, .modified])
+        #expect(columns["added.txt"] == [.added, .unmodified])
+        #expect(columns["added-then-edited.txt"] == [.added, .modified])
+        #expect(columns["removed.txt"] == [.unmodified, .deleted])
+        #expect(columns["renamed.txt"] == [.renamed, .unmodified])
+        #expect(columns["untracked.txt"] == [.unmodified, .untracked])
+        #expect(columns["ignored.txt"] == [.unmodified, .ignored])
     }
 }
