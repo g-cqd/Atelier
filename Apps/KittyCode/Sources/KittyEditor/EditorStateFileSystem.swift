@@ -14,8 +14,12 @@ import System
 extension EditorState {
     public func loadInitialTree(validateHistory: Bool = true) async {
         let expandedPaths = collectExpandedPaths(treeNodes)
-        treeNodes = await DirectoryScanner.scanAsync(
-            rootPath, maxDepth: 1, visibility: fileVisibility, withinRoot: rootPath)
+        // A scan cancelled or refused by the pool keeps the tree shown.
+        guard
+            let scanned = try? await DirectoryScanner.scanAsync(
+                rootPath, maxDepth: 1, visibility: fileVisibility, withinRoot: rootPath, pool: searchPool)
+        else { return }
+        treeNodes = scanned
         if !expandedPaths.isEmpty {
             restoreExpandedPaths(expandedPaths, in: &treeNodes)
         }
