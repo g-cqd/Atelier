@@ -222,6 +222,35 @@ struct DiffViewerModelReloadContinuityTests {
     }
 
     @Test
+    func `a one-sided reload that changes the selected file keeps it on screen until its new version lands`()
+        async throws
+    {
+        let sut = harness.makeSUT()
+        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]
+        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "2")]
+        try await harness.load(sut)
+        sut.select("a.swift")
+        try await harness.taskProvider.waitForAllTasks()
+        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.next() }
+        let before = try #require(sut.rendered)
+        harness.reader.gate["a.swift"] = AsyncProbe<Void>()
+
+        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "9")]
+        sut.right.reload()
+        _ = try await harness.reader.contentRequests.next()
+
+        #expect(sut.rendered?.id == before.id)
+        #expect(sut.detailState == .file(before))
+        #expect(sut.isRendering)
+        harness.reader.gate["a.swift"]?.send(())
+        harness.reader.gate["a.swift"]?.send(())
+        try await harness.taskProvider.waitForAllTasks()
+        let after = try #require(sut.rendered)
+        #expect(after.id != before.id)
+        #expect(after.keepsScrollPosition)
+    }
+
+    @Test
     func `a gap expansion survives a reload that reuses the selected file`() async throws {
         let sut = harness.makeSUT()
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]

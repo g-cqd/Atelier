@@ -85,23 +85,32 @@ struct DiffViewerModelSelectionTests {
     }
 
     @Test
-    func `a render finishing during a reload is not shown as current`() async throws {
+    func `a re-render that finishes while a side reloads keeps the cards on screen throughout`() async throws {
         let sut = harness.makeSUT()
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]
         harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "2")]
         try await harness.load(sut)
+        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.next() }
+        let finishes = AsyncProbe<Void>()
+        let modelHandler = sut.pipeline.onEvent
+        sut.pipeline.onEvent = { event in
+            modelHandler?(event)
+            if case .finished = event { finishes.send(()) }
+        }
         harness.reader.gate["a.swift"] = AsyncProbe<Void>()
         sut.settings.granularity = .character
-        try await harness.taskProvider.waitForSpawnedTasks(atLeast: 1)
         _ = try await harness.reader.contentRequests.next()
+        #expect(sut.detailState == .cards)
 
         let rightListing = harness.holdListing(of: ModelTestHarness.rightURL)
         sut.right.reload()
+        #expect(sut.detailState == .cards)
         harness.reader.gate["a.swift"]?.send(())
         harness.reader.gate["a.swift"]?.send(())
-        try await harness.taskProvider.waitForSpawnedTasks(atLeast: 1)
+        _ = try await finishes.next()
+        #expect(sut.right.isLoading)
+        #expect(sut.detailState == .cards)
 
-        #expect(sut.detailState == .loading)
         rightListing.send(())
         try await harness.taskProvider.waitForAllTasks()
         #expect(sut.detailState == .cards)
