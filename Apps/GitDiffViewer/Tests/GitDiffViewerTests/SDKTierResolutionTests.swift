@@ -12,6 +12,7 @@ struct SDKTierResolutionTests {
         let name = "GitDiffViewerTests.sdkTier.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: name))
         defaults.removePersistentDomain(forName: name)
+        defer { defaults.removePersistentDomain(forName: name) }
         let policy = LanguageServerPolicy(
             trust: RepositoryTrust(defaults: defaults), defaults: defaults,
             locate: { _ in URL(filePath: "/usr/bin/false") })
@@ -22,8 +23,8 @@ struct SDKTierResolutionTests {
                 asked.withLock { $0.append(platform) }
                 return nil
             })
-        defer { try? FileManager.default.removeItem(at: resolved.probeDirectory) }
 
         #expect(asked.withLock { $0 } == [.iOS])
+        try FileManager.default.removeItem(at: resolved.probeDirectory)
     }
 }
