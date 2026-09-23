@@ -86,7 +86,8 @@ struct NoWrapLayoutTests {
         let rows = CGFloat(text.rows.count) * text.lineHeight + 2 * DiffPaneMetrics.containerInset
         #expect(textView.textContainer?.widthTracksTextView == true)
         #expect(!textView.isHorizontallyResizable)
-        #expect(textView.frame.height == (rows + max(clip.height - text.lineHeight, 0)).rounded(.up))
+        let overscroll = max(clip.height - text.lineHeight - DiffPaneMetrics.containerInset, 0)
+        #expect(textView.frame.height == (rows + overscroll).rounded(.up))
         #expect(textView.frame.width == max(clip.width, text.measuredUnwrappedWidth()))
     }
 

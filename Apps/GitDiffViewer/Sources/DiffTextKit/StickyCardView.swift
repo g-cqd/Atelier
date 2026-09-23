@@ -8,6 +8,9 @@ import SwiftUI
 /// so the body scrolls beneath the header and nothing scrolled up shows above it; the card's bottom then pushes the
 /// header out. Sticking reads the enclosing scroll view and moves view origins and layers only: no view changes
 /// size while scrolling, so scrolling never lays out or re-evaluates SwiftUI.
+///
+/// Folding and unfolding change the card's height while the body keeps its own: the card's bottom edge clips the
+/// body away or reveals it, and the body's background stays behind it so the shadow beneath the card never shows.
 package final class StickyCardView: NSView {
     package static let cornerRadius: CGFloat = 10
     /// The weight of the outline and of the hairline under a pinned header.
@@ -21,13 +24,27 @@ package final class StickyCardView: NSView {
     package var stickyGap: CGFloat = 16 {
         didSet { if stickyGap != oldValue { needsLayout = true } }
     }
-    /// The header's height, measured by the owner; the body fills the rest of the card.
+    /// The header's height, measured by the owner.
     package var headerHeight: CGFloat = 0 {
         didSet { if headerHeight != oldValue { needsLayout = true } }
     }
+    /// The body's own height, measured by the owner. The body keeps it while the card is shorter, during a fold or an
+    /// unfold, and is clipped at the card's bottom.
+    package var bodyHeight: CGFloat = 0 {
+        didSet { if bodyHeight != oldValue { needsLayout = true } }
+    }
+    /// Painted behind the body: the body's own background, so no frame shows the shadow beneath the card through a
+    /// body that has not drawn yet. Nil paints nothing.
+    package var bodyBackground: NSColor? {
+        didSet { if bodyBackground != oldValue { resolveColors() } }
+    }
+    /// Called when the card stops showing any of its body: a fold has finished.
+    package var onBodyHidden: (() -> Void)?
 
     /// The geometry last applied; a scroll that leaves it unchanged costs nothing more.
     private(set) var appliedGeometry: StickyCardGeometry?
+    /// Whether the last layout showed part of the body, so a fold reports its end once.
+    private var showedBody = false
 
     private let shadowView = FlippedView()
     private let shadowLayer = CALayer()
@@ -90,19 +107,31 @@ package final class StickyCardView: NSView {
     /// The header's frame in this view: where it shows, sticking or not.
     var headerFrame: CGRect { convert(headerView.frame, from: topClipView) }
 
+    /// The frame of the body's clip in this view: the part of the card below the header.
+    var bodyClipFrame: CGRect { convert(bodyClipView.frame, from: topClipView) }
+
+    /// The color painted behind the body.
+    var paintedBodyBackground: CGColor? { bodyClipView.layer?.backgroundColor }
+
     package override func layout() {
         super.layout()
         let width = bounds.width
-        let bodyHeight = max(bounds.height - headerHeight, 0)
+        let geometry = currentGeometry()
+        // The geometry's header height, never the measured one: a NaN in a view frame traps in AppKit.
+        let headerHeight = geometry.headerHeight
         for view in [shadowView, cardClipView, outlineView] { view.frame = bounds }
         topClipView.setFrameSize(bounds.size)
         headerView.frame = CGRect(x: 0, y: 0, width: width, height: headerHeight)
-        bodyClipView.frame = CGRect(x: 0, y: headerHeight, width: width, height: bodyHeight)
-        bodyView.setFrameSize(CGSize(width: width, height: bodyHeight))
+        bodyClipView.frame = CGRect(x: 0, y: headerHeight, width: width, height: geometry.bodyClipHeight)
+        bodyView.setFrameSize(CGSize(width: width, height: geometry.bodyFrameHeight(bodyHeight: bodyHeight)))
         // Inset by the outline, which is drawn above it, so the two never overlap.
         hairlineView.frame = CGRect(
             x: Self.lineWidth, y: headerHeight, width: max(width - 2 * Self.lineWidth, 0), height: Self.lineWidth)
-        apply(currentGeometry(), after: nil)
+        apply(geometry, after: nil)
+        let showsBody = geometry.showsBody
+        guard showsBody != showedBody else { return }
+        showedBody = showsBody
+        if !showsBody { onBodyHidden?() }
     }
 
     package override func viewDidMoveToWindow() {
@@ -206,6 +235,7 @@ package final class StickyCardView: NSView {
             let separator = NSColor.separatorColor.cgColor
             outlineLayer.borderColor = separator
             hairlineView.layer?.backgroundColor = separator
+            bodyClipView.layer?.backgroundColor = bodyBackground?.cgColor
         }
     }
 

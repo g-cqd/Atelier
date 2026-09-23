@@ -231,7 +231,9 @@ package final class DiffTextViewCoordinator: NSObject {
         textView.insertionPointColor = rendered.palette.textColor
         textView.selectedTextAttributes = [.backgroundColor: rendered.palette.selection]
         contentStorage.performEditingTransaction {
-            contentStorage.textStorage?.setAttributedString(rendered.attributed)
+            guard let storage = contentStorage.textStorage else { return }
+            storage.setAttributedString(rendered.attributed)
+            rendered.padEmptyLastRow(in: storage)
         }
         if paletteChanged, let scrollView = textView.enclosingScrollView {
             Self.configureWrapping(
@@ -359,28 +361,30 @@ package final class DiffTextViewCoordinator: NSObject {
         scrollView.horizontalScrollElasticity = scrollsSideways ? .automatic : .none
     }
 
-    /// Lets the last line scroll up to the top of the pane by giving the text view trailing space below its
-    /// content. The space is part of the view, not a scroll inset, so nothing else has to account for it.
+    /// Lets the last line scroll up to the top of the pane, and no further, by giving the text view trailing space
+    /// below its content: scrolled to its end, the pane shows its last line whole at its top. The space is part of
+    /// the view, not a scroll inset, so nothing else has to account for it.
     package func updateOverscroll(in clipView: NSClipView) {
         guard let textView, let layoutManager = textView.textLayoutManager else { return }
         // The row's own height, not the font's: a taller line height would otherwise leave the last row short
         // of the top of the pane, half of it hidden under whatever sits above.
         let lineHeight = rendered?.lineHeight ?? DiffPalette.system.defaultLineHeight
+        let inset = textView.textContainerInset.height
+        // Less the inset below the text, which the last line would otherwise scroll past the top by.
+        let overscroll = max(clipView.bounds.height - lineHeight - inset, 0)
         if !wrapsLines, let rendered {
             // One line per row: the document's size needs no layout.
-            let contentHeight =
-                CGFloat(max(rendered.rows.count, 1)) * lineHeight + 2 * textView.textContainerInset.height
+            let contentHeight = CGFloat(max(rendered.rows.count, 1)) * lineHeight + 2 * inset
             let size = NSSize(
                 width: max(clipView.bounds.width, unwrappedWidth(of: rendered)),
-                height: (contentHeight + max(clipView.bounds.height - lineHeight, 0)).rounded(.up))
+                height: (contentHeight + overscroll).rounded(.up))
             guard textView.minSize != size || textView.frame.size != size else { return }
             textView.minSize = size
             textView.setFrameSize(size)
             return
         }
-        let contentHeight =
-            layoutManager.usageBoundsForTextContainer.height + 2 * textView.textContainerInset.height
-        let minimumHeight = (contentHeight + max(clipView.bounds.height - lineHeight, 0)).rounded(.up)
+        let contentHeight = layoutManager.usageBoundsForTextContainer.height + 2 * inset
+        let minimumHeight = (contentHeight + overscroll).rounded(.up)
         let minimumWidth: CGFloat =
             if textView.textContainer?.widthTracksTextView == true {
                 0
