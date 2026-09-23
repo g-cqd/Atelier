@@ -3,34 +3,16 @@ public import AtelierGrammar
 import Foundation
 import Synchronization
 
-/// Runtime registry of language-grammar bindings.
-///
-/// Loads `languages.json` manifests, holds compiled parse tables in
-/// memory and a backing disk cache, and dispatches `entry(for*: …)`
-/// lookups for `SyntaxArtifactsCache` and (eventually) ADR 8
-/// extensions. Previously an `actor` — now a `Sendable final class`
-/// over `Mutex<State>` so callers in synchronous contexts
-/// (`SyntaxArtifactsCache.loadArtifacts`, `LanguageHighlighter.Session.
-/// init`) can consult it without an `await` and without paying the
-/// actor's reentrancy budget. The lock guards mutation; reads are
-/// snapshot copies. Audit D1.
+/// The runtime registry of language grammars: registered entries, loaded grammars, and compiled parse tables cached
+/// in memory and on disk. Its state sits behind a `Mutex`, so synchronous callers on any thread can use it.
 public final class GrammarRegistry: Sendable {
-    /// Process-wide instance used by `SyntaxArtifactsCache`. ADR 8
-    /// extension hosts can register additional languages by calling
-    /// `GrammarRegistry.shared.register(…)` at startup; the cache
-    /// consults the shared registry first and only falls back to
-    /// `BundledLanguageManifest` for unregistered names.
+    /// The process-wide registry, which the highlighter consults before `BundledLanguageManifest`.
     public static let shared = GrammarRegistry()
 
     private struct State: Sendable {
-        /// Keyed by file extension (`.swift`, `.rb`, …) for the hot
-        /// `entry(forExtension:)` / `entry(forFilename:)` paths.
+        /// Entries keyed by file extension, dot included (`.swift`).
         var entries: [String: LanguageEntry] = [:]
-        /// Mirror of `entries` keyed by language name. Maintained
-        /// alongside `entries` in `register(_:)` so
-        /// `entry(forLanguage:)` is O(1) instead of a values walk —
-        /// matters at scale once ADR 8 extensions register hundreds of
-        /// languages. Audit B.7/E2.
+        /// `entries` keyed by language name, kept in step by `register(_:)`.
         var entriesByLanguage: [String: LanguageEntry] = [:]
         var loadedGrammars: [String: GrammarDefinition] = [:]
         var compiledTables: [String: ParseTableCompiler.CompilationResult] = [:]
@@ -52,9 +34,8 @@ public final class GrammarRegistry: Sendable {
 
     public init() {}
 
-    /// Register a language entry. The extensions are stored verbatim;
-    /// `entry(forExtension:)` normalises the incoming query so a
-    /// caller may register either `".swift"` or `"swift"`.
+    /// Registers `entry` under its name and, verbatim, under each of its extensions; lookups add a leading dot, so
+    /// an extension registered without one is never found.
     public func register(_ entry: LanguageEntry) {
         state.withLock { state in
             for ext in entry.extensions {
@@ -64,8 +45,10 @@ public final class GrammarRegistry: Sendable {
         }
     }
 
-    /// Load entries from a `languages.json` file. Format mirrors
-    /// `BundledLanguageManifest` (`name`, `extensions`, `path`).
+    /// Registers the entries of a `languages.json` file (`name`, `extensions`, `path`), skipping malformed ones and
+    /// any whose `path` isn't a single safe name.
+    /// - Throws: `GrammarError.fileNotFound` when the file can't be read, `.invalidJSON` when it isn't an array of
+    ///   entries.
     public func loadManifest(from path: String) throws(GrammarError) {
         let url = URL(fileURLWithPath: path)
         let data: Data
@@ -88,14 +71,7 @@ public final class GrammarRegistry: Sendable {
                 let extensions = item["extensions"] as? [String],
                 let path = item["path"] as? String
             else { continue }
-            // Audit C.5/F4 — reject path-traversal payloads in the
-            // attacker-controllable `path` field of an extension
-            // manifest. Without this guard, a malicious
-            // `languages.json` could set `"path": "../../../etc"` and
-            // `grammar(for:grammarsPath:)` would read arbitrary files
-            // outside the bundled-grammar root. Allow only a single
-            // safe-name token; reject `..`, `/`, leading `~`, and
-            // anything that contains non-`[A-Za-z0-9_-]` characters.
+            // The manifest is untrusted: a `path` like `../../etc` would read files outside the grammar root.
             guard Self.isSafePathToken(path) else { continue }
             register(LanguageEntry(name: name, extensions: extensions, path: path))
         }
@@ -120,32 +96,20 @@ public final class GrammarRegistry: Sendable {
         return state.withLock { $0.entries[normalized] }
     }
 
-    /// Find the language entry by its registered name. Used by
-    /// `SyntaxArtifactsCache.loadArtifacts` as the primary dispatch
-    /// path; `BundledLanguageManifest` is the fallback for languages
-    /// not registered at runtime.
+    /// The entry registered under `languageName`, with no fallback to the bundled manifest.
     public func entry(forLanguage languageName: String) -> LanguageEntry? {
-        // O(1) lookup via the language-keyed mirror (audit B.7/E2).
         state.withLock { $0.entriesByLanguage[languageName] }
     }
 
-    /// Find the language entry for a given filename by extracting the
-    /// file extension. Mirrors `BundledLanguageManifest.entry(forFilename:)`
-    /// so `LanguageHighlighter.detectLanguage(for:)` can consult the
-    /// runtime registry before falling back to bundled. Without this,
-    /// ADR 8 extension hosts that register additional languages cannot
-    /// get their language detected on file open (audit F10).
+    /// The entry registered for the lowercased extension of `filename`; nil when it has none.
     public func entry(forFilename filename: String) -> LanguageEntry? {
         let ext = (filename as NSString).pathExtension.lowercased()
         guard !ext.isEmpty else { return nil }
         return entry(forExtension: ext)
     }
 
-    /// Load and cache a grammar definition for a language. Audit B.6 —
-    /// resolves the entry via the runtime registry first, falling back
-    /// to `BundledLanguageManifest` so `LanguageHighlighter.SyntaxArtifactsCache`
-    /// can route every grammar load through this method without
-    /// pre-seeding the registry with the bundled set.
+    /// The grammar of `languageName`, loaded once from its registered entry, else its bundled one, and cached.
+    /// - Throws: `GrammarError.fileNotFound` when neither names the language, or the grammar loader's error.
     public func grammar(for languageName: String, grammarsPath: String) throws(GrammarError)
         -> GrammarDefinition
     {
@@ -168,12 +132,9 @@ public final class GrammarRegistry: Sendable {
         return grammar
     }
 
-    /// Return a compiled parse table result for the given language.
-    ///
-    /// Lookup order:
-    /// 1. In-memory cache (`compiledTables`).
-    /// 2. Disk cache at `<tmp>/kittycode-cache/<languageName>.ptable` (JSON-encoded `CompilationResult`).
-    /// 3. Fresh compilation from the grammar file, persisted to disk cache.
+    /// The compiled parse tables of `languageName`: from memory, else from `<tmp>/kittycode-cache/<name>.ptable`,
+    /// else compiled from the grammar and saved there.
+    /// - Throws: The `GrammarError` of loading or compiling the grammar.
     public func compiledResult(
         for languageName: String,
         grammarsPath: String
@@ -223,10 +184,7 @@ public final class GrammarRegistry: Sendable {
 // MARK: - Bundled entry bridge
 
 extension GrammarRegistry.LanguageEntry {
-    /// Wraps a `BundledLanguageEntry` for cases where the bundled
-    /// manifest is the fallback resolver — `SyntaxArtifactsCache` uses
-    /// this to convert a bundled entry into the shape it would have
-    /// found in the runtime registry.
+    /// A bundled entry in registry form, for lookups that fall back to the bundled manifest.
     init(bundled: BundledLanguageEntry) {
         self.init(name: bundled.name, extensions: bundled.extensions, path: bundled.path)
     }

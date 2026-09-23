@@ -58,10 +58,7 @@ enum BundledLanguageManifest {
         }
     }
 
-    /// Logger for manifest load failures. Bundled resource missing or
-    /// corrupted is the only way `loadManifest` returns nil — that should
-    /// not be silent because it disables every grammar-backed highlighter
-    /// at runtime. Audit D5.
+    /// Reports a missing or corrupt bundled manifest, which leaves every grammar highlighter disabled.
     private static let logger = Logger(
         subsystem: "kittycode.kittysyntax", category: "bundled-language-manifest")
 

@@ -3,24 +3,15 @@ import AtelierQuery
 public import AtelierSyntaxModel
 import Foundation
 
-/// Analyzes a language's grammar and query setup to determine what highlighting tier it achieves.
-///
-/// The reporter inspects static grammar/query properties and checks the artifacts cache
-/// to determine whether a language has been successfully compiled. It does NOT trigger
-/// compilation itself (which can be expensive or hang on complex grammars).
+/// Decides the highlighting tier a language reaches from its grammar and query metadata alone, never compiling, since
+/// a compile can be slow or hang on a complex grammar.
 public enum CapabilityReporter: Sendable {
-    /// Generate a capability report for a language.
+    /// The tier `language` should reach on a host with `hostCapabilities`: `.structural` on trust for a runtime
+    /// registration, otherwise judged from its bundled resources, external scanners and query features.
     public static func report(
         for language: String,
         hostCapabilities: HostCapabilities = HostCapabilities()
     ) -> HighlightCapabilityReport {
-        // Audit A.4/E3 — consult the runtime registry first so ADR 8
-        // extension hosts that register additional grammars are visible
-        // to capability reporting. Reports for runtime languages omit
-        // the resource-shape checks below (the extension is responsible
-        // for serving its own grammar/highlights at `entry.path`) and
-        // report the optimistic `.structural` tier; any actual compile
-        // failure will downgrade observed behaviour at parse time.
         if let registered = GrammarRegistry.shared.entry(forLanguage: language) {
             _ = registered
             return HighlightCapabilityReport(
@@ -94,9 +85,7 @@ public enum CapabilityReporter: Sendable {
                 maxPossibleTier = .enhanced
             }
         } else {
-            // No externals — structural tier is theoretically achievable.
-            // Whether it's actually achieved depends on compilation, but we
-            // report what SHOULD work, not whether compilation has been attempted.
+            // No externals: the structural tier should work, whether or not a compile has run.
             achievedTier = .structural
             maxPossibleTier = .semantic
         }
@@ -109,8 +98,7 @@ public enum CapabilityReporter: Sendable {
         )
     }
 
-    /// Generate reports for all known languages — bundled + runtime
-    /// registry (ADR 8 extensions). Audit A.4.
+    /// A report for every language the bundled manifest or the runtime registry names, sorted by name.
     public static func reportAll(
         hostCapabilities: HostCapabilities = HostCapabilities()
     ) -> [HighlightCapabilityReport] {
