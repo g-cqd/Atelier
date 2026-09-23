@@ -101,7 +101,6 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
             case .modified:
                 side == .old ? NSColor.systemRed.withAlphaComponent(0.16) : NSColor.systemGreen.withAlphaComponent(0.16)
             case .filler: textColor.withAlphaComponent(0.06)
-            case .gap: textColor.withAlphaComponent(0.04)
             case .header: textColor.withAlphaComponent(0.1)
         }
     }
@@ -112,7 +111,7 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
             case .removed: NSColor.systemRed.withAlphaComponent(0.4)
             case .modified:
                 side == .old ? NSColor.systemRed.withAlphaComponent(0.4) : NSColor.systemGreen.withAlphaComponent(0.4)
-            case .context, .filler, .gap, .header: .clear
+            case .context, .filler, .header: .clear
         }
     }
 
@@ -121,7 +120,7 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
     package func minimapColor(for kind: RowKind, side: RenderedSide) -> NSColor? {
         switch (kind, side) {
             case (.context, _): textColor.withAlphaComponent(0.25)
-            case (.filler, _), (.gap, _): nil
+            case (.filler, _): nil
             case (.header, _): textColor.withAlphaComponent(0.6)
             case (.added, .unified), (.removed, .unified), (.modified, .unified): .controlAccentColor
             case (.added, _): .systemGreen
