@@ -13,6 +13,21 @@ import Testing
 /// temporary directory.
 @Suite(.serialized)
 struct GitHostileRepositoryTests {
+    // MARK: - The user's index
+
+    @Test
+    func `the working-tree rename diff never rewrites the repository's index`() async throws {
+        let lab = try Lab()
+        defer { lab.cleanup() }
+        try lab.ageWorkingTree()
+        let index = lab.root.appending(path: ".git/index")
+        let before = try Data(contentsOf: index)
+
+        _ = try await lab.client().renames(from: "HEAD", to: nil)
+
+        #expect(try Data(contentsOf: index) == before)
+    }
+
     // MARK: - Sec C2: read commands
 
     @Test
