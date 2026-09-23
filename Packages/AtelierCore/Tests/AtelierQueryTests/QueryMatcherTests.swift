@@ -194,4 +194,74 @@ struct QueryMatcherTests {
         #expect(captureNames.contains("var"))
         #expect(captureNames.contains("name"))
     }
+
+    @Test
+    func `Matches come in pre-order, a node before its descendants and siblings left to right`() {
+        let first = SyntaxNode(type: "leaf", byteRange: 0 ..< 1)
+        let second = SyntaxNode(type: "leaf", byteRange: 1 ..< 2)
+        let inner = SyntaxNode(type: "inner", children: [first, second], byteRange: 0 ..< 2)
+        let last = SyntaxNode(type: "leaf", byteRange: 2 ..< 3)
+        let root = SyntaxNode(type: "outer", children: [inner, last], byteRange: 0 ..< 3)
+        let tree = SyntaxTree(root: root, source: "abc")
+
+        let matches = QueryMatcher.execute(query: Query(patterns: [.wildcard(capture: "node")]), tree: tree)
+
+        let visited = matches.compactMap { $0.captures.first?.node.byteRange }
+        #expect(visited == [0 ..< 3, 0 ..< 2, 0 ..< 1, 1 ..< 2, 2 ..< 3])
+    }
+
+    @Test
+    func `A point range skips the nodes outside it with their descendants`() {
+        let before = SyntaxNode(
+            type: "identifier", byteRange: 0 ..< 1, pointRange: Point(row: 0, column: 0) ..< Point(row: 0, column: 1))
+        let hidden = SyntaxNode(
+            type: "identifier", byteRange: 2 ..< 3, pointRange: Point(row: 1, column: 0) ..< Point(row: 1, column: 1))
+        let block = SyntaxNode(
+            type: "block", children: [hidden], byteRange: 2 ..< 3,
+            pointRange: Point(row: 1, column: 0) ..< Point(row: 1, column: 1))
+        let root = SyntaxNode(
+            type: "source", children: [before, block], byteRange: 0 ..< 3,
+            pointRange: Point(row: 0, column: 0) ..< Point(row: 1, column: 1))
+        let tree = SyntaxTree(root: root, source: "a\nb")
+        let query = Query(patterns: [.nodeMatch(type: "identifier", children: [], capture: "id")])
+
+        let matches = QueryMatcher.execute(
+            query: query, tree: tree, pointRange: Point(row: 0, column: 0) ..< Point(row: 0, column: 5))
+
+        #expect(matches.compactMap { $0.captures.first?.node.byteRange } == [0 ..< 1])
+    }
+
+    @Test
+    func `A query over a tree too deep to recurse into matches every node on a pool-sized stack`() async {
+        // Recursing once per level overflows a 512 KiB stack near 2,000 levels.
+        let summary = await onThread {
+            let tree = Self.makeChain(depth: 50_000)
+            return Self.summarizeMatches(in: tree)
+        }
+        #expect(summary.count == 50_000)
+        #expect(summary.firstPattern == 0)
+        #expect(summary.leafCapture == "leaf")
+    }
+
+    /// A `depth`-level chain of `branch` nodes ending in one `leaf`.
+    private static func makeChain(depth: Int) -> SyntaxTree {
+        var node = SyntaxNode(type: "leaf", byteRange: 0 ..< 1)
+        for _ in 1 ..< depth {
+            node = SyntaxNode(type: "branch", children: [node], byteRange: 0 ..< 1)
+        }
+        return SyntaxTree(root: node, source: "x")
+    }
+
+    /// The match count, the first match's pattern and the last match's capture for branches without a capture and a
+    /// captured leaf; the matches are gone before the tree, so no capture outlives it.
+    private static func summarizeMatches(
+        in tree: SyntaxTree
+    ) -> (count: Int, firstPattern: Int?, leafCapture: String?) {
+        let query = Query(patterns: [
+            .nodeMatch(type: "branch", children: [], capture: nil),
+            .nodeMatch(type: "leaf", children: [], capture: "leaf")
+        ])
+        let matches = QueryMatcher.execute(query: query, tree: tree)
+        return (matches.count, matches.first?.patternIndex, matches.last?.captures.first?.name)
+    }
 }

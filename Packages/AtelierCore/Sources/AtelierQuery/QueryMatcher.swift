@@ -1,68 +1,70 @@
 public import AtelierParser
 
 /// Walks a syntax tree and matches query patterns, returning captures.
+///
+/// Every `execute` returns matches in pre-order: a node's matches come before its descendants', siblings left to right,
+/// and a node's patterns in query order. The walk keeps its path on the heap, so any depth of tree is safe; only a
+/// pattern's own nesting, which ``QueryParser`` bounds, reaches the call stack.
 public enum QueryMatcher: Sendable {
     /// Execute a query against a syntax tree and return all matches.
+    ///
+    /// - Complexity: O(n × p) pattern attempts for n nodes and p patterns, and O(depth) memory besides the matches.
     public static func execute(query: Query, tree: SyntaxTree) -> [QueryMatch] {
-        var matches: [QueryMatch] = []
-        matchInNode(tree.root, query: query, source: tree.source, matches: &matches)
-        return matches
+        collectMatches(of: query, in: tree, byteRange: nil, pointRange: nil)
     }
 
-    /// Execute a query within a byte range.
+    /// Execute a query within a byte range; a node that does not overlap it is skipped with its descendants.
+    ///
+    /// - Complexity: O(n × p) pattern attempts for the n nodes visited and p patterns.
     public static func execute(query: Query, tree: SyntaxTree, byteRange range: Range<Int>)
         -> [QueryMatch]
     {
-        var matches: [QueryMatch] = []
-        matchInNode(
-            tree.root, query: query, source: tree.source, byteRange: range, pointRange: nil,
-            matches: &matches)
-        return matches
+        collectMatches(of: query, in: tree, byteRange: range, pointRange: nil)
     }
 
-    /// Execute a query within a point range (row/column).
+    /// Execute a query within a point range (row/column); a node that does not overlap it is skipped with its
+    /// descendants.
+    ///
+    /// - Complexity: O(n × p) pattern attempts for the n nodes visited and p patterns.
     public static func execute(query: Query, tree: SyntaxTree, pointRange range: Range<Point>)
         -> [QueryMatch]
     {
-        var matches: [QueryMatch] = []
-        matchInNode(
-            tree.root, query: query, source: tree.source, byteRange: nil, pointRange: range,
-            matches: &matches)
-        return matches
+        collectMatches(of: query, in: tree, byteRange: nil, pointRange: range)
     }
 
     // MARK: - Private
 
-    private static func matchInNode(
-        _ node: SyntaxNode,
-        query: Query,
-        source: String,
-        byteRange: Range<Int>? = nil,
-        pointRange: Range<Point>? = nil,
-        matches: inout [QueryMatch]
-    ) {
-        // Check if node is in range
-        if let range = byteRange {
-            guard node.byteRange.overlaps(range) else { return }
-        }
-        if let range = pointRange {
-            guard node.pointRange.overlaps(range) else { return }
-        }
-
-        // Try each pattern against this node
-        for (patternIdx, pattern) in query.patterns.enumerated() {
-            var captures: [(node: SyntaxNode, name: String)] = []
-            if matchPattern(pattern, against: node, source: source, captures: &captures) {
-                matches.append(QueryMatch(patternIndex: patternIdx, captures: captures))
+    private static func collectMatches(
+        of query: Query,
+        in tree: SyntaxTree,
+        byteRange: Range<Int>?,
+        pointRange: Range<Point>?
+    ) -> [QueryMatch] {
+        let source = tree.source
+        var matches: [QueryMatch] = []
+        // One entry per level of the current path: that level's siblings and the next one to visit.
+        var levels: [(siblings: [SyntaxNode], next: Int)] = [([tree.root], 0)]
+        while let top = levels.indices.last {
+            let index = levels[top].next
+            guard index < levels[top].siblings.count else {
+                levels.removeLast()
+                continue
+            }
+            levels[top].next = index + 1
+            let node = levels[top].siblings[index]
+            if let byteRange, !node.byteRange.overlaps(byteRange) { continue }
+            if let pointRange, !node.pointRange.overlaps(pointRange) { continue }
+            for (patternIndex, pattern) in query.patterns.enumerated() {
+                var captures: [(node: SyntaxNode, name: String)] = []
+                if matchPattern(pattern, against: node, source: source, captures: &captures) {
+                    matches.append(QueryMatch(patternIndex: patternIndex, captures: captures))
+                }
+            }
+            if !node.children.isEmpty {
+                levels.append((node.children, 0))
             }
         }
-
-        // Recurse into children
-        for child in node.children {
-            matchInNode(
-                child, query: query, source: source, byteRange: byteRange, pointRange: pointRange,
-                matches: &matches)
-        }
+        return matches
     }
 
     // swiftlint:disable:next cyclomatic_complexity function_body_length
