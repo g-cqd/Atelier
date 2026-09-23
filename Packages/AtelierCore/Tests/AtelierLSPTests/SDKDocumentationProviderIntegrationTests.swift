@@ -1,3 +1,5 @@
+import AemiRuntime
+import AtelierProcess
 import AtelierSyntaxModel
 import Foundation
 import Testing
@@ -19,7 +21,8 @@ struct SDKDocumentationProviderIntegrationTests {
         let provider = SDKDocumentationProvider(service: service)
 
         let content = "import AppKit\nlet material = NSVisualEffectView.Material.hudWindow"
-        let column = content.utf16.count - 1  // inside "hudWindow"
+        // Inside "hudWindow", counted on the hovered line alone.
+        let column = "let material = NSVisualEffectView.Material.hudWindow".utf16.count - 1
         let query = HoverQuery(documentURI: "file:///probe.swift", content: content, line: 1, utf16Column: column)
 
         let result = try await provider.hover(query)
@@ -27,6 +30,30 @@ struct SDKDocumentationProviderIntegrationTests {
 
         let markdown = try #require(result?.markdown)
         #expect(markdown.lowercased().contains("material"))
+    }
+
+    @Test(.timeLimit(.minutes(3)))
+    func `resolves UIView against the iOS simulator SDK`() async throws {
+        let serverExecutable = try #require(Self.resolveSourceKitLSP(), "sourcekit-lsp not found")
+        let pool = BlockingOffloadPool(width: 1)
+        defer { pool.shutdown() }
+        let runner = HardenedProcessRunner(pool: pool)
+        let probeDirectory = try SDKDocumentationProvider.makeProbeDirectory()
+        // A cold module cache takes a quarter of a minute to load UIKit here.
+        let provider = SDKDocumentationProvider.scratch(
+            serverExecutable: serverExecutable, probeDirectory: probeDirectory,
+            locateSDK: { platform in await SDKLocation.locate(platform, runner: runner) }, requestTimeout: .seconds(120)
+        )
+
+        let content = "import UIKit\nlet view = UIView()"
+        let query = HoverQuery(
+            documentURI: "file:///probe.swift", content: content, line: 1, utf16Column: "let view = UIV".utf16.count)
+        let result = try await provider.hover(query)
+        await provider.shutdown()
+        try FileManager.default.removeItem(at: probeDirectory)
+
+        let markdown = try #require(result?.markdown)
+        #expect(markdown.contains("class UIView"))
     }
 
     private static func resolveSourceKitLSP() -> URL? {
