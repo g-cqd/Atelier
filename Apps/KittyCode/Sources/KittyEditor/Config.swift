@@ -226,8 +226,16 @@ public struct KittyConfig: Codable, Sendable {
     }
 
     public struct GitConfig: Codable, Sendable {
+        static let defaultRefreshInterval: TimeInterval = 10
+
         public var enabled: Bool = true
-        public var refreshInterval: TimeInterval = 10
+        /// Seconds between git status refreshes, clamped to ``KittyConfig/intervalRange``; NaN or an infinity
+        /// becomes the default, 10.
+        public var refreshInterval: TimeInterval = GitConfig.defaultRefreshInterval {
+            didSet {
+                refreshInterval = KittyConfig.boundedInterval(refreshInterval, fallback: Self.defaultRefreshInterval)
+            }
+        }
         public var decorations: GitDecorationsConfig = .init()
 
         public init() {}
@@ -236,9 +244,9 @@ public struct KittyConfig: Codable, Sendable {
             let d = GitConfig()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? d.enabled
-            refreshInterval =
-                try c.decodeIfPresent(TimeInterval.self, forKey: .refreshInterval)
-                ?? d.refreshInterval
+            refreshInterval = KittyConfig.boundedInterval(
+                try c.decodeIfPresent(TimeInterval.self, forKey: .refreshInterval) ?? d.refreshInterval,
+                fallback: Self.defaultRefreshInterval)
             decorations =
                 try c.decodeIfPresent(GitDecorationsConfig.self, forKey: .decorations)
                 ?? d.decorations
@@ -287,8 +295,14 @@ public struct KittyConfig: Codable, Sendable {
     }
 
     public struct AutoSaveConfig: Codable, Sendable {
+        static let defaultInterval: TimeInterval = 30
+
         public var enabled: Bool = false
-        public var interval: TimeInterval = 30
+        /// Seconds between autosaves, clamped to ``KittyConfig/intervalRange``; NaN or an infinity becomes the
+        /// default, 30.
+        public var interval: TimeInterval = AutoSaveConfig.defaultInterval {
+            didSet { interval = KittyConfig.boundedInterval(interval, fallback: Self.defaultInterval) }
+        }
 
         public init() {}
 
@@ -296,7 +310,9 @@ public struct KittyConfig: Codable, Sendable {
             let d = AutoSaveConfig()
             let c = try decoder.container(keyedBy: CodingKeys.self)
             enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? d.enabled
-            interval = try c.decodeIfPresent(TimeInterval.self, forKey: .interval) ?? d.interval
+            interval = KittyConfig.boundedInterval(
+                try c.decodeIfPresent(TimeInterval.self, forKey: .interval) ?? d.interval,
+                fallback: Self.defaultInterval)
         }
     }
 
@@ -664,6 +680,18 @@ public struct KittyConfig: Codable, Sendable {
             KittyLogger.warning("config load failed at \(url.path): \(error). using defaults")
             return KittyConfig()
         }
+    }
+}
+
+extension KittyConfig {
+    /// The seconds a periodic task waits between runs: at least one, so a zero or negative interval cannot run the
+    /// task back to back, and at most an hour, so the interval always converts to a `Duration`.
+    static let intervalRange: ClosedRange<TimeInterval> = 1 ... 3_600
+
+    /// `interval` clamped to ``intervalRange``, or `fallback` when `interval` is NaN or an infinity.
+    static func boundedInterval(_ interval: TimeInterval, fallback: TimeInterval) -> TimeInterval {
+        guard interval.isFinite else { return fallback }
+        return min(max(interval, intervalRange.lowerBound), intervalRange.upperBound)
     }
 }
 
