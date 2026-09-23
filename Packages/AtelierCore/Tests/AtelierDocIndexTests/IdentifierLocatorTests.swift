@@ -73,4 +73,11 @@ struct IdentifierLocatorTests {
         let name = IdentifierLocator.identifier(in: "let value = 1", line: 0, utf16Column: 500)
         #expect(name == nil)
     }
+
+    @Test
+    func `an identifier on a later line of a CRLF file is found`() {
+        // "\r\n" is one Character, so lines split on the Character "\n" never ended in a CRLF file.
+        let name = IdentifierLocator.identifier(in: "let a = 1\r\nlet value = 2\r\n", line: 1, utf16Column: 6)
+        #expect(name == "value")
+    }
 }
