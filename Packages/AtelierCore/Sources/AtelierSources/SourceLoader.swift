@@ -49,6 +49,21 @@ public struct SourceLoader: SourceReading {
     public static let hashingConcurrency = 16
     /// Blobs per `cat-file --batch` process; a few processes run side by side for very large selections.
     public static let blobBatchSize = 256
+    /// The budget of every git run the loader starts, on the runner's clock: a git that never answers, as one reading
+    /// a FIFO a repository's configuration names does, is terminated then instead of holding a pool thread for good.
+    /// Generous, since a rename search between distant refs of a large repository can take seconds.
+    public static let gitTimeout: Duration = .seconds(60)
+
+    /// Git over `repository` within ``gitTimeout``: every client the loader and its sources run comes from here.
+    static func git(_ repository: URL, runner: any ProcessRunner) -> GitClient {
+        GitClient(repository: repository, runner: runner, timeout: gitTimeout)
+    }
+
+    /// The root of the repository `url` lies in, asked of git within ``gitTimeout``; nil as
+    /// ``GitClient/repositoryRoot(containing:runner:timeout:isolation:gate:)`` gives it.
+    static func repositoryRoot(containing url: URL, runner: any ProcessRunner) async -> URL? {
+        await GitClient.repositoryRoot(containing: url, runner: runner, timeout: gitTimeout)
+    }
 
     /// Extensions that are never text; everything else is listed and shown, as code when the language is known
     /// and as plain text otherwise. Binary content slipping through is caught when it is read.
@@ -88,8 +103,8 @@ public struct SourceLoader: SourceReading {
     }
 
     public func repositoryInfo(containing url: URL) async -> RepositoryInfo? {
-        guard let root = await GitClient.repositoryRoot(containing: url, runner: runner) else { return nil }
-        return try? await GitClient(repository: root, runner: runner).info()
+        guard let root = await Self.repositoryRoot(containing: url, runner: runner) else { return nil }
+        return try? await Self.git(root, runner: runner).info()
     }
 
     public func entries(of source: ComparisonSource) async throws -> [GitTreeEntry] {
@@ -120,16 +135,16 @@ public struct SourceLoader: SourceReading {
     }
 
     public func resolve(ref: String, in repository: URL) async throws -> String {
-        try await GitClient(repository: repository, runner: runner).resolve(ref: ref)
+        try await Self.git(repository, runner: runner).resolve(ref: ref)
     }
 
     public func renames(from left: ComparisonSource, to right: ComparisonSource) async -> [String: String] {
         switch (left, right) {
             case (.gitRef(let repository, let from), .gitRef(let other, let to)) where repository == other:
-                (try? await GitClient(repository: repository, runner: runner).renames(from: from, to: to)) ?? [:]
+                (try? await Self.git(repository, runner: runner).renames(from: from, to: to)) ?? [:]
             case (.gitRef(let repository, let from), .directory(let folder))
             where repository.standardizedFileURL == folder.standardizedFileURL:
-                (try? await GitClient(repository: repository, runner: runner).renames(from: from, to: nil)) ?? [:]
+                (try? await Self.git(repository, runner: runner).renames(from: from, to: nil)) ?? [:]
             case (.patch(let url, .old), .patch(let other, .new)) where url == other:
                 Dictionary(
                     ((try? await patches.patch(at: url))?.files ?? []).filter(\.isRename)
@@ -313,8 +328,8 @@ public struct DirectorySource: SourceProvider {
 
     /// Git run in this folder, when it lies in a repository: `ls-files` then lists paths relative to the folder.
     private func gitClient() async -> GitClient? {
-        await GitClient.repositoryRoot(containing: root, runner: runner) == nil
-            ? nil : GitClient(repository: root, runner: runner)
+        await SourceLoader.repositoryRoot(containing: root, runner: runner) == nil
+            ? nil : SourceLoader.git(root, runner: runner)
     }
 
     /// ``stat(_:under:)`` on `offload`, in batches of ``statBatchSize`` paths.
@@ -403,17 +418,17 @@ public struct GitRefSource: SourceProvider {
     public let runner: any ProcessRunner
 
     public func entries() async throws -> [GitTreeEntry] {
-        try await GitClient(repository: repository, runner: runner)
+        try await SourceLoader.git(repository, runner: runner)
             .tree(at: ref, isSupported: SourceLoader.isSupported(path:))
     }
 
     public func content(of entry: GitTreeEntry) async throws -> String {
-        SourceLoader.text(from: try await GitClient(repository: repository, runner: runner).blob(entry.blobID ?? ""))
+        SourceLoader.text(from: try await SourceLoader.git(repository, runner: runner).blob(entry.blobID ?? ""))
     }
 
     /// Blobs are fetched through one `cat-file --batch` process per batch instead of one process per file.
     public func contents(of entries: [GitTreeEntry]) async throws -> [String: String] {
-        let client = GitClient(repository: repository, runner: runner)
+        let client = SourceLoader.git(repository, runner: runner)
         let ids = Array(Set(entries.compactMap(\.blobID)))
         let batches = stride(from: 0, to: ids.count, by: SourceLoader.blobBatchSize)
             .map { Array(ids[$0 ..< min($0 + SourceLoader.blobBatchSize, ids.count)]) }

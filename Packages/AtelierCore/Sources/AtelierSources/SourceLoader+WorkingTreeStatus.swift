@@ -9,10 +9,10 @@ extension SourceLoader {
     /// - Throws: ``GitError`` when git fails; `CancellationError` when the task is cancelled, which terminates git.
     public func workingTreeStatus(of source: ComparisonSource) async throws -> [GitStatusEntry]? {
         guard case .directory(let folder) = source,
-            let root = await GitClient.repositoryRoot(containing: folder, runner: runner),
+            let root = await Self.repositoryRoot(containing: folder, runner: runner),
             let prefix = Self.prefix(of: folder, under: root)
         else { return nil }
-        let status = try await GitClient(repository: root, runner: runner).status(includingIgnored: false)
+        let status = try await Self.git(root, runner: runner).status(includingIgnored: false)
         return Self.entries(status.entries, under: prefix)
     }
 
@@ -21,7 +21,7 @@ extension SourceLoader {
     /// - Throws: ``GitError`` when git fails, for example for a folder outside every repository.
     public func ignoredPaths(among paths: [String], in source: ComparisonSource) async throws -> Set<String> {
         guard case .directory(let folder) = source else { return [] }
-        return try await GitClient(repository: folder, runner: runner).ignored(among: paths)
+        return try await Self.git(folder, runner: runner).ignored(among: paths)
     }
 
     /// `folder`'s path below `root`, ending in `/`, or empty for `root` itself; nil when `folder` lies outside it.

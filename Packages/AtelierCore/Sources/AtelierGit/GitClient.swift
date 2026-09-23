@@ -67,15 +67,17 @@ public struct GitClient: Sendable {
         self.gate = gate
     }
 
-    /// The root of the repository `url` lies in, or nil when it lies in none, or when its configuration is refused.
+    /// The root of the repository `url` lies in, or nil when it lies in none, when its configuration is refused, or
+    /// when git does not answer within `timeout`, a budget on the runner's clock that nil leaves open.
     public static func repositoryRoot(
-        containing url: URL, runner: any ProcessRunner, isolation: GitIsolation = .strict,
+        containing url: URL, runner: any ProcessRunner, timeout: Duration? = nil, isolation: GitIsolation = .strict,
         gate: GitConfigGate = .shared
     ) async -> URL? {
         let directory = url.hasDirectoryPath ? url : url.deletingLastPathComponent()
         guard
             let data = try? await run(
-                ["rev-parse", "--show-toplevel"], in: directory, runner: runner, isolation: isolation, gate: gate)
+                ["rev-parse", "--show-toplevel"], in: directory, runner: runner, timeout: timeout,
+                isolation: isolation, gate: gate)
         else { return nil }
         let path = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         return path.isEmpty ? nil : URL(filePath: path, directoryHint: .isDirectory)
