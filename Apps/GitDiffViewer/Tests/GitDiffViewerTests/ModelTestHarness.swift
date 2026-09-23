@@ -43,6 +43,14 @@ struct ModelTestHarness {
         sut.right.load(.directory(Self.rightURL), repository: nil)
         try await taskProvider.waitForAllTasks()
     }
+
+    /// Holds every listing of the folder at `url` until the returned gate gets one element per listing. Keyed the
+    /// way the reader looks it up: a folder's path ends with a slash, so `"/right"` would hold nothing.
+    func holdListing(of url: URL) -> AsyncProbe<Void> {
+        let gate = AsyncProbe<Void>()
+        reader.gate[url.path(percentEncoded: false)] = gate
+        return gate
+    }
 }
 
 /// Forgets the persistent domains a test's models wrote, so no preference file outlives the run.
