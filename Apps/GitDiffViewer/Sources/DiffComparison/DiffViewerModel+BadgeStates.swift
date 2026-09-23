@@ -15,17 +15,18 @@ extension DiffViewerModel {
 
     /// Rebuilds ``unifiedBadgeStates`` and each side's ``SideState/explorerBadgeStates`` from both sides' states and
     /// the comparison's renames. The unified and left explorers name a path by its left-side path, the right explorer
-    /// by its own, and all three draw a change in the same state (CARD-11).
+    /// by its own, and all three draw a change in the same state (CARD-11). The right explorer merges the unified
+    /// states back rather than the left side's own, so a pair git names twice, as it names a rename it has not
+    /// recorded (a deleted old path and an untracked new one), draws its one state on both sides.
     func updateUnifiedBadgeStates() {
         let comparison = comparison
-        let leftStates = left.badgeStates
         let rightStates = right.badgeStates
-        let unified = BadgeChangeStates.merged(leftStates, with: rightStates) {
+        let unified = BadgeChangeStates.merged(left.badgeStates, with: rightStates) {
             comparison.counterpartPath(of: $0, in: .right)
         }
         unifiedBadgeStates = unified
         left.showComparisonBadgeStates(unified)
         right.showComparisonBadgeStates(
-            .merged(rightStates, with: leftStates) { comparison.counterpartPath(of: $0, in: .left) })
+            .merged(rightStates, with: unified) { comparison.counterpartPath(of: $0, in: .left) })
     }
 }
