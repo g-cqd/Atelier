@@ -175,6 +175,25 @@ struct ViewerSettingsBroadcastTests {
     }
 
     @Test
+    func `hiding the sidebar in one window leaves another window's sidebar alone`() throws {
+        let defaults = try makeDefaults()
+        let window = ViewerSettings(defaults: defaults)
+        let other = ViewerSettings(defaults: defaults)
+
+        window.sidebarVisibility = .detailOnly
+
+        #expect(other.sidebarVisibility == .all)
+    }
+
+    @Test
+    func `a new window opens with the sidebar as the last window left it`() throws {
+        let defaults = try makeDefaults()
+        ViewerSettings(defaults: defaults).sidebarVisibility = .detailOnly
+
+        #expect(ViewerSettings(defaults: defaults).sidebarVisibility == .detailOnly)
+    }
+
+    @Test
     func `a project-scoped write on one instance does not broadcast to another instance's base value`() throws {
         let defaults = try makeDefaults()
         let a = ViewerSettings(defaults: defaults)
