@@ -47,15 +47,21 @@ extension ToolStatusRow {
 struct ToolsSettings: View {
     @Bindable var settings: ViewerSettings
     let scope: SettingsScope
-    let discovery: ToolDiscovery
     /// The app's trust decisions, from the environment the app sets on the Settings scene.
     @Environment(RepositoryTrust.self) private var trust: RepositoryTrust?
 
-    /// Keyed by ``DiagnosticTool/rawValue`` for a static-analysis tool, or the server id for a language server.
-    @State private var statuses: [String: ToolStatus] = [:]
-    @State private var isRefreshing = false
+    /// Where each tool and language server was found, probed for the settings this tab edits.
+    @State private var board: ToolStatusBoard
     /// Rows the user expanded or collapsed by hand, overriding the auto-expand-when-broken default.
     @State private var expandedOverrides: [String: Bool] = [:]
+
+    init(settings: ViewerSettings, scope: SettingsScope, discovery: ToolDiscovery) {
+        self.settings = settings
+        self.scope = scope
+        _board = State(initialValue: ToolStatusBoard(discovery: discovery))
+    }
+
+    private var statuses: [String: ToolStatus] { board.statuses }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -75,11 +81,13 @@ struct ToolsSettings: View {
                             + "tree is analyzed."
                     )
                     .settingsCaption()
-                    Button(SettingLabel.refreshToolStatus) { Task { await refreshAll() } }
-                        .disabled(isRefreshing)
+                    Button(SettingLabel.refreshToolStatus) {
+                        Task { await board.refreshAll(for: settings, rediscovering: true) }
+                    }
+                    .disabled(board.isRefreshing)
                     Text(
                         "Enabled tools below run their own discovered executables against this project's files "
-                            + "whenever a comparison changes."
+                            + "whenever a comparison changes. Refresh looks for them again, after an install."
                     )
                     .settingsCaption()
                 }
@@ -113,10 +121,10 @@ struct ToolsSettings: View {
             SettingsRestoreDefaultsFooter(settings: settings, scope: scope, category: .tools)
         }
         .navigationTitle("Tools")
-        .task(id: scope.selection) { await refreshAll() }
+        .task(id: scope.selection) { await board.refreshAll(for: settings, rediscovering: false) }
     }
 
-    private static let sourceKitLSPKey = "sourcekit-lsp"
+    private static let sourceKitLSPKey = ToolStatusBoard.sourceKitLSPKey
 
     /// One tool's row: a summary line, and its path controls in a `DisclosureGroup` that expands on its own while
     /// the pinned path is broken.
@@ -137,13 +145,13 @@ struct ToolsSettings: View {
                     Button("Locate…") {
                         if let chosen = chooseExecutable(named: executableName) {
                             customPath.wrappedValue = chosen
-                            Task { await refresh(key: key) }
+                            Task { await board.refresh(key: key, for: settings) }
                         }
                     }
                     if customPath.wrappedValue != nil {
                         Button("Reset") {
                             customPath.wrappedValue = nil
-                            Task { await refresh(key: key) }
+                            Task { await board.refresh(key: key, for: settings) }
                         }
                     }
                 }
@@ -229,40 +237,6 @@ struct ToolsSettings: View {
                 settings.lspServerLocations[key] = location
             }
         )
-    }
-
-    // MARK: - Status loading
-
-    private func refreshAll() async {
-        isRefreshing = true
-        for tool in DiagnosticTool.allCases {
-            await refresh(key: tool.rawValue)
-        }
-        await refresh(key: Self.sourceKitLSPKey)
-        isRefreshing = false
-    }
-
-    private func refresh(key: String) async {
-        if let tool = DiagnosticTool(rawValue: key) {
-            let location = settings.toolLocations[tool]
-            statuses[key] = await discovery.status(tool, location: location)
-            return
-        }
-        guard key == Self.sourceKitLSPKey else { return }
-        let location = settings.lspServerLocations[key]
-        if let location, !location.isEnabled {
-            statuses[key] = nil
-            return
-        }
-        if let located = await discovery.locate(
-            executableName: "sourcekit-lsp", overrideVariable: "GDV_SOURCEKIT_LSP",
-            customPath: location?.customPath, searchesToolchain: true
-        ) {
-            // No version: sourcekit-lsp can only report one by launching the language server itself.
-            statuses[key] = ToolStatus(tool: .swiftlint, url: located.url, origin: located.origin, version: nil)
-        } else {
-            statuses[key] = ToolStatus(tool: .swiftlint, url: nil, origin: nil, version: nil)
-        }
     }
 
     private func chooseExecutable(named name: String) -> String? {
