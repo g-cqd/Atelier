@@ -61,7 +61,7 @@ struct BlobHashingTests {
     func `a read of a missing file fails with the message Foundation's own reads give`() async throws {
         let url = FileManager.default.temporaryDirectory.appending(path: "gdv-\(UUID().uuidString)/missing.swift")
 
-        let error = await #expect(throws: CocoaError.self) { try await FileSource.read(url) }
+        let error = await #expect(throws: CocoaError.self) { try await FileSource.read(url, on: TestProcesses.pool) }
 
         #expect(error?.code == .fileReadNoSuchFile)
         #expect(

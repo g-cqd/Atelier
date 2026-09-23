@@ -152,7 +152,8 @@ extension AppearanceScheme {
 
 /// What the app owns for its whole life and every window shares: the pool git runs on and the loader over it.
 final class AppServices {
-    /// Four threads: enough for the batch reads a large selection runs side by side, further runs queue.
+    /// Four threads for git runs and the loader's file reads and hashing: enough for the batch reads a large
+    /// selection runs side by side, further runs queue.
     let pool = BlockingOffloadPool(width: 4)
     /// Git's runs, which quitting interrupts before the pool shuts down.
     let runner: InterruptibleProcessRunner
@@ -175,7 +176,7 @@ final class AppServices {
 
     init() {
         runner = InterruptibleProcessRunner(base: HardenedProcessRunner(pool: pool))
-        loader = SourceLoader(runner: runner)
+        loader = SourceLoader(runner: runner, pool: pool)
 
         diagnosticsRunner = InterruptibleProcessRunner(base: HardenedProcessRunner(pool: diagnosticsPool))
         toolDiscovery = ToolDiscovery(

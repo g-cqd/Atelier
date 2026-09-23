@@ -32,7 +32,7 @@ struct ModelTimelineBenchmark {
         let spy = TaskProviderSpy(label: "benchmark", defaultTimeout: .seconds(120))
         let pool = BlockingOffloadPool(width: 4)
         defer { pool.shutdown() }
-        let loader = SourceLoader(runner: HardenedProcessRunner(pool: pool))
+        let loader = SourceLoader(runner: HardenedProcessRunner(pool: pool), pool: pool)
         let model = DiffViewerModel(settings: ViewerSettings(defaults: defaults), reader: loader, taskProvider: spy)
         let clock = ContinuousClock()
 

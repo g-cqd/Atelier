@@ -15,7 +15,9 @@ struct SideStateFetchTests {
         root: root, branches: ["main", "origin/develop"], tags: [], commits: [])
 
     private func makeSUT(runner: any ProcessRunner, taskProvider: TaskProviderSpy = .tolerant()) -> SideState {
-        SideState(label: "Right", reader: SourceLoader(runner: runner), taskProvider: taskProvider)
+        SideState(
+            label: "Right", reader: SourceLoader(runner: runner, pool: LoaderTestPool.shared),
+            taskProvider: taskProvider)
     }
 
     private nonisolated static func remotesOutput(_ names: [String] = ["origin"]) -> ProcessOutput {

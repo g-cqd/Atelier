@@ -179,8 +179,9 @@ let package = Package(
         .testTarget(
             name: "AtelierSourcesTests",
             dependencies: [
-                "AtelierSources", "AtelierGit", "AtelierProcess", "AtelierSyntaxModel",
-                .product(name: "AemiIO", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
+                "AtelierSources", "AtelierGit", "AtelierProcess", "AtelierSyntaxModel", "AtelierTestSupport",
+                .product(name: "AemiIO", package: "aemi"), .product(name: "AemiRuntime", package: "aemi"),
+                .product(name: "AemiTestKit", package: "aemi")
             ],
             swiftSettings: strict
         ),
