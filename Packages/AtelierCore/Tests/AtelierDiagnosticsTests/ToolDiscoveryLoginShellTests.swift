@@ -196,6 +196,41 @@ struct ToolDiscoveryLoginShellTests {
         #expect(runner.specs.count == 2)
     }
 
+    /// The first lookup's probe is held until that lookup is cancelled; the second lookup has asked for the `PATH` by
+    /// then, in the same actor turn as its last well-known check, and must get it from a probe of its own.
+    @Test
+    func `a lookup waiting on a probe cancelled with another lookup gets the PATH from a new probe`() async throws {
+        let temp = TemporaryDirectory(prefix: "loginshell")
+        defer { temp.cleanup() }
+        let home = URL(filePath: temp.file("home"))
+        let shellDirectory = temp.file("fish-only")
+        try Self.makeExecutable(at: URL(filePath: shellDirectory + "/atelier-probe"))
+        let firstProbe = AsyncLatch()
+        let runner = FakeProcessRunner { _ in
+            if !firstProbe.isOpen {
+                firstProbe.open()
+                // Never opened: this probe ends only when its lookup is cancelled.
+                try await AsyncLatch().wait()
+            }
+            return .success(shellDirectory + "\n")
+        }
+        let fileManager = CheckRecordingFileManager(recordingUnder: home.appending(path: ".local/bin").path)
+        let discovery = ToolDiscovery(
+            runner: runner, bundledDirectory: nil, homeDirectory: home, environment: ["SHELL": "/bin/zsh"],
+            fileManager: fileManager)
+
+        let cancelled = Task { await Self.locate("atelier-probe", with: discovery) }
+        try await firstProbe.wait()
+        async let waiting = Self.locate("atelier-probe", with: discovery)
+        _ = try await fileManager.checks.wait(forAtLeast: 2, timeout: Self.failureBound)
+        cancelled.cancel()
+        let located = await waiting
+
+        #expect(await cancelled.value == nil)
+        #expect(located?.origin == .shellPath)
+        #expect(runner.specs.count == 2)
+    }
+
     @Test
     func `a probe that started before invalidate does not fill the cache`() async throws {
         let temp = TemporaryDirectory(prefix: "loginshell")

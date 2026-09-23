@@ -18,8 +18,9 @@ public actor ToolDiscovery {
     private var xcrunCache: [String: URL?] = [:]
     /// nil until the login shell's `$PATH` has been probed once; an empty array is a valid, cached result.
     private var shellPathDirectoriesCache: [String]?
-    /// Lookups waiting on the login-shell probe in flight, keyed by the ``invalidate()`` generation it started in.
-    private var shellPathWaiters: [Int: [CheckedContinuation<[String], Never>]] = [:]
+    /// Lookups waiting on the login-shell probe in flight, keyed by the ``invalidate()`` generation it started in; each
+    /// gets the probe's answer, or nil when the probe was cancelled with the lookup that started it.
+    private var shellPathWaiters: [Int: [CheckedContinuation<[String]?, Never>]] = [:]
     /// Bumped by ``invalidate()``, so a probe started before it neither fills the cache nor serves a later lookup.
     private var shellPathGeneration = 0
     private var versionCache: [String: (mtime: Date?, version: String?)] = [:]
@@ -136,30 +137,39 @@ public actor ToolDiscovery {
     // MARK: - Login shell $PATH
 
     /// The login shell's `$PATH`, probed once per ``invalidate()`` generation: lookups that arrive while the probe
-    /// runs wait for its answer instead of each starting a shell. A cancelled probe is not cached.
+    /// runs wait for its answer instead of each starting a shell. A cancelled probe is not cached, and the lookups
+    /// waiting on it probe again rather than go on with an empty `PATH`, which would report installed tools missing.
     private func shellPathDirectories() async -> [String] {
-        if let cached = shellPathDirectoriesCache { return cached }
-        let generation = shellPathGeneration
-        if shellPathWaiters[generation] != nil {
-            return await withCheckedContinuation { (continuation: CheckedContinuation<[String], Never>) in
+        while true {
+            if let cached = shellPathDirectoriesCache { return cached }
+            let generation = shellPathGeneration
+            guard shellPathWaiters[generation] != nil else { return await probeShellPath(generation: generation) }
+            let answer = await withCheckedContinuation { (continuation: CheckedContinuation<[String]?, Never>) in
                 if shellPathWaiters[generation] != nil {
                     shellPathWaiters[generation]?.append(continuation)
                 } else {
                     // Unreachable without a suspension since the check above; resumed rather than leaked all the same.
-                    continuation.resume(returning: shellPathDirectoriesCache ?? [])
+                    continuation.resume(returning: shellPathDirectoriesCache)
                 }
             }
+            if let answer { return answer }
+            // The probe was cancelled with the lookup that started it; a cancelled lookup gives up too.
+            if Task.isCancelled { return [] }
         }
+    }
+
+    /// Runs the probe for `generation`, caches its answer unless ``invalidate()`` ran meanwhile, and hands it to every
+    /// lookup that waited on it; a cancelled probe hands them nil, so they probe again.
+    private func probeShellPath(generation: Int) async -> [String] {
         shellPathWaiters[generation] = []
         let probed = await probeShellPath()
         if let probed, generation == shellPathGeneration {
             shellPathDirectoriesCache = probed
         }
-        let directories = probed ?? []
         for waiter in shellPathWaiters.removeValue(forKey: generation) ?? [] {
-            waiter.resume(returning: directories)
+            waiter.resume(returning: probed)
         }
-        return directories
+        return probed ?? []
     }
 
     /// The absolute directories on the `$PATH` the login shell exports, or nil when the calling task was cancelled.
