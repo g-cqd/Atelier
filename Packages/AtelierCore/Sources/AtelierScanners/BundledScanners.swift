@@ -5,6 +5,7 @@ public import AtelierParser
 public enum BundledScanners {
     /// Each ported scanner's type; add one line per port.
     public static let byGrammarName: [String: any GrammarExternalScanner.Type] = [
-        "swift": SwiftExternalScanner.self
+        "swift": SwiftExternalScanner.self,
+        "kotlin": KotlinExternalScanner.self
     ]
 }
