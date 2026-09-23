@@ -76,6 +76,10 @@ package final class RepositoryFreshness {
     private var headTask: Task<Void, Never>?
     private var refsTask: Task<Void, Never>?
     private var indexTask: Task<Void, Never>?
+    /// The tree paths written since the last tree callback, relative to the root; ``treeChangeFilter`` judges them.
+    private var pendingTreePaths: Set<String> = []
+    /// Whether the stream lost track of the tree since the last tree callback, which reloads without asking.
+    private var isTreeRescanPending = false
     /// Bumped by every ``teardown()`` and every attach; events and debounces from an older generation are dropped.
     private var generation = 0
 
@@ -83,7 +87,11 @@ package final class RepositoryFreshness {
     private var lastRepositoryRoot: URL?
     package private(set) var isEnabled: Bool
 
-    /// A tree file changed; the owner should reload the right side's entries.
+    /// Judges the tree paths written since the last reload, relative to the tree's root: true when a reload can show
+    /// one of them. Awaited inside the tree debounce, so a write arriving meanwhile supersedes the judgment and hands
+    /// its paths over again with the new one. Nil reloads for every write.
+    package var treeChangeFilter: (@MainActor (_ paths: Set<String>) async -> Bool)?
+    /// A tree file changed in a way a reload can show; the owner should reload the right side's entries.
     package var onTreeChanged: (() -> Void)?
     /// `HEAD` changed, as a checkout or a branch switch leaves it: a side on `HEAD` may now name another commit.
     package var onHeadChanged: (() -> Void)?
@@ -146,6 +154,8 @@ package final class RepositoryFreshness {
     package func teardown() {
         generation &+= 1
         attachedPaths = nil
+        pendingTreePaths = []
+        isTreeRescanPending = false
         consumerTask?.cancel()
         consumerTask = nil
         treeTask?.cancel()
@@ -229,8 +239,9 @@ package final class RepositoryFreshness {
                 case .fileChanged(let changed), .directoryChanged(let changed): changed
             }
         switch Self.classify(path, paths: paths) {
-            case .tree:
-                scheduleTreeChange(generation: generation)
+            case .tree(let relative):
+                pendingTreePaths.insert(relative)
+                scheduleTreeCheck(generation: generation)
             case .head:
                 scheduleHeadChange(generation: generation)
             case .refs:
@@ -238,7 +249,10 @@ package final class RepositoryFreshness {
             case .index:
                 scheduleIndexChange(generation: generation)
             case .rescan(let includesTree):
-                if includesTree { scheduleTreeChange(generation: generation) }
+                if includesTree {
+                    isTreeRescanPending = true
+                    scheduleTreeCheck(generation: generation)
+                }
                 scheduleHeadChange(generation: generation)
                 scheduleRefsChange(generation: generation)
                 scheduleIndexChange(generation: generation)
@@ -246,8 +260,10 @@ package final class RepositoryFreshness {
         }
     }
 
-    private func scheduleTreeChange(generation: Int) {
-        schedule(&treeTask, after: treeDebounce, generation: generation) { [weak self] in self?.onTreeChanged?() }
+    private func scheduleTreeCheck(generation: Int) {
+        schedule(&treeTask, after: treeDebounce, generation: generation) { [weak self] in
+            await self?.flushTreeChanges(generation: generation)
+        }
     }
 
     private func scheduleHeadChange(generation: Int) {
@@ -262,24 +278,40 @@ package final class RepositoryFreshness {
         schedule(&indexTask, after: refDebounce, generation: generation) { [weak self] in self?.onIndexChanged?() }
     }
 
+    /// Hands the tree paths written since the last reload to ``treeChangeFilter`` and reloads when it finds one a
+    /// reload can show; a rescan reloads without asking. A write arriving while the filter runs cancels this check,
+    /// which then keeps every path for the next one.
+    private func flushTreeChanges(generation: Int) async {
+        let paths = pendingTreePaths
+        let isRescan = isTreeRescanPending
+        var reloads = isRescan
+        if !reloads, !paths.isEmpty {
+            reloads = await treeChangeFilter?(paths) ?? true
+        }
+        guard !Task.isCancelled, self.generation == generation else { return }
+        pendingTreePaths.subtract(paths)
+        if isRescan { isTreeRescanPending = false }
+        if reloads { onTreeChanged?() }
+    }
+
     /// Trailing debounce: each call cancels the wait pending in `slot`, so `fire` runs once events stop for `duration`.
     private func schedule(
         _ slot: inout Task<Void, Never>?, after duration: Duration, generation: Int,
-        fire: @escaping () -> Void
+        fire: @escaping @MainActor () async -> Void
     ) {
         slot?.cancel()
         let clock = clock
         slot = taskProvider.task { [weak self] in
             try? await clock.sleep(for: duration)
             guard !Task.isCancelled, let self, self.generation == generation else { return }
-            fire()
+            await fire()
         }
     }
 
     /// Classifies an absolute, canonical path the watcher reported. `HEAD`, the index and the refs match before the
     /// git dirs' prefixes, which drop every other metadata change: objects, logs, locks, `FETCH_HEAD`. A watched
     /// directory itself, or one above it, only arrives when the stream lost track of what changed below. A tree path
-    /// under a directory the listing always skips, or a hidden one, is dropped.
+    /// under a directory the listing always skips is dropped here; every other one goes to ``treeChangeFilter``.
     nonisolated static func classify(_ path: String, paths: WatchedPaths) -> Classification {
         if path == paths.head { return .head }
         if path == paths.index { return .index }
@@ -289,13 +321,9 @@ package final class RepositoryFreshness {
         if isInside(path, paths.gitDir) || isInside(path, paths.commonDir) { return .ignored }
         guard isInside(path, paths.root) else { return .ignored }
         let relative = String(path.dropFirst(paths.root.count + 1))
-        // Mirrors the folder scan's exclusions, skipped directories and hidden paths alike: sourcekit-lsp's
-        // background index writes under `.build` would otherwise turn every hover into a reload loop.
-        let components = relative.split(separator: "/")
-        let liesUnderExcludedComponent = components.dropLast()
-            .contains { SourceLoader.skippedDirectories.contains(String($0)) || $0.hasPrefix(".") }
-        let isHiddenFile = components.last?.hasPrefix(".") ?? true
-        return (liesUnderExcludedComponent || isHiddenFile) ? .ignored : .tree(relative)
+        let liesUnderSkippedDirectory = relative.split(separator: "/").dropLast()
+            .contains { SourceLoader.skippedDirectories.contains(String($0)) }
+        return liesUnderSkippedDirectory ? .ignored : .tree(relative)
     }
 
     /// Whether `path` is `directory` or lies below it.
