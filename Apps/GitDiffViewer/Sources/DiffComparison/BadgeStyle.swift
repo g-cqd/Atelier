@@ -44,9 +44,9 @@ package enum BadgeFill: Equatable, Sendable {
     case white
 }
 
-/// A badge's letter colour: white (on a filled, coloured badge), a semantic colour (on a stroked or inverted
-/// badge), or the row's primary text colour.
-package enum BadgeTextColor: Equatable, Sendable {
+/// A colour a badge draws its letter or outline in: white (on a filled badge, or on a selected row's accent), a
+/// semantic colour, or the row's primary text colour.
+package enum BadgeInk: Equatable, Sendable {
     case white
     case token(BadgeColorToken)
     case primary
@@ -55,10 +55,10 @@ package enum BadgeTextColor: Equatable, Sendable {
 /// The resolved look of one badge: its fill, its stroke (nil for a filled badge), and its text colour.
 package struct BadgeStyle: Equatable, Sendable {
     package let fill: BadgeFill
-    package let stroke: BadgeColorToken?
-    package let text: BadgeTextColor
+    package let stroke: BadgeInk?
+    package let text: BadgeInk
 
-    package init(fill: BadgeFill, stroke: BadgeColorToken?, text: BadgeTextColor) {
+    package init(fill: BadgeFill, stroke: BadgeInk?, text: BadgeInk) {
         self.fill = fill
         self.stroke = stroke
         self.text = text
@@ -88,18 +88,20 @@ package enum BadgeStyleResolver {
         }
     }
 
-    /// The badge's look for one row: filled for a ``BadgeChangeState/staged`` change, stroked otherwise, and
-    /// inverted to a white fill while the row is selected in a focused list.
+    /// The badge's look for one row: filled for a ``BadgeChangeState/staged`` change, stroked otherwise. On a row
+    /// selected in a focused list (white text on the accent), a staged badge inverts to a white fill with a
+    /// coloured letter, and a stroked one draws its outline and letter in white.
     package static func resolve(
         scheme: BadgeScheme, kind: BadgeChangeKind, state: BadgeChangeState, isSelected: Bool, isFocused: Bool
     ) -> BadgeStyle {
         let token = colorToken(for: kind, scheme: scheme)
-        guard isSelected, isFocused else {
-            return state == .staged
-                ? BadgeStyle(fill: .token(token), stroke: nil, text: .white)
-                : BadgeStyle(fill: .none, stroke: token, text: .token(token))
+        let isOnAccent = isSelected && isFocused
+        switch (state, isOnAccent) {
+            case (.staged, false): return BadgeStyle(fill: .token(token), stroke: nil, text: .white)
+            case (.staged, true): return BadgeStyle(fill: .white, stroke: nil, text: .token(token))
+            case (_, false): return BadgeStyle(fill: .none, stroke: .token(token), text: .token(token))
+            case (_, true): return BadgeStyle(fill: .none, stroke: .white, text: .white)
         }
-        return BadgeStyle(fill: .white, stroke: nil, text: .token(token))
     }
 }
 
