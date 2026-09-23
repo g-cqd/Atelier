@@ -90,16 +90,22 @@ package final class LanguageServerPolicy {
     }
 
     /// The SDK tier's scratch sessions over ``sdkServerExecutable()``, one per platform, in a new private probe
-    /// directory; `locateSDK` finds a platform's SDK when its session is first needed. Nil when sourcekit-lsp is off
-    /// app-wide or missing, or when the directory cannot be created, which is logged.
+    /// directory. `locateSDK` finds every platform's SDK but the Mac's now, while the tier resolves, so that no hover
+    /// waits for it behind other work on the runner it uses. Nil when sourcekit-lsp is off app-wide or missing, or
+    /// when the directory cannot be created, which is logged.
     package func resolveSDKTier(
-        locateSDK: @escaping @Sendable (SDKPlatform) async -> SDKLocation?
+        locateSDK: @Sendable (SDKPlatform) async -> SDKLocation?
     ) async -> SDKHoverTier.Resolved? {
         guard let executable = await sdkServerExecutable() else { return nil }
+        var located: [SDKPlatform: SDKLocation] = [:]
+        for platform in SDKPlatform.allCases where platform != .macOS {
+            located[platform] = await locateSDK(platform)
+        }
         do {
             let probeDirectory = try SDKDocumentationProvider.makeProbeDirectory()
+            let sdks = located
             let provider = SDKDocumentationProvider.scratch(
-                serverExecutable: executable, probeDirectory: probeDirectory, locateSDK: locateSDK)
+                serverExecutable: executable, probeDirectory: probeDirectory, locateSDK: { sdks[$0] })
             return SDKHoverTier.Resolved(provider: provider, probeDirectory: probeDirectory)
         } catch {
             PhaseTrace.log("SDK documentation is off: \(error)")
