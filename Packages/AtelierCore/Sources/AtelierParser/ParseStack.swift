@@ -75,6 +75,31 @@ struct ParseStack: Sendable {
         SyntaxTree.releaseIteratively(consume deepNodes)
     }
 
+    /// Takes out the stack with the fewest errors, the first of them on a tie, and releases the others; nil when
+    /// `stacks` is empty.
+    static func takingFewestErrors(from stacks: inout [ParseStack]) -> ParseStack? {
+        guard let bestIndex = stacks.indices.min(by: { stacks[$0].errorCount < stacks[$1].errorCount }) else {
+            return nil
+        }
+        let best = stacks.remove(at: bestIndex)
+        for index in stacks.indices {
+            stacks[index].releaseNodes(sparing: best)
+        }
+        return best
+    }
+
+    /// Empties every stack in `stacks` without recursing into a deep subtree. A stack that shares nodes with the first
+    /// spares them, so only the first frees them.
+    static func releaseAll(_ stacks: inout [ParseStack]) {
+        guard !stacks.isEmpty else { return }
+        var first = stacks.removeFirst()
+        for index in stacks.indices {
+            stacks[index].releaseNodes(sparing: first)
+        }
+        stacks.removeAll()
+        first.releaseNodes()
+    }
+
     /// `stacks` with one stack per state history, in order: stacks with the same history parse the rest of the input
     /// alike, so the first with the fewest errors stands for all of them, and the others are released.
     ///

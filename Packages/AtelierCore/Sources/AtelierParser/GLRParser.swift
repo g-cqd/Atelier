@@ -74,12 +74,15 @@ public final class GLRParser: Sendable {
             var exceededDepth = false
             stacks = applyReduces(to: consume stacks, lookahead: endIdx, exceededDepth: &exceededDepth)
             guard !exceededDepth else {
-                Self.release(&stacks)
+                ParseStack.releaseAll(&stacks)
                 throw Self.treeTooDeep
             }
         }
 
-        var root = try buildRootNode(from: Self.takeBest(from: &stacks), source: source)
+        guard let best = ParseStack.takingFewestErrors(from: &stacks) else {
+            throw .parsingFailed("No valid parse at the end of input")
+        }
+        var root = try buildRootNode(from: consume best, source: source)
 
         // Insert extra comment tokens into the tree so query matchers can find them
         let extraComments = tokens.filter { $0.isExtra && $0.type == "comment" }
@@ -128,7 +131,7 @@ public final class GLRParser: Sendable {
         var exceededDepth = false
         var reduced = applyReduces(to: consume stacks, lookahead: lookahead, exceededDepth: &exceededDepth)
         guard !exceededDepth else {
-            Self.release(&reduced)
+            ParseStack.releaseAll(&reduced)
             throw Self.treeTooDeep
         }
         var next = ParseStack.mergingIdenticalHistories(shift(consume reduced, token: token, lookahead: lookahead))
@@ -145,30 +148,6 @@ public final class GLRParser: Sendable {
             }
         }
         return next
-    }
-
-    /// Takes out the stack with the fewest errors, the first of them on a tie, and releases the others.
-    private static func takeBest(from stacks: inout [ParseStack]) throws(ParseError) -> ParseStack {
-        guard let bestIndex = stacks.indices.min(by: { stacks[$0].errorCount < stacks[$1].errorCount }) else {
-            throw .parsingFailed("No valid parse at the end of input")
-        }
-        let best = stacks.remove(at: bestIndex)
-        for index in stacks.indices {
-            stacks[index].releaseNodes(sparing: best)
-        }
-        return best
-    }
-
-    /// Empties every stack in `stacks` without recursing into a deep subtree. A stack that shares nodes with the first
-    /// spares them, so only the first frees them.
-    private static func release(_ stacks: inout [ParseStack]) {
-        guard !stacks.isEmpty else { return }
-        var first = stacks.removeFirst()
-        for index in stacks.indices {
-            stacks[index].releaseNodes(sparing: first)
-        }
-        stacks.removeAll()
-        first.releaseNodes()
     }
 
     /// Runs every reduction `lookahead` calls for and returns the stacks ready to shift it or, at the end of the
