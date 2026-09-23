@@ -126,7 +126,7 @@ let package = Package(
             name: "KittyWorkspace",
             dependencies: [
                 .product(name: "AtelierText", package: "AtelierCore"), "KittySyntax", "KittyFileTree", "KittyGit",
-                .product(name: "AemiCore", package: "aemi")
+                .product(name: "AemiCore", package: "aemi"), .product(name: "AemiIO", package: "aemi")
             ],
             swiftSettings: strict),
 
@@ -207,7 +207,10 @@ let package = Package(
             swiftSettings: strict),
         .testTarget(
             name: "KittyWorkspaceTests",
-            dependencies: ["KittyWorkspace", .product(name: "AemiTesting", package: "aemi")],
+            dependencies: [
+                "KittyWorkspace", .product(name: "AemiIO", package: "aemi"),
+                .product(name: "AemiTesting", package: "aemi")
+            ],
             swiftSettings: strict),
         .testTarget(
             name: "KittyGitTests",

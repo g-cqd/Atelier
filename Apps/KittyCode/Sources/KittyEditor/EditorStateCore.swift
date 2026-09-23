@@ -1249,8 +1249,9 @@ public final class EditorState {
 
     @ObservationIgnored public let taskProvider: any TaskProvider
     @ObservationIgnored public let clock: any Clock<Duration>
-    /// The pool workspace search runs its blocking file scans on, so they never park a cooperative thread: the
-    /// app's injected pool, or else a one-worker pool of its own, which `shutdown()` must stop as `deinit` doesn't.
+    /// The pool the editor's blocking file work runs on, so it never parks a cooperative thread: workspace search's
+    /// walk and reads, file loads and reloads, and tree scans. The app's injected pool, or else a one-worker pool of
+    /// its own, which `shutdown()` must stop as `deinit` doesn't.
     @ObservationIgnored public let searchPool: BlockingOffloadPool
     /// Whether `searchPool` is this instance's own; an injected pool is stopped by its creator.
     @ObservationIgnored private let ownsSearchPool: Bool

@@ -32,19 +32,28 @@ public final class FileWatcherIntegration {
     private let workspace: WorkspaceSession
     private weak var delegate: (any FileWatcherDelegate)?
     private let taskProvider: any TaskProvider
+    /// Runs the blocking read of a file that changed, on the app's pool.
+    private let offloadFileRead: BlockingFileRead
     private var watchTask: Task<Void, Never>?
     /// The canonical paths each watched file's events can arrive under, keyed by the buffer's own path.
     private var canonicalPaths: [String: [String]] = [:]
 
     private static let logger = Logger(subsystem: "com.kittytui", category: "file-watcher")
 
+    /// - Parameters:
+    ///   - watcher: Reports changes to the workspace's directory and its open files.
+    ///   - workspace: Holds the buffers kept in step with their files.
+    ///   - delegate: Hears of every reload, flag and directory change.
+    ///   - offloadFileRead: Runs the blocking read of a file that changed, on the app's `BlockingOffloadPool`.
+    ///   - taskProvider: Runs the loop that reads the watcher's events.
     public init(
         watcher: any FileWatching, workspace: WorkspaceSession, delegate: any FileWatcherDelegate,
-        taskProvider: any TaskProvider = .default
+        offloadFileRead: @escaping BlockingFileRead, taskProvider: any TaskProvider = .default
     ) {
         self.watcher = watcher
         self.workspace = workspace
         self.delegate = delegate
+        self.offloadFileRead = offloadFileRead
         self.taskProvider = taskProvider
     }
 
@@ -111,7 +120,7 @@ public final class FileWatcherIntegration {
         let version = buffer.documentVersion
         let loadedFile: LoadedFile
         do {
-            loadedFile = try await WorkspaceFileLoading.readUTF8File(at: path, taskProvider: taskProvider)
+            loadedFile = try await WorkspaceFileLoading.readUTF8File(at: path, offload: offloadFileRead)
         } catch {
             Self.logger.error("Reloading a changed file failed: \(error.localizedDescription, privacy: .private)")
             return
