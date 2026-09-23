@@ -41,6 +41,44 @@ struct DiffRendererTests {
     }
 
     @Test
+    func `a leading gap lies on the boundary above the first row`() throws {
+        let rendered = try #require(
+            DiffRenderer.render(
+                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+            )
+            .unified)
+        let first = try #require(rendered.gaps.first)
+        #expect(first.boundary == 0)
+        #expect(first.marker.isLeading)
+        #expect(first.marker.hiddenRows == 7)
+    }
+
+    @Test
+    func `the split panes record the same gaps on the same boundaries`() throws {
+        let diff = DiffRenderer.render(
+            oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:]))
+        let oldSide = try #require(diff.old)
+        let newSide = try #require(diff.new)
+        #expect(oldSide.gaps.count == 3)
+        #expect(oldSide.gaps == newSide.gaps)
+    }
+
+    @Test
+    func `gaps looked up by boundary are those on the boundaries asked for`() throws {
+        let rendered = try #require(
+            DiffRenderer.render(
+                oldText: old, newText: new, language: .plain, layout: .changes(context: 2, expansions: [:])
+            )
+            .unified)
+        let boundaries = rendered.gaps.map(\.boundary)
+        try #require(boundaries.count == 3)
+        #expect(rendered.gaps(on: 0 ... 0).map(\.boundary) == [0])
+        #expect(rendered.gaps(on: 1 ... boundaries[1]).map(\.boundary) == [boundaries[1]])
+        #expect(rendered.gaps(on: (boundaries[1] + 1) ... (boundaries[2] - 1)).isEmpty)
+        #expect(rendered.gaps(on: 0 ... rendered.rows.count).map(\.boundary) == boundaries)
+    }
+
+    @Test
     func `several files are rendered one after another with a header each`() throws {
         let files = [
             FileDiffInput(title: "a.txt", oldText: "x\n", newText: "y\n", language: .plain),
