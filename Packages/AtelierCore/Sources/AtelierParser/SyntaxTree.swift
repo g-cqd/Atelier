@@ -2,20 +2,9 @@
 
 /// An immutable syntax tree produced by parsing.
 ///
-/// Reference type so that deep ASTs (e.g. large JSON arrays whose grammar
-/// rules build right-leaning structure) can be deallocated iteratively in
-/// `deinit`. The previous value-typed implementation triggered a recursive
-/// destruction chain — each `SyntaxNode` struct dropping its `children:
-/// [SyntaxNode]` recursed into the array's element destructors, blowing
-/// the 544 KB thread stack at ~2000 levels of nesting and surfacing as
-/// SIGBUS with `KERN_PROTECTION_FAILURE` at the stack guard.
-///
-/// `root` and `source` are `let` (and the class is therefore safely
-/// `Sendable` despite the `@unchecked` tag — they're set once at init,
-/// the iterative `deinit` doesn't mutate the tree at all, and no
-/// reference escapes after dealloc begins). The `@unchecked` only buys
-/// the freedom to hold `SyntaxNode` values (a struct whose `children`
-/// and `fields` are `var` arrays for parser-internal building).
+/// A class so `deinit` can release deep trees iteratively: destroying nested `SyntaxNode` arrays recursively
+/// overflows the thread stack at about 2,000 levels. `@unchecked Sendable` holds because `root` and `source` are
+/// set once at init and never mutated.
 public final class SyntaxTree: @unchecked Sendable {
     public let root: SyntaxNode
     public let source: String
@@ -26,11 +15,7 @@ public final class SyntaxTree: @unchecked Sendable {
     }
 
     deinit {
-        // Iteratively dispose the tree to avoid recursive struct
-        // destructors blowing the stack on deeply-nested ASTs. We
-        // hand-walk a stack, popping nodes and pushing their children
-        // before they fall out of scope — the popped node's own
-        // destructor then never recurses, only releases scalars.
+        // Children move to an explicit stack before their parent is released, so no destructor recurses.
         var stack: [SyntaxNode] = [root]
         while !stack.isEmpty {
             var node = stack.removeLast()
@@ -74,7 +59,7 @@ public final class SyntaxTree: @unchecked Sendable {
 // MARK: - Equatable
 
 extension SyntaxTree: Equatable {
-    /// Structural equality — preserves the previous value-type semantics.
+    /// Structural equality of the sources and the trees.
     public static func == (lhs: SyntaxTree, rhs: SyntaxTree) -> Bool {
         lhs.source == rhs.source && lhs.root == rhs.root
     }

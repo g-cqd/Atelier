@@ -11,14 +11,12 @@ public func findMatches(in lines: [String], pattern: SearchPattern) -> [SearchMa
         case .literal(let text, let caseSensitive):
             let options: String.CompareOptions = caseSensitive ? [] : .caseInsensitive
             for (row, line) in lines.enumerated() {
-                // Per-line cancellation check (audit D6). The match loop below
-                // can stall on a pathological line (e.g. a multi-MB single line
-                // with many literal hits); a parent `Task.cancel` should land
-                // within a bounded number of lines, not at task-group boundary.
+                // Checked per line: one pathological line, such as a multi-MB line with many hits, can stall the
+                // match loop, and a cancellation should land within a bounded number of lines.
                 if Task.isCancelled { return matches }
                 var searchStart = line.startIndex
-                // Columns are carried forward from the previous match: measuring each one from the start of the
-                // line made a line with many hits quadratic in its length.
+                // Columns carry forward from the previous match; measuring each from the line start is quadratic in
+                // a line with many hits.
                 var searchStartColumn = 0
                 while searchStart < line.endIndex,
                     let range = line.range(
@@ -33,7 +31,7 @@ public func findMatches(in lines: [String], pattern: SearchPattern) -> [SearchMa
             }
 
         case .regex(let regex):
-            // One budget for the whole file: a per-line budget let a backtracking pattern spend it on every line.
+            // One budget for the whole file: a per-line budget lets a backtracking pattern spend it on every line.
             let deadline = ContinuousClock.now.advanced(by: RegexMatcher.fileBudget)
             for (row, line) in lines.enumerated() {
                 if Task.isCancelled || ContinuousClock.now >= deadline { return matches }

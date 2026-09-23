@@ -7,7 +7,7 @@ public final class GLRParser: Sendable {
     private let parseTable: ParseTable
     private let lexTable: LexTable
     private let productions: [ProductionRule]
-    /// O(1) terminal name -> index lookup (replaces linear firstIndex(of:) scans).
+    /// O(1) terminal name -> index lookup.
     private let terminalIndex: [String: Int]
     /// O(1) non-terminal name -> index lookup.
     private let nonTerminalIndex: [String: Int]

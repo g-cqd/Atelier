@@ -70,22 +70,9 @@ public struct Rope: Sendable {
         return lines
     }
 
-    /// Stable hash of the rope's content. **O(1) per read** after the
-    /// rope has settled — the tree carries per-node hashes precomputed at
-    /// construction, so every read just combines `(byteCount, lineCount,
-    /// root.nodeHash)`.
-    ///
-    /// Per-edit cost is bounded by the depth of the mutation path: every
-    /// new `BranchNode` produced by `inserting` / `removing` / `replace`
-    /// runs its own O(1) hash combine in `init` from its children's
-    /// already-cached hashes. The leaf that was mutated computes its hash
-    /// once in `LeafNode.init`. Total work per edit: O(log N).
-    ///
-    /// Useful for change-detection paths (undo/redo invalidation, dirty
-    /// tracking) where the full lines-array hash would otherwise dominate
-    /// per-edit time on large files. Within a single process run the value
-    /// is deterministic; across runs `Hasher`'s seed randomises so values
-    /// are not stable for serialisation.
+    /// A hash of the rope's bytes as its leaves hold them: equal bytes split into different leaves can hash apart.
+    /// Seeded per process, so it must not be persisted.
+    /// - Complexity: O(1): each node caches its hash when built, so an edit rehashes only its O(log n) path.
     public var contentHash: Int {
         var hasher = Hasher()
         hasher.combine(byteCount)
@@ -101,25 +88,8 @@ public struct Rope: Sendable {
         return storage.root.byteOffsetAfterNewline(count: line)
     }
 
-    /// Drops the storage's cached `text` / `lines` / `contentHash` without
-    /// touching `root`. Used by `BufferEditHistory` immediately before pushing
-    /// a snapshot onto the undo stack — a long-lived snapshot would otherwise
-    /// keep multi-megabyte `cachedText` and `cachedLines` strings resident
-    /// even though no consumer ever reads from the snapshot's rope directly.
-    /// The next read on the live document pays the materialisation cost
-    /// once; subsequent reads are O(1) again. Tree structure and per-node
-    /// metadata (byte counts, newline counts) are unaffected.
-    ///
-    /// Audit B.5/F2 — clones storage first (`ensureUnique`) so the
-    /// invalidation operates on the snapshot's *own* storage instance.
-    /// Without this, immediately after `activeBufferSnapshot()` (before
-    /// the next mutation triggers CoW) the snapshot's `storage`
-    /// reference is the same object as the live document's, and
-    /// clearing its caches would nuke the live document's
-    /// `cachedText`/`cachedLines` too — re-introducing per-keystroke
-    /// rebuild cost. Post-clone, the snapshot owns a private storage
-    /// header (cheap — just a class instance + same root reference;
-    /// the tree itself is structurally shared until a real mutation).
+    /// Drops this rope's cached `text` and `lines`, leaving the tree untouched, so an undo snapshot does not keep
+    /// multi-megabyte strings resident. The storage is made unique first, so a rope sharing it keeps its caches.
     public mutating func invalidateSnapshotCaches() {
         ensureUnique()
         storage.invalidateCaches()
@@ -335,11 +305,9 @@ extension Rope {
     /// Reference type that wraps the tree root so we can use
     /// `isKnownUniquelyReferenced` for copy-on-write.
     ///
-    /// Holds lazy caches for the materialized text, the line array, and a
-    /// content hash — all expensive to recompute and frequently re-read
-    /// between edits. Each mutation goes through `clone()` (which starts with
-    /// empty caches) or directly through `invalidateCaches()` when storage is
-    /// uniquely held.
+    /// Holds lazy caches of the materialized text and line array; a mutation
+    /// clones a shared storage, whose caches start empty, or invalidates them
+    /// when the storage is uniquely held.
     fileprivate final class Storage: @unchecked Sendable {
         /// Written only while the storage is uniquely referenced (`ensureUnique()` precedes every mutation), so a
         /// shared storage is read-only here; the caches below are the one thing readers write, and they go
@@ -465,10 +433,6 @@ enum RopeNode: Sendable {
         }
     }
 
-    /// Reads the UTF-8 bytes of the `index`-th line into `out`, excluding any
-    /// terminating newline. Single tree walk: descends to the leaf containing
-    /// the line start, then collects bytes forward across leaves until it
-    /// finds the terminator (or end of document).
     /// Walks the tree once, accumulating bytes between newlines into `current`
     /// and flushing decoded lines into `lines`. The final line stays in
     /// `current` so the caller can decide whether to append a trailing entry.

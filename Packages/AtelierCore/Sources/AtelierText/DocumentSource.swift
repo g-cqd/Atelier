@@ -1,12 +1,6 @@
 import Foundation
 
-/// Abstraction over line-based text storage.
-///
-/// Consumers (rendering, layout, saving) use this protocol instead of
-/// accessing `TextBuffer` directly.  Normal files keep the exact same
-/// in-memory path through the existing `TextBuffer` conformance; the
-/// seam exists so a future windowed/paged source can serve large files
-/// without materializing every line.
+/// Line-based text storage, read by rendering, layout and saving without depending on `TextBuffer` itself.
 public protocol DocumentSource: Sendable {
     var lineCount: Int { get }
     var isEmpty: Bool { get }

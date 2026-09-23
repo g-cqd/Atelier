@@ -2,24 +2,7 @@ public import AtelierGrammar
 
 /// Wraps ``GLRParser`` with the per-language tables fixed at construction.
 ///
-/// Despite the previous name (`IncrementalParser`) and a docstring that
-/// promised "reuses unchanged subtrees from the previous parse tree",
-/// this type does **not** perform incremental parsing today — every call
-/// to ``parse(_:externalScanner:)`` runs a full GLR pass on the entire
-/// source. The tree-editing primitives in this file
-/// (``SyntaxTree/applying(edit:)`` and the supporting `applyEdit` helpers)
-/// are the building blocks a future incremental implementation would use,
-/// but no callsite currently feeds them back into the parser.
-///
-/// If real incrementality is added later, the right shape is:
-///   1. Apply the edit to the old tree (shift byte and point offsets).
-///   2. Walk the old tree, identify reusable subtrees outside the edit
-///      region.
-///   3. Parse only the changed region plus minimal context.
-///   4. Return a new tree that shares unchanged nodes with the old tree.
-///
-/// Until that work lands, the type's name reflects what it actually does:
-/// a grammar-driven parser with fixed tables.
+/// Every ``parse(_:externalScanner:)`` runs a full GLR pass over the whole source; no previous tree is reused.
 public final class GrammarParser: Sendable {
     private let parser: GLRParser
 
@@ -40,12 +23,8 @@ public final class GrammarParser: Sendable {
 // MARK: - Tree Edit Operations
 
 extension SyntaxTree {
-    /// Apply an edit to the tree, shifting byte/point ranges.
-    ///
-    /// Returns a modified tree ready for a future incremental re-parse to
-    /// reuse subtrees that fall outside the edit region. No production
-    /// callsite consumes the result today (the parser ignores `oldTree`);
-    /// tests exercise this primitive directly.
+    /// The tree with `edit` applied to its node ranges: nodes after the edit shift, nodes overlapping it are
+    /// adjusted. The source text is left as it was.
     public func applying(edit: TextEdit) -> SyntaxTree {
         let newRoot = applyEdit(to: root, edit: edit)
         return SyntaxTree(root: newRoot, source: source)

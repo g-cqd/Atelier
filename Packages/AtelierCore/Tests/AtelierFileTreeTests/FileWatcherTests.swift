@@ -5,14 +5,13 @@ import Testing
 
 @Suite(.tags(.fileWatcher))
 struct FileWatcherTests {
-    /// Awaits the next element of `stream`, racing it against a bounded timeout so a missed FSEvent
-    /// fails the test instead of hanging the suite. This is event-driven (the winning branch is
-    /// whichever suspension resumes first), not polling.
     private enum RaceOutcome<Element: Sendable>: Sendable {
         case element(Element?)
         case timedOut
     }
 
+    /// The next element of `stream`, or nil once `timeout` elapses, so a missed FSEvent fails the test instead of
+    /// hanging the suite.
     private func nextElement<Element: Sendable>(
         of stream: AsyncStream<Element>, timeout: Duration = .seconds(10)
     ) async -> Element? {
