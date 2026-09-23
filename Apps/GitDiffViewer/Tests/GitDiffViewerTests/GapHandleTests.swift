@@ -10,59 +10,64 @@ import Testing
 @MainActor
 struct GapHandleLayoutTests {
     private let key = GapKey(fileIndex: 0, gapIndex: 1)
+    private let both: [GapHandle] = [.extendsChangeAbove, .extendsChangeBelow]
 
     @Test
     func `the halves of a gap between two changes make one rectangle centred on its hairline`() {
-        let halves = GapHandleLayout.halves(
-            [.extendsChangeAbove, .extendsChangeBelow], boundaryY: 100, gutterWidth: 40)
+        let halves = GapHandleLayout.halves(both, boundaryY: 100, rowHeight: 15)
 
         #expect(halves.map(\.handle) == [.extendsChangeAbove, .extendsChangeBelow])
-        #expect(halves[0].rect == CGRect(x: 10, y: 93, width: 20, height: 7))
-        #expect(halves[1].rect == CGRect(x: 10, y: 100, width: 20, height: 7))
+        #expect(halves[0].rect == CGRect(x: 2, y: 93, width: 18, height: 7))
+        #expect(halves[1].rect == CGRect(x: 2, y: 100, width: 18, height: 7))
         #expect(halves[0].rect.union(halves[1].rect).midY == 100)
     }
 
     @Test
     func `a gap at the top of the file offers the lower half alone, hanging under its hairline`() {
         let marker = GapMarker(key: key, hiddenRows: 11, isLeading: true, isTrailing: false)
-        let halves = GapHandleLayout.halves(marker.handles, boundaryY: 0, gutterWidth: 40)
+        let halves = GapHandleLayout.halves(marker.handles, boundaryY: 0, rowHeight: 15)
 
         #expect(halves.map(\.handle) == [.extendsChangeBelow])
-        #expect(halves.first?.rect == CGRect(x: 10, y: 0, width: 20, height: 7))
+        #expect(halves.first?.rect == CGRect(x: 2, y: 0, width: 18, height: 7))
     }
 
     @Test
     func `a gap at the end of a file offers the upper half alone, sitting on its hairline`() {
         let marker = GapMarker(key: key, hiddenRows: 9, isLeading: false, isTrailing: true)
-        let halves = GapHandleLayout.halves(marker.handles, boundaryY: 300, gutterWidth: 40)
+        let halves = GapHandleLayout.halves(marker.handles, boundaryY: 300, rowHeight: 15)
 
         #expect(halves.map(\.handle) == [.extendsChangeAbove])
-        #expect(halves.first?.rect == CGRect(x: 10, y: 293, width: 20, height: 7))
+        #expect(halves.first?.rect == CGRect(x: 2, y: 293, width: 18, height: 7))
     }
 
     @Test
     func `a gap with no change on either side offers no half`() {
         let marker = GapMarker(key: key, hiddenRows: 40, isLeading: true, isTrailing: true)
-        #expect(GapHandleLayout.halves(marker.handles, boundaryY: 0, gutterWidth: 40).isEmpty)
+        #expect(GapHandleLayout.halves(marker.handles, boundaryY: 0, rowHeight: 15).isEmpty)
     }
 
     @Test
     func `each half's hit area is its rectangle, a little taller on its rounded side only`() {
-        let halves = GapHandleLayout.halves(
-            [.extendsChangeAbove, .extendsChangeBelow], boundaryY: 100, gutterWidth: 40)
+        let halves = GapHandleLayout.halves(both, boundaryY: 100, rowHeight: 15)
         let slop = GapHandleLayout.hitSlop
 
-        #expect(halves[0].hitArea == CGRect(x: 10, y: 93 - slop, width: 20, height: 7 + slop))
-        #expect(halves[1].hitArea == CGRect(x: 10, y: 100, width: 20, height: 7 + slop))
+        #expect(halves[0].hitArea == CGRect(x: 2, y: 93 - slop, width: 18, height: 7 + slop))
+        #expect(halves[1].hitArea == CGRect(x: 2, y: 100, width: 18, height: 7 + slop))
     }
 
     @Test
-    func `a narrow gutter narrows the halves to fit, still centred`() throws {
-        let rect = try #require(
-            GapHandleLayout.halves([.extendsChangeAbove], boundaryY: 50, gutterWidth: 22).first?.rect)
-        #expect(rect.minX >= 0)
-        #expect(rect.maxX <= 22)
-        #expect(rect.midX == 11)
+    func `the halves lie in the lane at the gutter's leading edge`() {
+        let halves = GapHandleLayout.halves(both, boundaryY: 100, rowHeight: 15)
+        #expect(halves.allSatisfy { $0.rect.minX > 0 && $0.hitArea.maxX < GapHandleLayout.laneWidth })
+    }
+
+    @Test
+    func `rows too short for the rectangle shorten its halves, so a row between two gaps keeps them apart`() {
+        let upper = GapHandleLayout.halves([.extendsChangeAbove], boundaryY: 111, rowHeight: 11)
+        let lower = GapHandleLayout.halves([.extendsChangeBelow], boundaryY: 100, rowHeight: 11)
+
+        #expect(upper.first?.rect.height == 5)
+        #expect((lower.first?.rect.maxY ?? .infinity) < (upper.first?.rect.minY ?? 0))
     }
 
     @Test
@@ -143,7 +148,7 @@ private final class GutterFixture {
 
     /// The halves of `gap` as the gutter lays them out.
     func halves(of gap: (marker: GapMarker, row: Int, y: CGFloat)) -> [GapHandleLayout.Half] {
-        GapHandleLayout.halves(gap.marker.handles, boundaryY: gap.y, gutterWidth: gutter.bounds.width - 1)
+        GapHandleLayout.halves(gap.marker.handles, boundaryY: gap.y, rowHeight: layout.rendered.lineHeight)
     }
 
     func mouse(_ type: NSEvent.EventType, at point: NSPoint, clicks: Int = 1) {
@@ -310,6 +315,28 @@ struct DiffGutterGapHandleTests {
         fixture.mouse(.mouseMoved, at: NSPoint(x: fixture.gutter.bounds.width - 1.5, y: gap.y + 2))
 
         #expect(halves.map { fixture.pixels(in: $0.rect) } == before)
+    }
+
+    @Test
+    func `line numbers start past the lane that holds the halves`() throws {
+        let fixture = try GutterFixture()
+        let gap = try #require(fixture.middleGap())
+        let numbersLeft = fixture.gutter.numbersLeft
+
+        #expect(fixture.halves(of: gap).allSatisfy { $0.hitArea.maxX < numbersLeft })
+    }
+
+    @Test
+    func `a gutter widens by the handles' lane only while its text offers a handle`() throws {
+        let fixture = try GutterFixture()
+        let text = (1 ... 60).map { "let value\($0) = \($0)" }.joined(separator: "\n") + "\n"
+        let rendered = try #require(DiffRenderer.render(oldText: text, newText: text, language: .plain).new)
+        let whole = DiffGutterView(clipView: nil)
+        whole.style = .new
+        whole.rendered = rendered
+
+        #expect(whole.numbersLeft < GapHandleLayout.laneWidth)
+        #expect(fixture.gutter.thickness - whole.thickness == fixture.gutter.numbersLeft - whole.numbersLeft)
     }
 
     @Test
