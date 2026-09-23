@@ -112,25 +112,20 @@ struct KittyCodeEntry {
             )
         }
 
-        // Config file watcher
-        let configWatcher = FileWatcher()
+        // Config file watcher: reloads after every save, another editor's atomic ones included.
         let configURL =
             launchConfig.configPath.map { URL(fileURLWithPath: $0) } ?? KittyConfig.configURL
         let configPath = configURL.path
-        let configWatchTask: Task<Void, Never>?
+        var configMonitor: WatchedFileMonitor?
         if FileManager.default.fileExists(atPath: configPath) {
-            await configWatcher.watchFile(configPath)
-            configWatchTask = taskProvider.task(role: .observation) { @MainActor in
-                for await event in configWatcher.events {
-                    guard case .fileChanged = event else { continue }
-                    var newConfig = KittyConfig.load(from: configURL)
-                    applyOverrides(from: launchConfig, to: &newConfig)
-                    state.applyConfig(newConfig)
-                    refreshSource.invalidate()
-                }
+            let monitor = WatchedFileMonitor(path: configPath, watcher: FileWatcher(), taskProvider: taskProvider) {
+                var newConfig = KittyConfig.load(from: configURL)
+                applyOverrides(from: launchConfig, to: &newConfig)
+                state.applyConfig(newConfig)
+                refreshSource.invalidate()
             }
-        } else {
-            configWatchTask = nil
+            await monitor.start()
+            configMonitor = monitor
         }
 
         // File watcher
@@ -152,6 +147,11 @@ struct KittyCodeEntry {
                 fileWatcherIntegration: fileWatcherIntegration,
                 autoSaveInterval: config.autoSave.interval,
                 saveActiveBuffer: { [weak state] in state?.writeBufferToDisk() },
+                offloadDiskWrite: { write in try await offloadPool.run(write) },
+                reportFailure: { [weak state] message in
+                    state?.statusMessage = message
+                    refreshSource.invalidate()
+                },
                 taskProvider: taskProvider,
                 clock: clock
             )
@@ -196,10 +196,9 @@ struct KittyCodeEntry {
             state.scrollOffset = max(0, state.cursorRow - 10)
         }
 
-        // Cleanup runs even when `runtime.run` throws; `configWatcher.stop()` is awaited below, as a `defer` can't
+        // Cleanup runs even when `runtime.run` throws; `configMonitor.stop()` is awaited below, as a `defer` can't
         // suspend.
         defer {
-            configWatchTask?.cancel()
             autoSaveManager?.stop()
             gitRefreshManager?.stop()
             state.gitDecorationManager?.stop()
@@ -230,9 +229,9 @@ struct KittyCodeEntry {
                 },
                 renderClock: renderClock
             )
-            await configWatcher.stop()
+            await configMonitor?.stop()
         } catch {
-            await configWatcher.stop()
+            await configMonitor?.stop()
             throw error
         }
 
