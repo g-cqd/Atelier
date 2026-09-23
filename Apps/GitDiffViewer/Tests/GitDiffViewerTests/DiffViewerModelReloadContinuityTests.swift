@@ -251,6 +251,31 @@ struct DiffViewerModelReloadContinuityTests {
     }
 
     @Test
+    func `revealed lines survive a reload that changes the selected file`() async throws {
+        let sut = harness.makeSUT()
+        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]
+        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "2")]
+        harness.serveOneChangeInTheMiddle()
+        try await harness.load(sut)
+        sut.settings.isolatesChanges = true
+        sut.select("a.swift")
+        try await harness.taskProvider.waitForAllTasks()
+        let marker = try #require(sut.rendered?.old?.rows.first?.gap)
+        harness.drag(sut, .extendsChangeBelow, of: marker, rows: 4)
+
+        // The same line changes again, differently: a new blob with the same hunk.
+        var lines = (1 ... 30).map { "line \($0)" }
+        lines[14] = "line fifteen, again"
+        harness.reader.blobContents["3"] = lines.joined(separator: "\n") + "\n"
+        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "3")]
+        sut.right.reload()
+        try await harness.taskProvider.waitForAllTasks()
+
+        #expect(sut.expansion(of: marker.key) == GapExpansion(below: 0, above: 4))
+        #expect(sut.rendered?.old?.rows.first?.gap?.hiddenRows == marker.hiddenRows - 4)
+    }
+
+    @Test
     func `a gap expansion survives a reload that reuses the selected file`() async throws {
         let sut = harness.makeSUT()
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]
