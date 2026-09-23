@@ -1,17 +1,6 @@
 // MARK: - Color
 //
-// Audit D2 — the visual-style value types (`Color`, `UnderlineStyle`,
-// `Style`) used to live in `KittyCodecs/Types.swift` alongside
-// terminal-input value types (`KeyEvent`, `MouseButton`, …). That
-// forced every syntax-highlighting consumer (`KittySyntax/Theme`,
-// `RoleBasedThemeResolver`, `Highlighter`, `HighlightMerger`,
-// `LanguageHighlighter`) to pull in the entire terminal-codec layer
-// just to name a `Style`. They now live in this minimal module
-// (`KittyStyle`) that has no dependencies and sits at the bottom of
-// the layer graph. `KittyCodecs` still depends on `KittyStyle` so its
-// SGR encoder + `ColorRGB` helpers continue to compile unchanged;
-// syntax-side code switches its `import KittyCodecs` for
-// `import KittyStyle` and stops reaching across layer boundaries.
+// The style value types sit in this dependency-free module so syntax code can name a `Style` without the codecs.
 
 public enum Color: Sendable, Equatable, Hashable {
     case `default`

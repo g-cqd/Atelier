@@ -1,8 +1,4 @@
-/// A rectangular region of the screen, in row/column coordinates.
-///
-/// `DirtyRect` is the unit the rendering pipeline operates on for partial
-/// repaint: callers describe which area of the screen they want re-painted,
-/// and the pipeline limits its work to those areas.
+/// A rectangular region of the screen in row/column coordinates, the unit of partial repaint.
 public struct DirtyRect: Sendable, Equatable, Hashable {
     /// Top row (inclusive).
     public var row: Int
@@ -30,16 +26,7 @@ public struct DirtyRect: Sendable, Equatable, Hashable {
     }
 }
 
-/// Set of rectangular regions of the screen that need re-painting on the
-/// next frame.
-///
-/// The pipeline drains and applies these between frames; views and state
-/// mutations describe what they changed via `mark(_:)` or `markRow(_:columns:)`.
-///
-/// Implementation notes — the collection allows overlap (no coalescing yet).
-/// Containment queries are linear in the rect count which is fine for typical
-/// per-frame workloads (a handful of rects). If profiles show this becoming a
-/// hot path we can switch to a segment tree without changing the API.
+/// The screen regions to repaint on the next frame; rects may overlap, since nothing coalesces them.
 public struct DirtyRegions: Sendable, Equatable {
     private var rects: [DirtyRect]
 
@@ -61,8 +48,7 @@ public struct DirtyRegions: Sendable, Equatable {
         mark(DirtyRect(row: row, col: 0, height: 1, width: columns))
     }
 
-    /// Marks the entire buffer as dirty. Discards any previous rectangles
-    /// since a single all-encompassing rect supersedes them.
+    /// Replaces every rect with one covering the whole buffer, or with none when the buffer is empty.
     public mutating func markAll(columns: Int, rows: Int) {
         guard columns > 0, rows > 0 else {
             rects.removeAll(keepingCapacity: true)
@@ -77,6 +63,7 @@ public struct DirtyRegions: Sendable, Equatable {
     }
 
     /// Returns `true` when `(row, col)` lies inside at least one rect.
+    /// - Complexity: O(n), where n is the number of rects.
     public func contains(row: Int, col: Int) -> Bool {
         for rect in rects where rect.contains(row: row, col: col) {
             return true

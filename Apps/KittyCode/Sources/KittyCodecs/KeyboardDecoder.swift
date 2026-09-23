@@ -8,18 +8,12 @@ import AemiKernel
 ///
 /// The progressive enhancement flags determine which fields are present.
 public struct KeyboardDecoder: Sendable {
-    /// Hard cap on the in-flight buffer length. A hostile stream that
-    /// dribbles bytes into a never-terminating CSI sequence cannot grow
-    /// the decoder past this; on overflow the partial sequence is
-    /// returned as `.invalid` and state resets to `.ground`.
+    /// Cap on the in-flight buffer: a sequence that never terminates is returned as `.invalid` past it, and the
+    /// state resets to `.ground`.
     private static let maxSequenceBytes = 4096
-    /// Hard cap on `alternateKeys.count`. A real Kitty keyboard chord
-    /// uses at most a handful of alternates; this is a defence-in-depth
-    /// cap against `CSI <kc>:1:1:1:1:...` style payloads.
+    /// Cap on `alternateKeys.count` against `CSI <kc>:1:1:1:…` payloads; a real chord carries a handful.
     private static let maxAlternateKeys = 32
-    /// Hard cap on `textCodepoints.count`. A single grapheme cluster
-    /// rarely exceeds tens of codepoints; this is a defence-in-depth
-    /// cap against `CSI <kc>;1:1:1:1:...` style payloads.
+    /// Cap on `textCodepoints.count` against `CSI <kc>;1:1:1:…` payloads; a grapheme cluster rarely needs tens.
     private static let maxTextCodepoints = 256
 
     private enum State: Sendable {

@@ -7,9 +7,7 @@ public struct RawModeGuard: ~Copyable, Sendable {
     }
 
     deinit {
-        // The terminal must be left in a usable state. If `tcsetattr` fails we
-        // can't propagate the error from a deinit, so log at .fault level: the
-        // user will be staring at a scrambled tty until they `reset` manually.
+        // A deinit can't propagate a failed restore, so it is logged as a fault; the tty stays scrambled until `reset`.
         do {
             try connection.restoreMode()
         } catch {

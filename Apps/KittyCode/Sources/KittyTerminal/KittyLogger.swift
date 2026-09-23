@@ -1,14 +1,8 @@
 import Foundation
 import os
 
-/// Structured logger for macOS runtime diagnostics.
-///
-/// Uses `os.Logger` for integration with Console.app and Instruments.
-///
-/// Dynamic message contents are redacted by default — callers that interpolate
-/// untrusted values (file paths, error descriptions, user input) get safe
-/// behaviour automatically. Use the `public:` variants to mark contents that
-/// are known to contain no sensitive data (e.g. static literals or enum cases).
+/// Runtime diagnostics through `os.Logger`. Messages are redacted by default; the `public:` variants are only for
+/// contents known to hold no sensitive data, such as static literals or enum cases.
 public enum KittyLogger: Sendable {
     private static let osLogger = Logger(subsystem: "com.kittytui", category: "runtime")
 
@@ -28,14 +22,12 @@ public enum KittyLogger: Sendable {
         osLogger.debug("\(message, privacy: .private)")
     }
 
-    /// Logs `message` at the fault level without redaction. Use only for
-    /// content that contains no sensitive data (static literals, enum cases).
+    /// Logs `message` at the fault level without redaction.
     public static func fault(public message: String) {
         osLogger.fault("\(message, privacy: .public)")
     }
 
-    /// Logs `message` at the error level without redaction. Use only for
-    /// content that contains no sensitive data (static literals, enum cases).
+    /// Logs `message` at the error level without redaction.
     public static func error(public message: String) {
         osLogger.error("\(message, privacy: .public)")
     }
@@ -50,10 +42,7 @@ public enum KittyLogger: Sendable {
         osLogger.debug("\(message, privacy: .public)")
     }
 
-    /// Logs at `.error` AND writes to stderr. Use for CLI parse failures and
-    /// terminal-mode crash reports — the user expects to see them in their
-    /// shell, while Console.app and Instruments captures them via the unified
-    /// logging system.
+    /// Logs `message` redacted at the error level and writes it in full to stderr, for the user's shell.
     public static func stderr(_ message: String) {
         osLogger.error("\(message, privacy: .private)")
         FileHandle.standardError.write(Data((message + "\n").utf8))

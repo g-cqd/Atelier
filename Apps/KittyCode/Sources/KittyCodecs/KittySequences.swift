@@ -1,10 +1,6 @@
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable large_tuple
-/// Static builders for Kitty terminal-specific escape sequences.
-///
-/// Covers synchronized output (mode 2026), the Kitty keyboard protocol (CSI u),
-/// SGR and pixel mouse modes, cursor control, alternate screen, clipboard (OSC 52),
-/// desktop notifications (OSC 99), focus events, and bracketed paste.
+/// Static builders for the escape sequences the app writes: kitty extensions and the standard modes it toggles.
 public enum KittySequences: Sendable {
     // MARK: - Lookup table for decimal encoding
 
@@ -340,7 +336,7 @@ public enum KittySequences: Sendable {
         appendDecimal(&bytes, UInt16(value))
     }
 
-    /// Legacy [UInt8] path for backward compatibility (static let properties, pushKeyboardMode, etc.)
+    /// Decimal encoding for the `[UInt8]` builders.
     private static func appendDecimalLegacy(_ bytes: inout [UInt8], _ value: UInt16) {
         if value >= 10_000 {
             bytes.append(0x30 + UInt8(value / 10_000))

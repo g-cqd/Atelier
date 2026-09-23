@@ -62,13 +62,7 @@ public final class SignalHandler: Sendable {
         }
     }
 
-    /// Captures and restores a POSIX signal disposition. The saved `sigaction`
-    /// is guarded by a `Mutex` from the `Synchronization` module: `install`
-    /// runs once at stream creation, `restore` runs in `onTermination`, and
-    /// while POSIX guarantees `sigaction(2)` is async-signal-safe, the prior
-    /// `@unchecked Sendable` annotation made the data-race analysis manual.
-    /// Mutex makes the invariant explicit and lets the type be Sendable
-    /// directly.
+    /// A POSIX signal disposition, saved in a `Mutex` when a handler is installed and restored on stream termination.
     private final class PreviousDisposition: Sendable {
         private let signal: Int32
         private let saved = Mutex<sigaction>(sigaction())

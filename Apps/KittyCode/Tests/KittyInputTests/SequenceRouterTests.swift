@@ -201,18 +201,12 @@ struct SequenceRouterTests {
         #expect(key.eventType == .press)
     }
 
-    // MARK: - Audit F6: control-sequence overflow caps
+    // MARK: - Control-sequence overflow caps
 
-    /// A hostile peer feeding `ESC [` followed by an unbounded stream of
-    /// semicolon-separated digits would pin the router in `.csiParam`
-    /// forever, growing `buffer` until OOM. The 4096-byte
-    /// `maxControlSequenceSize` cap returns `.unknown("control overflow")`
-    /// and resets routing so the stream stays bounded.
+    /// An endless `ESC [` parameter stream hits the 4096-byte cap, which reports a control overflow and resets routing.
     @Test
     func `csiParam overflow returns unknown and resets`() throws {
         var router = makeSUT()
-        // Open a CSI numeric-parameter sequence and dribble 5000
-        // digit/separator bytes. The cap fires before then.
         var events = router.feedAll([0x1b, 0x5b])  // ESC [
         let pattern: [UInt8] = [0x33, 0x3b]  // "3;" repeated
         for _ in 0 ..< 3000 {
@@ -227,9 +221,7 @@ struct SequenceRouterTests {
         #expect(labeled, "expected at least one .unknown(\"control overflow\") event")
     }
 
-    /// After overflow, the router must be back to `.ground` and accept
-    /// fresh input without losing characters. Otherwise an attacker who
-    /// triggers overflow could mask subsequent legitimate keys.
+    /// After an overflow the router is back in `.ground`, so the next key is not lost.
     @Test
     func `csiParam overflow recovers to accept fresh input`() throws {
         var router = makeSUT()
@@ -243,9 +235,7 @@ struct SequenceRouterTests {
         try assertSingleKeyEvent(in: events, expectedKeyCode: 97)
     }
 
-    /// `.osc` keeps its dedicated 1 MB cap (intentional — terminal-title
-    /// payloads are legitimately large), so a 5000-byte digit stream
-    /// inside `OSC` is NOT treated as `control overflow`.
+    /// OSC keeps its own 1 MB cap for title-sized payloads, so 5000 bytes inside one are no control overflow.
     @Test
     func `osc state is not subject to the smaller control-sequence cap`() throws {
         var router = makeSUT()
@@ -253,8 +243,7 @@ struct SequenceRouterTests {
         for _ in 0 ..< 5000 {
             _ = router.feed(0x33)
         }
-        // Now terminate. We don't care what type of event the OSC emits;
-        // we only want to verify it didn't trip the smaller cap.
+        // Whatever the OSC emits, it must not be a control overflow.
         let events = router.feed(0x07)  // BEL terminator
         let tripped = events.contains { event in
             if case .unknown(let bytes) = event {
