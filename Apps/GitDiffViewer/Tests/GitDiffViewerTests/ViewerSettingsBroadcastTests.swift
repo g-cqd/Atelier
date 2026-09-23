@@ -98,6 +98,55 @@ struct ViewerSettingsBroadcastTests {
     }
 
     @Test
+    func `a base edit broadcast to a window on a project writes no override and registers no project`() throws {
+        let defaults = try makeDefaults()
+        let settingsWindow = ViewerSettings(defaults: defaults)
+        let window = ViewerSettings(defaults: defaults)
+        let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
+        window.adoptProject(project)
+
+        settingsWindow.contextLines = 5
+
+        #expect(window.contextLines == 5)
+        #expect(defaults.object(forKey: "project.\(project.key).contextLines") == nil)
+        #expect(defaults.dictionary(forKey: "projectRegistry") == nil)
+    }
+
+    @Test
+    func `base edits keep reaching a window whose project overrides nothing`() throws {
+        let defaults = try makeDefaults()
+        let settingsWindow = ViewerSettings(defaults: defaults)
+        let window = ViewerSettings(defaults: defaults)
+        window.adoptProject(ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory)))
+
+        settingsWindow.contextLines = 5
+        settingsWindow.contextLines = 7
+
+        #expect(window.contextLines == 7)
+    }
+
+    @Test
+    func `overridden in N projects counts only the projects the user edited`() throws {
+        let defaults = try makeDefaults()
+        let settingsWindow = ViewerSettings(defaults: defaults)
+        let edited = ProjectIdentity(root: URL(filePath: "/repos/edited", directoryHint: .isDirectory))
+        let untouched = ProjectIdentity(root: URL(filePath: "/repos/untouched", directoryHint: .isDirectory))
+        let editedWindow = ViewerSettings(defaults: defaults)
+        editedWindow.adoptProject(edited)
+        let untouchedWindow = ViewerSettings(defaults: defaults)
+        untouchedWindow.adoptProject(untouched)
+        editedWindow.contextLines = 9  // the one override the user made
+
+        settingsWindow.contextLines = 5
+        settingsWindow.diagnosticsEnabled = true
+        settingsWindow.showsChangesOnly = true
+
+        #expect(settingsWindow.projectsWithOverrides(in: .diff).map(\.key) == [edited.key])
+        #expect(settingsWindow.projectsWithOverrides(in: .tools).isEmpty)
+        #expect(settingsWindow.projectsWithOverrides(in: .general).isEmpty)
+    }
+
+    @Test
     func `a project-scoped write on one instance does not broadcast to another instance's base value`() throws {
         let defaults = try makeDefaults()
         let a = ViewerSettings(defaults: defaults)

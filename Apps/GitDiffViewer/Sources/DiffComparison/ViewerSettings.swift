@@ -130,7 +130,7 @@ package final class ViewerSettings {
     /// Settings whose value may vary from one project to the next; everything else stays app-wide.
     static let projectScopedKeys: Set<String> = [
         Key.diagnosticsEnabled, Key.analyzedSides, Key.toolLocations, Key.lspServerLocations, Key.contextLines,
-        Key.showsChangesOnly, Key.showsIgnoredFiles, Key.diffHeuristics, Key.treeStyle
+        Key.showsChangesOnly, Key.showsIgnoredFiles, Key.diffHeuristics, Key.treeStyle, Key.granularity
     ]
 
     static let projectRegistryKey = "projectRegistry"
@@ -160,79 +160,132 @@ package final class ViewerSettings {
         defaults.set(registry, forKey: Self.projectRegistryKey)
     }
 
+    // Every setter returns early on an equal value: re-selecting what is already chosen must neither write an
+    // override nobody made nor tell observers to redo work.
     package var mode: ViewMode {
-        didSet { store(mode.rawValue, Key.mode, (oldValue == .inline) != (mode == .inline) ? .layout : .appearance) }
+        didSet {
+            guard mode != oldValue else { return }
+            store(mode.rawValue, Key.mode, (oldValue == .inline) != (mode == .inline) ? .layout : .appearance)
+        }
     }
     package var explorerPlacement: ExplorerPlacement {
-        didSet { store(explorerPlacement.rawValue, Key.explorerPlacement, .appearance) }
+        didSet {
+            if explorerPlacement != oldValue { store(explorerPlacement.rawValue, Key.explorerPlacement, .appearance) }
+        }
     }
     package var sidebarVisibility: SidebarVisibility {
-        didSet { store(sidebarVisibility.rawValue, Key.sidebarVisibility, .appearance) }
+        didSet {
+            if sidebarVisibility != oldValue { store(sidebarVisibility.rawValue, Key.sidebarVisibility, .appearance) }
+        }
     }
-    package var wrapsLines: Bool { didSet { store(wrapsLines, Key.wrapsLines, .appearance) } }
+    package var wrapsLines: Bool {
+        didSet { if wrapsLines != oldValue { store(wrapsLines, Key.wrapsLines, .appearance) } }
+    }
     /// Keep the two panes of a split layout at the same vertical position.
-    package var syncsScrolling: Bool { didSet { store(syncsScrolling, Key.syncsScrolling, .appearance) } }
-    package var showsChangesOnly: Bool { didSet { store(showsChangesOnly, Key.showsChangesOnly, .trees) } }
+    package var syncsScrolling: Bool {
+        didSet { if syncsScrolling != oldValue { store(syncsScrolling, Key.syncsScrolling, .appearance) } }
+    }
+    package var showsChangesOnly: Bool {
+        didSet { if showsChangesOnly != oldValue { store(showsChangesOnly, Key.showsChangesOnly, .trees) } }
+    }
     /// Lists the files git ignores in a section of their own, so their content can be looked at on demand.
-    package var showsIgnoredFiles: Bool { didSet { store(showsIgnoredFiles, Key.showsIgnoredFiles, .trees) } }
+    package var showsIgnoredFiles: Bool {
+        didSet { if showsIgnoredFiles != oldValue { store(showsIgnoredFiles, Key.showsIgnoredFiles, .trees) } }
+    }
     /// Whether the window watches the working tree and the repository's `.git` metadata for external changes and
     /// reloads on its own.
-    package var autoRefresh: Bool { didSet { store(autoRefresh, Key.autoRefresh, .freshness) } }
-    package var granularity: IntralineGranularity { didSet { store(granularity.rawValue, Key.granularity, .diff) } }
+    package var autoRefresh: Bool {
+        didSet { if autoRefresh != oldValue { store(autoRefresh, Key.autoRefresh, .freshness) } }
+    }
+    package var granularity: IntralineGranularity {
+        didSet { if granularity != oldValue { store(granularity.rawValue, Key.granularity, .diff) } }
+    }
     /// Which diff heuristics are wired in; any change re-diffs the selection.
     package var diffHeuristics: DiffHeuristics {
-        didSet { store(try? DefaultsJSON.encode(diffHeuristics), Key.diffHeuristics, .diff) }
+        didSet {
+            if diffHeuristics != oldValue { store(try? DefaultsJSON.encode(diffHeuristics), Key.diffHeuristics, .diff) }
+        }
     }
-    package var showsMinimap: Bool { didSet { store(showsMinimap, Key.showsMinimap, .appearance) } }
-    package var showsStatusBar: Bool { didSet { store(showsStatusBar, Key.showsStatusBar, .appearance) } }
-    package var treeStyle: FileTreeStyle { didSet { store(treeStyle.rawValue, Key.treeStyle, .trees) } }
+    package var showsMinimap: Bool {
+        didSet { if showsMinimap != oldValue { store(showsMinimap, Key.showsMinimap, .appearance) } }
+    }
+    package var showsStatusBar: Bool {
+        didSet { if showsStatusBar != oldValue { store(showsStatusBar, Key.showsStatusBar, .appearance) } }
+    }
+    package var treeStyle: FileTreeStyle {
+        didSet { if treeStyle != oldValue { store(treeStyle.rawValue, Key.treeStyle, .trees) } }
+    }
     /// Characters per line when wrapping; zero wraps at the viewport width.
-    package var wrapColumn: Int { didSet { store(wrapColumn, Key.wrapColumn, .appearance) } }
+    package var wrapColumn: Int {
+        didSet { if wrapColumn != oldValue { store(wrapColumn, Key.wrapColumn, .appearance) } }
+    }
     /// Path of the Xcode theme file to derive colors and font from; nil keeps the system look.
-    package var themePath: String? { didSet { store(themePath, Key.themePath, .palette) } }
+    package var themePath: String? { didSet { if themePath != oldValue { store(themePath, Key.themePath, .palette) } } }
     /// Show only the changed regions with context, in every layout.
-    package var isolatesChanges: Bool { didSet { store(isolatesChanges, Key.isolatesChanges, .layout) } }
+    package var isolatesChanges: Bool {
+        didSet { if isolatesChanges != oldValue { store(isolatesChanges, Key.isolatesChanges, .layout) } }
+    }
     /// Unchanged rows kept around each change when changes are isolated.
-    package var contextLines: Int { didSet { store(contextLines, Key.contextLines, .layout) } }
+    package var contextLines: Int {
+        didSet { if contextLines != oldValue { store(contextLines, Key.contextLines, .layout) } }
+    }
     /// Line height as a multiple of the font's; zero follows the theme (1.0 for the system palette).
-    package var lineHeightMultiple: Double { didSet { store(lineHeightMultiple, Key.lineHeightMultiple, .layout) } }
+    package var lineHeightMultiple: Double {
+        didSet { if lineHeightMultiple != oldValue { store(lineHeightMultiple, Key.lineHeightMultiple, .layout) } }
+    }
     /// Master toggle for the diagnostics track; off cancels any run in flight and clears findings.
     package var diagnosticsEnabled: Bool {
-        didSet { store(diagnosticsEnabled, Key.diagnosticsEnabled, .diagnostics) }
+        didSet { if diagnosticsEnabled != oldValue { store(diagnosticsEnabled, Key.diagnosticsEnabled, .diagnostics) } }
     }
     /// Whether hovering a symbol shows its documentation.
     package var showsHoverDocumentation: Bool {
-        didSet { store(showsHoverDocumentation, Key.showsHoverDocumentation, .appearance) }
+        didSet {
+            if showsHoverDocumentation != oldValue {
+                store(showsHoverDocumentation, Key.showsHoverDocumentation, .appearance)
+            }
+        }
     }
     /// Per-tool enablement and custom executable path, keyed by tool; every tool is enabled by default.
     package var toolLocations: [DiagnosticTool: ToolLocation] {
         didSet {
+            guard toolLocations != oldValue else { return }
             let encoded = Dictionary(uniqueKeysWithValues: toolLocations.map { ($0.key.rawValue, $0.value) })
             store(try? DefaultsJSON.encode(encoded), Key.toolLocations, .diagnostics)
         }
     }
     /// Per-server overrides for language servers outside ``DiagnosticTool``, such as `sourcekit-lsp`, by server id.
     package var lspServerLocations: [String: ToolLocation] {
-        didSet { store(try? DefaultsJSON.encode(lspServerLocations), Key.lspServerLocations, .diagnostics) }
+        didSet {
+            guard lspServerLocations != oldValue else { return }
+            store(try? DefaultsJSON.encode(lspServerLocations), Key.lspServerLocations, .diagnostics)
+        }
     }
     /// Which side(s) of a comparison diagnostics findings are mapped onto.
     package var analyzedSides: AnalyzedSides {
-        didSet { store(analyzedSides.rawValue, Key.analyzedSides, .diagnostics) }
+        didSet { if analyzedSides != oldValue { store(analyzedSides.rawValue, Key.analyzedSides, .diagnostics) } }
     }
     /// The Settings window's last-viewed tab, restored the next time it opens.
     package var settingsPane: SettingsPane {
-        didSet { store(settingsPane.rawValue, Key.settingsPane, .appearance) }
+        didSet { if settingsPane != oldValue { store(settingsPane.rawValue, Key.settingsPane, .appearance) } }
     }
     /// The light/dark appearance of the window chrome, the Settings window included.
     package var appearanceScheme: AppearanceScheme {
-        didSet { store(appearanceScheme.rawValue, Key.appearanceScheme, .appearance) }
+        didSet {
+            if appearanceScheme != oldValue { store(appearanceScheme.rawValue, Key.appearanceScheme, .appearance) }
+        }
     }
     /// Which colours a change badge's letter is drawn in: classic red/green/orange/purple, or Xcode's own.
-    package var badgeScheme: BadgeScheme { didSet { store(badgeScheme.rawValue, Key.badgeScheme, .appearance) } }
+    package var badgeScheme: BadgeScheme {
+        didSet { if badgeScheme != oldValue { store(badgeScheme.rawValue, Key.badgeScheme, .appearance) } }
+    }
     /// Whether the window follows the selected theme's own light/dark background instead of the system's, when
     /// ``appearanceScheme`` is ``AppearanceScheme/system`` -- an explicit light/dark pin always wins.
     package var matchesThemeAppearance: Bool {
-        didSet { store(matchesThemeAppearance, Key.matchesThemeAppearance, .appearance) }
+        didSet {
+            if matchesThemeAppearance != oldValue {
+                store(matchesThemeAppearance, Key.matchesThemeAppearance, .appearance)
+            }
+        }
     }
 
     let defaults: UserDefaults
@@ -247,23 +300,38 @@ package final class ViewerSettings {
         body()
     }
 
-    /// Set while another instance's broadcast base-key change is applied, so `store` doesn't re-broadcast it.
-    @ObservationIgnored var isApplyingBroadcast = false
+    /// Set while properties are reassigned values read back from storage: another instance's base write, or the
+    /// values of a project this instance adopts. `store` then writes nothing, neither the project's key, which would
+    /// turn a value the user never chose there into an override, nor the base key, which already holds it, and so
+    /// broadcasts nothing either; observers still hear the change.
+    @ObservationIgnored private var isApplyingStoredValues = false
+
+    func applyingStoredValues(_ body: () -> Void) {
+        isApplyingStoredValues = true
+        defer { isApplyingStoredValues = false }
+        body()
+    }
+
     /// `nonisolated(unsafe)`: written once at the end of `init` and read once in the nonisolated `deinit`.
     @ObservationIgnored private nonisolated(unsafe) var baseSettingObserver: (any NSObjectProtocol)?
 
     private func store(_ value: Any?, _ key: String, _ change: Change) {
-        if let projectID, Self.projectScopedKeys.contains(key) {
-            if !isFallingBackToBase {
-                defaults.set(value, forKey: scopedKey(key, for: projectID))
-                registerProject(projectID)
-            }
-        } else {
-            defaults.set(value, forKey: key)
-            if !isApplyingBroadcast { postBaseSettingChanged(key: key) }
-        }
+        if !isApplyingStoredValues { write(value, key) }
         observers.removeAll { $0.owner.object == nil }
         for observer in observers { observer.handler(change) }
+    }
+
+    /// Writes a user's edit: to the adopted project's key for a scoped setting, to the base key, announced to every
+    /// other instance, otherwise.
+    private func write(_ value: Any?, _ key: String) {
+        guard let projectID, Self.projectScopedKeys.contains(key) else {
+            defaults.set(value, forKey: key)
+            postBaseSettingChanged(key: key)
+            return
+        }
+        guard !isFallingBackToBase else { return }
+        defaults.set(value, forKey: scopedKey(key, for: projectID))
+        registerProject(projectID)
     }
 
     package init(defaults: UserDefaults = .standard) {
@@ -320,7 +388,10 @@ package final class ViewerSettings {
     deinit {
         if let baseSettingObserver { NotificationCenter.default.removeObserver(baseSettingObserver) }
     }
+}
 
+/// Restoring defaults and counting deviations, per Settings tab.
+extension ViewerSettings {
     /// Resets every setting in `category` to its coded default through the same setters as a user edit. Once a
     /// project is adopted, a scoped setting instead drops the project's override and falls back to the base value.
     package func restoreDefaults(_ category: SettingsCategory) {
@@ -349,7 +420,9 @@ package final class ViewerSettings {
                 contextLines = restoredValue(Key.contextLines, appDefault: 3) {
                     defaults.object(forKey: Key.contextLines) as? Int ?? 3
                 }
-                granularity = .word
+                granularity = restoredValue(Key.granularity, appDefault: IntralineGranularity.word) {
+                    defaults.string(forKey: Key.granularity).flatMap(IntralineGranularity.init(rawValue:)) ?? .word
+                }
                 diffHeuristics = restoredValue(Key.diffHeuristics, appDefault: DiffHeuristics()) {
                     defaults.data(forKey: Key.diffHeuristics)
                         .flatMap { try? DefaultsJSON.decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()

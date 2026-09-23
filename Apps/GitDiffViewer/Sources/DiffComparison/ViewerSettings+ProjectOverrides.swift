@@ -8,17 +8,18 @@ extension ViewerSettings {
     static func scopedKeys(for category: SettingsCategory) -> Set<String> {
         switch category {
             case .general: [Key.showsChangesOnly, Key.showsIgnoredFiles, Key.treeStyle]
-            case .diff: [Key.contextLines, Key.diffHeuristics]
+            case .diff: [Key.contextLines, Key.diffHeuristics, Key.granularity]
             case .appearance: []
             case .tools: [Key.diagnosticsEnabled, Key.analyzedSides, Key.toolLocations, Key.lspServerLocations]
         }
     }
 
     /// Adopts `id` as this instance's project and re-reads every scoped key, so each value that changes goes
-    /// through its setter exactly as a manual edit would. Nothing rebuilds the model or its window.
+    /// through its setter and reaches observers as a manual edit would, without being written back: adopting a
+    /// project creates no override. Nothing rebuilds the model or its window.
     package func adoptProject(_ id: ProjectIdentity?) {
         projectID = id
-        reloadProjectScopedValues()
+        applyingStoredValues { reloadProjectScopedValues() }
     }
 
     private func reloadProjectScopedValues() {
@@ -165,14 +166,13 @@ extension ViewerSettings {
             name: Self.baseSettingChangedNotification, object: self, userInfo: [Self.baseSettingChangedKey: key])
     }
 
-    /// Reloads a base key another instance just wrote, unless this instance's project override of `key` wins. Takes
+    /// Reloads a base key another instance just wrote, unless this instance's project override of `key` wins. The
+    /// value is only read, never written back, so a broadcast neither re-broadcasts nor creates an override. Takes
     /// `Sendable` values because the `Notification` itself must not cross into `MainActor.assumeIsolated`.
     func baseSettingChanged(posterID: ObjectIdentifier, key: String) {
         guard posterID != ObjectIdentifier(self) else { return }
         if let projectID, defaults.object(forKey: scopedKey(key, for: projectID)) != nil { return }
-        isApplyingBroadcast = true
-        defer { isApplyingBroadcast = false }
-        reload(key: key)
+        applyingStoredValues { reload(key: key) }
     }
 
     /// Every project that overrides at least one setting in `category`, sorted by display path.
@@ -212,7 +212,7 @@ extension ViewerSettings {
 
     private func refreshIfAdopted(_ projectKey: String) {
         guard projectID?.key == projectKey else { return }
-        applyWithoutRecreatingScopedOverrides { reloadProjectScopedValues() }
+        applyingStoredValues { reloadProjectScopedValues() }
     }
 
     private func pruneRegistryIfFullyCleared(projectKey: String) {
