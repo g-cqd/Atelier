@@ -63,36 +63,77 @@ package final class DiagnosticOverlay: Sendable {
     }
 }
 
-/// Builds a `DiagnosticOverlay`'s rows for one rendered text: a finding annotates the row of its file whose new-side
-/// line number matches, and with `includesOldSide` also a removed row whose old-side number matches.
+/// One side's findings, as the row mapper reads them: the path each rendered file's findings are keyed under, by file
+/// index, and the side's findings by path.
+package struct SideFindings: Sendable {
+    package let paths: [Int: String]
+    package let findings: [String: [Finding]]
+
+    package init(paths: [Int: String], findings: [String: [Finding]]) {
+        self.paths = paths
+        self.findings = findings
+    }
+
+    /// A side that was not analyzed.
+    package static let none = SideFindings(paths: [:], findings: [:])
+
+    /// The findings on `line` of the file at `fileIndex`.
+    func findings(atLine line: Int, fileIndex: Int) -> [Finding] {
+        guard let path = paths[fileIndex], let candidates = findings[path] else { return [] }
+        return candidates.filter { $0.line == line }
+    }
+}
+
+/// Builds a `DiagnosticOverlay`'s rows for one rendered text. Each side's findings show on that side's rows only
+/// (DIAG-08): the old pane shows the left side's by old line number, the new pane the right side's by new line
+/// number, and the unified text a removed row the left side's, an added row the right side's, and an unchanged row,
+/// which belongs to both, each side's once.
 package enum DiagnosticRowMapper {
-    /// The same mapping as ``rows(for:paths:findings:includesOldSide:)``, always off the main actor.
+    /// The same mapping as ``rows(for:left:right:)``, always off the main actor.
+    @concurrent
+    package static func rowsOffMain(
+        for rendered: RenderedText, left: SideFindings, right: SideFindings
+    ) async -> [Int: DiagnosticOverlay.RowDiagnostics] {
+        assert(!isOnMainThread(), "rowsOffMain must run off the main actor")
+        return rows(for: rendered, left: left, right: right)
+    }
+
+    /// The right side's findings alone, by `paths`, for a pane that has only those; `includesOldSide` no longer does
+    /// anything, since no side's findings show on the other side's rows. Kept until every pane passes both sides.
     @concurrent
     package static func rowsOffMain(
         for rendered: RenderedText, paths: [Int: String], findings: [String: [Finding]], includesOldSide: Bool = false
     ) async -> [Int: DiagnosticOverlay.RowDiagnostics] {
         assert(!isOnMainThread(), "rowsOffMain must run off the main actor")
-        return rows(for: rendered, paths: paths, findings: findings, includesOldSide: includesOldSide)
+        return rows(for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
     }
 
+    /// The right side's findings alone; see ``rowsOffMain(for:paths:findings:includesOldSide:)``.
     package static func rows(
         for rendered: RenderedText, paths: [Int: String], findings: [String: [Finding]], includesOldSide: Bool = false
     ) -> [Int: DiagnosticOverlay.RowDiagnostics] {
+        rows(for: rendered, left: .none, right: SideFindings(paths: paths, findings: findings))
+    }
+
+    package static func rows(
+        for rendered: RenderedText, left: SideFindings, right: SideFindings
+    ) -> [Int: DiagnosticOverlay.RowDiagnostics] {
         var byRow: [Int: [Finding]] = [:]
         for (rowIndex, meta) in rendered.rows.enumerated() {
-            guard let path = paths[meta.fileIndex], let candidates = findings[path] else { continue }
-            let line: Int?
-            if let newNumber = meta.newNumber {
-                line = newNumber
-            } else if includesOldSide {
-                line = meta.oldNumber
-            } else {
-                line = nil
+            var matches: [Finding] = []
+            if rendered.side != .old, let newNumber = meta.newNumber {
+                matches = right.findings(atLine: newNumber, fileIndex: meta.fileIndex)
             }
-            guard let line else { continue }
-            let matches = candidates.filter { $0.line == line }
+            if rendered.side != .new, let oldNumber = meta.oldNumber {
+                // An unchanged row belongs to both sides: a finding both report on it shows once.
+                let seen = Set(matches.map(RowKey.init))
+                matches += left.findings(atLine: oldNumber, fileIndex: meta.fileIndex)
+                    .filter {
+                        !seen.contains(RowKey($0))
+                    }
+            }
             guard !matches.isEmpty else { continue }
-            byRow[rowIndex, default: []].append(contentsOf: matches)
+            byRow[rowIndex] = matches
         }
 
         var result: [Int: DiagnosticOverlay.RowDiagnostics] = [:]
@@ -114,6 +155,21 @@ package enum DiagnosticRowMapper {
                 severity: severity, count: rowFindings.count, findings: rowFindings, squiggles: squiggles)
         }
         return result
+    }
+
+    /// What makes two sides' findings on one unchanged row the same finding.
+    private struct RowKey: Hashable {
+        let tool: DiagnosticTool
+        let ruleID: String
+        let message: String
+        let column: Int?
+
+        init(_ finding: Finding) {
+            tool = finding.tool
+            ruleID = finding.ruleID
+            message = finding.message
+            column = finding.column
+        }
     }
 
     /// The row's own UTF-16 length, its trailing newline (and the `\r` of a `\r\n`) trimmed off: `RenderedText`
