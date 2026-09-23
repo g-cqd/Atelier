@@ -79,7 +79,7 @@ struct SideStateFreshnessTests {
         // A's re-read is gated and confirmed started before the side moves on to B.
         reader.gate["repositoryInfo:\(repoA.path(percentEncoded: false))"] = AsyncProbe<Void>()
         taskProvider.task { await sut.refreshRepositoryInfo() }
-        _ = try await reader.repositoryInfoRequests.next()
+        _ = try await reader.repositoryInfoRequests.expectNext()
 
         sut.load(.directory(repoB), repository: initialB)
         reader.gate["repositoryInfo:\(repoA.path(percentEncoded: false))"]?.send(())

@@ -52,7 +52,7 @@ struct DiffViewerModelTests {
         #expect(sut.renderedFiles.map(\.path) == ["a/changed.swift", "b.swift"])
         #expect(sut.renderedFiles.allSatisfy { $0.rendered.old?.rows.allSatisfy { $0.kind != .header } == true })
         var requests: [String] = []
-        for _ in 0 ..< 4 { requests.append(try #require(try await harness.reader.contentRequests.next())) }
+        for _ in 0 ..< 4 { requests.append(try #require(try await harness.reader.contentRequests.expectNext())) }
         #expect(requests.sorted() == ["a/changed.swift", "a/changed.swift", "b.swift", "b.swift"])
         try harness.reader.contentRequests.expectNoBufferedElements()
     }
@@ -134,7 +134,7 @@ struct DiffViewerModelTests {
             harness.entry("a.swift", "3"), harness.entry("b.swift", "4")
         ]
         try await harness.load(sut)
-        for _ in 0 ..< 4 { _ = try await harness.reader.contentRequests.next() }
+        for _ in 0 ..< 4 { _ = try await harness.reader.contentRequests.expectNext() }
 
         sut.select("b.swift")
 
@@ -161,7 +161,7 @@ struct DiffViewerModelTests {
         try await harness.taskProvider.waitForAllTasks()
 
         var requested: [String] = []
-        for _ in 0 ..< 4 { requested.append(try #require(try await harness.reader.contentRequests.next())) }
+        for _ in 0 ..< 4 { requested.append(try #require(try await harness.reader.contentRequests.expectNext())) }
         #expect(requested.sorted() == ["a.swift", "a.swift", "b.swift", "b.swift"])
         try harness.reader.contentRequests.expectNoBufferedElements()
 

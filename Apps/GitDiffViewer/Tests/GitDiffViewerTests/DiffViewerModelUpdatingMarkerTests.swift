@@ -44,7 +44,7 @@ struct DiffViewerModelUpdatingMarkerTests {
             harness.entry("a.swift", "3"), harness.entry("b.swift", "4")
         ]
         try await harness.load(sut)
-        for _ in 0 ..< 4 { _ = try await harness.reader.contentRequests.next() }
+        for _ in 0 ..< 4 { _ = try await harness.reader.contentRequests.expectNext() }
     }
 
     /// Loads `main` against the working tree, two changed files, and drains the four reads they made.
@@ -55,7 +55,7 @@ struct DiffViewerModelUpdatingMarkerTests {
         sut.left.load(Self.main, repository: Self.repository)
         sut.right.load(.directory(Self.root), repository: Self.repository)
         try await harness.taskProvider.waitForAllTasks()
-        for _ in 0 ..< 4 { _ = try await harness.reader.contentRequests.next() }
+        for _ in 0 ..< 4 { _ = try await harness.reader.contentRequests.expectNext() }
     }
 
     @Test
@@ -70,7 +70,7 @@ struct DiffViewerModelUpdatingMarkerTests {
 
         sut.swapSides()
         #expect(sut.shownComparison == .previous)
-        _ = try await harness.reader.contentRequests.next()
+        _ = try await harness.reader.contentRequests.expectNext()
         #expect(sut.detailState == .cards)
         #expect(sut.renderedFiles.map(\.rendered.id) == previous)
         #expect(sut.shownComparison == .previous)
@@ -96,7 +96,7 @@ struct DiffViewerModelUpdatingMarkerTests {
 
         sut.left.refChoice = .ref("feature")
         #expect(sut.shownComparison == .previous)
-        _ = try await harness.reader.contentRequests.next()
+        _ = try await harness.reader.contentRequests.expectNext()
         #expect(sut.detailState == .cards)
         #expect(sut.renderedFiles.map(\.rendered.id) == previous)
         #expect(sut.shownComparison == .previous)

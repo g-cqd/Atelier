@@ -70,7 +70,7 @@ struct DiffViewerModelSelectionTests {
         sut.left.load(.directory(ModelTestHarness.leftURL), repository: nil)
         sut.right.load(.directory(ModelTestHarness.rightURL), repository: nil)
         try await harness.taskProvider.waitForSpawnedTasks(atLeast: 3)
-        for _ in 0 ..< 4 { _ = try await harness.reader.contentRequests.next() }
+        for _ in 0 ..< 4 { _ = try await harness.reader.contentRequests.expectNext() }
         #expect(sut.renderedFiles.map(\.path) == ["a.swift"])
         #expect(sut.isRendering)
 
@@ -90,7 +90,7 @@ struct DiffViewerModelSelectionTests {
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]
         harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "2")]
         try await harness.load(sut)
-        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.next() }
+        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.expectNext() }
         let finishes = AsyncProbe<Void>()
         let modelHandler = sut.pipeline.onEvent
         sut.pipeline.onEvent = { event in
@@ -99,7 +99,7 @@ struct DiffViewerModelSelectionTests {
         }
         harness.reader.gate["a.swift"] = AsyncProbe<Void>()
         sut.settings.granularity = .character
-        _ = try await harness.reader.contentRequests.next()
+        _ = try await harness.reader.contentRequests.expectNext()
         #expect(sut.detailState == .cards)
 
         let rightListing = harness.holdListing(of: ModelTestHarness.rightURL)
@@ -107,7 +107,7 @@ struct DiffViewerModelSelectionTests {
         #expect(sut.detailState == .cards)
         harness.reader.gate["a.swift"]?.send(())
         harness.reader.gate["a.swift"]?.send(())
-        _ = try await finishes.next()
+        _ = try await finishes.expectNext()
         #expect(sut.right.isLoading)
         #expect(sut.detailState == .cards)
 
@@ -128,14 +128,14 @@ struct DiffViewerModelSelectionTests {
         sut.left.load(.directory(ModelTestHarness.leftURL), repository: nil)
         sut.right.load(.directory(ModelTestHarness.rightURL), repository: nil)
         try await harness.taskProvider.waitForAllTasks()
-        for _ in 0 ..< 6 { _ = try await harness.reader.contentRequests.next() }
+        for _ in 0 ..< 6 { _ = try await harness.reader.contentRequests.expectNext() }
         harness.reader.gate["c.swift"] = AsyncProbe<Void>()
         harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [
             harness.entry("a.swift", "4"), harness.entry("b.swift", "5"), harness.entry("c.swift", "7")
         ]
         sut.right.reload()
         try await harness.taskProvider.waitForSpawnedTasks(atLeast: 2)
-        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.next() }
+        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.expectNext() }
         try harness.reader.contentRequests.expectNoBufferedElements()
 
         sut.select("a.swift")
@@ -158,7 +158,7 @@ struct DiffViewerModelSelectionTests {
             harness.entry("z/same.swift", "1"), harness.entry("a/changed.swift", "8")
         ]
         try await harness.load(sut)
-        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.next() }
+        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.expectNext() }
         let firstRender = try #require(sut.renderedFiles.first?.rendered.id)
 
         sut.settings.showsChangesOnly = true
@@ -173,7 +173,7 @@ struct DiffViewerModelSelectionTests {
 
         sut.settings.granularity = .character
         try await harness.taskProvider.waitForAllTasks()
-        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.next() }
+        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.expectNext() }
         try harness.reader.contentRequests.expectNoBufferedElements()
     }
 
@@ -183,14 +183,14 @@ struct DiffViewerModelSelectionTests {
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]
         harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "2")]
         try await harness.load(sut)
-        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.next() }
+        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.expectNext() }
         let before = try #require(sut.renderedFiles.first?.rendered.id)
 
         sut.settings.diffHeuristics.whitespace = .ignoreAll
         try await harness.taskProvider.waitForAllTasks()
 
         #expect(sut.renderedFiles.first?.rendered.id != before)
-        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.next() }
+        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.expectNext() }
         try harness.reader.contentRequests.expectNoBufferedElements()
     }
 

@@ -125,7 +125,7 @@ struct SideStateBadgeStatesTests {
         let sut = makeSUT()
         sut.load(source, repository: Self.info)
         try await taskProvider.waitForAllTasks()
-        _ = try await reader.workingTreeStatusRequests.next()
+        _ = try await reader.workingTreeStatusRequests.expectNext()
 
         // The reload's status read and listing are both held, so it started first and lands last.
         let statusGate = AsyncProbe<Void>()
@@ -133,7 +133,7 @@ struct SideStateBadgeStatesTests {
         reader.gate["status:" + Self.gateKey(source)] = statusGate
         reader.gate[Self.gateKey(source)] = listingGate
         sut.reload()
-        _ = try await reader.workingTreeStatusRequests.next()
+        _ = try await reader.workingTreeStatusRequests.expectNext()
         reader.gate["status:" + Self.gateKey(source)] = nil
 
         // Staging lands through a refresh while the reload is still out.
@@ -141,7 +141,7 @@ struct SideStateBadgeStatesTests {
         sut.onBadgeStatesChanged = { published.send(()) }
         reader.workingTreeStatuses[source] = staged
         sut.refreshBadgeStates()
-        _ = try await published.next()
+        _ = try await published.expectNext()
         #expect(sut.badgeState(of: "a.swift") == .staged)
 
         // The reload's read comes back with the answer from before the staging.
