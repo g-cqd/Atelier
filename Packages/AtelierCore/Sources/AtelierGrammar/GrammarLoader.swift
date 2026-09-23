@@ -43,6 +43,8 @@ public enum GrammarLoader: Sendable {
     ///   its root, or has a `rules` member that is not an object; `.missingField` or `.invalidRuleType` when a member
     ///   a grammar needs is absent or has the wrong shape.
     /// - Complexity: O(n) in the size of the data.
+    /// - Note: `RESERVED` keeps its content rule, but its context's reserved words are ignored. Named precedence
+    ///   labels keep their associativity but not their ordering until the compiler supports either feature.
     public static func parse(_ data: Data) throws(GrammarError) -> GrammarDefinition {
         let document: JSONDocument
         do {
@@ -154,11 +156,11 @@ public enum GrammarLoader: Sendable {
             case "OPTIONAL":  // tree-sitter uses CHOICE with BLANK for optional
                 return .optional(try parseRule(requiredContent(rule)))
             case "PREC":
-                return .prec(try requiredInteger(rule.value), try parseRule(requiredContent(rule)))
+                return .prec(try precedenceValue(rule.value), try parseRule(requiredContent(rule)))
             case "PREC_LEFT":
-                return .precLeft(try requiredInteger(rule.value), try parseRule(requiredContent(rule)))
+                return .precLeft(try precedenceValue(rule.value), try parseRule(requiredContent(rule)))
             case "PREC_RIGHT":
-                return .precRight(try requiredInteger(rule.value), try parseRule(requiredContent(rule)))
+                return .precRight(try precedenceValue(rule.value), try parseRule(requiredContent(rule)))
             case "PREC_DYNAMIC":
                 return .precDynamic(try requiredInteger(rule.value), try parseRule(requiredContent(rule)))
             case "TOKEN":
@@ -171,6 +173,8 @@ public enum GrammarLoader: Sendable {
                 let content = try requiredContent(rule)
                 let value = try requiredString(rule.value, "value")
                 return .alias(try parseRule(content), value, rule.named.flatMap(flag) ?? false)
+            case "RESERVED":
+                return try parseRule(requiredContent(rule))
             case "BLANK":
                 return .blank
             default:
@@ -226,6 +230,12 @@ public enum GrammarLoader: Sendable {
     private static func requiredInteger(_ node: JSON?) throws(GrammarError) -> Int {
         guard let value = node.flatMap(integer) else { throw .missingField("value") }
         return value
+    }
+
+    /// Named precedence ordering is not represented by `Rule`; preserve the rule with neutral precedence.
+    private static func precedenceValue(_ node: JSON?) throws(GrammarError) -> Int {
+        if node?.string != nil { return 0 }
+        return try requiredInteger(node)
     }
 
     /// `node` as an integer: a number with an exact integer value, or a boolean as 1 or 0.
