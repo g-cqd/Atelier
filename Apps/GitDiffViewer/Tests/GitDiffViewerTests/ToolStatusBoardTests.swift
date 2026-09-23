@@ -1,3 +1,4 @@
+import AemiTesting
 import AtelierDiagnostics
 import AtelierTestSupport
 import DiffGit
@@ -42,6 +43,50 @@ struct ToolStatusBoardTests {
         await sut.refreshAll(for: settings, rediscovering: true)
 
         #expect(sut.statuses[DiagnosticTool.swiftlint.rawValue]?.url?.path == swiftlint.path)
+    }
+
+    @Test
+    func `a refresh superseded by another writes no status of its own`() async throws {
+        let temp = FileManager.default.temporaryDirectory.appending(
+            path: "GitDiffViewerTests.board.\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let pinned = temp.appending(path: "pinned/swiftformat")
+        try FileManager.default.createDirectory(
+            at: pinned.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "#!/bin/sh\n".write(to: pinned, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: pinned.path)
+        // The first xcrun probe, the older refresh's, holds until that refresh is cancelled.
+        let firstProbe = TaskGate()
+        let probes = Mutex(0)
+        let runner = FakeProcessRunner { spec in
+            guard spec.executable.path == "/usr/bin/xcrun" else { return .success("") }
+            let isFirst = probes.withLock { count in
+                count += 1
+                return count == 1
+            }
+            if isFirst {
+                firstProbe.open()
+                // Never opened: this probe ends only when its refresh is cancelled.
+                try await TaskGate().wait()
+            }
+            return .failure(1, error: "")
+        }
+        let discovery = ToolDiscovery(
+            runner: runner, bundledDirectory: nil, homeDirectory: temp.appending(path: "home"),
+            environment: ["SHELL": "/bin/zsh"], wellKnownDirectories: [])
+        let older = ViewerSettings(defaults: try Self.makeDefaults())
+        older.toolLocations[.swiftformat] = ToolLocation(customPath: pinned.path)
+        let newer = ViewerSettings(defaults: try Self.makeDefaults())
+        let sut = ToolStatusBoard(discovery: discovery)
+        let olderRefresh = Task { await sut.refreshAll(for: older, rediscovering: false) }
+        try await firstProbe.wait()
+        await sut.refreshAll(for: newer, rediscovering: false)
+
+        olderRefresh.cancel()
+        await olderRefresh.value
+
+        #expect(sut.statuses[DiagnosticTool.swiftformat.rawValue]?.isAvailable == false)
+        #expect(!sut.isRefreshing)
     }
 
     private static func makeDefaults() throws -> UserDefaults {
