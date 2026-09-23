@@ -1,6 +1,7 @@
 public import AtelierSyntaxModel
 import Darwin
 public import Foundation
+import os
 
 /// Why the SDK tier's private probe directory could not be created.
 public enum SDKProbeDirectoryError: Error, Sendable, Equatable {
@@ -12,18 +13,37 @@ public enum SDKProbeDirectoryError: Error, Sendable, Equatable {
 /// imports probes the hovered identifier chain against the toolchain's own modules, with no network and no project
 /// build context.
 ///
+/// Each file resolves against its platform's SDK (``SDKPlatform/forFile(importing:inProjectDeclaring:)``): its imports
+/// decide, then the manifests of the project it lies in, for a document on disk. One session serves each platform,
+/// made on the platform's first hover; a platform whose session cannot be made, as iOS without Xcode, falls back to
+/// the Mac's.
+///
 /// Declarations resolve reliably; prose appears only where the SDK's `.swiftdoc` carries it, so availability, the
 /// online-only discussion and plain-comment Objective-C headers give none. A bare lowercase name with no receiver
 /// is rejected before any request, and a query sends at most two probes. Answers, misses included, are cached in an
-/// LRU keyed on the chain and its sorted imports, since the SDK cannot change under a running app. A query whose
-/// probe got no answer, as from a cold server still loading the SDK's modules, is not cached, so the next hover asks
-/// again.
+/// LRU keyed on the platform, the chain and its sorted imports, since the SDK cannot change under a running app. A
+/// query whose probe got no answer, as from a cold server still loading the SDK's modules, is not cached, so the next
+/// hover asks again.
 public actor SDKDocumentationProvider: HoverProvider {
-    private let service: SourceKitLSPService
-    /// The directory every probe document is named under: the service's workspace root.
-    private let probeRoot: URL
-    private let defaultImports: [String]
+    /// Makes the session that resolves a platform's probes, or nil when the platform has none, as without its SDK.
+    public typealias SessionFactory = @Sendable (SDKPlatform) async -> SourceKitLSPService?
+
+    private enum Session {
+        case ready(SourceKitLSPService?)
+        /// Being made; the callers waiting on it.
+        case making([CheckedContinuation<SourceKitLSPService?, Never>])
+    }
+
+    private static let logger = Logger(subsystem: "Atelier.LSP", category: "SDKDocumentationProvider")
+
+    private let makeSession: SessionFactory
     private let cacheCapacity: Int
+
+    private var sessions: [SDKPlatform: Session] = [:]
+    /// Set by ``shutdown()``: no session is made afterwards.
+    private var isShutDown = false
+    /// The platforms the project above a directory declares, keyed by the directory's path.
+    private var declaredPlatforms: [String: Set<SDKPlatform>] = [:]
 
     /// Most recently used last in `order`; a `nil` value is a cached miss, which the server answered.
     private var cache: [CacheKey: HoverContent?] = [:]
@@ -33,27 +53,32 @@ public actor SDKDocumentationProvider: HoverProvider {
     private var syntheticDocumentCounter = 0
 
     private struct CacheKey: Hashable {
+        let platform: SDKPlatform
         let chain: String
         let imports: [String]
     }
 
-    public init(
-        service: SourceKitLSPService,
-        defaultImports: [String] = ["Foundation", "AppKit", "SwiftUI"],
-        cacheCapacity: Int = 256
-    ) {
-        self.service = service
-        probeRoot = service.workspaceRoot
-        self.defaultImports = defaultImports
+    /// A provider over the sessions `makeSession` makes, one per platform, each on the platform's first hover.
+    public init(sessions makeSession: @escaping SessionFactory, cacheCapacity: Int = 256) {
+        self.makeSession = makeSession
         self.cacheCapacity = cacheCapacity
+    }
+
+    /// A provider that resolves every platform's probes through `service`.
+    public init(service: SourceKitLSPService, cacheCapacity: Int = 256) {
+        self.init(sessions: { _ in service }, cacheCapacity: cacheCapacity)
     }
 
     public func hover(_ query: HoverQuery) async throws -> HoverContent? {
         guard let extraction = Self.extractChain(in: query.content, line: query.line, utf16Column: query.utf16Column)
         else { return nil }
 
-        let imports = Self.collectImports(in: query.content, unioning: defaultImports)
-        let key = CacheKey(chain: extraction.chain, imports: imports)
+        let fileImports = Self.importedModules(in: query.content, limit: Self.maximumProbeImports)
+        let wanted = SDKPlatform.forFile(
+            importing: fileImports, inProjectDeclaring: projectPlatforms(forDocumentAt: query.documentURI))
+        guard let (platform, service) = await session(preferring: wanted) else { return nil }
+        let imports = platform.probeImports(fileImports: fileImports, limit: Self.maximumProbeImports)
+        let key = CacheKey(platform: platform, chain: extraction.chain, imports: imports)
 
         if let cached = cache[key] {
             touch(key)
@@ -61,9 +86,78 @@ public actor SDKDocumentationProvider: HoverProvider {
         }
 
         let result = await probeWithFallback(
-            chain: extraction.chain, chainStartsUppercase: extraction.startsUppercase, imports: imports)
+            on: service, chain: extraction.chain, chainStartsUppercase: extraction.startsUppercase, imports: imports)
         if result.isSettled { store(key, result.content) }
         return result.content
+    }
+
+    /// Shuts down every session this provider made; a hover afterwards answers nothing.
+    public func shutdown() async {
+        isShutDown = true
+        let current = sessions
+        sessions.removeAll()
+        var services: [SourceKitLSPService] = []
+        for session in current.values {
+            switch session {
+                case .ready(let service?): services.append(service)
+                case .ready(nil): break
+                case .making(let waiters): for waiter in waiters { waiter.resume(returning: nil) }
+            }
+        }
+        await withTaskGroup(of: Void.self) { group in
+            for service in services { group.addTask { await service.shutdown() } }
+        }
+    }
+
+    // MARK: - Platforms and their sessions
+
+    /// The session for `platform`, or the Mac's when `platform` has none; nil when neither has one.
+    private func session(preferring platform: SDKPlatform) async -> (SDKPlatform, SourceKitLSPService)? {
+        if let service = await session(for: platform) { return (platform, service) }
+        guard platform != .macOS, let service = await session(for: .macOS) else { return nil }
+        return (.macOS, service)
+    }
+
+    /// `platform`'s session, made by the first caller while later ones wait for it, and kept, a nil one included.
+    private func session(for platform: SDKPlatform) async -> SourceKitLSPService? {
+        switch sessions[platform] {
+            case .ready(let service):
+                return service
+            case .making:
+                return await withCheckedContinuation { continuation in
+                    if case .making(let waiters) = sessions[platform] {
+                        sessions[platform] = .making(waiters + [continuation])
+                    } else {
+                        // Unreachable without a suspension since the switch; resumed rather than leaked all the same.
+                        continuation.resume(returning: nil)
+                    }
+                }
+            case nil:
+                guard !isShutDown else { return nil }
+                sessions[platform] = .making([])
+                let service = await makeSession(platform)
+                guard case .making(let waiters) = sessions[platform] else {
+                    // `shutdown()` ran meanwhile and answered the waiters.
+                    await service?.shutdown()
+                    return nil
+                }
+                if service == nil { Self.logger.info("No \(platform.rawValue, privacy: .public) SDK session") }
+                sessions[platform] = .ready(service)
+                for waiter in waiters { waiter.resume(returning: service) }
+                return service
+        }
+    }
+
+    /// The platforms the project of the document at `uri` declares: empty unless it is a file on disk. Remembered per
+    /// directory, and forgotten all at once past 512 directories.
+    private func projectPlatforms(forDocumentAt uri: String) -> Set<SDKPlatform> {
+        guard let url = URL(string: uri), url.isFileURL else { return [] }
+        let directory = url.deletingLastPathComponent().path(percentEncoded: false)
+        if let known = declaredPlatforms[directory] { return known }
+        if declaredPlatforms.count >= 512 { declaredPlatforms.removeAll() }
+        let platforms = ProjectPlatforms.declared(forFileAt: url)
+        declaredPlatforms[directory] = platforms
+        return platforms
     }
 
     // MARK: - Probing
@@ -72,17 +166,19 @@ public actor SDKDocumentationProvider: HoverProvider {
     /// probe's answer if that one has prose. Settled only when every probe it sent was answered, since a probe that
     /// got none might have had prose. A first probe that gets no answer sends no second one: the server is not
     /// answering yet.
-    private func probeWithFallback(chain: String, chainStartsUppercase: Bool, imports: [String]) async
-        -> (content: HoverContent?, isSettled: Bool)
-    {
+    private func probeWithFallback(
+        on service: SourceKitLSPService, chain: String, chainStartsUppercase: Bool, imports: [String]
+    ) async -> (content: HoverContent?, isSettled: Bool) {
         let first = await probe(
-            chain: chain, chainStartsUppercase: chainStartsUppercase, imports: imports, typePosition: false)
+            on: service, chain: chain, chainStartsUppercase: chainStartsUppercase, imports: imports,
+            typePosition: false)
         guard case .answered(let primary) = first else { return (nil, false) }
         if let primary, HoverContentQuality.hasProse(primary.markdown) { return (primary, true) }
         guard chainStartsUppercase else { return (primary, true) }
 
         switch await probe(
-            chain: chain, chainStartsUppercase: chainStartsUppercase, imports: imports, typePosition: true)
+            on: service, chain: chain, chainStartsUppercase: chainStartsUppercase, imports: imports,
+            typePosition: true)
         {
             case .answered(let secondary?) where HoverContentQuality.hasProse(secondary.markdown):
                 return (secondary, true)
@@ -93,11 +189,13 @@ public actor SDKDocumentationProvider: HoverProvider {
         }
     }
 
-    private func probe(chain: String, chainStartsUppercase: Bool, imports: [String], typePosition: Bool) async
-        -> HoverOutcome
-    {
+    /// One probe on `service`, whose document is named under the session's workspace root, its probe directory.
+    private func probe(
+        on service: SourceKitLSPService, chain: String, chainStartsUppercase: Bool, imports: [String],
+        typePosition: Bool
+    ) async -> HoverOutcome {
         syntheticDocumentCounter += 1
-        let uri = probeRoot.appending(path: "probe-\(syntheticDocumentCounter).swift").absoluteString
+        let uri = service.workspaceRoot.appending(path: "probe-\(syntheticDocumentCounter).swift").absoluteString
 
         var lines: [String] = imports.map { "import \($0)" }
         let probeLineIndex = lines.count
@@ -303,8 +401,54 @@ public actor SDKDocumentationProvider: HoverProvider {
                 false
         }
     }
+}
 
-    // MARK: - Scratch service convenience
+// MARK: - Scratch sessions
+
+extension SDKDocumentationProvider {
+    /// A provider over scratch sessions of `serverExecutable`, one per platform, each rooted at `probeDirectory`, which
+    /// every probe document is named under. The probes send their content inline and never read the workspace, so the
+    /// empty directory serves as sourcekit-lsp's `rootUri`. The caller owns the directory, and removes it once
+    /// ``shutdown()`` has returned. `locateSDK` finds a platform's SDK when its session is first needed, for every
+    /// platform but the Mac, whose SDK the server finds itself; a platform whose SDK it does not find has no session.
+    public static func scratch(
+        serverExecutable: URL, probeDirectory: URL,
+        locateSDK: @escaping @Sendable (SDKPlatform) async -> SDKLocation?,
+        idleShutdown: Duration = .seconds(180), requestTimeout: Duration = .seconds(2)
+    ) -> SDKDocumentationProvider {
+        SDKDocumentationProvider(sessions: { platform in
+            var sdk: SDKLocation?
+            if platform != .macOS {
+                guard let located = await locateSDK(platform) else { return nil }
+                sdk = located
+            }
+            return SourceKitLSPService(
+                configuration: scratchConfiguration(
+                    for: platform, sdk: sdk, serverExecutable: serverExecutable, probeDirectory: probeDirectory,
+                    idleShutdown: idleShutdown, requestTimeout: requestTimeout))
+        })
+    }
+
+    /// The configuration of `platform`'s scratch session: background indexing off, as for every hover session, and,
+    /// given an `sdk`, sourcekit-lsp's fallback build settings, which a probe document gets since it belongs to no
+    /// build system: that SDK, and a `-target` for it.
+    public static func scratchConfiguration(
+        for platform: SDKPlatform, sdk: SDKLocation?, serverExecutable: URL, probeDirectory: URL,
+        idleShutdown: Duration = .seconds(180), requestTimeout: Duration = .seconds(2)
+    ) -> SourceKitLSPService.Configuration {
+        var options: [String: JSONValue] = [:]
+        if case .object(let hoverOptions) = SourceKitLSPService.Configuration.hoverInitializationOptions {
+            options = hoverOptions
+        }
+        if let sdk, let target = platform.targetTriple(sdkVersion: sdk.version) {
+            options["fallbackBuildSystem"] = .object([
+                "sdk": .string(sdk.path), "swiftCompilerFlags": .array([.string("-target"), .string(target)])
+            ])
+        }
+        return SourceKitLSPService.Configuration(
+            serverExecutable: serverExecutable, workspaceRoot: probeDirectory, idleShutdown: idleShutdown,
+            requestTimeout: requestTimeout, initializationOptions: .object(options))
+    }
 
     /// A ``SourceKitLSPService`` rooted at a new private probe directory (``makeProbeDirectory(in:)``), which every
     /// probe document is named under. The probes send their content inline and never read the workspace, so the
