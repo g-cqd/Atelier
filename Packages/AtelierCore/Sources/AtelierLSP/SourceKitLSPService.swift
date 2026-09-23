@@ -1,6 +1,7 @@
 import AtelierProcess
 public import AtelierSyntaxModel
 public import Foundation
+import os
 
 /// `operation`'s result, or `LSPServiceError.timedOut` when `timeout` elapses first; the loser is cancelled.
 private func raceAgainstTimeout<T: Sendable>(
@@ -22,9 +23,23 @@ private func raceAgainstTimeout<T: Sendable>(
     }
 }
 
-/// Failures internal to ``SourceKitLSPService``; its public API reports every failure as `nil`.
+/// Failures internal to ``SourceKitLSPService``, whose hover reports each as ``HoverOutcome/unavailable``.
 private enum LSPServiceError: Error, Sendable {
     case timedOut
+}
+
+/// What a hover request came to: the server's answer, or none.
+public enum HoverOutcome: Sendable, Equatable {
+    /// The server answered, with content or with nothing to show (nil).
+    case answered(HoverContent?)
+    /// The server gave no answer: it is unavailable or restarting, it timed out or closed the connection, it replied
+    /// with an error or with a result that could not be read, or the request was cancelled. Asking again may answer.
+    case unavailable
+
+    /// The answer's content; nil when the server has nothing to show, or gave no answer.
+    public var content: HoverContent? {
+        if case .answered(let content) = self { content } else { nil }
+    }
 }
 
 /// `initialize`'s parameters with sourcekit-lsp's `initializationOptions`, which ``InitializeParams`` does not carry.
@@ -41,6 +56,8 @@ private struct SessionInitializeParams: Encodable, Sendable {
 /// open, and is shut down after ``Configuration/idleShutdown`` without a hover. A hover after any shutdown
 /// reconnects; only a failed connection attempt spends the restart budget.
 public actor SourceKitLSPService {
+    private static let logger = Logger(subsystem: "Atelier.LSP", category: "SourceKitLSPService")
+
     /// How to reach the server, and the policy for keeping the session alive.
     public struct Configuration: Sendable {
         public var serverExecutable: URL
@@ -124,15 +141,16 @@ public actor SourceKitLSPService {
     /// The directory the server runs in and takes as its workspace (`rootUri`).
     public nonisolated var workspaceRoot: URL { configuration.workspaceRoot }
 
-    /// The server's hover at the position, or `nil` when the server is unavailable, times out or has nothing to
-    /// show. Opens `uri` with `content` on the server first, and restarts the idle timer.
+    /// The server's hover at the position: its answer, which may have nothing to show, or ``HoverOutcome/unavailable``
+    /// when no answer came, so that a caller caches answers alone. Opens `uri` with `content` on the server first, and
+    /// restarts the idle timer.
     public func hover(
         uri: String, languageID: String, content: String, line: Int, utf16Column: Int
-    ) async -> HoverContent? {
-        guard !permanentlyUnavailable else { return nil }
+    ) async -> HoverOutcome {
+        guard !permanentlyUnavailable else { return .unavailable }
         defer { scheduleIdleShutdown() }
 
-        guard let connection = await ensureConnection() else { return nil }
+        guard let connection = await ensureConnection() else { return .unavailable }
         await ensureOpen(uri: uri, languageID: languageID, content: content, on: connection)
 
         let params = HoverParams(
@@ -142,15 +160,17 @@ public actor SourceKitLSPService {
             let hover = try await raceAgainstTimeout(clock: clock, timeout: configuration.requestTimeout) {
                 try await connection.requestOptional("textDocument/hover", params, as: Hover.self)
             }
-            guard let hover, !hover.markdown.isEmpty else { return nil }
-            return HoverContent(markdown: hover.markdown, source: .languageServer)
-        } catch LSPConnectionError.transportClosed {
+            guard let hover, !hover.markdown.isEmpty else { return .answered(nil) }
+            return .answered(HoverContent(markdown: hover.markdown, source: .languageServer))
+        } catch LSPConnectionError.transportClosed(let reason) {
             // A dead connection is dropped so the next hover reconnects.
+            Self.logger.error("sourcekit-lsp went away during a hover: \(reason, privacy: .public)")
             await abruptTeardown()
-            return nil
+            return .unavailable
         } catch {
-            // A timeout or a bad response leaves a connection that may still be fine.
-            return nil
+            // A timeout, a server error or an unreadable reply leaves a connection that may still be fine.
+            Self.logger.info("A hover got no answer: \(String(describing: error), privacy: .public)")
+            return .unavailable
         }
     }
 
