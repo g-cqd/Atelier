@@ -98,3 +98,29 @@ v2's index (X) and worktree (Y) columns into one FileStatus, plus a path from Gi
 into SourceEntry/the comparison model. v1 approximates by side kind (working tree = unstaged
 style). Cross-consumer enum change — sequence with the FileStatusProvider/GitStatusProvider
 modularization move.
+
+## Diff interaction refinements (user-requested 09-23)
+Requested on 09-23; not scheduled yet. Xcode's comparison view is the reference for items 2 and 3, and the user
+offered screenshots of its drag handles and scope ribbon.
+
+1. **Resizable panes.** In split and stacked diffs, a divider between the old and new panes can be dragged to change
+   their width (split) or height (stacked). The ratio persists per window, double-clicking the divider restores
+   50/50, and the divider stays hittable without adding visible chrome.
+2. **Gap-expansion drag fixes (investigate, then fix).**
+   - *Direction bug:* dragging a gap handle back towards lines already shown, or past the context limit set in
+     Settings, still discloses lines. While dragging, the handle may only reveal more lines or return towards its
+     starting state; a negative drag never discloses anything.
+   - *Edge auto-scroll:* holding a handle at the edge of the viewport or its container keeps disclosing lines in the
+     drag direction, at a bounded rate that is not too fast, like autoscroll during a text selection.
+   - *Two handles per gap:* a hidden run between two changes can grow from either side, so it shows two handles:
+     one extending the change above downwards, one extending the change below upwards. Each gets its own hover
+     state.
+3. **Gutter scope ribbon.** Scope indicators and fold controls in the gutter, in the spirit of Xcode's code folding
+   ribbon: highlight the enclosing block on hover, and disclose or collapse a block. It takes little or no extra
+   width: the gutter's spacing is reworked into layers, with line numbers, diagnostics tint, change markers and scope
+   controls on separate sides and z levels. Scope comes from the syntax model (SwiftSyntax for Swift, the lexer's
+   brackets elsewhere).
+4. **Compact inline view (a setting).** An inline mode that shows only the newest file's final content. The gutter,
+   in the same visual language as the scope ribbon, marks each place with a change: an addition, a removal or a
+   modification. Clicking a marker discloses that change in place, above the resulting lines. Compatible with the
+   isolated-changes mode: gaps collapse the same way and the markers survive around them.

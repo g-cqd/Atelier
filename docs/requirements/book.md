@@ -1135,6 +1135,80 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
   with expected gains, and a progressive pipeline design (PERF-09).
 - **Priority:** Must. **Related:** PERF-09.
 
+### CARD (continued): Requests after the audit
+
+#### CARD-13 · Folding keeps the text visible and the colours steady
+- **Statement:** Folding a card clips its text away as the card shrinks; no frame shows another background colour.
+- **Source:** 09-23 (after the audit), "when collapsing the background is darker grayish that's very distracting for
+  the file cards, when the text disappears while it collapses, that feels weird".
+- **Acceptance criteria:**
+  1. On fold, the text stays visible and is clipped progressively until only the header remains.
+  2. On unfold, the body is revealed with its content, never as an empty band.
+  3. No frame shows a background colour the card does not have at rest.
+- **Priority:** Must. **Related:** CARD-12.
+
+#### CARD-14 · Split layouts size cards exactly
+- **Statement:** In the side-by-side layout, a card's height equals its content, stays stable while scrolling, and
+  unfolding never blanks the list.
+- **Source:** 09-23, "when using another layout than the inline, scroll in the file list cards is buggy and sometimes
+  big spaces are added to the content of the file cards"; "split layout, plus expanding a file completely erases the
+  scrollview content".
+- **Acceptance criteria:**
+  1. Card heights equal their laid-out content in every layout, with wrapping on and off.
+  2. No card height changes during a scroll unless its content changed.
+  3. Unfolding a card in the split layout keeps the list's content on screen.
+- **Priority:** Must. **Related:** CARD-12, PERF-05.
+
+#### CARD-15 · The card list offers inline and side by side only
+- **Statement:** The card list supports the inline and side-by-side layouts; stacked is for a single file.
+- **Source:** 09-23, "file list cards should only support inline or horizontal split, but not stacked split".
+- **Acceptance criteria:**
+  1. With Stacked selected, the card list draws side by side, and the stored setting is unchanged.
+  2. While the card list shows, Stacked is disabled in the toolbar picker and the View menu, with an explanation.
+  3. A single file still honours Stacked.
+- **Priority:** Must.
+
+### DIFF: Diff interaction refinements (roadmap, 09-23)
+
+#### DIFF-01 · Resizable split and stacked panes
+- **Statement:** The divider between the old and new panes can be dragged.
+- **Source:** 09-23, "being able to drag the pane width when split or stacked diff are shown".
+- **Acceptance criteria:** Dragging the divider resizes the panes, and the ratio persists per window.
+- **Priority:** Should.
+
+#### DIFF-02 · Gap-expansion drag behaves predictably
+- **Statement:** Dragging a gap handle only reveals lines or returns towards its start, keeps revealing at a bounded
+  rate at an edge, and a gap between two changes offers a handle on each side.
+- **Source:** 09-23, "when dragging the gutter line shower in the opposite direction … it still expands the line …
+  holding the dragger to an edge of the view port or view container should continue to disclose lines (not too fast
+  though) … we need to show 2 different drag controls, with hover effect".
+- **Acceptance criteria:**
+  1. A drag against the reveal direction never discloses lines.
+  2. Holding a handle at an edge keeps revealing at a bounded rate.
+  3. A gap between two changes shows two handles with hover feedback.
+- **Priority:** Should. Reference: Xcode's comparison view; the user offered screenshots.
+
+#### DIFF-03 · A gutter scope ribbon
+- **Statement:** The gutter shows scope indicators and fold controls without growing much wider.
+- **Source:** 09-23, "provide in the gutter (without much additional or no extra space allocated to it …) a scope
+  indicator and control to disclose and collapse to better identify code blocks".
+- **Acceptance criteria:**
+  1. Hovering a line highlights its enclosing scope.
+  2. A scope can be collapsed and disclosed from the gutter.
+  3. The gutter's width grows by at most a few points.
+- **Priority:** Could. Reference: Xcode; the user offered screenshots.
+
+#### DIFF-04 · A compact inline view
+- **Statement:** A setting shows only the newest content, with gutter markers that disclose each change in place.
+- **Source:** 09-23, "an inline (not isolated) but compacted view, where we would just show the end result with the
+  newest file, but indicating in the gutter the places where there are changes and proposing to disclose the change
+  on top … compatible with the isolated change diff mode".
+- **Acceptance criteria:**
+  1. The view shows the new side only, with a marker per change.
+  2. Clicking a marker discloses that addition, removal or modification in place.
+  3. It works with the isolated-changes mode.
+- **Priority:** Could.
+
 ## Request index
 
 Times are CEST. "Mid-turn" marks a message the user sent while the assistant was working.
@@ -1216,3 +1290,8 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R73 | 09-23 (mid-turn) | "reuse the backdrop effect beneath them … capsule shape … a pin symbol" | TAB-08, TAB-09 |
 | R74 | 09-23 (mid-turn) | "micro optimizations towards improving rendering speed across gui/tui" | PERF-09, QUAL-08 |
 | R75 | 09-23 09:37 | "tab hovering background could be lighter" (and the answers to Q1-Q5) | TAB-07, TAB-08, SET-03, HOVER-08, CARD-09, DIAG-08 |
+| R76 | 09-23 (after audit) | "when collapsing the background is darker grayish" | CARD-13 |
+| R77 | 09-23 (after audit) | "when using another layout than the inline, scroll … is buggy" | CARD-14 |
+| R78 | 09-23 (after audit) | "split layout, plus expanding a file completely erases the scrollview content" | CARD-14 |
+| R79 | 09-23 (after audit) | "file list cards should only support inline or horizontal split" | CARD-15 |
+| R80 | 09-23 (after audit) | "i'd like that you add to the roadmap a few refinements" | DIFF-01 to DIFF-04 |
