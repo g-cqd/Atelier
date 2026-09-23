@@ -20,8 +20,9 @@ public actor DiagnosticsEngine {
         }
     }
 
-    /// What to analyze, and which tools are enabled and where to find them.
-    public struct Request: Sendable {
+    /// What to analyze, and which tools are enabled and where to find them. Equatable, so a caller can tell an
+    /// unchanged request from a new one and skip re-running it.
+    public struct Request: Sendable, Equatable {
         public var root: URL
         public var files: [FileTarget]
         /// Identifies the working tree's current state for corpus-scoped tools; nil when there is no working tree
