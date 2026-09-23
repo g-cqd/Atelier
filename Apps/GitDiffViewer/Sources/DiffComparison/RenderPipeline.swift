@@ -82,6 +82,12 @@ package final class RenderPipeline {
     @ObservationIgnored private var layout: (context: Int, isolates: Bool) = (3, false)
     /// Bumped whenever `configure` changes how diffs render, which leaves every stamp before it stale.
     @ObservationIgnored private var configuration = 0
+    /// Bumped whenever what is published is replaced or taken away, not when it is rendered again or extended; a
+    /// relayout lands only on the content it rendered.
+    @ObservationIgnored private var contentVersion = 0
+    @ObservationIgnored private var relayoutTask: Task<Void, Never>?
+    /// Bumped by every relayout; one that lands after a newer one started is dropped.
+    @ObservationIgnored private var relayoutGeneration = 0
 
     /// Granularity and heuristics of what is published; a render borrows published work only when they match.
     @ObservationIgnored private var publishedGranularity: IntralineGranularity?
@@ -158,31 +164,37 @@ package final class RenderPipeline {
         }
     }
 
-    /// Renders everything published again with the current configuration; without `keepingScroll`, every gap folds
-    /// back too. A render in flight renders its own files again when it lands.
+    /// Renders everything published again, off the main actor, with the current configuration; without
+    /// `keepingScroll`, every gap folds back too. A render in flight renders its own files again when it lands.
     package func relayout(keepingScroll: Bool) {
-        guard let target, !prepared.isEmpty else { return }
         if !keepingScroll { gapExpansions = [:] }
-        rerender(Array(prepared.indices), of: target, keepingScroll: keepingScroll)
-        if !isRendering { onEvent?(.finished) }
+        refresh(keepingScroll: keepingScroll)
     }
 
     /// Reveals rows around a gap on top of `base`: dragging down pulls rows from the hunk above, dragging up from the
     /// hunk below; a gap at the top or bottom of a file reveals in its only possible direction whichever way it is
-    /// dragged. The document is re-laid out in place.
+    /// dragged.
     package func adjustGap(_ marker: GapMarker, from base: GapExpansion, byLines delta: Int) {
         let effective = marker.isLeading ? -abs(delta) : marker.isTrailing ? abs(delta) : delta
-        let expansion = GapExpansion(below: base.below + max(effective, 0), above: base.above + max(-effective, 0))
-        guard gapExpansions[marker.key] != expansion else { return }
-        gapExpansions[marker.key] = expansion
-        relayout(keepingScroll: true)
+        setExpansion(
+            GapExpansion(below: base.below + max(effective, 0), above: base.above + max(-effective, 0)),
+            for: marker.key)
+    }
+
+    /// Reveals `expansion` around one gap and renders only the file it belongs to, at once on the main actor: one
+    /// file's cost per drag step, and no `.finished`, since nothing else changed.
+    package func setExpansion(_ expansion: GapExpansion, for key: GapKey) {
+        guard self.expansion(of: key) != expansion else { return }
+        gapExpansions[key] = expansion == GapExpansion() ? nil : expansion
+        guard let target, prepared.indices.contains(key.fileIndex) else { return }
+        rerender([key.fileIndex], of: target, keepingScroll: true)
     }
 
     /// Folds every revealed gap back to the context lines, keeping the scroll position.
     package func resetGaps() {
         guard !gapExpansions.isEmpty else { return }
         gapExpansions = [:]
-        relayout(keepingScroll: true)
+        refresh(keepingScroll: true)
     }
 
     package func expansion(of key: GapKey) -> GapExpansion {
@@ -197,6 +209,7 @@ package final class RenderPipeline {
         cards = []
         prepared = []
         stamps = []
+        contentVersion += 1
     }
 
     /// Publishes files that landed behind those already published, in target order.
@@ -226,6 +239,7 @@ package final class RenderPipeline {
         target = job.target
         prepared = diffs
         stamps = files.map(\.stamp)
+        contentVersion += 1
         publishedGranularity = job.inputs.granularity
         publishedHeuristics = job.inputs.heuristics
         switch job.target {
@@ -244,12 +258,58 @@ package final class RenderPipeline {
     /// Renders the published files at `indices` again, inline, under the current stamp.
     private func rerender(_ indices: [Int], of target: Target, keepingScroll: Bool) {
         let layout = renderLayout(for: target)
+        let files = indices.filter { prepared.indices.contains($0) }
+            .map { index -> (Int, Stamped) in
+                let file = PaneRenderer.renderInline(
+                    PaneRenderer.Job(index: index, diff: prepared[index]), options: options, layout: layout)
+                return (index, (file, currentStamp(forIndex: index, in: target)))
+            }
+        install(files, of: target, keepingScroll: keepingScroll)
+    }
+
+    /// Renders again, off the main actor, every published file whose stamp is out of date, and puts each back unless
+    /// something newer took its place meanwhile: a render that replaced what is published, a newer relayout, or a gap
+    /// drag on that file. Sends `.finished` once it lands, unless a render is in flight, which will.
+    private func refresh(keepingScroll: Bool) {
+        relayoutTask?.cancel()
+        relayoutGeneration += 1
+        guard let target else { return }
+        let stale = prepared.indices.filter { stamps[$0] != currentStamp(forIndex: $0, in: target) }
+        guard !stale.isEmpty else {
+            if !isRendering { onEvent?(.finished) }
+            return
+        }
+        let relayout = relayoutGeneration
+        let content = contentVersion
+        let jobs = stale.map { PaneRenderer.Job(index: $0, diff: prepared[$0]) }
+        let expected = stale.map { currentStamp(forIndex: $0, in: target) }
+        let options = options
+        let layout = renderLayout(for: target)
+        relayoutTask = taskProvider.task {
+            do {
+                let files = try await self.renderer.render(jobs, options: options, layout: layout)
+                guard relayout == self.relayoutGeneration, content == self.contentVersion, let target = self.target
+                else { return }
+                let landed = zip(stale, zip(files, expected))
+                    .filter { index, file in file.1 == self.currentStamp(forIndex: index, in: target) }
+                    .map { index, file in (index, (file.0, file.1)) }
+                self.install(landed, of: target, keepingScroll: keepingScroll)
+                if !self.isRendering { self.onEvent?(.finished) }
+            } catch is CancellationError {
+                return
+            } catch {
+                PhaseTrace.log("relayout failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Puts rendered files back at their indices of what is published, each under the stamp it was rendered with.
+    private func install(_ files: [(Int, Stamped)], of target: Target, keepingScroll: Bool) {
         var updated = cards
-        for index in indices where prepared.indices.contains(index) {
-            var diff = PaneRenderer.renderInline(
-                PaneRenderer.Job(index: index, diff: prepared[index]), options: options, layout: layout)
+        for (index, stamped) in files where prepared.indices.contains(index) {
+            var diff = stamped.file
             diff.keepsScrollPosition = keepingScroll
-            stamps[index] = currentStamp(forIndex: index, in: target)
+            stamps[index] = stamped.stamp
             switch target {
                 case .file:
                     file = diff
