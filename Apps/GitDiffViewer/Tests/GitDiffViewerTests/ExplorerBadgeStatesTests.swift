@@ -79,6 +79,18 @@ struct ExplorerBadgeStatesTests {
     }
 
     @Test
+    func `a rename made without git, a deleted path and an untracked one, draws one state in both trees`()
+        async throws
+    {
+        let sut = try await makeLoadedSUT(
+            leftEntries: [harness.entry("old.swift", "1")], rightEntries: [harness.entry("new.swift", "1")],
+            status: Self.status("1 .D N... 100644 100644 000000 aaaa aaaa old.swift", "? new.swift"))
+
+        #expect(sut.left.explorerBadgeStates.state(of: "old.swift") == .unstaged)
+        #expect(sut.right.explorerBadgeStates.state(of: "new.swift") == .unstaged)
+    }
+
+    @Test
     func `a ref against a ref draws every change filled in both trees`() async throws {
         let feature = ComparisonSource.gitRef(repository: Self.root, ref: "feature")
         let sut = try await makeLoadedSUT(
