@@ -27,7 +27,9 @@ package enum SettingLabel {
 
     // MARK: Appearance
 
+    package static let diffLayout = "Diff layout"
     package static let wrapsLines = "Wrap long lines"
+    package static let wrapColumn = "Wrap column"
     package static let appearanceScheme = "Appearance"
     package static let badgeScheme = "Badge colors"
     package static let matchesThemeAppearance = "Match window appearance to theme"
@@ -37,5 +39,14 @@ package enum SettingLabel {
     package static let diagnosticsEnabled = "Analyze changed Swift files"
     package static let showsHoverDocumentation = "Show documentation on hover"
     package static let analyzedSides = "Analyze"
+    package static let tools = "Tools"
+    package static let languageServers = "Language servers"
     package static let refreshToolStatus = "Refresh Tool Status"
+
+    // MARK: Projects
+
+    /// The Settings window's scope selector.
+    package static let settingsScope = "Settings for"
+    /// The whitespace mode and the advanced matching heuristics together, as one project override.
+    package static let matching = "Whitespace and matching"
 }
