@@ -98,6 +98,9 @@ public final class GLRParser: Sendable {
     }
 
     /// Parses `source` from the tokens `tokens` reads out of it.
+    ///
+    /// The cancellation check counts every token read, extras such as comments too, so a file of comments alone
+    /// still meets one every 256 tokens; the token limit counts only the tokens the stacks take.
     private func parse(
         _ source: String,
         from tokens: inout some ParseTokenSource,
@@ -105,15 +108,17 @@ public final class GLRParser: Sendable {
     ) throws(ParseError) -> SyntaxTree {
         var stacks = [ParseStack(state: 0)]
         var extras: [ParseToken] = []
+        var readCount = 0
         var tokenIndex = 0
         while let token = tokens.next(for: stacks) {
+            if readCount.isMultiple(of: Self.cancellationCheckInterval), isCancelled() {
+                ParseStack.releaseAll(&stacks)
+                throw .cancelled(atToken: readCount)
+            }
+            readCount += 1
             guard !token.isExtra else {
                 extras.append(token)
                 continue
-            }
-            if tokenIndex.isMultiple(of: Self.cancellationCheckInterval), isCancelled() {
-                ParseStack.releaseAll(&stacks)
-                throw .cancelled(atToken: tokenIndex)
             }
             guard tokenIndex < Self.maxTokens else {
                 ParseStack.releaseAll(&stacks)
@@ -124,11 +129,9 @@ public final class GLRParser: Sendable {
         }
 
         guard tokenIndex > 0 else {
-            // Empty input
-            return SyntaxTree(
-                root: SyntaxNode(type: productions.first?.name ?? "source", byteRange: 0 ..< 0),
-                source: source
-            )
+            // No token but extras, if any: an empty root keeps them, as a parsed one does.
+            let root = SyntaxNode(type: productions.first?.name ?? "source", byteRange: 0 ..< 0)
+            return SyntaxTree(root: attachingExtras(extras, to: root), source: source)
         }
         if let endIdx = terminalIndex["$end"] {
             var exceededDepth = false
