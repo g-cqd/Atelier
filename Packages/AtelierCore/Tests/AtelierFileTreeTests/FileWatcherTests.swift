@@ -48,6 +48,27 @@ struct FileWatcherTests {
         await watcher.stop()
     }
 
+    /// A released watcher or a stopped stream must never leave FSEvents calling into freed state: the app crashed
+    /// in the field with a callback yielding through a deallocated context box.
+    @Test func `stopping or dropping watchers while their events are in flight never reaches freed state`()
+        async throws
+    {
+        let tree = try TempTree()
+        try tree.createFile(named: "churn.txt", content: "0")
+        for round in 0 ..< 60 {
+            let watcher = FileWatcher()
+            await watcher.watchDirectory(tree.root)
+            try "\(round)".write(toFile: tree.root + "/churn.txt", atomically: true, encoding: .utf8)
+            // Even rounds stop explicitly; odd rounds drop the watcher and leave teardown to its deinit.
+            if round.isMultiple(of: 2) { await watcher.stop() }
+        }
+        let survivor = FileWatcher()
+        await survivor.watchDirectory(tree.root)
+        try "done".write(toFile: tree.root + "/churn.txt", atomically: true, encoding: .utf8)
+        #expect(await nextElement(of: survivor.events) != nil)
+        await survivor.stop()
+    }
+
     @Test func `watching a file surfaces an event when it is written`() async throws {
         let tree = try TempTree()
         try tree.createFile(named: "watched.txt", content: "before")
