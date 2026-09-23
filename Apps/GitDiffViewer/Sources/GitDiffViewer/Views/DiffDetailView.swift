@@ -25,12 +25,14 @@ struct DiffDetailView: View {
         switch model.detailState {
             case .cards:
                 CombinedDiffView(model: model)
+                    .updatingMarker(model.shownComparison)
             case .file(let rendered):
                 // The AppKit panes stay below the bar: SwiftUI hands neither the bar's inset nor its edge effect to
                 // an NSScrollView, so a divider closes the bar here instead.
                 VStack(spacing: 0) {
                     if showsTabs { Divider() }
                     panes(for: rendered)
+                        .updatingMarker(model.shownComparison)
                 }
             case .loading:
                 ProgressView("Comparing…")
