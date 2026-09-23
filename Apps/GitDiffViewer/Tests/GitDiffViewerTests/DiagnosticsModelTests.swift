@@ -5,9 +5,8 @@ import Testing
 
 @testable import DiffComparison
 
-/// ``DiagnosticsModel``'s adapter behavior: merging streamed findings per tool, the derived summary, the paths it
-/// reports changed, and how it reacts to the settings that drive it. Runs a real ``DiagnosticsSession`` over a fake
-/// ``DiagnosticsRunning`` so the merge logic is exercised the way production wiring actually delivers updates.
+/// ``DiagnosticsModel``: merging streamed findings per tool, the summary, the changed paths it reports, and its
+/// reactions to settings, over a real ``DiagnosticsSession`` and a fake runner.
 @MainActor
 struct DiagnosticsModelTests {
     private static let root = URL(filePath: "/repo")

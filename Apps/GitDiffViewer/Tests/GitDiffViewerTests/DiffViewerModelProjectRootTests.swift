@@ -4,9 +4,8 @@ import Testing
 @testable import DiffComparison
 @testable import DiffGit
 
-/// ``DiffViewerModel/currentProjectRoot``: the seam ``ComparisonWindow`` rebinds its project-scoped settings
-/// identity from. Must reflect the comparison's *current* repository, not just the one it launched with, so a
-/// later switch through the source toolbar is what this test drives.
+/// ``DiffViewerModel/currentProjectRoot`` follows the comparison's current repository, including a later switch
+/// through the source toolbar.
 @MainActor
 struct DiffViewerModelProjectRootTests {
     private let harness = ModelTestHarness()
@@ -51,8 +50,7 @@ struct DiffViewerModelProjectRootTests {
         sut.right.load(.directory(ModelTestHarness.rightURL), repository: nil)
         #expect(sut.currentProjectRoot == firstRoot)
 
-        // The equivalent of picking a different repository from the source toolbar: the side's `repository`
-        // changes root entirely, not just its branch or ref.
+        // As picking another repository from the source toolbar does.
         sut.left.load(.directory(ModelTestHarness.leftURL), repository: repository(secondRoot))
 
         #expect(sut.currentProjectRoot == secondRoot)

@@ -128,11 +128,8 @@ struct HoverHitTesterTests {
 
     // MARK: Cards-mode hosting (EmbeddedDiffTextView's real text stack)
 
-    /// Cards mode hosts its text through a real `NSTextView` too: `EmbeddedDiffTextView.Coordinator.attach(_:)`
-    /// moves the view's own layout manager onto a `StaticTextLayout`'s detached content storage rather than
-    /// copying the string into the view's own storage. `HoverHitTester` only ever needs a text view's layout
-    /// manager and the `RenderedText` it shows, so it works unchanged once a card pane is wired up exactly the
-    /// way ``TextLayoutTests`` shows a scrolling pane's viewport is (an off-screen host, laid out fully).
+    /// Hosts `rendered` the way a card pane does: the text view's layout manager attached to a `StaticTextLayout`'s
+    /// detached storage, laid out fully off screen.
     @MainActor
     private func makeCardHostedTextView(rendered: RenderedText, width: CGFloat = 800) -> NSTextView {
         let layout = StaticTextLayout(rendered: rendered)

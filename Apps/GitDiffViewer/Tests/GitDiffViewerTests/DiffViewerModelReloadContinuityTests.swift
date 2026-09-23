@@ -32,9 +32,7 @@ struct DiffViewerModelReloadContinuityTests {
         sut.setAllCollapsed(true)
         #expect(sut.collapsedFiles == ["a.swift", "b.swift"])
 
-        // A reload or an auto-refresh re-comparison must not discard the user's folds, whether or not any file
-        // actually changed: `CardFolding` is keyed by path, so a fold made before still applies to the same file
-        // after.
+        // Re-compares, as a reload or an auto-refresh does.
         sut.sourcesChanged()
         try await harness.taskProvider.waitForAllTasks()
         #expect(sut.collapsedFiles == ["a.swift", "b.swift"])
@@ -88,8 +86,7 @@ struct DiffViewerModelReloadContinuityTests {
         let beforeA = try #require(sut.renderedFiles.first { $0.path == "a.swift" })
         let beforeB = try #require(sut.renderedFiles.first { $0.path == "b.swift" })
 
-        // c.swift, the last file, disappears from both sides; z.swift, sorting after it, appears. a.swift and
-        // b.swift, ahead of the change, keep both their identity and their position.
+        // c.swift disappears and z.swift, sorting after it, appears; a.swift and b.swift keep their positions.
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [
             harness.entry("a.swift", "1"), harness.entry("b.swift", "2"), harness.entry("z.swift", "7")
         ]
@@ -165,14 +162,12 @@ struct DiffViewerModelReloadContinuityTests {
         try await harness.taskProvider.waitForAllTasks()
         let unchanged = try #require(sut.rendered)
 
-        // A reload where a.swift's content did not actually change publishes nothing new: the very same
-        // `RenderedDiff` stays put.
+        // A reload that changes nothing keeps the very same `RenderedDiff`.
         sut.right.reload()
         try await harness.taskProvider.waitForAllTasks()
         #expect(sut.rendered?.id == unchanged.id)
 
-        // A reload where it did change re-renders it, keeping the pane's scroll position since it is still the
-        // same file the user is looking at.
+        // A reload that changes it re-renders it and keeps the pane's scroll position.
         harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "9")]
         sut.right.reload()
         try await harness.taskProvider.waitForAllTasks()
@@ -186,9 +181,7 @@ struct DiffViewerModelReloadContinuityTests {
         async throws
     {
         let sut = harness.makeSUT()
-        // Past `SourceLoader`'s hashing limit, a working-tree entry carries no blob id at all: its identity is
-        // `(path, nil, nil)` on every load, indistinguishable from itself by blob alone even though the file's
-        // content changed on disk.
+        // Past `SourceLoader`'s hashing limit an entry has no blob id, so blobs cannot tell its versions apart.
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [
             SourceEntry(relativePath: "big.swift", blobID: nil, size: 9_000_000)
         ]
@@ -217,9 +210,7 @@ struct DiffViewerModelReloadContinuityTests {
         try await harness.load(sut)
         #expect(sut.detailState == .cards)
 
-        // `right.reload()` marks the side loading synchronously, before its `entries(of:)` call (gated here)
-        // ever returns: the detail area must keep showing what is already published instead of unmounting into
-        // a `ProgressView` for the whole round trip.
+        // The gated reload leaves the side loading; the published cards must stay mounted meanwhile.
         harness.reader.gate["/right"] = AsyncProbe<Void>()
         sut.right.reload()
         #expect(sut.right.isLoading)
@@ -245,9 +236,7 @@ struct DiffViewerModelReloadContinuityTests {
         try await harness.taskProvider.waitForAllTasks()
         #expect(sut.expansion(of: marker.key) == GapExpansion(below: 0, above: 4))
 
-        // Neither side's blob changes: the reload reuses the very same `RenderedDiff`, expanded rows baked in
-        // and all, so the expansion tracking it must stay too -- otherwise `resetGaps()` would become a no-op
-        // for content that still visually shows the revealed rows.
+        // Neither blob changes, so the reload reuses the `RenderedDiff` with its expanded rows baked in.
         sut.right.reload()
         try await harness.taskProvider.waitForAllTasks()
 

@@ -6,10 +6,7 @@ import Testing
 @testable import DiffRendering
 
 @Suite struct HoverDocumentTests {
-    /// A regression test for the invisible-prose bug: `AttributedString(markdown:)` leaves `.foregroundColor`
-    /// unset for plain runs, which on the hover panel's vibrant `.behindWindow` material rendered as blank text
-    /// even though the summary had genuinely been resolved (``renderProse`` in `HoverDocument`). Every run of the
-    /// built summary must carry an explicit color so it never blends into the panel's own glass.
+    /// Uncolored text would blend into the panel's vibrant material.
     @Test func summaryProseAlwaysCarriesAnExplicitForegroundColor() throws {
         let content = HoverContent(
             markdown: """
@@ -31,10 +28,7 @@ import Testing
         #expect(summary.string == "A value type describing how a capture session should be configured.")
     }
 
-    /// The declaration chip's backing comes from the pane's own palette, not the panel's vibrancy material: a
-    /// theme's role colors are chosen to read against the pane they render in, so the panel copies that same
-    /// background behind the declaration (and any candidate declarations) rather than leaving it to whatever
-    /// light/dark appearance the panel's own glass happens to land on.
+    /// A theme's role colors read against the pane's own background, not against the panel's glass.
     @Test func buildCarriesTheChipBackgroundFromThePalette() throws {
         let content = HoverContent(
             markdown: """
@@ -52,12 +46,7 @@ import Testing
             chipBackground.usingColorSpace(.sRGB) == palette.background.withAlphaComponent(0.94).usingColorSpace(.sRGB))
     }
 
-    /// A regression test for the Helvetica-leaking-into-prose bug: `AttributedString(markdown:)` records bold and
-    /// italic as `inlinePresentationIntent`, never as a font, and the bridge to `NSAttributedString` has nothing
-    /// of its own to fall back to -- a run with no `.font` attribute draws in `NSTextView`'s hardcoded default,
-    /// Helvetica 12, not the system font, dropping the bold/italic styling along with it. Every run of a built
-    /// summary must carry an explicit `NSFont` whose family matches the system font's own, never Helvetica, and
-    /// bold/italic text must carry the matching symbolic trait.
+    /// A fontless run would draw in Helvetica 12; bold and italic runs also carry the matching symbolic trait.
     @Test func summaryProseAlwaysCarriesAnExplicitSystemFont() throws {
         let content = HoverContent(
             markdown: """

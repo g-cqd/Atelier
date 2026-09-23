@@ -3,9 +3,8 @@ import Testing
 
 @testable import DiffComparison
 
-/// ``GitMetadataLocation/resolve(root:read:)``: telling a plain repository's `.git` directory from a linked
-/// worktree's pointer file, and following it (and its `commondir`) to the real git metadata locations, against an
-/// in-memory `read` so no real filesystem is involved.
+/// ``GitMetadataLocation/resolve(root:read:)`` for plain repositories and linked worktrees, over an in-memory
+/// `read`.
 struct GitMetadataLocationTests {
     @Test
     func `a plain repository keeps gitDir and commonDir as the root's own .git`() {

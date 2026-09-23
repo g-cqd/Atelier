@@ -7,10 +7,8 @@ import Testing
 @testable import DiffComparison
 @testable import DiffGit
 
-/// ``DiffViewerModel/attachFreshness()``'s refs-changed wiring: an ordinary commit moves `refs/heads/<branch>`
-/// without touching the symbolic `.git/HEAD` file, so ``RepositoryFreshness/onHeadChanged`` never fires for it --
-/// only ``RepositoryFreshness/onRefsChanged``. A side parked on a named ref (`HEAD`, a branch, a remote-tracking
-/// ref) must still pick up wherever that ref now points, not just refresh its menu.
+/// The refs-changed wiring: a commit moves the branch's ref but not the symbolic `.git/HEAD`, so a side parked on a
+/// named ref must reload on a refs change, not just refresh its menu.
 @MainActor
 struct DiffViewerModelRefsChangedTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
@@ -64,8 +62,7 @@ struct DiffViewerModelRefsChangedTests {
         try await taskProvider.waitForAllTasks()
         #expect(sut.left.entries.map(\.relativePath) == ["a.swift"])
 
-        // A commit landed on the checked-out branch: `refs/heads/main` moved, `.git/HEAD` itself did not, so
-        // `RepositoryFreshness` reports this through `onRefsChanged`, not `onHeadChanged`.
+        // A commit on the checked-out branch moves `refs/heads/main`, which arrives as a refs change.
         headTree.move(to: "b.swift")
         sut.freshness?.onRefsChanged?()
         try await taskProvider.waitForAllTasks()
@@ -90,9 +87,7 @@ struct DiffViewerModelRefsChangedTests {
         sut.freshness?.onRefsChanged?()
         try await taskProvider.waitForAllTasks()
 
-        // Neither side names a ref, so a refs change cannot have moved what either is showing: the cheap,
-        // single-task menu refresh runs (`refreshBothSidesRepositoryInfo`'s own `taskProvider.task`), not
-        // `reloadSources()`'s two (one per side).
+        // Neither side names a ref: one menu-refresh task runs instead of a reload's two.
         #expect(taskProvider.spawnedTaskCount - spawnedBefore == 1)
     }
 }
