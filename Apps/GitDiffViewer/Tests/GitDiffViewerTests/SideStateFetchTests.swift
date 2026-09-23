@@ -14,7 +14,7 @@ struct SideStateFetchTests {
     private nonisolated static let info = RepositoryInfo(
         root: root, branches: ["main", "origin/develop"], tags: [], commits: [])
 
-    private func makeSUT(runner: any ProcessRunner, taskProvider: TaskProviderSpy = TaskProviderSpy()) -> SideState {
+    private func makeSUT(runner: any ProcessRunner, taskProvider: TaskProviderSpy = .tolerant()) -> SideState {
         SideState(label: "Right", reader: SourceLoader(runner: runner), taskProvider: taskProvider)
     }
 
@@ -118,7 +118,7 @@ struct SideStateFetchTests {
     @Test
     func `loadRemotesIfNeeded reads remotes once and is a no-op once known`() async throws {
         let runner = FakeProcessRunner { _ in Self.remotesOutput(["origin", "upstream"]) }
-        let taskProvider = TaskProviderSpy()
+        let taskProvider = TaskProviderSpy.tolerant()
         let sut = makeSUT(runner: runner, taskProvider: taskProvider)
         sut.load(.directory(Self.root), repository: Self.info, entries: [])
 

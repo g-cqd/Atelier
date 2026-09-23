@@ -11,7 +11,7 @@ import Testing
 
 @MainActor
 struct UnifiedTreeTests {
-    private let taskProvider = TaskProviderSpy()
+    private let taskProvider = TaskProviderSpy.tolerant()
     private let reader = FakeSourceReader()
 
     @Test
