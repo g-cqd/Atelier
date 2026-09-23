@@ -193,6 +193,7 @@ package final class ViewerSettings {
             if explorerPlacement != oldValue { store(explorerPlacement.rawValue, Key.explorerPlacement, .appearance) }
         }
     }
+    /// This window's sidebar, stored for the next window but never shared with the open ones (``windowLocalKeys``).
     package var sidebarVisibility: SidebarVisibility {
         didSet {
             if sidebarVisibility != oldValue { store(sidebarVisibility.rawValue, Key.sidebarVisibility, .appearance) }
@@ -341,13 +342,17 @@ package final class ViewerSettings {
         for observer in observers { observer.handler(change) }
     }
 
+    /// Settings each window keeps for itself: stored so the next window opens as the last one was left, never
+    /// announced to the others, so hiding the sidebar in one window leaves every other window's alone.
+    static let windowLocalKeys: Set<String> = [Key.sidebarVisibility]
+
     /// Writes a user's edit to the adopted project's key for a scoped setting, to the base key otherwise, and
     /// announces it to every other instance, so each window on that project, or on none that overrides the key,
-    /// follows at once.
+    /// follows at once; a window-local setting is only stored.
     private func write(_ value: Any?, _ key: String) {
         guard let projectID, Self.projectScopedKeys.contains(key) else {
             defaults.set(value, forKey: key)
-            postSettingChanged(key: key, projectKey: nil)
+            if !Self.windowLocalKeys.contains(key) { postSettingChanged(key: key, projectKey: nil) }
             return
         }
         guard !isFallingBackToBase else { return }
