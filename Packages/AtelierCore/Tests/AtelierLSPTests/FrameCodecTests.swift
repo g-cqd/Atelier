@@ -87,6 +87,32 @@ struct FrameCodecTests {
     }
 
     @Test
+    func `a 9 KiB header without a terminator throws`() {
+        let header = Data(repeating: UInt8(ascii: "x"), count: 9 * 1024)
+        var codec = LSPFrameCodec()
+        #expect(throws: LSPFramingError.headerTooLarge) {
+            _ = try codec.feed(header)
+        }
+    }
+
+    @Test
+    func `a header of the maximum size still frames its payload when its terminator arrives last`() throws {
+        let payload = Data(#"{"a":1}"#.utf8)
+        let lengthLine = "Content-Length: \(payload.count)\r\n"
+        let paddingName = "X-Padding: "
+        let padding = String(
+            repeating: "p", count: LSPFrameCodec.maximumHeaderSize - lengthLine.utf8.count - paddingName.utf8.count)
+        var framed = Data((lengthLine + paddingName + padding + "\r\n\r\n").utf8)
+        framed.append(payload)
+        // Everything but the terminator's last byte: the codec must keep waiting rather than refuse the header.
+        let split = LSPFrameCodec.maximumHeaderSize + 3
+
+        var codec = LSPFrameCodec()
+        #expect(try codec.feed(framed.prefix(split)) == [])
+        #expect(try codec.feed(framed.dropFirst(split)) == [payload])
+    }
+
+    @Test
     func `frame produces exact bytes`() {
         let payload = Data(#"{"a":1}"#.utf8)
         let framed = LSPFrameCodec.frame(payload)

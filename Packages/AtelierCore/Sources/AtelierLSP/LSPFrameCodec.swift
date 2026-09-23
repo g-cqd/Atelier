@@ -10,6 +10,8 @@ public enum LSPFramingError: Error, Equatable, Sendable {
     case negativeContentLength(Int)
     /// The declared length exceeded the codec's configured maximum.
     case payloadTooLarge(Int)
+    /// No header end arrived within ``LSPFrameCodec/maximumHeaderSize`` bytes.
+    case headerTooLarge
 }
 
 /// Incremental parser for the LSP base protocol's `Content-Length` framing.
@@ -18,6 +20,13 @@ public enum LSPFramingError: Error, Equatable, Sendable {
 /// is complete and returns the payloads it can extract, in order.
 public struct LSPFrameCodec: Sendable {
     private static let headerTerminator = Data("\r\n\r\n".utf8)
+
+    /// The longest header block accepted, its terminator excluded. A real header is a line or two; a server that
+    /// writes something else to its output, such as a crash log, would otherwise grow the buffer without bound, since
+    /// ``maximumPayloadSize`` only applies once a header has ended.
+    public static let maximumHeaderSize = 8 * 1024
+    /// How many leading bytes can hold the end of an accepted header: the longest header and its terminator.
+    private static let headerSearchLimit = maximumHeaderSize + headerTerminator.count
 
     private let maximumPayloadSize: Int
     private var buffer: Data
@@ -28,11 +37,21 @@ public struct LSPFrameCodec: Sendable {
     }
 
     /// Feeds a chunk read from the transport; returns every complete payload now available, in order.
+    ///
+    /// The header end is looked for within the first ``maximumHeaderSize`` bytes only, so a large payload that arrives
+    /// in many chunks is never rescanned whole.
+    /// - Throws: ``LSPFramingError/headerTooLarge`` as soon as a header runs past ``maximumHeaderSize`` bytes without
+    ///   ending.
     public mutating func feed(_ chunk: Data) throws(LSPFramingError) -> [Data] {
         buffer.append(chunk)
 
         var payloads: [Data] = []
-        while let headerEnd = buffer.range(of: Self.headerTerminator) {
+        while true {
+            let window = buffer.startIndex ..< buffer.startIndex + min(buffer.count, Self.headerSearchLimit)
+            guard let headerEnd = buffer.range(of: Self.headerTerminator, in: window) else {
+                if buffer.count >= Self.headerSearchLimit { throw LSPFramingError.headerTooLarge }
+                break
+            }
             let headerData = buffer[buffer.startIndex ..< headerEnd.lowerBound]
             let contentLength = try Self.parseContentLength(headerData)
 
