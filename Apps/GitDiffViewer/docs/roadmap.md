@@ -79,14 +79,12 @@ See `multi-language-hover-design.md` for the full multi-language design.
 - Native tabs: investigate NSWindow tabbing (tabbingMode/tabbingIdentifier bridged from the
   SwiftUI WindowGroup) so comparisons can live as native macOS window tabs.
 
-## Tab bar styling (user-requested; needs investigation)
-Native NSWindow tab restyling is largely private API — investigate honestly what's reachable:
-inter-tab gap equal to the bar's surrounding negative space, glass tabs with very light shadow,
-close button not reserving leading space (appears IN PLACE of the leading badge on hover),
-diff badge instead of the doc icon as the tab's leading visual, neutral tab tint (badge carries
-the cue). If native tabs can't be styled to this spec (likely — the tab bar exposes only
-title/accessoryView/tooltip), evaluate a custom in-window tab strip replacing native tabbing,
-weighing the loss of native merge/drag behaviors. Decision needed before implementation.
+## In-app tab bar styling (user-requested; shipped)
+The request targets the app's own `TabBarView` (file tabs opened from card headers), not native
+NSWindow tabs. Shipped: one `TabBarLayout.gap` (6 pt) drives the inter-tab gap and the bar's inset;
+tabs are Liquid Glass inside a single `GlassEffectContainer`, with a light shadow and no bar material;
+the diff badge is the leading visual, and the close button takes its place on hover with an animated
+swap (`TabSlotContent`); tabs are neutral, with no accent tint.
 
 ## Accent-color adaptation (research)
 Adapting app accent colors throughout the UI to the selected syntax theme (beyond light/dark
