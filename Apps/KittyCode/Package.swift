@@ -37,7 +37,10 @@ let package = Package(
     dependencies: [
         .package(path: "../../Packages/AtelierCore"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main")
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", branch: "main"),
+        // AtelierCore's own pin, URL and revision alike: SwiftPM rejects one package identity at two locations or
+        // versions in the same graph.
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "b98f139b2aa0581b6103ce0943662fc54e28a193")
     ],
     targets: [
         // Layer 0 — Raw mode, FD I/O, terminal queries
@@ -73,7 +76,9 @@ let package = Package(
             swiftSettings: strict),
 
         // Layer 2e — SF Symbols discovery + terminal glyph helpers
-        .target(name: "KittySymbols", swiftSettings: strict),
+        .target(
+            name: "KittySymbols", dependencies: [.product(name: "AemiJSON", package: "AemiJSON")],
+            swiftSettings: strict),
 
         // Layer 2f — Git integration (pluggable)
         .target(
@@ -104,7 +109,8 @@ let package = Package(
                 .product(name: "AtelierLexers", package: "AtelierCore"),
                 .product(name: "AtelierTheme", package: "AtelierCore"),
                 .product(name: "AemiCore", package: "aemi"),
-                .product(name: "AemiKernel", package: "aemi")
+                .product(name: "AemiKernel", package: "aemi"),
+                .product(name: "AemiJSON", package: "AemiJSON")
             ],
             resources: [.copy("Grammars")],
             swiftSettings: strict
@@ -142,7 +148,8 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "AemiCore", package: "aemi"),
                 .product(name: "AemiKernel", package: "aemi"),
-                .product(name: "AemiRuntime", package: "aemi")
+                .product(name: "AemiRuntime", package: "aemi"),
+                .product(name: "AemiJSON", package: "AemiJSON")
             ],
             swiftSettings: strict),
 

@@ -1,3 +1,4 @@
+import AemiJSON
 import AemiKernel
 public import AtelierGrammar
 import Foundation
@@ -46,7 +47,7 @@ public final class GrammarRegistry: Sendable {
     }
 
     /// Registers the entries of a `languages.json` file (`name`, `extensions`, `path`), skipping malformed ones and
-    /// any whose `path` isn't a single safe name.
+    /// any whose `path` isn't a single safe name. A key repeated in one entry keeps its first value.
     /// - Throws: `GrammarError.fileNotFound` when the file can't be read, `.invalidJSON` when it isn't an array of
     ///   entries.
     public func loadManifest(from path: String) throws(GrammarError) {
@@ -57,24 +58,32 @@ public final class GrammarRegistry: Sendable {
         } catch {
             throw .fileNotFound(path)
         }
-        let json: Any
+        let document: JSONDocument
         do {
-            json = try JSONSerialization.jsonObject(with: data)
+            document = try SyntaxJSON.parse(data)
         } catch {
             throw .invalidJSON(String(describing: error))
         }
-        guard let array = json as? [[String: Any]] else {
+        guard let items = document.root.array, items.allSatisfy(\.isObject) else {
             throw .invalidJSON("Expected array of language entries")
         }
-        for item in array {
-            guard let name = item["name"] as? String,
-                let extensions = item["extensions"] as? [String],
-                let path = item["path"] as? String
+        for item in items {
+            let entry = ManifestEntryMembers(item)
+            guard let name = entry.name?.string,
+                let extensions = entry.extensions.flatMap(Self.strings),
+                let path = entry.path?.string
             else { continue }
             // The manifest is untrusted: a `path` like `../../etc` would read files outside the grammar root.
             guard Self.isSafePathToken(path) else { continue }
             register(LanguageEntry(name: name, extensions: extensions, path: path))
         }
+    }
+
+    /// The elements of an array of strings; nil when `node` is not an array or holds anything but strings.
+    private static func strings(_ node: JSON) -> [String]? {
+        guard let elements = node.array else { return nil }
+        let strings = elements.compactMap(\.string)
+        return strings.count == elements.count ? strings : nil
     }
 
     private static func isSafePathToken(_ value: String) -> Bool {
@@ -167,8 +176,7 @@ public final class GrammarRegistry: Sendable {
         FileManager.default.temporaryDirectory.appendingPathComponent("kittycode-cache")
 
     private func loadFromDisk(at url: URL) throws -> ParseTableCompiler.CompilationResult {
-        let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode(ParseTableCompiler.CompilationResult.self, from: data)
+        try Self.decodeCompiledTables(from: Data(contentsOf: url))
     }
 
     private func saveToDisk(_ result: ParseTableCompiler.CompilationResult, at url: URL) throws {
@@ -176,8 +184,37 @@ public final class GrammarRegistry: Sendable {
             at: Self.cacheDirectory,
             withIntermediateDirectories: true
         )
-        let data = try JSONEncoder().encode(result)
-        try data.write(to: url, options: .atomic)
+        try Self.encodeCompiledTables(result).write(to: url, options: .atomic)
+    }
+
+    /// The compiled tables a cache file holds, whether AemiJSON or Foundation's `JSONEncoder` wrote it.
+    /// - Throws: `JSONError` or `DecodingError` when `data` is not a cache file.
+    static func decodeCompiledTables(from data: Data) throws -> ParseTableCompiler.CompilationResult {
+        try SyntaxJSON.decode(ParseTableCompiler.CompilationResult.self, from: data)
+    }
+
+    /// The contents of a cache file for `result`.
+    static func encodeCompiledTables(_ result: ParseTableCompiler.CompilationResult) throws -> Data {
+        try SyntaxJSON.encode(result)
+    }
+}
+
+/// The members a manifest entry reads, each the first of its key.
+private struct ManifestEntryMembers {
+    var name: JSON?
+    var extensions: JSON?
+    var path: JSON?
+
+    /// Visits `object`'s members once.
+    init(_ object: JSON) {
+        object.forEachMember { key, value in
+            switch key {
+                case "name": name = name ?? value
+                case "extensions": extensions = extensions ?? value
+                case "path": path = path ?? value
+                default: break
+            }
+        }
     }
 }
 
