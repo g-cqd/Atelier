@@ -1,3 +1,4 @@
+import AemiRuntime
 import Foundation
 import Testing
 
@@ -211,8 +212,9 @@ struct DirectoryScannerTests {
         try FileManager.default.createSymbolicLink(
             atPath: deepLink, withDestinationPath: escapeTarget)
 
-        let entries = await DirectoryScanner.scanAsync(
-            tree.root, maxDepth: 5, withinRoot: tree.root)
+        let pool = BlockingOffloadPool(width: 1)
+        defer { pool.shutdown() }
+        let entries = try await DirectoryScanner.scanAsync(tree.root, maxDepth: 5, withinRoot: tree.root, pool: pool)
 
         // Walk to level1/level2 children and assert no `escape` link survived.
         let level1 = try #require(entries.first { $0.name == "level1" })
