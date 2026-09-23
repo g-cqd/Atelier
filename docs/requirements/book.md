@@ -698,7 +698,8 @@ There is no image 01 (the number went to the pasted crash text) and no image 08.
   1. A staged change shows a filled badge; an unstaged change shows a stroked badge with colored text on a
      transparent background.
   2. In the Xcode scheme, Added is green, Modified is blue and Deleted is red (confirmed 09-23 09:37, Q4).
-     Renamed is unconfirmed and stays blue until checked against Xcode.
+     Renamed is blue too: Xcode draws a rename as a blue "M" (screenshot, 09-23 12:05), and the user chose to keep
+     the letter "R" ("i'd prefer we use R for renamed though").
   3. A new file that is not staged shows "A" with a stroke, not "?".
   4. The same rules apply wherever a badge appears.
 - **Priority:** Should. **Related:** CARD-11, SET-07.
