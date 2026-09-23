@@ -1,13 +1,8 @@
 import Foundation
 
-/// Path-string helpers shared between `KittyEditor` and the executable
-/// shell. Public so the `KittyCode` executable can call into it without
-/// going through `@testable import`.
+/// Path-string helpers shared by the editor library and the executable.
 public enum PathUtilities {
-    /// Expands a leading `~` or `~/` to the current user's home directory.
-    /// Equivalent to `(path as NSString).expandingTildeInPath` for the
-    /// shapes kittycode actually accepts (no `~username`); avoids the
-    /// Foundation bridge.
+    /// Expands a leading `~` or `~/` to the home directory; any other path, `~user` included, comes back unchanged.
     public static func expandingTilde(in path: String) -> String {
         guard path.hasPrefix("~") else { return path }
         if path == "~" { return NSHomeDirectory() }

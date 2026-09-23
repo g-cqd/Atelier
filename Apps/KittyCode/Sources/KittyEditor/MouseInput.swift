@@ -606,16 +606,8 @@ private func enqueueAcceleratedScroll(
 
     guard state.scrollAccelerationTask == nil else { return }
 
-    // Use Task.detached so the loop runs on a background executor.
-    // Only the MainActor.run block hops to the main actor, avoiding
-    // starvation when other @MainActor work is scheduled concurrently.
-    //
-    // Audit A13 — snapshot the interval once at task start. The
-    // user's `scrollAccelerationStepIntervalMilliseconds` doesn't
-    // change mid-acceleration; reading it every tick added an extra
-    // MainActor round-trip per ~16 ms cycle. Halving the actor-hop
-    // count keeps the scroll loop tight when other UI work is
-    // already contending for the main actor.
+    // A detached loop that hops to the main actor only to apply a step, so it can't starve other main-actor work;
+    // the interval is read once, sparing a hop per tick.
     let intervalMilliseconds = max(
         1, state.config.editor.scrollAccelerationStepIntervalMilliseconds)
     let taskProvider = state.taskProvider
@@ -676,9 +668,7 @@ public func cancelPendingAcceleratedScroll(state: EditorState, resetBurst: Bool)
     }
 }
 
-/// Synchronously drains all pending accelerated scroll lines, applying each
-/// one-by-one. Cancels the background acceleration task first so there is no
-/// race.  Intended for deterministic testing.
+/// Cancels the acceleration task, then applies the pending accelerated scroll synchronously, for deterministic tests.
 @MainActor
 public func drainPendingAcceleratedScroll(state: EditorState) {
     state.scrollAccelerationTask?.cancel()
@@ -766,7 +756,7 @@ private func handleEditorClick(mouseRow: Int, mouseCol: Int, editorRect: Rect, s
     }
 }
 
-/// 300 ms double-click window matches the previous Date-based behavior.
+/// Two clicks within this window make a double-click.
 private let doubleClickThreshold: Duration = .milliseconds(300)
 
 /// Returns `true` when `now` is within the double-click window of `last`.

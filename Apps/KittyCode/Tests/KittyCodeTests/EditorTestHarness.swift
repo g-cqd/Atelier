@@ -15,18 +15,12 @@ import Testing
 
 @testable import KittyEditor
 
-/// Single factory for the `EditorState` + `RenderPipeline` pairs `KittyCodeTests` suites build as
-/// their system under test. Replaces four near-duplicate `make*Context` factories (Audit test-support
-/// consolidation) that differed only in which `KittyConfig` knobs they toggled and whether they set an
-/// initial mode / collapsed the sidebar / eagerly refreshed highlights — every one of those knobs is a
-/// parameter here instead. `taskProvider`/`clock` default to the real runtime (`.default` /
-/// `ContinuousClock()`, unchanged from every prior factory); pass `TaskProviderSpy()` / `TestClock()`
-/// (`AemiTesting`) when a test needs deterministic control over background work instead of letting it
-/// run free, matching the app-tier testing convention in `AGENTS.md`.
+/// The factory for the `EditorState` and `RenderPipeline` pairs the suites test. `taskProvider` and `clock` default
+/// to the real runtime; pass `TaskProviderSpy()` and `TestClock()` to control background work deterministically.
 @MainActor
 enum EditorTestHarness {
-    /// General-purpose builder. Defaults reproduce the old `makeKittyCodeNavigationContext` shape (the
-    /// most common one): activity bar and tab ribbon hidden, `.editor` mode, status bar shown.
+    /// The general builder; by default the activity bar and tab ribbon are hidden and the status bar is shown, in
+    /// `.editor` mode.
     static func make(
         rootPath: String = ".",
         fileContent: [String]? = nil,
@@ -64,9 +58,8 @@ enum EditorTestHarness {
         return (state, pipeline)
     }
 
-    /// The old `makeScrollRenderingContext` shape: a synthetic `lineCount`-line file, sidebar
-    /// collapsed, status bar hidden, highlights refreshed eagerly (the scroll-diff tests assert
-    /// against `highlightedLines` immediately, before any render pass would otherwise populate it).
+    /// A synthetic `lineCount`-line file with the sidebar collapsed, the status bar hidden and highlights refreshed
+    /// up front, since the scroll-diff tests read `highlightedLines` before any render.
     static func makeScrollRendering(
         lineCount: Int = 100,
         columns: Int = 40,

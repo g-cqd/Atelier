@@ -208,13 +208,6 @@ extension EditorState {
     }
 
     private func applyUndo(_ record: FileTreeOperationRecord) async -> Bool {
-        // Audit C.3/NF25 — re-validate every path in the undo record
-        // against the CURRENT `rootPath` before any filesystem action.
-        // The record was validated at record time, but `rootPath` may
-        // have changed (workspace switch via `applyConfig`); without a
-        // re-check, an attacker who tricks the user into a workspace
-        // swap can have a previously-deleted file `restore`d into the
-        // new workspace's tree.
         guard pathsAreInsideCurrentRoot(record.operation) else {
             statusMessage = "Undo blocked: operation paths are outside current workspace"
             return false
@@ -243,7 +236,6 @@ extension EditorState {
     }
 
     private func applyRedo(_ record: FileTreeOperationRecord) async -> Bool {
-        // Audit C.3/NF25 — same containment check as `applyUndo`.
         guard pathsAreInsideCurrentRoot(record.operation) else {
             statusMessage = "Redo blocked: operation paths are outside current workspace"
             return false
@@ -269,12 +261,8 @@ extension EditorState {
         }
     }
 
-    /// Audit C.3/NF25 — every undo/redo replay path must lie inside
-    /// the CURRENT `rootPath`. The record was captured under whatever
-    /// workspace was active at record time; `applyConfig` (or a fresh
-    /// `loadInitialTree` against a different root) can move the
-    /// workspace under the snapshot's feet. Replays into the wrong
-    /// tree would silently leak content across workspaces.
+    /// Whether every path of `operation` lies inside the current root, which may have changed since it was recorded:
+    /// an undo or redo must never touch another workspace.
     private func pathsAreInsideCurrentRoot(_ operation: FileTreeOperation) -> Bool {
         switch operation {
             case .create(let snapshot), .delete(let snapshot), .duplicate(let snapshot):

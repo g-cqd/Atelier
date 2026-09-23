@@ -4,11 +4,8 @@ public import Foundation
 public import KittyCodecs
 import KittyTerminal
 
-/// Errors surfaced while loading or decoding the user's `~/.kittycode.json`.
-///
-/// `load(from:)` always falls back to a default config, but these typed cases
-/// let internal callers distinguish "no file" from "bad file" (currently used
-/// by the logger to choose log level).
+/// Why `~/.kittycode.json` could not be loaded. `load(from:)` throws neither: it logs the failure and falls back to
+/// the default config.
 public enum ConfigError: Error {
     case fileUnreadable(URL, any Error)
     case decodeFailed(URL, any Error)

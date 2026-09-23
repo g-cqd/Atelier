@@ -7,8 +7,7 @@ import KittyFileTree
 public import KittyInput
 public import KittyRenderer
 
-/// Duration that command-feedback overlays stay on screen after the key
-/// sequence that produced them. Matches the previous wall-clock 1.5 s window.
+/// How long command feedback stays on screen after the key sequence that produced it.
 private let commandFeedbackDuration: Duration = .milliseconds(1500)
 
 @MainActor

@@ -139,7 +139,7 @@ public struct KeymapResolver: Sendable {
         contextMenuBindings[KeyStroke(keyCode: AsciiKey.escape)] = .contextMenuDismiss
         context[.contextMenu] = contextMenuBindings
 
-        // Apply config string overrides (Phase 3)
+        // Apply config string overrides
         Self.applyConfigOverrides(config: config, global: &global)
 
         // Multi-key sequence bindings (vim normal mode)
@@ -184,7 +184,7 @@ public struct KeymapResolver: Sendable {
         return .none
     }
 
-    // MARK: - Label lookup (Phase 4)
+    // MARK: - Label lookup
 
     public func shortcutLabel(for command: CommandID, context: KeyContext? = nil) -> String? {
         // Check context-specific bindings first
@@ -220,7 +220,7 @@ public struct KeymapResolver: Sendable {
         return 3
     }
 
-    // MARK: - Status hints (Phase 4)
+    // MARK: - Status hints
 
     public func statusHints() -> String {
         let save = shortcutLabel(for: .saveFile) ?? "^O"
@@ -374,7 +374,7 @@ public struct KeymapResolver: Sendable {
         }
     }
 
-    // MARK: - Config overrides (Phase 3)
+    // MARK: - Config overrides
 
     private static func applyConfigOverrides(
         config: KittyConfig, global: inout [KeyStroke: CommandID]
