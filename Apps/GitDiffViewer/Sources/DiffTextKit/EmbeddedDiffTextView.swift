@@ -100,40 +100,55 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         coordinator.detach()
     }
 
-    /// Prepares the detached layout for the pane width, then shows it in the text view at the size it measured.
+    /// Prepares the detached layout for the pane width, sizes the text view, then shows the layout in it: sized
+    /// first, the text view never lays the text out for a stale frame.
     private func update(_ pane: DiffPaneView, context: Context) {
         pane.gutterView.onGapDrag = onGapDrag
         pane.gutterView.currentExpansion = currentExpansion
         guard let layout, let textView = context.coordinator.textView, width > 0 else { return }
+        let coordinator = context.coordinator
+        let isNewLayout = coordinator.layout !== layout
+        // The gutter's width follows the widest line number, which the text width depends on.
+        if isNewLayout { pane.gutterView.rendered = layout.rendered }
         let textWidth = max(width - pane.gutterView.thickness, 1)
         prepare(layout, textWidth: textWidth)
-
-        let coordinator = context.coordinator
-        if coordinator.layout !== layout {
+        size(textView, in: pane, for: layout, textWidth: textWidth, coordinator: coordinator)
+        if isNewLayout {
             coordinator.attach(layout)
-            pane.gutterView.rendered = layout.rendered
             onDisplayed?()
         }
         coordinator.hoverController.isEnabled = hoverEnabled
         coordinator.hoverController.resolve = hoverResolver
-        // Lines that fit take the clip view's width exactly and follow it: the width the card measured can differ
-        // from the clip by a point or two, and a text view wider by that much would scroll sideways by that much.
+    }
+
+    /// Sizes the text view to the layout. Lines that fit take the clip view's width exactly and follow it: the width
+    /// the card measured can differ from the clip by a point or two, and a text view wider by that much would scroll
+    /// sideways by that much.
+    private func size(
+        _ textView: NSTextView, in pane: DiffPaneView, for layout: StaticTextLayout, textWidth: CGFloat,
+        coordinator: Coordinator
+    ) {
         let scrollView = pane.contentView as? NSScrollView
         let fits = layout.contentWidth <= textWidth + 0.5
-        let width = fits ? max(scrollView?.contentView.bounds.width ?? textWidth, 1) : layout.contentWidth
-        let size = NSSize(width: width, height: layout.height)
-        if coordinator.appliedSize != size || coordinator.appliedMode != wrapMode {
-            coordinator.appliedSize = size
-            coordinator.appliedMode = wrapMode
+        let viewWidth = fits ? max(scrollView?.contentView.bounds.width ?? textWidth, 1) : layout.contentWidth
+        let frameSize = NSSize(width: viewWidth, height: layout.height)
+        guard coordinator.appliedSize != frameSize || coordinator.appliedMode != wrapMode else { return }
+        coordinator.appliedSize = frameSize
+        coordinator.appliedMode = wrapMode
+        // Without wrapping, the container follows a view already as wide as the longest line, so TextKit lays out
+        // only what shows: a container of fixed width makes every frame change lay out the whole document.
+        let tracksView = wrapMode == .none
+        textView.textContainer?.widthTracksTextView = tracksView
+        if !tracksView {
             textView.textContainer?.size = NSSize(width: layout.width, height: DiffPaneMetrics.unboundedExtent)
-            textView.autoresizingMask = fits ? [.width] : []
-            textView.setFrameSize(size)
-            // Sideways scrolling only for lines wider than the pane; a card whose lines fit must not catch the
-            // sideways swipes meant for the list around it, nor rubber-band on them.
-            scrollView?.horizontalScrollElasticity = fits ? .none : .automatic
-            textView.needsDisplay = true
-            pane.needsLayout = true
         }
+        textView.autoresizingMask = fits ? [.width] : []
+        textView.setFrameSize(frameSize)
+        // Sideways scrolling only for lines wider than the pane; a card whose lines fit must not catch the sideways
+        // swipes meant for the list around it, nor rubber-band on them.
+        scrollView?.horizontalScrollElasticity = fits ? .none : .automatic
+        textView.needsDisplay = true
+        pane.needsLayout = true
     }
 
     private func prepare(_ layout: StaticTextLayout, textWidth: CGFloat) {
@@ -171,8 +186,9 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
             // A new render, or a different file's layout entirely: whatever hover the old content was showing no
             // longer points at anything real.
             hoverController.invalidate()
-            // Joining another storage does not invalidate what the view last drew; lay the viewport out afresh.
-            layoutManager.textViewportLayoutController.layoutViewport()
+            // Joining another storage does not invalidate what the view last drew, so the viewport is laid out
+            // afresh; off-window only by the coming layout pass, since a viewport there spans the whole document.
+            if textView.window != nil { layoutManager.textViewportLayoutController.layoutViewport() }
             textView.needsLayout = true
             textView.needsDisplay = true
         }
