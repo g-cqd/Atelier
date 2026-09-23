@@ -2,11 +2,8 @@ import Testing
 
 @testable import DiffComparison
 
-/// ``SettingLabel`` (R3): one canonical string per setting, referenced from the Settings window, the Tools tab
-/// and the View options menu so the three read identically. The app target's views cannot be imported here (the
-/// test target only depends on the library targets, not the `GitDiffViewer` executable), so this asserts the
-/// constants exist with the exact strings those surfaces build against; `swift build` covers the compile-level
-/// check that `SettingsView.swift`, `ToolsSettings.swift` and `ViewOptionsMenu.swift` all use them.
+/// ``SettingLabel``'s canonical strings. The app target's views that use them are not importable here, so the build
+/// itself checks those uses.
 struct SettingLabelTests {
     @Test
     func `every canonical label is non-empty and stable`() {

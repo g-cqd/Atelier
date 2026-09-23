@@ -2,8 +2,8 @@ import Testing
 
 @testable import DiffComparison
 
-/// ``BadgeStyleResolver`` (Feature 1): the pure table behind a change badge's look -- filled for a committed
-/// change, stroked for an uncommitted one, inverted for a row selected in a focused list.
+/// ``BadgeStyleResolver``: filled for a committed change, stroked for an uncommitted one, inverted for a row
+/// selected in a focused list.
 struct BadgeStyleResolverTests {
     @Test
     func `staged, unselected: filled with the scheme's colour and a white letter`() {

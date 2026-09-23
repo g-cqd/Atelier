@@ -5,13 +5,8 @@ import Testing
 @testable import DiffRendering
 @testable import DiffTextKit
 
-/// Regression coverage for the panel's own vertical rhythm: every slot in ``HoverDocPanel`` used to size itself
-/// from a hand-tallied estimate (a fixed per-row guess for the parameters grid, a candidates group double-counted
-/// as two of the content stack's own top-level slots, ...) that could -- and did -- drift from what Auto Layout
-/// actually drew, leaving real, visible empty space at the bottom of the panel past where its content stopped.
-/// ``HoverDocPanel/show(document:anchorRect:in:)`` now sizes the window from the very same `NSStackView` fitting
-/// size it lays the content out with, so the two can never disagree; these tests check that invariant directly
-/// against three fixtures of increasing shape, the same span the user's own screenshots covered.
+/// The panel's window is sized to exactly its laid-out content, with no wasted space, across fixtures of
+/// increasing shape.
 @MainActor
 struct HoverDocPanelTests {
     @MainActor
@@ -22,9 +17,7 @@ struct HoverDocPanelTests {
 
     private let retainedWindows = WindowRetainer()
 
-    /// A borderless, real (but off-screen) host window with a text view inside, the same shape
-    /// `DocHoverControllerTests` hosts its own fixtures in -- `HoverDocPanel` needs a real `NSWindow` to attach
-    /// its child panel to and to read an `NSScreen` off of.
+    /// A text view in a real, off-screen window: the panel attaches to a window and reads its screen.
     private func makeHostTextView() -> NSTextView {
         let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
         let window = NSWindow(
@@ -43,9 +36,7 @@ struct HoverDocPanelTests {
         NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 12)])
     }
 
-    /// Asserts ``HoverDocPanel/panelHeightForTests`` (what the window was actually sized to) matches
-    /// ``HoverDocPanel/laidOutContentHeightForTests`` (what the laid-out content stack really needs) for
-    /// `document`, within a point of floating-point slop.
+    /// Asserts the panel's height matches its laid-out content height for `document`, within a point.
     private func assertNoWastedSpace(
         _ document: HoverDocument, sourceLocation: SourceLocation = #_sourceLocation
     ) throws {
@@ -54,8 +45,7 @@ struct HoverDocPanelTests {
         panel.show(document: document, anchorRect: NSRect(x: 0, y: 100, width: 40, height: 16), in: textView)
         let laidOut = try #require(panel.laidOutContentHeightForTests, sourceLocation: sourceLocation)
         let shown = try #require(panel.panelHeightForTests, sourceLocation: sourceLocation)
-        // Only when the panel is not clamped to its scrolling ceiling: at the ceiling the window is deliberately
-        // capped below what the full, unclamped content would need, and the body's own scroller reaches the rest.
+        // At the ceiling the window is capped on purpose and the body scrolls.
         guard laidOut < HoverPanelSizing.maxHeight else { return }
         #expect(abs(shown - laidOut) < 1, "shown \(shown) vs laid out \(laidOut)", sourceLocation: sourceLocation)
     }
@@ -94,10 +84,7 @@ struct HoverDocPanelTests {
         try assertNoWastedSpace(document)
     }
 
-    /// A regression test for the footer's own removal: the user found the provenance line unnecessary chrome, and
-    /// it no longer renders even when ``HoverDocument/provenance`` carries a real tier -- the panel simply never
-    /// builds a footer view at all any more, so there is nothing to check it against besides the fixtures above
-    /// laying out with no wasted space regardless of what `provenance` is set to.
+    /// A provenance adds nothing to the panel's height: the panel draws no footer.
     @Test func provenanceStillHasNoFooterFootprint() throws {
         let withProvenance = HoverDocument(
             declaration: codeAttributed("struct CameraConfiguration"), provenance: .languageServer,

@@ -6,8 +6,7 @@ import Testing
 @testable import DiffComparison
 @testable import DiffGit
 
-/// ``SideState/refreshRepositoryInfo()``: re-reads repository info without touching entries, the seam
-/// ``RepositoryFreshness``'s refs callback (and, later, a fetch) drives.
+/// ``SideState/refreshRepositoryInfo()``: re-reads repository info without touching entries.
 @MainActor
 struct SideStateFreshnessTests {
     private static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
@@ -77,8 +76,7 @@ struct SideStateFreshnessTests {
         sut.load(.directory(repoA), repository: initialA)
         try await taskProvider.waitForAllTasks()
 
-        // A's re-read is gated; `repositoryInfoRequests` confirms it actually started (and so captured A as the
-        // repository to re-read) before this side moves on to B entirely.
+        // A's re-read is gated and confirmed started before the side moves on to B.
         reader.gate["repositoryInfo:\(repoA.path(percentEncoded: false))"] = AsyncProbe<Void>()
         taskProvider.task { await sut.refreshRepositoryInfo() }
         _ = try await reader.repositoryInfoRequests.next()

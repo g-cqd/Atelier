@@ -11,9 +11,7 @@ import Testing
         #expect(!scrolls)
     }
 
-    /// A short, real answer -- a one-line declaration and a footer, say -- hugs its own content instead of
-    /// padding out to some fixed minimum: the panel used to force every hover up to a 260pt floor, leaving a void
-    /// under anything shorter than that regardless of how little it actually had to show.
+    /// A short answer gets a short panel, with no floor beyond ``HoverPanelSizing/minHeight``.
     @Test func aShortDocumentHugsItsOwnContentRatherThanPaddingToAFixedFloor() {
         let (height, scrolls) = HoverPanelSizing.clampedHeight(forContentHeight: 90)
         #expect(height == 90)
