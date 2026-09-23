@@ -6,13 +6,10 @@ import Testing
 
 @testable import AtelierDiagnostics
 
-/// ``DiagnosticsEngine``'s ``DiagnosticTool/requiredConfigurationFile`` gate: a tool that reads a
-/// project-specific configuration file is skipped, without ever invoking the runner, when the analyzed root does
-/// not carry that file — split out of ``DiagnosticsEngineTests`` to keep that suite under its `type_body_length`
-/// budget.
+/// ``DiagnosticsEngine``'s ``DiagnosticTool/requiredConfigurationFile`` gate: a tool whose configuration file is
+/// missing at the analyzed root is skipped without running.
 struct DiagnosticsEngineRequiredConfigurationTests {
-    /// Writes an executable script at `url`; its contents are irrelevant since a ``FakeProcessRunner`` never
-    /// actually spawns it, but discovery still needs a real, executable file on disk to find.
+    /// An executable file at `url` for discovery to find; the fake runner never spawns it.
     private static func makeExecutable(at url: URL) throws {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -20,8 +17,7 @@ struct DiagnosticsEngineRequiredConfigurationTests {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
     }
 
-    /// A discovery that resolves `tool` to `executable` through a custom path, with every other rung starved of a
-    /// runner call by disabling the toolchain search and leaving `PATH` unconsulted (nothing to find there anyway).
+    /// A discovery with no bundle and an empty environment, so the request's custom path is what finds the tool.
     private static func discovery(runner: any ProcessRunner, home: URL) -> ToolDiscovery {
         ToolDiscovery(runner: runner, bundledDirectory: nil, homeDirectory: home, environment: [:])
     }

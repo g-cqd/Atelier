@@ -5,8 +5,6 @@ public import Foundation
 public struct ToolLocation: Sendable, Codable, Equatable {
     public var isEnabled: Bool
     /// A path to the executable that wins over every search rung but an environment override.
-    /// Held as a plain `String` rather than a typed path so this value stays trivially `Codable`
-    /// without adding `SystemPackage` to this target's public surface.
     public var customPath: String?
     /// Reserved for a security-scoped bookmark when the app sandboxes; unused today.
     public var bookmark: Data?
