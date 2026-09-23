@@ -102,6 +102,15 @@ package struct HoverDocument: @unchecked Sendable {
         self.chipBackground = chipBackground
     }
 
+    /// This document with `diagnostics` after its own, every other field kept as it is, ``chipBackground``
+    /// included, so a row with findings shows its declaration on the same chip as any other row.
+    package func adding(diagnostics: [DiagnosticEntry]) -> HoverDocument {
+        HoverDocument(
+            declaration: declaration, summary: summary, discussion: discussion, parameters: parameters,
+            returns: returns, provenance: provenance, extraCandidates: extraCandidates,
+            diagnostics: self.diagnostics + diagnostics, chipBackground: chipBackground)
+    }
+
     /// Structures and styles `content` for the hover panel: declarations colored with the hovered pane's `palette`,
     /// prose through Foundation's markdown parser with a plain-text fallback.
     package static func build(from content: HoverContent, palette: DiffPalette) -> HoverDocument {
