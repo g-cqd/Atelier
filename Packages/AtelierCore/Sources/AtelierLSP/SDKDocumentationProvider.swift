@@ -15,7 +15,9 @@ public enum SDKProbeDirectoryError: Error, Sendable, Equatable {
 /// Declarations resolve reliably; prose appears only where the SDK's `.swiftdoc` carries it, so availability, the
 /// online-only discussion and plain-comment Objective-C headers give none. A bare lowercase name with no receiver
 /// is rejected before any request, and a query sends at most two probes. Answers, misses included, are cached in an
-/// LRU keyed on the chain and its sorted imports, since the SDK cannot change under a running app.
+/// LRU keyed on the chain and its sorted imports, since the SDK cannot change under a running app. A query whose
+/// probe got no answer, as from a cold server still loading the SDK's modules, is not cached, so the next hover asks
+/// again.
 public actor SDKDocumentationProvider: HoverProvider {
     private let service: SourceKitLSPService
     /// The directory every probe document is named under: the service's workspace root.
@@ -23,7 +25,7 @@ public actor SDKDocumentationProvider: HoverProvider {
     private let defaultImports: [String]
     private let cacheCapacity: Int
 
-    /// Most recently used last in `order`; a `nil` value is a cached miss.
+    /// Most recently used last in `order`; a `nil` value is a cached miss, which the server answered.
     private var cache: [CacheKey: HoverContent?] = [:]
     private var order: [CacheKey] = []
 
@@ -60,30 +62,39 @@ public actor SDKDocumentationProvider: HoverProvider {
 
         let result = await probeWithFallback(
             chain: extraction.chain, chainStartsUppercase: extraction.startsUppercase, imports: imports)
-        store(key, result)
-        return result
+        if result.isSettled { store(key, result.content) }
+        return result.content
     }
 
     // MARK: - Probing
 
     /// The value-position probe's answer or, when it has no prose and the chain starts uppercase, a type-position
-    /// probe's answer if that one has prose.
+    /// probe's answer if that one has prose. Settled only when every probe it sent was answered, since a probe that
+    /// got none might have had prose. A first probe that gets no answer sends no second one: the server is not
+    /// answering yet.
     private func probeWithFallback(chain: String, chainStartsUppercase: Bool, imports: [String]) async
-        -> HoverContent?
+        -> (content: HoverContent?, isSettled: Bool)
     {
-        let primary = await probe(
+        let first = await probe(
             chain: chain, chainStartsUppercase: chainStartsUppercase, imports: imports, typePosition: false)
-        if let primary, HoverContentQuality.hasProse(primary.markdown) { return primary }
-        guard chainStartsUppercase else { return primary }
+        guard case .answered(let primary) = first else { return (nil, false) }
+        if let primary, HoverContentQuality.hasProse(primary.markdown) { return (primary, true) }
+        guard chainStartsUppercase else { return (primary, true) }
 
-        let secondary = await probe(
+        switch await probe(
             chain: chain, chainStartsUppercase: chainStartsUppercase, imports: imports, typePosition: true)
-        if let secondary, HoverContentQuality.hasProse(secondary.markdown) { return secondary }
-        return primary
+        {
+            case .answered(let secondary?) where HoverContentQuality.hasProse(secondary.markdown):
+                return (secondary, true)
+            case .answered:
+                return (primary, true)
+            case .unavailable:
+                return (primary, false)
+        }
     }
 
     private func probe(chain: String, chainStartsUppercase: Bool, imports: [String], typePosition: Bool) async
-        -> HoverContent?
+        -> HoverOutcome
     {
         syntheticDocumentCounter += 1
         let uri = probeRoot.appending(path: "probe-\(syntheticDocumentCounter).swift").absoluteString
@@ -108,12 +119,10 @@ public actor SDKDocumentationProvider: HoverProvider {
         // sourcekit-lsp resolves a dotted expression per token, so the hover targets the chain's last segment.
         let column = prefix.utf16.count + Self.tailSegmentOffset(in: chain)
 
-        guard
-            let hover = await service.hover(
-                uri: uri, languageID: "swift", content: content, line: probeLineIndex, utf16Column: column),
-            !hover.markdown.isEmpty
-        else { return nil }
-        return HoverContent(markdown: hover.markdown, source: .sdk)
+        let outcome = await service.hover(
+            uri: uri, languageID: "swift", content: content, line: probeLineIndex, utf16Column: column)
+        guard case .answered(let hover?) = outcome else { return outcome }
+        return .answered(HoverContent(markdown: hover.markdown, source: .sdk))
     }
 
     /// The UTF-16 offset, within `chain`, of its last dot-separated segment's first character; `0` when `chain`

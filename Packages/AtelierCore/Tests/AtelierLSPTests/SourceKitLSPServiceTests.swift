@@ -68,7 +68,7 @@ struct SourceKitLSPServiceTests {
         #expect(hoverEnvelope.method == "textDocument/hover")
         try respond(transport, id: try #require(hoverEnvelope.id), result: hoverResult(markdown: "**x**"))
 
-        let content = await hover
+        let content = await hover.content
         #expect(content?.markdown == "**x**")
         #expect(content?.source == .languageServer)
         #expect(await factory.generationCount == 1)
@@ -94,7 +94,7 @@ struct SourceKitLSPServiceTests {
         #expect(firstOpen.method == "textDocument/didOpen")
         try respond(
             transport, id: try #require(try await decodeSent(transport, at: 3).id), result: hoverResult(markdown: "a"))
-        _ = try #require(await first)
+        _ = try #require(await first.content)
 
         // Second hover, same content: no new open/close, straight to hover.
         async let second = service.hover(
@@ -104,7 +104,7 @@ struct SourceKitLSPServiceTests {
         #expect(secondHover.method == "textDocument/hover")
         try respond(
             transport, id: try #require(secondHover.id), result: hoverResult(markdown: "a"))
-        _ = try #require(await second)
+        _ = try #require(await second.content)
 
         // Third hover, changed content: didClose then didOpen (version bumped), then hover.
         async let third = service.hover(
@@ -121,7 +121,7 @@ struct SourceKitLSPServiceTests {
         let thirdHover = try await decodeSent(transport, at: 7)
         #expect(thirdHover.method == "textDocument/hover")
         try respond(transport, id: try #require(thirdHover.id), result: hoverResult(markdown: "b"))
-        let thirdResult = try #require(await third)
+        let thirdResult = try #require(await third.content)
         #expect(thirdResult.markdown == "b")
     }
 
@@ -144,7 +144,7 @@ struct SourceKitLSPServiceTests {
         #expect(try await decodeSent(transport, at: 2).method == "textDocument/didOpen")
         try respond(
             transport, id: try #require(try await decodeSent(transport, at: 3).id), result: hoverResult(markdown: "a"))
-        _ = try #require(await first)
+        _ = try #require(await first.content)
 
         // Second document evicts the first: didClose(a), didOpen(b), hover(b).
         async let second = service.hover(
@@ -159,16 +159,16 @@ struct SourceKitLSPServiceTests {
         #expect(try await decodeSent(transport, at: 5).method == "textDocument/didOpen")
         try respond(
             transport, id: try #require(try await decodeSent(transport, at: 6).id), result: hoverResult(markdown: "b"))
-        _ = try #require(await second)
+        _ = try #require(await second.content)
     }
 
     @Test
-    func `a request that never answers times out to nil and sends cancelRequest`() async throws {
+    func `a request that never answers times out as unavailable and sends cancelRequest`() async throws {
         let factory = ScriptedConnectionFactory()
-        var configuration = SourceKitLSPService.Configuration(
+        let configuration = SourceKitLSPService.Configuration(
             serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
-        configuration.requestTimeout = .milliseconds(50)
-        let service = SourceKitLSPService(configuration: configuration) { _ in await factory.make() }
+        let clock = TestClock()
+        let service = SourceKitLSPService(configuration: configuration, clock: clock) { _ in await factory.make() }
 
         async let hover = service.hover(
             uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
@@ -180,14 +180,33 @@ struct SourceKitLSPServiceTests {
         await transport.sink.waitForCount(4)
         let hoverEnvelope = try await decodeSent(transport, at: 3)
         #expect(hoverEnvelope.method == "textDocument/hover")
-        // Never respond to the hover request.
+        // Never respond to the hover request: its timeout, the one sleeper parked, elapses instead.
+        try await clock.waitForSleepers(atLeast: 1)
+        clock.advance(by: configuration.requestTimeout)
 
-        let content = await hover
-        #expect(content == nil)
+        #expect(await hover == .unavailable)
 
         await transport.sink.waitForCount(5)
         let cancelEnvelope = try await decodeSent(transport, at: 4)
         #expect(cancelEnvelope.method == "$/cancelRequest")
+    }
+
+    @Test
+    func `a hover the server answers with nothing is an answer, not unavailable`() async throws {
+        let factory = ScriptedConnectionFactory(answering: [
+            "initialize": .object([:]), "textDocument/hover": .null, "shutdown": .null
+        ])
+        let configuration = SourceKitLSPService.Configuration(
+            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+        let service = SourceKitLSPService(configuration: configuration, clock: TestClock()) { _ in
+            await factory.make()
+        }
+
+        let outcome = await service.hover(
+            uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
+
+        #expect(outcome == .answered(nil))
+        await service.shutdown()
     }
 
     @Test
@@ -214,16 +233,15 @@ struct SourceKitLSPServiceTests {
                 try await clock.waitForAdditionalSleepers(1)
                 clock.advance(by: .seconds(1))
             }
-            let content = await hover
-            #expect(content == nil)
+            #expect(await hover == .unavailable)
         }
 
         #expect(await factory.generationCount == 3)
 
-        // Past the budget: hover returns nil immediately, without asking the factory again.
-        let content = await service.hover(
+        // Past the budget: hover is unavailable at once, without asking the factory again.
+        let outcome = await service.hover(
             uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
-        #expect(content == nil)
+        #expect(outcome == .unavailable)
         #expect(await factory.generationCount == 3)
     }
 
@@ -259,8 +277,8 @@ struct SourceKitLSPServiceTests {
         }
 
         let (firstResult, secondResult) = await (first, second)
-        #expect(firstResult != nil)
-        #expect(secondResult != nil)
+        #expect(firstResult.content != nil)
+        #expect(secondResult.content != nil)
         #expect(await factory.generationCount == 1)
     }
 
@@ -279,8 +297,7 @@ struct SourceKitLSPServiceTests {
             uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
         try await clock.waitForAdditionalSleepers(1)
         clock.advance(by: .milliseconds(10))
-        let content = await hover
-        #expect(content == nil)
+        #expect(await hover == .unavailable)
 
         // The connection that never answered `initialize` must have had its transport closed, not left
         // running behind a session that gave up on it.
@@ -307,7 +324,7 @@ struct SourceKitLSPServiceTests {
         await transport.sink.waitForCount(4)
         try respond(
             transport, id: try #require(try await decodeSent(transport, at: 3).id), result: hoverResult(markdown: "a"))
-        _ = try #require(await hover)
+        _ = try #require(await hover.content)
 
         // The request timeouts were unparked when hover() returned, so the parked sleeper is the idle shutdown.
         try await clock.waitForSleepers(atLeast: 1)
@@ -336,7 +353,7 @@ struct SourceKitLSPServiceTests {
         try respond(
             secondTransport, id: try #require(try await decodeSent(secondTransport, at: 3).id),
             result: hoverResult(markdown: "a"))
-        _ = try #require(await second)
+        _ = try #require(await second.content)
         #expect(await factory.generationCount == 2)
     }
 }

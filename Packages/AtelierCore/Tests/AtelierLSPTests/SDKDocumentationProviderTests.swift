@@ -1,3 +1,4 @@
+import AemiTestKit
 import AtelierSyntaxModel
 import Foundation
 import Testing
@@ -33,11 +34,20 @@ private func hoverResult(markdown: String) -> JSONValue {
     .object(["contents": .object(["kind": .string("markdown"), "value": .string(markdown)])])
 }
 
-private func makeService(factory: ScriptedConnectionFactory) -> SourceKitLSPService {
+private func makeService(
+    factory: ScriptedConnectionFactory, clock: any Clock<Duration> = ContinuousClock()
+) -> SourceKitLSPService {
     let configuration = SourceKitLSPService.Configuration(
         serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
-    return SourceKitLSPService(configuration: configuration) { _ in await factory.make() }
+    return SourceKitLSPService(configuration: configuration, clock: clock) { _ in await factory.make() }
 }
+
+/// The scratch sessions' request timeout, which ``makeService(factory:clock:)`` keeps.
+private let requestTimeout =
+    SourceKitLSPService.Configuration(
+        serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp")
+    )
+    .requestTimeout
 
 /// Drives the handshake + `didOpen` + `hover` sequence for one probe, responding with `markdown`, and returns
 /// the connected transport for further inspection.
@@ -308,7 +318,7 @@ struct SDKDocumentationProviderTests {
     }
 
     @Test
-    func `a nil result is also cached`() async throws {
+    func `an answer with nothing to show is cached`() async throws {
         let factory = ScriptedConnectionFactory()
         let service = makeService(factory: factory)
         let provider = SDKDocumentationProvider(service: service)
@@ -339,6 +349,63 @@ struct SDKDocumentationProviderTests {
         let framesAfter = await transport.sink.all.count
         #expect(framesAfter == framesBefore)
         #expect(await factory.generationCount == 1)
+    }
+
+    @Test
+    func `a timed-out probe is not cached, and the next probe answers`() async throws {
+        let factory = ScriptedConnectionFactory(answering: ["initialize": .object([:])])
+        let clock = TestClock()
+        let provider = SDKDocumentationProvider(service: makeService(factory: factory, clock: clock))
+        // A dotted lowercase chain: one value-position probe per query, and no type-position one.
+        let query = HoverQuery(
+            documentURI: "file:///a.swift", content: "import AppKit\nlet f = view.frame", line: 1,
+            utf16Column: "let f = view.fr".utf16.count)
+
+        // A cold server: the first probe's hover goes unanswered until its timeout, the one sleeper, elapses.
+        async let first = provider.hover(query)
+        await factory.waitForGeneration(1)
+        let transport = await factory.transport(at: 0)
+        await transport.sink.waitForCount(4)
+        #expect(try await decodeSent(transport, at: 3).method == "textDocument/hover")
+        try await clock.waitForSleepers(atLeast: 1)
+        clock.advance(by: requestTimeout)
+        #expect(try await first == nil)
+
+        // Warm now, the server answers at once; the same query asks it again rather than a cached miss.
+        transport.answer("textDocument/hover", with: hoverResult(markdown: "The view's frame rectangle."))
+        let second = try await provider.hover(query)
+
+        #expect(second?.markdown == "The view's frame rectangle.")
+        #expect(second?.source == .sdk)
+    }
+
+    @Test
+    func `a type-position probe that times out leaves the declaration uncached`() async throws {
+        let factory = ScriptedConnectionFactory(answering: ["initialize": .object([:])])
+        let clock = TestClock()
+        let provider = SDKDocumentationProvider(service: makeService(factory: factory, clock: clock))
+        let query = HoverQuery(
+            documentURI: "file:///a.swift", content: "import SwiftUI\nlet x = StateObject", line: 1,
+            utf16Column: "let x = StateObject".utf16.count - 3)
+        let declaration = "```swift\nstruct StateObject<ObjectType>\n```"
+
+        // The value-position probe answers with the declaration alone; the type-position one then times out.
+        async let first = provider.hover(query)
+        await factory.waitForGeneration(1)
+        let transport = await factory.transport(at: 0)
+        try await driveFollowUpProbe(transport, afterFrameCount: 2, markdown: hoverResult(markdown: declaration))
+        await transport.sink.waitForCount(6)
+        #expect(try await decodeSent(transport, at: 5).method == "textDocument/hover")
+        // The type-position probe's timeout, and the idle timer the first probe's hover started.
+        try await clock.waitForSleepers(atLeast: 2)
+        clock.advance(by: requestTimeout)
+        #expect(try await first?.markdown == declaration)
+
+        // Asked again, the warm server's prose is found instead of the declaration shown meanwhile.
+        transport.answer("textDocument/hover", with: hoverResult(markdown: declaration + "\n\nA property wrapper."))
+        let second = try await provider.hover(query)
+
+        #expect(second?.markdown == declaration + "\n\nA property wrapper.")
     }
 }
 

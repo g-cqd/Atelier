@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 @testable import AtelierLSP
 
@@ -26,13 +27,16 @@ actor FrameSink {
 }
 
 /// An in-process ``LSPTransport`` double: `send` is captured into a ``FrameSink`` a test inspects, and
-/// `deliver`/`endIncoming` feed the client side of the conversation. No child process involved.
+/// `deliver`/`endIncoming` feed the client side of the conversation, or ``answer(_:with:)`` answers requests as
+/// they are sent. No child process involved.
 final class PipeTransport: LSPTransport, Sendable {
     let incoming: AsyncThrowingStream<Data, any Error>
     private let incomingContinuation: AsyncThrowingStream<Data, any Error>.Continuation
     let sink = FrameSink()
     /// How many times ``close()`` ran.
     let closeCount = CloseCounter()
+    /// The result each method's requests get as soon as they are sent, keyed by method.
+    private let standingAnswers = Mutex<[String: JSONValue]>([:])
 
     init() {
         let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
@@ -42,6 +46,16 @@ final class PipeTransport: LSPTransport, Sendable {
 
     func send(_ data: Data) async throws {
         await sink.append(data)
+        guard case .serverRequest(let id, let method) = try IncomingMessage.decode(unframe(data)),
+            let result = standingAnswers.withLock({ $0[method] })
+        else { return }
+        // A client request reads as a request to its receiver; its answer arrives after the frame is recorded.
+        deliver(LSPFrameCodec.frame(try JSONRPCMessage.response(id: id, result: result)))
+    }
+
+    /// From now on, answers every request for `method` with `result` as soon as it is sent, as a warm server would.
+    func answer(_ method: String, with result: JSONValue) {
+        standingAnswers.withLock { $0[method] = result }
     }
 
     func close() async {
