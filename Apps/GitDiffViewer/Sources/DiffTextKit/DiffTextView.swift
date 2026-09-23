@@ -154,6 +154,7 @@ package struct DiffTextView: NSViewRepresentable {
             coordinator.wrapColumn = wrapColumn
             Coordinator.configureWrapping(
                 wrapsLines, column: wrapColumn, font: rendered.palette.font, textView: textView, scrollView: scrollView)
+            coordinator.updateOverscroll(in: scrollView.contentView)
             splitController?.wrapsLines = wrapsLines
         }
         if pane.minimapView.isHidden == showsMinimap {
@@ -218,6 +219,8 @@ package final class DiffTextViewCoordinator: NSObject {
     /// The last `diagnosticsVersion` applied, so `updateNSView` can tell an in-place overlay mutation from a
     /// no-op re-render.
     package var diagnosticsVersion = -1
+    /// ``RenderedText/measuredUnwrappedWidth()`` of the text on show, measured once per render.
+    private var unwrappedWidth: (id: UUID, width: CGFloat)?
 
     package func apply(_ rendered: RenderedText, keepingScroll: Bool = false) {
         let paletteChanged = self.rendered?.palette.font != rendered.palette.font
@@ -256,19 +259,31 @@ package final class DiffTextViewCoordinator: NSObject {
     }
 
     /// Wrapped panes track the viewport width, or wrap at a fixed column and scroll sideways when the viewport is
-    /// narrower; unwrapped panes grow with their longest line.
+    /// narrower; unwrapped panes track a text view that ``updateOverscroll(in:)`` sizes to the longest line.
     package static func configureWrapping(
         _ wraps: Bool, column: Int, font: NSFont, textView: NSTextView, scrollView: NSScrollView
     ) {
         guard let container = textView.textContainer else { return }
-        let tracksViewport = wraps && column <= 0
+        guard wraps else {
+            // A container that tracks the view lets TextKit lay out the viewport only; a fixed one makes every frame
+            // change lay out the whole document.
+            textView.isHorizontallyResizable = false
+            textView.autoresizingMask = []
+            container.widthTracksTextView = true
+            scrollView.hasHorizontalScroller = true
+            if let layoutManager = textView.textLayoutManager {
+                layoutManager.invalidateLayout(for: layoutManager.documentRange)
+            }
+            textView.needsLayout = true
+            textView.needsDisplay = true
+            return
+        }
+        let tracksViewport = column <= 0
         textView.isHorizontallyResizable = !tracksViewport
         textView.autoresizingMask = tracksViewport ? [.width] : []
         container.widthTracksTextView = tracksViewport
-        let width: CGFloat =
-            if !wraps {
-                CGFloat.greatestFiniteMagnitude
-            } else if column > 0 {
+        let width =
+            if column > 0 {
                 DiffPalette.wrapWidth(column: column, font: font, padding: container.lineFragmentPadding)
             } else {
                 scrollView.contentView.bounds.width
@@ -353,6 +368,18 @@ package final class DiffTextViewCoordinator: NSObject {
         // The row's own height, not the font's: a taller line height would otherwise leave the last row short
         // of the top of the pane, half of it hidden under whatever sits above.
         let lineHeight = rendered?.lineHeight ?? DiffPalette.system.defaultLineHeight
+        if !wrapsLines, let rendered {
+            // One line per row: the document's size needs no layout.
+            let contentHeight =
+                CGFloat(max(rendered.rows.count, 1)) * lineHeight + 2 * textView.textContainerInset.height
+            let size = NSSize(
+                width: max(clipView.bounds.width, unwrappedWidth(of: rendered)),
+                height: (contentHeight + max(clipView.bounds.height - lineHeight, 0)).rounded(.up))
+            guard textView.minSize != size || textView.frame.size != size else { return }
+            textView.minSize = size
+            textView.setFrameSize(size)
+            return
+        }
         let contentHeight =
             layoutManager.usageBoundsForTextContainer.height + 2 * textView.textContainerInset.height
         let minimumHeight = (contentHeight + max(clipView.bounds.height - lineHeight, 0)).rounded(.up)
@@ -371,6 +398,13 @@ package final class DiffTextViewCoordinator: NSObject {
         if textView.frame.height < minimumHeight {
             textView.setFrameSize(NSSize(width: max(textView.frame.width, minimumWidth), height: minimumHeight))
         }
+    }
+
+    private func unwrappedWidth(of rendered: RenderedText) -> CGFloat {
+        if let unwrappedWidth, unwrappedWidth.id == rendered.id { return unwrappedWidth.width }
+        let width = rendered.measuredUnwrappedWidth()
+        unwrappedWidth = (rendered.id, width)
+        return width
     }
 
     @objc package func textViewFrameDidChange(_ notification: Notification) {
