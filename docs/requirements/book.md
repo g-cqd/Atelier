@@ -10,135 +10,18 @@ written between 13:40 and 14:40 on 09-23, re-reads every source from 09-19 on. I
 decisions (R81 to R103), 13 requirements (121 in all), a new area (REND), and amendments to 13 existing
 requirements.
 
-## Open questions (09-23)
+## Open questions
 
-Twelve points need your answer, most important first. Each gives the requirements it settles, the context, and the
-options; the first option is the recommended default unless it says otherwise. Statuses are from `audit.md`, at
-`ebafb9f`. Already decided and not asked again: the g-cqd mirrors (D5), the hook patch (D6), the trust prompt
-on first hover (D7), Wave 1 (D4).
+None. The twelve questions of 09-23 (OQ1 to OQ12) were answered between 14:45 and 14:53; the answers are D9 to D20
+under "Decisions" below. OQ2 needed no answer: D5 already settles the pin, which the coordinator applies when the aemi
+fixes land. OQ3's first half was carried out under D6: at 14:40 the six clones outside `~/Developer` were patched
+(backup `~/project-hooks-ph6-backup-2.tar.gz`), and no hook on the machine runs a repository's own binary any more.
 
-**OQ1. Build the text renderer? (REND-02, REND-03; fix plan §7.4)**
-`docs/design/text-renderer.md` measured TextKit 2 used correctly at 12.7 ms and 25.5 ms for a new 5k and 50k-row
-document, and a CoreText prototype at 3.8 ms for both. Wrapping in a split still costs 256 ms per pass at 5k rows
-with TextKit. Your 10:01 message asked for switchable backends while the new one is built; nothing of the seam
-exists yet.
-- (a) **Recommended.** Finish TextKit's M0 fixes and build the backend seam now (M0 item 13, estimated 4 to 6 days),
-  then run M1, a drawing-only CoreText renderer, time-boxed by its exit criteria (estimated 3.5 to 5 weeks). Reason:
-  it is what you asked for, and the seam keeps TextKit as the fallback until the new renderer matches it.
-- (b) Finish M0 and the seam, then decide on M1 from M0's exit numbers.
-- (c) M0 only; TextKit stays the only backend.
-- Also confirm: macOS does not scale text with Dynamic Type, so the design maps text size to ⌘+, ⌘− and ⌘0 on the
-  Mac and follows Dynamic Type only where the platform scales text (iPadOS, visionOS). Is that what you meant by
-  "supporting dynamictypesupport in swiftui"?
-
-**OQ2. Pin aemi now? (PROC-12; fix plan §7.5, track 2O)**
-D5's option text included pointing Atelier at the aemi mirror "by pinned revision". Today the three manifests follow
-`Aemi-Studio/aemi` on `main`, which has moved from `dacd5f1` (what builds resolve and what the review read) to
-`a061a80`, so a fresh resolve would build unreviewed code.
-- (a) **Recommended.** Pin now, at `dacd5f1`, through `Aemi-Studio/aemi`, switching AemiJSON's own aemi dependency in
-  the same step; bump the pin as each aemi fix lands. Reason: reproducible builds today, on the reviewed revision.
-- (b) Pin only after the aemi fixes land in the mirror.
-- (c) Pin by tag rather than revision (the mirror would need a tag).
-
-**OQ3. Finish the hook fix and install a fixed project-hooks? (QUAL-09, PROC-12; fix plan 1K, §7.2)**
-The 12:35 patch covered the two templates and the 31 clones under `~/Developer` (backup:
-`~/project-hooks-ph6-backup.tar.gz`). Six clones elsewhere still run a repository's own binary first: under
-`~/Public`, `~/Downloads` (two), `~/.codex`, and two work-repository clones. The installed
-`~/.local/bin/project-hooks` dates from 05-12. Its pre-push tests the working tree (PH-5), which is why pushes wait
-while agents edit, and its scratch builds hold 9.1 GB in `$TMPDIR/project-hooks-build` (PH-7).
-- (a) **Recommended.** Patch the six clones now, with a backup. Then, once track 1K and the PH-5 and PH-7 fixes land
-  in `g-cqd/project-hooks` on top of its own refinements, build it, keep the old binary as a backup, replace
-  `~/.local/bin/project-hooks`, and regenerate the hooks in every clone.
-- (b) Patch the six clones only; keep the old binary.
-- (c) Leave both as they are.
-
-**OQ4. Install arcleak, dolly and deadwood on this machine? (DIAG-01, TOOL-03)**
-None of the three is installed, so their findings have never appeared in the app, and the acceptance run of track 1I
-(2 of 2 dolly and 14 of 14 deadwood findings) could not happen. `bundle.sh` skips them for the same reason.
-- (a) **Recommended.** Build each from its `g-cqd` mirror at its latest tag and install it in `~/.local/bin`,
-  where discovery finds it and the bundle script picks it up. Reason: it is the only way to verify DIAG-01 end to end.
-- (b) Build them into the app bundle only, at bundle time.
-- (c) Leave them uninstalled; the three tools stay unverified.
-
-**OQ5. Which settings are per project? (SET-03)**
-Your Q2 answer began "yes" to an either-or question. Today 9 of 27 settings can differ per project, and the Settings
-window has no Default-or-project selector. Appearance and theme matching can only be app-wide as built (one
-appearance for the whole app), and the SDK documentation tier belongs to no repository, so track 1A has it follow
-the app-wide sourcekit-lsp setting.
-- (a) **Recommended.** Everything that shapes a comparison or its tools is per project: diff options, layout,
-  wrapping, minimap, isolation, context, granularity, hover, diagnostics, analyzed sides, auto-refresh, tool and
-  server locations. The app's look stays app-wide: appearance, theme matching, badge colors. The Settings window gets
-  the scope selector and an editable list of projects. Reason: those are the settings whose right value differs by
-  repository.
-- (b) Literally every setting, which needs a per-window appearance.
-- (c) Keep today's nine and only add the selector and the list.
-
-**OQ6. Which sides do the analyzers run on? (DIAG-08)**
-The setting offers "Newer side" and "Both sides", and "Both" only copies the newer side's findings onto old rows. Your
-Q5 answer asked for both, one side or none, each run on its own files.
-- (a) **Recommended.** Four modes: Both, Left only, Right only (the default), None. A side that is a git ref is
-  exported with `git archive` into a private temporary folder, linted there with that side's own configuration, and
-  its findings shown on its rows only; in an untrusted repository, only the working tree is analyzed.
-- (b) Three modes: Newer (default), Both, None.
-- (c) Keep two modes and drop the copying onto old rows.
-
-**OQ7. What should Swap show while it reloads? (GIT-03)**
-GIT-03 says Swap never collapses the viewer, but the fix plan's track 2B treats Swap and a new ref as real source
-switches and clears the screen, so an old comparison is never shown as current.
-- (a) **Recommended.** Keep the previous cards on screen, marked as updating, until the new comparison lands; never
-  show "Comparing…". Reason: it keeps the viewer and never passes the old comparison off as current.
-- (b) Clear at once for a real source switch (Swap, another ref or folder); keep continuity only for reloads of the
-  same sources.
-- (c) Keep the old cards with no marker.
-
-**OQ8. When should the unplanned features go in? (TAB-07, DIAG-03, DUI-03, HOVER-14, HOVER-08, HOVER-05, DIFF-01 to DIFF-04)**
-The fix plan's waves hold findings, not features. Native file-tab behaviour, diagnostics in the card list, the Liquid
-Glass panel, the Quick Help title row and the four diff refinements are in no wave; the roadmap lists DIFF-01 to
-DIFF-04 as "not scheduled yet".
-- (a) **Recommended.** DIFF-02 goes with track 2B, which owns the same code. The rest forms a feature wave after Wave
-  2 and before Wave 3, in this order: TAB-07, card-list diagnostics, HOVER-08 and HOVER-05, DIFF-01, DIFF-03,
-  DIFF-04. Reason: these are gaps you reported, and Wave 2 first removes the defects under them.
-- (b) Run them now, in parallel with Wave 2, where files do not collide.
-- (c) After Wave 3.
-- Also for TAB-07: ⌃Tab already switches comparison windows, which are native window tabs (TAB-01). Recommended:
-  ⌃Tab and ⌃⇧Tab move between file tabs, and ⌘⇧] and ⌘⇧[ keep switching windows.
-
-**OQ9. How should a renamed file read? (CARD-09)**
-Xcode writes "HTTPClient.swift ← APIClient.swift", the old name grayed after an arrow (image 23). Offered at 12:06;
-not answered. Rows and card headers show only the new path today.
-- (a) **Recommended.** The `new ← old` label in the file list and in card headers; tabs and the status bar keep the
-  new name only, for width.
-- (b) The label everywhere a file name appears.
-- (c) The new name only, as today.
-
-**OQ10. The backdrop under the tabs in the single-file view (TAB-09; fix plan §7.3)**
-The card list scrolls beneath the tab bar with the system's edge effect. The single-file panes are AppKit scroll
-views and stop at a divider.
-- (a) **Recommended.** Try the AppKit route first (macOS 26's scroll edge effect for AppKit views, or handing the
-  bar's inset to the scroll view); evaluate AemiSDR only if that fails, and add no dependency without asking.
-- (b) Evaluate AemiSDR now.
-- (c) Keep the divider.
-
-**OQ11. An Xcode diff palette? (DIFF-05, SET-07)**
-The Xcode screenshots (image 12) show gray old lines without line numbers, light-blue new lines, tan and blue changed
-tokens, and a blue change bar. Nobody has asked for it yet.
-- (a) **Recommended.** Yes, later: an "Xcode" choice for the diff colors, off by default and independent of the badge
-  scheme, built with the gutter rework of DIFF-03, which shares its change bar.
-- (b) Tie it to the Xcode badge scheme.
-- (c) No.
-
-**OQ12. Commit titles (PROC-09; fix plan §7.5)**
-Before 09-21, titles read `<Scope>: <sentence>` (median 63 characters). Since then they are single long sentences
-with no scope (median 250, longest 446).
-- (a) **Recommended.** Return to `<Scope>: <sentence>`, under about 72 characters, with the detail in the body.
-  Reason: it is the repository's own form, and it reads in `git log --oneline`.
-- (b) Keep the long sentences.
-
-**Defaults kept unless you object.** These were chosen without an explicit answer:
+**Defaults kept unless the user objects.** Chosen without an explicit answer, and listed to the user with the answers:
 - A file with both staged and unstaged changes draws a stroked badge (CARD-11).
 - A folder draws stroked when git reports any unstaged or untracked file inside it, even one the list hides (CARD-11).
 - The SDK documentation tier follows the app-wide sourcekit-lsp setting, since it has no repository (track 1A, Sec L2).
-- A Findings row will also scroll to its line, with the toolbar fix of track 2D (DUI-01; GDV S18).
+- A Findings row also scrolls to its line, with the toolbar fix of track 2D (DUI-01; GDV S18).
 - The layout shortcuts ⌘1, ⌘2 and ⌘3 stay on the toolbar picker; the View menu gets no layout items (CARD-15).
 
 ## Reading guide
@@ -252,7 +135,7 @@ report) and no image 24 (the 12:06 crash report). Images 12 to 21 are in the rep
 ## Decisions (09-21 and 09-23)
 
 The user's answers to the assistant's multiple-choice questions, and one plan approval. The first revision missed
-D1 to D3.
+D1 to D3. D9 to D20 answer the open questions of 09-23.
 
 | # | Time | Question, summarised | Answer | Requirements |
 |---|---|---|---|---|
@@ -264,6 +147,18 @@ D1 to D3.
 | D6 | 09-23 12:34 | Patch the hook script the global git template installs, and the copies in existing clones, so a clone cannot get its own project-hooks binary run? | "Patch now (Recommended)" | QUAL-09 |
 | D7 | 09-23 12:34 | How should the app ask before starting sourcekit-lsp in an untrusted repository? | "Prompt on first hover (Recommended)"; the option's text: "The first hover in an unknown repository asks once whether to trust it. Doc comments and SDK docs keep working meanwhile. A Settings list lets you review and revoke." | QUAL-07 |
 | D8 | 09-23 12:37 | The GitHub Copilot for Xcode extension had leaked 1,809 zombie processes and made builds fail; end it? | "End it now (Recommended)" | PROC-10 |
+| D9 | 09-23 14:47 | Start Wave 2, and when do the requested features no wave holds go in? | "Wave 2 now, then features (Recommended)": Wave 2 as parallel agents grouped by files, DIFF-02 with track 2B; then a feature wave before Wave 3: TAB-07 (⌃Tab and ⌃⇧Tab between file tabs, ⌘⇧] and ⌘⇧[ keep switching windows), card-list diagnostics, the hover panel and its title row, DIFF-01, DIFF-03, DIFF-04 | PROC-11, TAB-07, DIAG-03, DUI-03, HOVER-14, HOVER-08, HOVER-05, DIFF-01 to DIFF-04 |
+| D10 | 09-23 14:47 | Build the custom text renderer? | "Seam, then CoreText M1 (Recommended)": finish M0 and the switchable backend seam, then M1 time-boxed by its exit criteria, with TextKit as the fallback. The Dynamic Type reading (⌘+, ⌘− and ⌘0 on the Mac; Dynamic Type where the platform scales text) drew no objection | REND-02, REND-03 |
+| D11 | 09-23 14:47 | Which settings can differ per project? | "Comparison and tools (Recommended)": per project, diff options, layout, wrapping, minimap, isolation, context, granularity, hover, diagnostics, analyzed sides, auto-refresh, tool and server locations; app-wide, appearance, theme matching and badge colors; Settings gets the scope selector and an editable project list | SET-03 |
+| D12 | 09-23 14:47 | Which sides do the analyzers run on? | "Both, left, right, none (Recommended)": four modes, right side by default; a ref side is exported into a private temporary folder, analyzed with its own configuration, and its findings show on its own rows; an untrusted repository has only its working tree analyzed | DIAG-08 |
+| D13 | 09-23 14:50 | What does the viewer show while Swap, another ref or another folder loads? | "Old cards, marked updating (Recommended)": the previous cards stay, visibly marked as updating, until the new comparison lands; never "Comparing…" | GIT-03 |
+| D14 | 09-23 14:50 | How should a renamed file read? | Typed: "new and old on cards, not in the sidebar list". The `new ← old` label goes on card headers only; the sidebar list, tabs and status bar keep the new name | CARD-09 |
+| D15 | 09-23 14:50 | Once fixed, how do arcleak, dolly and deadwood reach the app? | "Bundle into the app only": built into the bundle's helpers from the fixed `g-cqd` revisions; nothing installed on the user's `PATH` | DIAG-01, TOOL-03 |
+| D16 | 09-23 14:50 | Once its fixes pass, may the fixed project-hooks be installed? | "Install, keep a backup (Recommended)": the old binary kept as `~/.local/bin/project-hooks.bak`, the hooks regenerated in every clone after a backup, and the trust opt-in shown to the user before the hooks are regenerated | QUAL-09, PROC-12 |
+| D17 | 09-23 14:53 | The backdrop under the tabs in the single-file view | "AppKit route first (Recommended)": AemiSDR only if that fails, and no dependency without asking | TAB-09 |
+| D18 | 09-23 14:53 | An Xcode diff palette? | "Yes, later, off by default (Recommended)": an "Xcode" choice for the diff colors, independent of the badge scheme, built with DIFF-03 | DIFF-05, SET-07 |
+| D19 | 09-23 14:53 | Commit titles from now on | "<Scope>: <sentence>, short (Recommended)": under about 72 characters, the detail in the body | PROC-09 |
+| D20 | 09-23 14:53 | Should deadwood keep refusing to follow links out of the repository? | "Keep containment (Recommended)": never follow links out of the repository, and make baselines stable under that rule | DIAG-01 |
 
 ## Answered questions (09-23 09:37)
 
