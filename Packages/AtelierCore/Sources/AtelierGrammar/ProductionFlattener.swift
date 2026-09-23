@@ -14,6 +14,7 @@ struct FlatStep: Sendable, Equatable {
     var precedence = 0
     /// The associativity that goes with `precedence`.
     var associativity: Associativity?
+    var alias: SymbolAlias?
     var field: String?
 }
 
@@ -34,10 +35,19 @@ struct FlatProduction: Sendable, Equatable {
         }
         return fields
     }
+
+    var aliases: [Int: SymbolAlias] {
+        var aliases: [Int: SymbolAlias] = [:]
+        for (index, step) in steps.enumerated() {
+            if let alias = step.alias { aliases[index] = alias }
+        }
+        return aliases
+    }
 }
 
 /// Flattens a grammar's rules into productions the way tree-sitter does, keeping on each step the precedence,
-/// associativity and field in scope, so conflicts can be resolved the way tree-sitter resolves them.
+/// associativity, alias and field in scope: the first two to resolve conflicts as tree-sitter does, the others to
+/// name the step's node.
 ///
 /// A repetition becomes a left-recursive helper rule, `_repeat_n → ε | _repeat_n x` or `_repeat1_n → x |
 /// _repeat1_n x`, whose steps start with no metadata, as the helper rules tree-sitter builds do.
@@ -46,10 +56,11 @@ struct ProductionFlattener {
     private struct Scope {
         var precedence = 0
         var associativity: Associativity?
+        var alias: SymbolAlias?
         var field: String?
 
         func step(_ symbol: String) -> FlatStep {
-            FlatStep(symbol: symbol, precedence: precedence, associativity: associativity, field: field)
+            FlatStep(symbol: symbol, precedence: precedence, associativity: associativity, alias: alias, field: field)
         }
     }
 
@@ -162,8 +173,10 @@ struct ProductionFlattener {
                 var inner = scope
                 inner.field = name
                 return try expand(content, ruleName: ruleName, scope: inner, atEnd: atEnd)
-            case .alias(let content, _, _):
-                return try expand(content, ruleName: ruleName, scope: scope, atEnd: atEnd)
+            case .alias(let content, let value, let isNamed):
+                var inner = scope
+                inner.alias = SymbolAlias(type: isNamed ? value : "\"" + value + "\"", isNamed: isNamed)
+                return try expand(content, ruleName: ruleName, scope: inner, atEnd: atEnd)
         }
     }
 

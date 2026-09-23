@@ -204,11 +204,26 @@ public struct LexState: Sendable, Equatable, Codable {
 
 // MARK: - Production Rule
 
+/// The name a production gives the node at one of its steps in place of the node's own: tree-sitter's `alias`.
+public struct SymbolAlias: Sendable, Equatable, Codable {
+    /// The node's type: the alias for a named alias, and for an anonymous one the alias in quotes, as the type of an
+    /// anonymous token is.
+    public var type: String
+    public var isNamed: Bool
+
+    public init(type: String, isNamed: Bool) {
+        self.type = type
+        self.isNamed = isNamed
+    }
+}
+
 public struct ProductionRule: Sendable, Equatable, Codable {
     public var name: String
     public var symbolCount: Int
     public var symbols: [String]
     public var fields: [Int: String]
+    /// The aliases of the production's steps, by step index.
+    public var aliases: [Int: SymbolAlias]
     /// The production's `prec.dynamic` value: of two parses that tie on errors, the one whose reductions add up to
     /// more wins.
     public var dynamicPrecedence: Int
@@ -218,12 +233,14 @@ public struct ProductionRule: Sendable, Equatable, Codable {
         symbolCount: Int,
         symbols: [String] = [],
         fields: [Int: String] = [:],
+        aliases: [Int: SymbolAlias] = [:],
         dynamicPrecedence: Int = 0
     ) {
         self.name = name
         self.symbolCount = symbolCount
         self.symbols = symbols
         self.fields = fields
+        self.aliases = aliases
         self.dynamicPrecedence = dynamicPrecedence
     }
 
@@ -234,7 +251,14 @@ public struct ProductionRule: Sendable, Equatable, Codable {
         case symbolCount
         case symbols
         case fields
+        case aliases
         case dynamicPrecedence
+    }
+
+    /// An entry of `aliases` as the cache stores it.
+    private struct IndexedAlias: Codable {
+        var index: Int
+        var alias: SymbolAlias
     }
 
     public init(from decoder: any Decoder) throws {
@@ -255,6 +279,8 @@ public struct ProductionRule: Sendable, Equatable, Codable {
             decoded[index] = pair[1]
         }
         self.fields = decoded
+        let aliases = try container.decodeIfPresent([IndexedAlias].self, forKey: .aliases) ?? []
+        self.aliases = Dictionary(aliases.map { ($0.index, $0.alias) }, uniquingKeysWith: { first, _ in first })
         self.dynamicPrecedence = try container.decodeIfPresent(Int.self, forKey: .dynamicPrecedence) ?? 0
     }
 
@@ -265,6 +291,8 @@ public struct ProductionRule: Sendable, Equatable, Codable {
         try container.encode(symbols, forKey: .symbols)
         let pairs = fields.sorted(by: { $0.key < $1.key }).map { [String($0.key), $0.value] }
         try container.encode(pairs, forKey: .fields)
+        let aliases = self.aliases.sorted(by: { $0.key < $1.key }).map { IndexedAlias(index: $0.key, alias: $0.value) }
+        try container.encode(aliases, forKey: .aliases)
         try container.encode(dynamicPrecedence, forKey: .dynamicPrecedence)
     }
 }
