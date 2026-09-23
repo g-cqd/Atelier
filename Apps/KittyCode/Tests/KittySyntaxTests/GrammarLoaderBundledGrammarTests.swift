@@ -56,13 +56,14 @@ struct GrammarLoaderBundledGrammarTests {
         }
     }
 
+    /// Swift's grammar is upstream's since 0.7.3, whose external scanner produces 33 tokens.
     @Test
-    func `Load bundled swift grammar external scanner is not required`() throws {
+    func `bundled swift grammar declares its scanner's externals`() throws {
         let resourcePath = try #require(KittySyntaxResources.bundle.resourcePath)
         let path = "\(resourcePath)/Grammars/swift/grammar.json"
         let grammar = try GrammarLoader.load(from: path)
         #expect(grammar.name == "swift")
-        #expect(grammar.externals.isEmpty)
+        #expect(grammar.externals.count == 33)
     }
 
     @Test(arguments: BundledLanguageManifest.entries.map(\.path))
