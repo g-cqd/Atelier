@@ -5,8 +5,6 @@ package import DiffRendering
 import Foundation
 import Observation
 
-import func AemiRuntime.mapConcurrently
-
 /// Turns the selection into what the detail area shows: one document for a file, one card per file for a folder.
 /// Every publish carries the generation it belongs to, so a superseded render can never overwrite a newer one, and
 /// re-layouts never cancel a load that is still streaming cards in.
@@ -70,11 +68,16 @@ package final class RenderPipeline {
 
     private let preparer: DiffPreparer
     private let taskProvider: any TaskProvider
+    private let renderer: PaneRenderer
 
-    package init(preparer: DiffPreparer, taskProvider: any TaskProvider, options: DiffRenderer.Options) {
+    package init(
+        preparer: DiffPreparer, taskProvider: any TaskProvider, options: DiffRenderer.Options,
+        renderer: PaneRenderer = .live
+    ) {
         self.preparer = preparer
         self.taskProvider = taskProvider
         self.options = options
+        self.renderer = renderer
     }
 
     /// Options for the next renders; re-renders of prepared diffs happen through `relayout`.
@@ -239,26 +242,32 @@ package final class RenderPipeline {
         }
     }
 
-    @concurrent
-    private static func renderOffMain(
+    /// Renders `prepared` off the main actor through ``renderer``, the way `render` does inline.
+    private func renderOffMain(
         _ prepared: [PreparedDiff], target: Target, options: DiffRenderer.Options, layout: RenderLayout,
         keepingScroll: Bool, firstIndex: Int = 0
     ) async throws -> Rendered {
+        let jobs = prepared.enumerated().map { PaneRenderer.Job(index: firstIndex + $0.offset, diff: $0.element) }
+        let panes = try await renderer.render(jobs, options: options, layout: layout)
         switch target {
             case .file:
-                return render(prepared, target: target, options: options, layout: layout, keepingScroll: keepingScroll)
+                guard var pane = panes.first else { throw IncompleteRender() }
+                pane.keepsScrollPosition = keepingScroll
+                return .file(pane)
             case .cards:
-                let indexed = Array(prepared.enumerated())
-                let files = try await mapConcurrently(indexed, limit: ProcessInfo.processInfo.activeProcessorCount) {
-                    offset, file in
-                    render(
-                        [file], target: target, options: options, layout: layout, keepingScroll: keepingScroll,
-                        firstIndex: firstIndex + offset
-                    )
-                    .cards[0]
-                }
-                return .cards(files)
+                return .cards(
+                    zip(prepared, panes)
+                        .map { diff, pane in
+                            var pane = pane
+                            pane.keepsScrollPosition = keepingScroll
+                            return RenderedFile(path: diff.title, rendered: pane)
+                        })
         }
+    }
+
+    /// A renderer that answered fewer panes than it was given diffs.
+    private struct IncompleteRender: LocalizedError {
+        var errorDescription: String? { "The diff could not be rendered." }
     }
 }
 
@@ -367,7 +376,7 @@ extension RenderPipeline {
                     guard generation == self.generation else { return }
                     prepared = head
                     publish(
-                        try await Self.renderOffMain(
+                        try await renderOffMain(
                             head, target: target, options: options, layout: renderLayout,
                             keepingScroll: keepingScroll),
                         generation: generation, appending: false)
@@ -379,7 +388,7 @@ extension RenderPipeline {
                     guard generation == self.generation else { return }
                     prepared += tail
                     publish(
-                        try await Self.renderOffMain(
+                        try await renderOffMain(
                             tail, target: target, options: options, layout: renderLayout,
                             keepingScroll: keepingScroll, firstIndex: 1), generation: generation, appending: true)
                 }
@@ -422,17 +431,11 @@ extension RenderPipeline {
                     missingPairs, left: inputs.left, right: inputs.right, granularity: inputs.granularity,
                     heuristics: inputs.heuristics)
                 guard generation == self.generation else { return }
-                let indexed = Array(zip(missingIndices, freshPrepared))
-                let freshCards = try await mapConcurrently(
-                    indexed, limit: ProcessInfo.processInfo.activeProcessorCount
-                ) { index, diff -> RenderedFile in
-                    guard
-                        case .cards(let files) = Self.render(
-                            [diff], target: .cards([pairs[index]]), options: options, layout: layout,
-                            keepingScroll: false, firstIndex: index)
-                    else { preconditionFailure("Self.render(target: .cards) always returns .cards") }
-                    return files[0]
-                }
+                let jobs = zip(missingIndices, freshPrepared).map { PaneRenderer.Job(index: $0, diff: $1) }
+                let freshCards = zip(
+                    freshPrepared, try await self.renderer.render(jobs, options: options, layout: layout)
+                )
+                .map { RenderedFile(path: $0.title, rendered: $1) }
                 guard generation == self.generation else { return }
                 let freshPreparedByIdentity = Dictionary(
                     zip(missingPairs.map(PairIdentity.init), freshPrepared), uniquingKeysWith: { first, _ in first })
