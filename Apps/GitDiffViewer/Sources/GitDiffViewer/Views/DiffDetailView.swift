@@ -9,37 +9,47 @@ import SwiftUI
 struct DiffDetailView: View {
     let model: DiffViewerModel
 
+    private var showsTabs: Bool { !model.tabs.tabs.isEmpty }
+
     var body: some View {
-        VStack(spacing: 0) {
-            if !model.tabs.tabs.isEmpty {
-                TabBarView(model: model)
-                Divider()
+        content
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // A bar rather than a row stacked above the content: the card list scrolls beneath the tabs as it does
+            // beneath the toolbar, and the system extends its scroll edge effect over them.
+            .safeAreaBar(edge: .top, spacing: 0) {
+                if showsTabs { TabBarView(model: model) }
             }
-            switch model.detailState {
-                case .cards:
-                    CombinedDiffView(model: model)
-                case .file(let rendered):
+    }
+
+    @ViewBuilder private var content: some View {
+        switch model.detailState {
+            case .cards:
+                CombinedDiffView(model: model)
+            case .file(let rendered):
+                // The AppKit panes stay below the bar: SwiftUI hands neither the bar's inset nor its edge effect to
+                // an NSScrollView, so a divider closes the bar here instead.
+                VStack(spacing: 0) {
+                    if showsTabs { Divider() }
                     panes(for: rendered)
-                case .loading:
-                    ProgressView("Comparing…")
-                case .error(let error):
-                    ContentUnavailableView(
-                        "Cannot compare", systemImage: "exclamationmark.triangle", description: Text(error))
-                case .noChanges:
-                    ContentUnavailableView(
-                        "No changes", systemImage: "checkmark.circle",
-                        description: Text("Every file under the selection is identical on both sides."))
-                case .noSelection:
-                    ContentUnavailableView(
-                        "No file selected", systemImage: "doc.text.magnifyingglass",
-                        description: Text("Select a file in either explorer."))
-                case .noSources:
-                    ContentUnavailableView(
-                        "No sources", systemImage: "folder.badge.questionmark",
-                        description: Text("Pick the two sides to compare."))
-            }
+                }
+            case .loading:
+                ProgressView("Comparing…")
+            case .error(let error):
+                ContentUnavailableView(
+                    "Cannot compare", systemImage: "exclamationmark.triangle", description: Text(error))
+            case .noChanges:
+                ContentUnavailableView(
+                    "No changes", systemImage: "checkmark.circle",
+                    description: Text("Every file under the selection is identical on both sides."))
+            case .noSelection:
+                ContentUnavailableView(
+                    "No file selected", systemImage: "doc.text.magnifyingglass",
+                    description: Text("Select a file in either explorer."))
+            case .noSources:
+                ContentUnavailableView(
+                    "No sources", systemImage: "folder.badge.questionmark",
+                    description: Text("Pick the two sides to compare."))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder private func panes(for rendered: RenderedDiff) -> some View {
