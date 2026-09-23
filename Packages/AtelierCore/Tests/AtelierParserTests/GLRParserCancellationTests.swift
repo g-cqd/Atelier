@@ -27,6 +27,23 @@ struct GLRParserCancellationTests {
     }
 
     @Test
+    func `A parse of comments alone stops at a cancellation check`() throws {
+        let parser = try BundledGrammarFixture.parser(for: BundledGrammarFixture.json)
+        var checks = 0
+
+        #expect(throws: ParseError.cancelled(atToken: GLRParser.cancellationCheckInterval)) {
+            // Cancelled from the second check on, which only a check on comments, 256 tokens in, reaches.
+            try parser.parse(
+                String(repeating: "// comment\n", count: 600),
+                externalScanner: nil,
+                isCancelled: {
+                    checks += 1
+                    return checks > 1
+                })
+        }
+    }
+
+    @Test
     func `A parse in a cancelled task stops before its first token`() async throws {
         let parser = try BundledGrammarFixture.parser(for: BundledGrammarFixture.json)
 

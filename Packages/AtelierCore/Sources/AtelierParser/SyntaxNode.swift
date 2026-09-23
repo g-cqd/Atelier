@@ -94,6 +94,7 @@ public enum ParseError: Error, Sendable, Equatable {
     case tooManyTokens(limit: Int)
     /// The tree would be more than `limit` levels deep, deeper than a parse builds.
     case tooDeep(limit: Int)
-    /// The task the parse ran in was cancelled; the parse found it so before the token at `atToken`.
+    /// The task the parse ran in was cancelled; the parse found it so before the token at `atToken`, counting every
+    /// token it read, comments too.
     case cancelled(atToken: Int)
 }
