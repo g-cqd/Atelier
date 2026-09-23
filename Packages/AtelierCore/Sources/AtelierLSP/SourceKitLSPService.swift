@@ -222,15 +222,23 @@ public actor SourceKitLSPService {
             resumeEstablishingWaiters(with: created)
             return created
         } catch {
+            Self.logger.error("sourcekit-lsp did not start: \(String(describing: error), privacy: .public)")
             // A created connection has a running process behind it even when `initialize` failed.
             if let newConnection {
                 await newConnection.stop()
             }
             restartsUsed += 1
             if restartsUsed > configuration.maximumRestarts {
+                let attempts = restartsUsed
+                Self.logger.error("sourcekit-lsp failed to start \(attempts, privacy: .public) times; no more restarts")
                 permanentlyUnavailable = true
             } else {
-                try? await clock.sleep(for: .seconds(1))
+                do {
+                    try await clock.sleep(for: .seconds(1))
+                } catch {
+                    // Cancelled: the caller no longer waits, and the next hover may restart at once.
+                    Self.logger.debug("The restart backoff ended early: \(String(describing: error), privacy: .public)")
+                }
             }
             resumeEstablishingWaiters(with: nil)
             return nil
@@ -269,11 +277,28 @@ public actor SourceKitLSPService {
 
     /// Ends a session that may still be listening: `shutdown`, then `exit`, then the transport closes.
     private func gracefulTeardown(_ connection: LSPConnection) async {
-        _ = try? await raceAgainstTimeout(clock: clock, timeout: .milliseconds(500)) {
-            try await connection.requestOptional("shutdown", JSONValue.null, as: DiscardedResult.self)
+        do {
+            _ = try await raceAgainstTimeout(clock: clock, timeout: .milliseconds(500)) {
+                try await connection.requestOptional("shutdown", JSONValue.null, as: DiscardedResult.self)
+            }
+        } catch {
+            // Stopping the connection below ends the server all the same.
+            Self.logger.info(
+                "sourcekit-lsp did not acknowledge shutdown: \(String(describing: error), privacy: .public)")
         }
-        try? await connection.notify("exit", JSONValue.null)
+        await send("exit", JSONValue.null, on: connection)
         await connection.stop()
+    }
+
+    /// Sends a notification, logging a failure: a dead transport also fails the next request, which tears the
+    /// connection down.
+    private func send(_ method: String, _ params: some Encodable & Sendable, on connection: LSPConnection) async {
+        do {
+            try await connection.notify(method, params)
+        } catch {
+            let reason = String(describing: error)
+            Self.logger.debug("Could not send \(method, privacy: .public): \(reason, privacy: .public)")
+        }
     }
 
     // MARK: - Idle shutdown
@@ -289,6 +314,7 @@ public actor SourceKitLSPService {
                 try await sessionClock.sleep(for: duration)
             } catch {
                 // Cancelled: a newer timer or a teardown owns the session now.
+                Self.logger.debug("Idle timer \(generation, privacy: .public) superseded")
                 return
             }
             await self?.idleFire(generation: generation)
@@ -313,14 +339,16 @@ public actor SourceKitLSPService {
                 touch(uri)
                 return
             }
-            try? await connection.notify(
-                "textDocument/didClose", DidCloseTextDocumentParams(textDocument: TextDocumentIdentifier(uri: uri)))
+            await send(
+                "textDocument/didClose", DidCloseTextDocumentParams(textDocument: TextDocumentIdentifier(uri: uri)),
+                on: connection)
             let newVersion = existing.version + 1
-            try? await connection.notify(
+            await send(
                 "textDocument/didOpen",
                 DidOpenTextDocumentParams(
                     textDocument: TextDocumentItem(
-                        uri: uri, languageId: languageID, version: newVersion, text: content)))
+                        uri: uri, languageId: languageID, version: newVersion, text: content)),
+                on: connection)
             openDocuments[uri] = OpenDocument(version: newVersion, contentHash: hash)
             touch(uri)
             return
@@ -330,10 +358,11 @@ public actor SourceKitLSPService {
             await evictOldest(on: connection)
         }
 
-        try? await connection.notify(
+        await send(
             "textDocument/didOpen",
             DidOpenTextDocumentParams(
-                textDocument: TextDocumentItem(uri: uri, languageId: languageID, version: 1, text: content)))
+                textDocument: TextDocumentItem(uri: uri, languageId: languageID, version: 1, text: content)),
+            on: connection)
         openDocuments[uri] = OpenDocument(version: 1, contentHash: hash)
         openOrder.append(uri)
     }
@@ -348,8 +377,9 @@ public actor SourceKitLSPService {
         guard !openOrder.isEmpty else { return }
         let oldest = openOrder.removeFirst()
         openDocuments.removeValue(forKey: oldest)
-        try? await connection.notify(
-            "textDocument/didClose", DidCloseTextDocumentParams(textDocument: TextDocumentIdentifier(uri: oldest)))
+        await send(
+            "textDocument/didClose", DidCloseTextDocumentParams(textDocument: TextDocumentIdentifier(uri: oldest)),
+            on: connection)
     }
 
     // MARK: - The real-world factory

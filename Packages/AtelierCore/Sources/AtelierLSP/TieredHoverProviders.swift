@@ -1,12 +1,15 @@
 public import AtelierSyntaxModel
+import os
 
 /// Composes several ``HoverProvider`` tiers into one, preferring prose: the first answer becomes the base and wins at
 /// once if it has prose (``HoverContentQuality/hasProse(_:)``); otherwise the first later answer with prose wins,
 /// behind the base's leading declaration fence when it has none of its own. With no prose from any tier, the base is
 /// the answer. ``HoverContent/source`` names the tier that supplied the prose, or the base's tier.
 ///
-/// A tier's `CancellationError` ends the composite; any other error from a tier counts as no answer.
+/// A tier's `CancellationError` ends the composite; any other error from a tier is logged and counts as no answer.
 public struct TieredHoverProviders: HoverProvider {
+    private static let logger = Logger(subsystem: "Atelier.LSP", category: "TieredHoverProviders")
+
     private let providers: [any HoverProvider]
 
     public init(_ providers: [any HoverProvider]) {
@@ -23,6 +26,8 @@ public struct TieredHoverProviders: HoverProvider {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
+                let reason = String(describing: error)
+                Self.logger.info("A hover tier failed; asking the next: \(reason, privacy: .public)")
                 continue
             }
             guard let content else { continue }
