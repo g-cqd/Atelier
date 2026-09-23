@@ -221,6 +221,52 @@ struct GitArchiveTests {
     }
 
     @Test
+    func `a tar entry with a negative size is refused`() throws {
+        let folder = try GitClient.makePrivateFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let stream = ArchiveLab.header(name: "A.swift", sizeField: "-1", type: UInt8(ascii: "0"))
+
+        #expect(throws: TarExtractor.Failure.truncated) {
+            try TarExtractor.extract(ArchiveLab.ended(stream), into: folder)
+        }
+    }
+
+    @Test
+    func `a pax size that is negative is refused`() throws {
+        let folder = try GitClient.makePrivateFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let stream = ArchiveLab.pax("11 size=-5\n") + ArchiveLab.header(name: "A.swift", sizeField: "0", type: 0x30)
+
+        #expect(throws: TarExtractor.Failure.truncated) {
+            try TarExtractor.extract(ArchiveLab.ended(stream), into: folder)
+        }
+    }
+
+    @Test
+    func `a pax size beyond the stream is refused`() throws {
+        let folder = try GitClient.makePrivateFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let stream =
+            ArchiveLab.pax("29 size=9223372036854775807\n")
+            + ArchiveLab.header(name: "A.swift", sizeField: "0", type: 0x30)
+
+        #expect(throws: TarExtractor.Failure.truncated) {
+            try TarExtractor.extract(ArchiveLab.ended(stream), into: folder)
+        }
+    }
+
+    @Test
+    func `a pax record shorter than its own length field is refused`() throws {
+        let folder = try GitClient.makePrivateFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let stream = ArchiveLab.pax("1 x") + ArchiveLab.header(name: "A.swift", sizeField: "0", type: 0x30)
+
+        #expect(throws: TarExtractor.Failure.truncated) {
+            try TarExtractor.extract(ArchiveLab.ended(stream), into: folder)
+        }
+    }
+
+    @Test
     func `the driver names of every filter key are read from a name listing`() {
         let listing = Data("core.bare\0filter.lfs.clean\0filter.lfs.smudge\0filter.a.b.process\0filter.x\0".utf8)
 
@@ -277,9 +323,10 @@ private struct ArchiveLab {
         try git("commit", "-q", "-m", "files")
     }
 
-    /// Runs git outside the client under test, with an identity, no signing and no template hooks.
+    /// Runs git outside the client under test, with an identity, no signing and no template hooks, `input` written
+    /// to its standard input.
     @discardableResult
-    func git(_ arguments: String...) throws -> String {
+    func git(_ arguments: String..., input: Data? = nil) throws -> String {
         let process = Process()
         process.executableURL = GitClient.executable
         process.arguments =
@@ -289,8 +336,16 @@ private struct ArchiveLab {
         let output = Pipe()
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        try process.run()
+        if let input {
+            let stdin = Pipe()
+            process.standardInput = stdin
+            try process.run()
+            try stdin.fileHandleForWriting.write(contentsOf: input)
+            try stdin.fileHandleForWriting.close()
+        } else {
+            process.standardInput = FileHandle.nullDevice
+            try process.run()
+        }
         let data = output.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -318,6 +373,29 @@ private struct ArchiveLab {
             files[subpath] = try String(contentsOf: url, encoding: .utf8)
         }
         return files
+    }
+
+    /// A ustar header block for `name`, its size field written as given, and of `type`.
+    static func header(name: String, sizeField: String, type: UInt8) -> [UInt8] {
+        var header = [UInt8](repeating: 0, count: 512)
+        header.replaceSubrange(0 ..< name.utf8.count, with: Array(name.utf8))
+        header.replaceSubrange(124 ..< 124 + sizeField.utf8.count, with: Array(sizeField.utf8))
+        header[156] = type
+        header.replaceSubrange(257 ..< 263, with: Array("ustar\0".utf8))
+        return header
+    }
+
+    /// A pax extended header entry whose body is `records`, as written, padded to a block.
+    static func pax(_ records: String) -> [UInt8] {
+        var body = Array(records.utf8)
+        let size = String(body.count, radix: 8)
+        body += [UInt8](repeating: 0, count: (512 - body.count % 512) % 512)
+        return header(name: "pax", sizeField: size, type: UInt8(ascii: "x")) + body
+    }
+
+    /// `blocks` followed by the two zero blocks that end an archive.
+    static func ended(_ blocks: [UInt8]) -> Data {
+        Data(blocks + [UInt8](repeating: 0, count: 1024))
     }
 
     /// A one-entry ustar archive naming its file `name`, as a hostile stream could.
