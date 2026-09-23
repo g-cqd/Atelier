@@ -44,13 +44,15 @@ public enum SDKPlatform: String, Sendable, Hashable, CaseIterable {
     /// The platform the probes of a file that imports `imports` resolve against, in a project that declares
     /// `declared`, empty when it declares none or is not known. The imports decide when they name one platform's own
     /// frameworks and not the other's; otherwise the project does, and a project that declares iOS without macOS is
-    /// an iOS project; otherwise the Mac, whose SDK resolves platform-neutral code as well as any.
-    public static func forFile(importing imports: [String], inProjectDeclaring declared: Set<SDKPlatform>)
-        -> SDKPlatform
-    {
+    /// an iOS project; otherwise the Mac, whose SDK resolves platform-neutral code as well as any. `declared` is read
+    /// only when the imports do not decide, since finding it reads the project's manifests.
+    public static func forFile(
+        importing imports: [String], inProjectDeclaring declared: @autoclosure () -> Set<SDKPlatform>
+    ) -> SDKPlatform {
         let named = allCases.filter { platform in imports.contains { platform.exclusiveModules.contains($0) } }
         if named.count == 1, let platform = named.first { return platform }
-        return declared.contains(.iOS) && !declared.contains(.macOS) ? .iOS : .macOS
+        let project = declared()
+        return project.contains(.iOS) && !project.contains(.macOS) ? .iOS : .macOS
     }
 
     /// The modules a probe on this platform imports: the platform's defaults, then `fileImports` less the other
@@ -213,13 +215,15 @@ enum ProjectPlatforms {
         }
     }
 
-    /// The platforms the nearest project that declares any, above the file at `fileURL`, declares: a directory's
-    /// `Package.swift` and `*.xcodeproj`s are read, from the file's own directory up to the repository's root, the
-    /// first directory that holds a `.git`. Empty when none declares a platform.
-    static func declared(forFileAt fileURL: URL) -> Set<SDKPlatform> {
+    /// The platforms the nearest project that declares any, above the file at `fileURL`, declares: `read` gives what a
+    /// directory's own manifests declare, ``declared(inDirectory:)`` or a memo of it, for each directory from the file's
+    /// own up to the repository's root, the first directory that holds a `.git`. Empty when none declares a platform.
+    static func declared(
+        forFileAt fileURL: URL, reading read: (String) -> Set<SDKPlatform> = declared(inDirectory:)
+    ) -> Set<SDKPlatform> {
         var directory = fileURL.deletingLastPathComponent().standardizedFileURL.path(percentEncoded: false)
         while true {
-            let platforms = declared(inDirectory: directory)
+            let platforms = read(directory)
             if !platforms.isEmpty { return platforms }
             let parent = (directory as NSString).deletingLastPathComponent
             guard !FileManager.default.fileExists(atPath: (directory as NSString).appendingPathComponent(".git")),
@@ -251,9 +255,12 @@ enum ProjectPlatforms {
     }
 
     /// The contents of the regular file at `path`; nil when there is none, when it is not a regular file, or when it is
-    /// larger than ``maximumManifestSize``. Opened without blocking and checked on its descriptor, so a repository
-    /// cannot stall the read with a pipe or a device named like a manifest.
+    /// larger than ``maximumManifestSize``. Checked before it is opened, so that opening a device named like a manifest
+    /// has no effect, then opened without blocking and checked again on its descriptor, so that a pipe swapped in
+    /// meanwhile cannot stall the read.
     static func readManifest(atPath path: String) -> Data? {
+        var named = stat()
+        guard stat(path, &named) == 0, named.st_mode & S_IFMT == S_IFREG else { return nil }
         let descriptor = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC)
         guard descriptor >= 0 else { return nil }
         let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
