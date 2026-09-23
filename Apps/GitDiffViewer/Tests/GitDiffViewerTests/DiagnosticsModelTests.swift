@@ -27,7 +27,7 @@ struct DiagnosticsModelTests {
 
     private func makeSUT(runner: FakeDiagnosticsRunner? = nil) throws -> SUT {
         let runner = runner ?? FakeDiagnosticsRunner()
-        let spy = TaskProviderSpy()
+        let spy = TaskProviderSpy.tolerant()
         let settings = ViewerSettings(defaults: try makeDefaults())
         settings.diagnosticsEnabled = true
         let model = DiagnosticsModel(engine: runner, settings: settings, taskProvider: spy, debounce: .milliseconds(1))

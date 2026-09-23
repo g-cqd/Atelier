@@ -92,7 +92,7 @@ struct DocHoverControllerTests {
     private func makeSUT(debounce: Duration = .milliseconds(5)) -> (
         controller: DocHoverController, spy: ResolverSpy, taskProvider: TaskProviderSpy
     ) {
-        let taskProvider = TaskProviderSpy()
+        let taskProvider = TaskProviderSpy.tolerant()
         let controller = DocHoverController(taskProvider: taskProvider, debounce: debounce)
         let spy = ResolverSpy()
         controller.resolve = { hit in await spy.resolve(hit) }
@@ -108,7 +108,7 @@ struct DocHoverControllerTests {
 
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
         controller.pointerMoved(to: point(row: 1, column: 8, in: rendered))
-        try await taskProvider.waitForAllTasks(timeout: .seconds(2))
+        try await taskProvider.waitForAllTasks()
 
         let calls = await spy.calls
         #expect(calls.count == 1)
@@ -123,9 +123,9 @@ struct DocHoverControllerTests {
         controller.attach(to: view) { rendered }
 
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
-        try await taskProvider.waitForAllTasks(timeout: .seconds(2))
+        try await taskProvider.waitForAllTasks()
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
-        try await taskProvider.waitForAllTasks(timeout: .seconds(2))
+        try await taskProvider.waitForAllTasks()
 
         #expect(await spy.calls.count == 1)
         #expect(taskProvider.spawnedTaskCount == 1)
@@ -140,7 +140,7 @@ struct DocHoverControllerTests {
 
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
         controller.invalidate()
-        try await taskProvider.waitForAllTasks(timeout: .seconds(2))
+        try await taskProvider.waitForAllTasks()
 
         #expect(await spy.calls.isEmpty)
         #expect(controller.isPopoverVisible == false)
@@ -192,7 +192,7 @@ struct DocHoverControllerTests {
         controller.attach(to: view) { rendered }
 
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
-        try await taskProvider.waitForAllTasks(timeout: .seconds(2))
+        try await taskProvider.waitForAllTasks()
         #expect(controller.isPopoverVisible == true)
 
         // A small scroll: row 0's anchor stays within the 100pt-tall viewport.
@@ -210,7 +210,7 @@ struct DocHoverControllerTests {
         controller.attach(to: view) { rendered }
 
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
-        try await taskProvider.waitForAllTasks(timeout: .seconds(2))
+        try await taskProvider.waitForAllTasks()
         #expect(controller.isPopoverVisible == true)
 
         // Scroll far enough that row 0 is nowhere near the 100pt-tall viewport any more.
@@ -228,7 +228,7 @@ struct DocHoverControllerTests {
         controller.attach(to: view) { rendered }
 
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
-        try await taskProvider.waitForAllTasks(timeout: .seconds(2))
+        try await taskProvider.waitForAllTasks()
         #expect(controller.isPopoverVisible == true)
 
         // Same origin as already reflected: a spurious notification, not a scroll.
@@ -248,7 +248,7 @@ struct DocHoverControllerTests {
         controller.pointerMoved(to: point(row: 0, column: 4, in: rendered))
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
         controller.pointerMoved(to: point(row: 1, column: 8, in: rendered))
-        try await taskProvider.waitForAllTasks(timeout: .seconds(2))
+        try await taskProvider.waitForAllTasks()
 
         #expect(await spy.maxConcurrent <= 1)
     }

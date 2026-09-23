@@ -11,7 +11,7 @@ import Testing
 /// ``WatchEventSource`` and a virtual clock.
 @MainActor
 struct RepositoryFreshnessTests {
-    private let taskProvider = TaskProviderSpy()
+    private let taskProvider = TaskProviderSpy.tolerant()
     private let clock = TestClock()
 
     // MARK: Classification (pure, no watcher needed)
