@@ -106,7 +106,7 @@ struct SideStateFetchTests {
         let fetchCallsWhileFirstWasRunning = runner.specs.count(where: { $0.arguments.contains("fetch") })
 
         gate.send(())
-        _ = await first.value
+        try await first.expectValue()
 
         #expect(fetchCallsWhileFirstWasRunning == 1)
     }
@@ -183,7 +183,7 @@ struct SideStateFetchTests {
         sut.load(.directory(otherRoot), repository: otherInfo, entries: [])
 
         gate.send(())
-        _ = await fetchTask.value
+        try await fetchTask.expectValue()
 
         // The remotes read for the old repository must never land on the side that has since moved to another.
         #expect(sut.repository?.root == otherRoot)
