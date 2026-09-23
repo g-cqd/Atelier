@@ -33,6 +33,7 @@ extension StaticTextLayout: GutterTextSource {
 package final class DiffGutterView: NSView {
     package var rendered: RenderedText? {
         didSet {
+            metrics = Metrics(rendered: rendered)
             invalidateIntrinsicContentSize()
             needsDisplay = true
         }
@@ -76,6 +77,27 @@ package final class DiffGutterView: NSView {
 
     private var drag: GapDrag?
 
+    /// The font, column width and number attributes of the current text, which every drawn row reuses.
+    private struct Metrics {
+        let font: NSFont
+        let columnWidth: CGFloat
+        let contextAttributes: [NSAttributedString.Key: Any]
+        let changedAttributes: [NSAttributedString.Key: Any]
+
+        /// - Complexity: O(rows), for the widest line number.
+        init(rendered: RenderedText?) {
+            let palette = rendered?.palette ?? .system
+            font = palette.gutterFont
+            let digitWidth = ("8" as NSString).size(withAttributes: [.font: font]).width
+            let digits = max(String(rendered?.maximumLineNumber ?? 0).count, 2)
+            columnWidth = CGFloat(digits) * digitWidth
+            contextAttributes = [.font: font, .foregroundColor: palette.gutterText]
+            changedAttributes = [.font: font, .foregroundColor: palette.gutterChangedText]
+        }
+    }
+
+    private var metrics = Metrics(rendered: nil)
+
     /// Without a clip view the gutter belongs to an embedded pane that shows its whole document.
     package init(clipView: NSClipView?) {
         self.clipView = clipView
@@ -100,7 +122,7 @@ package final class DiffGutterView: NSView {
 
     package var thickness: CGFloat {
         let columns: CGFloat = style == .dual ? 2 : 1
-        return padding * 2 + columns * columnWidth + (columns - 1) * columnGap
+        return padding * 2 + columns * metrics.columnWidth + (columns - 1) * columnGap
     }
 
     package override var intrinsicContentSize: NSSize {
@@ -108,16 +130,6 @@ package final class DiffGutterView: NSView {
     }
 
     private var palette: DiffPalette { rendered?.palette ?? .system }
-
-    private var digitWidth: CGFloat {
-        ("8" as NSString).size(withAttributes: [.font: palette.gutterFont]).width
-    }
-
-    private var digits: Int {
-        max(String(rendered?.maximumLineNumber ?? 0).count, 2)
-    }
-
-    private var columnWidth: CGFloat { CGFloat(digits) * digitWidth }
 
     @objc private func clipViewDidScroll(_ notification: Notification) {
         needsDisplay = true
@@ -149,7 +161,7 @@ package final class DiffGutterView: NSView {
     }
 
     package override func resetCursorRects() {
-        forEachVisibleFragment { fragment, row, _, y in
+        forEachFragment(in: visibleRect) { fragment, row, _, y in
             guard row.kind == .gap else { return }
             addCursorRect(
                 NSRect(x: 0, y: y, width: bounds.width, height: fragment.layoutFragmentFrame.height),
@@ -165,7 +177,7 @@ package final class DiffGutterView: NSView {
     )? {
         guard overlay?.isEmpty == false, point.x >= 0, point.x < bounds.width else { return nil }
         var found: (Int, DiagnosticOverlay.RowDiagnostics, NSRect)?
-        forEachVisibleFragment { fragment, row, rowIndex, y in
+        forEachFragment(in: Self.row(at: point)) { fragment, row, rowIndex, y in
             let frame = fragment.layoutFragmentFrame
             guard row.kind != .gap, point.y >= y, point.y < y + frame.height, let diagnostics = overlay?.row(rowIndex)
             else { return }
@@ -181,7 +193,7 @@ package final class DiffGutterView: NSView {
             return
         }
         var hit: (GapMarker, CGFloat)?
-        forEachVisibleFragment { fragment, row, _, y in
+        forEachFragment(in: Self.row(at: point)) { fragment, row, _, y in
             let frame = fragment.layoutFragmentFrame
             if let gap = row.gap, point.y >= y, point.y < y + frame.height {
                 hit = (gap, fragment.textLineFragments.first?.typographicBounds.height ?? frame.height)
@@ -208,24 +220,35 @@ package final class DiffGutterView: NSView {
         drag = nil
     }
 
-    /// Visits the laid-out fragments intersecting the clip view, with each row's metadata, its row index, and its
-    /// y in this view.
-    private func forEachVisibleFragment(_ body: (NSTextLayoutFragment, RowMeta, Int, CGFloat) -> Void) {
+    /// A one-point-tall band across the gutter at `point`, for hit tests.
+    private static func row(at point: NSPoint) -> NSRect {
+        NSRect(x: 0, y: point.y, width: 1, height: 1)
+    }
+
+    /// Visits the laid-out fragments intersecting `rect` of this view, with each row's metadata, its row index, and
+    /// its y in this view.
+    ///
+    /// Starts at the fragment under `rect`'s top rather than at the document's start, so drawing one tile of a tall
+    /// embedded gutter costs the rows in that tile, not the whole document. A top not laid out yet starts at the
+    /// text's laid-out viewport when `rect` lies below that viewport's top, and at the document's start otherwise.
+    /// - Complexity: O(rows in `rect`), plus a lookup of the first fragment.
+    func forEachFragment(in rect: NSRect, _ body: (NSTextLayoutFragment, RowMeta, Int, CGFloat) -> Void) {
         guard let source, let rendered, !rendered.rows.isEmpty, let layoutManager = source.gutterLayoutManager,
             let contentManager = layoutManager.textContentManager
         else { return }
         let scrollOffset = clipView?.bounds.origin.y ?? 0
         let inset = source.gutterInset
-        let visibleHeight = clipView?.bounds.height ?? bounds.height
+        let top = CGPoint(x: 0, y: max(rect.minY - inset + scrollOffset, 0))
+        let viewport = layoutManager.textViewportLayoutController
         let start =
-            clipView == nil
-            ? layoutManager.documentRange.location
-            : layoutManager.textViewportLayoutController.viewportRange?.location ?? layoutManager.documentRange.location
+            layoutManager.textLayoutFragment(for: top)?.rangeInElement.location
+            ?? viewport.viewportRange.flatMap { top.y >= viewport.viewportBounds.minY ? $0.location : nil }
+            ?? layoutManager.documentRange.location
         layoutManager.enumerateTextLayoutFragments(from: start, options: [.ensuresLayout]) { fragment in
             let frame = fragment.layoutFragmentFrame
             let y = frame.minY + inset - scrollOffset
-            if y > visibleHeight { return false }
-            if y + frame.height < 0 { return true }
+            if y > rect.maxY { return false }
+            if y + frame.height < rect.minY { return true }
             let offset = contentManager.offset(
                 from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
             let rowIndex = rendered.rowIndex(containing: offset)
@@ -236,18 +259,12 @@ package final class DiffGutterView: NSView {
 
     package override func draw(_ dirtyRect: NSRect) {
         palette.gutterBackground.setFill()
-        bounds.fill()
+        dirtyRect.fill()
         NSColor.separatorColor.setFill()
-        NSRect(x: bounds.maxX - 1, y: 0, width: 1, height: bounds.height).fill()
+        NSRect(x: bounds.maxX - 1, y: dirtyRect.minY, width: 1, height: dirtyRect.height).fill()
 
-        let baseAttributes: [NSAttributedString.Key: Any] = [
-            .font: palette.gutterFont, .foregroundColor: palette.gutterText
-        ]
-        let changedAttributes: [NSAttributedString.Key: Any] = [
-            .font: palette.gutterFont, .foregroundColor: palette.gutterChangedText
-        ]
-
-        forEachVisibleFragment { fragment, row, rowIndex, y in
+        let metrics = metrics
+        forEachFragment(in: dirtyRect) { fragment, row, rowIndex, y in
             let frame = fragment.layoutFragmentFrame
             if row.kind == .gap {
                 drawGapHandle(y: y, height: frame.height)
@@ -256,9 +273,9 @@ package final class DiffGutterView: NSView {
             let diagnostics = overlay?.row(rowIndex)
             let attributes: [NSAttributedString.Key: Any] =
                 if let diagnostics {
-                    [.font: palette.gutterFont, .foregroundColor: severityColor(diagnostics.severity)]
+                    [.font: metrics.font, .foregroundColor: severityColor(diagnostics.severity)]
                 } else {
-                    row.kind == .context ? baseAttributes : changedAttributes
+                    row.kind == .context ? metrics.contextAttributes : metrics.changedAttributes
                 }
             // A line numbered the same on both sides shows its number once, next to the text.
             let numbers: [Int?] =
@@ -274,12 +291,13 @@ package final class DiffGutterView: NSView {
             let baseline =
                 y + (firstLine.map { $0.typographicBounds.minY + $0.glyphOrigin.y } ?? frame.height * 0.75)
                 - (rendered?.baselineOffset ?? 0)
-            let top = baseline - palette.gutterFont.ascender
+            let top = baseline - metrics.font.ascender
             for (column, number) in numbers.enumerated() {
                 guard let number else { continue }
                 let label = String(number) as NSString
                 let size = label.size(withAttributes: attributes)
-                let x = padding + CGFloat(column) * (columnWidth + columnGap) + columnWidth - size.width
+                let x =
+                    padding + CGFloat(column) * (metrics.columnWidth + columnGap) + metrics.columnWidth - size.width
                 if let diagnostics {
                     drawUnderlay(severity: diagnostics.severity, x: x, top: top, size: size)
                 }
