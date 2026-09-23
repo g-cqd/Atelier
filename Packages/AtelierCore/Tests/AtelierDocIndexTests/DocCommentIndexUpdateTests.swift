@@ -82,7 +82,7 @@ struct DocCommentIndexUpdateTests {
             DocIndexFile(uri: "file:///b.swift", content: "/// B.\nfunc b() {}")
         ])
 
-        try await index.keepOnly(["file:///a.swift"])
+        try await index.keepOnly(["file:///a.swift": .both])
 
         #expect(await index.fileCount == 1)
         #expect(await markdown(of: "a", in: index) == ["A."])
@@ -132,22 +132,31 @@ struct DocCommentIndexUpdateTests {
     @Test
     func `the lookup by name lists what a scan of every file lists`() async throws {
         let index = makeIndex()
-        let files = [
-            "file:///a.swift": "/// A run.\nfunc run() {}\n/// A stop.\nfunc stop() {}",
-            "file:///b.swift": "/// B run.\nfunc run() {}\n/// B size.\nvar size: Int",
-            "file:///c.swift": "/// C stop.\nfunc stop() {}\nstruct Plain {}"
+        var indexed: [String: (content: String, sides: DocIndexSides)] = [
+            "file:///a.swift": ("/// A run.\nfunc run() {}\n/// A stop.\nfunc stop() {}", .old),
+            "file:///b.swift": ("/// B run.\nfunc run() {}\n/// B size.\nvar size: Int", .new),
+            "file:///c.swift": ("/// C stop.\nfunc stop() {}\nstruct Plain {}", .both),
+            "file:///d.swift": ("/// D run.\nfunc run() {}", .both)
         ]
-        var indexed = files
-        try await index.upsert(files.map { DocIndexFile(uri: $0.key, content: $0.value) })
-        indexed["file:///b.swift"] = "/// B run, again.\nfunc run() {}\n/// B stop.\nfunc stop() {}"
-        try await index.upsert([DocIndexFile(uri: "file:///b.swift", content: indexed["file:///b.swift"] ?? "")])
+        try await index.upsert(
+            indexed.map { DocIndexFile(uri: $0.key, content: $0.value.content, sides: $0.value.sides) })
+        indexed["file:///b.swift"] = ("/// B run, again.\nfunc run() {}\n/// B stop.\nfunc stop() {}", .new)
+        try await index.upsert([
+            DocIndexFile(uri: "file:///b.swift", content: indexed["file:///b.swift"]?.content ?? "", sides: .new)
+        ])
         indexed["file:///a.swift"] = nil
-        try await index.keepOnly(Set(indexed.keys))
+        indexed["file:///d.swift"]?.sides = .old
+        try await index.keepOnly(indexed.mapValues(\.sides))
 
         for name in ["run", "stop", "size", "Plain", "missing"] {
-            let scanned = indexed.flatMap { DocCommentIndex.extractEntries(uri: $0.key, content: $0.value) }
-                .filter { $0.name == name }
-            #expect(sorted(await index.matches(named: name)) == sorted(scanned), "\(name)")
+            for side in [DocIndexSides.old, .new, .both] {
+                let scanned = indexed.filter { !$0.value.sides.isDisjoint(with: side) }
+                    .flatMap { DocCommentIndex.extractEntries(uri: $0.key, content: $0.value.content) }
+                    .filter { $0.name == name }
+                #expect(
+                    sorted(await index.matches(named: name, side: side)) == sorted(scanned),
+                    "\(name) on \(side.rawValue)")
+            }
         }
     }
 

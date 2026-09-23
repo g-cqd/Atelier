@@ -11,12 +11,31 @@ public struct DocIndexFile: Sendable, Hashable {
     /// The git blob id of `content`, when known: a file indexed at the same blob id keeps its entries without its
     /// content being hashed or parsed again. Nil never matches, so the content is hashed instead.
     public let blobID: String?
+    /// The sides of a comparison the file answers for.
+    public let sides: DocIndexSides
 
-    public init(uri: String, content: String, blobID: String? = nil) {
+    public init(uri: String, content: String, blobID: String? = nil, sides: DocIndexSides = .both) {
         self.uri = uri
         self.content = content
         self.blobID = blobID
+        self.sides = sides
     }
+}
+
+/// The sides of a comparison a file belongs to. A lookup from one side lists only the files of that side, so a
+/// hover on the new side never lists the old version of a declaration beside the new one, whether both sides are
+/// refs or the file was renamed, and a hover on the old side never lists the new version.
+public struct DocIndexSides: OptionSet, Sendable, Hashable {
+    public let rawValue: UInt8
+
+    public init(rawValue: UInt8) {
+        self.rawValue = rawValue
+    }
+
+    public static let old = DocIndexSides(rawValue: 1 << 0)
+    public static let new = DocIndexSides(rawValue: 1 << 1)
+    /// A file that is the same on both sides, such as one outside the changeset; as a lookup's side, every file.
+    public static let both: DocIndexSides = [.old, .new]
 }
 
 /// A documented declaration: its name, a body-free signature, and its doc comment rendered as markdown.
@@ -39,6 +58,7 @@ public actor DocCommentIndex {
         let blobID: String?
         /// The content's hash, when the file was indexed without a blob id.
         let contentHash: Int?
+        var sides: DocIndexSides
         let entries: [DocEntry]
     }
 
@@ -64,28 +84,28 @@ public actor DocCommentIndex {
     /// unchanged keeps its entries.
     /// - Throws: `CancellationError` when the calling task is cancelled; the files dropped by then stay dropped.
     public func update(files: [DocIndexFile]) async throws {
-        try keepOnly(Set(files.map(\.uri)))
+        try keepOnly(Dictionary(files.map { ($0.uri, $0.sides) }, uniquingKeysWith: { _, last in last }))
         try await upsert(files)
     }
 
     /// Adds `files`, or replaces the ones already indexed, keeping every other file. A file indexed at the same blob
-    /// id, or without one and with the same content, keeps its entries; the others are parsed side by side, off the
-    /// actor.
+    /// id, or without one and with the same content, keeps its entries and takes its new sides; the others are parsed
+    /// side by side, off the actor.
     /// - Throws: `CancellationError` when the calling task is cancelled, parsing or not. Nothing lands then, so a
     ///   superseded update never overwrites a newer one.
     public func upsert(_ files: [DocIndexFile]) async throws {
         try Task.checkCancellation()
+        var unchanged: [DocIndexFile] = []
         var changed: [(file: DocIndexFile, contentHash: Int?)] = []
         for file in files {
             let indexed = self.files[file.uri]
             if let blobID = file.blobID {
-                if indexed?.blobID != blobID { changed.append((file, nil)) }
+                if indexed?.blobID == blobID { unchanged.append(file) } else { changed.append((file, nil)) }
             } else {
                 let hash = Self.hash(of: file.content)
-                if indexed?.contentHash != hash { changed.append((file, hash)) }
+                if indexed?.contentHash == hash { unchanged.append(file) } else { changed.append((file, hash)) }
             }
         }
-        guard !changed.isEmpty else { return }
         let extractor = extractor
         let limit = ProcessInfo.processInfo.activeProcessorCount
         let parsed = try await mapConcurrently(changed, limit: limit) { change in
@@ -94,19 +114,28 @@ public actor DocCommentIndex {
         }
         // The last check before anything lands, with no suspension until the files are in.
         try Task.checkCancellation()
+        for file in unchanged {
+            self.files[file.uri]?.sides = file.sides
+        }
         for (change, entries) in zip(changed, parsed) {
+            let file = change.file
             replace(
-                change.file.uri,
-                with: FileState(blobID: change.file.blobID, contentHash: change.contentHash, entries: entries))
+                file.uri,
+                with: FileState(
+                    blobID: file.blobID, contentHash: change.contentHash, sides: file.sides, entries: entries))
         }
     }
 
-    /// Keeps only the files at `uris`, dropping every other file and its entries.
-    /// - Throws: `CancellationError` when the calling task is cancelled, and then drops nothing.
-    public func keepOnly(_ uris: Set<String>) throws {
+    /// Keeps only the files `sides` names, each answering for the sides given there, and drops every other file with
+    /// its entries.
+    /// - Throws: `CancellationError` when the calling task is cancelled, and then changes nothing.
+    public func keepOnly(_ sides: [String: DocIndexSides]) throws {
         try Task.checkCancellation()
-        for uri in files.keys.filter({ !uris.contains($0) }) {
+        for uri in files.keys.filter({ sides[$0] == nil }) {
             replace(uri, with: nil)
+        }
+        for (uri, fileSides) in sides {
+            files[uri]?.sides = fileSides
         }
     }
 
@@ -130,11 +159,13 @@ public actor DocCommentIndex {
         }
     }
 
-    /// Entries named exactly `name`, those of `preferringURI` first, the rest in a stable order. Other URIs' entries
-    /// are deduplicated (see `collapsingHistoricalDuplicates`); `preferringURI`'s own are kept as they are, since a
-    /// hover on an old blob asks about the revision it names.
-    public func documentation(forIdentifier name: String, preferringURI uri: String?) -> [DocEntry] {
-        let matches = matches(named: name)
+    /// Entries named exactly `name` in the files that answer for `side`, those of `preferringURI` first, the rest in a
+    /// stable order. Other URIs' entries are deduplicated (see `collapsingHistoricalDuplicates`); `preferringURI`'s
+    /// own are kept as they are, since a hover on an old blob asks about the revision it names.
+    public func documentation(
+        forIdentifier name: String, preferringURI uri: String?, side: DocIndexSides = .both
+    ) -> [DocEntry] {
+        let matches = matches(named: name, side: side)
         let sameURI = uri.map { queryURI in matches.filter { $0.uri == queryURI } } ?? []
         let otherURIs = uri == nil ? matches : matches.filter { $0.uri != uri }
         var combined = sameURI + Self.collapsingHistoricalDuplicates(otherURIs)
@@ -151,9 +182,13 @@ public actor DocCommentIndex {
         return combined
     }
 
-    /// Every entry named exactly `name`, from its bucket alone.
-    func matches(named name: String) -> [DocEntry] {
-        byName[name]?.values.flatMap(\.self) ?? []
+    /// Every entry named exactly `name` in a file that answers for `side`, from the name's bucket alone.
+    func matches(named name: String, side: DocIndexSides) -> [DocEntry] {
+        var matches: [DocEntry] = []
+        for (uri, entries) in byName[name] ?? [:] where files[uri]?.sides.isDisjoint(with: side) == false {
+            matches += entries
+        }
+        return matches
     }
 
     /// Drops an `atelier-blob://` entry, which is history, when a `file://` entry has the same underlying path, then
