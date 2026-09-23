@@ -114,6 +114,7 @@ final class FakeSourceReader: SourceReading, Sendable {
         var blobContents: [String: String] = [:]
         var gate: [String: AsyncProbe<Void>] = [:]
         var gitRenames: [String: String] = [:]
+        var commits: [String: String] = [:]
         var workingTreeStatuses: [ComparisonSource: [GitStatusEntry]] = [:]
         var entriesReads = 0
         var failingListings: [ComparisonSource: String] = [:]
@@ -190,6 +191,13 @@ final class FakeSourceReader: SourceReading, Sendable {
         set { state.withLock { $0.gitRenames = newValue } }
     }
 
+    /// The commit each ref resolves to, which a test moves the way a commit or a checkout does; a ref without one
+    /// resolves to itself, and so never moves.
+    var commits: [String: String] {
+        get { state.withLock { $0.commits } }
+        set { state.withLock { $0.commits = newValue } }
+    }
+
     func repositoryInfo(containing url: URL) async -> RepositoryInfo? {
         repositoryInfoRequests.send(url)
         if let gate = gate["repositoryInfo:\(url.path(percentEncoded: false))"] {
@@ -199,6 +207,10 @@ final class FakeSourceReader: SourceReading, Sendable {
     }
 
     func renames(from left: ComparisonSource, to right: ComparisonSource) async -> [String: String] { gitRenames }
+
+    func resolve(ref: String, in repository: URL) async throws -> String {
+        commits[ref] ?? ref
+    }
 
     func entries(of source: ComparisonSource) async throws -> [SourceEntry] {
         state.withLock { $0.entriesReads += 1 }
