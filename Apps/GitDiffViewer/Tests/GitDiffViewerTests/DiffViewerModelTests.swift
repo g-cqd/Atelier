@@ -201,7 +201,7 @@ struct DiffViewerModelTests {
         sut.settings.isolatesChanges = true
         sut.select("a.swift")
         try await harness.taskProvider.waitForAllTasks()
-        let marker = try #require(sut.rendered?.old?.rows.first?.gap)
+        let marker = try #require(sut.rendered?.old?.gaps.first?.marker)
         #expect(marker.isLeading)
 
         harness.drag(sut, .extendsChangeBelow, of: marker, rows: 4)
