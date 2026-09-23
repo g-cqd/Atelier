@@ -51,10 +51,11 @@ struct PipelineHarness {
             granularity: .word, heuristics: DiffHeuristics(), keepingPublished: keepingPublished)
     }
 
-    /// The gap above the first hunk of the card at `index`, on its new side.
+    /// The gap above the first hunk of the card at `index`, on its new side, or its only side when inline.
     func leadingGap(ofCard index: Int) -> GapMarker? {
         guard sut.cards.indices.contains(index) else { return nil }
-        return sut.cards[index].rendered.new?.rows.first?.gap
+        let rendered = sut.cards[index].rendered
+        return (rendered.new ?? rendered.unified)?.rows.first?.gap
     }
 
     /// Drags the leading gap of the card at `index` to reveal `rows` rows above its hunk.
