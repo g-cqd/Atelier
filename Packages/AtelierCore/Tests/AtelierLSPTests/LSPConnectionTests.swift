@@ -57,9 +57,7 @@ struct LSPConnectionTests {
         async let second = connection.request("b", EmptyParams(), as: Payload.self)
         await transport.sink.waitForCount(2)
 
-        // `async let` does not promise which of two child tasks actually reaches the actor -- and so sends its
-        // frame -- first; match each envelope by its method rather than by array position, so this assertion
-        // holds regardless of which one the scheduler happened to run first.
+        // `async let` does not order the two sends, so envelopes are matched by method, not by position.
         let frames = await transport.sink.all
         let envelopes = try frames.map { try JSONDecoder().decode(SentEnvelope.self, from: unframe($0)) }
         let firstID = try #require(envelopes.first { $0.method == "a" }?.id)

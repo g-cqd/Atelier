@@ -2,51 +2,19 @@ public import AtelierSyntaxModel
 public import Foundation
 
 /// On-device Apple SDK documentation through sourcekit-lsp: a synthetic document mirroring the hovered file's
-/// imports probes the identifier against the toolchain's own modules -- no network, no project build context.
+/// imports probes the hovered identifier chain against the toolchain's own modules, with no network and no project
+/// build context.
 ///
-/// ## Mechanics
-/// 1. Extract the hovered identifier and its dotted chain (e.g. `NSVisualEffectView.Material.hudWindow`) by
-///    scanning the hovered line around `utf16Column` for `[A-Za-z0-9_$.]` runs, trimming leading/trailing dots.
-/// 2. Fast-reject chains sourcekit-lsp could never resolve without more context: a bare lowercase-leading
-///    identifier with no dot (a member name without a receiver, e.g. hovering `hudWindow` alone) returns `nil`
-///    before any LSP traffic.
-/// 3. Collect `import X` lines from the hovered document (deduped, capped at 12), unioned with
-///    ``defaultImports``.
-/// 4. Synthesize a scratch Swift file: the imports, then a probe expression built from the chain --
-///    `let _ = <chain>` when the chain starts with an uppercase letter (a type or type-qualified member, which
-///    resolves as an expression on its own), `let _ = { <chain> }` as a fallback so a call-shaped or
-///    lowercase-rooted-but-import-qualified chain still parses as a closure body. The hover position within that
-///    line targets the *last* dot-separated segment of the chain -- `NSVisualEffectView.Material.hudWindow`
-///    hovers at `hudWindow`, not the leading `NSVisualEffectView` -- since sourcekit-lsp resolves a dotted
-///    expression per-token, not for the chain as a whole; targeting the head would answer with the outermost
-///    type's own declaration (and typically no prose) regardless of which member was actually being asked about.
-/// 5. `didOpen` the synthetic document at a fabricated `file://` URI under a scratch temp directory, hover at
-///    that position, and map any non-empty result to ``HoverContent`` with ``HoverContent/Source-swift.enum/sdk``.
-/// 6. When that first probe's answer has no prose (a bare declaration, or nothing at all) and the chain starts
-///    with an uppercase letter, retry once with a second, type-position probe -- `typealias _AtelierProbe =
-///    <chain>` -- hovering the chain there instead. Some toolchains resolve a type's bare value-position
-///    reference to an unapplied initializer overload list rather than the type itself (no prose either way, but
-///    a different, unhelpful answer); the type-position form asks for the type itself unambiguously. Whichever
-///    of the two answers has prose wins; if neither does, the first (already-fetched) answer is kept -- some
-///    answer beats none. At most two probes are ever sent per query, and only the final chosen answer is cached.
-///
-/// ## Limits (honest, live-verified against a real toolchain)
-/// - Declarations resolve reliably; doc comments surface only when the SDK's `.swiftdoc` carries them.
-/// - Availability annotations and the online-only long-form discussion Xcode shows are absent.
-/// - Old plain-comment Objective-C headers give a declaration only, no prose, even after the second probe.
-/// - A bare member name with no receiver and no qualifying import (e.g. hovering `foo` in `x.foo`) is rejected
-///   before any LSP call; only the qualified chain resolves.
-///
-/// ## Caching
-/// An LRU keyed on `(chain, sorted imports)` caches both hits and misses (`nil` included), since a toolchain's
-/// answer for a given chain+imports pair is immutable for the lifetime of the process -- the underlying SDK
-/// does not change out from under a running app. Capacity is set at ``init(service:defaultImports:cacheCapacity:)``.
+/// Declarations resolve reliably; prose appears only where the SDK's `.swiftdoc` carries it, so availability, the
+/// online-only discussion and plain-comment Objective-C headers give none. A bare lowercase name with no receiver
+/// is rejected before any request, and a query sends at most two probes. Answers, misses included, are cached in an
+/// LRU keyed on the chain and its sorted imports, since the SDK cannot change under a running app.
 public actor SDKDocumentationProvider: HoverProvider {
     private let service: SourceKitLSPService
     private let defaultImports: [String]
     private let cacheCapacity: Int
 
-    /// LRU cache: most-recently-used at the end of `order`. `nil` values are meaningful (a cached miss).
+    /// Most recently used last in `order`; a `nil` value is a cached miss.
     private var cache: [CacheKey: HoverContent?] = [:]
     private var order: [CacheKey] = []
 
@@ -88,9 +56,8 @@ public actor SDKDocumentationProvider: HoverProvider {
 
     // MARK: - Probing
 
-    /// Runs the primary (value-position) probe; when it has nothing to show or no prose and the chain names a
-    /// type (starts uppercase), retries once with a type-position probe instead. See the type-level doc comment,
-    /// point 6, for why a second attempt is worthwhile and why it is only ever a second attempt.
+    /// The value-position probe's answer or, when it has no prose and the chain starts uppercase, a type-position
+    /// probe's answer if that one has prose.
     private func probeWithFallback(chain: String, chainStartsUppercase: Bool, imports: [String]) async
         -> HoverContent?
     {
@@ -115,9 +82,8 @@ public actor SDKDocumentationProvider: HoverProvider {
         let probeLineIndex = lines.count
         let prefix: String
         if typePosition {
-            // A type-position reference: some toolchains resolve a bare value-position `let _ = Type` to an
-            // unapplied initializer overload list instead of the type itself when `Type` is initializable in a
-            // way that reads as call-shaped; a `typealias` target is unambiguously the type.
+            // Some toolchains resolve a value-position `let _ = Type` to its initializer overloads; a `typealias`
+            // target is unambiguously the type.
             prefix = "typealias _AtelierProbe = "
             lines.append("\(prefix)\(chain)")
         } else if chainStartsUppercase {
@@ -129,9 +95,7 @@ public actor SDKDocumentationProvider: HoverProvider {
         }
         let content = lines.joined(separator: "\n")
 
-        // Hover at the chain's *last* dot-separated segment: sourcekit-lsp resolves a dotted expression
-        // per-token, so hovering the head of `NSVisualEffectView.Material.hudWindow` answers with
-        // `NSVisualEffectView` itself (no prose) regardless of which member the chain actually names.
+        // sourcekit-lsp resolves a dotted expression per token, so the hover targets the chain's last segment.
         let column = prefix.utf16.count + Self.tailSegmentOffset(in: chain)
 
         guard
@@ -177,11 +141,8 @@ public actor SDKDocumentationProvider: HoverProvider {
         let startsUppercase: Bool
     }
 
-    /// Extracts the dotted identifier chain touching `(line, utf16Column)`, e.g. hovering anywhere in
-    /// `NSVisualEffectView.Material.hudWindow` (including mid-chain, or on a trailing dot) yields the whole
-    /// chain with leading/trailing dots trimmed. Returns `nil` when there is no identifier run under the
-    /// position, or when the chain is a bare member name (no dot, lowercase-leading) that sourcekit-lsp could
-    /// never resolve without a receiver -- rejected here so no LSP traffic is spent on it.
+    /// The whole dotted identifier chain touching `(line, utf16Column)`, trimmed of outer dots; nil when no chain is
+    /// there or when it is a bare lowercase name, which a probe cannot resolve without its receiver.
     static func extractChain(in content: String, line: Int, utf16Column: Int) -> ChainExtraction? {
         let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
         guard line >= 0, line < lines.count, utf16Column >= 0 else { return nil }
@@ -194,8 +155,7 @@ public actor SDKDocumentationProvider: HoverProvider {
             return CharacterSet.alphanumerics.contains(scalar) || scalar == "_" || scalar == "$" || scalar == "."
         }
 
-        // A hover exactly at end-of-line, or on trivia, still wants the run immediately to its left, matching
-        // how editors report the cursor after the last character of a token.
+        // A hover just past the line's last character still means the token before it.
         var probeColumn = utf16Column
         if probeColumn == lineText.count, probeColumn > 0, isChainUnit(lineText[probeColumn - 1]) {
             probeColumn -= 1
@@ -216,16 +176,13 @@ public actor SDKDocumentationProvider: HoverProvider {
         let startsUppercase = firstCharacter.isUppercase
         let isDotted = chain.contains(".")
 
-        // A bare, undotted, lowercase-leading name is a local identifier or a member name without its
-        // receiver in view (e.g. hovering `hudWindow` alone, rather than `Material.hudWindow`); sourcekit-lsp
-        // has nothing to resolve it against in a synthetic probe, so reject before any LSP call.
         guard isDotted || startsUppercase else { return nil }
 
         return ChainExtraction(chain: chain, startsUppercase: startsUppercase)
     }
 
-    /// `import X` lines in `content` (leading whitespace tolerated, `@testable`/submodule imports skipped),
-    /// deduped and unioned with `defaults`, capped at 12 total imports.
+    /// The top-level modules of `content`'s plain `import` lines, unioned with `defaults`: sorted, unique, and at
+    /// most 12.
     static func collectImports(in content: String, unioning defaults: [String]) -> [String] {
         var seen: Set<String> = []
         var result: [String] = []
@@ -239,7 +196,6 @@ public actor SDKDocumentationProvider: HoverProvider {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             guard line.hasPrefix("import ") else { continue }
             let rest = line.dropFirst("import ".count).trimmingCharacters(in: .whitespaces)
-            // Only take the top-level module name: `import Foundation.NSString` -> `Foundation`.
             guard let module = rest.split(separator: ".").first, !module.isEmpty else { continue }
             add(String(module))
             if result.count >= 12 { break }
@@ -253,9 +209,8 @@ public actor SDKDocumentationProvider: HoverProvider {
 
     // MARK: - Scratch service convenience
 
-    /// A ``SourceKitLSPService`` configured with a scratch temp-directory workspace root, suitable for
-    /// ``SDKDocumentationProvider``'s synthetic probes: the workspace itself is never inspected for symbols,
-    /// only used as sourcekit-lsp's `rootUri`, so any writable directory works.
+    /// A ``SourceKitLSPService`` rooted at a scratch temporary directory: the probes never read the workspace, so any
+    /// writable directory serves as sourcekit-lsp's `rootUri`.
     public static func makeScratchService(
         serverExecutable: URL,
         serverArguments: [String] = [],
