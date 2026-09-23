@@ -1,11 +1,3 @@
-// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
-// swiftlint:disable file_length function_body_length type_body_length
-struct FlatProduction: Sendable, Equatable {
-    var name: String
-    var symbols: [String]
-    var fields: [Int: String]
-}
-
 public struct GrammarCompilationLimits: Sendable, Equatable {
     public var maxExpandedAlternativesPerRule: Int
     public var maxFlattenedProductions: Int
@@ -33,77 +25,14 @@ public struct GrammarCompilationLimits: Sendable, Equatable {
     public static let `default` = GrammarCompilationLimits()
 }
 
-private struct FlatSequence: Sendable, Equatable {
-    var symbols: [String]
-    var fields: [Int: String]
-
-    static let empty = FlatSequence(symbols: [], fields: [:])
-}
-
-private struct FlattenContext: Sendable {
-    let limits: GrammarCompilationLimits
-    var auxiliaryProductions: [FlatProduction] = []
-    var counter = 0
-    var productionCount = 0
-    var productionSymbolCount = 0
-
-    init(limits: GrammarCompilationLimits) {
-        self.limits = limits
-    }
-
-    mutating func freshName(_ prefix: String) -> String {
-        counter += 1
-        return "\(prefix)_\(counter)"
-    }
-
-    mutating func register(_ production: FlatProduction) throws(GrammarError) {
-        productionCount += 1
-        guard productionCount <= limits.maxFlattenedProductions else {
-            throw .resourceLimitExceeded(
-                "Flattened grammar exceeded limit (\(productionCount) productions, limit \(limits.maxFlattenedProductions))"
-            )
-        }
-
-        productionSymbolCount += production.symbols.count
-        guard productionSymbolCount <= limits.maxProductionSymbols else {
-            throw .resourceLimitExceeded(
-                "Flattened grammar symbol count exceeded limit (\(productionSymbolCount) symbols, limit \(limits.maxProductionSymbols))"
-            )
-        }
-    }
-
-    mutating func appendAuxiliary(_ production: FlatProduction) throws(GrammarError) {
-        try register(production)
-        auxiliaryProductions.append(production)
-    }
-
-    func ensureAlternativeCount(
-        _ count: Int,
-        construct: String,
-        ruleName: String?
-    ) throws(GrammarError) {
-        guard count <= limits.maxExpandedAlternativesPerRule else {
-            let prefix: String
-            if let ruleName {
-                prefix = "\(construct) expansion for \(ruleName)"
-            } else {
-                prefix = "\(construct) expansion"
-            }
-            throw .resourceLimitExceeded(
-                "\(prefix) exceeded limit (\(count) alternatives, limit \(limits.maxExpandedAlternativesPerRule))"
-            )
-        }
-    }
-}
-
 /// Compiles a GrammarDefinition into an LR parse table.
 ///
-/// This is a simplified LR(1) table compiler that:
-/// 1. Flattens grammar rules into productions
+/// A canonical LR(1) compiler that:
+/// 1. Flattens grammar rules into productions, keeping the precedence and associativity of each step
 /// 2. Computes FIRST sets
 /// 3. Builds LR(1) item sets (states)
-/// 4. Fills action/goto tables
-/// 5. Marks unresolvable conflicts for GLR handling
+/// 4. Fills action/goto tables, resolving shift/reduce conflicts by precedence and associativity as tree-sitter does
+/// 5. Keeps the conflicts precedence can't resolve, for the GLR parser to fork on
 public enum ParseTableCompiler: Sendable {
     /// Compiled result containing parse table, lex table, and production rules.
     public struct CompilationResult: Sendable, Codable {
@@ -117,7 +46,7 @@ public enum ParseTableCompiler: Sendable {
         _ grammar: GrammarDefinition,
         limits: GrammarCompilationLimits = .default
     ) throws(GrammarError) -> CompilationResult {
-        let flattened = try flattenRules(grammar, limits: limits)
+        let flattened = try ProductionFlattener.flatten(grammar.rules, limits: limits)
         let nonTerminals = collectNonTerminals(flattened)
         let terminals = collectTerminals(flattened, nonTerminals: Set(nonTerminals))
         let grammarProductions = flattened.map { (name: $0.name, symbols: $0.symbols) }
@@ -140,21 +69,15 @@ public enum ParseTableCompiler: Sendable {
             limits: limits
         )
 
-        // Build parse table
-        let table = buildParseTable(
-            itemSets: itemSets,
-            transitions: transitions,
-            productions: grammarProductions,
-            terminals: terminals,
-            nonTerminals: nonTerminals
-        )
+        let table = ParseActionResolver(productions: flattened, firstSets: firstSets)
+            .parseTable(itemSets: itemSets, transitions: transitions, terminals: terminals, nonTerminals: nonTerminals)
 
-        let productions = flattened.map { prod in
+        let productions = flattened.map { production in
             ProductionRule(
-                name: prod.name,
-                symbolCount: prod.symbols.count,
-                symbols: prod.symbols,
-                fields: prod.fields
+                name: production.name,
+                symbolCount: production.steps.count,
+                symbols: production.symbols,
+                fields: production.fields
             )
         }
 
@@ -169,222 +92,14 @@ public enum ParseTableCompiler: Sendable {
 
     // MARK: - Private
 
-    private static func flattenRules(
-        _ grammar: GrammarDefinition,
-        limits: GrammarCompilationLimits
-    ) throws(GrammarError) -> [FlatProduction] {
-        var productions: [FlatProduction] = []
-        var context = FlattenContext(limits: limits)
-
-        // Add augmented start rule: S' → startSymbol
-        if let first = grammar.rules.first {
-            let startProduction = FlatProduction(name: "_start", symbols: [first.name], fields: [:])
-            try context.register(startProduction)
-            productions.append(startProduction)
-        }
-
-        for (name, rule) in grammar.rules {
-            let expanded = try expandRule(rule, ruleName: name, context: &context)
-            for production in expanded {
-                let flatProduction = FlatProduction(
-                    name: name,
-                    symbols: production.symbols,
-                    fields: production.fields
-                )
-                try context.register(flatProduction)
-                productions.append(flatProduction)
-            }
-        }
-
-        productions.append(contentsOf: context.auxiliaryProductions)
-        return productions
-    }
-
-    private static func expandRule(
-        _ rule: Rule,
-        ruleName: String?,
-        context: inout FlattenContext
-    ) throws(GrammarError) -> [FlatSequence] {
-        switch rule {
-            case .symbol(let name):
-                return [FlatSequence(symbols: [name], fields: [:])]
-            case .string(let value):
-                return [FlatSequence(symbols: ["\"" + value + "\""], fields: [:])]
-            case .pattern:
-                // Patterns become terminal tokens — use a placeholder
-                return [FlatSequence(symbols: ["_pattern"], fields: [:])]
-            case .seq(let members):
-                var result = [FlatSequence.empty]
-                for member in members {
-                    let memberExpanded = try expandRule(member, ruleName: ruleName, context: &context)
-                    let alternativeCount = try checkedAlternativeCount(
-                        lhs: result.count,
-                        rhs: memberExpanded.count,
-                        operation: { $0.multipliedReportingOverflow(by: $1) },
-                        construct: "Sequence",
-                        ruleName: ruleName,
-                        context: context
-                    )
-                    try context.ensureAlternativeCount(
-                        alternativeCount,
-                        construct: "Sequence",
-                        ruleName: ruleName
-                    )
-                    var newResult: [FlatSequence] = []
-                    newResult.reserveCapacity(alternativeCount)
-                    for existing in result {
-                        for expanded in memberExpanded {
-                            newResult.append(combine(existing, expanded))
-                        }
-                    }
-                    result = newResult
-                }
-                return result
-            case .choice(let members):
-                var productions: [FlatSequence] = []
-                for member in members {
-                    let expanded = try expandRule(member, ruleName: ruleName, context: &context)
-                    let alternativeCount = try checkedAlternativeCount(
-                        lhs: productions.count,
-                        rhs: expanded.count,
-                        operation: { $0.addingReportingOverflow($1) },
-                        construct: "Choice",
-                        ruleName: ruleName,
-                        context: context
-                    )
-                    try context.ensureAlternativeCount(
-                        alternativeCount,
-                        construct: "Choice",
-                        ruleName: ruleName
-                    )
-                    productions.append(contentsOf: expanded)
-                }
-                return productions
-            case .repeat(let content):
-                let helperName = context.freshName("_repeat")
-                let inner = try expandRule(content, ruleName: ruleName, context: &context)
-                let recursiveAlternatives = inner.filter { !$0.symbols.isEmpty }
-
-                try context.appendAuxiliary(FlatProduction(name: helperName, symbols: [], fields: [:]))
-                for alternative in recursiveAlternatives {
-                    try context.appendAuxiliary(
-                        FlatProduction(
-                            name: helperName,
-                            symbols: [helperName] + alternative.symbols,
-                            fields: shiftFields(alternative.fields, by: 1)
-                        ))
-                }
-
-                return [FlatSequence(symbols: [helperName], fields: [:])]
-            case .repeat1(let content):
-                let helperName = context.freshName("_repeat1")
-                let inner = try expandRule(content, ruleName: ruleName, context: &context)
-                let recursiveAlternatives = inner.filter { !$0.symbols.isEmpty }
-
-                for alternative in inner {
-                    try context.appendAuxiliary(
-                        FlatProduction(
-                            name: helperName,
-                            symbols: alternative.symbols,
-                            fields: alternative.fields
-                        ))
-                }
-                for alternative in recursiveAlternatives {
-                    try context.appendAuxiliary(
-                        FlatProduction(
-                            name: helperName,
-                            symbols: [helperName] + alternative.symbols,
-                            fields: shiftFields(alternative.fields, by: 1)
-                        ))
-                }
-
-                return [FlatSequence(symbols: [helperName], fields: [:])]
-            case .optional(let content):
-                let expanded = try expandRule(content, ruleName: ruleName, context: &context)
-                let alternativeCount = try checkedAlternativeCount(
-                    lhs: expanded.count,
-                    rhs: 1,
-                    operation: { $0.addingReportingOverflow($1) },
-                    construct: "Optional",
-                    ruleName: ruleName,
-                    context: context
-                )
-                try context.ensureAlternativeCount(
-                    alternativeCount,
-                    construct: "Optional",
-                    ruleName: ruleName
-                )
-                return [FlatSequence.empty] + expanded
-            case .prec(_, let content), .precLeft(_, let content), .precRight(_, let content),
-                .precDynamic(_, let content):
-                return try expandRule(content, ruleName: ruleName, context: &context)
-            case .token(let content), .immediateToken(let content):
-                return try expandRule(content, ruleName: ruleName, context: &context)
-            case .field(let name, let content):
-                return try expandRule(content, ruleName: ruleName, context: &context)
-                    .map { production in
-                        guard !production.symbols.isEmpty else {
-                            return production
-                        }
-
-                        var fields = production.fields
-                        fields[0] = name
-                        return FlatSequence(symbols: production.symbols, fields: fields)
-                    }
-            case .alias(let content, _, _):
-                return try expandRule(content, ruleName: ruleName, context: &context)
-            case .blank:
-                return [FlatSequence.empty]
-        }
-    }
-
-    private static func checkedAlternativeCount(
-        lhs: Int,
-        rhs: Int,
-        operation: (Int, Int) -> (partialValue: Int, overflow: Bool),
-        construct: String,
-        ruleName: String?,
-        context: FlattenContext
-    ) throws(GrammarError) -> Int {
-        let (count, overflowed) = operation(lhs, rhs)
-        guard !overflowed else {
-            let prefix: String
-            if let ruleName {
-                prefix = "\(construct) expansion for \(ruleName)"
-            } else {
-                prefix = "\(construct) expansion"
-            }
-            throw .resourceLimitExceeded(
-                "\(prefix) exceeded limit (overflow while counting alternatives, limit \(context.limits.maxExpandedAlternativesPerRule))"
-            )
-        }
-        return count
-    }
-
-    private static func combine(_ lhs: FlatSequence, _ rhs: FlatSequence) -> FlatSequence {
-        var fields = lhs.fields
-        for (index, name) in rhs.fields {
-            fields[lhs.symbols.count + index] = name
-        }
-
-        return FlatSequence(symbols: lhs.symbols + rhs.symbols, fields: fields)
-    }
-
-    private static func shiftFields(_ fields: [Int: String], by offset: Int) -> [Int: String] {
-        Dictionary(
-            uniqueKeysWithValues: fields.map { (index, name) in
-                (index + offset, name)
-            })
-    }
-
     private static func collectTerminals(
         _ productions: [FlatProduction],
         nonTerminals: Set<String>
     ) -> [String] {
         var terminals = Set<String>()
         for prod in productions {
-            for sym in prod.symbols where !nonTerminals.contains(sym) {
-                terminals.insert(sym)
+            for step in prod.steps where !nonTerminals.contains(step.symbol) {
+                terminals.insert(step.symbol)
             }
         }
         terminals.insert("$end")
@@ -513,87 +228,5 @@ public enum ParseTableCompiler: Sendable {
         }
 
         return (itemSets, transitions)
-    }
-
-    private static func buildParseTable(
-        itemSets: [ItemSet],
-        transitions: [Int: [(symbol: String, target: Int)]],
-        productions: [(name: String, symbols: [String])],
-        terminals: [String],
-        nonTerminals: [String]
-    ) -> ParseTable {
-        let terminalIndex = Dictionary(
-            uniqueKeysWithValues: terminals.enumerated().map { ($1, $0) })
-        let ntIndex = Dictionary(uniqueKeysWithValues: nonTerminals.enumerated().map { ($1, $0) })
-
-        var actions = [[Action]](
-            repeating: [Action](repeating: .error, count: terminals.count), count: itemSets.count)
-        var gotos = [[Int?]](
-            repeating: [Int?](repeating: nil, count: nonTerminals.count), count: itemSets.count)
-
-        for (stateIdx, itemSet) in itemSets.enumerated() {
-            // Fill from transitions (shifts and gotos)
-            if let trans = transitions[stateIdx] {
-                for (symbol, target) in trans {
-                    if let tIdx = terminalIndex[symbol] {
-                        let newAction = Action.shift(target)
-                        actions[stateIdx][tIdx] = resolveConflict(
-                            existing: actions[stateIdx][tIdx], new: newAction)
-                    } else if let ntIdx = ntIndex[symbol] {
-                        gotos[stateIdx][ntIdx] = target
-                    }
-                }
-            }
-
-            // Fill reduces from completed items
-            for item in itemSet.items {
-                let prod = productions[item.ruleIndex]
-                guard item.dotPosition == prod.symbols.count else { continue }
-
-                if item.ruleIndex == 0 {
-                    // Accept
-                    if let tIdx = terminalIndex["$end"] {
-                        actions[stateIdx][tIdx] = .accept
-                    }
-                } else {
-                    if let tIdx = terminalIndex[item.lookahead] {
-                        let newAction = Action.reduce(
-                            ruleIndex: item.ruleIndex,
-                            count: prod.symbols.count,
-                            nonTerminal: prod.name
-                        )
-                        actions[stateIdx][tIdx] = resolveConflict(
-                            existing: actions[stateIdx][tIdx], new: newAction)
-                    }
-                }
-            }
-        }
-
-        return ParseTable(
-            stateCount: itemSets.count,
-            symbols: terminals + nonTerminals,
-            terminals: terminals,
-            nonTerminals: nonTerminals,
-            actions: actions,
-            gotos: gotos
-        )
-    }
-
-    private static func resolveConflict(existing: Action, new: Action) -> Action {
-        switch existing {
-            case .error:
-                return new
-            case .accept:
-                return existing
-            case .shift, .reduce:
-                if existing == new { return existing }
-                // Unresolvable conflict — mark for GLR
-                return .conflict([existing, new])
-            case .conflict(var actions):
-                if !actions.contains(new) {
-                    actions.append(new)
-                }
-                return .conflict(actions)
-        }
     }
 }
