@@ -136,25 +136,25 @@ struct RepositoryFreshnessTests {
     }
 
     @Test
-    func `a skipped directory never reaches the tree callback`() async throws {
+    func `a path under a skipped directory never reaches the tree filter`() async throws {
         let factory = WatcherFactory()
         let sut = harness.makeSUT(factory: factory)
         let root = WatcherHarness.url("/repo")
-        let probe = AsyncProbe<Void>()
-        var treeChanges = 0
-        sut.onTreeChanged = {
-            treeChanges += 1
-            probe.send(())
+        let judged = AsyncProbe<Set<String>>()
+        sut.treeChangeFilter = { paths in
+            judged.send(paths)
+            return true
         }
         sut.comparisonChanged(rightSource: .directory(root), repositoryRoot: root)
         let source = try #require(factory.latest)
 
-        // A legitimate event after the skipped one proves the pipeline is live and only it reloaded.
+        // The skipped path schedules nothing; the legitimate one after it proves the pipeline is live.
         source.send(.directoryChanged("/repo/node_modules/left-pad/index.js"))
-        try await harness.fire(
-            .directoryChanged("/repo/Sources/Foo.swift"), on: source, after: WatcherHarness.treeDebounce, probe: probe)
+        source.send(.directoryChanged("/repo/Sources/Foo.swift"))
+        try await harness.clock.waitForSleepers()
+        harness.clock.advance(by: WatcherHarness.treeDebounce)
 
-        #expect(treeChanges == 1)
+        #expect(try await judged.next() == ["Sources/Foo.swift"])
         try await harness.drain(sut)
     }
 
