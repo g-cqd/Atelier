@@ -67,6 +67,14 @@ struct GrammarRegistryTests {
     }
 
     @Test
+    func `a registered dotfile name is found by its full path`() {
+        let registry = GrammarRegistry()
+        registry.register(GrammarRegistry.LanguageEntry(name: "bash", extensions: [".bashrc"], path: "bash"))
+
+        #expect(registry.entry(forFilename: "/home/user/.bashrc")?.name == "bash")
+    }
+
+    @Test
     func `loadManifest registers all 19 languages from bundled languages json`() async throws {
         let grammarsPath = try #require(KittySyntaxResources.bundle.resourcePath)
         let manifestPath = "\(grammarsPath)/Grammars/languages.json"
@@ -91,6 +99,17 @@ struct GrammarRegistryTests {
                 FileManager.default.fileExists(atPath: highlightsPath),
                 "Missing highlights for \(entry.name)")
         }
+    }
+
+    @Test(arguments: [
+        ("component.jsx", "javascript"),
+        ("module.ebuild", "bash"),
+        ("library.eclass", "bash"),
+        (".bashrc", "bash"),
+        ("/home/user/.bash_profile", "bash")
+    ])
+    func `bundled upstream file types select their grammars`(filename: String, language: String) {
+        #expect(LanguageHighlighter.detectLanguage(for: filename) == language)
     }
 
     @Test
