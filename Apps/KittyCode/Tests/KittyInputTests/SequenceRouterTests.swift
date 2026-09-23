@@ -213,6 +213,26 @@ struct SequenceRouterTests {
         try assertSingleKeyEvent(in: [events[1]], expectedKeyCode: 57352)
     }
 
+    @Test
+    func `A stray lead byte before an arrow key yields a replacement character, then the arrow`() throws {
+        var router = makeSUT()
+        let events = router.feedAll([0xC3, 0x1B, 0x5B, 0x41])
+
+        try #require(events.count == 2)
+        let replacement = try requireKeyEvent(events[0])
+        #expect(replacement.keyCode == 0xFFFD)
+        #expect(replacement.associatedText == "\u{FFFD}")
+        try assertSingleKeyEvent(in: [events[1]], expectedKeyCode: 57352)
+    }
+
+    @Test
+    func `A paste with an invalid byte keeps its text around a replacement character`() throws {
+        var router = makeSUT()
+        let bytes = Array("\u{1B}[200~ab".utf8) + [0xFF] + Array("cd\u{1B}[201~".utf8)
+
+        #expect(try requirePasteEvent(router.feedAll(bytes)) == "ab\u{FFFD}cd")
+    }
+
     private func assertSingleKeyEvent(in events: [InputEvent], expectedKeyCode: UInt32) throws {
         let key = try requireKeyEvent(events)
         #expect(key.keyCode == expectedKeyCode)

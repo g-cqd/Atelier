@@ -265,8 +265,8 @@ public struct SequenceRouter: Sendable {
                     buffer.suffix(Self.pasteEndMarker.count).elementsEqual(Self.pasteEndMarker)
                 {
                     let pasteBytes = buffer.dropLast(Self.pasteEndMarker.count)
-                    let text = String(bytes: pasteBytes, encoding: .utf8) ?? ""
-                    events.append(.paste(text))
+                    // Invalid UTF-8 becomes U+FFFD rather than costing the whole paste.
+                    events.append(.paste(String(decoding: pasteBytes, as: UTF8.self)))
                     resetRouting()
                 }
 
@@ -281,6 +281,13 @@ public struct SequenceRouter: Sendable {
                 }
 
             case .utf8Sequence:
+                guard byte & 0b1100_0000 == 0b1000_0000 else {
+                    // Not a continuation byte: the lead byte stands alone as U+FFFD, and this byte starts afresh.
+                    events.append(.key(KeyEvent(keyCode: 0xFFFD, modifiers: utf8Modifiers, associatedText: "\u{FFFD}")))
+                    resetRouting()
+                    feed(byte, into: &events)
+                    return
+                }
                 utf8Buffer.append(byte)
                 if utf8Buffer.count >= utf8ExpectedBytes {
                     let text = String(decoding: utf8Buffer, as: UTF8.self)
