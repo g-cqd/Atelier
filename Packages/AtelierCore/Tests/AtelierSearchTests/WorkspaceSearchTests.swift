@@ -38,11 +38,11 @@ struct WorkspaceSearchTests {
         try writeFile(tmp + "/c.swift", content: "no match here")
 
         let files = [tmp + "/a.swift", tmp + "/b.swift", tmp + "/c.swift"]
-        let pattern = compilePattern(SearchQuery(text: "hello"))!
+        let query = SearchQuery(text: "hello")
 
         let result = await withPool { pool in
             await searchWorkspace(
-                pattern: pattern,
+                query: query,
                 files: files,
                 openBuffers: [:],
                 pool: pool,
@@ -65,11 +65,11 @@ struct WorkspaceSearchTests {
 
         let files = [tmp + "/a.swift"]
         let openBuffers = [tmp + "/a.swift": ["hello world"]]
-        let pattern = compilePattern(SearchQuery(text: "hello"))!
+        let query = SearchQuery(text: "hello")
 
         let result = await withPool { pool in
             await searchWorkspace(
-                pattern: pattern,
+                query: query,
                 files: files,
                 openBuffers: openBuffers,
                 pool: pool,
@@ -92,13 +92,13 @@ struct WorkspaceSearchTests {
         }
 
         let files = (0 ..< 50).map { tmp + "/file\($0).txt" }
-        let pattern = compilePattern(SearchQuery(text: "hello"))!
+        let query = SearchQuery(text: "hello")
 
         let pool = BlockingOffloadPool(width: 1)
         defer { pool.shutdown() }
         let task = Task {
             await searchWorkspace(
-                pattern: pattern,
+                query: query,
                 files: files,
                 openBuffers: [:],
                 pool: pool,
@@ -127,11 +127,11 @@ struct WorkspaceSearchTests {
         try writeFile(tmp + "/many.txt", content: content)
 
         let files = [tmp + "/many.txt"]
-        let pattern = compilePattern(SearchQuery(text: "hello"))!
+        let query = SearchQuery(text: "hello")
 
         let result = await withPool { pool in
             await searchWorkspace(
-                pattern: pattern,
+                query: query,
                 files: files,
                 openBuffers: [:],
                 pool: pool,
@@ -153,11 +153,11 @@ struct WorkspaceSearchTests {
         try writeFile(tmp + "/has_match.txt", content: "hello")
 
         let files = [tmp + "/empty.txt", tmp + "/has_match.txt"]
-        let pattern = compilePattern(SearchQuery(text: "hello"))!
+        let query = SearchQuery(text: "hello")
 
         let result = await withPool { pool in
             await searchWorkspace(
-                pattern: pattern,
+                query: query,
                 files: files,
                 openBuffers: [:],
                 pool: pool,
@@ -177,10 +177,10 @@ struct WorkspaceSearchTests {
         defer { cleanup(tmp) }
 
         try writeFile(tmp + "/a.txt", content: "alpha\nbeta\ngamma")  // no trailing \n
-        let pattern = compilePattern(SearchQuery(text: "gamma"))!
+        let query = SearchQuery(text: "gamma")
         let result = await withPool { pool in
             await searchWorkspace(
-                pattern: pattern, files: [tmp + "/a.txt"], openBuffers: [:], pool: pool,
+                query: query, files: [tmp + "/a.txt"], openBuffers: [:], pool: pool,
                 onProgress: { _ in })
         }
         #expect(result.totalMatchCount == 1)
@@ -193,10 +193,10 @@ struct WorkspaceSearchTests {
 
         // Ends with `\n`, which `split` turns into a final empty line: ["alpha", "beta", ""].
         try writeFile(tmp + "/a.txt", content: "alpha\nbeta\n")
-        let pattern = compilePattern(SearchQuery(text: "beta"))!
+        let query = SearchQuery(text: "beta")
         let result = await withPool { pool in
             await searchWorkspace(
-                pattern: pattern, files: [tmp + "/a.txt"], openBuffers: [:], pool: pool,
+                query: query, files: [tmp + "/a.txt"], openBuffers: [:], pool: pool,
                 onProgress: { _ in })
         }
         #expect(result.totalMatchCount == 1)
@@ -210,10 +210,10 @@ struct WorkspaceSearchTests {
         // An 80 KB single line followed by a matching marker.
         let bigLine = String(repeating: "x", count: 80 * 1024)
         try writeFile(tmp + "/a.txt", content: bigLine + "\nNEEDLE\n")
-        let pattern = compilePattern(SearchQuery(text: "NEEDLE"))!
+        let query = SearchQuery(text: "NEEDLE")
         let result = await withPool { pool in
             await searchWorkspace(
-                pattern: pattern, files: [tmp + "/a.txt"], openBuffers: [:], pool: pool,
+                query: query, files: [tmp + "/a.txt"], openBuffers: [:], pool: pool,
                 onProgress: { _ in })
         }
         #expect(result.totalMatchCount == 1)
@@ -225,24 +225,46 @@ struct WorkspaceSearchTests {
         defer { cleanup(tmp) }
 
         try writeFile(tmp + "/a.txt", content: "alpha\r\nbeta\r\n")
-        let pattern = compilePattern(SearchQuery(text: "beta"))!
+        let query = SearchQuery(text: "beta")
         let result = await withPool { pool in
             await searchWorkspace(
-                pattern: pattern, files: [tmp + "/a.txt"], openBuffers: [:], pool: pool,
+                query: query, files: [tmp + "/a.txt"], openBuffers: [:], pool: pool,
                 onProgress: { _ in })
         }
         #expect(result.totalMatchCount == 1)
     }
 
     @Test
-    func `a search over no files finds nothing`() async throws {
-        let pattern = try #require(compilePattern(SearchQuery(text: "needle")))
-
+    func `a search over no files finds nothing`() async {
         let result = await withPool { pool in
-            await searchWorkspace(pattern: pattern, files: [], openBuffers: [:], pool: pool, onProgress: { _ in })
+            await searchWorkspace(
+                query: SearchQuery(text: "needle"), files: [], openBuffers: [:], pool: pool, onProgress: { _ in })
         }
 
         #expect(result.totalMatchCount == 0)
         #expect(result.filesSearched == 0)
+    }
+
+    @Test
+    func `a result carries the query it ran`() async {
+        let query = SearchQuery(text: "Needle", isCaseSensitive: true, isRegex: false, wholeWord: true)
+
+        let result = await withPool { pool in
+            await searchWorkspace(query: query, files: [], openBuffers: [:], pool: pool, onProgress: { _ in })
+        }
+
+        #expect(result.query == query)
+    }
+
+    @Test
+    func `an invalid regular expression finds nothing and still reports its query`() async {
+        let query = SearchQuery(text: "(unclosed", isRegex: true)
+
+        let result = await withPool { pool in
+            await searchWorkspace(query: query, files: [], openBuffers: [:], pool: pool, onProgress: { _ in })
+        }
+
+        #expect(result.query == query)
+        #expect(result.totalMatchCount == 0)
     }
 }
