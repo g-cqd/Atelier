@@ -1,5 +1,12 @@
 public import AtelierSyntaxModel
+import Darwin
 public import Foundation
+
+/// Why the SDK tier's private probe directory could not be created.
+public enum SDKProbeDirectoryError: Error, Sendable, Equatable {
+    /// `mkdtemp(3)` failed under the parent directory at `parentPath`, with `code` as its `errno`.
+    case creationFailed(parentPath: String, code: Int32)
+}
 
 /// On-device Apple SDK documentation through sourcekit-lsp: a synthetic document mirroring the hovered file's
 /// imports probes the hovered identifier chain against the toolchain's own modules, with no network and no project
@@ -11,6 +18,8 @@ public import Foundation
 /// LRU keyed on the chain and its sorted imports, since the SDK cannot change under a running app.
 public actor SDKDocumentationProvider: HoverProvider {
     private let service: SourceKitLSPService
+    /// The directory every probe document is named under: the service's workspace root.
+    private let probeRoot: URL
     private let defaultImports: [String]
     private let cacheCapacity: Int
 
@@ -32,6 +41,7 @@ public actor SDKDocumentationProvider: HoverProvider {
         cacheCapacity: Int = 256
     ) {
         self.service = service
+        probeRoot = service.workspaceRoot
         self.defaultImports = defaultImports
         self.cacheCapacity = cacheCapacity
     }
@@ -76,7 +86,7 @@ public actor SDKDocumentationProvider: HoverProvider {
         -> HoverContent?
     {
         syntheticDocumentCounter += 1
-        let uri = "file:///tmp/atelier-sdk-probe/probe-\(syntheticDocumentCounter).swift"
+        let uri = probeRoot.appending(path: "probe-\(syntheticDocumentCounter).swift").absoluteString
 
         var lines: [String] = imports.map { "import \($0)" }
         let probeLineIndex = lines.count
@@ -209,20 +219,40 @@ public actor SDKDocumentationProvider: HoverProvider {
 
     // MARK: - Scratch service convenience
 
-    /// A ``SourceKitLSPService`` rooted at a scratch temporary directory: the probes never read the workspace, so any
-    /// writable directory serves as sourcekit-lsp's `rootUri`.
+    /// A ``SourceKitLSPService`` rooted at a new private probe directory (``makeProbeDirectory(in:)``), which every
+    /// probe document is named under. The probes send their content inline and never read the workspace, so the
+    /// empty directory serves as sourcekit-lsp's `rootUri`. The caller owns the directory, and removes it once the
+    /// service has shut down.
+    /// - Throws: ``SDKProbeDirectoryError/creationFailed(parentPath:code:)`` when the directory cannot be created.
     public static func makeScratchService(
         serverExecutable: URL,
         serverArguments: [String] = [],
         idleShutdown: Duration = .seconds(180),
-        requestTimeout: Duration = .seconds(2)
-    ) -> SourceKitLSPService {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("atelier-sdk-probe", isDirectory: true)
-        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        requestTimeout: Duration = .seconds(2),
+        parentDirectory: URL = FileManager.default.temporaryDirectory
+    ) throws(SDKProbeDirectoryError) -> SourceKitLSPService {
+        let root = try makeProbeDirectory(in: parentDirectory)
         let configuration = SourceKitLSPService.Configuration(
             serverExecutable: serverExecutable, serverArguments: serverArguments, workspaceRoot: root,
             idleShutdown: idleShutdown, requestTimeout: requestTimeout)
         return SourceKitLSPService(configuration: configuration)
+    }
+
+    /// Creates a new directory under `parent` with `mkdtemp(3)`: its name is unique, and only the current user can
+    /// read, write or enter it (mode 0700), so no other account can plant a file under a probe document.
+    /// - Throws: ``SDKProbeDirectoryError/creationFailed(parentPath:code:)`` when `mkdtemp` fails.
+    public static func makeProbeDirectory(
+        in parent: URL = FileManager.default.temporaryDirectory
+    ) throws(SDKProbeDirectoryError) -> URL {
+        let parentPath = parent.path(percentEncoded: false)
+        var template = Array(parent.appending(path: "atelier-sdk-probe.XXXXXX").path(percentEncoded: false).utf8CString)
+        // `mkdtemp` rewrites the trailing X's in place and returns its argument, or nil with `errno` set.
+        let failure: Int32? = template.withUnsafeMutableBufferPointer { buffer in
+            guard let base = buffer.baseAddress else { return EINVAL }
+            return mkdtemp(base) == nil ? errno : nil
+        }
+        if let failure { throw .creationFailed(parentPath: parentPath, code: failure) }
+        let path = String(decoding: template.dropLast().map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        return URL(filePath: path, directoryHint: .isDirectory)
     }
 }

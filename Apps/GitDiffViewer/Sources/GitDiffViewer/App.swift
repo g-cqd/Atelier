@@ -200,7 +200,14 @@ final class AppServices {
             sdkHoverState = .some(nil)
             return nil
         }
-        let service = SDKDocumentationProvider.makeScratchService(serverExecutable: located.url)
+        let service: SourceKitLSPService
+        do {
+            service = try SDKDocumentationProvider.makeScratchService(serverExecutable: located.url)
+        } catch {
+            PhaseTrace.log("SDK documentation is off: \(error)")
+            sdkHoverState = .some(nil)
+            return nil
+        }
         sdkScratchService = service
         let provider = SDKDocumentationProvider(service: service)
         sdkHoverState = provider
@@ -257,13 +264,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
                 await registry.shutdownAll()
-                await scratch?.shutdown()
+                guard let scratch else { return }
+                await scratch.shutdown()
+                removeProbeDirectory(at: scratch.workspaceRoot)
             }
             group.addTask {
                 try? await Task.sleep(for: .seconds(1))
             }
             await group.next()
             group.cancelAll()
+        }
+    }
+
+    /// Removes the SDK tier's private probe directory once its session has shut down.
+    nonisolated private static func removeProbeDirectory(at directory: URL) {
+        do {
+            try FileManager.default.removeItem(at: directory)
+        } catch {
+            PhaseTrace.log("the SDK probe directory stays at \(directory.path(percentEncoded: false)): \(error)")
         }
     }
 
