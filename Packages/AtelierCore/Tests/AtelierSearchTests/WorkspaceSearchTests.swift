@@ -169,7 +169,7 @@ struct WorkspaceSearchTests {
         #expect(result.filesSearched == 2)
     }
 
-    /// The mapped-file reader splits lines like `split(separator: "\n", omittingEmptySubsequences: false)`: with and
+    /// The file reader splits lines like `split(separator: "\n", omittingEmptySubsequences: false)`: with and
     /// without a final newline, across a line over 64 KB, and with CRLF endings.
     @Test("file without trailing newline counts every line")
     func streamingNoTrailingNewline() async throws {

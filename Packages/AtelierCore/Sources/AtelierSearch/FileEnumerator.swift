@@ -1,6 +1,13 @@
-import AemiKernels
 import Foundation
 
+/// The files a workspace search reads under `rootPath`, listed without being opened: the search's own read skips
+/// binary and oversized files, so that each file is opened once.
+/// - Parameters:
+///   - rootPath: The folder to walk.
+///   - excludeGlobs: Names of directories and files left out wherever they appear.
+///   - includeHidden: Whether names starting with a dot are listed.
+///   - gitIgnoredPaths: Absolute paths of the files git ignores.
+/// - Returns: Absolute paths, symbolic links resolved.
 public func enumerateSearchableFiles(
     rootPath: String,
     excludeGlobs: [String] = [".git", ".build", "build"],
@@ -40,18 +47,8 @@ public func enumerateSearchableFiles(
         // Skip gitignored paths
         if gitIgnoredPaths.contains(absolutePath) { continue }
 
-        // Skip binary files (check first 8KB for null bytes)
-        if isBinaryFile(at: absolutePath) { continue }
-
         results.append(absolutePath)
     }
 
     return results
-}
-
-private func isBinaryFile(at path: String) -> Bool {
-    guard let handle = FileHandle(forReadingAtPath: path) else { return false }
-    defer { try? handle.close() }
-    guard let data = try? handle.read(upToCount: 8192) else { return false }
-    return AemiKernels.firstIndexOfByte(0, in: [UInt8](data)) != nil
 }

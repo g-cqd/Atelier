@@ -137,8 +137,8 @@ let package = Package(
             dependencies: ["AtelierGit", "AtelierProcess"],
             swiftSettings: strict
         ),
-        // Workspace search: file enumeration, literal and regex matching over mapped files on the blocking pool,
-        // and replacement templates.
+        // Workspace search: file enumeration, literal and regex matching over files read on the blocking pool, and
+        // replacement templates.
         .target(
             name: "AtelierSearch",
             dependencies: [
@@ -166,7 +166,10 @@ let package = Package(
             swiftSettings: strict),
         .testTarget(
             name: "AtelierSearchTests",
-            dependencies: ["AtelierSearch", .product(name: "AemiRuntime", package: "aemi")],
+            dependencies: [
+                "AtelierSearch", .product(name: "AemiIO", package: "aemi"),
+                .product(name: "AemiRuntime", package: "aemi")
+            ],
             swiftSettings: strict),
         // Themes as values keyed by highlight role, with Xcode theme import; the apps bridge to their colour types.
         .target(name: "AtelierTheme", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),

@@ -77,19 +77,18 @@ struct FileEnumeratorTests {
         #expect(files[0].hasSuffix("keep.txt"))
     }
 
-    @Test("excludes binary files")
-    func excludesBinaryFiles() throws {
+    /// The enumerator opens no file: the search's one read of each file finds the binary ones.
+    @Test
+    func `a binary file is listed, left to the search's own read`() throws {
         let tmp = try makeTempDir()
         defer { cleanup(tmp) }
 
         try writeFile(tmp + "/text.txt", content: "hello world")
-        // Write binary file with null bytes
-        let binaryData = Data([0x48, 0x65, 0x6C, 0x00, 0x6C, 0x6F])
-        try binaryData.write(to: URL(fileURLWithPath: tmp + "/binary.bin"))
+        try Data([0x48, 0x65, 0x6C, 0x00, 0x6C, 0x6F]).write(to: URL(fileURLWithPath: tmp + "/binary.bin"))
 
         let files = enumerateSearchableFiles(rootPath: tmp)
-        #expect(files.count == 1)
-        #expect(files[0].hasSuffix("text.txt"))
+
+        #expect(Set(files.map { URL(fileURLWithPath: $0).lastPathComponent }) == ["text.txt", "binary.bin"])
     }
 
     @Test("excludes .git directory")
