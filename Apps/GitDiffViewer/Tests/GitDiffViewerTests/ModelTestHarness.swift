@@ -93,6 +93,7 @@ final class FakeSourceReader: SourceReading, Sendable {
         var ignored: [ComparisonSource: [SourceEntry]] = [:]
         var repositories: [URL: RepositoryInfo] = [:]
         var contents: [String: String] = [:]
+        var blobContents: [String: String] = [:]
         var gate: [String: AsyncProbe<Void>] = [:]
         var gitRenames: [String: String] = [:]
         var workingTreeStatuses: [ComparisonSource: [GitStatusEntry]] = [:]
@@ -121,6 +122,12 @@ final class FakeSourceReader: SourceReading, Sendable {
     var contents: [String: String] {
         get { state.withLock { $0.contents } }
         set { state.withLock { $0.contents = newValue } }
+    }
+
+    /// Contents by blob id, served ahead of ``contents``, so the two sides of one path can differ.
+    var blobContents: [String: String] {
+        get { state.withLock { $0.blobContents } }
+        set { state.withLock { $0.blobContents = newValue } }
     }
 
     var ignored: [ComparisonSource: [SourceEntry]] {
@@ -183,6 +190,30 @@ final class FakeSourceReader: SourceReading, Sendable {
         if let gate = gate[entry.relativePath] {
             _ = try await gate.next()
         }
+        if let blobID = entry.blobID, let content = blobContents[blobID] { return content }
         return contents[entry.relativePath] ?? "\(entry.relativePath) \(entry.blobID ?? "")\n"
+    }
+}
+
+/// Renders like the live renderer, except that while ``isHolding`` each render step announces the file indices it
+/// renders on ``steps`` and waits for one element on ``release``, so a test can act while a render step runs.
+final class HoldingPaneRenderer: Sendable {
+    let steps = AsyncProbe<[Int]>()
+    let release = AsyncProbe<Void>()
+    private let holding = Mutex(false)
+
+    var isHolding: Bool {
+        get { holding.withLock { $0 } }
+        set { holding.withLock { $0 = newValue } }
+    }
+
+    var renderer: PaneRenderer {
+        PaneRenderer { [self] jobs, options, layout in
+            if isHolding {
+                steps.send(jobs.map(\.index))
+                _ = try await release.next()
+            }
+            return try await PaneRenderer.live.render(jobs, options: options, layout: layout)
+        }
     }
 }

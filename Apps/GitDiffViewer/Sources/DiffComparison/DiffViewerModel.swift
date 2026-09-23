@@ -145,10 +145,13 @@ package final class DiffViewerModel {
     }
 
     /// What the detail area shows, derived from the model so the view has no logic of its own. Content already
-    /// published outranks a side reload in flight, so a reload keeps the detail views and their scroll position.
+    /// published outranks a side reload or a render in flight, whatever the selection now asks for: a reload, a
+    /// re-comparison or a new diff option keeps the detail views and their scroll position until the replacement
+    /// lands, and only a new selection takes them away at once.
     package var detailState: DetailState {
         if isShowingCombinedFiles, !renderedFiles.isEmpty { return .cards }
         if let rendered { return .file(rendered) }
+        if !renderedFiles.isEmpty { return .cards }
         if left.isLoading || right.isLoading { return .loading }
         if isRendering { return .loading }
         if let renderError { return .error(renderError) }
@@ -286,10 +289,10 @@ package final class DiffViewerModel {
         updateFreshness()
         tabs.keepOnly { comparison.contains($0) }
         if let selectedPath, !comparison.contains(selectedPath) {
-            applySelection(tabs.activePath)
+            applySelection(tabs.activePath, keepingPublished: true)
         } else if selectedPath == nil, let singleFiles = comparison.singleFiles {
             tabs.open(singleFiles.left)
-            applySelection(singleFiles.left)
+            applySelection(singleFiles.left, keepingPublished: true)
         } else {
             render()
         }
@@ -389,7 +392,7 @@ package final class DiffViewerModel {
         timer.begin()
         let leftPath = path.map { side == .left ? $0 : comparison.counterpartPath(of: $0, in: .right) }
         if let leftPath { tabs.open(leftPath) } else { tabs.closeAll() }
-        applySelection(leftPath)
+        applySelection(leftPath, keepingPublished: false)
     }
 
     /// A double click: shows the file or folder in a pinned tab of its own.
@@ -397,35 +400,37 @@ package final class DiffViewerModel {
         timer.begin()
         let leftPath = side == .left ? path : comparison.counterpartPath(of: path, in: .right)
         tabs.pin(leftPath)
-        applySelection(leftPath)
+        applySelection(leftPath, keepingPublished: false)
     }
 
     package func activateTab(_ id: DiffTab.ID) {
         tabs.activate(id)
         guard tabs.activePath != selectedPath else { return }
         timer.begin()
-        applySelection(tabs.activePath)
+        applySelection(tabs.activePath, keepingPublished: false)
     }
 
     package func pinTab(_ id: DiffTab.ID) {
         tabs.pin(id)
         guard tabs.activePath != selectedPath else { return }
         timer.begin()
-        applySelection(tabs.activePath)
+        applySelection(tabs.activePath, keepingPublished: false)
     }
 
     package func closeTab(_ id: DiffTab.ID) {
         tabs.close(id)
         guard tabs.activePath != selectedPath else { return }
         timer.begin()
-        applySelection(tabs.activePath)
+        applySelection(tabs.activePath, keepingPublished: false)
     }
 
-    private func applySelection(_ leftPath: String?) {
+    /// Shows `leftPath`. A selection the user makes takes what is published away at once and streams the new one in;
+    /// one a re-comparison makes, because the selected path went away, keeps what is published until it lands.
+    private func applySelection(_ leftPath: String?, keepingPublished: Bool) {
         selectedPath = leftPath
         navigator.reset()
         folding.reset()
-        render()
+        render(keepingPublished: keepingPublished)
     }
 
     // MARK: Cards
@@ -474,7 +479,9 @@ package final class DiffViewerModel {
         pipeline.expansion(of: key)
     }
 
-    private func render() {
+    /// Renders the selection. Only a selection the user makes passes `keepingPublished: false`; everything else
+    /// (a reload, a re-comparison, a new diff option) keeps what is published on screen until its replacement lands.
+    private func render(keepingPublished: Bool = true) {
         configurePipeline()
         guard let leftSource = left.source, let rightSource = right.source else {
             pipeline.clear()
@@ -501,7 +508,7 @@ package final class DiffViewerModel {
         PhaseTrace.log("render \(target.pairs.count) files")
         pipeline.render(
             target, left: leftSource, right: rightSource, granularity: settings.granularity,
-            heuristics: settings.diffHeuristics)
+            heuristics: settings.diffHeuristics, keepingPublished: keepingPublished)
     }
 
     private func configurePipeline() {

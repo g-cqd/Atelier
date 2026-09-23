@@ -12,7 +12,7 @@ package enum RenderedSide: Sendable, Hashable {
 }
 
 /// Colors and font of the diff panes: the system look, or one derived from an Xcode theme.
-package struct DiffPalette: @unchecked Sendable {
+package struct DiffPalette: @unchecked Sendable, Equatable {
     package let font: NSFont
     package let textColor: NSColor
     package let background: NSColor
