@@ -34,6 +34,13 @@ public final class GLRParser: Sendable {
     static let maxTreeDepth = 16_384
     /// The error a parse throws instead of building a tree deeper than ``maxTreeDepth``.
     static let treeTooDeep = ParseError.parsingFailed("Tree depth exceeds limit \(maxTreeDepth)")
+    /// Tokens between two cancellation checks: a cancelled parse stops within this many tokens.
+    static let cancellationCheckInterval = 256
+
+    /// The error a parse throws when it finds itself cancelled at the token at `index`.
+    static func cancelled(atToken index: Int) -> ParseError {
+        .parsingFailed("Parse cancelled at token \(index)")
+    }
 
     /// Parse source text and produce a syntax tree.
     ///
@@ -42,12 +49,25 @@ public final class GLRParser: Sendable {
     /// build a tree more than 16,384 levels deep declines instead; what it built is freed without recursion, so the
     /// decline is safe on a 512 KiB thread stack.
     ///
-    /// - Throws: `ParseError.parsingFailed` beyond 100,000 tokens, or for a tree deeper than 16,384 levels.
+    /// Synchronous, but it honours the cancellation of the task it runs in: it checks every 256 tokens and stops at
+    /// the first check that finds the task cancelled.
+    ///
+    /// - Throws: `ParseError.parsingFailed` beyond 100,000 tokens, for a tree deeper than 16,384 levels, or when
+    ///   cancelled.
     /// - Complexity: O(t · s · (b + d)) for t tokens, s live stacks (at most 256), b reductions per token and stack
     ///   (at most the table's state count plus the stack's depth d), and d for merging stacks.
     public func parse(
         _ source: String,
         externalScanner: (any ExternalScanner)? = nil
+    ) throws(ParseError) -> SyntaxTree {
+        try parse(source, externalScanner: externalScanner, isCancelled: { Task.isCancelled })
+    }
+
+    /// ``parse(_:externalScanner:)`` with `isCancelled` in place of the task's cancellation.
+    func parse(
+        _ source: String,
+        externalScanner: (any ExternalScanner)?,
+        isCancelled: () -> Bool
     ) throws(ParseError) -> SyntaxTree {
         let lexer = Lexer(lexTable: lexTable, externalScanner: externalScanner)
         let tokens = lexer.tokenize(source)
@@ -68,6 +88,10 @@ public final class GLRParser: Sendable {
 
         var stacks = [ParseStack(state: 0)]
         for (tokenIdx, token) in nonExtraTokens.enumerated() {
+            if tokenIdx.isMultiple(of: Self.cancellationCheckInterval), isCancelled() {
+                ParseStack.releaseAll(&stacks)
+                throw Self.cancelled(atToken: tokenIdx)
+            }
             stacks = try advance(consume stacks, past: token, at: tokenIdx)
         }
         if let endIdx = terminalIndex["$end"] {
