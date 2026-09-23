@@ -7,6 +7,12 @@ public struct SymbolCatalog: Sendable {
         self.entries = entries
     }
 
+    /// A catalog of `mappings` keyed by name, keeping the first mapping of a name listed more than once.
+    /// - Complexity: O(n)
+    public init(mappings: [SymbolMappingEntry]) {
+        self.init(entries: Dictionary(mappings.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first }))
+    }
+
     public subscript(_ name: String) -> SymbolMappingEntry? {
         entries[name]
     }
@@ -14,8 +20,7 @@ public struct SymbolCatalog: Sendable {
     public static func load(from url: URL) throws -> SymbolCatalog {
         let data = try Data(contentsOf: url)
         let mappings = try JSONDecoder().decode([SymbolMappingEntry].self, from: data)
-        let entries = Dictionary(uniqueKeysWithValues: mappings.map { ($0.name, $0) })
-        return SymbolCatalog(entries: entries)
+        return SymbolCatalog(mappings: mappings)
     }
 }
 

@@ -39,7 +39,15 @@ public struct SymbolDiscovery {
             fontCodepoints: nil
         )
 
-        return SymbolCollection(records: publicRecords + privateRecords)
+        return SymbolCollection(records: Self.removingDuplicateNames(publicRecords + privateRecords))
+    }
+
+    /// `records` without the records whose name an earlier record has, so a name in both bundles keeps its public
+    /// record and a name listed twice keeps its first.
+    /// - Complexity: O(n)
+    static func removingDuplicateNames(_ records: [SymbolRecord]) -> [SymbolRecord] {
+        var seen = Set<String>(minimumCapacity: records.count)
+        return records.filter { seen.insert($0.name).inserted }
     }
 
     private func loadSymbolOrder(from bundleURL: URL) throws -> [String] {
