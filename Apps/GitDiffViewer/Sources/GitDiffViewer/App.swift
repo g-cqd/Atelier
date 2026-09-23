@@ -174,9 +174,11 @@ final class AppServices {
         diagnosticsEngine = DiagnosticsEngine(runner: diagnosticsRunner, discovery: toolDiscovery)
 
         let toolDiscovery = toolDiscovery
-        lspRegistry = SourceKitLSPRegistry { root in
-            await Self.sourceKitLSPConfiguration(workspaceRoot: root, toolDiscovery: toolDiscovery)
-        }
+        lspRegistry = SourceKitLSPRegistry(
+            admits: { _ in true },
+            makeConfiguration: { root in
+                await Self.sourceKitLSPConfiguration(workspaceRoot: root, toolDiscovery: toolDiscovery)
+            })
     }
 
     /// The resolved SDK tier; `.some(nil)` records a failed resolution, so it is attempted once per app.
