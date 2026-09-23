@@ -43,9 +43,8 @@ package final class DiffGutterView: NSView {
         didSet { invalidateIntrinsicContentSize() }
     }
 
-    /// Diagnostics for the pane's rows: a row that carries one blends its line number into the severity color over
-    /// a faint underlay, with zero effect on the gutter's own width -- unlike the badge column this replaced (see
-    /// ``thickness``'s own history), a diagnostic never reflows anything around it.
+    /// Diagnostics for the pane's rows: a row with one tints its line number over a faint underlay, without changing
+    /// the gutter's width.
     package var overlay: DiagnosticOverlay? {
         didSet {
             needsDisplay = true
@@ -56,9 +55,8 @@ package final class DiffGutterView: NSView {
     package var onGapDrag: ((GapMarker, GapExpansion, Int) -> Void)?
     /// Expansion currently applied to a gap, captured when a drag starts.
     package var currentExpansion: ((GapKey) -> GapExpansion)?
-    /// Called with a row's diagnostics, the decorated number's own frame (in this view's coordinates), and this
-    /// view itself when it is clicked -- everything an `NSPopover` needs to anchor on the line: `positioned:in:`
-    /// takes both the rect and the view it is relative to.
+    /// Called when a decorated line number is clicked, with its row, its findings, its frame in this view's
+    /// coordinates, and this view, so a popover can anchor on the line.
     package var onDiagnosticClick:
         ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)?
 
@@ -169,9 +167,7 @@ package final class DiffGutterView: NSView {
         }
     }
 
-    /// The row (if any) whose decorated line number sits under `point`, its diagnostics, and the number column's
-    /// own frame -- gap handles take priority in ``mouseDown(with:)`` (a gap row never carries diagnostics of its
-    /// own, so the two never actually compete, but the check order documents the precedence regardless).
+    /// The row whose decorated line number sits under `point`, with its diagnostics and the number's frame.
     private func diagnosticHit(at point: NSPoint) -> (
         rowIndex: Int, diagnostics: DiagnosticOverlay.RowDiagnostics, rect: NSRect
     )? {
@@ -306,9 +302,7 @@ package final class DiffGutterView: NSView {
         }
     }
 
-    /// A faint rounded-rect wash behind a diagnostic-carrying line number, the row's worst severity's colour at
-    /// low alpha: blends with the gutter rather than adding a column of its own, so a row that gains or loses a
-    /// finding never shifts anything else in the pane.
+    /// A faint rounded-rect wash in the severity's colour behind a diagnostic-carrying line number.
     private func drawUnderlay(severity: Finding.Severity, x: CGFloat, top: CGFloat, size: NSSize) {
         let inset: CGFloat = 2
         let rect = NSRect(x: x - inset, y: top - 1, width: size.width + 2 * inset, height: size.height + 2)

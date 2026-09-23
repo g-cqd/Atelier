@@ -4,14 +4,12 @@ package import DiffRendering
 import Foundation
 import Synchronization
 
-/// Whether the calling thread is the process' main thread; used to assert the executor contract of the
-/// `@concurrent` work below stays off it, in debug builds and under tests.
+/// Whether the calling thread is the main thread, for asserting that work runs off it.
 private func isOnMainThread() -> Bool {
     pthread_main_np() != 0
 }
 
-/// Per-pane row annotations: written on the main actor when results land, read on TextKit's own drawing thread.
-/// A `Mutex` makes that cross-thread hand-off safe without pulling drawing onto the main actor.
+/// Per-pane row annotations, written on the main actor and read on TextKit's drawing threads under a `Mutex`.
 package final class DiagnosticOverlay: Sendable {
     /// Everything a row needs to draw its diagnostics: the worst severity present, how many findings landed on
     /// it, the findings themselves (for a click to show), and where to underline within the row's text.
@@ -65,16 +63,10 @@ package final class DiagnosticOverlay: Sendable {
     }
 }
 
-/// Builds a `DiagnosticOverlay`'s row content for one rendered text: findings keyed by comparison-relative path,
-/// with the path each rendered row's `fileIndex` belongs to. A finding annotates the row whose file matches and
-/// whose new-side line number equals the finding's line. When `includesOldSide` is set (``AnalyzedSides/both``),
-/// a removed row (no new-side line) whose old-side line number matches a finding is annotated too — findings
-/// come from analyzing the newer side only, so this old-side echo is best-effort context, not an independent
-/// analysis of the old content; the deeper left-content analysis stays roadmapped.
+/// Builds a `DiagnosticOverlay`'s rows for one rendered text: a finding annotates the row of its file whose new-side
+/// line number matches, and with `includesOldSide` also a removed row whose old-side number matches.
 package enum DiagnosticRowMapper {
-    /// Same mapping as ``rows(for:paths:findings:includesOldSide:)``, guaranteed to run off the main actor
-    /// (SE-0461's `@concurrent`) so the caller can await it from the main actor without blocking it.
-    /// `RenderedText` is `@unchecked Sendable` and `Finding` is fully `Sendable`, so both inputs cross for free.
+    /// The same mapping as ``rows(for:paths:findings:includesOldSide:)``, always off the main actor.
     @concurrent
     package static func rowsOffMain(
         for rendered: RenderedText, paths: [Int: String], findings: [String: [Finding]], includesOldSide: Bool = false

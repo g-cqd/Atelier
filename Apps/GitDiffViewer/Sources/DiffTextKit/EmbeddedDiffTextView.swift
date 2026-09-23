@@ -183,8 +183,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
             textView.backgroundColor = layout.rendered.palette.background
             textView.selectedTextAttributes = [.backgroundColor: layout.rendered.palette.selection]
             self.layout = layout
-            // A new render, or a different file's layout entirely: whatever hover the old content was showing no
-            // longer points at anything real.
+            // A hover over the old content points at nothing once the storage changes.
             hoverController.invalidate()
             // Joining another storage does not invalidate what the view last drew, so the viewport is laid out
             // afresh; off-window only by the coming layout pass, since a viewport there spans the whole document.

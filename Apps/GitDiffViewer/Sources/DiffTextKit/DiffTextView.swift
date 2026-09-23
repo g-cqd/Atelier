@@ -24,12 +24,12 @@ package struct DiffTextView: NSViewRepresentable {
     /// Shows documentation for the identifier under the pointer after it rests there.
     package var hoverEnabled = false
     package var hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)?
-    /// Diagnostics drawn over this pane's rows: a squiggle in the text, and a badge in the gutter.
+    /// Diagnostics drawn over this pane's rows: a squiggle in the text, and a tinted line number in the gutter.
     package var diagnosticOverlay: DiagnosticOverlay?
     /// Bumped by the caller whenever `diagnosticOverlay`'s content changes in place (`replace(_:)`), since the
     /// overlay is a reference type the representable otherwise cannot see change.
     package var diagnosticsVersion = 0
-    /// Called with a row's findings and the clicked badge's frame, in the gutter's own coordinates.
+    /// Called with a row's findings and the clicked line number's frame, in the gutter's coordinates.
     package var onDiagnosticClick:
         ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)?
 
@@ -173,8 +173,7 @@ package struct DiffTextView: NSViewRepresentable {
             coordinator.fragmentProvider.overlay = diagnosticOverlay
             coordinator.gutterView?.overlay = diagnosticOverlay
             coordinator.diagnosticsVersion = diagnosticsVersion
-            // The fragments TextKit has already laid out cache what they drew last: they need to be told the
-            // diagnostics changed under them before a redraw picks the new ones up.
+            // Laid-out fragments cache what they drew, so a diagnostics change must invalidate them.
             if let textView = coordinator.textView, let layoutManager = textView.textLayoutManager {
                 layoutManager.invalidateLayout(for: layoutManager.documentRange)
                 textView.needsLayout = true
@@ -198,8 +197,7 @@ package struct DiffTextView: NSViewRepresentable {
         NotificationCenter.default.removeObserver(coordinator)
     }
 
-    /// Kept as a nested-looking name for callers of `NSViewRepresentable`; the implementation lives at file scope
-    /// in `DiffTextViewCoordinator` so this type doesn't blow the `type_body_length` limit.
+    /// The coordinator, declared at file scope to keep this type under `type_body_length`.
     package typealias Coordinator = DiffTextViewCoordinator
 }
 
