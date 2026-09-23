@@ -295,15 +295,6 @@ public final class GLRParser: Sendable {
         return shifted
     }
 
-    /// What `reduce` did to a stack.
-    private enum Reduction {
-        case reduced
-        /// The table has no GOTO state for the reduction, an error; the stack is as it was.
-        case missingGoto
-        /// The node would be taller than ``GLRParser/maxTreeDepth``; the stack is as it was.
-        case tooDeep
-    }
-
     /// Replaces the top `count` nodes of `stack` with one `nonTerminal` node built by production `rule`, and moves to
     /// the table's GOTO state from the state the first of those nodes was pushed in. Without that GOTO state the
     /// reduction is an error.
@@ -350,7 +341,11 @@ public final class GLRParser: Sendable {
         stack.state = target
         return .reduced
     }
+}
 
+// MARK: - Tree Building
+
+extension GLRParser {
     private func productionFields(for ruleIndex: Int) -> [Int: String] {
         guard productions.indices.contains(ruleIndex) else { return [:] }
         return productions[ruleIndex].fields
@@ -375,4 +370,13 @@ public final class GLRParser: Sendable {
             isNamed: true
         )
     }
+}
+
+/// What `GLRParser.reduce` did to a stack.
+private enum Reduction {
+    case reduced
+    /// The table has no GOTO state for the reduction, an error; the stack is as it was.
+    case missingGoto
+    /// The node would be taller than ``GLRParser/maxTreeDepth``; the stack is as it was.
+    case tooDeep
 }
