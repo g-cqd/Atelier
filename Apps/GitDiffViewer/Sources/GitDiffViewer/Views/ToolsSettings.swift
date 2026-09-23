@@ -65,14 +65,14 @@ struct ToolsSettings: View {
                     Toggle(SettingLabel.diagnosticsEnabled, isOn: $settings.diagnosticsEnabled)
                     Toggle(SettingLabel.showsHoverDocumentation, isOn: $settings.showsHoverDocumentation)
                     Picker(SettingLabel.analyzedSides, selection: $settings.analyzedSides) {
-                        Text("Newer side").tag(AnalyzedSides.newer)
-                        Text("Both sides").tag(AnalyzedSides.both)
+                        ForEach(AnalyzedSides.allCases) { Text($0.displayName).tag($0) }
                     }
                     .disabled(!settings.diagnosticsEnabled)
                     Text(
-                        "Findings on a removed or old line only show with \"Both sides\", and are a best-effort "
-                            + "echo of the newer side's analysis at the same line number, not an independent look "
-                            + "at the old content."
+                        "Each side is analyzed on its own files with its own configuration, and its findings show on "
+                            + "its own rows. A side that is a branch, tag or commit is exported to a private "
+                            + "temporary folder first, in a repository you trust; in any other, only the working "
+                            + "tree is analyzed."
                     )
                     .settingsCaption()
                     Button(SettingLabel.refreshToolStatus) { Task { await refreshAll() } }

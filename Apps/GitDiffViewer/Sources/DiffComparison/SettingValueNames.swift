@@ -47,8 +47,10 @@ extension WhitespaceMode {
 extension AnalyzedSides {
     package var displayName: String {
         switch self {
-            case .newer: "Newer side"
             case .both: "Both sides"
+            case .leftOnly: "Left side only"
+            case .rightOnly: "Right side only"
+            case .none: "No side"
         }
     }
 }
