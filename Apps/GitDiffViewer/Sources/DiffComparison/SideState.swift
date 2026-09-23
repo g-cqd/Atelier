@@ -46,6 +46,9 @@ package final class SideState {
     private var gitBadgeStates: BadgeChangeStates? {
         didSet { onBadgeStatesChanged?() }
     }
+    /// Where each of this side's paths stands in the comparison, merged by the owner from both sides' states; nil
+    /// until the owner merges them.
+    private var comparisonBadgeStates: BadgeChangeStates?
     /// Bumped by every read of git's status and by every load that brings its own; a read that lands after a newer
     /// one started is dropped.
     @ObservationIgnored private var badgeStatesGeneration = 0
@@ -81,9 +84,10 @@ package final class SideState {
         self.taskProvider = taskProvider
     }
 
-    /// Where every path of this side stands against the index, for its badges: git's own answer for a folder inside
-    /// a repository. Until git answers, and for a folder outside every repository, every path is unstaged, the way a
-    /// working copy looks; a ref, a file or a patch is staged throughout.
+    /// Where every path of this side stands against the index: git's own answer for a folder inside a repository.
+    /// Until git answers, and for a folder outside every repository, every path is unstaged, the way a working copy
+    /// looks; a ref, a file or a patch is staged throughout. The owner merges both sides' states into what each
+    /// explorer draws, ``explorerBadgeStates``.
     package var badgeStates: BadgeChangeStates {
         if let gitBadgeStates { return gitBadgeStates }
         if case .directory = source { return .uniform(.unstaged) }
@@ -93,6 +97,19 @@ package final class SideState {
     /// Where `path`, a file or a folder of this side, stands against the index; see ``badgeStates``.
     package func badgeState(of path: String) -> BadgeChangeState {
         badgeStates.state(of: path)
+    }
+
+    /// What this side's explorer draws, keyed by this side's own paths: a change's state in the comparison, which the
+    /// owner merges from both sides' ``badgeStates`` so the same file draws the same state in both explorers
+    /// (CARD-11). In `HEAD` against the working tree, an edit the index does not hold yet draws stroked on the `HEAD`
+    /// side too. This side's own states until the owner merges.
+    package var explorerBadgeStates: BadgeChangeStates {
+        comparisonBadgeStates ?? badgeStates
+    }
+
+    /// Takes the comparison's badge states keyed by this side's paths; see ``explorerBadgeStates``.
+    package func showComparisonBadgeStates(_ states: BadgeChangeStates) {
+        comparisonBadgeStates = states
     }
 
     package var refChoice: RefChoice {

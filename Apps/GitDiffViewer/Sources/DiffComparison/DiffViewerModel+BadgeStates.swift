@@ -13,11 +13,19 @@ extension DiffViewerModel {
         right.refreshBadgeStates()
     }
 
-    /// Rebuilds ``unifiedBadgeStates`` from both sides' states and the comparison's renames.
+    /// Rebuilds ``unifiedBadgeStates`` and each side's ``SideState/explorerBadgeStates`` from both sides' states and
+    /// the comparison's renames. The unified and left explorers name a path by its left-side path, the right explorer
+    /// by its own, and all three draw a change in the same state (CARD-11).
     func updateUnifiedBadgeStates() {
         let comparison = comparison
-        unifiedBadgeStates = .merged(left: left.badgeStates, right: right.badgeStates) {
+        let leftStates = left.badgeStates
+        let rightStates = right.badgeStates
+        let unified = BadgeChangeStates.merged(leftStates, with: rightStates) {
             comparison.counterpartPath(of: $0, in: .right)
         }
+        unifiedBadgeStates = unified
+        left.showComparisonBadgeStates(unified)
+        right.showComparisonBadgeStates(
+            .merged(rightStates, with: leftStates) { comparison.counterpartPath(of: $0, in: .left) })
     }
 }
