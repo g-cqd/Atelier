@@ -2,10 +2,14 @@ import DiffGit
 
 /// The working-tree paths one watcher debounce collected, sorted by what a reload of the folder could make of them
 /// (GDV S2). A write to a listed file, or to a folder holding listed files, shows on reload. A new path shows unless
-/// git ignores it, which only git can tell. The rest never shows: a path under a directory the listing always skips,
-/// a file whose kind the listing leaves out, and a new path in a hidden folder, where editors and build tools keep
-/// their state (sourcekit-lsp's index under `.build` among them).
+/// git ignores it, which only git can tell, dotfiles and hidden folders included. A path under a directory the
+/// listing always skips, or a file whose kind it leaves out, never shows. Nothing under ``toolOutputDirectory``
+/// reloads, listed or not: the tools the app starts write there, and a write of theirs must never reload (PERF-03).
 package struct WorkingTreeWrites: Equatable, Sendable {
+    /// SwiftPM's build directory, where sourcekit-lsp keeps its index (`.build/index-build`), at any depth, so a
+    /// package inside a repository counts too.
+    package static let toolOutputDirectory = ".build"
+
     /// Whether one of the writes hit a listed file or folder, which a reload shows without asking git.
     package let touchesListing: Bool
     /// The writes a reload would list unless git ignores them, sorted; empty once ``touchesListing`` settles it.
@@ -16,7 +20,7 @@ package struct WorkingTreeWrites: Equatable, Sendable {
     ///   - isListed: Whether a path names a listed file or a folder holding listed files.
     package init(_ paths: some Collection<String>, isListed: (String) -> Bool) {
         var unlisted: [String] = []
-        for path in paths.sorted() {
+        for path in paths.sorted() where !Self.liesInToolOutput(path) {
             if isListed(path) {
                 self.init(touchesListing: true, unlisted: [])
                 return
@@ -33,13 +37,14 @@ package struct WorkingTreeWrites: Equatable, Sendable {
         self.unlisted = unlisted
     }
 
-    /// Whether an unlisted `path` could appear in a later listing: not below a skipped directory, not of a kind the
-    /// listing leaves out, and not in or at a hidden component.
+    private static func liesInToolOutput(_ path: String) -> Bool {
+        path.split(separator: "/").contains { $0 == toolOutputDirectory }
+    }
+
+    /// Whether an unlisted `path` could appear in a later listing: not below a skipped directory, and not of a kind
+    /// the listing leaves out.
     private static func mayBeListed(_ path: String) -> Bool {
-        let components = path.split(separator: "/")
-        let isExcluded = components.contains {
-            $0.hasPrefix(".") || SourceLoader.skippedDirectories.contains(String($0))
-        }
-        return !isExcluded && SourceLoader.isSupported(path: path)
+        !path.split(separator: "/").contains { SourceLoader.skippedDirectories.contains(String($0)) }
+            && SourceLoader.isSupported(path: path)
     }
 }
