@@ -126,34 +126,16 @@ public struct SourceLoader: SourceReading {
         return String(decoding: bytes, as: UTF8.self)
     }
 
-    /// Hashes a file through a read-only memory mapping, so no copy of its contents is made. The length comes from
-    /// the open descriptor, not from `size`: a file truncated between the directory scan and this hash would
-    /// otherwise be mapped past its end, and touching such a page raises SIGBUS. A truncation after the descriptor
-    /// is measured is the one window that remains.
-    /// - Parameters:
-    ///   - path: The file to hash.
-    ///   - size: The size the scan saw; only used to skip the mapping of an empty file.
+    /// Hashes a file as git would store it, read in chunks with `pread` rather than mapped: another process can
+    /// truncate a working-tree file at any moment, and touching a mapped page past the new end raises SIGBUS, where
+    /// a short read is only an error. The size comes from the open descriptor, not from an earlier scan.
+    /// - Parameter path: The file to hash.
     /// - Returns: The hex git blob id of the file's current contents.
-    /// - Throws: `IOError` when the file cannot be opened, measured or mapped.
-    public static func blobID(atPath path: String, size: Int) throws -> String {
-        var hasher = Insecure.SHA1()
-        guard size > 0 else {
-            hasher.update(data: Data("blob 0\0".utf8))
-            return Self.hex(hasher.finalize())
-        }
+    /// - Throws: `IOError` when the file cannot be opened, measured or read to its end.
+    public static func blobID(atPath path: String) throws -> String {
         let file = try PosixFile(path: path, mode: .readOnly)
         defer { file.close() }
-        let count = try file.fileSize()
-        hasher.update(data: Data("blob \(count)\0".utf8))
-        if count > 0 {
-            let map = try RawFileMap(fileDescriptor: file.fileDescriptor, capacity: count)
-            // The whole file is read once, front to back: let the kernel page it in ahead of the hash.
-            map.prefetch(offset: 0, length: count)
-            map.withRegion(offset: 0, count: count) { region in
-                region.withUnsafeBytes { hasher.update(bufferPointer: $0) }
-            }
-        }
-        return Self.hex(hasher.finalize())
+        return try blobID(of: file)
     }
 
     /// Salted with the path: files a patch carries without content, such as pure renames or mode changes, would
@@ -192,7 +174,7 @@ public struct FileSource: SourceProvider {
         let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
         let blobID =
             size <= SourceLoader.maximumHashedSize
-            ? try await Self.blobID(atPath: url.path(percentEncoded: false), size: size) : nil
+            ? try await Self.blobID(atPath: url.path(percentEncoded: false)) : nil
         return [GitTreeEntry(relativePath: url.lastPathComponent, blobID: blobID, size: size)]
     }
 
@@ -201,13 +183,14 @@ public struct FileSource: SourceProvider {
     }
 
     @concurrent
-    public static func blobID(atPath path: String, size: Int) async throws -> String {
-        try SourceLoader.blobID(atPath: path, size: size)
+    public static func blobID(atPath path: String) async throws -> String {
+        try SourceLoader.blobID(atPath: path)
     }
 
+    /// The file's bytes, copied with `pread`; see ``SourceLoader/blobID(atPath:)`` for why not mapped.
     @concurrent
     public static func read(_ url: URL) async throws -> Data {
-        try Data(contentsOf: url)
+        try SourceLoader.contents(atPath: url.path(percentEncoded: false))
     }
 }
 
@@ -217,6 +200,9 @@ public struct DirectorySource: SourceProvider {
 
     /// Inside a repository, the folder as git sees it: tracked and untracked files, dotfiles included, nothing
     /// git ignores. Elsewhere, a folder scan that leaves hidden files out.
+    ///
+    /// A file that cannot be hashed, because it vanished, shrank or is not readable since it was listed, is listed
+    /// without a blob id, so it counts as changed and is read when shown, instead of failing the whole folder.
     @concurrent
     public func entries() async throws -> [GitTreeEntry] {
         let files =
@@ -227,8 +213,7 @@ public struct DirectorySource: SourceProvider {
             }
         return try await mapConcurrently(files, limit: SourceLoader.hashingConcurrency) { file in
             let blobID =
-                file.size <= SourceLoader.maximumHashedSize
-                ? try SourceLoader.blobID(atPath: file.fullPath, size: file.size) : nil
+                file.size <= SourceLoader.maximumHashedSize ? try? SourceLoader.blobID(atPath: file.fullPath) : nil
             return GitTreeEntry(relativePath: file.relativePath, blobID: blobID, size: file.size)
         }
     }

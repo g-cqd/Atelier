@@ -180,7 +180,7 @@ let package = Package(
             name: "AtelierSourcesTests",
             dependencies: [
                 "AtelierSources", "AtelierGit", "AtelierProcess", "AtelierSyntaxModel",
-                .product(name: "AemiRuntime", package: "aemi")
+                .product(name: "AemiIO", package: "aemi"), .product(name: "AemiRuntime", package: "aemi")
             ],
             swiftSettings: strict
         ),
