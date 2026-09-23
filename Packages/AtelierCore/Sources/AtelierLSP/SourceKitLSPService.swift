@@ -167,6 +167,10 @@ public actor SourceKitLSPService {
             Self.logger.error("sourcekit-lsp went away during a hover: \(reason, privacy: .public)")
             await abruptTeardown()
             return .unavailable
+        } catch is CancellationError {
+            // The caller moved on, as when the pointer leaves the identifier.
+            Self.logger.debug("A hover was cancelled")
+            return .unavailable
         } catch {
             // A timeout, a server error or an unreadable reply leaves a connection that may still be fine.
             Self.logger.info("A hover got no answer: \(String(describing: error), privacy: .public)")
