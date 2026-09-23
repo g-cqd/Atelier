@@ -1,6 +1,14 @@
 /// Maps tree-sitter capture names (e.g. `"keyword.function"`) to
 /// `(HighlightRole, HighlightModifierSet)` pairs.
 public enum CaptureRoleMapper: Sendable {
+    /// Whether a capture colors text. A name with a leading underscore only feeds a predicate, and `spell`, `nospell`
+    /// and `conceal` steer an editor's spell checking and concealment, so a highlighter skips them: otherwise the
+    /// `@spell` of `(comment) @comment @spell` would restyle the comment.
+    public static func colorsText(_ captureName: String) -> Bool {
+        let name = captureName.hasPrefix("@") ? captureName.dropFirst() : captureName[...]
+        return !name.hasPrefix("_") && !nonColoringNames.contains(name)
+    }
+
     /// Map a tree-sitter capture name to a role and modifier set.
     public static func map(_ captureName: String) -> (role: HighlightRole, modifiers: HighlightModifierSet) {
         let name = captureName.hasPrefix("@") ? String(captureName.dropFirst()) : captureName
@@ -93,8 +101,23 @@ public enum CaptureRoleMapper: Sendable {
         "escape": (.escape, []),
 
         // Delimiter (legacy capture name used by some queries)
-        "delimiter": (.punctuationDelimiter, [])
+        "delimiter": (.punctuationDelimiter, []),
+
+        // Names from older nvim-treesitter queries, which some grammars' own queries still use
+        "conditional": (.keyword, []),
+        "repeat": (.keyword, []),
+        "include": (.keyword, []),
+        "exception": (.keyword, []),
+        "preproc": (.keyword, []),
+        "float": (.numberFloat, []),
+        "parameter": (.variableParameter, []),
+        "field": (.property, []),
+        "method": (.functionMethod, []),
+        "character": (.string, []),
+        "character.special": (.punctuationSpecial, [])
     ]
+
+    private static let nonColoringNames: Set<Substring> = ["spell", "nospell", "conceal"]
 
     private static let lspTokenTypeLookup: [String: HighlightRole] = [
         "namespace": .namespace,
