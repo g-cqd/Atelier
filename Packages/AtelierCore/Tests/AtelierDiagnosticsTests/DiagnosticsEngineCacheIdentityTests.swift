@@ -6,10 +6,8 @@ import Testing
 
 @testable import AtelierDiagnostics
 
-/// ``DiagnosticsEngine``'s cache identity: the root and the ordered path/hash pairs that must both be part of a
-/// per-file tool's cache key, so a rename never aliases the old path and two different repositories never share a
-/// result. Split out of ``DiagnosticsEngineTests`` (whose helpers this reuses) purely to keep that type under the
-/// house style's length limit.
+/// ``DiagnosticsEngine``'s cache identity: a per-file tool's key holds the root and the path/hash pairs, so a rename
+/// never aliases the old path and two repositories never share a result.
 struct DiagnosticsEngineCacheIdentityTests {
     @Test
     func `renaming a file without changing its content busts the cache instead of aliasing the old path`()
@@ -25,8 +23,7 @@ struct DiagnosticsEngineCacheIdentityTests {
             runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
-        // Same content hash, same set of hashes overall, only the path changed: a fingerprint keyed on hashes
-        // alone would see an identical payload and answer from cache under the file's old, now-wrong path.
+        // The same content under a new path: a key of hashes alone would answer from cache under the old path.
         let first = try await engine.run(
             .arcleak,
             request: DiagnosticsEngineTests.request(

@@ -4,9 +4,8 @@ import Testing
 
 @testable import AtelierDiagnostics
 
-/// ``DiagnosticsSession``'s orchestration: fan-out, per-tool delivery and cancellation, exercised against a fake
-/// ``DiagnosticsRunning`` whose per-tool timing is driven by a ``TestClock`` instead of real time. Debouncing and
-/// superseding are the caller's responsibility now, so they are exercised in `DiagnosticsModelTests` instead.
+/// ``DiagnosticsSession``'s fan-out, per-tool delivery and cancellation, against a fake ``DiagnosticsRunning`` whose
+/// per-tool timing is driven by a ``TestClock``.
 struct DiagnosticsSessionTests {
     private static let root = URL(filePath: "/repo")
 
@@ -91,8 +90,8 @@ struct DiagnosticsSessionTests {
     }
 }
 
-/// A ``DiagnosticsRunning`` whose per-tool completion is driven by a shared ``TestClock`` instead of real time, so
-/// tests can pin the exact interleaving of a fan-out deterministically.
+/// A ``DiagnosticsRunning`` whose per-tool completion is driven by a shared ``TestClock``, so a test pins the exact
+/// interleaving of a fan-out.
 private actor FakeDiagnosticsRunner: DiagnosticsRunning {
     private let clock: TestClock
     private var delays: [DiagnosticTool: Duration] = [:]

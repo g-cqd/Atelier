@@ -5,16 +5,8 @@ public enum ToolCommand {
     /// The arguments to analyze `files` under `root`. Tools with ``DiagnosticTool/AnalysisScope-swift.enum/corpus``
     /// scope analyze `root` as a whole and ignore `files`.
     ///
-    /// swiftlint takes no file or path arguments at all: given explicit paths, SwiftLint analyzes exactly those
-    /// paths and never consults its own `included:`/`excluded:` lists, so a project's `.swiftlint.yml` is silently
-    /// bypassed. Run with no arguments and the analysis root as its current directory, SwiftLint discovers
-    /// `.swiftlint.yml` there itself and honors those lists exactly as the project's own `swiftlint` runs do; the
-    /// engine narrows the resulting findings back down to the changed files afterward.
-    ///
-    /// Lockwood's swiftformat is given the same treatment and for the same reason: pointed at explicit files it
-    /// still discovers a nearby `.swiftformat`, but per-directory `--exclude` globs only apply while it is
-    /// traversing on its own, so it is run as `swiftformat --lint .` over the analysis root and its findings are
-    /// narrowed back down afterward, exactly like swiftlint's.
+    /// swiftlint and Lockwood's swiftformat get no file arguments: given explicit paths they skip the project's own
+    /// `included:`/`excluded:` lists and `--exclude` globs, so they run over the root the way the project runs them.
     public static func analyze(_ tool: DiagnosticTool, files: [String], root: URL) -> [String] {
         switch tool {
             case .swiftlint:

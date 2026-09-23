@@ -2,8 +2,7 @@ public import AtelierProcess
 import Darwin
 public import Foundation
 
-/// Whether the calling thread is the process' main thread; used to assert the executor contract of
-/// ``DiagnosticsEngine/parsedFindings(from:tool:root:)`` stays off it, in debug builds and under tests.
+/// Whether the calling thread is the process' main thread, for asserting that parsing stays off it.
 private func isOnMainThread() -> Bool {
     pthread_main_np() != 0
 }
@@ -72,10 +71,8 @@ public actor DiagnosticsEngine {
         }
     }
 
-    /// Identifies a cached run: the exact tool binary (by path and modification date, since a reinstalled or
-    /// updated tool must not reuse a stale result), its configuration, its analysis root (so two different
-    /// repositories, or two windows on the same repository at two different worktree paths, never share a
-    /// result), and its payload.
+    /// Identifies a cached run: the tool binary by path and modification date, so an updated tool never reuses a
+    /// result, its configuration, its analysis root, and its payload.
     private struct CacheKey: Hashable {
         let tool: DiagnosticTool
         let executablePath: String
@@ -194,8 +191,7 @@ public actor DiagnosticsEngine {
 
     // MARK: - Fingerprints
 
-    /// Builds `tool`'s cache key for `request`, run against the tool located at `locatedPath`. Pulled out of
-    /// `run(_:request:)` so that function stays under the house style's length limit.
+    /// `tool`'s cache key for `request`, run with the binary at `locatedPath`.
     private func cacheKey(for tool: DiagnosticTool, request: Request, locatedPath: String) -> CacheKey {
         CacheKey(
             tool: tool, executablePath: locatedPath, executableModification: modificationDate(ofItemAt: locatedPath),
@@ -217,18 +213,13 @@ public actor DiagnosticsEngine {
             .joined(separator: "|")
     }
 
-    /// `root`, resolved to an absolute, symlink-free path: two requests naming the same directory by different
-    /// spellings (a relative path, a trailing slash, a symlinked worktree) must land on the same cache entries,
-    /// and two different directories must never collide on this alone.
+    /// `root` as an absolute, symlink-free path, so every spelling of one directory shares its cache entries.
     private func canonicalRoot(_ root: URL) -> String {
         root.resolvingSymlinksInPath().standardizedFileURL.path
     }
 
-    /// A fingerprint of what is being analyzed: each file's path paired with its content hash (not the hashes
-    /// alone) for a per-file tool, sorted by the pair so the fingerprint stays order-independent while still
-    /// tying every hash to the path it was read from -- renaming a file to another path already present, or
-    /// swapping two files' paths, changes at least one pair and so still busts the cache even though the set of
-    /// hashes alone would not have; the corpus fingerprint as-is for a corpus tool.
+    /// What is being analyzed: for a per-file tool the sorted `path=hash` pairs, so moving content between paths
+    /// still changes it; for a corpus tool the corpus fingerprint.
     private func payloadFingerprint(for tool: DiagnosticTool, request: Request) -> String {
         switch tool.scope {
             case .perFile:
@@ -242,9 +233,7 @@ public actor DiagnosticsEngine {
         let message: String
     }
 
-    /// The tool's output decoded per its format, off the main actor (SE-0461's `@concurrent`): a large SARIF
-    /// payload or a big Xcode text log is real parsing work, freeing the engine's own actor to keep taking other
-    /// tools' results while this one decodes.
+    /// The tool's output decoded per its format on the concurrent executor, so a large log never holds the engine.
     @concurrent
     private static func parsedFindings(
         from output: ProcessOutput, tool: DiagnosticTool, root: URL
@@ -266,8 +255,7 @@ public actor DiagnosticsEngine {
         }
     }
 
-    /// Narrows a corpus tool's findings to the files the caller asked about; a per-file tool's cache key already
-    /// pins the exact file set, so its findings need no filtering.
+    /// Narrows a corpus tool's findings to the requested files; a per-file tool only ran on those.
     private func filterFindings(_ findings: [Finding], tool: DiagnosticTool, request: Request) -> [Finding] {
         guard tool.scope == .corpus else { return findings }
         let paths = Set(request.files.map(\.path))

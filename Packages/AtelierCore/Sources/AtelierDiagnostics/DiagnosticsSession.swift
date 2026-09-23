@@ -1,5 +1,4 @@
-/// What runs one tool over one request; ``DiagnosticsEngine`` is the production conformance, so a test can
-/// substitute a fake with controllable timing instead of spawning real processes.
+/// What runs one tool over one request: ``DiagnosticsEngine`` in production, a fake with controlled timing in tests.
 public protocol DiagnosticsRunning: Sendable {
     func run(_ tool: DiagnosticTool, request: DiagnosticsEngine.Request) async throws -> DiagnosticsEngine.ToolResult
 }
@@ -7,12 +6,10 @@ public protocol DiagnosticsRunning: Sendable {
 extension DiagnosticsEngine: DiagnosticsRunning {}
 
 /// Runs the enabled tools of one request concurrently, one tool per child task, and reports each tool's outcome
-/// as it lands. UI-agnostic so both apps in the workspace can share it behind their own adapters.
+/// as it lands.
 ///
-/// Caller-driven by design: there is no stored task, generation counter or debounce here. The caller structures
-/// the run (a task group, or a task started from its own `TaskProvider`) and owns its lifetime — cancelling that
-/// task cancels every tool still in flight. Pacing (debouncing bursts of calls, superseding an in-flight run)
-/// belongs to the caller too, since only it knows the cadence its own inputs arrive at.
+/// The caller owns the task the run happens in, so cancelling it cancels every tool still in flight, and it paces
+/// its own calls: nothing here debounces or supersedes a run.
 public struct DiagnosticsSession: Sendable {
     /// One tool's outcome, and whether it was the last one still outstanding for its run.
     public struct Update: Sendable {
@@ -31,13 +28,9 @@ public struct DiagnosticsSession: Sendable {
         self.engine = engine
     }
 
-    /// Fans the enabled tools of `request` out concurrently and calls `onUpdate` once per tool as it finishes.
-    /// Disabled tools (``ToolLocation/isEnabled`` false, or simply absent from `request.tools`) never run; an
-    /// empty enabled set returns immediately without calling `onUpdate`.
-    ///
-    /// Returns once every enabled tool has reported. Cancelling the task this is awaited from cancels every
-    /// tool still running; a cancelled tool's contribution is silently dropped rather than delivered, and every
-    /// other failure is already carried in its ``DiagnosticsEngine/ToolResult/status``, not thrown.
+    /// Runs the enabled tools of `request` concurrently and calls `onUpdate` once per tool as it finishes, returning
+    /// once every one has reported. A cancelled tool reports nothing; any other failure arrives in its
+    /// ``DiagnosticsEngine/ToolResult/status``.
     public func analyze(_ request: DiagnosticsEngine.Request, onUpdate: sending (Update) async -> Void) async {
         let enabledTools = Array(request.tools.filter(\.value.isEnabled).keys)
         guard !enabledTools.isEmpty else { return }
