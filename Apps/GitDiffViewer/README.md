@@ -48,7 +48,7 @@ Formatting and the size and complexity gates follow aemi's canonical `.swift-for
 ## Run
 
 ```sh
-./scripts/bundle.sh                                     # release build wrapped in .build/GitDiffViewer.app
+./scripts/bundle.sh                                     # release build with its helpers in .build/GitDiffViewer.app
 open .build/GitDiffViewer.app                           # HEAD vs working tree of the current directory's repository
 open .build/GitDiffViewer.app --args -repo path/to/repo
 open .build/GitDiffViewer.app --args -repo path/to/repo -leftRef main -rightRef feature/x
@@ -68,6 +68,45 @@ or unfolds a folder, and typing a name jumps to it. `⌃⌘S` shows or hides the
 file, as does dropping one on the window: every file of the patch becomes a card, with the old side on the left and
 the new side on the right. A patch only carries the hunks, so lines outside them are shown blank when a gap is
 expanded; line numbers are the real ones.
+
+## Bundle
+
+`scripts/bundle.sh` builds the release app into `.build/GitDiffViewer.app` and puts the diagnostic tools in
+`Contents/Helpers`, where the app looks for them before `PATH`. Each helper comes from one known source; the script
+never falls back to `PATH` and installs nothing.
+
+| Helper | Source | Checked |
+|---|---|---|
+| arcleak, dolly, deadwood | the commit `scripts/helpers.lock` pins, built in a private checkout in `~/Library/Caches/fr.gcqd.GitDiffViewer.build/tools/<tool>` | HEAD is the pinned commit and the tree is clean, before and after the build; the build resolves only the tool's committed `Package.resolved` |
+| swift-format | the Swift 6.4 toolchain that builds the app | signed by Apple or by Swift Open Source |
+| swiftlint, swiftformat | Homebrew's prefix, `$(brew --prefix)/bin` | a Mach-O executable |
+
+Each helper is signed with the hardened runtime, then run once for its version; `Contents/Resources/helpers.txt`
+records the version and source of each. The app is signed last.
+
+`helpers.lock` has one line per analyzer: its name, repository URL and full 40-character commit SHA. To move an
+analyzer to another commit, change its SHA in a commit of its own; the next run fetches that commit by its SHA and
+builds it.
+
+One command builds the app and the analyzers: `$SWIFT` when it is set, otherwise `xcrun swift`, and it must be Swift
+6.4. When `TOOLCHAINS` is unset and Xcode's Swift is not 6.4, the script selects the first installed Swift 6.4
+toolchain (swiftly and `scripts/bootstrap-toolchain.sh` both install one) and says which. Every build, the app's
+included, uses `--force-resolved-versions`, so a dependency's moving `main` reaches a bundle only through a committed
+`Package.resolved`.
+
+```sh
+./scripts/bundle.sh --dry-run                           # each helper, its source and checks; fetches and builds nothing
+CODESIGN_IDENTITY="Apple Development: …" ./scripts/bundle.sh   # sign with this identity instead of ad-hoc
+GDV_ALLOW_MISSING_HELPERS=1 ./scripts/bundle.sh         # leave out a helper that fails, with a warning
+GDV_BUNDLE_ARCLEAK=/path/to/arcleak ./scripts/bundle.sh # bundle this binary instead, reported as an override
+GDV_BUILD_JOBS=8 ./scripts/bundle.sh                    # parallel build jobs (default 2)
+```
+
+A helper that fails to build or fails a check stops the script unless `GDV_ALLOW_MISSING_HELPERS=1` is set, and a
+failed run leaves the previous bundle in place. The dry run lists every failure it can find without building, and
+exits non-zero when one would stop the real run. The analyzers pull swift-syntax, and arcleak and deadwood also
+indexstore-db, so the first run takes a while; later runs reuse the checkouts and their `.build`. Delete a tool's
+directory from the cache to fetch it again.
 
 ## Diff algorithm
 
