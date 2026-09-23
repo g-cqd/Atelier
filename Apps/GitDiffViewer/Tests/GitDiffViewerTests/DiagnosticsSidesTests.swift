@@ -220,13 +220,16 @@ struct DiagnosticsSidesTests {
 
     @Test
     func `analyzing no side clears every finding at once`() async throws {
-        let sut = try makeSUT(mode: .both, findings: [Self.rightRoot: [Self.finding(line: 2)]])
+        let sut = try makeSUT(
+            mode: .both,
+            findings: [Self.leftRoot: [Self.finding(line: 1)], Self.rightRoot: [Self.finding(line: 2)]])
         sut.model.comparisonChanged(.init(left: Self.folder(Self.leftRoot), right: Self.folder(Self.rightRoot)))
         try await finish(sut)
 
         sut.settings.analyzedSides = .none
 
         #expect(sut.model.findingsByFile.isEmpty)
+        #expect(sut.model.leftFindingsByFile.isEmpty)
         #expect(sut.model.summary.isEmpty)
     }
 
