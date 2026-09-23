@@ -79,11 +79,11 @@ struct ToolStatusBoardTests {
         let newer = ViewerSettings(defaults: try Self.makeDefaults())
         let sut = ToolStatusBoard(discovery: discovery)
         let olderRefresh = Task { await sut.refreshAll(for: older, rediscovering: false) }
-        try await firstProbe.wait()
+        try await firstProbe.expectOpen()
         await sut.refreshAll(for: newer, rediscovering: false)
 
         olderRefresh.cancel()
-        await olderRefresh.value
+        try await olderRefresh.expectValue()
 
         #expect(sut.statuses[DiagnosticTool.swiftformat.rawValue]?.isAvailable == false)
         #expect(!sut.isRefreshing)

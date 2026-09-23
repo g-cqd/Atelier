@@ -94,6 +94,26 @@ extension TestClock {
     }
 }
 
+extension TaskGate {
+    /// Returns once the gate opens, as ``wait()`` does, or throws ``WaitTimeout`` once ``TaskProviderSpy/failureBound``
+    /// has passed first.
+    func expectOpen(sourceLocation: SourceLocation = #_sourceLocation) async throws {
+        try await withFailureBound(awaiting: "The gate's opening", sourceLocation: sourceLocation) { [self] in
+            try await wait()
+        }
+    }
+}
+
+extension Task where Failure == Never {
+    /// The task's value, or ``WaitTimeout`` once ``TaskProviderSpy/failureBound`` has passed first: awaiting ``value``
+    /// alone cannot be cancelled, so a task that never finishes would hang the run.
+    func expectValue(sourceLocation: SourceLocation = #_sourceLocation) async throws -> Success {
+        try await withFailureBound(awaiting: "The task's value", sourceLocation: sourceLocation) { [self] in
+            await value
+        }
+    }
+}
+
 extension AsyncProbe {
     /// The next element, as ``next()`` returns it, or ``WaitTimeout`` once ``TaskProviderSpy/failureBound`` has passed
     /// without one: a signal that never comes fails the test instead of hanging the run.
