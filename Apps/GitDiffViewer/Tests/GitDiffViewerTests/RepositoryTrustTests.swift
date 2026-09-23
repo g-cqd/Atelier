@@ -166,6 +166,24 @@ struct RepositoryTrustTests {
     }
 
     @Test
+    func `only a trusted repository allows Fetch`() throws {
+        let scratch = try ScratchDirectories()
+        let trusted = try scratch.directory("trusted")
+        let declined = try scratch.directory("declined")
+        let unknown = try scratch.directory("unknown")
+        let trust = RepositoryTrust(defaults: try makeDefaults())
+        trust.requestTrust(for: trusted)
+        try answerNext(trust, trusts: true)
+        trust.requestTrust(for: declined)
+        try answerNext(trust, trusts: false)
+
+        #expect(trust.allowsFetch(in: trusted))
+        #expect(!trust.allowsFetch(in: declined))
+        #expect(!trust.allowsFetch(in: unknown))
+        #expect(!trust.allowsFetch(in: nil))
+    }
+
+    @Test
     func `revoking a trusted repository declines it and reports the change`() throws {
         let scratch = try ScratchDirectories()
         let root = try scratch.directory("repository")

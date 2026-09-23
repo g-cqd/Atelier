@@ -24,9 +24,9 @@ struct TrustedRepositoriesSection: View {
                 }
             }
             Text(
-                "Hover documentation starts sourcekit-lsp, which builds the project and so runs its code, only in the "
-                    + "repositories listed here. A hover in any other repository asks once. Revoking stops "
-                    + "sourcekit-lsp in that repository."
+                "Hover documentation starts sourcekit-lsp, which builds the project and so runs its code, and Fetch "
+                    + "runs, only in the repositories listed here. A hover in any other repository asks once, and "
+                    + "Trust Repository… in its source menu asks again. Revoking stops sourcekit-lsp there."
             )
             .settingsCaption()
         }

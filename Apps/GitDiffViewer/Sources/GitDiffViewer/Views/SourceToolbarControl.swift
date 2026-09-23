@@ -12,6 +12,9 @@ import SwiftUI
 struct SourceToolbarControl: NSViewRepresentable {
     let side: SideState
     let position: Side
+    /// The app's trust decisions, from the environment the app sets on every comparison window; without it, nothing
+    /// counts as trusted.
+    @Environment(RepositoryTrust.self) private var trust: RepositoryTrust?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(side: side)
@@ -31,7 +34,10 @@ struct SourceToolbarControl: NSViewRepresentable {
     }
 
     func updateNSView(_ button: NSPopUpButton, context: Context) {
-        let snapshot = Snapshot(side: side, position: position)
+        context.coordinator.trust = trust
+        let snapshot = Snapshot(
+            side: side, position: position,
+            allowsFetch: trust?.allowsFetch(in: side.repository?.root) ?? false)
         guard context.coordinator.snapshot != snapshot else { return }
         context.coordinator.snapshot = snapshot
         button.menu = context.coordinator.menu(for: snapshot)
@@ -57,6 +63,8 @@ struct SourceToolbarControl: NSViewRepresentable {
         let isFetching: Bool
         let primaryRemoteName: String?
         let fetchError: String?
+        /// Whether the user trusts this side's repository, which Fetch needs.
+        let allowsFetch: Bool
 
         /// A ref or a file name keeps its last path component, ellipsized in the middle past 30 characters; the
         /// full name stays in the tooltip and the menu.
@@ -95,7 +103,7 @@ struct SourceToolbarControl: NSViewRepresentable {
             }
         }
 
-        init(side: SideState, position: Side) {
+        init(side: SideState, position: Side, allowsFetch: Bool) {
             let described = side.source?.descriptor(repository: side.repository)
             title = side.source?.displayName ?? "Choose \(position == .left ? "left" : "right") side…"
             attributedTitle = Self.attributedTitle(for: described, fallback: title)
@@ -111,12 +119,14 @@ struct SourceToolbarControl: NSViewRepresentable {
             isFetching = side.isFetching
             primaryRemoteName = side.remoteNames.first
             fetchError = side.lastFetchError
+            self.allowsFetch = allowsFetch
         }
     }
 
     final class Coordinator: NSObject {
         let side: SideState
         var snapshot: Snapshot?
+        var trust: RepositoryTrust?
 
         init(side: SideState) {
             self.side = side
@@ -198,15 +208,19 @@ struct SourceToolbarControl: NSViewRepresentable {
             return item
         }
 
-        /// The fetch item, disabled while a fetch runs, and a disabled line naming the last failure, if any.
+        /// The fetch item, disabled while a fetch runs and in an untrusted repository, which offers to trust it
+        /// instead, and a disabled line naming the last failure, if any.
         private func addFetchItems(to menu: NSMenu, snapshot: Snapshot) {
             let state = RepositoryFetch.MenuItem(
                 remoteName: snapshot.primaryRemoteName, isFetching: snapshot.isFetching, lastError: snapshot.fetchError
             )
             let fetchItem = NSMenuItem(title: state.title, action: #selector(fetch), keyEquivalent: "")
             fetchItem.target = self
-            fetchItem.isEnabled = state.isEnabled
+            fetchItem.isEnabled = state.isEnabled && snapshot.allowsFetch
             menu.addItem(fetchItem)
+            if !snapshot.allowsFetch {
+                menu.addItem(item("Trust Repository…", #selector(trustRepository)))
+            }
             guard let errorLine = state.errorLine else { return }
             let errorItem = NSMenuItem(title: errorLine, action: nil, keyEquivalent: "")
             errorItem.isEnabled = false
@@ -214,7 +228,15 @@ struct SourceToolbarControl: NSViewRepresentable {
         }
 
         @objc private func fetch() {
+            // Checked again at the click: the menu may predate a revocation.
+            guard trust?.allowsFetch(in: side.repository?.root) == true else { return }
             Task { await side.fetch() }
+        }
+
+        /// Asks the user, in the active window, whether to trust this side's repository, even one they declined.
+        @objc private func trustRepository() {
+            guard let root = side.repository?.root else { return }
+            trust?.requestTrust(for: root)
         }
 
         @objc func chooseWorkingTree() { side.refChoice = .workingTree }
