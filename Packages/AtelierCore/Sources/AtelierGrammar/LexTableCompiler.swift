@@ -1,6 +1,7 @@
-/// Compiles terminal tokens from a grammar into a lexer DFA (LexTable).
+/// Compiles a grammar's tokens into a lex table.
 public enum LexTableCompiler: Sendable {
-    /// Extract string/pattern tokens and compile into a LexTable.
+    /// The table of a context-free lexer for `grammar`: a trie of its string literals and the comment patterns of its
+    /// extras, without lex modes.
     public static func compile(_ grammar: GrammarDefinition) -> LexTable {
         var keywords: [String: Int] = [:]
         var tokenID = 0
@@ -191,5 +192,45 @@ public enum LexTableCompiler: Sendable {
                 }
             return LexState(transitions: transitions, accepting: node.accepting)
         }
+    }
+}
+
+// MARK: - Lex modes
+
+extension LexTableCompiler {
+    /// The table of a lexer for `tokens` that reads each token in a lex mode: one for each distinct set in
+    /// `validTokens`, the valid tokens of each parse state, and an error mode for every token that may follow a
+    /// separator. A token that is not immediate may follow any of `separators`, which the lexer leaves out of it.
+    /// - Throws: `GrammarError.invalidRuleType` for a token rule the automaton can't read;
+    ///   `.resourceLimitExceeded` when an automaton passes its limit.
+    static func compile(
+        tokens: [LexicalToken],
+        separators: [Rule],
+        validTokens: [[Int]]
+    ) throws(GrammarError) -> LexTable {
+        var builder = LexAutomatonBuilder(nfa: try TokenNFA(tokens: tokens, separators: separators), tokens: tokens)
+        var modes: [[Int]: Int] = [:]
+        var modeStarts: [Int] = []
+        func mode(for valid: [Int]) throws(GrammarError) -> Int {
+            if let existing = modes[valid] {
+                return existing
+            }
+            modes[valid] = modeStarts.count
+            modeStarts.append(try builder.startState(for: valid))
+            return modeStarts.count - 1
+        }
+        var stateModes: [Int] = []
+        stateModes.reserveCapacity(validTokens.count)
+        for valid in validTokens {
+            stateModes.append(try mode(for: valid))
+        }
+        let errorMode = try mode(for: tokens.indices.filter { !tokens[$0].isImmediate })
+        return LexTable(
+            tokens: tokens.map { LexToken(name: $0.name, isNamed: $0.isNamed, isExtra: $0.isExtra) },
+            automaton: builder.states,
+            modeStarts: modeStarts,
+            stateModes: stateModes,
+            errorMode: errorMode
+        )
     }
 }
