@@ -13,6 +13,8 @@ public actor ToolDiscovery {
     private let homeDirectory: URL
     private let environment: [String: String]
     private let fileManager: FileManager
+    /// Overrides ``wellKnownDirectories``; nil searches the usual install locations.
+    private let wellKnownDirectoriesOverride: [String]?
 
     /// `.some(nil)` caches a name `xcrun` could not find; an absent key has never been probed.
     private var xcrunCache: [String: URL?] = [:]
@@ -27,24 +29,35 @@ public actor ToolDiscovery {
 
     private static let logger = Logger(subsystem: "AtelierDiagnostics", category: "ToolDiscovery")
 
+    /// - Parameters:
+    ///   - runner: Runs `xcrun`, the login shell and the version probes.
+    ///   - bundledDirectory: The app's own helpers, searched right after a custom path; nil when there are none.
+    ///   - homeDirectory: Where the per-user install locations are, and where the login shell starts.
+    ///   - environment: Supplies each tool's override variable and `SHELL`.
+    ///   - fileManager: Checks which candidates are executable.
+    ///   - wellKnownDirectories: The directories searched between the toolchain and the login shell's `$PATH`; nil
+    ///     searches Homebrew's and the usual per-user install locations. A test passes its own, so what is installed
+    ///     on the machine running it never answers a lookup.
     public init(
         runner: any ProcessRunner,
         bundledDirectory: URL?,
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        wellKnownDirectories: [String]? = nil
     ) {
         self.runner = runner
         self.bundledDirectory = bundledDirectory
         self.homeDirectory = homeDirectory
         self.environment = environment
         self.fileManager = fileManager
+        self.wellKnownDirectoriesOverride = wellKnownDirectories
     }
 
     /// The directories always searched after the override, the custom path, the bundle and the toolchain, and
     /// before the login shell's `$PATH`.
     private var wellKnownDirectories: [String] {
-        [
+        wellKnownDirectoriesOverride ?? [
             "/opt/homebrew/bin", "/usr/local/bin",
             homeDirectory.appending(path: ".swiftly/bin").path,
             homeDirectory.appending(path: ".mint/bin").path,
