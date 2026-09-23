@@ -1,66 +1,49 @@
 package import CoreGraphics
 package import DiffRendering
 
-/// Where a gap row's handles sit in the gutter, after Xcode's (book DIFF-02): a rounded grabber about 20 × 14 points
-/// with two lines, centred on a hairline across the gutter where the lines are hidden. A gap between two changes gets
-/// two smaller grabbers, one on each side of the hairline, each against the change it extends; a gap at an end of
-/// the file gets the one its change can use. Pure geometry, in the gutter's flipped coordinates.
+/// Where a gap's handles sit in the gutter, after Xcode's (book DIFF-02): one rounded rectangle about 20 × 14 points,
+/// centred across the gutter on the hairline that marks the gap on the boundary between two rows, and split by it
+/// into two halves. Each half is a handle of its own, rounded toward the change it extends and flat on the hairline,
+/// the side it is dragged toward: the upper half lies over the bottom of the row above and extends the change above,
+/// the lower half over the top of the row below and extends the change below. A gap that grows from one side only
+/// shows that side's half. Pure geometry, in the gutter's flipped coordinates.
 package enum GapHandleLayout {
-    /// One handle of a gap row.
-    package struct Handle: Equatable {
+    /// One half of a gap's rectangle.
+    package struct Half: Equatable {
         package let handle: GapHandle
-        /// The grabber drawn for it.
-        package let grabber: CGRect
-        /// Where the pointer counts as over it: its side of the row, across the whole gutter.
+        /// The half drawn, from the hairline to its rounded side.
+        package let rect: CGRect
+        /// Where the pointer counts as over it: `rect`, a little taller on its rounded side.
         package let hitArea: CGRect
     }
 
-    package static let grabberWidth: CGFloat = 20
-    package static let grabberHeight: CGFloat = 14
-    /// The height of each of two grabbers sharing a row; they reach a point past the row at most, short of the
-    /// numbers of the rows around it, whose text sits at the floor of its row.
-    package static let stackedGrabberHeight: CGFloat = 8
-    /// The space between two stacked grabbers, where the hairline runs.
-    package static let stackedGap: CGFloat = 1
+    package static let width: CGFloat = 20
+    /// The height of each half, from the hairline: the rectangle is twice as tall.
+    package static let halfHeight: CGFloat = 7
+    package static let cornerRadius: CGFloat = 3.5
+    /// How much taller than its half a half's hit area is, away from the hairline.
+    package static let hitSlop: CGFloat = 3
+    /// How far a half reaches from its hairline, hit area included: the band a redraw or a hit test looks around.
+    package static let reach: CGFloat = halfHeight + hitSlop
     /// How deep, from the edge of what shows of the gutter, a held pointer starts to count as at the edge.
     package static let edgeZone: CGFloat = 16
 
-    /// The hairline's height in the row starting at `rowY`: its middle.
-    package static func hairlineY(rowY: CGFloat, rowHeight: CGFloat) -> CGFloat {
-        rowY + rowHeight / 2
-    }
-
-    /// The handles of a gap offering `handles`, in a row `rowHeight` tall starting at `rowY`, in a gutter
-    /// `gutterWidth` wide.
-    package static func handles(
-        _ handles: [GapHandle], rowY: CGFloat, rowHeight: CGFloat, gutterWidth: CGFloat
-    ) -> [Handle] {
-        let width = min(grabberWidth, max(gutterWidth - 8, 8))
-        let x = (gutterWidth - width) / 2
-        let middle = hairlineY(rowY: rowY, rowHeight: rowHeight)
-        let row = CGRect(x: 0, y: rowY, width: gutterWidth, height: rowHeight)
-        guard handles.count == 2 else {
-            return handles.map { handle in
-                let height = min(grabberHeight, max(rowHeight - 2, 6))
-                return Handle(
-                    handle: handle, grabber: CGRect(x: x, y: middle - height / 2, width: width, height: height),
-                    hitArea: row)
-            }
-        }
-        let half = stackedGap / 2
+    /// The halves `handles` asks for, on the hairline at `boundaryY` of a gutter `gutterWidth` wide, centred across it
+    /// and narrowed to fit a gutter too narrow for them.
+    package static func halves(_ handles: [GapHandle], boundaryY: CGFloat, gutterWidth: CGFloat) -> [Half] {
+        let halfWidth = min(width, max(gutterWidth - 8, 8))
+        let x = (gutterWidth - halfWidth) / 2
         return handles.map { handle in
             switch handle {
                 case .extendsChangeAbove:
-                    Handle(
+                    Half(
                         handle: handle,
-                        grabber: CGRect(
-                            x: x, y: middle - half - stackedGrabberHeight, width: width, height: stackedGrabberHeight),
-                        hitArea: CGRect(x: 0, y: rowY, width: gutterWidth, height: middle - rowY))
+                        rect: CGRect(x: x, y: boundaryY - halfHeight, width: halfWidth, height: halfHeight),
+                        hitArea: CGRect(x: x, y: boundaryY - reach, width: halfWidth, height: reach))
                 case .extendsChangeBelow:
-                    Handle(
-                        handle: handle,
-                        grabber: CGRect(x: x, y: middle + half, width: width, height: stackedGrabberHeight),
-                        hitArea: CGRect(x: 0, y: middle, width: gutterWidth, height: row.maxY - middle))
+                    Half(
+                        handle: handle, rect: CGRect(x: x, y: boundaryY, width: halfWidth, height: halfHeight),
+                        hitArea: CGRect(x: x, y: boundaryY, width: halfWidth, height: reach))
             }
         }
     }
