@@ -560,7 +560,7 @@ public func triggerWorkspaceSearch(state: EditorState) {
         isRegex: search.isRegex,
         wholeWord: search.isWholeWord
     )
-    guard let pattern = compilePattern(query) else {
+    guard compilePattern(query) != nil else {
         state.workspaceSearchResults = []
         state.workspaceSearchSummary = search.isRegex ? "Invalid regex" : ""
         state.isSearchingWorkspace = false
@@ -604,7 +604,7 @@ public func triggerWorkspaceSearch(state: EditorState) {
         let result =
             await taskProvider.detachedTask(role: .work) { [openBuffers, searchPool] in
                 await searchWorkspace(
-                    pattern: pattern,
+                    query: query,
                     files: files,
                     openBuffers: openBuffers,
                     pool: searchPool,
