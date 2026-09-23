@@ -113,13 +113,45 @@ struct GapBandTests {
         let pane = try CardPaneFixture(rendered: rendered)
         let bandTop = pane.layout.inset + CGFloat(between.boundary) * rendered.lineHeight
 
-        // The changed row's own colour, then the band under it, then the text's background past the text.
+        // The changed row's own colour, then the band under it, above its separator, then the text's background past
+        // the text.
         let row = pane.pixel(at: NSPoint(x: 200, y: bandTop - rendered.lineHeight / 2))
-        let band = pane.pixel(at: NSPoint(x: 200, y: bandTop + rendered.gapBandHeight / 2))
+        let band = pane.pixel(at: NSPoint(x: 200, y: bandTop + 2))
         let background = pane.pixel(at: NSPoint(x: 200, y: pane.textView.frame.maxY - 1))
 
         #expect(row != background)
         #expect(band == background)
+    }
+
+    @Test
+    func `a band between two changes carries a separator across its middle and the text's whole width`() throws {
+        let rendered = try #require(text().new)
+        let between = try #require(rendered.gaps.first { $0.boundary > 0 && $0.boundary < rendered.rows.count })
+        let pane = try CardPaneFixture(rendered: rendered)
+        let bandTop = pane.layout.inset + CGFloat(between.boundary) * rendered.lineHeight
+        let separator = bandTop + GapHandleLayout.separatorOffset(bandHeight: rendered.gapBandHeight) + 0.5
+        let width = pane.textView.bounds.width
+
+        let line = [0.5, width / 2, width - 0.5].map { pane.pixel(at: NSPoint(x: $0, y: separator)) }
+        let clear = [separator - 2, separator + 2].map { pane.pixel(at: NSPoint(x: width / 2, y: $0)) }
+        let background = pane.pixel(at: NSPoint(x: width / 2, y: pane.textView.frame.maxY - 1))
+
+        #expect(line.allSatisfy { $0 != background })
+        #expect(clear.allSatisfy { $0 == background })
+    }
+
+    @Test
+    func `the bands above the first row and below the last carry no separator across the text`() throws {
+        let rendered = try #require(text().new)
+        let pane = try CardPaneFixture(rendered: rendered)
+        let band = rendered.gapBandHeight
+        let middle = pane.textView.bounds.width / 2
+        let height = pane.textView.frame.height
+
+        let samples = [band / 2, height - band / 2, height - 1].map { pane.pixel(at: NSPoint(x: middle, y: $0)) }
+
+        #expect(samples.count == 3)
+        #expect(samples.allSatisfy { $0 == samples.last })
     }
 
     @Test

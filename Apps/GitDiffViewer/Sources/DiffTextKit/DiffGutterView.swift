@@ -408,8 +408,8 @@ extension DiffGutterView {
     }
 
     /// The bands of the gaps near `rect`, each with its handle: the halves the gap offers, highlighted under the
-    /// pointer or while dragged, and between two of them the separator across the gutter. Nothing else is drawn in a
-    /// band.
+    /// pointer or while dragged, and between two of them the separator, whose part across the text the text draws.
+    /// Nothing else is drawn in a band.
     private func drawGaps(in rect: NSRect) {
         forEachGap(in: rect) { gap, band in
             let handle = handle(of: gap.marker, in: band)

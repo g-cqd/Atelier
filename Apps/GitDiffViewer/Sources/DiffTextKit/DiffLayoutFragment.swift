@@ -29,9 +29,14 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
     package var rowIndex: Int = -1
     /// The band of a gap after this row, at the bottom of the fragment, which stays empty: no row colour reaches it.
     package var bandBelow: CGFloat = 0
+    /// The colour of the separator across that band's middle, when the band lies between two changes; the gutter
+    /// draws the separator's start, and the fragment the rest, across the whole text (book DIFF-02).
+    package var separatorColor: NSColor?
 
     package override var renderingSurfaceBounds: CGRect {
-        super.renderingSurfaceBounds.union(backgroundRect(origin: .zero))
+        var bounds = super.renderingSurfaceBounds.union(backgroundRect(origin: .zero))
+        if let separator = separatorRect(origin: .zero) { bounds = bounds.union(separator) }
+        return bounds
     }
 
     package override func draw(at point: CGPoint, in context: CGContext) {
@@ -39,6 +44,12 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
             context.saveGState()
             context.setFillColor(backgroundColor.cgColor)
             context.fill(backgroundRect(origin: point))
+            context.restoreGState()
+        }
+        if let separatorColor, let separator = separatorRect(origin: point) {
+            context.saveGState()
+            context.setFillColor(separatorColor.cgColor)
+            context.fill(separator)
             context.restoreGState()
         }
         drawEmphasis(at: point, in: context)
@@ -127,6 +138,17 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
             width: width,
             height: max(layoutFragmentFrame.height - bandBelow, 0)
         )
+    }
+
+    /// The separator across the band after this row, as wide as the row's background, at the height the gutter draws
+    /// its own; nil without one.
+    private func separatorRect(origin: CGPoint) -> CGRect? {
+        guard separatorColor != nil, bandBelow > 0 else { return nil }
+        let row = backgroundRect(origin: origin)
+        let bandTop = origin.y + layoutFragmentFrame.height - bandBelow
+        return CGRect(
+            x: row.minX, y: bandTop + GapHandleLayout.separatorOffset(bandHeight: bandBelow), width: row.width,
+            height: 1)
     }
 
     private static let horizontalOverdraw: CGFloat = 8
