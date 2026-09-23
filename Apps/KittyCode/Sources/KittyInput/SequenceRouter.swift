@@ -21,6 +21,12 @@ public struct SequenceRouter: Sendable {
         case paste
         case ss3
         case utf8Sequence
+        /// Past the paste cap: dropping bytes up to the end marker.
+        case pasteOverflow
+        /// Past the OSC cap: dropping bytes up to BEL or `ESC \`.
+        case oscOverflow
+        /// Past the control-sequence cap: dropping bytes up to the sequence's final byte.
+        case controlOverflow
     }
 
     private enum FunctionalKeyCode {
@@ -40,15 +46,14 @@ public struct SequenceRouter: Sendable {
         static let f4: UInt32 = 57367
     }
 
+    /// `ESC [ 201 ~`. Its first byte appears nowhere else in it, which `advancePasteEndMarker` relies on.
     private static let pasteEndMarker: [UInt8] = [0x1b, 0x5b, 0x32, 0x30, 0x31, 0x7e]
-    private static let oscOverflowBytes = Array("osc overflow".utf8)
-    private static let pasteOverflowBytes = Array("paste overflow".utf8)
-    private static let controlOverflowBytes = Array("control overflow".utf8)
 
-    private static let maxPasteSize = 1_048_576  // 1MB
+    /// Cap on a bracketed paste and on an OSC sequence, 1 MiB.
+    public static let maxPasteSize = 1_048_576
     /// Cap on every sequence but OSC and paste, which carry payloads under their own 1 MB caps: far above any real
     /// control sequence, low enough that an endless parameter stream can't pin `buffer`.
-    private static let maxControlSequenceSize = 4096
+    public static let maxControlSequenceSize = 4096
 
     private var keyboardDecoder = KeyboardDecoder()
     private var mouseDecoder = MouseDecoder()
@@ -57,6 +62,9 @@ public struct SequenceRouter: Sendable {
     private var utf8Buffer: [UInt8] = []
     private var utf8ExpectedBytes: Int = 0
     private var utf8Modifiers: KeyModifiers = []
+    /// While dropping an overflowed paste, how many bytes of the end marker the last bytes matched; while dropping an
+    /// overflowed OSC, 1 when the last byte was the ESC of an `ESC \` terminator.
+    private var terminatorProgress = 0
 
     public init() {}
 
@@ -67,15 +75,11 @@ public struct SequenceRouter: Sendable {
     }
 
     private mutating func feed(_ byte: UInt8, into events: inout [InputEvent]) {
-        if routeState != .ground,
-            routeState != .osc,
-            routeState != .paste,
-            buffer.count >= Self.maxControlSequenceSize
-        {
-            events.append(.unknown(Self.controlOverflowBytes))
+        // Only a CSI's parameters grow this far; the rest of the sequence is dropped with them, never typed.
+        if routeState != .osc, routeState != .paste, buffer.count >= Self.maxControlSequenceSize {
+            events.append(.overflow(.controlSequence))
             resetRouting()
-            feed(byte, into: &events)
-            return
+            routeState = .controlOverflow
         }
 
         switch routeState {
@@ -243,31 +247,58 @@ public struct SequenceRouter: Sendable {
 
             case .osc:
                 buffer.append(byte)
-                if buffer.count > Self.maxPasteSize {
-                    // OSC sequence too large — discard
-                    events.append(.unknown(Self.oscOverflowBytes))
-                    resetRouting()
-                } else if byte == 0x07 {
+                if byte == 0x07 || (buffer.count >= 2 && buffer[buffer.count - 2] == 0x1b && byte == 0x5c) {
                     events.append(.unknown(buffer))
                     resetRouting()
-                } else if buffer.count >= 2, buffer[buffer.count - 2] == 0x1b, byte == 0x5c {
-                    events.append(.unknown(buffer))
+                } else if buffer.count > Self.maxPasteSize {
+                    events.append(.overflow(.osc(command: oscCommand())))
+                    terminatorProgress = byte == 0x1b ? 1 : 0
+                    buffer = []
+                    routeState = .oscOverflow
+                }
+
+            case .oscOverflow:
+                if byte == 0x07 || (terminatorProgress == 1 && byte == 0x5c) {
                     resetRouting()
+                } else {
+                    terminatorProgress = byte == 0x1b ? 1 : 0
                 }
 
             case .paste:
                 buffer.append(byte)
-                if buffer.count > Self.maxPasteSize {
-                    // Paste too large — discard and reset
-                    events.append(.unknown(Self.pasteOverflowBytes))
-                    resetRouting()
-                } else if buffer.count >= Self.pasteEndMarker.count,
+                if buffer.count >= Self.pasteEndMarker.count,
                     buffer.suffix(Self.pasteEndMarker.count).elementsEqual(Self.pasteEndMarker)
                 {
                     let pasteBytes = buffer.dropLast(Self.pasteEndMarker.count)
                     // Invalid UTF-8 becomes U+FFFD rather than costing the whole paste.
                     events.append(.paste(String(decoding: pasteBytes, as: UTF8.self)))
                     resetRouting()
+                } else if buffer.count > Self.maxPasteSize {
+                    events.append(.overflow(.paste))
+                    // The last bytes kept may already start the end marker.
+                    terminatorProgress = 0
+                    for keptByte in buffer.suffix(Self.pasteEndMarker.count - 1) {
+                        _ = advancePasteEndMarker(keptByte)
+                    }
+                    buffer = []
+                    routeState = .pasteOverflow
+                }
+
+            case .pasteOverflow:
+                if advancePasteEndMarker(byte) {
+                    resetRouting()
+                }
+
+            case .controlOverflow:
+                switch byte {
+                    case 0x20 ... 0x3f:
+                        break
+                    case 0x40 ... 0x7e:
+                        resetRouting()
+                    default:
+                        // No control sequence holds this byte: the sequence was cut short, and the byte starts afresh.
+                        resetRouting()
+                        feed(byte, into: &events)
                 }
 
             case .ss3:
@@ -371,6 +402,25 @@ public struct SequenceRouter: Sendable {
         utf8Buffer.removeAll(keepingCapacity: true)
         utf8ExpectedBytes = 0
         utf8Modifiers = []
+        terminatorProgress = 0
+    }
+
+    /// Feeds one byte of an overflowed paste to the end-marker match; true when the byte completes the marker.
+    private mutating func advancePasteEndMarker(_ byte: UInt8) -> Bool {
+        if byte == Self.pasteEndMarker[terminatorProgress] {
+            terminatorProgress += 1
+        } else {
+            // The marker's first byte appears nowhere else in it, so a mismatch can only restart the match here.
+            terminatorProgress = byte == Self.pasteEndMarker[0] ? 1 : 0
+        }
+        guard terminatorProgress == Self.pasteEndMarker.count else { return false }
+        terminatorProgress = 0
+        return true
+    }
+
+    /// The leading number of the OSC in `buffer`, 52 for `ESC ] 52 ; …`, or nil when it starts with no number.
+    private func oscCommand() -> Int? {
+        Int(String(decoding: buffer.dropFirst(2).prefix(while: ASCII.isDigit), as: UTF8.self))
     }
 
     private mutating func beginUTF8Sequence(
