@@ -1,5 +1,6 @@
 import AemiJSON
 import Foundation
+import os
 
 /// Why an ``LSPConnection`` request or notification failed.
 public enum LSPConnectionError: Error, Sendable, Equatable {
@@ -20,6 +21,8 @@ public actor LSPConnection {
     /// threads have about 512 KiB of stack: a reply 300 levels deep, which the parser's own limit of 512 admits,
     /// overflows it. The results a client reads nest a handful of levels.
     static let maximumResultDepth = 64
+
+    private static let logger = Logger(subsystem: "Atelier.LSP", category: "LSPConnection")
 
     private let transport: any LSPTransport
 
@@ -117,6 +120,8 @@ public actor LSPConnection {
                     do {
                         try await self?.transport.send(frame)
                     } catch {
+                        let reason = String(describing: error)
+                        Self.logger.debug("Could not send \(method, privacy: .public): \(reason, privacy: .public)")
                         await self?.failPending(id, with: error)
                     }
                 }
@@ -134,7 +139,13 @@ public actor LSPConnection {
     private func cancelPending(_ id: JSONRPCID) async {
         guard let continuation = pending.removeValue(forKey: id) else { return }
         continuation.resume(throwing: CancellationError())
-        try? await notify("$/cancelRequest", CancelParams(id: id))
+        do {
+            try await notify("$/cancelRequest", CancelParams(id: id))
+        } catch {
+            // The caller already has its answer; a lost cancel only leaves the server working longer than needed.
+            let (request, reason) = (String(describing: id), String(describing: error))
+            Self.logger.debug("Could not cancel \(request, privacy: .public): \(reason, privacy: .public)")
+        }
     }
 
     private func failAllPending(with error: any Error) {
@@ -158,6 +169,8 @@ public actor LSPConnection {
             }
             endedByTransport(description: "server closed the connection")
         } catch {
+            // A read that fails after stop() is the teardown itself, not news.
+            if !closed { Self.logger.error("The connection ended: \(String(describing: error), privacy: .public)") }
             endedByTransport(description: String(describing: error))
         }
     }
@@ -173,7 +186,12 @@ public actor LSPConnection {
         do {
             message = try IncomingMessage.decode(payload)
         } catch {
-            // Not a valid JSON-RPC envelope; nothing sensible to do but drop it.
+            Self.logger.error(
+                "Dropped a frame that is not a JSON-RPC message: \(String(describing: error), privacy: .public)")
+            // A response that cannot be read still settles its request now, rather than as a timeout later.
+            if let id = IncomingMessage.responseID(ofUndecodable: payload) {
+                failPending(id, with: LSPConnectionError.malformedResponse("\(error)"))
+            }
             return
         }
 
@@ -203,6 +221,8 @@ public actor LSPConnection {
             try await transport.send(LSPFrameCodec.frame(reply))
         } catch {
             // Best effort: a dead transport surfaces through the read loop.
+            let reason = String(describing: error)
+            Self.logger.debug("Could not answer the server's \(method, privacy: .public): \(reason, privacy: .public)")
         }
     }
 }

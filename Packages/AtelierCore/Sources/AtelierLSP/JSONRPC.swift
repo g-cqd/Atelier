@@ -186,4 +186,16 @@ public enum IncomingMessage: Sendable {
         let resultData = root["result"].withRawJSONBytes { Data($0) }
         return .response(id: id, result: resultData, error: error)
     }
+
+    /// The id of a response that ``decode(_:)`` refused, such as one carrying invalid UTF-8 or a lone surrogate
+    /// escape, read with a lenient parse that does not validate strings. Nil when even that parse fails, or when the
+    /// payload names a method: a server request's id is the server's own and matches none of the client's.
+    static func responseID(ofUndecodable payload: Data) -> JSONRPCID? {
+        // A payload that is not JSON even leniently has no id to read; the caller logs why decode refused it.
+        guard let root = try? AemiJSON.parse(payload, options: .lenient).root, root["method"].string == nil else {
+            return nil
+        }
+        let idNode = root["id"]
+        return idNode.int.map(JSONRPCID.number) ?? idNode.string.map(JSONRPCID.string)
+    }
 }
