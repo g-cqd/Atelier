@@ -52,7 +52,7 @@ struct DiffViewerModelFetchTests {
 
     @Test
     func `a fetch on a side parked on a remote-tracking ref reloads the comparison`() async throws {
-        let taskProvider = TaskProviderSpy()
+        let taskProvider = TaskProviderSpy.tolerant()
         let tree = RemoteTree()
         let (sut, cleanup) = makeSUT(runner: makeRunner(tree: tree), taskProvider: taskProvider)
         defer { cleanup() }
@@ -73,7 +73,7 @@ struct DiffViewerModelFetchTests {
 
     @Test
     func `a fetch on a side parked on a local branch does not reload the comparison`() async throws {
-        let taskProvider = TaskProviderSpy()
+        let taskProvider = TaskProviderSpy.tolerant()
         let tree = RemoteTree()
         let (sut, cleanup) = makeSUT(runner: makeRunner(tree: tree), taskProvider: taskProvider)
         defer { cleanup() }

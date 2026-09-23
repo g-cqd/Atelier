@@ -50,7 +50,7 @@ struct DiffViewerModelRefsChangedTests {
 
     @Test
     func `a refs change recomposes a HEAD-versus-working-tree comparison, picking up the new commit`() async throws {
-        let taskProvider = TaskProviderSpy()
+        let taskProvider = TaskProviderSpy.tolerant()
         let headTree = HeadTree()
         let (sut, cleanup) = makeSUT(runner: makeRunner(headTree: headTree), taskProvider: taskProvider)
         defer { cleanup() }
@@ -72,7 +72,7 @@ struct DiffViewerModelRefsChangedTests {
 
     @Test
     func `a refs change with both sides on the working tree only refreshes repository info`() async throws {
-        let taskProvider = TaskProviderSpy()
+        let taskProvider = TaskProviderSpy.tolerant()
         let headTree = HeadTree()
         let (sut, cleanup) = makeSUT(runner: makeRunner(headTree: headTree), taskProvider: taskProvider)
         defer { cleanup() }
