@@ -176,12 +176,20 @@ extension BadgeFill {
     }
 }
 
-extension BadgeTextColor {
+extension BadgeInk {
     fileprivate var color: Color {
         switch self {
             case .white: .white
             case .token(let token): token.color
             case .primary: .primary
+        }
+    }
+
+    fileprivate var nsColor: NSColor {
+        switch self {
+            case .white: .white
+            case .token(let token): token.nsColor
+            case .primary: .labelColor
         }
     }
 }
@@ -246,19 +254,17 @@ final class ChangeBadgeView: NSView {
                 path.fill()
         }
         if let stroke = style.stroke {
+            // Inset by half the line width so the 1 pt outline stays inside the badge's own bounds.
+            let strokePath = NSBezierPath(
+                roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: ChangeGlyph.cornerRadius - 0.5,
+                yRadius: ChangeGlyph.cornerRadius - 0.5)
             stroke.nsColor.withAlphaComponent(alpha).setStroke()
-            path.lineWidth = 1
-            path.stroke()
+            strokePath.lineWidth = 1
+            strokePath.stroke()
         }
-        let textColor: NSColor =
-            switch style.text {
-                case .white: .white
-                case .token(let token): token.nsColor
-                case .primary: .labelColor
-            }
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .bold),
-            .foregroundColor: textColor.withAlphaComponent(alpha)
+            .foregroundColor: style.text.nsColor.withAlphaComponent(alpha)
         ]
         let text = NSAttributedString(string: glyph.letter, attributes: attributes)
         let size = text.size()
