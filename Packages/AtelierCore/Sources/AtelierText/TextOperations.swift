@@ -60,13 +60,16 @@ public enum TextOperations {
     /// Deletes the character immediately before the cursor.
     ///
     /// When cursor is at column 0 and not on the first line, the current
-    /// line is merged into the previous line.
+    /// line is merged into the previous line. A column past the line end is
+    /// clamped to it first, as `insert` does, so it never causes a crash.
     @discardableResult
     public static func deleteBackward(in buffer: inout TextBuffer, at cursor: inout TextCursor)
         -> TextMutation?
     {
+        var line = buffer.line(at: cursor.row)
+        // A replace-all that shortens the line leaves the cursor where the longer line ended.
+        cursor.col = min(cursor.col, line.count)
         if cursor.col > 0 {
-            var line = buffer.line(at: cursor.row)
             let index = line.index(line.startIndex, offsetBy: cursor.col - 1)
             line.remove(at: index)
             buffer.setLine(at: cursor.row, to: line)
