@@ -60,7 +60,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
 
-        let textView = NSTextView(usingTextLayoutManager: true)
+        let textView = DiffPaneTextView(usingTextLayoutManager: true)
         textView.isEditable = false
         textView.isSelectable = true
         textView.isRichText = false

@@ -67,14 +67,14 @@ package struct DiffTextView: NSViewRepresentable {
     }
 
     package func makeNSView(context: Context) -> DiffPaneView {
-        let scrollView = NSTextView.scrollableTextView()
+        let scrollView = DiffPaneTextView.scrollableTextView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.automaticallyAdjustsContentInsets = false
 
-        let textView = scrollView.documentView as? NSTextView ?? NSTextView(usingTextLayoutManager: true)
+        let textView = scrollView.documentView as? NSTextView ?? DiffPaneTextView(usingTextLayoutManager: true)
         textView.isEditable = false
         textView.isSelectable = true
         textView.isRichText = false
