@@ -27,9 +27,8 @@ struct FileOutlineView: NSViewRepresentable {
     let uiState: ExplorerUIState
     /// Which colours a badge's letter is drawn in.
     var badgeScheme: BadgeScheme = .classic
-    /// Where every badge in this tree stands against the index; one value for the whole tree, since the comparison
-    /// carries no per-file index state.
-    var badgeState: BadgeChangeState = .staged
+    /// Where each row's change stands against the index, keyed by this explorer's own paths.
+    var badgeStates: BadgeChangeStates = .uniform(.staged)
 
     func makeCoordinator() -> Coordinator {
         Coordinator(uiState: uiState)
@@ -84,7 +83,7 @@ struct FileOutlineView: NSViewRepresentable {
         coordinator.onPin = onPin
         coordinator.uiState = uiState
         coordinator.badgeScheme = badgeScheme
-        coordinator.badgeState = badgeState
+        coordinator.badgeStates = badgeStates
         if coordinator.isSidebar != isSidebar {
             coordinator.applyPlacement(isSidebar: isSidebar, to: outline)
         }
@@ -110,7 +109,7 @@ struct FileOutlineView: NSViewRepresentable {
         var onPin: (String) -> Void = { _ in }
         var uiState: ExplorerUIState
         var badgeScheme: BadgeScheme = .classic
-        var badgeState: BadgeChangeState = .staged
+        var badgeStates: BadgeChangeStates = .uniform(.staged)
         weak var outlineView: NSOutlineView?
 
         private var roots: [OutlineItem] = []
@@ -383,7 +382,7 @@ struct FileOutlineView: NSViewRepresentable {
         private func configure(_ cell: FileCellView, for item: OutlineItem) {
             cell.configure(
                 node: item.node, glyph: status(item.key).flatMap(ChangeGlyph.init), scheme: badgeScheme,
-                state: badgeState)
+                state: badgeStates.state(of: item.key))
         }
     }
 }

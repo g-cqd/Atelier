@@ -65,6 +65,12 @@ extension ViewerSettings {
                 let value =
                     defaults.string(forKey: effectiveKey(key)).flatMap(AppearanceScheme.init(rawValue:)) ?? .system
                 if value != appearanceScheme { appearanceScheme = value }
+            case Key.badgeScheme:
+                let value = defaults.string(forKey: effectiveKey(key)).flatMap(BadgeScheme.init(rawValue:)) ?? .classic
+                if value != badgeScheme { badgeScheme = value }
+            case Key.matchesThemeAppearance:
+                let value = defaults.object(forKey: effectiveKey(key)) as? Bool ?? false
+                if value != matchesThemeAppearance { matchesThemeAppearance = value }
             default:
                 return false
         }

@@ -87,11 +87,23 @@ final class FakeSourceReader: SourceReading, Sendable {
         var contents: [String: String] = [:]
         var gate: [String: AsyncProbe<Void>] = [:]
         var gitRenames: [String: String] = [:]
+        var workingTreeStatuses: [ComparisonSource: [GitStatusEntry]] = [:]
+        var entriesReads = 0
     }
 
     private let state = Mutex(State())
     let contentRequests = AsyncProbe<String>()
     let repositoryInfoRequests = AsyncProbe<URL>()
+    let workingTreeStatusRequests = AsyncProbe<ComparisonSource>()
+
+    /// Git's status per source, as ``workingTreeStatus(of:)`` serves it; a source without one is no working tree.
+    var workingTreeStatuses: [ComparisonSource: [GitStatusEntry]] {
+        get { state.withLock { $0.workingTreeStatuses } }
+        set { state.withLock { $0.workingTreeStatuses = newValue } }
+    }
+
+    /// How many times any source's entries were listed.
+    var entriesReads: Int { state.withLock { $0.entriesReads } }
 
     var entries: [ComparisonSource: [SourceEntry]] {
         get { state.withLock { $0.entries } }
@@ -113,7 +125,8 @@ final class FakeSourceReader: SourceReading, Sendable {
         set { state.withLock { $0.repositories = newValue } }
     }
 
-    /// Reads of a path, or entries of a directory path, wait for one element per read on their gate.
+    /// Reads of a path, entries of a directory path, or `status:` plus a directory path for its git status, wait for
+    /// one element per read on their gate.
     var gate: [String: AsyncProbe<Void>] {
         get { state.withLock { $0.gate } }
         set { state.withLock { $0.gate = newValue } }
@@ -135,10 +148,22 @@ final class FakeSourceReader: SourceReading, Sendable {
     func renames(from left: ComparisonSource, to right: ComparisonSource) async -> [String: String] { gitRenames }
 
     func entries(of source: ComparisonSource) async throws -> [SourceEntry] {
+        state.withLock { $0.entriesReads += 1 }
         if case .directory(let url) = source, let gate = gate[url.path(percentEncoded: false)] {
             _ = try await gate.next()
         }
         return entries[source] ?? []
+    }
+
+    /// Serves ``workingTreeStatuses`` as they stand once the source's `status:` gate, if any, lets the read through.
+    /// The gate is taken before the request is announced, so a test that saw the request may drop the gate for the
+    /// reads after it.
+    func workingTreeStatus(of source: ComparisonSource) async throws -> [GitStatusEntry]? {
+        var held: AsyncProbe<Void>?
+        if case .directory(let url) = source { held = gate["status:\(url.path(percentEncoded: false))"] }
+        workingTreeStatusRequests.send(source)
+        if let held { _ = try await held.next() }
+        return workingTreeStatuses[source]
     }
 
     func ignoredEntries(of source: ComparisonSource) async throws -> [SourceEntry] {

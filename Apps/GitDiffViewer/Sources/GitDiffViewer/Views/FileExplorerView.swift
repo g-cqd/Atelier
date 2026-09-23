@@ -24,7 +24,7 @@ struct FileExplorerView: View {
             onPin: { model.pin($0, from: position) },
             uiState: uiState,
             badgeScheme: model.settings.badgeScheme,
-            badgeState: side.badgeState
+            badgeStates: side.badgeStates
         )
         .overlay {
             if side.source == nil {
@@ -51,7 +51,7 @@ struct UnifiedExplorerView: View {
             onPin: { model.pin($0, from: .left) },
             uiState: uiState,
             badgeScheme: model.settings.badgeScheme,
-            badgeState: model.left.badgeState == .staged && model.right.badgeState == .staged ? .staged : .unstaged
+            badgeStates: model.unifiedBadgeStates
         )
         .overlay {
             if model.left.source == nil, model.right.source == nil {

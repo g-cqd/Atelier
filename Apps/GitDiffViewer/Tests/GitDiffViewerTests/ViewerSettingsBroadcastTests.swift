@@ -76,6 +76,28 @@ struct ViewerSettingsBroadcastTests {
     }
 
     @Test
+    func `a badge scheme edit on one instance reaches another window's settings`() throws {
+        let defaults = try makeDefaults()
+        let a = ViewerSettings(defaults: defaults)
+        let b = ViewerSettings(defaults: defaults)
+
+        a.badgeScheme = .xcode
+
+        #expect(b.badgeScheme == .xcode)
+    }
+
+    @Test
+    func `following the theme's appearance on one instance reaches another window's settings`() throws {
+        let defaults = try makeDefaults()
+        let a = ViewerSettings(defaults: defaults)
+        let b = ViewerSettings(defaults: defaults)
+
+        a.matchesThemeAppearance = true
+
+        #expect(b.matchesThemeAppearance)
+    }
+
+    @Test
     func `a project-scoped write on one instance does not broadcast to another instance's base value`() throws {
         let defaults = try makeDefaults()
         let a = ViewerSettings(defaults: defaults)

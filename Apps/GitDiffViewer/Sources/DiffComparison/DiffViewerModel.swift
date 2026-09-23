@@ -34,6 +34,9 @@ package final class DiffViewerModel {
     package private(set) var tabs = DiffTabs()
     package private(set) var comparison = Comparison.empty
     package private(set) var trees = ExplorerTrees.empty
+    /// Where every path of the unified explorer and the tabs stands against the index, by left-side path: both
+    /// sides' ``SideState/badgeStates`` merged, a right-side file under its left-side counterpart.
+    package internal(set) var unifiedBadgeStates = BadgeChangeStates.uniform(.staged)
     package private(set) var folding = CardFolding()
     package private(set) var scrollRequest: ScrollRequest?
     /// The palette for the selected Xcode theme, or the system one when none is selected or it cannot be read.
@@ -82,6 +85,8 @@ package final class DiffViewerModel {
         right.onEntriesChanged = { [weak self] in self?.sourcesChanged() }
         left.onIgnoredEntriesChanged = { [weak self] in self?.ignoredEntriesChanged() }
         right.onIgnoredEntriesChanged = { [weak self] in self?.ignoredEntriesChanged() }
+        left.onBadgeStatesChanged = { [weak self] in self?.updateUnifiedBadgeStates() }
+        right.onBadgeStatesChanged = { [weak self] in self?.updateUnifiedBadgeStates() }
         pipeline.configure(
             options: Self.options(settings, palette: palette), context: settings.contextLines,
             isolatesChanges: settings.isolatesChanges)
@@ -200,7 +205,8 @@ package final class DiffViewerModel {
                 left.load(loaded.left, repository: loaded.info)
             }
             if let entries = loaded.rightEntries {
-                right.load(loaded.right, repository: loaded.info, entries: entries)
+                right.load(
+                    loaded.right, repository: loaded.info, entries: entries, badgeStates: loaded.rightBadgeStates)
             } else {
                 right.load(loaded.right, repository: loaded.info)
             }
@@ -214,6 +220,8 @@ package final class DiffViewerModel {
         let right: ComparisonSource
         let leftEntries: [SourceEntry]?
         let rightEntries: [SourceEntry]?
+        /// The working tree's badge states, read beside its entries; nil for a ref, or when git fails.
+        let rightBadgeStates: BadgeChangeStates?
     }
 
     private static func loadSides(in url: URL, leftRef: String, rightRef: String?, reader: any SourceReading) async
@@ -225,9 +233,10 @@ package final class DiffViewerModel {
             rightRef.map { ComparisonSource.gitRef(repository: info.root, ref: $0) } ?? .directory(info.root)
         async let leftEntries = reader.entries(of: leftSource)
         async let rightEntries = reader.entries(of: rightSource)
+        async let rightBadgeStates = SideState.readBadgeStates(of: rightSource, reader: reader)
         let loaded = LoadedSides(
             info: info, left: leftSource, right: rightSource, leftEntries: try? await leftEntries,
-            rightEntries: try? await rightEntries)
+            rightEntries: try? await rightEntries, rightBadgeStates: await rightBadgeStates)
         PhaseTrace.log("prologue loaded")
         return loaded
     }
@@ -262,6 +271,7 @@ package final class DiffViewerModel {
         guard !left.isLoading, !right.isLoading else {
             comparison = .empty
             trees = .empty
+            updateUnifiedBadgeStates()
             pipeline.clear()
             diagnostics?.comparisonChanged(root: nil, files: [], corpusFingerprint: nil)
             hoverDocs?.comparisonChanged(root: nil, files: [])
@@ -272,6 +282,7 @@ package final class DiffViewerModel {
             left: left.entries, right: right.entries, leftSource: left.source, rightSource: right.source,
             leftIgnored: left.ignoredEntries ?? [], rightIgnored: right.ignoredEntries ?? []
         )
+        updateUnifiedBadgeStates()
         // No `folding.reset()`: folds are keyed by path, so they survive a reload or re-comparison.
         detectRenames()
         rebuildTrees()
@@ -308,6 +319,7 @@ package final class DiffViewerModel {
                 return
             }
             comparison.merge(gitRenames: detected)
+            updateUnifiedBadgeStates()
             rebuildTrees()
             render()
         }

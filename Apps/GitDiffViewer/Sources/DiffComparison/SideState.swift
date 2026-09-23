@@ -36,6 +36,16 @@ package final class SideState {
     /// This repository's remote names, read once so the fetch menu can name the primary one; empty until then.
     package private(set) var remoteNames: [String] = []
 
+    /// Where each file of this folder stands against the index, as git's status last reported it; nil for any other
+    /// source, for a folder outside every repository, and until git answers.
+    private var gitBadgeStates: BadgeChangeStates? {
+        didSet { onBadgeStatesChanged?() }
+    }
+    /// Bumped by every read of git's status and by every load that brings its own; a read that lands after a newer
+    /// one started is dropped.
+    @ObservationIgnored private var badgeStatesGeneration = 0
+    @ObservationIgnored private var badgeStatesTask: Task<Void, Never>?
+
     private var loadTask: Task<Void, Never>?
     private var ignoredTask: Task<Void, Never>?
     private var remoteTask: Task<Void, Never>?
@@ -48,6 +58,8 @@ package final class SideState {
     /// Called after a successful fetch and its ``refreshRepositoryInfo()``, unless this side has since moved to
     /// another repository.
     @ObservationIgnored package var onFetched: (@MainActor () -> Void)?
+    /// Called whenever git's answer behind ``badgeStates`` changes, so the owner can update what it derives from it.
+    @ObservationIgnored package var onBadgeStatesChanged: (@MainActor () -> Void)?
 
     /// The production ``SourceLoader``'s process runner, shared for fetches; nil for any other reader, which
     /// disables fetching.
@@ -59,10 +71,18 @@ package final class SideState {
         self.taskProvider = taskProvider
     }
 
-    /// Where this side's changes stand against the index, for its file badges: ``BadgeChangeState/unstaged`` for a
-    /// directory source, ``BadgeChangeState/staged`` for anything else.
-    package var badgeState: BadgeChangeState {
-        if case .directory = source { .unstaged } else { .staged }
+    /// Where every path of this side stands against the index, for its badges: git's own answer for a folder inside
+    /// a repository. Until git answers, and for a folder outside every repository, every path is unstaged, the way a
+    /// working copy looks; a ref, a file or a patch is staged throughout.
+    package var badgeStates: BadgeChangeStates {
+        if let gitBadgeStates { return gitBadgeStates }
+        if case .directory = source { return .uniform(.unstaged) }
+        return .uniform(.staged)
+    }
+
+    /// Where `path`, a file or a folder of this side, stands against the index; see ``badgeStates``.
+    package func badgeState(of path: String) -> BadgeChangeState {
+        badgeStates.state(of: path)
     }
 
     package var refChoice: RefChoice {
@@ -107,8 +127,11 @@ package final class SideState {
     }
 
     package func load(_ source: ComparisonSource, repository: RepositoryInfo?) {
+        let isNewSource = source != self.source
         self.source = source
         setRepository(repository)
+        // Another tree's states would badge this one's files until its own status lands.
+        if isNewSource { gitBadgeStates = nil }
         reload()
     }
 
@@ -141,16 +164,19 @@ package final class SideState {
         isLoading = false
     }
 
-    /// Adopts entries the owner already read, so the comparison starts without another round trip. The owner
-    /// reports the change itself, so both sides can be swapped in before anything is recomputed.
+    /// Adopts entries the owner already read, with the badge states it read beside them (nil when it read none), so
+    /// the comparison starts without another round trip. The owner reports the change itself, so both sides can be
+    /// swapped in before anything is recomputed.
     package func load(
-        _ source: ComparisonSource, repository: RepositoryInfo?, entries: [SourceEntry], ignored: [SourceEntry]? = nil
+        _ source: ComparisonSource, repository: RepositoryInfo?, entries: [SourceEntry], ignored: [SourceEntry]? = nil,
+        badgeStates: BadgeChangeStates? = nil
     ) {
         loadTask?.cancel()
         self.source = source
         setRepository(repository)
         isLoading = false
         errorMessage = nil
+        publish(badgeStates, generation: beginBadgeStatesRead())
         apply(entries, ignored: ignored, notifying: false)
     }
 
@@ -211,11 +237,17 @@ package final class SideState {
         isLoading = true
         errorMessage = nil
         onReload?()
+        let generation = beginBadgeStatesRead()
+        let reader = reader
         loadTask = taskProvider.task {
+            // Git's status runs beside the listing, so the files and their badges land together.
+            async let badgeStates = Self.readBadgeStates(of: source, reader: reader)
             do {
                 let entries = try await reader.entries(of: source)
+                let states = await badgeStates
                 guard !Task.isCancelled else { return }
                 isLoading = false
+                publish(states, generation: generation)
                 apply(entries, ignored: nil, notifying: true)
             } catch is CancellationError {
                 return
@@ -225,6 +257,49 @@ package final class SideState {
                 apply([], ignored: nil, notifying: true)
             }
         }
+    }
+
+    /// Re-reads git's status for this side's folder and swaps in the badge states it gives, without re-reading the
+    /// files: staging or committing moves what the index holds, not what the files hold. A no-op for any other
+    /// source; a later read or load supersedes it.
+    package func refreshBadgeStates() {
+        guard let source, case .directory = source else { return }
+        let generation = beginBadgeStatesRead()
+        let reader = reader
+        badgeStatesTask = taskProvider.task {
+            let states = await Self.readBadgeStates(of: source, reader: reader)
+            guard !Task.isCancelled else { return }
+            publish(states, generation: generation)
+        }
+    }
+
+    /// Git's status for `source` as badge states, read and built off the main actor: nil when `source` is not a
+    /// folder inside a repository, and when git fails, which leaves the side its look without git.
+    @concurrent
+    nonisolated static func readBadgeStates(of source: ComparisonSource, reader: any SourceReading) async
+        -> BadgeChangeStates?
+    {
+        do {
+            return try await reader.workingTreeStatus(of: source).map(BadgeChangeStates.init(status:))
+        } catch is CancellationError {
+            return nil
+        } catch {
+            PhaseTrace.log("git status failed for \(source.displayName): \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// Supersedes every earlier read of git's status; returns the generation a new result must still hold to land.
+    private func beginBadgeStatesRead() -> Int {
+        badgeStatesTask?.cancel()
+        badgeStatesTask = nil
+        badgeStatesGeneration += 1
+        return badgeStatesGeneration
+    }
+
+    private func publish(_ states: BadgeChangeStates?, generation: Int) {
+        guard generation == badgeStatesGeneration else { return }
+        gitBadgeStates = states
     }
 
     /// Reads the files git ignores, once per source and only when asked: the listing takes seconds on a tree
