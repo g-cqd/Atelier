@@ -58,16 +58,24 @@ package struct BadgeChangeStates: Sendable, Equatable {
         }
     }
 
-    /// Both sides as one view keyed by left-side paths: each right-side file moves to the path `leftPath` gives it,
-    /// the more pressing state wins where both sides name a path, and the folders are aggregated again.
+    /// Both sides as one view keyed by left-side paths, the unified explorer's; see ``merged(_:with:ownPath:)``.
     /// - Complexity: O((left files + right files) × path depth)
     package static func merged(left: Self, right: Self, leftPath: (String) -> String) -> Self {
-        var files = left.files
-        for (path, state) in right.files {
-            let key = leftPath(path)
+        merged(left, with: right, ownPath: leftPath)
+    }
+
+    /// Both sides as one side's explorer draws them, keyed by that side's paths: `own`'s files keep their paths, each
+    /// of `other`'s moves to the path `ownPath` gives it, the more pressing state wins where both sides name a path,
+    /// and the folders are aggregated again. A badge describes a change's git state in the comparison, not the side
+    /// it is drawn on, so built once per explorer this draws each file in the same state in both (CARD-11).
+    /// - Complexity: O((own files + other files) × path depth)
+    package static func merged(_ own: Self, with other: Self, ownPath: (String) -> String) -> Self {
+        var files = own.files
+        for (path, state) in other.files {
+            let key = ownPath(path)
             files[key] = files[key].map { morePressing($0, state) } ?? state
         }
-        return Self(files: files, fallback: morePressing(left.fallback, right.fallback))
+        return Self(files: files, fallback: morePressing(own.fallback, other.fallback))
     }
 
     /// Where `path`, a file or a folder, stands against the index.

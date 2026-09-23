@@ -24,7 +24,7 @@ struct FileExplorerView: View {
             onPin: { model.pin($0, from: position) },
             uiState: uiState,
             badgeScheme: model.settings.badgeScheme,
-            badgeStates: side.badgeStates
+            badgeStates: side.explorerBadgeStates
         )
         .overlay {
             if side.source == nil {
