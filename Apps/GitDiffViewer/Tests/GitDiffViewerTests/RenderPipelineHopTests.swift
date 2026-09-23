@@ -93,7 +93,7 @@ struct RenderPipelineHopTests {
         harness.render(
             [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 1)], keepingPublished: false)
         try await harness.taskProvider.waitForAllTasks()
-        for _ in 0 ..< 4 { _ = try await harness.reader.contentRequests.next() }
+        for _ in 0 ..< 4 { _ = try await harness.reader.contentRequests.expectNext() }
     }
 
     @Test
@@ -107,7 +107,7 @@ struct RenderPipelineHopTests {
 
         harness.render(
             [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 2)], keepingPublished: true)
-        _ = try await harness.reader.contentRequests.next()
+        _ = try await harness.reader.contentRequests.expectNext()
 
         #expect(harness.sut.cards.map(\.rendered.id) == before)
         #expect(harness.sut.isRendering)
@@ -130,7 +130,7 @@ struct RenderPipelineHopTests {
 
         harness.render(
             [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 2)], keepingPublished: true)
-        _ = try await harness.reader.contentRequests.next()
+        _ = try await harness.reader.contentRequests.expectNext()
         try harness.revealAbove(3, inCard: 0)
         try harness.revealAbove(3, inCard: 1)
         harness.reader.gate["b.swift"]?.send(())
@@ -152,7 +152,7 @@ struct RenderPipelineHopTests {
 
         harness.render(
             [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 2)], keepingPublished: true)
-        #expect(try await harness.holding.steps.next() == [1])
+        #expect(try await harness.holding.steps.expectNext() == [1])
         try harness.revealAbove(3, inCard: 0)
         try harness.revealAbove(3, inCard: 1)
         harness.holding.isHolding = false
@@ -172,7 +172,7 @@ struct RenderPipelineHopTests {
 
         harness.render(
             [harness.pair("a.swift", version: 1), harness.pair("b.swift", version: 2)], keepingPublished: true)
-        _ = try await harness.reader.contentRequests.next()
+        _ = try await harness.reader.contentRequests.expectNext()
         harness.sut.configure(options: PipelineHarness.inline, context: 2, isolatesChanges: false)
         harness.sut.relayout(keepingScroll: false)
         harness.reader.gate["b.swift"]?.send(())

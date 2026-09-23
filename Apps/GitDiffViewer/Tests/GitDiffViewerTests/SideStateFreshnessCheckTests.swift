@@ -94,7 +94,7 @@ struct SideStateFreshnessCheckTests {
         let listing = reader.gateNextListing(of: Self.tree)
         reader.entries[Self.tree] = [Self.entry("a.swift", "2")]
         sut.reloadAfterOutsideWrite()
-        _ = try await listing.reached.next()
+        _ = try await listing.reached.expectNext()
 
         reader.entries[Self.tree] = [Self.entry("a.swift", "3")]
         sut.reloadAfterOutsideWrite()

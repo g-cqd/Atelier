@@ -267,7 +267,7 @@ struct DiagnosticsModelTests {
             root: Self.root, files: [target("A.swift"), target("B.swift"), target("C.swift")],
             corpusFingerprint: "two")
         try await startRun(on: clock)
-        _ = try await swiftlintLanded.next()
+        _ = try await swiftlintLanded.expectNext()
 
         #expect(sut.model.findingsByFile["A.swift"] == nil)
         #expect(sut.model.findingsByFile["B.swift"]?.map(\.tool) == [.arcleak])

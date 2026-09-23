@@ -100,7 +100,7 @@ struct SideStateFetchTests {
 
         let first = Task { await sut.fetch() }
         // The runner has the fetch spec in hand, so `isFetching` is certainly set.
-        _ = try await started.next()
+        _ = try await started.expectNext()
 
         await sut.fetch()
         let fetchCallsWhileFirstWasRunning = runner.specs.count(where: { $0.arguments.contains("fetch") })
@@ -176,7 +176,7 @@ struct SideStateFetchTests {
 
         let fetchTask = Task { await sut.fetch() }
         // The `remotes()` read is in flight against the first repository once the runner has its spec.
-        _ = try await started.next()
+        _ = try await started.expectNext()
 
         let otherRoot = URL(filePath: "/other", directoryHint: .isDirectory)
         let otherInfo = RepositoryInfo(root: otherRoot, branches: [], tags: [], commits: [])

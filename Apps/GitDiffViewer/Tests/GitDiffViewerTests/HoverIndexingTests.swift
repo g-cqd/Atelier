@@ -44,7 +44,7 @@ struct HoverIndexingTests {
     /// The next `count` reads, in the order they were asked for.
     private func reads(_ count: Int) async throws -> [String] {
         var paths: [String] = []
-        for _ in 0 ..< count { paths.append(try #require(try await harness.reader.contentRequests.next())) }
+        for _ in 0 ..< count { paths.append(try #require(try await harness.reader.contentRequests.expectNext())) }
         return paths
     }
 

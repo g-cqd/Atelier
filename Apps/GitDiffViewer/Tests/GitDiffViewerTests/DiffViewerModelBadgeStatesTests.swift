@@ -100,7 +100,7 @@ struct DiffViewerModelBadgeStatesTests {
         try await harness.taskProvider.waitForAllTasks()
 
         #expect(sut.badgeState(ofPath: "a.swift") == .unstaged)
-        #expect(try await harness.reader.workingTreeStatusRequests.next() == Self.tree)
+        #expect(try await harness.reader.workingTreeStatusRequests.expectNext() == Self.tree)
         try harness.reader.workingTreeStatusRequests.expectNoBufferedElements()
         #expect(harness.reader.entriesReads == 2)
     }

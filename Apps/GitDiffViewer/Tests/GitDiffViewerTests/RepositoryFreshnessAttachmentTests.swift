@@ -146,7 +146,7 @@ struct RepositoryFreshnessAttachmentTests {
         try #require(factory.all.count == 1)
         harness.clock.advance(by: WatcherHarness.treeDebounce)
 
-        _ = try await probe.next()
+        _ = try await probe.expectNext()
         #expect(!source.isStopped)
         try await harness.drain(sut)
     }

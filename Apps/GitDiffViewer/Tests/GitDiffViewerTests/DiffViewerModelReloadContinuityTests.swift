@@ -50,7 +50,7 @@ struct DiffViewerModelReloadContinuityTests {
             harness.entry("a.swift", "3"), harness.entry("b.swift", "4")
         ]
         try await harness.load(sut)
-        for _ in 0 ..< 4 { _ = try await harness.reader.contentRequests.next() }
+        for _ in 0 ..< 4 { _ = try await harness.reader.contentRequests.expectNext() }
         let beforeA = try #require(sut.renderedFiles.first { $0.path == "a.swift" })
         let beforeB = try #require(sut.renderedFiles.first { $0.path == "b.swift" })
 
@@ -68,7 +68,7 @@ struct DiffViewerModelReloadContinuityTests {
 
         // a.swift was neither re-read nor re-diffed; only b.swift's two sides were.
         var requested: [String] = []
-        for _ in 0 ..< 2 { requested.append(try #require(try await harness.reader.contentRequests.next())) }
+        for _ in 0 ..< 2 { requested.append(try #require(try await harness.reader.contentRequests.expectNext())) }
         #expect(requested.sorted() == ["b.swift", "b.swift"])
         try harness.reader.contentRequests.expectNoBufferedElements()
     }
@@ -231,13 +231,13 @@ struct DiffViewerModelReloadContinuityTests {
         try await harness.load(sut)
         sut.select("a.swift")
         try await harness.taskProvider.waitForAllTasks()
-        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.next() }
+        for _ in 0 ..< 2 { _ = try await harness.reader.contentRequests.expectNext() }
         let before = try #require(sut.rendered)
         harness.reader.gate["a.swift"] = AsyncProbe<Void>()
 
         harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "9")]
         sut.right.reload()
-        _ = try await harness.reader.contentRequests.next()
+        _ = try await harness.reader.contentRequests.expectNext()
 
         #expect(sut.rendered?.id == before.id)
         #expect(sut.detailState == .file(before))

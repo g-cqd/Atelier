@@ -199,7 +199,7 @@ private final class ParseCounter: Sendable {
             root: nil, files: [caller()], corpusReader: reader, corpusSource: .directory(Self.rightRoot),
             corpusEntries: [restEntry()])
         // The stale pass is inside its corpus read when the newer comparison supersedes it.
-        _ = try await reader.batchStarted.next()
+        _ = try await reader.batchStarted.expectNext()
         let unrelated = HoverDocumentationModel.FileEntry(
             index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift", oldText: "let x = 1\n",
             newText: "let x = 1\n", oldBlobID: "old2", newBlobID: "new2")
@@ -223,7 +223,7 @@ private final class ParseCounter: Sendable {
         model.comparisonChanged(
             root: nil, files: [caller()], corpusReader: reader, corpusSource: .directory(Self.rightRoot),
             corpusEntries: corpus)
-        let first = try #require(try await reader.batchStarted.next())
+        let first = try #require(try await reader.batchStarted.expectNext())
         model.comparisonChanged(root: nil, files: [caller(blob: "newer")])
         gate.open()
         try await taskProvider.waitForAllTasks()
@@ -370,7 +370,7 @@ private final class ParseCounter: Sendable {
         model.comparisonChanged(
             root: nil, files: [caller()], corpusReader: reader, corpusSource: .directory(Self.rightRoot),
             corpusEntries: corpus)
-        let first = try #require(try await reader.batchStarted.next())
+        let first = try #require(try await reader.batchStarted.expectNext())
         model.isEnabled = false
         gate.open()
         try await taskProvider.waitForAllTasks()
