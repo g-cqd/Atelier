@@ -17,8 +17,9 @@ struct SDKDocumentationProviderIntegrationTests {
             return
         }
 
-        let service = try SDKDocumentationProvider.makeScratchService(serverExecutable: serverExecutable)
-        let provider = SDKDocumentationProvider(service: service)
+        let probeDirectory = try SDKDocumentationProvider.makeProbeDirectory()
+        let provider = SDKDocumentationProvider.scratch(
+            serverExecutable: serverExecutable, probeDirectory: probeDirectory, locateSDK: { _ in nil })
 
         let content = "import AppKit\nlet material = NSVisualEffectView.Material.hudWindow"
         // Inside "hudWindow", counted on the hovered line alone.
@@ -26,7 +27,8 @@ struct SDKDocumentationProviderIntegrationTests {
         let query = HoverQuery(documentURI: "file:///probe.swift", content: content, line: 1, utf16Column: column)
 
         let result = try await provider.hover(query)
-        await service.shutdown()
+        await provider.shutdown()
+        try FileManager.default.removeItem(at: probeDirectory)
 
         let markdown = try #require(result?.markdown)
         #expect(markdown.lowercased().contains("material"))

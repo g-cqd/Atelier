@@ -192,7 +192,10 @@ final class AppServices {
             makeConfiguration: { root in await policy.configuration(forRoot: root) })
         lspRegistry = registry
         policy.stopSessionsOnRevocation(in: registry)
-        sdkHoverTier = SDKHoverTier { await policy.resolveSDKTier() }
+        let sdkRunner = diagnosticsRunner
+        sdkHoverTier = SDKHoverTier {
+            await policy.resolveSDKTier { platform in await SDKLocation.locate(platform, runner: sdkRunner) }
+        }
     }
 
     /// The SDK tier's provider, which windows hover through; nil when sourcekit-lsp is off app-wide or missing.

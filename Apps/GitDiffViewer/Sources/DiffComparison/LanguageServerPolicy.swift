@@ -89,13 +89,18 @@ package final class LanguageServerPolicy {
         return await locate(location)
     }
 
-    /// The SDK tier's scratch session over ``sdkServerExecutable()``, in a new private probe directory; nil when
-    /// sourcekit-lsp is off app-wide or missing, or when the directory cannot be created, which is logged.
-    package func resolveSDKTier() async -> SDKHoverTier.Resolved? {
+    /// The SDK tier's scratch sessions over ``sdkServerExecutable()``, one per platform, in a new private probe
+    /// directory; `locateSDK` finds a platform's SDK when its session is first needed. Nil when sourcekit-lsp is off
+    /// app-wide or missing, or when the directory cannot be created, which is logged.
+    package func resolveSDKTier(
+        locateSDK: @escaping @Sendable (SDKPlatform) async -> SDKLocation?
+    ) async -> SDKHoverTier.Resolved? {
         guard let executable = await sdkServerExecutable() else { return nil }
         do {
-            let service = try SDKDocumentationProvider.makeScratchService(serverExecutable: executable)
-            return SDKHoverTier.Resolved(provider: SDKDocumentationProvider(service: service), service: service)
+            let probeDirectory = try SDKDocumentationProvider.makeProbeDirectory()
+            let provider = SDKDocumentationProvider.scratch(
+                serverExecutable: executable, probeDirectory: probeDirectory, locateSDK: locateSDK)
+            return SDKHoverTier.Resolved(provider: provider, probeDirectory: probeDirectory)
         } catch {
             PhaseTrace.log("SDK documentation is off: \(error)")
             return nil
@@ -149,17 +154,18 @@ package final class LanguageServerPolicy {
     }
 }
 
-/// The on-device Apple SDK documentation tier: one scratch sourcekit-lsp session per app, shared by every window.
+/// The on-device Apple SDK documentation tier: one scratch sourcekit-lsp session per platform and per app, shared by
+/// every window.
 @MainActor
 package final class SDKHoverTier {
-    /// A resolved tier: the provider windows hover through, and the scratch session behind it.
+    /// A resolved tier: the provider windows hover through, and the probe directory its sessions run in.
     package struct Resolved: Sendable {
         package let provider: SDKDocumentationProvider
-        package let service: SourceKitLSPService
+        package let probeDirectory: URL
 
-        package init(provider: SDKDocumentationProvider, service: SourceKitLSPService) {
+        package init(provider: SDKDocumentationProvider, probeDirectory: URL) {
             self.provider = provider
-            self.service = service
+            self.probeDirectory = probeDirectory
         }
     }
 
@@ -187,13 +193,13 @@ package final class SDKHoverTier {
         return await task.value?.provider
     }
 
-    /// Shuts the scratch session down and removes its probe directory, once a resolution in flight lands; nothing
+    /// Shuts the scratch sessions down and removes their probe directory, once a resolution in flight lands; nothing
     /// happens before the first ``provider()``.
     package func shutdown() async {
         guard let resolved = await resolution?.value else { return }
-        await resolved.service.shutdown()
+        await resolved.provider.shutdown()
         do {
-            try FileManager.default.removeItem(at: resolved.service.workspaceRoot)
+            try FileManager.default.removeItem(at: resolved.probeDirectory)
         } catch {
             PhaseTrace.log("the SDK probe directory stays: \(error)")
         }

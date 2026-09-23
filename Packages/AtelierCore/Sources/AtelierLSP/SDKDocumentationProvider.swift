@@ -450,25 +450,6 @@ extension SDKDocumentationProvider {
             requestTimeout: requestTimeout, initializationOptions: .object(options))
     }
 
-    /// A ``SourceKitLSPService`` rooted at a new private probe directory (``makeProbeDirectory(in:)``), which every
-    /// probe document is named under. The probes send their content inline and never read the workspace, so the
-    /// empty directory serves as sourcekit-lsp's `rootUri`. The caller owns the directory, and removes it once the
-    /// service has shut down.
-    /// - Throws: ``SDKProbeDirectoryError/creationFailed(parentPath:code:)`` when the directory cannot be created.
-    public static func makeScratchService(
-        serverExecutable: URL,
-        serverArguments: [String] = [],
-        idleShutdown: Duration = .seconds(180),
-        requestTimeout: Duration = .seconds(2),
-        parentDirectory: URL = FileManager.default.temporaryDirectory
-    ) throws(SDKProbeDirectoryError) -> SourceKitLSPService {
-        let root = try makeProbeDirectory(in: parentDirectory)
-        let configuration = SourceKitLSPService.Configuration(
-            serverExecutable: serverExecutable, serverArguments: serverArguments, workspaceRoot: root,
-            idleShutdown: idleShutdown, requestTimeout: requestTimeout)
-        return SourceKitLSPService(configuration: configuration)
-    }
-
     /// Creates a new directory under `parent` with `mkdtemp(3)`: its name is unique, and only the current user can
     /// read, write or enter it (mode 0700), so no other account can plant a file under a probe document.
     /// - Throws: ``SDKProbeDirectoryError/creationFailed(parentPath:code:)`` when `mkdtemp` fails.
