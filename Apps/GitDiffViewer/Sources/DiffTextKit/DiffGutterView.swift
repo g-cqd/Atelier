@@ -66,7 +66,7 @@ package final class DiffGutterView: NSView {
     /// The text system whose rows are numbered; set together with `rendered`.
     package weak var source: (any GutterTextSource)?
     private weak var clipView: NSClipView?
-    private nonisolated static let padding: CGFloat = 8
+    private let padding: CGFloat = 8
     private let columnGap: CGFloat = 10
     /// One handle of one gap, as the pointer finds it.
     private struct HandleID: Equatable {
@@ -87,19 +87,14 @@ package final class DiffGutterView: NSView {
     private var hoveredHandle: HandleID?
     private var hoverTracking: NSTrackingArea?
 
-    /// The font, column width and number attributes of the current text, which every drawn row reuses, and where its
-    /// number columns start.
+    /// The font, column width and number attributes of the current text, which every drawn row reuses.
     private struct Metrics {
         let font: NSFont
         let columnWidth: CGFloat
         let contextAttributes: [NSAttributedString.Key: Any]
         let changedAttributes: [NSAttributedString.Key: Any]
-        /// The leading edge of the first number column: past the gap handles' lane when the text offers a handle.
-        /// The halves lie over the rows around their hairline, where those rows' numbers are, and a handle centred in
-        /// a gutter this narrow would cover them.
-        let numbersLeft: CGFloat
 
-        /// - Complexity: O(rows), for the widest line number, and O(gaps).
+        /// - Complexity: O(rows), for the widest line number.
         init(rendered: RenderedText?) {
             let palette = rendered?.palette ?? .system
             font = palette.gutterFont
@@ -108,8 +103,6 @@ package final class DiffGutterView: NSView {
             columnWidth = CGFloat(digits) * digitWidth
             contextAttributes = [.font: font, .foregroundColor: palette.gutterText]
             changedAttributes = [.font: font, .foregroundColor: palette.gutterChangedText]
-            let offersHandle = rendered?.gaps.contains { !$0.marker.handles.isEmpty } ?? false
-            numbersLeft = offersHandle ? max(DiffGutterView.padding, GapHandleLayout.laneWidth) : DiffGutterView.padding
         }
     }
 
@@ -139,11 +132,8 @@ package final class DiffGutterView: NSView {
 
     package var thickness: CGFloat {
         let columns: CGFloat = style == .dual ? 2 : 1
-        return numbersLeft + columns * metrics.columnWidth + (columns - 1) * columnGap + Self.padding
+        return padding * 2 + columns * metrics.columnWidth + (columns - 1) * columnGap
     }
-
-    /// Where the first number column starts: after the gap handles' lane when the text offers a handle.
-    package var numbersLeft: CGFloat { metrics.numbersLeft }
 
     package override var intrinsicContentSize: NSSize {
         NSSize(width: thickness, height: NSView.noIntrinsicMetric)
@@ -194,7 +184,7 @@ package final class DiffGutterView: NSView {
     /// Each half of a gap's handle shows the one direction it drags in, over its own hit area only.
     package override func resetCursorRects() {
         forEachGap(in: visibleRect) { gap, band in
-            for half in halves(of: gap.marker, boundaryY: band.midY) {
+            for half in handle(of: gap.marker, in: band).halves {
                 addCursorRect(
                     half.hitArea, cursor: .rowResize(directions: half.handle == .extendsChangeAbove ? .down : .up))
             }
@@ -218,8 +208,7 @@ package final class DiffGutterView: NSView {
 
     package override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        // A handle lies over the rows around its hairline, their line numbers included, so it takes a press first;
-        // the rest of those rows' gutter keeps its own clicks.
+        // A press in a gap's band belongs to its handle; the rows around it keep their own clicks.
         if let hit = gapHalf(at: point) {
             if event.clickCount == 2 {
                 onGapDrag?(.revealedAll(hit.marker, hit.handle))
@@ -358,8 +347,7 @@ package final class DiffGutterView: NSView {
                 let label = String(number) as NSString
                 let size = label.size(withAttributes: attributes)
                 let x =
-                    metrics.numbersLeft + CGFloat(column) * (metrics.columnWidth + columnGap) + metrics.columnWidth
-                    - size.width
+                    padding + CGFloat(column) * (metrics.columnWidth + columnGap) + metrics.columnWidth - size.width
                 if let diagnostics {
                     drawUnderlay(severity: diagnostics.severity, x: x, top: top, size: size)
                 }
@@ -389,20 +377,18 @@ package final class DiffGutterView: NSView {
 // MARK: Gap handles
 
 extension DiffGutterView {
-    /// The halves `marker` offers on the hairline at `boundaryY`, in the lane before the numbers.
-    private func halves(of marker: GapMarker, boundaryY: CGFloat) -> [GapHandleLayout.Half] {
-        GapHandleLayout.halves(
-            marker.handles, boundaryY: boundaryY, rowHeight: rendered?.lineHeight ?? palette.defaultLineHeight)
+    /// The handle `marker` shows in its `band`.
+    private func handle(of marker: GapMarker, in band: NSRect) -> GapHandleLayout.Handle {
+        GapHandleLayout.handle(marker.handles, in: band, lineHeight: rendered?.lineHeight ?? palette.defaultLineHeight)
     }
 
-    /// The half of a gap's handle whose hit area holds `point`, with its gap.
+    /// The half of a gap's handle whose part of the band holds `point`, with its gap.
     private func gapHalf(at point: NSPoint) -> (marker: GapMarker, handle: GapHandle)? {
         guard point.x >= 0, point.x < bounds.width else { return nil }
         var found: (GapMarker, GapHandle)?
-        let reach = GapHandleLayout.reach
-        forEachGap(in: NSRect(x: 0, y: point.y - reach, width: 1, height: 2 * reach)) { gap, band in
-            guard found == nil,
-                let half = halves(of: gap.marker, boundaryY: band.midY).first(where: { $0.hitArea.contains(point) })
+        forEachGap(in: NSRect(x: 0, y: point.y, width: 1, height: 1)) { gap, band in
+            guard found == nil, band.contains(point),
+                let half = handle(of: gap.marker, in: band).halves.first(where: { $0.hitArea.contains(point) })
             else { return }
             found = (gap.marker, half.handle)
         }
@@ -421,67 +407,68 @@ extension DiffGutterView {
         needsDisplay = true
     }
 
-    /// The gaps whose halves reach into `rect`: a hairline across the gutter on each one's boundary, and the halves it
-    /// offers over the rows on either side, highlighted under the pointer or while dragged. A gap offering none, a
-    /// whole file without a change, leaves no trace.
+    /// The bands of the gaps near `rect`, each with its handle: a hairline across the gutter, and the halves the gap
+    /// offers, highlighted under the pointer or while dragged. The band itself stays empty.
     private func drawGaps(in rect: NSRect) {
-        let width = bounds.width - 1
         forEachGap(in: rect) { gap, band in
-            let y = band.midY
-            let halves = halves(of: gap.marker, boundaryY: y)
-            guard let span = halves.first?.rect else { return }
-            for half in halves {
-                let id = HandleID(key: gap.marker.key, handle: half.handle)
-                drawHalf(half, isActive: id == hoveredHandle || id == handleDrag?.id)
-            }
-            // The hairline, across the band's middle, which is also the halves' flat side across their width: drawn
-            // once, the same whichever half is active, so each half's highlight stays its own.
-            let line = NSRect(x: 0, y: y - 0.5, width: width, height: 1)
+            let handle = handle(of: gap.marker, in: band)
             palette.textColor.withAlphaComponent(Self.hairlineAlpha).setFill()
-            line.divided(atDistance: span.minX, from: .minXEdge).slice.fill()
-            line.divided(atDistance: width - span.maxX, from: .maxXEdge).slice.fill()
+            handle.hairline.fill()
+            let isPair = handle.halves.count == 2
+            for half in handle.halves {
+                let id = HandleID(key: gap.marker.key, handle: half.handle)
+                drawHalf(half, closed: !isPair, isActive: id == hoveredHandle || id == handleDrag?.id)
+            }
+            // Between two halves, the hairline is their shared flat side, in the outline's colour whichever half is
+            // active, so each half's highlight stays its own.
+            guard isPair, let span = handle.halves.first?.rect else { return }
+            let side = NSRect(x: span.minX, y: handle.hairline.minY, width: span.width, height: 1)
             palette.gutterBackground.setFill()
-            NSRect(x: span.minX, y: line.minY, width: span.width, height: 1).fill()
-            palette.textColor.withAlphaComponent(Self.strokeAlpha(isActive: false)).setFill()
-            NSRect(x: span.minX, y: line.minY, width: span.width, height: 1).fill()
+            side.fill()
+            palette.textColor.withAlphaComponent(Self.outlineAlpha(isActive: false)).setFill()
+            side.fill()
         }
     }
 
-    private static let hairlineAlpha: CGFloat = 0.1
+    /// Xcode's hairline: 241 on its white gutter.
+    private static let hairlineAlpha: CGFloat = 0.055
 
-    private static func strokeAlpha(isActive: Bool) -> CGFloat {
-        isActive ? 0.5 : 0.22
+    /// Xcode's outline and grip: 221 on its white gutter; stronger under the pointer or while dragged.
+    private static func outlineAlpha(isActive: Bool) -> CGFloat {
+        isActive ? 0.4 : 0.135
     }
 
-    /// One half of a gap's rectangle: rounded on the side of the change it extends and open on the hairline, which
-    /// draws its flat side, with one grip line across it; drawn stronger while it is hovered or dragged.
-    private func drawHalf(_ half: GapHandleLayout.Half, isActive: Bool) {
+    /// One half of a gap's handle: rounded on the side of the change it extends, flat on the hairline, with its grip
+    /// line; drawn stronger while it is hovered or dragged. Two halves leave their flat side to the hairline they share;
+    /// a lone half, whose hairline lies apart from it, outlines its own.
+    private func drawHalf(_ half: GapHandleLayout.Half, closed: Bool, isActive: Bool) {
         let rect = half.rect
-        let radius = min(GapHandleLayout.cornerRadius, rect.height - 1, rect.width / 2)
-        let (flatY, roundY) =
-            half.handle == .extendsChangeAbove ? (rect.maxY, rect.minY + 0.5) : (rect.minY, rect.maxY - 0.5)
+        // The outline lies inside the half, half a point in from its edges.
+        let radius = min(GapHandleLayout.cornerRadius - 0.5, rect.height - 1, rect.width / 2)
+        let isUpper = half.handle == .extendsChangeAbove
+        let flatY = isUpper ? rect.maxY - (closed ? 0.5 : 0) : rect.minY + (closed ? 0.5 : 0)
+        let roundY = isUpper ? rect.minY + 0.5 : rect.maxY - 0.5
         let left = rect.minX + 0.5
         let right = rect.maxX - 0.5
-        // Its stroke lies inside the half, which ends on the boundary.
         let outline = NSBezierPath()
         outline.move(to: NSPoint(x: left, y: flatY))
         outline.appendArc(from: NSPoint(x: left, y: roundY), to: NSPoint(x: right, y: roundY), radius: radius)
         outline.appendArc(from: NSPoint(x: right, y: roundY), to: NSPoint(x: right, y: flatY), radius: radius)
         outline.line(to: NSPoint(x: right, y: flatY))
+        if closed { outline.close() }
         palette.gutterBackground.setFill()
         outline.fill()
-        palette.textColor.withAlphaComponent(isActive ? 0.12 : 0.04).setFill()
+        palette.textColor.withAlphaComponent(isActive ? 0.1 : 0.04).setFill()
         outline.fill()
-        palette.textColor.withAlphaComponent(Self.strokeAlpha(isActive: isActive)).setStroke()
+        palette.textColor.withAlphaComponent(Self.outlineAlpha(isActive: isActive)).setStroke()
         outline.lineWidth = 1
         outline.stroke()
-        palette.textColor.withAlphaComponent(Self.strokeAlpha(isActive: isActive)).setFill()
-        let gripWidth = min(8, rect.width - 6)
-        NSRect(x: rect.midX - gripWidth / 2, y: rect.midY - 0.5, width: gripWidth, height: 1).fill()
+        palette.textColor.withAlphaComponent(Self.outlineAlpha(isActive: isActive)).setFill()
+        half.grip.fill()
     }
 
-    /// Scrolls whatever shows the gutter, the pane's clip view or the list around a card, so the boundary of the gap
-    /// held open at an edge stays in view, with its handle, as rows open above it.
+    /// Scrolls whatever shows the gutter, the pane's clip view or the list around a card, so the band of the gap held
+    /// open at an edge stays in view, with its handle, as rows open above it.
     private func keepInView(_ id: HandleID) {
         let visible = visibleRect
         guard !visible.isEmpty else { return }
