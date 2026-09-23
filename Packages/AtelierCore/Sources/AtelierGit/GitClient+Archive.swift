@@ -25,10 +25,12 @@ extension GitClient {
     ///   stays as committed and no signature program or `git describe` runs.
     /// - Every filter driver defined in any configuration scope is blanked, the user's own included, so a `filter=`
     ///   attribute in the tree starts no clean, smudge or process command; git-lfs's would even reach the network.
-    /// - Attributes come from the empty tree, not from the archived one, the working tree or the user's file, so
-    ///   `export-ignore` drops no file and no line ending or encoding is converted: the files hold the blobs the diff
-    ///   shows, and a finding lands on the line the diff draws. The repository's own `info/attributes` still applies,
-    ///   since git reads it before anything else; its filters run nothing either.
+    /// - Attributes come from the empty tree (`attr.tree`), not from the archived one, and not from the user's file,
+    ///   so `export-ignore` drops no file and no line ending or encoding is converted: the files hold the blobs the
+    ///   diff shows, and a finding lands on the line the diff draws. `--worktree-attributes` is what makes git consult
+    ///   `attr.tree` at all; it reads that tree before the working tree. A git older than 2.43 ignores `attr.tree` and
+    ///   reads the working tree's `.gitattributes` instead, and the repository's own `info/attributes` always applies,
+    ///   since git reads it first: either may drop or convert a file, and neither can run a filter.
     /// - Only regular files are written. A symbolic link, which could point a tool at a file outside the export, is
     ///   skipped, and a path that would leave the folder is refused.
     ///
@@ -156,7 +158,8 @@ enum TarExtractor {
             guard let parsedSize = octal(header, at: 124, length: 12) else { throw Failure.truncated }
             let size = nextSize ?? parsedSize
             let dataStart = offset + blockSize
-            guard dataStart + size <= bytes.count else { throw Failure.truncated }
+            // Checked before any arithmetic on it: a hostile size must neither trap nor overflow.
+            guard size >= 0, size <= bytes.count - dataStart else { throw Failure.truncated }
             let data = bytes[dataStart ..< dataStart + size]
             offset = dataStart + (size + blockSize - 1) / blockSize * blockSize
             switch header[header.startIndex + 156] {
@@ -166,7 +169,7 @@ enum TarExtractor {
                     nextPath = records["path"]
                     nextSize = try records["size"]
                         .map { value in
-                            guard let size = Int(value) else { throw Failure.truncated }
+                            guard let size = Int(value), size >= 0 else { throw Failure.truncated }
                             return size
                         }
                     continue
@@ -194,20 +197,25 @@ enum TarExtractor {
         return String(decoding: slice.prefix { $0 != 0 }, as: UTF8.self)
     }
 
-    /// An octal number field, NUL- or space-terminated.
+    /// An octal number field, NUL- or space-terminated; nil unless it holds octal digits only, since `Int(_:radix:)`
+    /// would also take a sign.
     private static func octal(_ header: ArraySlice<UInt8>, at start: Int, length: Int) -> Int? {
         let text = field(header, at: start, length: length).trimmingCharacters(in: .whitespaces)
+        guard text.utf8.allSatisfy({ (UInt8(ascii: "0") ... UInt8(ascii: "7")).contains($0) }) else { return nil }
         return text.isEmpty ? 0 : Int(text, radix: 8)
     }
 
-    /// The `key=value` records of a pax extended header, each written as `<length> <key>=<value>\n`.
+    /// The `key=value` records of a pax extended header, each written as `<length> <key>=<value>\n`, where the length
+    /// counts the whole record; a record whose length does not reach past its own space to a closing newline, or runs
+    /// past the header, is refused.
     private static func paxRecords(_ data: ArraySlice<UInt8>) throws -> [String: String] {
         var records: [String: String] = [:]
         var index = data.startIndex
         while index < data.endIndex {
             guard let space = data[index...].firstIndex(of: UInt8(ascii: " ")),
-                let length = Int(String(decoding: data[index ..< space], as: UTF8.self)), length > 0,
-                index + length <= data.endIndex
+                let length = Int(String(decoding: data[index ..< space], as: UTF8.self)),
+                length > space - index + 1, length <= data.endIndex - index,
+                data[index + length - 1] == UInt8(ascii: "\n")
             else { throw Failure.truncated }
             let record = data[(space + 1) ..< (index + length - 1)]
             if let equals = record.firstIndex(of: UInt8(ascii: "=")) {
