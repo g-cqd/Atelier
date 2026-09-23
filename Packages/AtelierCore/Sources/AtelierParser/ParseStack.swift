@@ -1,39 +1,18 @@
-import Synchronization
-
-private let parseStackIDs = ParseStackIDGenerator()
-
-private final class ParseStackIDGenerator: Sendable {
-    private let counter = Mutex(0)
-
-    func next() -> Int {
-        counter.withLock { counter in
-            let current = counter
-            counter += 1
-            return current
-        }
-    }
-}
-
 struct ParseStack: Sendable {
-    let id: Int
     var state: Int
     var stateStack: [Int]
     var nodes: [SyntaxNode]
     var errorCount: Int
-    // Reserved for incremental-lexing scanner checkpointing.
-    var scannerState: [UInt8]
 
     var stateBeforeTop: Int {
         stateStack.last ?? 0
     }
 
     init(state: Int) {
-        self.id = parseStackIDs.next()
         self.state = state
         self.stateStack = [state]
         self.nodes = []
         self.errorCount = 0
-        self.scannerState = []
     }
 
     mutating func pushNode(_ node: SyntaxNode) {
