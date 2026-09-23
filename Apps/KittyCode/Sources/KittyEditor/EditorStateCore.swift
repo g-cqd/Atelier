@@ -1276,9 +1276,9 @@ public final class EditorState {
         self.treePanelWidth = config.treeWidth
         self.colorScheme = Self.makeColorScheme(config: config)
         self.configuredSyntaxTheme = try? Self.resolveConfiguredSyntaxTheme(config: config, palette: TerminalPalette())
-        let catalog = config.useSFSymbolsInTerminal ? SymbolCatalogLoader.loadOrDiscover() : nil
-        self.symbolTheme = TerminalSymbolTheme.make(
-            symbolsEnabled: config.useSFSymbolsInTerminal, catalog: catalog)
+        self.symbolTheme = TerminalSymbolTheme.make(symbolsEnabled: config.useSFSymbolsInTerminal) {
+            SymbolCatalogLoader.loadOrDiscover()
+        }
         let (stream, cont) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         self.fullHighlightSignal = stream
         self.fullHighlightContinuation = cont
@@ -1515,9 +1515,9 @@ public final class EditorState {
         loadConfiguredSyntaxTheme(newConfig)
         colorScheme = Self.makeColorScheme(config: newConfig)
         treePanelWidth = newConfig.treeWidth
-        let catalog = newConfig.useSFSymbolsInTerminal ? SymbolCatalogLoader.loadOrDiscover() : nil
-        symbolTheme = TerminalSymbolTheme.make(
-            symbolsEnabled: newConfig.useSFSymbolsInTerminal, catalog: catalog)
+        symbolTheme = TerminalSymbolTheme.make(symbolsEnabled: newConfig.useSFSymbolsInTerminal) {
+            SymbolCatalogLoader.loadOrDiscover()
+        }
         refreshHighlights()
         // Theme / config / symbol-theme swap touches every visible cell.
         markEverythingDirty()

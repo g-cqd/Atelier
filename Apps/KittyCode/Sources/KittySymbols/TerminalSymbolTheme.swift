@@ -46,14 +46,21 @@ public struct TerminalSymbolTheme: Sendable {
         glyphs[role] ?? Glyph(text: "", prefersSymbol: false)
     }
 
-    public static func make(symbolsEnabled: Bool, catalog: SymbolCatalog?) -> TerminalSymbolTheme {
+    /// Every role's glyph: its SF Symbol when `symbolsEnabled` and the terminal takes them, else its fallback text.
+    /// - Parameters:
+    ///   - symbolsEnabled: Whether the config asks for SF Symbols; `KITTYCODE_SF_SYMBOLS=0` still turns them off.
+    ///   - loadCatalog: Reads the SF Symbols catalog, a megabyte-scale file; called at most once, for the first role
+    ///     whose symbol has no built-in codepoint, so never while every role has one.
+    /// - Returns: A theme with a glyph for every role.
+    public static func make(symbolsEnabled: Bool, loadCatalog: () -> SymbolCatalog?) -> TerminalSymbolTheme {
         let useSymbols = symbolsEnabled && TerminalSymbolSupport.prefersSFSymbolGlyphs()
+        var catalog: SymbolCatalog??  // nil until loaded
         return TerminalSymbolTheme(
             glyphs: Role.allCases.reduce(into: [:]) { result, role in
                 let fallback = fallbackText(for: role)
                 if useSymbols,
                     let name = symbolName(for: role),
-                    let glyph = resolveGlyph(name: name, catalog: catalog)
+                    let glyph = resolveGlyph(name: name, catalog: &catalog, loadCatalog: loadCatalog)
                 {
                     result[role] = Glyph(text: glyph, prefersSymbol: true)
                 } else {
@@ -62,11 +69,14 @@ public struct TerminalSymbolTheme: Sendable {
             })
     }
 
-    private static func resolveGlyph(name: String, catalog: SymbolCatalog?) -> String? {
+    private static func resolveGlyph(
+        name: String, catalog: inout SymbolCatalog??, loadCatalog: () -> SymbolCatalog?
+    ) -> String? {
         if let cp = puaCodepoints[name], let scalar = UnicodeScalar(cp) {
             return String(Character(scalar))
         }
-        return catalog?[name]?.glyph
+        if catalog == nil { catalog = .some(loadCatalog()) }
+        return catalog??[name]?.glyph
     }
 
     // SF Pro PUA codepoints for symbols used by the theme.
