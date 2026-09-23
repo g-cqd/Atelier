@@ -32,22 +32,50 @@ struct SyntaxTreeTests {
     }
 
     @Test
-    func `deeply nested tree deinit drains without stack overflow`() {
-        // Deep enough to exercise the iterative deinit; building the chain copies O(depth²) nodes, so going deeper
-        // only slows the test.
-        let tree = Self.makeDeepTree(depth: 1_000)
-        _ = tree
-        #expect(
-            Bool(true),
-            "got here = iterative deinit unwound the chain without crashing")
+    func `A tree too deep to free recursively releases on a pool-sized stack`() async {
+        // Freed recursively, a chain overflows a 512 KiB stack between 2,000 and 3,000 levels.
+        let rootChildren = await onThread {
+            let tree = Self.makeChain(depth: 100_000)
+            return tree.root.children.count
+        }
+        #expect(rootChildren == 1)
     }
 
-    /// Constructs a `depth`-deep `SyntaxTree` whose root chains down
-    /// through `children[0]` to a single leaf at the bottom.
-    private static func makeDeepTree(depth: Int) -> SyntaxTree {
+    @Test
+    func `A tree whose fields repeat its children releases each subtree once`() async {
+        // The parser stores a field as a copy of a child; walking fields and children alike would reach the leaf of
+        // this chain 2^63 times.
+        let rootFields = await onThread {
+            let tree = Self.makeChain(depth: 64, fieldPerLevel: true)
+            return tree.root.fields.count
+        }
+        #expect(rootFields == 1)
+    }
+
+    @Test
+    func `Releasing a tree leaves a subtree held elsewhere whole`() {
+        var subtree: SyntaxNode?
+        do {
+            let tree = Self.makeChain(depth: 10, fieldPerLevel: true)
+            subtree = tree.root.children.first
+        }
+        var depth = 0
+        var node = subtree
+        while let current = node {
+            depth += 1
+            node = current.children.first
+        }
+        #expect(depth == 9)
+        #expect(subtree?.fields["inner"]?.first?.children.count == 1)
+    }
+
+    /// A `depth`-level tree whose root chains down through `children[0]` to a single leaf; with `fieldPerLevel`, each
+    /// branch also names its child in an `inner` field, as the parser records fields.
+    private static func makeChain(depth: Int, fieldPerLevel: Bool = false) -> SyntaxTree {
         var node = SyntaxNode(type: "leaf", byteRange: 0 ..< 1)
-        for level in 1 ... depth {
-            node = SyntaxNode(type: "branch-\(level)", children: [node], byteRange: 0 ..< 1)
+        for _ in 1 ..< depth {
+            node = SyntaxNode(
+                type: "branch", children: [node], byteRange: 0 ..< 1, fields: fieldPerLevel ? ["inner": [node]] : [:])
         }
         return SyntaxTree(root: node, source: "x")
     }
