@@ -53,6 +53,14 @@ struct GLRParserJSONLexingTests {
     }
 
     @Test
+    func `A source of comments alone keeps them in its tree`() throws {
+        let tree = try Self.parse("// one\n/* two */\n")
+
+        #expect(tree.root.children.map { $0.text(from: tree.source) } == ["// one", "/* two */"])
+        #expect(tree.root.children.map(\.isExtra) == [true, true])
+    }
+
+    @Test
     func `A 206 KB JSON file stays under the token limit and parses without an error`() throws {
         let source = Self.records(bytes: 206 * 1_024)
 
