@@ -84,7 +84,7 @@ enum BundledLanguageManifest {
         }
         let decodedEntries: [BundledLanguageEntry]
         do {
-            decodedEntries = try JSONDecoder().decode([BundledLanguageEntry].self, from: data)
+            decodedEntries = try SyntaxJSON.decode([BundledLanguageEntry].self, from: data)
         } catch {
             logger.fault(
                 "languages.json decode failed: \(error.localizedDescription, privacy: .public)")
