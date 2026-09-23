@@ -3,11 +3,7 @@ import Foundation
 import KittyTerminal
 import System
 
-/// Parses `CommandLine.arguments` into a structured launch action.
-///
-/// Internally backed by `apple/swift-argument-parser`. The wrapper keeps the
-/// `parse([String]) -> Action` surface stable so existing tests and call
-/// sites in `AppMain` don't need to change.
+/// Parses `CommandLine.arguments` into a structured launch action, through swift-argument-parser.
 public struct CLIArguments: Sendable {
     public enum Action: Sendable {
         case run(LaunchConfig)
@@ -32,12 +28,13 @@ public struct CLIArguments: Sendable {
         public var themeForeground: String?
     }
 
+    /// The launch action `args` asks for; a malformed command line prints its error to stderr and exits with
+    /// status 1.
     public static func parse(_ args: [String] = CommandLine.arguments) -> Action {
         // Drop argv[0]; the rest is what ArgumentParser sees.
         let arguments = Array(args.dropFirst())
 
-        // `--help`/`-h` and `--version`/`-v` are intercepted so the caller can
-        // print the message themselves (existing tests assert the enum case).
+        // `--help` and `--version` are intercepted, so the caller prints the message itself.
         if arguments.contains(where: { $0 == "--help" || $0 == "-h" }) {
             return .printHelp
         }
@@ -49,10 +46,6 @@ public struct CLIArguments: Sendable {
             let parsed = try KittyCodeCommand.parse(arguments)
             return .run(parsed.toLaunchConfig())
         } catch {
-            // ArgumentParser surfaces ValidationError / UnknownArgument /
-            // MissingArgument as `error`. Render the canonical message,
-            // route through KittyLogger.stderr, then exit with the same code
-            // the old hand-rolled parser used.
             let message = KittyCodeCommand.message(for: error)
             KittyLogger.stderr(message)
             exit(1)
@@ -61,16 +54,10 @@ public struct CLIArguments: Sendable {
 
     // MARK: - Help / version text
 
-    /// Composed at compile time from `BuildVersion.release` (see
-    /// `Sources/KittyCode/Version.swift`). The release workflow
-    /// (`.github/workflows/release.yml`) overwrites that file before
-    /// `swift build -c release`, so tagged releases report their
-    /// semantic version while local builds report `0.0.0-dev`. Audit D9.
+    /// The `--version` line, from `BuildVersion.release`.
     public static let versionString = "KittyCode \(BuildVersion.release)"
 
-    /// ArgumentParser-generated help text. Includes all options/flags/argument
-    /// the command declares; documentation tests scan this for `--help`,
-    /// `--version`, `--read-only`, etc.
+    /// The generated help text, listing every option, flag and argument the command declares.
     public static var helpText: String {
         KittyCodeCommand.helpMessage(columns: 80)
     }
@@ -135,9 +122,7 @@ public struct CLIArguments: Sendable {
         return (resolvedPath, line, column)
     }
 
-    /// Forwards to the shared `PathUtilities.expandingTilde` in `KittyEditor`
-    /// (audit D3 extracted the editor library). Kept as a CLIArguments-namespace
-    /// wrapper for callers that already reach for `CLIArguments.expandingTilde`.
+    /// `PathUtilities.expandingTilde(in:)`, under the `CLIArguments` namespace.
     public static func expandingTilde(in path: String) -> String {
         PathUtilities.expandingTilde(in: path)
     }

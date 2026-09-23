@@ -104,10 +104,7 @@ public func renderShellLayout(
     let layout = LayoutMetrics(state: state, columns: cols, rows: rows)
     guard layout.contentRows > 0 else { return }
 
-    // Render chrome sections (tab ribbon, activity bar, sidebar, separator, status bar)
-    // only when chrome state is dirty. Content-only edits (typing inside a
-    // line) skip this whole block — the previous frame's chrome pixels
-    // remain on screen unchanged.
+    // Chrome repaints only when dirty; a content-only edit leaves the previous frame's chrome on screen.
     let renderChrome = !skipChromeSections
     // Search panel hosts the input cursor in the sidebar; if we're in that
     // mode, the sidebar must always paint so the cursor position is in sync.

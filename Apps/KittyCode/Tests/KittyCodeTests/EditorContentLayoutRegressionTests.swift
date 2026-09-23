@@ -94,12 +94,9 @@ struct EditorContentLayoutRegressionTests {
         let sut = makeSUT(columns: 60, rows: 10, tabRibbon: .top)
         sut.state.mode = .editor
         sut.state.sidebarCollapsed = true
-        // With tab ribbon but no buffers, showTabRibbon=false (count=0)
-        // So contentStartRow=1. Let's just verify render doesn't crash
         renderShellLayout(pipeline: sut.pipeline, state: sut.state)
 
-        // No tab ribbon (no buffers), content starts at row 0
-        // The empty editor message should be somewhere in the middle rows
+        // With no buffers the ribbon hides, so content starts at row 0 and the message sits mid-panel.
         let midRow = 0 + (10 - 1) / 2  // contentStartRow + contentRows/2
         let rowChars = (0 ..< 60).map { sut.pipeline.buffer[midRow, $0].character }
         let rowText = String(rowChars).trimmingCharacters(in: .whitespaces)

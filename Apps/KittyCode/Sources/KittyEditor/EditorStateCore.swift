@@ -21,10 +21,7 @@ import os
 
 public import class AemiRuntime.BlockingOffloadPool
 
-/// Signpost emitter for editor hot paths — wraps `textDidChange` and the
-/// wrap-cache rebuild so Instruments traces can attribute frame-budget
-/// overruns to specific subsystems. Audit D10 (mirrors the pattern in
-/// `RenderPipeline.swift`).
+/// Editor signposts around `textDidChange` and the wrap-cache rebuild, so Instruments can attribute frame time.
 private let editorSignposter = OSSignposter(
     subsystem: "com.kittytui.editor", category: "edit")
 
@@ -58,9 +55,9 @@ public final class EditorState {
                 && self.documentVersion == documentVersion && lineWrapCounts.count == lineCount
         }
 
-        /// Pure helper: how many wrapped rows does `line` produce at the given
-        /// `contentWidth` and `tabSize`? Used both by the full rebuild path in
-        /// `buildWrapCache` and the incremental patch path in `invalidateLines`.
+        /// The rows `line` wraps into at `contentWidth` columns, tabs reaching the next multiple of `tabSize`; at
+        /// least one.
+        /// - Complexity: O(n), where n is the length of `line`.
         public static func wrapCount(of line: String, contentWidth: Int, tabSize: Int) -> Int {
             var rowCount = 1
             var currentRowWidth = 0
@@ -79,13 +76,8 @@ public final class EditorState {
             return rowCount
         }
 
-        /// Incrementally re-wraps only the lines affected by `mutation` instead
-        /// of clearing the entire cache and forcing a full rebuild on the next
-        /// frame. Falls back to `invalidate()` when an invariant (contentWidth /
-        /// tabSize / array length) doesn't match — those cases need a full
-        /// rebuild anyway. Called from `textDidChange(_ mutation:)`; the wholesale
-        /// `invalidate()` is kept for the no-mutation `textDidChange()` overload
-        /// where the mutation footprint is unknown.
+        /// Re-wraps only the lines `mutation` touched, patching the row total and offsets; invalidates the whole cache
+        /// instead when its width, tab size or line count doesn't match.
         mutating func invalidateLines(
             mutation: TextMutation,
             newDocumentVersion: Int,
@@ -313,12 +305,7 @@ public final class EditorState {
     @ObservationIgnored public var processRunner: (any ProcessRunner)?
     @ObservationIgnored public var gitDecorationManager: GitDecorationManager?
     @ObservationIgnored public var renderRefreshSource: RenderRefreshSource?
-    /// Observation-aware tick source. When non-nil, every `mark*Dirty` call
-    /// advances it; an observation-listener task in `ApplicationRuntime` then
-    /// injects an `.refresh` input event so the existing event loop renders
-    /// the next frame. Lets us drop ad-hoc `renderRefreshSource.invalidate()`
-    /// calls from async completion sites — the dirty marker that already
-    /// runs there is enough.
+    /// Advanced by the `mark*Dirty` calls that dirty something new, so the runtime renders the next frame.
     @ObservationIgnored public var renderClock: RenderClock?
     @ObservationIgnored public weak var fileWatcherIntegration: FileWatcherIntegration?
     public var colorScheme: ColorScheme {
@@ -362,11 +349,8 @@ public final class EditorState {
 
     public var highlightedLines: [[StyledSpan]] {
         get { workspace.highlightedLines }
-        // No didSet here: in-place mutations via `replaceSubrange` (see
-        // `refreshPlainHighlights`) also route through this setter and would
-        // wrongly escalate per-line dirty marks to contentAll. Wholesale
-        // reassignment sites (async post-load, full-document highlight,
-        // file watcher reload) mark dirty explicitly.
+        // Marks nothing: per-line `replaceSubrange` edits pass through here too, so wholesale assignments mark dirty
+        // themselves.
         set { workspace.highlightedLines = newValue }
     }
 
@@ -491,13 +475,8 @@ public final class EditorState {
         didSet { markChromeDirty() }
     }
     @ObservationIgnored public var workspaceSearchTask: Task<Void, Never>?
-    /// Long-lived consumer that debounces workspace-search-as-you-type
-    /// signals. The producer (`triggerWorkspaceSearchDebounced`) yields a
-    /// tick on every find-field keystroke; the consumer sleeps the
-    /// configured debounce window and then runs `triggerWorkspaceSearch`.
-    /// `bufferingNewest(1)` collapses bursts of keystrokes into a single
-    /// work cycle. Mirrors `GitDecorationManager.debouncedConsumer`
-    /// (audit NF12 / A9).
+    /// The consumer debouncing search as you type: each find-field keystroke signals it, and `bufferingNewest(1)`
+    /// turns a burst into one `triggerWorkspaceSearch` after the debounce window.
     @ObservationIgnored public var workspaceSearchDebounceTask: Task<Void, Never>?
     @ObservationIgnored public let workspaceSearchDebounceSignal: AsyncStream<Void>
     @ObservationIgnored public let workspaceSearchDebounceContinuation: AsyncStream<Void>.Continuation
@@ -517,11 +496,8 @@ public final class EditorState {
         return highlightedLines[index]
     }
 
-    /// Cached syntax theme. The 22-call `setStyle` build is non-trivial and
-    /// `syntaxTheme` is read once per render line plus per edit — without
-    /// caching we'd rebuild ~1 000 themes per frame on a 1 000-line file.
-    /// Recomputed when `colorScheme.didSet` fires (theme switch / config
-    /// reload) — see init and `applyConfig`.
+    /// The built `syntaxTheme`, read once per rendered line; cleared by a colour scheme change and by
+    /// `replaceConfiguredSyntaxTheme(_:)`.
     @ObservationIgnored private var cachedSyntaxTheme: Theme?
     /// The theme `syntax.xcodeTheme` names, loaded when the config is applied; nil when none is configured or
     /// the file could not be read, in which case the colour scheme's syntax colours apply.
@@ -643,10 +619,6 @@ public final class EditorState {
         }
         highlightedLines = lines
 
-        // Schedule the background full-document highlight via the
-        // long-lived consumer. The producer doesn't spawn anything; the
-        // consumer re-reads MainActor state at work time, so a burst of
-        // keystrokes coalesces into at most one full-highlight pass.
         fullHighlightContinuation.yield(())
     }
 
@@ -675,8 +647,7 @@ public final class EditorState {
             return
         }
 
-        // Lines come straight from the buffer: materialising every line of the document (`fileContent`) on a
-        // keystroke cost a full document's worth of strings on a large file.
+        // Lines come straight from the buffer: `fileContent` would materialise the whole document per keystroke.
         let lineCount = fileLineCount
         guard isMutationApplicable(mutation, lineCount: lineCount) else {
             refreshHighlights()
@@ -707,9 +678,7 @@ public final class EditorState {
         return min(visible.lowerBound, edited.lowerBound) ..< max(visible.upperBound, edited.upperBound)
     }
 
-    /// Plain-text refresh that only touches the lines covered by `mutation`.
-    /// Avoids rebuilding the full `highlightedLines` array on every keystroke
-    /// when syntax highlighting is off.
+    /// Restyles only the lines `mutation` covers as plain text, for when syntax highlighting is off.
     private func refreshPlainHighlights(after mutation: TextMutation) {
         guard isMutationApplicable(mutation, lineCount: fileLineCount) else {
             refreshHighlights()
@@ -730,7 +699,7 @@ public final class EditorState {
             && mutation.updatedLineRange.upperBound <= lineCount
     }
 
-    // MARK: - Backward-compatible text access
+    // MARK: - Text access
 
     public var fileContent: [String] {
         get {
@@ -843,8 +812,7 @@ public final class EditorState {
             statusMessage = "Read-only mode"
             return
         }
-        // The widest line only widens on an edit's own lines; dropping the cached width with the other snapshot
-        // caches made every keystroke re-measure the display width of the whole document.
+        // An edit can only widen the widest line through its own lines, so the cached width outlives the other caches.
         let knownMaxLineWidth = cachedMaxLineWidth
         invalidateTextSnapshotCache()
         cachedMaxLineWidth = knownMaxLineWidth
@@ -870,9 +838,6 @@ public final class EditorState {
         widenCachedMaxLineWidth(for: mutation.updatedLineRange)
         refreshHighlights(after: mutation)
         gitDecorationManager?.scheduleRefreshForActiveBuffer()
-        // Patch only the affected lines in the wrap cache. Falls back to a
-        // full invalidation when the cache invariants don't match (e.g. the
-        // first edit before a viewport has computed `contentWidth`).
         let tabSize = config.editor.tabSize
         let contentWidth = wrapCache.contentWidth
         let nextDocVersion = bufferManager.activeBuffer?.documentVersion ?? 0
@@ -886,9 +851,7 @@ public final class EditorState {
                 contentWidth: contentWidth,
                 tabSize: tabSize)
         }
-        // If the mutation kept the line count stable, only the affected lines
-        // need a repaint. Anything that shifts line count downstream requires
-        // a full content repaint because line→screen-row mapping changes.
+        // A changed line count moves every row below the edit, so only a stable count repaints just its lines.
         if mutation.originalLineRange.count == mutation.updatedLineRange.count {
             markLinesDirty(mutation.updatedLineRange)
         } else {
@@ -926,9 +889,7 @@ public final class EditorState {
         }
     }
 
-    /// Marks only the newly exposed buffer lines when scrolling vertically.
-    /// Falls back to a full content repaint when the delta is larger than the
-    /// estimated visible area (in which case sliding offers no win).
+    /// Marks only the lines a vertical scroll exposes; a jump of a screen or more repaints the whole content.
     private func markScrollDirty(from oldOffset: Int, to newOffset: Int) {
         let visibleRows = max(0, lastRenderRows - 2)
         let delta = newOffset - oldOffset
@@ -1184,15 +1145,10 @@ public final class EditorState {
     @ObservationIgnored public var marqueeTargetLabel: String?
     @ObservationIgnored public var wrapCache = WrapCache()
 
-    // MARK: - Dirty tracking (Phase 2)
+    // MARK: - Dirty tracking
     //
-    // Logical-coordinate dirty state. Drained at the start of each render
-    // frame and translated into pipeline-level `DirtyRegions`. Phase 2 just
-    // collects the markers; Phase 3 makes the renderer act on them. These
-    // are `@ObservationIgnored` because the public observation surface is
-    // `RenderClock.tick` (advanced by `mark*Dirty`) — letting consumers
-    // observe these directly would have the registrar fire per-set during
-    // hot edit loops with no benefit.
+    // Logical dirty state, drained each frame into the pipeline's `DirtyRegions`. `RenderClock.tick` is the observable
+    // surface, so these stay observation-ignored and hot edit loops don't fire the registrar on every set.
 
     /// Buffer-line indices whose content has changed and need repaint.
     @ObservationIgnored public var dirtyContentLines = Set<Int>()
@@ -1250,9 +1206,7 @@ public final class EditorState {
         get { bufferManager.activeBuffer?.selection }
         set {
             bufferManager.activeBuffer?.selection = newValue
-            // Selection cells render differently from non-selected cells; any
-            // change must invalidate content so the new highlight (or its
-            // removal) is painted on the next frame.
+            // Selected cells render differently, so any selection change repaints the content.
             markContentAllDirty()
         }
     }
@@ -1265,13 +1219,8 @@ public final class EditorState {
     @ObservationIgnored public var lastKeyRepeatProcessedAt: ClockInstant?
     @ObservationIgnored public var pendingKeySequence: [KeyStroke] = []
     @ObservationIgnored public var pendingKeySequenceTime: ClockInstant?
-    /// Long-lived consumer task that handles background full-document
-    /// highlights. `refreshHighlights()` yields into `fullHighlightSignal`
-    /// instead of spawning a fresh Task per call — eliminating the
-    /// per-keystroke Task allocation + cancellation overhead (audit NF12).
-    /// `bufferingNewest(1)` collapses a burst of keystrokes into a single
-    /// work cycle. Started lazily on first signal so EditorState's `init`
-    /// stays synchronous-only.
+    /// The consumer of `fullHighlightSignal`, started by `init`: `bufferingNewest(1)` turns a burst of highlight
+    /// requests into one full-document pass, with no task spawned per keystroke.
     @ObservationIgnored public var fullHighlightTask: Task<Void, Never>?
     @ObservationIgnored public let fullHighlightSignal: AsyncStream<Void>
     @ObservationIgnored public let fullHighlightContinuation: AsyncStream<Void>.Continuation
@@ -1298,17 +1247,10 @@ public final class EditorState {
 
     @ObservationIgnored public let taskProvider: any TaskProvider
     @ObservationIgnored public let clock: any Clock<Duration>
-    /// Blocking-offload pool workspace search runs its per-file `mmap` + newline scan on, so that
-    /// blocking work never parks a cooperative-pool thread. The composition root (`AppMain`) creates
-    /// one `BlockingOffloadPool` for the whole process and passes it in here; when no pool is supplied
-    /// (a caller — typically a test — that doesn't need to share one with the rest of the app)
-    /// `EditorState` creates and owns a minimal one-worker pool instead, and `shutdown()` releases it.
-    /// `BlockingOffloadPool`'s worker threads keep the pool alive until `shutdown()` runs (its `deinit`
-    /// does not stop them — see its doc comment), so any owned fallback pool must be shut down through
-    /// `EditorState.shutdown()` to avoid leaking a thread.
+    /// The pool workspace search runs its blocking file scans on, so they never park a cooperative thread: the
+    /// app's injected pool, or else a one-worker pool of its own, which `shutdown()` must stop as `deinit` doesn't.
     @ObservationIgnored public let searchPool: BlockingOffloadPool
-    /// Whether `searchPool` was created by this instance rather than injected — only then does
-    /// `shutdown()` own its teardown; an injected pool is released by whoever created it.
+    /// Whether `searchPool` is this instance's own; an injected pool is stopped by its creator.
     @ObservationIgnored private let ownsSearchPool: Bool
 
     public init(
@@ -1367,13 +1309,7 @@ public final class EditorState {
         }
     }
 
-    /// Long-lived consumer for workspace-search-as-you-type debouncing.
-    /// One per `EditorState`; reads from the `bufferingNewest(1)` signal so
-    /// a burst of find-field keystrokes coalesces into a single search
-    /// after the debounce window elapses. The actual heavy work
-    /// (`triggerWorkspaceSearch`) keeps its own cancel-and-respawn
-    /// `workspaceSearchTask` since the search itself is preemptible and
-    /// benefits from explicit cancellation when the query changes.
+    /// Starts `workspaceSearchDebounceTask`; each search it triggers keeps its own cancellable `workspaceSearchTask`.
     private func startWorkspaceSearchDebounceConsumer() {
         guard workspaceSearchDebounceTask == nil else { return }
         let clock = clock
@@ -1383,12 +1319,7 @@ public final class EditorState {
                 guard let strong = self else { return }
                 let debounceMs = strong.config.search.debounceMilliseconds
                 try? await clock.sleep(for: .milliseconds(debounceMs))
-                // Audit B.2/F4 — `Task.sleep` swallows cancellation via
-                // `try?`, so check explicitly before running the search
-                // body. Without this, `shutdown()` racing with a pending
-                // debounce wakeup would invoke `triggerWorkspaceSearch`
-                // against a half-torn-down state graph (observed
-                // properties firing during shutdown, etc.).
+                // `try?` swallows the sleep's cancellation; no search may run on a state `shutdown()` tears down.
                 if Task.isCancelled { return }
                 guard let strong = self else { return }
                 triggerWorkspaceSearch(state: strong)
@@ -1396,10 +1327,8 @@ public final class EditorState {
         }
     }
 
-    /// Cleanly stops the long-lived full-highlight consumer task. Symmetric
-    /// to `GitDecorationManager.stop()`; `AppMain` calls both during
-    /// shutdown so neither leaves an orphaned task running against a
-    /// deallocating state graph.
+    /// Stops the full-highlight and search-debounce consumers and an owned search pool, so no task outlives the
+    /// state; `AppMain` calls it alongside `GitDecorationManager.stop()`.
     public func shutdown() {
         fullHighlightContinuation.finish()
         fullHighlightTask?.cancel()
@@ -1410,12 +1339,7 @@ public final class EditorState {
         if ownsSearchPool { searchPool.shutdown() }
     }
 
-    /// Background-highlight body invoked by the long-lived consumer task.
-    /// Re-reads session and document text on the main actor so a stale
-    /// signal arrives running against the current state, not the state at
-    /// signal-emit time. The `documentText == source` staleness gate
-    /// ensures a highlight pass that finishes after the user has moved on
-    /// is silently dropped.
+    /// The full-document pass over the current state, not the signal's; a result the document has outrun is dropped.
     private func performFullHighlight() async {
         guard syntaxHighlightingEnabled else { return }
         let session = currentHighlightSession()
@@ -1427,7 +1351,6 @@ public final class EditorState {
         let fullHighlights =
             session.prefersLineInput ? session.highlightLines(fileContent) : session.highlightDocument(source: source)
 
-        // Only apply if the document hasn't moved on while we worked.
         guard documentText == source else { return }
         highlightedLines = fullHighlights
         markContentAllDirty()

@@ -3,13 +3,8 @@ import Testing
 
 @testable import KittyEditor
 
-/// Audit NF12 — `scheduleRefreshForActiveBuffer` and `fullHighlightTask`
-/// previously cancelled the prior task and spawned a fresh one on every
-/// keystroke (~8 Task allocations + cancellations / sec under sustained
-/// typing). Both paths are now driven by long-lived consumer tasks that
-/// read from `bufferingNewest(1)` AsyncStreams. These tests pin the
-/// lifecycle: the consumer is started once and the same Task reference
-/// survives across a burst of refresh signals.
+/// Git refreshes and full highlights run on long-lived consumers: each starts once, and the same task survives a
+/// burst of refresh signals.
 @Suite
 @MainActor
 struct RefreshLifecycleTests {

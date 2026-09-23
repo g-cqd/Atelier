@@ -36,12 +36,8 @@ private struct RenderSignature: Equatable {
 
 @MainActor
 public func renderFrame(pipeline: RenderPipeline, state: EditorState) {
-    // Detect viewport resize. SIGWINCH delivers `.resize(...)` which
-    // ApplicationRuntime applies via `pipeline.resize(...)` before invoking
-    // the render callback — but the editor's logical dirty markers don't
-    // know about the new dimensions, so Phase 6b's `skipChromeSections` gate
-    // would otherwise leave chrome stale on the resized buffer. Compare
-    // against the last render's dims and escalate to a full repaint.
+    // The runtime resizes the pipeline behind the dirty markers' back, so a new size repaints everything; the chrome
+    // would otherwise stay stale.
     if state.lastRenderColumns != pipeline.columns || state.lastRenderRows != pipeline.rows {
         state.markEverythingDirty()
     }
@@ -73,8 +69,7 @@ public func renderFrame(pipeline: RenderPipeline, state: EditorState) {
 
     let layout = LayoutMetrics(state: state, columns: pipeline.columns, rows: pipeline.rows)
 
-    // Translate logical dirty info into pipeline-level rects. Phase 3 only
-    // marks them; later phases use the data to bypass per-cell work.
+    // Translate logical dirty info into pipeline-level rects.
     pipeline.clearDirtyRegions()
     if dirty.contentAll || dirty.chrome {
         pipeline.markAllDirty()

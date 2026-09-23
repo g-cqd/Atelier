@@ -484,10 +484,8 @@ public func ensureSearchResultVisible(state: EditorState) {
     let idx = state.searchPanelSelectedIndex
     guard idx >= 0 else { return }
 
-    // The search panel uses approximately 5 header rows (header, query, toggles, summary, blank).
-    // The visible results area height depends on the panel rect, but we estimate a reasonable
-    // viewport height here. The actual viewport is `availRows` in renderSearchPanel.
-    // We use the last known render dimensions to approximate.
+    // An estimate from the last render size and about five header rows; the real viewport is `availRows` in
+    // `renderSearchPanel`.
     let headerRows = 5
     let panelHeight = state.lastRenderRows - 2  // minus status bar and title bar
     let availRows = max(1, panelHeight - headerRows)
@@ -636,9 +634,7 @@ public func triggerWorkspaceSearchDebounced(state: EditorState) {
     // acknowledged the keystroke even before the debounce window elapses.
     state.isSearchingWorkspace = true
     state.workspaceSearchSummary = "Searching..."
-    // The long-lived consumer on `EditorState` handles the debounce
-    // window via `Task.sleep` inside its loop; `bufferingNewest(1)`
-    // collapses bursts into a single subsequent search.
+    // `workspaceSearchDebounceTask` debounces the burst into one search.
     state.workspaceSearchDebounceContinuation.yield(())
 }
 
