@@ -1,4 +1,4 @@
-import AtelierDiagnostics
+package import AtelierDiagnostics
 import DiffCore
 import Foundation
 
@@ -109,6 +109,12 @@ extension ViewerSettings {
         return decodeBase()
     }
 
+    /// Every tool these settings run, by its location: a tool ``toolLocations`` does not name counts at its default,
+    /// enabled, as the Tools tab shows it.
+    package var enabledToolLocations: [DiagnosticTool: ToolLocation] {
+        Self.defaultToolLocations.merging(toolLocations) { _, set in set }.filter(\.value.isEnabled)
+    }
+
     /// Every tool enabled, at no custom path.
     static var defaultToolLocations: [DiagnosticTool: ToolLocation] {
         Dictionary(uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation()) })
@@ -117,16 +123,20 @@ extension ViewerSettings {
     /// sourcekit-lsp enabled, at no custom path.
     static var defaultLSPServerLocations: [String: ToolLocation] { ["sourcekit-lsp": ToolLocation()] }
 
+    /// The stored locations, with every tool the stored value does not name, such as one added since it was saved,
+    /// at its default: enabled, as the Tools tab shows it, and so run. A tool missing from the dictionary used to
+    /// read as enabled in Settings and never run.
     static func decodeToolLocations(_ data: Data?) -> [DiagnosticTool: ToolLocation] {
-        data
+        let stored =
+            data
             .flatMap { try? DefaultsJSON.decode([String: ToolLocation].self, from: $0) }
             .map { decoded in
                 Dictionary(
                     uniqueKeysWithValues: decoded.compactMap { key, value in
                         DiagnosticTool(rawValue: key).map { ($0, value) }
                     })
-            }
-            ?? defaultToolLocations
+            } ?? [:]
+        return defaultToolLocations.merging(stored) { _, saved in saved }
     }
 
     /// How many settings in `category` differ from their coded default, for the tab footer's deviation indicator.
