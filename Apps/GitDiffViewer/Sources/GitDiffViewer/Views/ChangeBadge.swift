@@ -53,22 +53,9 @@ enum ChangeGlyph {
         }
     }
 
-    var color: Color {
-        switch self {
-            case .added: .green
-            case .deleted: .red
-            case .modified: .orange
-            case .renamed: .purple
-        }
-    }
-
-    var nsColor: NSColor {
-        switch self {
-            case .added: .systemGreen
-            case .deleted: .systemRed
-            case .modified: .systemOrange
-            case .renamed: .systemPurple
-        }
+    /// This kind's colour under `scheme`, the one its badge draws in.
+    func color(in scheme: BadgeScheme) -> Color {
+        BadgeStyleResolver.colorToken(for: badgeKind, scheme: scheme).color
     }
 
     /// This kind, in the scheme-and-state-independent vocabulary ``BadgeStyleResolver`` resolves from.
@@ -202,12 +189,8 @@ extension BadgeInk {
 
 /// The same badge for AppKit rows: the explorer draws thousands of them, so it stays a plain view.
 ///
-/// Selection and focus reach this view the same way AppKit already tells a plain ``NSTableCellView`` subview
-/// about them: the row view assigns its own `backgroundStyle` to every subview that implements
-/// `-setBackgroundStyle:`, `.emphasized` exactly when the row is selected *and* its outline view is the key
-/// window's first responder (a selection in an unfocused window reads `.normal`, same as no selection at all) --
-/// precisely the native blue-vs-gray distinction the badge's own invert should follow, with nothing bespoke to
-/// track.
+/// Its host cell sets ``backgroundStyle``: `.emphasized` exactly while the row is selected in a focused list, the
+/// native accent-versus-gray distinction the badge's white variant follows.
 final class ChangeBadgeView: NSView {
     var glyph: ChangeGlyph? {
         didSet {
