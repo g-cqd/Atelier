@@ -1,3 +1,4 @@
+import AtelierSyntaxModel
 import Foundation
 import Testing
 
@@ -99,6 +100,26 @@ struct HighlighterTests {
             )
 
         #expect(spans == [StyledSpan(text: "\"name\"", style: keyStyle)])
+    }
+
+    /// Upstream queries tag comments `@comment @spell` for spell checkers; the second capture must not restyle them.
+    @Test
+    func `a spell capture beside a comment capture keeps the comment style`() throws {
+        var theme = Theme(defaultStyle: .default)
+        let commentStyle = Style(fg: .rgb(r: 1, g: 2, b: 3), italic: true)
+        theme.setStyle(commentStyle, for: "comment")
+        let comment = SyntaxNode(type: "comment", byteRange: 0 ..< 7, isNamed: true)
+        let tree = SyntaxTree(
+            root: SyntaxNode(type: "source", children: [comment], byteRange: 0 ..< 7), source: "// note")
+        let query = try QueryParser.parse("(comment) @comment @spell")
+        let highlighter = Highlighter(theme: theme)
+        let matches = QueryMatcher.execute(query: query, tree: tree)
+
+        #expect(
+            highlighter.highlight(source: tree.source, tree: tree, query: query) == [
+                StyledSpan(text: "// note", style: commentStyle)
+            ])
+        #expect(highlighter.buildTokens(matches: matches).map(\.role) == [.comment])
     }
 
     @Test
