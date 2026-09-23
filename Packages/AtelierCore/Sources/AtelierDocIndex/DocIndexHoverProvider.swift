@@ -1,22 +1,29 @@
 public import AtelierSyntaxModel
 
 /// A `HoverProvider` backed by a `DocCommentIndex`: resolves the identifier at the query position and formats its
-/// doc comment(s) as markdown, with no build context required.
+/// doc comment(s) as markdown, with no build context required. The hovered document is parsed once for as long as
+/// the hovers stay in it.
 public struct DocIndexHoverProvider: HoverProvider {
     private let index: DocCommentIndex
     private let side: DocIndexSides
+    private let sources: ParsedSourceCache
 
     /// - Parameters:
     ///   - index: The index names are looked up in.
     ///   - side: The side of a comparison the hovered documents are on; only files that answer for it are listed.
     public init(index: DocCommentIndex, side: DocIndexSides = .both) {
+        self.init(index: index, side: side, sources: ParsedSourceCache())
+    }
+
+    init(index: DocCommentIndex, side: DocIndexSides, sources: ParsedSourceCache) {
         self.index = index
         self.side = side
+        self.sources = sources
     }
 
     public func hover(_ query: HoverQuery) async throws -> HoverContent? {
-        guard
-            let name = IdentifierLocator.identifier(in: query.content, line: query.line, utf16Column: query.utf16Column)
+        let source = sources.source(for: query.content)
+        guard let name = IdentifierLocator.identifier(in: source, line: query.line, utf16Column: query.utf16Column)
         else { return nil }
         let entries = await index.documentation(forIdentifier: name, preferringURI: query.documentURI, side: side)
         guard !entries.isEmpty else { return nil }
