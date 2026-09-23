@@ -28,10 +28,12 @@ struct CompiledTableCache: Sendable {
 
     let directory: URL
 
-    /// The tables or the compile error stored for `key`; nil when neither is there or readable.
+    /// The tables or the compile error stored for `key`; nil when neither is there or readable, or when the tables
+    /// point outside themselves, which a damaged file can do and which would trap the parser on every launch.
     func outcome(for key: Key) -> Result<ParseTableCompiler.CompilationResult, GrammarError>? {
         if let data = try? Data(contentsOf: fileURL(for: key, kind: .tables)),
-            let tables = try? GrammarRegistry.decodeCompiledTables(from: data)
+            let tables = try? GrammarRegistry.decodeCompiledTables(from: data),
+            tables.isConsistent
         {
             return .success(tables)
         }
