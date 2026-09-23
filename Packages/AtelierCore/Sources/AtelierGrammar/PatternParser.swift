@@ -13,8 +13,8 @@ indirect enum PatternNode: Sendable, Equatable {
 /// Parses the regular expressions of tree-sitter's `PATTERN` rules: the JavaScript source of a grammar's regex
 /// literals, which tree-sitter compiles with Rust's regex syntax.
 ///
-/// It takes what token rules use: literals, `.`, classes with ranges and negation, the `\d \w \s` classes and their
-/// negations, character escapes, `\p{…}` general categories and identifier properties, groups, alternation, and the
+/// It takes what token rules use: literals, `.`, classes with ranges and negation, the ASCII `\d \w \s` classes and
+/// their negations, character escapes, `\p{…}` general categories and identifier properties, groups, alternation, and the
 /// `* + ? {n} {n,} {n,m}` quantifiers, lazy or not, since the lexer takes the longest match regardless. Anchors, word
 /// boundaries, backreferences, lookaround and inline flags have no meaning for a token and are rejected.
 struct PatternParser {
@@ -296,12 +296,11 @@ struct PatternParser {
 
     // MARK: - Sets
 
+    // `\d`, `\w` and `\s` are ASCII, as tree-sitter rewrites them before it compiles a pattern: Unicode's classes
+    // would let a JSON separator skip a no-break space, which JSON does not allow between tokens.
     static let anyButNewline = ScalarRanges(scalar: 0x0A).inverted()
     static let digits = ScalarRanges([0x30 ... 0x39])
     static let wordCharacters = ScalarRanges([0x30 ... 0x39, 0x41 ... 0x5A, 0x5F ... 0x5F, 0x61 ... 0x7A])
-    /// Unicode's White_Space property, which Rust's `\s` stands for.
-    static let whitespace = ScalarRanges([
-        0x09 ... 0x0D, 0x20 ... 0x20, 0x85 ... 0x85, 0xA0 ... 0xA0, 0x1680 ... 0x1680, 0x2000 ... 0x200A,
-        0x2028 ... 0x2029, 0x202F ... 0x202F, 0x205F ... 0x205F, 0x3000 ... 0x3000
-    ])
+    /// Tab, line feed, vertical tab, form feed, carriage return and space: tree-sitter's `[\t-\r ]`.
+    static let whitespace = ScalarRanges([0x09 ... 0x0D, 0x20 ... 0x20])
 }

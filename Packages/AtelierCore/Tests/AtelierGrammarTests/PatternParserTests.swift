@@ -31,7 +31,11 @@ struct PatternParserTests {
         #expect(try Self.characters(#"\x41"#) == ScalarRanges(scalar: 0x41))
         #expect(try Self.characters(#"é"#) == ScalarRanges(scalar: 0xE9))
         #expect(try Self.characters(#"\/"#) == ScalarRanges(scalar: 0x2F))
-        #expect(try Self.characters(#"\s"#).contains(0x2028))
+    }
+
+    @Test
+    func `The whitespace class is ASCII whitespace, as tree-sitter reads it`() throws {
+        #expect(try Self.characters(#"\s"#) == ScalarRanges([0x09 ... 0x0D, 0x20 ... 0x20]))
     }
 
     @Test
