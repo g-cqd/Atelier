@@ -17,9 +17,9 @@ struct DocIndexHoverProviderTests {
         }
         """
 
-    private func makeIndex() async -> DocCommentIndex {
+    private func makeIndex() async throws -> DocCommentIndex {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(uri: "file:///callee.swift", content: Self.calleeFile),
             DocIndexFile(uri: "file:///caller.swift", content: Self.callerFile)
         ])
@@ -28,7 +28,7 @@ struct DocIndexHoverProviderTests {
 
     @Test
     func `resolves documentation for a call site from another file`() async throws {
-        let index = await makeIndex()
+        let index = try await makeIndex()
         let provider = DocIndexHoverProvider(index: index)
         // "    loadConfig()" -> "loadConfig" starts at utf16 column 4.
         let query = HoverQuery(documentURI: "file:///caller.swift", content: Self.callerFile, line: 1, utf16Column: 6)
@@ -49,7 +49,7 @@ struct DocIndexHoverProviderTests {
                 shared()
             }
             """
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(uri: "file:///a.swift", content: sameFile),
             DocIndexFile(uri: "file:///b.swift", content: "/// Other doc.\nfunc shared() {}")
         ])
@@ -67,7 +67,7 @@ struct DocIndexHoverProviderTests {
         for index in 0 ..< 5 {
             files.append(DocIndexFile(uri: "file:///f\(index).swift", content: "/// Doc \(index).\nfunc shared() {}"))
         }
-        await index.update(files: files)
+        try await index.update(files: files)
         let provider = DocIndexHoverProvider(index: index)
         let content = "shared()"
         let query = HoverQuery(documentURI: "file:///caller.swift", content: content, line: 0, utf16Column: 2)
@@ -84,7 +84,7 @@ struct DocIndexHoverProviderTests {
 
     @Test
     func `unknown identifier resolves to nil`() async throws {
-        let index = await makeIndex()
+        let index = try await makeIndex()
         let provider = DocIndexHoverProvider(index: index)
         let content = "unknownName()"
         let query = HoverQuery(documentURI: "file:///caller.swift", content: content, line: 0, utf16Column: 2)
@@ -94,7 +94,7 @@ struct DocIndexHoverProviderTests {
 
     @Test
     func `position on a keyword resolves to nil`() async throws {
-        let index = await makeIndex()
+        let index = try await makeIndex()
         let provider = DocIndexHoverProvider(index: index)
         let query = HoverQuery(documentURI: "file:///caller.swift", content: Self.callerFile, line: 0, utf16Column: 1)
         let hover = try await provider.hover(query)
@@ -116,7 +116,7 @@ extension DocIndexHoverProviderTests {
             }
             """
         let index = DocCommentIndex()
-        await index.update(files: [DocIndexFile(uri: "file:///a.swift", content: content)])
+        try await index.update(files: [DocIndexFile(uri: "file:///a.swift", content: content)])
         let provider = DocIndexHoverProvider(index: index)
         // Line 2 (zero-based) is "    var displayName: String {"; "displayName" starts right after "    var ".
         let column = "    var ".utf16.count

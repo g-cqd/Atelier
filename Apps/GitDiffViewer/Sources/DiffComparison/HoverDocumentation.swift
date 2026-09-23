@@ -126,7 +126,7 @@ package final class HoverDocumentationModel {
         feedTask?.cancel()
         feedTask = taskProvider.task { [weak self, index] in
             guard !Task.isCancelled else { return }
-            await index.update(files: docFiles)
+            try? await index.update(files: docFiles)
             guard let self, let corpusReader, let corpusSource, !Task.isCancelled,
                 myGeneration == self.generation
             else { return }
@@ -144,7 +144,7 @@ package final class HoverDocumentationModel {
                                 content: $0)
                         }
                 }
-            await index.update(files: broadFiles)
+            try? await index.update(files: broadFiles)
         }
     }
 

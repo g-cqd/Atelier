@@ -8,9 +8,9 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `extracts a documented function`() async {
+    func `extracts a documented function`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(
                 uri: "file:///a.swift",
                 content: """
@@ -27,9 +27,9 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `extracts a documented initializer`() async {
+    func `extracts a documented initializer`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(
                 uri: "file:///a.swift",
                 content: """
@@ -46,9 +46,9 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `extracts a documented subscript`() async {
+    func `extracts a documented subscript`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(
                 uri: "file:///a.swift",
                 content: """
@@ -65,9 +65,9 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `extracts documented properties`() async {
+    func `extracts documented properties`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(
                 uri: "file:///a.swift",
                 content: """
@@ -89,9 +89,9 @@ struct DocCommentIndexTests {
         arguments: [
             ("struct", "Foo"), ("class", "Foo"), ("enum", "Foo"), ("actor", "Foo"), ("protocol", "Foo")
         ])
-    func `extracts documented type declarations`(kind: String, name: String) async {
+    func `extracts documented type declarations`(kind: String, name: String) async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(
                 uri: "file:///a.swift",
                 content: """
@@ -105,9 +105,9 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `extracts a documented typealias`() async {
+    func `extracts a documented typealias`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(
                 uri: "file:///a.swift",
                 content: """
@@ -121,9 +121,9 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `extracts a documented macro`() async {
+    func `extracts a documented macro`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(
                 uri: "file:///a.swift",
                 content: """
@@ -136,9 +136,9 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `extracts a documented enum case`() async {
+    func `extracts a documented enum case`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(
                 uri: "file:///a.swift",
                 content: """
@@ -153,9 +153,9 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `normalizes a block doc comment`() async {
+    func `normalizes a block doc comment`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(
                 uri: "file:///a.swift",
                 content: """
@@ -172,9 +172,9 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `undocumented declarations produce no entry`() async {
+    func `undocumented declarations produce no entry`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(uri: "file:///a.swift", content: "func undocumented() {}")
         ])
         let entries = await index.documentation(forIdentifier: "undocumented", preferringURI: nil)
@@ -182,9 +182,9 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `signature has no body and collapses whitespace`() async {
+    func `signature has no body and collapses whitespace`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(
                 uri: "file:///a.swift",
                 content: """
@@ -202,12 +202,12 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `update with changed content replaces entries`() async {
+    func `update with changed content replaces entries`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(uri: "file:///a.swift", content: "/// Old.\nfunc run() {}")
         ])
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(uri: "file:///a.swift", content: "/// New.\nfunc run() {}")
         ])
         let entries = await index.documentation(forIdentifier: "run", preferringURI: nil)
@@ -216,19 +216,19 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `unchanged content is not re-parsed into duplicates`() async {
+    func `unchanged content is not re-parsed into duplicates`() async throws {
         let index = DocCommentIndex()
         let file = DocIndexFile(uri: "file:///a.swift", content: "/// Doc.\nfunc run() {}")
-        await index.update(files: [file])
-        await index.update(files: [file])
+        try await index.update(files: [file])
+        try await index.update(files: [file])
         let entries = await index.documentation(forIdentifier: "run", preferringURI: nil)
         #expect(entries.count == 1)
     }
 
     @Test
-    func `preferringURI sorts that file's entries first`() async {
+    func `preferringURI sorts that file's entries first`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(uri: "file:///a.swift", content: "/// From A.\nfunc run() {}"),
             DocIndexFile(uri: "file:///b.swift", content: "/// From B.\nfunc run() {}")
         ])
@@ -239,9 +239,9 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `blob and file entries with the same signature collapse to the file entry`() async {
+    func `blob and file entries with the same signature collapse to the file entry`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(uri: "atelier-blob://deadbeef/Sources/Foo.swift", content: "/// Foo.\nstruct Foo {}"),
             DocIndexFile(uri: "file:///repo/Sources/Foo.swift", content: "/// Foo.\nstruct Foo {}")
         ])
@@ -251,9 +251,9 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `blob and file entries at the same path with different signatures keep only the file entry`() async {
+    func `blob and file entries at the same path with different signatures keep only the file entry`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(uri: "atelier-blob://deadbeef/Sources/Foo.swift", content: "/// Foo.\nstruct Foo {}"),
             DocIndexFile(
                 uri: "file:///repo/Sources/Foo.swift", content: "/// Foo.\nstruct Foo: Sendable {}")
@@ -265,9 +265,9 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `same-named declarations at genuinely different paths both remain candidates`() async {
+    func `same-named declarations at genuinely different paths both remain candidates`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(uri: "atelier-blob://deadbeef/Sources/Foo.swift", content: "/// Foo A.\nstruct Foo {}"),
             DocIndexFile(uri: "file:///repo/Sources/Bar.swift", content: "/// Foo B.\nstruct Foo {}")
         ])
@@ -276,9 +276,9 @@ struct DocCommentIndexTests {
     }
 
     @Test
-    func `hovering the old blob side itself shows the old side's own documentation, not the new one's`() async {
+    func `hovering the old blob side itself shows the old side's own documentation, not the new one's`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(
                 uri: "atelier-blob://deadbeef/Sources/Foo.swift", content: "/// Old doc, no conformance.\nstruct Foo {}"
             ),
@@ -298,9 +298,9 @@ struct DocCommentIndexTests {
 
 extension DocCommentIndexTests {
     @Test
-    func `a documented computed property inside an extension with an explicit get block is indexed`() async {
+    func `a documented computed property inside an extension with an explicit get block is indexed`() async throws {
         let index = DocCommentIndex()
-        await index.update(files: [
+        try await index.update(files: [
             DocIndexFile(
                 uri: "file:///a.swift",
                 content: """
