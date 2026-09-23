@@ -157,7 +157,7 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         guard let data = try? await client.content(of: relativePath, at: "HEAD") else { return .missing }
         let content = String(decoding: data, as: UTF8.self)
         // Split once: every debounced refresh diffs against these lines.
-        return .text(content, lines: Self.splitLines(content).map { Substring($0) })
+        return .text(content, lines: Self.splitLines(content))
     }
 
     private func relativePath(for normalizedPath: String) -> String? {
@@ -183,9 +183,29 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL.path
     }
 
-    static func splitLines(_ content: String) -> [String] {
-        let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        return lines.isEmpty ? [""] : lines
+    /// The lines of `content`, each ended by LF, CRLF or a lone CR, as a buffer holds its file's text: a final line
+    /// break leaves an empty last line. Swift folds CRLF into one `Character`, so the split runs on UTF-8 bytes.
+    /// - Complexity: O(n) in the UTF-8 length of `content`.
+    static func splitLines(_ content: String) -> [Substring] {
+        let utf8 = content.utf8
+        var lines: [Substring] = []
+        var lineStart = utf8.startIndex
+        var index = utf8.startIndex
+        while index < utf8.endIndex {
+            let byte = utf8[index]
+            guard byte == UInt8(ascii: "\n") || byte == UInt8(ascii: "\r") else {
+                index = utf8.index(after: index)
+                continue
+            }
+            lines.append(content[lineStart ..< index])
+            index = utf8.index(after: index)
+            if byte == UInt8(ascii: "\r"), index < utf8.endIndex, utf8[index] == UInt8(ascii: "\n") {
+                index = utf8.index(after: index)
+            }
+            lineStart = index
+        }
+        lines.append(content[lineStart...])
+        return lines
     }
 
     static func addedLineDecorations(for lines: [String], color: FileStatusColor) -> GitLineDecorations {

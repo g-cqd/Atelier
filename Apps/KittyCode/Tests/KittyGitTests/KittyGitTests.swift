@@ -170,6 +170,24 @@ struct KittyGitTests {
         #expect(runner.specs.count == specs)
     }
 
+    @Test(arguments: ["one\r\ntwo\r\nthree\r\n", "one\rtwo\rthree\r"])
+    func `a base from HEAD with CRLF or CR line endings splits into lines, so only the edited line is marked`(
+        base: String
+    ) async {
+        let runner = FakeProcessRunner { spec in
+            if spec.arguments.contains("--porcelain=v2") {
+                return porcelain(["1 .M N... 100644 100644 100644 aaaa bbbb tracked.txt"])
+            }
+            return .success(base)
+        }
+        let provider = GitStatusProvider(rootPath: "/project", runner: runner)
+        await provider.refresh()
+        // The buffer holds the file with its line breaks normalized to LF.
+        let decorations = await provider.lineDecorations(
+            for: "/project/tracked.txt", lines: ["one", "TWO", "three", ""])
+        #expect(decorations.markers == [1: .modified])
+    }
+
     @Test
     func `Added line decorations mark every visible line and empty input yields none`() {
         #expect(
