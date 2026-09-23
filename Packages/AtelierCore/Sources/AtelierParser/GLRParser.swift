@@ -9,6 +9,10 @@ public final class GLRParser: Sendable {
     private let terminalIndex: [String: Int]
     /// O(1) non-terminal name -> index lookup.
     private let nonTerminalIndex: [String: Int]
+    /// The lex table's automaton laid out for reading; nil for a table without lex modes.
+    private let scanner: TokenScanner?
+    /// The terminal index of each of the lex table's tokens; nil for an extra, which the table does not take.
+    private let tokenTerminals: [Int?]
 
     public init(parseTable: ParseTable, lexTable: LexTable, productions: [ProductionRule]) {
         self.parseTable = parseTable
@@ -24,6 +28,8 @@ public final class GLRParser: Sendable {
             ntIdx[nt] = i
         }
         self.nonTerminalIndex = ntIdx
+        self.scanner = TokenScanner(lexTable)
+        self.tokenTerminals = lexTable.tokens.map { tIdx[$0.name] }
     }
 
     private static let maxStacks = 256
@@ -64,35 +70,69 @@ public final class GLRParser: Sendable {
     }
 
     /// ``parse(_:externalScanner:)`` with `isCancelled` in place of the task's cancellation.
+    ///
+    /// With lex modes, the lexer reads each token in the mode of the parser's state, as tree-sitter does, so of two
+    /// tokens that overlap, such as JSON's string content and punctuation, it reads the one the parser can take; a
+    /// table without them is lexed context-free, all at once.
     func parse(
         _ source: String,
         externalScanner: (any ExternalScanner)?,
         isCancelled: () -> Bool
     ) throws(ParseError) -> SyntaxTree {
-        let lexer = Lexer(lexTable: lexTable, externalScanner: externalScanner)
-        let tokens = lexer.tokenize(source)
-        let nonExtraTokens = tokens.filter { !$0.isExtra }
+        guard let scanner else {
+            let lexer = Lexer(lexTable: lexTable, externalScanner: externalScanner)
+            var tokens = TokenizedSource(lexer.tokenize(source), terminalIndex: terminalIndex)
+            return try parse(source, from: &tokens, isCancelled: isCancelled)
+        }
+        let outcome = Self.withUTF8(of: source) { utf8 in
+            var tokens = ScannedTokenSource(
+                utf8, scanner: scanner, tokens: lexTable.tokens, tokenTerminals: tokenTerminals,
+                terminalIndex: terminalIndex, externalScanner: externalScanner)
+            return Result { () throws(ParseError) in try parse(source, from: &tokens, isCancelled: isCancelled) }
+        }
+        return try outcome.get()
+    }
 
-        guard nonExtraTokens.count <= Self.maxTokens else {
-            throw .parsingFailed(
-                "Token count \(nonExtraTokens.count) exceeds limit \(Self.maxTokens)")
+    /// `body` over the UTF-8 bytes of `source`, copied only when the string does not store them contiguously.
+    private static func withUTF8<Value>(of source: String, _ body: (UnsafeBufferPointer<UInt8>) -> Value) -> Value {
+        if let value = source.utf8.withContiguousStorageIfAvailable(body) {
+            return value
+        }
+        return Array(source.utf8).withUnsafeBufferPointer(body)
+    }
+
+    /// Parses `source` from the tokens `tokens` reads out of it.
+    private func parse(
+        _ source: String,
+        from tokens: inout some ParseTokenSource,
+        isCancelled: () -> Bool
+    ) throws(ParseError) -> SyntaxTree {
+        var stacks = [ParseStack(state: 0)]
+        var extras: [ParseToken] = []
+        var tokenIndex = 0
+        while let token = tokens.next(for: stacks) {
+            guard !token.isExtra else {
+                extras.append(token)
+                continue
+            }
+            if tokenIndex.isMultiple(of: Self.cancellationCheckInterval), isCancelled() {
+                ParseStack.releaseAll(&stacks)
+                throw Self.cancelled(atToken: tokenIndex)
+            }
+            guard tokenIndex < Self.maxTokens else {
+                ParseStack.releaseAll(&stacks)
+                throw .parsingFailed("Token count exceeds limit \(Self.maxTokens)")
+            }
+            stacks = try advance(consume stacks, past: token, at: tokenIndex)
+            tokenIndex += 1
         }
 
-        guard !nonExtraTokens.isEmpty else {
+        guard tokenIndex > 0 else {
             // Empty input
             return SyntaxTree(
                 root: SyntaxNode(type: productions.first?.name ?? "source", byteRange: 0 ..< 0),
                 source: source
             )
-        }
-
-        var stacks = [ParseStack(state: 0)]
-        for (tokenIdx, token) in nonExtraTokens.enumerated() {
-            if tokenIdx.isMultiple(of: Self.cancellationCheckInterval), isCancelled() {
-                ParseStack.releaseAll(&stacks)
-                throw Self.cancelled(atToken: tokenIdx)
-            }
-            stacks = try advance(consume stacks, past: token, at: tokenIdx)
         }
         if let endIdx = terminalIndex["$end"] {
             var exceededDepth = false
@@ -106,12 +146,8 @@ public final class GLRParser: Sendable {
         guard let best = ParseStack.takingBest(from: &stacks) else {
             throw .parsingFailed("No valid parse at the end of input")
         }
-        // The lexer's tokens, extras included, cover the source, so the last one ends where the source ends.
-        let root = try buildRootNode(
-            from: consume best, byteCount: source.utf8.count, endPoint: tokens.last?.pointRange.upperBound ?? .zero)
-        return SyntaxTree(
-            root: attachingComments(tokens.filter { $0.isExtra && $0.type == "comment" }, to: consume root),
-            source: source)
+        let root = try buildRootNode(from: consume best, byteCount: source.utf8.count, endPoint: tokens.end)
+        return SyntaxTree(root: attachingExtras(extras, to: consume root), source: source)
     }
 
     // MARK: - Private
@@ -120,10 +156,10 @@ public final class GLRParser: Sendable {
     /// ``treeTooDeep`` when a reduction would build a node deeper than ``maxTreeDepth``, after releasing every stack.
     private func advance(
         _ stacks: consuming [ParseStack],
-        past token: Lexer.Token,
+        past token: ParseToken,
         at tokenIndex: Int
     ) throws(ParseError) -> [ParseStack] {
-        guard let lookahead = terminalIndex[token.type] else {
+        guard let lookahead = token.terminal else {
             // Unknown token — wrap in error node and continue
             var marked = consume stacks
             let node = SyntaxNode(
@@ -232,7 +268,7 @@ public final class GLRParser: Sendable {
 
     /// Shifts `token` onto every stack whose state allows it, forking when several shifts do. A stack that cannot
     /// shift it keeps its state and takes the token as an ERROR node: error recovery skips the token for that stack.
-    private func shift(_ stacks: consuming [ParseStack], token: Lexer.Token, lookahead: Int) -> [ParseStack] {
+    private func shift(_ stacks: consuming [ParseStack], token: ParseToken, lookahead: Int) -> [ParseStack] {
         var pending = consume stacks
         pending.reverse()
         var shifted: [ParseStack] = []
@@ -241,7 +277,7 @@ public final class GLRParser: Sendable {
             type: token.type,
             byteRange: token.byteRange,
             pointRange: token.pointRange,
-            isNamed: false
+            isNamed: token.isNamed
         )
         while var stack = pending.popLast() {
             let shiftTargets: [Int]
@@ -365,18 +401,19 @@ extension GLRParser {
         )
     }
 
-    /// `root` with a `comment` child per token of `comments`, in source order, and its ranges widened to cover them,
-    /// or a query limited to a comment's range would skip the root with the comment. `comments` is in source order.
-    private func attachingComments(_ comments: [Lexer.Token], to root: consuming SyntaxNode) -> SyntaxNode {
-        guard let first = comments.first, let last = comments.last else { return root }
-        for token in comments {
+    /// `root` with an extra child per token of `extras`, such as a comment, in source order, and its ranges widened to
+    /// cover them, or a query limited to a comment's range would skip the root with the comment. `extras` is in source
+    /// order.
+    private func attachingExtras(_ extras: [ParseToken], to root: consuming SyntaxNode) -> SyntaxNode {
+        guard let first = extras.first, let last = extras.last else { return root }
+        for token in extras {
             root.children.append(
                 SyntaxNode(
-                    type: "comment",
+                    type: token.type,
                     byteRange: token.byteRange,
                     pointRange: token.pointRange,
                     isExtra: true,
-                    isNamed: true
+                    isNamed: token.isNamed
                 ))
         }
         root.children.sort {
