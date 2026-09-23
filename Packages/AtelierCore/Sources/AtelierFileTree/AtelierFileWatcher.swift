@@ -49,13 +49,8 @@ public actor FileWatcher {
     }
 
     private var fileSources: [String: any DispatchSourceFileSystemObject] = [:]
-    private var directoryStream: FSEventStreamRef?
-    private var streamQueue: DispatchQueue?
+    private var directoryStream: DirectoryStream?
     private var continuation: AsyncStream<FileWatchEvent>.Continuation?
-    /// Strong reference to the box passed to `FSEventStreamCreate` so the
-    /// callback's `info` pointer stays valid for the stream's lifetime.
-    /// Cleared in `stop()` after the stream has been invalidated.
-    private var directoryStreamBox: SendableContinuationBox?
     private nonisolated let epoch: ContinuousClock.Instant
     private nonisolated let suppression: SuppressionWindow
 
@@ -76,47 +71,8 @@ public actor FileWatcher {
 
     public func watchDirectory(_ path: String) {
         guard directoryStream == nil else { return }
-
-        let queue = DispatchQueue(label: "com.kittycode.fswatcher", qos: .utility)
-        streamQueue = queue
-
-        // Box ownership lives on `self`. Passing an unretained pointer into
-        // `FSEventStreamContext.info` avoids relying on whether the CF API
-        // honours the optional `retain` callback for that field.
-        let box = SendableContinuationBox(continuation: continuation)
-        directoryStreamBox = box
-
-        var context = FSEventStreamContext()
-        context.info = UnsafeMutableRawPointer(Unmanaged.passUnretained(box).toOpaque())
-
-        let paths = [path] as CFArray
-        let stream = FSEventStreamCreate(
-            nil,
-            { _, info, numEvents, eventPaths, _, _ in
-                guard let info,
-                    let cfPaths = Unmanaged<CFArray>.fromOpaque(eventPaths).takeUnretainedValue()
-                        as? [String]
-                else { return }
-                let box = Unmanaged<SendableContinuationBox>.fromOpaque(info).takeUnretainedValue()
-                for i in 0 ..< numEvents {
-                    box.continuation?.yield(.directoryChanged(cfPaths[i]))
-                }
-            },
-            &context,
-            paths,
-            FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
-            Self.debounceInterval,
-            UInt32(kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents)
-        )
-
-        if let stream {
-            FSEventStreamSetDispatchQueue(stream, queue)
-            FSEventStreamStart(stream)
-            directoryStream = stream
-        } else {
-            // Stream creation failed; drop the box so it gets deallocated.
-            directoryStreamBox = nil
-        }
+        directoryStream = DirectoryStream(
+            path: path, continuation: continuation, latency: Self.debounceInterval)
     }
 
     public func watchFile(_ path: String) {
@@ -168,18 +124,84 @@ public actor FileWatcher {
         }
         fileSources.removeAll()
 
-        if let stream = directoryStream {
-            FSEventStreamStop(stream)
-            FSEventStreamInvalidate(stream)
-            FSEventStreamRelease(stream)
-            directoryStream = nil
-        }
-        // Drop the box only after the stream has been fully torn down so the
-        // callback can never run with a dangling pointer.
-        directoryStreamBox = nil
+        directoryStream?.invalidate()
+        directoryStream = nil
 
         continuation?.finish()
         continuation = nil
+    }
+
+    deinit {
+        for source in fileSources.values {
+            source.cancel()
+        }
+        directoryStream?.invalidate()
+        continuation?.finish()
+    }
+}
+
+/// One FSEvents stream and the serial queue it calls back on.
+///
+/// Memory safety rests on two rules. FSEvents owns the continuation box through the context's `retain` and
+/// `release` callbacks, so `info` stays valid for as long as the stream exists, however late a callback runs. And
+/// every operation on the stream after creation, teardown included, runs on `queue`, so tearing it down can never
+/// interleave with a callback in flight. The queue is required: FSEvents' only non-deprecated scheduling API takes
+/// one.
+private final class DirectoryStream: @unchecked Sendable {
+    // Invariant: after `init` returns, `stream` is read and written only on `queue`.
+    private let queue: DispatchQueue
+    private var stream: FSEventStreamRef?
+
+    init?(path: String, continuation: AsyncStream<FileWatcher.FileWatchEvent>.Continuation?, latency: TimeInterval) {
+        let box = SendableContinuationBox(continuation: continuation)
+        var context = FSEventStreamContext(
+            version: 0, info: Unmanaged.passUnretained(box).toOpaque(),
+            retain: { info in
+                guard let info else { return nil }
+                _ = Unmanaged<SendableContinuationBox>.fromOpaque(info).retain()
+                return info
+            },
+            release: { info in
+                guard let info else { return }
+                Unmanaged<SendableContinuationBox>.fromOpaque(info).release()
+            },
+            copyDescription: nil)
+        guard
+            let stream = FSEventStreamCreate(
+                nil,
+                { _, info, numEvents, eventPaths, _, _ in
+                    guard let info,
+                        let cfPaths = Unmanaged<CFArray>.fromOpaque(eventPaths).takeUnretainedValue()
+                            as? [String]
+                    else { return }
+                    let box = Unmanaged<SendableContinuationBox>.fromOpaque(info).takeUnretainedValue()
+                    for i in 0 ..< min(numEvents, cfPaths.count) {
+                        box.continuation?.yield(.directoryChanged(cfPaths[i]))
+                    }
+                },
+                &context,
+                [path] as CFArray,
+                FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+                latency,
+                UInt32(kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents)
+            )
+        else { return nil }
+        let queue = DispatchQueue(label: "Atelier.FileWatcher.events", qos: .utility)
+        self.queue = queue
+        self.stream = stream
+        FSEventStreamSetDispatchQueue(stream, queue)
+        FSEventStreamStart(stream)
+    }
+
+    /// Stops and releases the stream on its own queue, after any callback already running there returns.
+    func invalidate() {
+        queue.async { [self] in
+            guard let stream else { return }
+            FSEventStreamStop(stream)
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+            self.stream = nil
+        }
     }
 }
 
