@@ -8,6 +8,10 @@ import Foundation
 /// editor opening an unknown checkout should. ``inheriting`` keeps the caller's environment and only stops
 /// prompts and optional locks, the way a viewer the user pointed at a repository of their own expects.
 /// ``networking`` sits between the two, for commands that reach a remote.
+///
+/// Pins are the second layer only. The first one is ``GitConfigPolicy``, which reads the repository's own
+/// configuration before any command runs and refuses the ones a pin cannot cover, such as a `filter` driver whose
+/// name only the repository knows.
 public enum GitIsolation: Sendable, Hashable {
     case inheriting
     case strict
@@ -57,27 +61,42 @@ public enum GitIsolation: Sendable, Hashable {
         "GIT_CONFIG_NOSYSTEM": "1"
     ]
 
-    /// The configuration keys git security advisories name as remote-code-execution vectors from an
-    /// attacker-controlled `.git/config`, pinned to safe values; no workspace setting can re-enable them.
-    public static let strictConfigurationFlags: [String] = [
-        "-c", "protocol.file.allow=user",
+    /// The keys both isolations pin, whatever the command: the git security advisories' remote-code-execution
+    /// vectors from an attacker-controlled `.git/config`, and the signing programs `log` and `show` would otherwise
+    /// start. `protocol.allow=never` with `protocol.ext.allow=never` beside it, because a repository's own
+    /// `protocol.ext.allow=always` is the more specific key and would win over the general one alone.
+    private static let sharedConfigurationFlags: [String] = [
+        "-c", "protocol.allow=never",
+        "-c", "protocol.ext.allow=never",
+        "-c", "protocol.file.allow=never",
         "-c", "core.fsmonitor=false",
-        "-c", "core.sshCommand=/usr/bin/false",
         "-c", "core.hooksPath=/dev/null",
         "-c", "diff.external=",
         "-c", "core.pager=cat",
         "-c", "core.editor=false",
-        "-c", "uploadpack.packObjectsHook="
+        "-c", "uploadpack.packObjectsHook=",
+        "-c", "gpg.program=false",
+        "-c", "gpg.ssh.program=false",
+        "-c", "gpg.x509.program=false"
     ]
 
-    /// ``strictConfigurationFlags`` with `core.sshCommand` pinned to the plain `ssh` so a fetch can authenticate;
-    /// pinned rather than omitted, since an omitted key lets the repository's own `.git/config` choose the command.
-    public static let networkingConfigurationFlags: [String] = stride(
-        from: 0, to: strictConfigurationFlags.count, by: 2
-    )
-    .flatMap { index -> [String] in
-        let key = strictConfigurationFlags[index]
-        let value = strictConfigurationFlags[index + 1]
-        return [key, value == "core.sshCommand=/usr/bin/false" ? "core.sshCommand=ssh" : value]
-    }
+    /// ``sharedConfigurationFlags`` with `core.sshCommand` pinned to a program that cannot run: a read command
+    /// never reaches a remote, so nothing needs `ssh`. Pinned rather than omitted, since an omitted key lets the
+    /// repository's own `.git/config` choose the command.
+    public static let strictConfigurationFlags: [String] =
+        sharedConfigurationFlags + ["-c", "core.sshCommand=/usr/bin/false"]
+
+    /// ``sharedConfigurationFlags`` with the transports a fetch may use opened, the plain `ssh` pinned so a fetch
+    /// can authenticate, and every way a repository has of naming a command during a transfer closed. The reset of
+    /// `credential.helper` drops the whole helper list, including the user's own; ``GitClient`` puts the helpers
+    /// defined outside the repository back, so a private `https` remote still authenticates.
+    public static let networkingConfigurationFlags: [String] =
+        sharedConfigurationFlags + [
+            "-c", "core.sshCommand=ssh",
+            "-c", "protocol.https.allow=always",
+            "-c", "protocol.ssh.allow=always",
+            "-c", "credential.helper=",
+            "-c", "core.askPass=",
+            "-c", "core.gitProxy="
+        ]
 }

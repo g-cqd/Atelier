@@ -8,12 +8,24 @@ public enum GitError: Error, Equatable, LocalizedError {
     case notARepository
     /// A ref, object id or path that could be read as an option or break the command line.
     case invalidArgument(String)
+    /// The repository's own configuration holds keys that can make git run a command it chose, so no command ran.
+    /// The keys are named without their values, which can hold a token or a path the user did not choose.
+    case refusedConfiguration([String])
+    /// A fetch URL that is neither `https` nor `ssh`, or a remote with no URL at all.
+    case unsupportedRemoteURL(String)
 
     public var errorDescription: String? {
         switch self {
             case .commandFailed(let message): message.trimmingCharacters(in: .whitespacesAndNewlines)
             case .notARepository: "Not a git repository"
             case .invalidArgument(let value): "Not a usable git reference or path: \(value)"
+            case .refusedConfiguration(let keys):
+                """
+                This repository's git configuration can make git run commands it chose, so git was not run. \
+                Refused keys: \(keys.joined(separator: ", "))
+                """
+            case .unsupportedRemoteURL(let url):
+                "Only an https or ssh remote can be fetched from; this one is: \(url)"
         }
     }
 }
@@ -21,6 +33,12 @@ public enum GitError: Error, Equatable, LocalizedError {
 /// Git as a set of async methods over one repository, each parsed by the matching ``GitParsers`` function. Every
 /// run inherits the parent's environment with ``hardeningEnvironment`` on top, so git never waits on a terminal
 /// prompt or an optional lock.
+///
+/// Before any command runs in a repository, its own configuration is read and judged by ``GitConfigPolicy``: a
+/// repository that can make git run a command it chose gets no command at all, and every method throws
+/// ``GitError/refusedConfiguration(_:)``. The verdict is cached per repository in ``GitConfigGate`` and re-read
+/// when a configuration file changes, so the check costs one git process per configuration change, not one per
+/// command.
 public struct GitClient: Sendable {
     /// Variables set on every git run: no credential prompt on a closed standard input, no optional index locks.
     public static let hardeningEnvironment = ["GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"]
@@ -29,29 +47,35 @@ public struct GitClient: Sendable {
     private let runner: any ProcessRunner
     private let timeout: Duration?
     private let isolation: GitIsolation
+    private let gate: GitConfigGate
 
     /// - Parameters:
     ///   - repository: The repository root every command runs in.
     ///   - runner: How git is spawned; the app owns the pool behind it, tests inject a fake.
     ///   - timeout: The budget of one git run on the runner's clock; nil lets a run take as long as it needs.
     ///   - isolation: How much of the caller's environment and of the repository's configuration git may see.
+    ///   - gate: Where the configuration verdict of a repository is read and cached; the shared one unless a test
+    ///     wants a cache of its own.
     public init(
-        repository: URL, runner: any ProcessRunner, timeout: Duration? = nil, isolation: GitIsolation = .strict
+        repository: URL, runner: any ProcessRunner, timeout: Duration? = nil, isolation: GitIsolation = .strict,
+        gate: GitConfigGate = .shared
     ) {
         self.repository = repository
         self.runner = runner
         self.timeout = timeout
         self.isolation = isolation
+        self.gate = gate
     }
 
-    /// The root of the repository `url` lies in, or nil when it lies in none.
+    /// The root of the repository `url` lies in, or nil when it lies in none, or when its configuration is refused.
     public static func repositoryRoot(
-        containing url: URL, runner: any ProcessRunner, isolation: GitIsolation = .strict
+        containing url: URL, runner: any ProcessRunner, isolation: GitIsolation = .strict,
+        gate: GitConfigGate = .shared
     ) async -> URL? {
         let directory = url.hasDirectoryPath ? url : url.deletingLastPathComponent()
         guard
             let data = try? await run(
-                ["rev-parse", "--show-toplevel"], in: directory, runner: runner, isolation: isolation)
+                ["rev-parse", "--show-toplevel"], in: directory, runner: runner, isolation: isolation, gate: gate)
         else { return nil }
         let path = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         return path.isEmpty ? nil : URL(filePath: path, directoryHint: .isDirectory)
@@ -79,10 +103,15 @@ public struct GitClient: Sendable {
     }
 
     /// The branch and every path that is not clean, ignored files included, untracked files listed one by one.
+    ///
+    /// Changes inside a submodule's own working tree are left out: reading them makes git enter the submodule and
+    /// obey *its* `.git/config`, which ``GitConfigPolicy`` never saw. A submodule whose recorded commit moved is
+    /// still reported.
     public func status() async throws -> GitStatusSnapshot {
         GitParsers.porcelainV2(
             try await run([
-                "status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all", "--ignored=matching"
+                "status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all", "--ignored=matching",
+                "--ignore-submodules=dirty"
             ]))
     }
 
@@ -119,11 +148,17 @@ public struct GitClient: Sendable {
     }
 
     /// Renames between two refs, or between a ref and the working tree when `to` is nil, old path to new path.
+    ///
+    /// `--no-ext-diff` and `--no-textconv` keep an external diff or a textconv driver out of the run, and
+    /// `--ignore-submodules=dirty` keeps git from entering a submodule, whose own configuration the gate never saw;
+    /// none of the three can change which paths a rename filter reports.
     public func renames(from: String, to: String?) async throws -> [String: String] {
         GitParsers.renames(
             try await run(
-                ["diff", "--name-status", "-M", "-z", "--diff-filter=R", "--end-of-options", try Self.checked(from)]
-                    + (try to.map { [try Self.checked($0)] } ?? [])))
+                [
+                    "diff", "--no-ext-diff", "--no-textconv", "--ignore-submodules=dirty", "--name-status", "-M",
+                    "-z", "--diff-filter=R", "--end-of-options", try Self.checked(from)
+                ] + (try to.map { [try Self.checked($0)] } ?? [])))
     }
 
     private func references(pattern: String...) async throws -> [String] {
@@ -141,8 +176,11 @@ public struct GitClient: Sendable {
         try await references(pattern: "refs/tags")
     }
 
+    /// `--no-show-signature` because a repository that sets `log.showSignature` makes `git log` run the signature
+    /// program on every commit that carries a `gpgsig` header; the pinned `gpg.program` is the second layer.
     private func recentCommits(limit: Int) async throws -> [GitCommit] {
-        GitParsers.commits(try await run(["log", "--format=%H%x1f%h%x1f%s", "-n", String(limit)]))
+        GitParsers.commits(
+            try await run(["log", "--no-show-signature", "--format=%H%x1f%h%x1f%s", "-n", String(limit)]))
     }
 
     /// The repository's remotes, one per name, with their `fetch` URL; a remote with only a `push` line is left
@@ -162,14 +200,39 @@ public struct GitClient: Sendable {
 
     /// Fetches from `remote`, `refspecs` when given, pruning stale remote-tracking branches on request. Runs under
     /// ``GitIsolation/networking`` whatever the client's isolation, with `timeout` in place of the client's budget.
+    ///
+    /// The fetch goes to the remote's URL, not to its name, and only when that URL is `https` or `ssh`
+    /// (``GitConfigPolicy/transportURL(_:)``): fetching by name lets the repository pick the transport, and
+    /// `remote.<name>.uploadpack` with a local path is one of the ways it then runs a command. Without `refspecs`
+    /// the remote's own are used, so remote-tracking branches still move, and a remote that configured none gets the
+    /// default one.
+    /// - Throws: ``GitError/unsupportedRemoteURL(_:)`` for a remote with no URL or a URL of another scheme,
+    ///   ``GitError/refusedConfiguration(_:)`` when the repository's configuration is refused.
     public func fetch(
         remote: String = "origin", refspecs: [String] = [], prune: Bool = false, timeout: Duration = .seconds(120)
     ) async throws {
+        let name = try Self.checked(remote)
+        let checkedRefspecs = try refspecs.map(Self.checked)
+        let verdict = try await Self.approvedConfiguration(
+            in: repository, runner: runner, timeout: timeout, isolation: .networking, gate: gate)
+        guard let configured = verdict.value(forKey: "remote.\(name).url") else {
+            throw GitError.unsupportedRemoteURL("\(name) has no URL")
+        }
+        guard let url = GitConfigPolicy.transportURL(configured) else {
+            throw GitError.unsupportedRemoteURL(GitConfigPolicy.redacted(configured))
+        }
+        let configuredRefspecs = verdict.values(forKey: "remote.\(name).fetch")
+        let effective =
+            checkedRefspecs.isEmpty
+            ? (configuredRefspecs.isEmpty ? ["+refs/heads/*:refs/remotes/\(name)/*"] : configuredRefspecs)
+            : checkedRefspecs
+        // `--no-recurse-submodules`: a submodule fetch would run under the submodule's own configuration.
         let arguments =
-            ["fetch"] + (prune ? ["--prune"] : []) + ["--end-of-options", try Self.checked(remote)]
-            + (try refspecs.map(Self.checked))
-        _ = try await Self.run(
-            arguments, in: repository, runner: runner, timeout: timeout, isolation: .networking)
+            ["fetch"] + (prune ? ["--prune"] : []) + ["--no-recurse-submodules", "--end-of-options", url]
+            + (try effective.map(Self.checked))
+        _ = try await Self.spawn(
+            arguments, in: repository, runner: runner, timeout: timeout, isolation: .networking,
+            extraConfiguration: Self.mitigationFlags(for: verdict, isolation: .networking))
     }
 
     /// A ref, object id or path as git may see it on the command line: not empty, not option-shaped, and free of
@@ -184,7 +247,8 @@ public struct GitClient: Sendable {
 
     private func run(_ arguments: [String], input: Data? = nil) async throws -> Data {
         try await Self.run(
-            arguments, input: input, in: repository, runner: runner, timeout: timeout, isolation: isolation)
+            arguments, input: input, in: repository, runner: runner, timeout: timeout, isolation: isolation,
+            gate: gate)
     }
 
     /// Where git lives: `GDV_GIT` when it names an executable, else the first `git` on `PATH` or in the usual
@@ -200,17 +264,57 @@ public struct GitClient: Sendable {
     )
     .resolve("git")
 
-    /// Runs git and returns its standard output; a non-zero exit becomes a ``GitError`` carrying its standard error,
-    /// a runner failure becomes a ``GitError`` naming it, and cancelling the task terminates git.
+    /// Runs git once the repository's configuration has been approved, and returns its standard output.
+    /// - Throws: ``GitError/refusedConfiguration(_:)`` before git runs when the configuration is refused; otherwise
+    ///   as ``spawn(_:input:in:runner:timeout:isolation:extraConfiguration:)``.
     private static func run(
         _ arguments: [String], input: Data? = nil, in directory: URL, runner: any ProcessRunner,
-        timeout: Duration? = nil, isolation: GitIsolation = .strict
+        timeout: Duration? = nil, isolation: GitIsolation = .strict, gate: GitConfigGate = .shared
+    ) async throws -> Data {
+        let verdict = try await approvedConfiguration(
+            in: directory, runner: runner, timeout: timeout, isolation: isolation, gate: gate)
+        return try await spawn(
+            arguments, input: input, in: directory, runner: runner, timeout: timeout, isolation: isolation,
+            extraConfiguration: mitigationFlags(for: verdict, isolation: isolation))
+    }
+
+    /// The repository's configuration verdict, read through `gate` and cached there.
+    /// - Throws: ``GitError/refusedConfiguration(_:)`` when a key falls outside ``GitConfigPolicy``'s allowlist, so
+    ///   that no command runs in that repository at all.
+    static func approvedConfiguration(
+        in directory: URL, runner: any ProcessRunner, timeout: Duration?, isolation: GitIsolation,
+        gate: GitConfigGate
+    ) async throws -> GitConfigVerdict {
+        let verdict = try await gate.verdict(in: directory, isolation: isolation) {
+            try await spawn(
+                GitConfigPolicy.listingArguments, in: directory, runner: runner, timeout: timeout,
+                isolation: isolation)
+        }
+        guard verdict.isApproved else { throw GitError.refusedConfiguration(verdict.refusedKeys) }
+        return verdict
+    }
+
+    /// The `-c` flags one repository's verdict adds to its commands: every filter driver it defines blanked, and,
+    /// for a fetch, the credential helpers defined outside the repository put back after the pins reset the list.
+    static func mitigationFlags(for verdict: GitConfigVerdict, isolation: GitIsolation) -> [String] {
+        var flags = GitConfigPolicy.filterBlankingFlags(for: verdict.filterDrivers)
+        if isolation == .networking {
+            flags += verdict.userCredentialHelpers.flatMap { ["-c", "credential.helper=\($0)"] }
+        }
+        return flags
+    }
+
+    /// Runs git and returns its standard output; a non-zero exit becomes a ``GitError`` carrying its standard error,
+    /// a runner failure becomes a ``GitError`` naming it, and cancelling the task terminates git.
+    private static func spawn(
+        _ arguments: [String], input: Data? = nil, in directory: URL, runner: any ProcessRunner,
+        timeout: Duration? = nil, isolation: GitIsolation = .strict, extraConfiguration: [String] = []
     ) async throws -> Data {
         PhaseTrace.log("git \(arguments.prefix(2).joined(separator: " "))")
         defer { PhaseTrace.log("git done \(arguments.prefix(2).joined(separator: " "))") }
         let spec = ProcessSpec(
-            executable: executable, arguments: isolation.configurationFlags + arguments, currentDirectory: directory,
-            environment: isolation.environment, standardInput: input, timeout: timeout)
+            executable: executable, arguments: isolation.configurationFlags + extraConfiguration + arguments,
+            currentDirectory: directory, environment: isolation.environment, standardInput: input, timeout: timeout)
         let output: ProcessOutput
         do {
             output = try await runner.run(spec)
