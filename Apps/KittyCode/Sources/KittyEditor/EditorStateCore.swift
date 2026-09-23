@@ -504,6 +504,8 @@ public final class EditorState {
     @ObservationIgnored private var configuredSyntaxTheme: Theme?
     /// The colours the terminal answered for its palette, as `receiveTerminalReply` gathers them.
     @ObservationIgnored public var terminalPalette = TerminalPalette()
+    /// Paste requests sent to the terminal whose clipboard reply has not come; a reply none waits for is ignored.
+    @ObservationIgnored var pendingClipboardReplies = 0
 
     public var syntaxTheme: Theme {
         if let cached = cachedSyntaxTheme { return cached }

@@ -251,8 +251,28 @@ public func handleCut(state: EditorState) {
 
 @MainActor
 public func handlePasteRequest(state: EditorState) {
-    state.terminalWriter?(KittySequences.requestClipboard)
+    if let terminalWriter = state.terminalWriter {
+        terminalWriter(KittySequences.requestClipboard)
+        state.pendingClipboardReplies += 1
+    }
     state.statusMessage = "Paste request sent"
+}
+
+/// Pastes the clipboard reply a paste request waits for, or says why nothing was pasted. A reply no request waits
+/// for is ignored, so bytes that merely look like one cannot paste. Returns whether a request took the reply.
+@MainActor
+func receiveClipboardReply(_ reply: OSCClipboard.Reply, state: EditorState) -> Bool {
+    guard state.pendingClipboardReplies > 0 else { return false }
+    state.pendingClipboardReplies -= 1
+    switch reply {
+        case .text(let text):
+            handlePaste(text, state: state)
+        case .empty:
+            state.statusMessage = "Nothing to paste: the clipboard is empty or the terminal declined"
+        case .unreadable:
+            state.statusMessage = "Nothing pasted: the terminal's clipboard reply was not base64"
+    }
+    return true
 }
 
 @MainActor
