@@ -35,6 +35,16 @@ struct FindingRevealTests {
     }
 
     @Test
+    func `a left-side finding reveals the row showing its old line`() throws {
+        let rendered = DiffRenderer.render(oldText: old, newText: new, language: .plain)
+
+        let row = try #require(
+            FindingReveal(leftPath: "a.swift", line: 2, side: .left).row(in: rendered, inline: false))
+
+        #expect(rendered.old?.rows[row].oldNumber == 2)
+    }
+
+    @Test
     func `a line hidden in a gap reveals the last row shown before it`() throws {
         let long = (1 ... 30).map { "line \($0)\n" }.joined()
         let changed = long.replacingOccurrences(of: "line 30\n", with: "line thirty\n")

@@ -39,6 +39,16 @@ struct FindingsNavigatorGroupingTests {
     }
 
     @Test
+    func `the right side's files come first, then the left side's, each marked with its side`() {
+        let groups = FindingsNavigatorGrouping.groups(
+            right: ["b.swift": [finding(file: "b.swift", line: 1)]],
+            left: ["a.swift": [finding(file: "a.swift", line: 1)]])
+
+        #expect(groups.map(\.path) == ["b.swift", "a.swift"])
+        #expect(groups.map(\.side) == [.right, .left])
+    }
+
+    @Test
     func `a file with no findings is dropped entirely`() {
         let groups = FindingsNavigatorGrouping.groups(["empty.swift": []])
 

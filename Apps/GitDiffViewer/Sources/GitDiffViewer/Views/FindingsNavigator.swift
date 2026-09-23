@@ -44,26 +44,32 @@ private struct FindingsNavigatorPopover: View {
     @Binding var isPresented: Bool
 
     private var groups: [FindingsNavigatorGrouping.FileGroup] {
-        FindingsNavigatorGrouping.groups(model.diagnostics?.findingsByFile ?? [:])
+        FindingsNavigatorGrouping.groups(
+            right: model.diagnostics?.findingsByFile ?? [:], left: model.diagnostics?.leftFindingsByFile ?? [:])
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                ForEach(groups, id: \.path) { group in
+                ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
                     VStack(alignment: .leading, spacing: 4) {
-                        Text((group.path as NSString).lastPathComponent)
-                            .font(.headline)
-                            .help(group.path)
+                        HStack(spacing: 6) {
+                            Text((group.path as NSString).lastPathComponent)
+                                .font(.headline)
+                            if group.side == .left {
+                                Text("Left side").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .help(group.path)
                         ForEach(Array(group.findings.enumerated()), id: \.offset) { _, finding in
                             FindingRow(finding: finding) {
-                                // Opens the file, then its line once the file's render lands.
-                                model.reveal(finding)
+                                // Opens the file, then its line on the finding's side once the file's render lands.
+                                model.reveal(finding, on: group.side)
                                 isPresented = false
                             }
                         }
                     }
-                    if group.path != groups.last?.path { Divider() }
+                    if index < groups.count - 1 { Divider() }
                 }
                 if groups.isEmpty {
                     Text("No findings").foregroundStyle(.secondary).padding()
