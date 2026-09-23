@@ -102,7 +102,7 @@ public final class Highlighter: Sendable {
         scratch.rawSpans.reserveCapacity(matches.reduce(into: 0) { $0 += $1.captures.count })
 
         for match in matches {
-            for capture in match.captures {
+            for capture in match.captures where CaptureRoleMapper.colorsText(capture.name) {
                 let style = theme.style(for: capture.name)
                 let idx = scratch.paletteIndex(for: style)
                 scratch.rawSpans.append(
@@ -169,8 +169,8 @@ public final class Highlighter: Sendable {
 
     // MARK: - Token-based highlighting
 
-    /// A token in `layer` for every capture in `matches`, roles unresolved; an earlier query pattern gets a higher
-    /// priority, so it wins on identical ranges as it does in `highlight(source:tree:query:)`.
+    /// A token in `layer` for every capture in `matches` that colors text, roles unresolved; an earlier query pattern
+    /// gets a higher priority, so it wins on identical ranges as it does in `highlight(source:tree:query:)`.
     public func buildTokens(
         matches: [QueryMatch],
         layer: HighlightLayer = .structural
@@ -180,7 +180,7 @@ public final class Highlighter: Sendable {
         tokens.reserveCapacity(matches.reduce(into: 0) { $0 += $1.captures.count })
 
         for match in matches {
-            for capture in match.captures {
+            for capture in match.captures where CaptureRoleMapper.colorsText(capture.name) {
                 let (role, modifiers) = CaptureRoleMapper.map(capture.name)
                 tokens.append(
                     HighlightToken(
