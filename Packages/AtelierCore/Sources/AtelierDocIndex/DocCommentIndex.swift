@@ -51,13 +51,9 @@ public actor DocCommentIndex {
         self.files = next
     }
 
-    /// Entries whose name matches exactly, with `preferringURI`'s entries sorted first and a stable order otherwise.
-    /// A file being re-indexed under an `atelier-blob://` URI (a diff's old side) and again under its live
-    /// `file://` URI (the working copy) is one declaration, not two: duplicate and superseded-history candidates
-    /// among every URI *other than* `preferringURI` are collapsed before sorting -- see
-    /// `collapsingHistoricalDuplicates`. `preferringURI`'s own entries are never touched by that collapse: hovering
-    /// an old blob's own declaration must show *that* declaration, even when a newer `file://` entry at the same
-    /// path has since changed it -- the query is asking about the revision it names, not the working copy.
+    /// Entries named exactly `name`, those of `preferringURI` first, the rest in a stable order. Other URIs' entries
+    /// are deduplicated (see `collapsingHistoricalDuplicates`); `preferringURI`'s own are kept as they are, since a
+    /// hover on an old blob asks about the revision it names.
     public func documentation(forIdentifier name: String, preferringURI uri: String?) -> [DocEntry] {
         var matches: [DocEntry] = []
         for state in files.values {
@@ -81,18 +77,9 @@ public actor DocCommentIndex {
         return combined
     }
 
-    /// Collapses entries that are really the same declaration seen more than once:
-    ///  - An `atelier-blob://<oid>/<path>` entry (a diff's old side) is dropped whenever a `file://` entry among
-    ///    `entries` resolves to the same underlying path, even if their signatures differ -- the blob side is
-    ///    history, never a candidate, and a changed signature (e.g. a conformance added since that blob) does not
-    ///    make it a second, legitimate declaration.
-    ///  - Among what remains, entries that render identically -- the same whitespace-normalized signature *and*
-    ///    the same doc comment, i.e. truly the same declaration seen twice (a corpus copy of the same file
-    ///    indexed a second time under a different URI) -- are collapsed to one, preferring a `file://` entry over
-    ///    any other scheme when both are present. Two declarations that merely happen to share a signature (say,
-    ///    two different `run()` overrides with their own doc comments) are not touched by this: their markdown
-    ///    differs, so they are not "identical".
-    /// Genuinely distinct same-name declarations at different paths are left alone.
+    /// Drops an `atelier-blob://` entry, which is history, when a `file://` entry has the same underlying path, then
+    /// collapses entries with the same normalized signature and markdown to one, preferring `file://`. Distinct
+    /// declarations that only share a name or a signature are kept.
     private static func collapsingHistoricalDuplicates(_ entries: [DocEntry]) -> [DocEntry] {
         let filePaths = entries.compactMap { entry -> String? in
             guard entry.uri.hasPrefix("file://") else { return nil }
@@ -121,10 +108,8 @@ public actor DocCommentIndex {
         return order.compactMap { bestByRendering[$0] }
     }
 
-    /// The declaration's path as it would appear on disk, derived from either URI shape: the segment after the
-    /// blob OID for `atelier-blob://<oid>/<path>`, or everything after the scheme (leading slashes stripped) for
-    /// `file://<root>/<path>` -- callers compare these as suffixes since the `file://` side carries a repository
-    /// root the blob side does not.
+    /// The path in an `atelier-blob://<oid>/<path>` or `file://<root>/<path>` URI; the `file://` one keeps its root,
+    /// so callers compare suffixes.
     private static func underlyingPath(from uri: String) -> String? {
         if uri.hasPrefix("atelier-blob://") {
             let rest = uri.dropFirst("atelier-blob://".count)
@@ -263,9 +248,8 @@ private final class DocCommentVisitor: SyntaxVisitor {
         return String(text.dropFirst().dropLast())
     }
 
-    /// The decl's head with its body cut off at the first top-level `{`, whitespace collapsed. A simple
-    /// first-brace cut, so a closure-typed default parameter value ahead of the body would truncate early; that
-    /// tradeoff is accepted for this first version.
+    /// The declaration up to its first `{`, whitespace collapsed; a closure default value ahead of the body cuts it
+    /// short.
     private static func signature(from decl: DeclSyntax) -> String {
         let text = decl.trimmedDescription
         let head = text.firstIndex(of: "{").map { text[text.startIndex ..< $0] } ?? text[...]

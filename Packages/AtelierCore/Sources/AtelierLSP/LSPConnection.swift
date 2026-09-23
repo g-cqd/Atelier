@@ -3,8 +3,7 @@ import Foundation
 
 /// Why an ``LSPConnection`` request or notification failed.
 public enum LSPConnectionError: Error, Sendable, Equatable {
-    /// The transport closed -- either the read loop ended (the server went away) or ``LSPConnection/stop()``
-    /// was called. The associated string is the underlying description, when one was available.
+    /// The server went away or ``LSPConnection/stop()`` was called; the string describes why, when known.
     case transportClosed(String)
     /// The server replied with a JSON-RPC error object.
     case serverError(JSONRPCError)
@@ -13,13 +12,9 @@ public enum LSPConnectionError: Error, Sendable, Equatable {
     case malformedResponse(String)
 }
 
-/// A JSON-RPC connection to a language server over an ``LSPTransport``: request/response with matched ids,
-/// fire-and-forget notifications, and handling for the handful of requests/notifications a server sends back
-/// (`workspace/configuration`, everything else, and `$/cancelRequest` on our own cancelled requests).
-///
-/// One actor owns the whole conversation: a single unstructured read-loop task decodes frames off the
-/// transport and either resumes a pending request's continuation or replies to a server-initiated request;
-/// callers of ``request(_:_:as:)`` and ``notify(_:_:)`` never touch the transport directly.
+/// A JSON-RPC connection to a language server over an ``LSPTransport``: requests matched to their responses by id,
+/// notifications, and answers to the server's own requests. A request whose task is cancelled throws
+/// `CancellationError` and sends `$/cancelRequest`. Nothing is read until ``start()`` runs the read loop.
 public actor LSPConnection {
     private let transport: any LSPTransport
     private let decoder = AemiJSON.JSONDecoder()
@@ -27,14 +22,10 @@ public actor LSPConnection {
     private var nextRequestID = 0
     private var pending: [JSONRPCID: CheckedContinuation<Data?, any Error>] = [:]
     private var readTask: Task<Void, Never>?
-    /// Set as soon as requests must stop being accepted: either ``stop()`` was called, or the read loop ended
-    /// (a malformed frame, or the server closing its side). Independent of ``transportDisposed`` -- a read loop
-    /// ending on its own does not itself release the transport, only marks it unusable for new work.
+    /// Set once ``stop()`` runs or the read loop ends; new requests and notifications are refused from then on.
     private var closed = false
-    /// Set once ``LSPTransport/close()`` has actually run. ``stop()`` always drives the transport to this state,
-    /// even when the read loop already set ``closed`` -- otherwise a connection whose reader ended on a
-    /// malformed frame would keep its transport (and the process/pipes behind it) alive forever, since
-    /// ``stop()`` used to no-op whenever ``closed`` was already true.
+    /// Set once ``LSPTransport/close()`` has run. Only ``stop()`` sets it, so a read loop that ended on its own
+    /// still leaves the transport for ``stop()`` to close.
     private var transportDisposed = false
 
     public init(transport: any LSPTransport) {
@@ -61,9 +52,8 @@ public actor LSPConnection {
         return result
     }
 
-    /// Sends a request and decodes its result as `R`, or `nil` when the server's result was JSON `null` or
-    /// absent -- the LSP shape for "nothing to show" (e.g. `textDocument/hover` with no symbol under the
-    /// cursor).
+    /// Sends a request and decodes its result as `R`, or `nil` when the result is `null` or absent, which is how
+    /// LSP says there is nothing to show.
     public func requestOptional<P: Encodable & Sendable, R: Decodable & Sendable>(
         _ method: String, _ params: P, as type: R.Type
     ) async throws -> R? {
@@ -83,9 +73,8 @@ public actor LSPConnection {
         try await transport.send(frame)
     }
 
-    /// Ends the read loop, closes the transport, and fails every pending request with
-    /// ``LSPConnectionError/transportClosed(_:)``. Idempotent, and always disposes the transport even when the
-    /// read loop already marked the connection closed (a malformed frame, or the server hanging up first).
+    /// Ends the read loop, closes the transport once, and fails every pending request with
+    /// ``LSPConnectionError/transportClosed(_:)``. Idempotent.
     public func stop() async {
         closed = true
         readTask?.cancel()
@@ -198,8 +187,7 @@ public actor LSPConnection {
             }
             try await transport.send(LSPFrameCodec.frame(reply))
         } catch {
-            // Best effort: a failed reply to a server-initiated request doesn't itself close the connection;
-            // a genuinely dead transport will surface through the read loop.
+            // Best effort: a dead transport surfaces through the read loop.
         }
     }
 }

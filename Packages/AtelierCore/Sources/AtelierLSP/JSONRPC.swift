@@ -45,7 +45,7 @@ extension JSONValue: Codable {
     }
 }
 
-/// A JSON-RPC request identifier: a number or a string, per the spec.
+/// A JSON-RPC request identifier, which the protocol allows to be a number or a string.
 public enum JSONRPCID: Sendable, Hashable {
     case number(Int)
     case string(String)
@@ -116,8 +116,6 @@ private struct ErrorResponseEnvelope: Encodable {
 }
 
 /// Builders for the four JSON-RPC envelope shapes a client sends over the LSP base protocol.
-/// Encoding goes through `AemiJSON.JSONEncoder` (drop-in for Foundation's, single-pass byte
-/// writer underneath); these run once per outgoing message, so the per-message win compounds.
 public enum JSONRPCMessage {
     /// A request the client sends to the server, expecting a matching response.
     public static func request<P: Encodable>(id: JSONRPCID, method: String, params: P) throws -> Data {
@@ -154,11 +152,7 @@ public enum IncomingMessage: Sendable {
 
     /// Decodes and classifies one JSON-RPC payload.
     ///
-    /// Classification reads the envelope's `method`/`id` straight off AemiJSON's lazy tape, and a
-    /// response's `result` is handed back as the **original subtree bytes** zero-copy
-    /// (`JSON.withRawJSONBytes`, enabled by `recordsContainerSpans`) — no `JSONValue` tree, no
-    /// re-encode. Measured on a 260 B hover response: ~0.6 µs vs ~33 µs for the previous
-    /// decode-tree-then-re-encode pass; ~3 µs end-to-end including the typed decode at the call site.
+    /// A response's `result` is the payload's own bytes for that field, handed back without a re-encode.
     public static func decode(_ payload: Data) throws -> IncomingMessage {
         var options = JSONParseOptions.strict
         options.recordsContainerSpans = true

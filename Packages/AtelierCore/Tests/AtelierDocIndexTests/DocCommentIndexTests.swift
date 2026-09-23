@@ -286,9 +286,7 @@ struct DocCommentIndexTests {
                 uri: "file:///repo/Sources/Foo.swift",
                 content: "/// New doc, now Sendable.\nstruct Foo: Sendable {}")
         ])
-        // The query's own URI is the blob (the old side of a diff): its own declaration must survive the
-        // cross-URI historical dedupe and sort first, even though a newer `file://` entry at the same path
-        // exists and would otherwise supersede it.
+        // The query's own blob entry survives the dedupe and sorts first, despite a newer `file://` entry at its path.
         let entries = await index.documentation(
             forIdentifier: "Foo", preferringURI: "atelier-blob://deadbeef/Sources/Foo.swift")
         #expect(entries.count == 2)
@@ -299,10 +297,6 @@ struct DocCommentIndexTests {
 }
 
 extension DocCommentIndexTests {
-    /// A focused repro of a user-reported miss: a documented computed property declared inside an `extension`,
-    /// with an explicit `get` accessor block -- the shape a screenshot showed failing to deliver prose to the
-    /// hover panel (declaration-only, `sourcekit-lsp` provenance, meaning no tier answered, when the doc-comment
-    /// index should have).
     @Test
     func `a documented computed property inside an extension with an explicit get block is indexed`() async {
         let index = DocCommentIndex()
