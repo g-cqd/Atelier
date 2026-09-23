@@ -1,10 +1,11 @@
+package import AemiCore
 package import AtelierDiagnostics
 package import AtelierLSP
 import DiffGit
 package import Foundation
 
 /// Decides whether and how GitDiffViewer launches sourcekit-lsp: per repository root for the language-server tier,
-/// and app-wide for the SDK tier, whose scratch session has no root.
+/// only where the user trusts the repository, and app-wide for the SDK tier, whose scratch session has no root.
 @MainActor
 package final class LanguageServerPolicy {
     /// Finds sourcekit-lsp's executable for a persisted location, honoring its custom path; nil when none resolves.
@@ -13,15 +14,34 @@ package final class LanguageServerPolicy {
     /// The id sourcekit-lsp's location is stored under in ``ViewerSettings/lspServerLocations``.
     static let serverID = "sourcekit-lsp"
 
+    private let trust: RepositoryTrust
     private let defaults: UserDefaults
     private let locate: Locate
+    private let taskProvider: any TaskProvider
 
     /// - Parameters:
+    ///   - trust: The user's decisions, which gate every session with a repository root.
     ///   - defaults: Where ``ViewerSettings`` persists `lspServerLocations`, app-wide and per project.
     ///   - locate: Finds the executable; ``locate(with:)`` in the app.
-    package init(defaults: UserDefaults = .standard, locate: @escaping Locate) {
+    ///   - taskProvider: Spawns the shutdown of a revoked repository's session.
+    package init(
+        trust: RepositoryTrust, defaults: UserDefaults = .standard, locate: @escaping Locate,
+        taskProvider: any TaskProvider = .default
+    ) {
+        self.trust = trust
         self.defaults = defaults
         self.locate = locate
+        self.taskProvider = taskProvider
+    }
+
+    /// Shuts a repository's session in `registry` down as soon as the user stops trusting the repository, rather than
+    /// at its idle shutdown. The registry already refuses the root from then on; this stops the server running there.
+    package func stopSessionsOnRevocation(in registry: SourceKitLSPRegistry) {
+        // Weak: the registry's own closures hold this policy, which holds the trust store that holds this closure.
+        trust.onDecisionChanged = { [weak registry, taskProvider] root, decision in
+            guard decision == .declined, let registry else { return }
+            taskProvider.task { await registry.shutdown(root: root) }
+        }
     }
 
     /// Looks sourcekit-lsp up through `discovery` the way the Tools settings do: the `GDV_SOURCEKIT_LSP` override, the
@@ -35,9 +55,27 @@ package final class LanguageServerPolicy {
         }
     }
 
-    /// The configuration of a sourcekit-lsp session rooted at `root`, a canonical directory; nil when sourcekit-lsp is
-    /// off for `root`'s project, or when no executable resolves.
+    /// Whether a sourcekit-lsp session may run at `root`, a canonical directory: sourcekit-lsp is on for `root`'s
+    /// project, and the user trusts the repository. A root the user never decided on is refused and asks the user,
+    /// once; a root where sourcekit-lsp is off asks nothing, since trusting it would start nothing.
+    package func admitsSession(at root: URL) -> Bool {
+        guard sourceKitLSPDiscoveryEnabled(sourceKitLSPLocation(forRoot: root)) else { return false }
+        switch trust.decision(for: root) {
+            case .trusted:
+                return true
+            case .declined:
+                return false
+            case nil:
+                trust.requestDecision(for: root)
+                return false
+        }
+    }
+
+    /// The configuration of a sourcekit-lsp session rooted at `root`, a canonical directory; nil when the user does not
+    /// trust the repository, when sourcekit-lsp is off for `root`'s project, or when no executable resolves.
     package func configuration(forRoot root: URL) async -> SourceKitLSPService.Configuration? {
+        // Checked again although the registry admits every root first: an untrusted root never reaches a server.
+        guard trust.isTrusted(root) else { return nil }
         let location = sourceKitLSPLocation(forRoot: root)
         guard sourceKitLSPDiscoveryEnabled(location), let executable = await locate(location) else { return nil }
         return SourceKitLSPService.Configuration(serverExecutable: executable, workspaceRoot: root)
