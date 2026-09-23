@@ -16,6 +16,9 @@ package final class ToolStatusBoard {
     package private(set) var isRefreshing = false
 
     private let discovery: ToolDiscovery
+    /// Bumped by every ``refreshAll(for:rediscovering:)``: a refresh another has replaced, when the tab changes scope
+    /// mid-way, writes nothing more, so the rows never show the previous scope's statuses.
+    @ObservationIgnored private var generation = 0
 
     package init(discovery: ToolDiscovery) {
         self.discovery = discovery
@@ -25,32 +28,42 @@ package final class ToolStatusBoard {
     /// `rediscovering`, which first drops discovery's caches, `xcrun`'s answers, the login shell's `PATH` and the
     /// versions, so a tool installed since the last probe is found without relaunching the app (TOOL-01).
     package func refreshAll(for settings: ViewerSettings, rediscovering: Bool) async {
+        generation &+= 1
+        let generation = generation
         isRefreshing = true
         if rediscovering { await discovery.invalidate() }
-        for tool in DiagnosticTool.allCases {
-            await refresh(key: tool.rawValue, for: settings)
+        for key in DiagnosticTool.allCases.map(\.rawValue) + [Self.sourceKitLSPKey] {
+            guard generation == self.generation else { return }
+            await refresh(key: key, for: settings, generation: generation)
         }
-        await refresh(key: Self.sourceKitLSPKey, for: settings)
+        guard generation == self.generation else { return }
         isRefreshing = false
     }
 
     /// Probes the row under `key` for `settings`: a tool through its own location, sourcekit-lsp the way the language
     /// server policy finds it. A disabled language server has no status.
     package func refresh(key: String, for settings: ViewerSettings) async {
+        await refresh(key: key, for: settings, generation: generation)
+    }
+
+    /// Probes the row under `key`, writing the answer only while no newer refresh has started.
+    private func refresh(key: String, for settings: ViewerSettings, generation: Int) async {
+        let status = await status(ofRow: key, for: settings)
+        guard generation == self.generation else { return }
+        statuses[key] = status
+    }
+
+    private func status(ofRow key: String, for settings: ViewerSettings) async -> ToolStatus? {
         if let tool = DiagnosticTool(rawValue: key) {
-            statuses[key] = await discovery.status(tool, location: settings.toolLocations[tool])
-            return
+            return await discovery.status(tool, location: settings.toolLocations[tool])
         }
-        guard key == Self.sourceKitLSPKey else { return }
+        guard key == Self.sourceKitLSPKey else { return nil }
         let location = settings.lspServerLocations[key]
-        if let location, !location.isEnabled {
-            statuses[key] = nil
-            return
-        }
+        if let location, !location.isEnabled { return nil }
         let located = await discovery.locate(
             executableName: Self.sourceKitLSPKey, overrideVariable: "GDV_SOURCEKIT_LSP",
             customPath: location?.customPath, searchesToolchain: true)
         // No version: sourcekit-lsp can only report one by launching the language server itself.
-        statuses[key] = ToolStatus(tool: .swiftlint, url: located?.url, origin: located?.origin, version: nil)
+        return ToolStatus(tool: .swiftlint, url: located?.url, origin: located?.origin, version: nil)
     }
 }
