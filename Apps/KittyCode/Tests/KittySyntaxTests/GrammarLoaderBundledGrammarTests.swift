@@ -64,4 +64,11 @@ struct GrammarLoaderBundledGrammarTests {
         #expect(grammar.name == "swift")
         #expect(grammar.externals.isEmpty)
     }
+
+    @Test(arguments: BundledLanguageManifest.entries.map(\.path))
+    func `every bundled grammar loads`(language: String) throws {
+        let resourcePath = try #require(KittySyntaxResources.bundle.resourcePath)
+        let grammar = try GrammarLoader.load(from: "\(resourcePath)/Grammars/\(language)/grammar.json")
+        #expect(grammar.name == language)
+    }
 }

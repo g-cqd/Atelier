@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import AtelierGrammar
+@testable import AtelierParser
 @testable import KittySyntax
 
 /// How the registry reads a `languages.json` manifest, and how its compiled-table cache stays readable by, and from,
@@ -89,6 +90,20 @@ struct GrammarRegistryJSONTests {
         #expect(decoded.parseTable == compiled.parseTable)
         #expect(decoded.lexTable == compiled.lexTable)
         #expect(decoded.productions == compiled.productions)
+    }
+
+    @Test
+    func `bundled JSON parses a nested value without ERROR nodes`() throws {
+        let compiled = try compiledJSONGrammar()
+        let parser = GLRParser(
+            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+        let tree = try parser.parse(#"{"name":"value","items":[1,true,null]}"#)
+        #expect(tree.root.type == "document")
+        var pending = [tree.root]
+        while let node = pending.popLast() {
+            #expect(!node.isError)
+            pending.append(contentsOf: node.children)
+        }
     }
 
     private func compiledJSONGrammar() throws -> ParseTableCompiler.CompilationResult {

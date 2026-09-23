@@ -167,8 +167,8 @@ struct GrammarLoaderJSONShapeTests {
         #expect(grammar.rules.map(\.rule) == [.prec(expected, .blank)])
     }
 
-    @Test(arguments: ["1.5", "\"named\"", "null", "[1]"])
-    func `a precedence value that is not an integer is reported missing`(value: String) {
+    @Test(arguments: ["1.5", "null", "[1]"])
+    func `a precedence value that is neither an integer nor a name is reported missing`(value: String) {
         #expect(throws: GrammarError.missingField("value")) {
             try GrammarLoader.parse(
                 grammar(rules: #""r": {"type": "PREC", "value": \#(value), "content": {"type": "BLANK"}}"#))

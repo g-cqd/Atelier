@@ -128,4 +128,49 @@ struct GrammarLoaderTests {
         #expect(grammar.rules.count == 1)
         #expect(try requireStringRule(grammar.rules.first?.rule) == "😀")
     }
+
+    @Test
+    func `reserved rule loads its content without contextual word restrictions`() throws {
+        let json = #"""
+            {
+                "name": "reserved",
+                "rules": {
+                    "source": {
+                        "type": "RESERVED",
+                        "content": {"type": "STRING", "value": "property"},
+                        "context_name": "properties"
+                    }
+                },
+                "reserved": {"properties": ["if", "else"]}
+            }
+            """#
+
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+        #expect(grammar.rules.first?.rule == .string("property"))
+    }
+
+    @Test
+    func `reserved rule without content reports the missing field`() {
+        let json = #"{"name":"reserved","rules":{"source":{"type":"RESERVED","context_name":"properties"}}}"#
+        #expect(throws: GrammarError.missingField("content")) {
+            try GrammarLoader.parse(Data(json.utf8))
+        }
+    }
+
+    @Test(arguments: ["PREC", "PREC_LEFT", "PREC_RIGHT"])
+    func `named precedence loads with its ordering deferred to the compiler`(kind: String) throws {
+        let json = """
+            {"name":"precedence","rules":{"source":{"type":"\(kind)","value":"assign",\
+            "content":{"type":"STRING","value":"value"}}}}
+            """
+
+        let grammar = try GrammarLoader.parse(Data(json.utf8))
+        let expected: Rule
+        switch kind {
+            case "PREC": expected = .prec(0, .string("value"))
+            case "PREC_LEFT": expected = .precLeft(0, .string("value"))
+            default: expected = .precRight(0, .string("value"))
+        }
+        #expect(grammar.rules.first?.rule == expected)
+    }
 }
