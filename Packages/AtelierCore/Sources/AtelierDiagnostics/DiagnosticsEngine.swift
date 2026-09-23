@@ -1,11 +1,5 @@
 public import AtelierProcess
-import Darwin
 public import Foundation
-
-/// Whether the calling thread is the process' main thread, for asserting that parsing stays off it.
-private func isOnMainThread() -> Bool {
-    pthread_main_np() != 0
-}
 
 /// Runs each diagnostic tool as one cancellable, timeout-bounded job, parses its output into ``Finding``s, and
 /// caches the full result per tool-version/config/payload combination so an unchanged run costs nothing to repeat.
@@ -148,7 +142,7 @@ public actor DiagnosticsEngine {
 
         let spec = ProcessSpec(
             executable: located.url, arguments: ToolCommand.analyze(tool, files: argvFiles, root: request.root),
-            currentDirectory: request.root, timeout: .seconds(scope == .perFile ? 60 : 300)
+            currentDirectory: request.root, timeout: ToolCommand.timeout(tool)
         )
 
         var output: ProcessOutput?
@@ -170,17 +164,22 @@ public actor DiagnosticsEngine {
                 fromCache: false)
         }
 
-        guard ToolCommand.acceptableExitCodes(tool).contains(output.terminationStatus) else {
-            let message = output.errorText.isEmpty ? "exit \(output.terminationStatus)" : output.errorText
-            return ToolResult(tool: tool, findings: [], status: .failed(message), duration: duration, fromCache: false)
+        let exitStatus = output.terminationStatus
+        let ranToCompletion = ToolCommand.acceptableExitCodes(tool).contains(exitStatus)
+        guard ranToCompletion || ToolCommand.exitCodesAcceptedWithParsableOutput(tool).contains(exitStatus) else {
+            return ToolResult(
+                tool: tool, findings: [], status: .failed(Self.failureMessage(of: output)), duration: duration,
+                fromCache: false)
         }
 
         let findings: [Finding]
         switch await Self.parsedFindings(from: output, tool: tool, root: request.root) {
             case .success(let parsed): findings = parsed
             case .failure(let failure):
+                // A run that stopped short explains itself on standard error, not in the output it failed to write.
+                let message = ranToCompletion ? failure.message : Self.failureMessage(of: output)
                 return ToolResult(
-                    tool: tool, findings: [], status: .failed(failure.message), duration: duration, fromCache: false)
+                    tool: tool, findings: [], status: .failed(message), duration: duration, fromCache: false)
         }
 
         store(findings, for: cacheKey)
@@ -233,12 +232,16 @@ public actor DiagnosticsEngine {
         let message: String
     }
 
+    /// What a failed run printed on standard error, or its exit status when it printed nothing there.
+    private static func failureMessage(of output: ProcessOutput) -> String {
+        output.errorText.isEmpty ? "exit \(output.terminationStatus)" : output.errorText
+    }
+
     /// The tool's output decoded per its format on the concurrent executor, so a large log never holds the engine.
     @concurrent
     private static func parsedFindings(
         from output: ProcessOutput, tool: DiagnosticTool, root: URL
     ) async -> Result<[Finding], ParseFailure> {
-        assert(!isOnMainThread(), "parsedFindings must run off the main actor")
         switch tool.outputFormat {
             case .sarif:
                 do {
