@@ -19,8 +19,7 @@ struct DiagnosticDiffTextView: View {
     var syncsScrolling = true
     var scrollRequest: ScrollRequest?
     var splitController: SplitPaneController?
-    var onGapDrag: ((GapMarker, GapExpansion, Int) -> Void)?
-    var currentExpansion: ((GapKey) -> GapExpansion)?
+    var onGapDrag: ((GapDragEvent) -> Void)?
     var onDisplayed: (() -> Void)?
 
     @State private var overlay = DiagnosticOverlay()
@@ -35,7 +34,7 @@ struct DiagnosticDiffTextView: View {
             rendered: rendered, gutter: gutter, keepsScrollPosition: keepsScrollPosition, wrapsLines: wrapsLines,
             wrapColumn: wrapColumn, showsMinimap: showsMinimap, syncsScrolling: syncsScrolling,
             scrollRequest: scrollRequest, splitController: splitController, onGapDrag: onGapDrag,
-            currentExpansion: currentExpansion, onDisplayed: onDisplayed,
+            onDisplayed: onDisplayed,
             hoverEnabled: model.settings.showsHoverDocumentation && model.hoverDocs != nil,
             hoverResolver: hoverResolver,
             diagnosticOverlay: model.settings.diagnosticsEnabled ? overlay : nil, diagnosticsVersion: version,

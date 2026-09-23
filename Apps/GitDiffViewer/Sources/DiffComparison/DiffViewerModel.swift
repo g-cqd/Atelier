@@ -464,11 +464,6 @@ package final class DiffViewerModel {
         pipeline.relayout(keepingScroll: false)
     }
 
-    package func adjustGap(_ marker: GapMarker, from base: GapExpansion, byLines delta: Int) {
-        timer.abandon()
-        pipeline.adjustGap(marker, from: base, byLines: delta)
-    }
-
     /// Feeds a gap handle's drag to ``gapDrags``; each step renders only the card it drags.
     package func handleGapDrag(_ event: GapDragEvent) {
         timer.abandon()
