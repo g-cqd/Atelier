@@ -59,70 +59,71 @@ public final class GLRParser: Sendable {
         for (tokenIdx, token) in nonExtraTokens.enumerated() {
             guard let termIdx = terminalIndex[token.type] else {
                 // Unknown token — wrap in error node and continue
-                stacks = stacks.map { stack in
-                    var s = stack
-                    s.pushNode(
-                        SyntaxNode(
-                            type: token.type,
-                            byteRange: token.byteRange,
-                            pointRange: token.pointRange,
-                            isError: true,
-                            isNamed: false
-                        ))
-                    return s
+                let node = SyntaxNode(
+                    type: token.type,
+                    byteRange: token.byteRange,
+                    pointRange: token.pointRange,
+                    isError: true,
+                    isNamed: false
+                )
+                for index in stacks.indices {
+                    stacks[index].pushNode(node)
                 }
                 continue
             }
 
             // Apply reduces first (before shift)
-            stacks = applyReduces(stacks: stacks, terminalIndex: termIdx)
+            stacks = applyReduces(stacks: consume stacks, terminalIndex: termIdx)
 
-            // Apply shifts
+            // Apply shifts. Each stack is popped off `stacks`, so it is the only owner of its node array and a push
+            // appends in place instead of copying the array.
+            let leaf = SyntaxNode(
+                type: token.type,
+                byteRange: token.byteRange,
+                pointRange: token.pointRange,
+                isNamed: false
+            )
             var newStacks: [ParseStack] = []
-            for var stack in stacks {
+            newStacks.reserveCapacity(stacks.count)
+            stacks.reverse()
+            while var stack = stacks.popLast() {
                 let action = parseTable.actions[stack.state][termIdx]
                 switch action {
                     case .shift(let nextState):
-                        stack.pushNode(
-                            SyntaxNode(
-                                type: token.type,
-                                byteRange: token.byteRange,
-                                pointRange: token.pointRange,
-                                isNamed: false
-                            ))
+                        stack.pushNode(leaf)
                         stack.state = nextState
                         newStacks.append(stack)
 
                     case .conflict(let actions):
-                        for act in actions {
-                            if case .shift(let nextState) = act {
-                                var forked = stack
-                                forked.pushNode(
-                                    SyntaxNode(
-                                        type: token.type,
-                                        byteRange: token.byteRange,
-                                        pointRange: token.pointRange,
-                                        isNamed: false
-                                    ))
-                                forked.state = nextState
-                                newStacks.append(forked)
-                            }
+                        let shiftTargets = actions.compactMap { action -> Int? in
+                            if case .shift(let nextState) = action { return nextState }
+                            return nil
                         }
+                        guard let lastTarget = shiftTargets.last else { break }
+                        // Forks copy the stack; the last shift takes it over.
+                        for nextState in shiftTargets.dropLast() {
+                            var forked = stack
+                            forked.pushNode(leaf)
+                            forked.state = nextState
+                            newStacks.append(forked)
+                        }
+                        stack.pushNode(leaf)
+                        stack.state = lastTarget
+                        newStacks.append(stack)
 
                     case .accept:
                         newStacks.append(stack)
 
                     case .reduce, .error:
                         // Error recovery: skip token
-                        var errStack = stack
-                        errStack.pushNode(
+                        stack.pushNode(
                             SyntaxNode(
                                 type: "ERROR",
                                 byteRange: token.byteRange,
                                 pointRange: token.pointRange,
                                 isError: true
                             ))
-                        newStacks.append(errStack)
+                        newStacks.append(stack)
                 }
             }
 
@@ -133,13 +134,13 @@ public final class GLRParser: Sendable {
             // Prune stacks if count exceeds limit — keep stacks with fewest errors
             if stacks.count > Self.maxStacks {
                 stacks.sort { $0.errorCount < $1.errorCount }
-                stacks = Array(stacks.prefix(Self.maxStacks))
+                stacks.removeLast(stacks.count - Self.maxStacks)
             }
         }
 
         // Check for accept on $end
         if let endIdx = terminalIndex["$end"] {
-            stacks = applyReduces(stacks: stacks, terminalIndex: endIdx)
+            stacks = applyReduces(stacks: consume stacks, terminalIndex: endIdx)
         }
 
         // Pick the best stack (prefer one with fewer errors)
@@ -168,10 +169,14 @@ public final class GLRParser: Sendable {
 
     // MARK: - Private
 
-    private func applyReduces(stacks: [ParseStack], terminalIndex termIdx: Int) -> [ParseStack] {
+    private func applyReduces(stacks: consuming [ParseStack], terminalIndex termIdx: Int) -> [ParseStack] {
+        // Popped stacks own their node arrays, so a reduction rewrites them in place.
+        var pending = consume stacks
+        pending.reverse()
         var result: [ParseStack] = []
+        result.reserveCapacity(pending.count)
 
-        for var stack in stacks {
+        while var stack = pending.popLast() {
             var shouldAppendStack = true
 
             reduceLoop: while true {
@@ -179,16 +184,15 @@ public final class GLRParser: Sendable {
 
                 switch action {
                     case .reduce(let ruleIndex, let count, let nonTerminal):
-                        stack = performReduce(
-                            stack: stack, ruleIndex: ruleIndex, count: count, nonTerminal: nonTerminal)
+                        performReduce(&stack, ruleIndex: ruleIndex, count: count, nonTerminal: nonTerminal)
                         continue reduceLoop
 
                     case .conflict(let actions):
                         // Fork: one stack per reduce action
                         for act in actions {
                             if case .reduce(let ri, let c, let nt) = act {
-                                let forked = performReduce(
-                                    stack: stack, ruleIndex: ri, count: c, nonTerminal: nt)
+                                var forked = stack
+                                performReduce(&forked, ruleIndex: ri, count: c, nonTerminal: nt)
                                 result.append(forked)
                             }
                         }
@@ -214,10 +218,7 @@ public final class GLRParser: Sendable {
         return result
     }
 
-    private func performReduce(stack: ParseStack, ruleIndex: Int, count: Int, nonTerminal: String)
-        -> ParseStack
-    {
-        var s = stack
+    private func performReduce(_ s: inout ParseStack, ruleIndex: Int, count: Int, nonTerminal: String) {
         let children = s.popNodes(count)
 
         let byteStart = children.first?.byteRange.lowerBound ?? 0
@@ -247,8 +248,6 @@ public final class GLRParser: Sendable {
         {
             s.state = gotoState
         }
-
-        return s
     }
 
     private func productionFields(for ruleIndex: Int) -> [Int: String] {
