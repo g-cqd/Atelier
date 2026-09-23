@@ -84,8 +84,9 @@ struct WatcherHarness {
         _ event: FileWatcher.FileWatchEvent, on source: FakeWatchEventSource, after duration: Duration,
         probe: AsyncProbe<Void>
     ) async throws {
+        let mark = clock.registrationMark()
         source.send(event)
-        try await clock.waitForSleepers()
+        try await clock.expectSleepers(after: mark)
         clock.advance(by: duration)
         _ = try await probe.expectNext()
     }
@@ -94,8 +95,9 @@ struct WatcherHarness {
     func write(
         _ path: String, on source: FakeWatchEventSource, after duration: Duration, probe: AsyncProbe<Void>
     ) async throws {
+        let mark = clock.registrationMark()
         try #require(source.write(path), "\(path) lies outside every watched directory")
-        try await clock.waitForSleepers()
+        try await clock.expectSleepers(after: mark)
         clock.advance(by: duration)
         _ = try await probe.expectNext()
     }

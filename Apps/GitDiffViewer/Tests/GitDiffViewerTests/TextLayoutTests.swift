@@ -150,12 +150,14 @@ struct TextLayoutTests {
         controller.register(nil, textView: leftView)
         controller.register(nil, textView: rightView)
 
+        let burst = clock.base.registrationMark()
         controller.wrapsLines = true
         controller.update(oldText, for: leftView)
         controller.update(newText, for: rightView)
-        try await clock.base.waitForSleepers()
+        try await clock.base.expectSleepers(after: burst)
+        let rescheduled = clock.base.registrationMark()
         controller.scheduleAlignment()
-        try await clock.base.waitForSleepers()
+        try await clock.base.expectSleepers(after: rescheduled)
         clock.base.advance(by: SplitPaneController.alignmentDebounce)
         await controller.pendingAlignment?.value
 
@@ -177,16 +179,18 @@ struct TextLayoutTests {
         let rightView = try Self.textView(showing: newText, width: 100)
         controller.register(nil, textView: leftView)
         controller.register(nil, textView: rightView)
+        let wrapping = clock.base.registrationMark()
         controller.update(oldText, for: leftView)
         controller.update(newText, for: rightView)
         controller.wrapsLines = true
-        try await clock.base.waitForSleepers()
+        try await clock.base.expectSleepers(after: wrapping)
         clock.base.advance(by: SplitPaneController.alignmentDebounce)
         await controller.pendingAlignment?.value
         let aligned = try Self.fragmentHeights(of: #require(leftView.textLayoutManager))
 
+        let unwrapping = clock.base.registrationMark()
         controller.wrapsLines = false
-        try await clock.base.waitForSleepers()
+        try await clock.base.expectSleepers(after: unwrapping)
         clock.base.advance(by: SplitPaneController.alignmentDebounce)
         await controller.pendingAlignment?.value
 

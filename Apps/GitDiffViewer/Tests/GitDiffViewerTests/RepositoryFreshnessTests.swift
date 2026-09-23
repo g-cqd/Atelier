@@ -28,15 +28,15 @@ struct RepositoryFreshnessTests {
         sut.comparisonChanged(rightSource: .directory(root), repositoryRoot: root)
         let source = try #require(factory.latest)
 
+        let first = harness.clock.registrationMark()
         source.send(.directoryChanged("/repo/a.swift"))
-        try await harness.clock.waitForSleepers()
+        try await harness.clock.expectSleepers(after: first)
         harness.clock.advance(by: .milliseconds(300))
         #expect(treeChanges == 0)
 
-        // Waits for a fresh sleeper registration, since the cancelled one may still be queued.
-        let mark = harness.clock.registrationMark()
+        let second = harness.clock.registrationMark()
         source.send(.directoryChanged("/repo/b.swift"))
-        try await harness.clock.waitForSleepers(1, after: mark)
+        try await harness.clock.expectSleepers(after: second)
         harness.clock.advance(by: WatcherHarness.treeDebounce)
         _ = try await probe.expectNext()
 
@@ -124,8 +124,9 @@ struct RepositoryFreshnessTests {
         sut.comparisonChanged(rightSource: .directory(root), repositoryRoot: root)
         let source = try #require(factory.latest)
 
+        let mark = harness.clock.registrationMark()
         source.send(.directoryChanged("/repo"))
-        try await harness.clock.waitForSleepers(count: 4)
+        try await harness.clock.expectSleepers(4, after: mark)
         harness.clock.advance(by: WatcherHarness.treeDebounce)
         _ = try await tree.expectNext()
         try await metadata.wait(forAtLeast: 3, timeout: TaskProviderSpy.failureBound)
@@ -149,9 +150,10 @@ struct RepositoryFreshnessTests {
         let source = try #require(factory.latest)
 
         // The skipped path schedules nothing; the legitimate one after it proves the pipeline is live.
+        let mark = harness.clock.registrationMark()
         source.send(.directoryChanged("/repo/node_modules/left-pad/index.js"))
         source.send(.directoryChanged("/repo/Sources/Foo.swift"))
-        try await harness.clock.waitForSleepers()
+        try await harness.clock.expectSleepers(after: mark)
         harness.clock.advance(by: WatcherHarness.treeDebounce)
 
         #expect(try await judged.expectNext() == ["Sources/Foo.swift"])
@@ -175,11 +177,12 @@ struct RepositoryFreshnessTests {
         sut.comparisonChanged(rightSource: .directory(root), repositoryRoot: root)
         let source = try #require(factory.latest)
 
+        let first = harness.clock.registrationMark()
         source.send(.directoryChanged("/repo/build/out.o"))
-        try await harness.clock.waitForSleepers()
-        let mark = harness.clock.registrationMark()
+        try await harness.clock.expectSleepers(after: first)
+        let second = harness.clock.registrationMark()
         source.send(.directoryChanged("/repo/App.xcodeproj/xcuserdata/UserInterfaceState.xcuserstate"))
-        try await harness.clock.waitForSleepers(1, after: mark)
+        try await harness.clock.expectSleepers(after: second)
         harness.clock.advance(by: WatcherHarness.treeDebounce)
 
         #expect(
@@ -208,15 +211,16 @@ struct RepositoryFreshnessTests {
         sut.onTreeChanged = { reloads.send(()) }
         sut.comparisonChanged(rightSource: .directory(root), repositoryRoot: root)
         let source = try #require(factory.latest)
+        let first = harness.clock.registrationMark()
         source.send(.directoryChanged("/repo/a.swift"))
-        try await harness.clock.waitForSleepers()
+        try await harness.clock.expectSleepers(after: first)
         harness.clock.advance(by: WatcherHarness.treeDebounce)
         #expect(try await judged.expectNext() == ["a.swift"])
 
         // The second write lands while the first check waits on its verdict, and supersedes it.
-        let mark = harness.clock.registrationMark()
+        let second = harness.clock.registrationMark()
         source.send(.directoryChanged("/repo/b.swift"))
-        try await harness.clock.waitForSleepers(1, after: mark)
+        try await harness.clock.expectSleepers(after: second)
         harness.clock.advance(by: WatcherHarness.treeDebounce)
 
         #expect(try await judged.expectNext() == ["a.swift", "b.swift"])

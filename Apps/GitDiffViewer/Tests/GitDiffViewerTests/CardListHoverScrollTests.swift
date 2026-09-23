@@ -104,8 +104,9 @@ struct CardListHoverScrollTests {
 
     /// Rests the pointer on `row`'s identifier until the panel shows.
     private func showPanel(row: Int, in sut: SUT) async throws {
+        let mark = clock.registrationMark()
         sut.controller.pointerMoved(to: point(row: row, in: sut))
-        try await clock.waitForSleepers()
+        try await clock.expectSleepers(after: mark)
         clock.advance(by: debounce)
         try await taskProvider.waitForAllTasks()
     }

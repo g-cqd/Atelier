@@ -140,8 +140,9 @@ struct RepositoryFreshnessAttachmentTests {
         let source = try #require(factory.latest)
 
         // A save lands while a reload lists the tree; the reload then reports the same comparison.
+        let mark = harness.clock.registrationMark()
         source.send(.directoryChanged("/repo/b.swift"))
-        try await harness.clock.waitForSleepers()
+        try await harness.clock.expectSleepers(after: mark)
         sut.comparisonChanged(rightSource: .directory(root), repositoryRoot: root)
         try #require(factory.all.count == 1)
         harness.clock.advance(by: WatcherHarness.treeDebounce)
