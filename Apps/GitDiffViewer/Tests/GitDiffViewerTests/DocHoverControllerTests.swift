@@ -1,27 +1,60 @@
 import AemiTesting
 import AppKit
 import DiffCore
+import Synchronization
 import Testing
 
 @testable import DiffRendering
 @testable import DiffTextKit
 
-/// Counts calls and tracks concurrency of a fake documentation lookup: `resolve` sleeps a little, like a real
-/// lookup would, so a test can observe whether two calls ever overlap.
-private actor ResolverSpy {
-    private(set) var calls: [HoverHit] = []
-    private(set) var maxConcurrent = 0
-    private var concurrent = 0
-    var delay: Duration = .milliseconds(20)
-    var content: HoverDocument? = HoverDocument(summary: NSAttributedString(string: "docs"))
+/// A fake documentation lookup that records its calls and how many of them ever overlap. A holding spy keeps each
+/// lookup in flight until the test releases it, so a newer hover can arrive while an older lookup still runs.
+private final class ResolverSpy: Sendable {
+    private struct State {
+        var calls: [HoverHit] = []
+        var inFlight = 0
+        var maxInFlight = 0
+        var held: [CheckedContinuation<Void, Never>] = []
+    }
+
+    private let state = Mutex(State())
+    private let holdsLookups: Bool
+    private let content = HoverDocument(summary: NSAttributedString(string: "docs"))
+    /// Each lookup as it starts; a held lookup is recorded once it can be released.
+    let started = CountProbe<HoverHit>()
+
+    init(holdsLookups: Bool) {
+        self.holdsLookups = holdsLookups
+    }
+
+    var calls: [HoverHit] { state.withLock(\.calls) }
+    var maxInFlight: Int { state.withLock(\.maxInFlight) }
 
     func resolve(_ hit: HoverHit) async -> HoverDocument? {
-        concurrent += 1
-        maxConcurrent = max(maxConcurrent, concurrent)
-        try? await Task.sleep(for: delay)
-        concurrent -= 1
-        calls.append(hit)
+        state.withLock { state in
+            state.inFlight += 1
+            state.maxInFlight = max(state.maxInFlight, state.inFlight)
+        }
+        if holdsLookups {
+            // Deaf to cancellation, as a real lookup may be: a superseded hover does not stop the one in flight.
+            await withCheckedContinuation { continuation in
+                state.withLock { $0.held.append(continuation) }
+                started.record(hit)
+            }
+        } else {
+            started.record(hit)
+        }
+        state.withLock { state in
+            state.inFlight -= 1
+            state.calls.append(hit)
+        }
         return content
+    }
+
+    /// Lets the oldest held lookup return; a no-op when none is held.
+    func releaseOldest() {
+        let oldest = state.withLock { $0.held.isEmpty ? nil : $0.held.removeFirst() }
+        oldest?.resume()
     }
 }
 
@@ -48,7 +81,9 @@ struct DocHoverControllerTests {
         textView.textContainer?.widthTracksTextView = false
         textView.textContainer?.size = NSSize(width: 800, height: DiffPaneMetrics.unboundedExtent)
         textView.textContentStorage?.textStorage?.setAttributedString(rendered.attributed)
-        textView.textLayoutManager?.ensureLayout(for: textView.textLayoutManager!.documentRange)
+        if let layoutManager = textView.textLayoutManager {
+            layoutManager.ensureLayout(for: layoutManager.documentRange)
+        }
         // The panel needs a real window to attach to.
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 200), styleMask: [.borderless], backing: .buffered,
@@ -66,7 +101,9 @@ struct DocHoverControllerTests {
         textView.textContainer?.widthTracksTextView = false
         textView.textContainer?.size = NSSize(width: 800, height: DiffPaneMetrics.unboundedExtent)
         textView.textContentStorage?.textStorage?.setAttributedString(rendered.attributed)
-        textView.textLayoutManager?.ensureLayout(for: textView.textLayoutManager!.documentRange)
+        if let layoutManager = textView.textLayoutManager {
+            layoutManager.ensureLayout(for: layoutManager.documentRange)
+        }
         textView.frame = NSRect(x: 0, y: 0, width: 800, height: rendered.lineHeight * CGFloat(rendered.rows.count) + 40)
 
         let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 800, height: 100))
@@ -89,12 +126,12 @@ struct DocHoverControllerTests {
             y: DiffPaneMetrics.containerInset + (CGFloat(row) + 0.5) * rendered.lineHeight)
     }
 
-    private func makeSUT(debounce: Duration = .milliseconds(5)) -> (
+    private func makeSUT(debounce: Duration = .milliseconds(5), holdingLookups: Bool = false) -> (
         controller: DocHoverController, spy: ResolverSpy, taskProvider: TaskProviderSpy
     ) {
         let taskProvider = TaskProviderSpy.tolerant()
         let controller = DocHoverController(taskProvider: taskProvider, debounce: debounce)
-        let spy = ResolverSpy()
+        let spy = ResolverSpy(holdsLookups: holdingLookups)
         controller.resolve = { hit in await spy.resolve(hit) }
         return (controller, spy, taskProvider)
     }
@@ -110,7 +147,7 @@ struct DocHoverControllerTests {
         controller.pointerMoved(to: point(row: 1, column: 8, in: rendered))
         try await taskProvider.waitForAllTasks()
 
-        let calls = await spy.calls
+        let calls = spy.calls
         #expect(calls.count == 1)
         #expect(calls.first?.row == 1)
     }
@@ -127,7 +164,7 @@ struct DocHoverControllerTests {
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
         try await taskProvider.waitForAllTasks()
 
-        #expect(await spy.calls.count == 1)
+        #expect(spy.calls.count == 1)
         #expect(taskProvider.spawnedTaskCount == 1)
     }
 
@@ -142,28 +179,29 @@ struct DocHoverControllerTests {
         controller.invalidate()
         try await taskProvider.waitForAllTasks()
 
-        #expect(await spy.calls.isEmpty)
+        #expect(spy.calls.isEmpty)
         #expect(controller.isPopoverVisible == false)
     }
 
-    /// Hovering a pane whose render has gone away costs nothing: no hit-test, no task, no resolver call.
+    /// Hovering a pane whose render has gone away costs nothing: no hit-test, no task, no resolver call. A lookup
+    /// runs only inside a spawned task, so no spawn proves no call, now or later.
     @Test
-    func `pointerMoved with no rendered content does zero resolver or hit-test work`() async throws {
+    func `pointerMoved with no rendered content does zero resolver or hit-test work`() throws {
         let rendered = try rendered()
         let view = textView(showing: rendered)
         let (controller, spy, taskProvider) = makeSUT()
         controller.attach(to: view) { nil }
 
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
-        try? await Task.sleep(for: .milliseconds(20))
 
-        #expect(await spy.calls.isEmpty)
         #expect(taskProvider.spawnedTaskCount == 0)
+        #expect(spy.started.isEmpty)
         #expect(controller.isPopoverVisible == false)
     }
 
+    /// A lookup runs only inside a spawned task, so no spawn proves no call, now or later.
     @Test
-    func `disabling the controller never calls the resolver`() async throws {
+    func `disabling the controller never calls the resolver`() throws {
         let rendered = try rendered()
         let view = textView(showing: rendered)
         let (controller, spy, taskProvider) = makeSUT()
@@ -171,10 +209,9 @@ struct DocHoverControllerTests {
         controller.attach(to: view) { rendered }
 
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
-        try? await Task.sleep(for: .milliseconds(50))
 
-        #expect(await spy.calls.isEmpty)
         #expect(taskProvider.spawnedTaskCount == 0)
+        #expect(spy.started.isEmpty)
     }
 
     // MARK: Scroll-follow
@@ -238,18 +275,27 @@ struct DocHoverControllerTests {
         #expect(controller.isPopoverVisible == true)
     }
 
+    /// The older lookup ignores its cancellation and runs on, as a slow language server may; the newer hover's lookup
+    /// starts only once it returns, and the newer hover is the one shown.
     @Test
-    func `resolution never runs more than one at a time`() async throws {
+    func `a hover over a lookup still in flight resolves once that lookup returns, one lookup at a time`()
+        async throws
+    {
         let rendered = try rendered()
         let view = textView(showing: rendered)
-        let (controller, spy, taskProvider) = makeSUT()
+        let (controller, spy, taskProvider) = makeSUT(holdingLookups: true)
         controller.attach(to: view) { rendered }
 
-        controller.pointerMoved(to: point(row: 0, column: 4, in: rendered))
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
+        try await spy.started.wait(forAtLeast: 1, timeout: TaskProviderSpy.failureBound)
         controller.pointerMoved(to: point(row: 1, column: 8, in: rendered))
+        spy.releaseOldest()
+        try await spy.started.wait(forAtLeast: 2, timeout: TaskProviderSpy.failureBound)
+        spy.releaseOldest()
         try await taskProvider.waitForAllTasks()
 
-        #expect(await spy.maxConcurrent <= 1)
+        #expect(spy.maxInFlight == 1)
+        #expect(spy.calls.map(\.row) == [0, 1])
+        #expect(controller.isPopoverVisible == true)
     }
 }
