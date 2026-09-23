@@ -2,13 +2,11 @@ package import AppKit
 import DiffCore
 import Foundation
 
-/// Colors a snippet of source (a fenced declaration in a hover document, typically) the same way a diff pane
-/// would: the lexical tier of the highlighting engine, mapped through the pane's own ``DiffPalette``, so a
-/// declaration shown in the hover panel matches the identifier it documents exactly.
+/// Colors a source snippet, such as a hover's declaration, the way a diff pane would: the lexical highlighting tier
+/// mapped through the pane's ``DiffPalette``.
 package enum CodeAttributedBuilder {
-    /// `code` colored over `palette`'s font and text color. `languageTag` is a fence's own language tag (`swift`,
-    /// `objc`, `c++`, ...); an unrecognized or missing tag falls back to Swift, since nearly every fenced
-    /// declaration a hover shows is Swift regardless of the tag sourcekit-lsp happened to put on the fence.
+    /// `code` colored over `palette`'s font and text color, lexed as the fence's `languageTag`; an unrecognized or
+    /// missing tag lexes as Swift.
     package static func attributedString(
         for code: String, languageTag: String? = nil, palette: DiffPalette
     ) -> NSAttributedString {

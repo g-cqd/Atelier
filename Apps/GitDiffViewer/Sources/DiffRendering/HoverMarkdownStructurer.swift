@@ -1,13 +1,8 @@
 import Foundation
 
-/// Parses the markdown shapes sourcekit-lsp and the doc-comment index actually produce into plain-text pieces
-/// (``HoverDocument`` colors and styles them afterward, given the palette the resolver was hovering over):
-///
-/// - A leading fenced declaration, then an abstract paragraph and further discussion prose.
-/// - A `- Parameters:` list, its items one per parameter (`- name: description`), and a `- Returns:` item.
-/// - Multiple candidates (sourcekit-lsp's "## Multiple results" overload list, and the doc-comment index's own
-///   multi-entry answer) joined by a line that is exactly `---`; only the first is the primary document, the rest
-///   become ``HoverMarkdownStructurer/Document/extraCandidates``.
+/// Parses the hover markdown sourcekit-lsp and the doc-comment index produce into plain-text pieces: a leading
+/// fenced declaration, a summary paragraph and discussion, a `- Parameters:` list and a `- Returns:` item. Blocks
+/// separated by a `---` line are overload candidates; the first is the primary document.
 package enum HoverMarkdownStructurer {
     package struct Field: Sendable, Equatable {
         package let name: String
@@ -60,8 +55,7 @@ package enum HoverMarkdownStructurer {
 
     // MARK: Block splitting
 
-    /// Splits on a line that is exactly `---`, and drops a leading "## Multiple results" heading, which carries
-    /// no content of its own; empty blocks (a stray leading/trailing separator) are dropped.
+    /// Splits on lines that are exactly `---`, dropping the "## Multiple results" heading and empty blocks.
     private static func splitBlocks(_ markdown: String) -> [String] {
         let lines = markdown.components(separatedBy: "\n")
         var blocks: [[String]] = [[]]
@@ -112,8 +106,8 @@ package enum HoverMarkdownStructurer {
         return block
     }
 
-    /// The block's own leading fenced code (a declaration, `sourcekit-lsp` and the doc-comment index both put one
-    /// first), and everything after its closing fence. `nil` when the block does not open with a fence.
+    /// The block's leading fenced declaration and everything after its closing fence; a nil declaration when the
+    /// block does not open with a fence.
     private static func extractLeadingDeclaration(_ text: String) -> (declaration: String?, rest: String) {
         let leading = text.drop(while: { $0 == "\n" || $0 == " " || $0 == "\t" })
         guard leading.hasPrefix("```") else { return (nil, text) }
@@ -134,11 +128,8 @@ package enum HoverMarkdownStructurer {
         return (stripUnderscoredAttributeLines(body), rest)
     }
 
-    /// Drops any declaration line that is nothing but an underscored (`@_`-prefixed) attribute -- compiler-internal
-    /// annotations such as `@_originallyDefinedIn(module: "...", ...)` or `@_specialize(...)` that sourcekit-lsp's
-    /// declaration answers sometimes carry for a system symbol, and that Xcode's own Quick Help hides. A public
-    /// attribute (`@MainActor`, `@frozen`, `@propertyWrapper`, `@preconcurrency`, ...) never starts with the `_`
-    /// sigil, so this only ever removes the underscored ones.
+    /// Drops declaration lines that start with an underscored, compiler-internal attribute such as `@_specialize`,
+    /// as Xcode's Quick Help does.
     private static func stripUnderscoredAttributeLines(_ declaration: String) -> String {
         let lines = declaration.components(separatedBy: "\n")
         let kept = lines.filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("@_") }
