@@ -140,6 +140,23 @@ struct SideStateFreshnessCheckTests {
     }
 
     @Test
+    func `a check waits for the load a custom ref chains, and reloads nothing it already lists`() async throws {
+        let sut = try await makeSideOnMain()
+        let feature = ComparisonSource.gitRef(repository: Self.root, ref: "f1")
+        reader.commits = ["main": "c1", "feature": "f1"]
+        reader.entries[feature] = [Self.entry("a.swift", "f")]
+
+        // The custom ref resolves before its own load starts, and the check lands in between.
+        sut.customRef = "feature"
+        sut.selectCustomRef()
+        sut.reloadIfRefMoved()
+        try await taskProvider.waitForAllTasks()
+
+        #expect(sut.source == feature)
+        #expect(reader.listings(of: feature) == 1)
+    }
+
+    @Test
     func `a side handed its entries without their commit reloads once to learn it`() async throws {
         reader.commits = ["main": "c1"]
         reader.entries[Self.main] = [Self.entry("a.swift")]
