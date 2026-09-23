@@ -42,7 +42,7 @@ struct SDKHoverTierTests {
         let tier = SDKHoverTier(taskProvider: TaskProviderSpy.tolerant()) { await spy.resolve() }
 
         async let first = tier.provider()
-        try await spy.entered.wait()
+        try await spy.entered.expectOpen()
         // The first resolution is suspended inside its own work: a second call must join it, not start another.
         async let second = tier.provider()
         spy.gate.open()

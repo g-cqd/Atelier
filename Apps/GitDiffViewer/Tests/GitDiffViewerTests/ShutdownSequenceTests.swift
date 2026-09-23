@@ -81,7 +81,7 @@ struct ShutdownSequenceTests {
         let stuck = StuckPool()
         let started = TaskGate()
         async let job: Void = stuck.stick(started: started)
-        try await started.wait()
+        try await started.expectOpen()
         let pool = stuck.pool
         let sequence = ShutdownSequence(
             interruptDiagnostics: {}, interruptGitWork: {}, drainLanguageServers: {},
@@ -122,13 +122,13 @@ struct InterruptibleProcessRunnerTests {
         let runner = InterruptibleProcessRunner(base: base, taskProvider: TaskProviderSpy.tolerant())
 
         async let run = runner.run(spec)
-        try await entered.wait()
+        try await entered.expectOpen()
         runner.interruptAll()
         let outcome: Result<ProcessOutput, any Error>
         do { outcome = .success(try await run) } catch { outcome = .failure(error) }
 
         #expect(throws: CancellationError.self) { try outcome.get() }
-        try await sawCancellation.wait()
+        try await sawCancellation.expectOpen()
     }
 
     @Test
@@ -162,7 +162,7 @@ struct InterruptibleProcessRunnerTests {
         let stuck = StuckPool()
         let started = TaskGate()
         async let job: Void = stuck.stick(started: started)
-        try await started.wait()
+        try await started.expectOpen()
         let hardened = HardenedProcessRunner(pool: stuck.pool)
         let reachedPoolRunner = TaskGate()
         let base = FakeProcessRunner { spec in
@@ -172,7 +172,7 @@ struct InterruptibleProcessRunnerTests {
         let runner = InterruptibleProcessRunner(base: base, taskProvider: TaskProviderSpy.tolerant())
 
         async let queued = runner.run(touchSpec(marker))
-        try await reachedPoolRunner.wait()
+        try await reachedPoolRunner.expectOpen()
         runner.interruptAll()
         // The worker is free again before the run ends: an interruption that left the job queued would run it now.
         try stuck.release()
