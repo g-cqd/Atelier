@@ -149,18 +149,22 @@ struct ChangeGlyphBadge: View {
     var state: BadgeChangeState = .staged
     var isSelected = false
     var isFocused = false
+    /// The badge's side; the letter and the corner radius scale with it, the outline stays 1 pt.
+    var size: CGFloat = ChangeGlyph.size
 
     var body: some View {
         let style = BadgeStyleResolver.resolve(
             scheme: scheme, kind: glyph.badgeKind, state: state, isSelected: isSelected, isFocused: isFocused)
+        let scale = size / ChangeGlyph.size
+        let shape = RoundedRectangle(cornerRadius: ChangeGlyph.cornerRadius * scale)
         Text(glyph.letter)
-            .font(.caption.bold())
+            .font(.system(size: 10 * scale, weight: .bold))
             .foregroundStyle(style.text.color)
-            .frame(width: ChangeGlyph.size, height: ChangeGlyph.size)
-            .background(RoundedRectangle(cornerRadius: ChangeGlyph.cornerRadius).fill(style.fill.color))
+            .frame(width: size, height: size)
+            .background(shape.fill(style.fill.color))
             .overlay {
                 if let stroke = style.stroke {
-                    RoundedRectangle(cornerRadius: ChangeGlyph.cornerRadius).strokeBorder(stroke.color, lineWidth: 1)
+                    shape.strokeBorder(stroke.color, lineWidth: 1)
                 }
             }
     }
