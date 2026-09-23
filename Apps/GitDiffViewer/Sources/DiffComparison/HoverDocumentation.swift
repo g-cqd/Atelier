@@ -5,26 +5,6 @@ package import AtelierSyntaxModel
 package import DiffGit
 package import Foundation
 
-/// LSP first when available; the doc-comment index answers otherwise and for git-blob content. Any `primary`
-/// failure falls back to the index; a cancellation propagates.
-struct TieredHoverProvider: HoverProvider {
-    let primary: (any HoverProvider)?
-    let fallback: any HoverProvider
-
-    func hover(_ query: HoverQuery) async throws -> HoverContent? {
-        if let primary {
-            do {
-                if let content = try await primary.hover(query) { return content }
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                // Any other failure of the primary tier falls through to the doc-comment index.
-            }
-        }
-        return try await fallback.hover(query)
-    }
-}
-
 /// Which side of a diff a hover query falls on; mirrors ``DiffTextKit/HoverSide`` without depending on it.
 package enum HoverQuerySide: Sendable, Equatable {
     case old
