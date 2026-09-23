@@ -316,8 +316,9 @@ package final class ViewerSettings {
     @ObservationIgnored private var isFallingBackToBase = false
 
     func applyWithoutRecreatingScopedOverrides(_ body: () -> Void) {
+        let outer = isFallingBackToBase
         isFallingBackToBase = true
-        defer { isFallingBackToBase = false }
+        defer { isFallingBackToBase = outer }
         body()
     }
 
@@ -328,8 +329,9 @@ package final class ViewerSettings {
     @ObservationIgnored private var isApplyingStoredValues = false
 
     func applyingStoredValues(_ body: () -> Void) {
+        let outer = isApplyingStoredValues
         isApplyingStoredValues = true
-        defer { isApplyingStoredValues = false }
+        defer { isApplyingStoredValues = outer }
         body()
     }
 
