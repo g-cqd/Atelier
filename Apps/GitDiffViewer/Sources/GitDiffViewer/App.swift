@@ -56,6 +56,7 @@ struct GitDiffViewerApp: App {
             )
             .frame(minWidth: 900, minHeight: 600)
             .repositoryTrustPrompt(appDelegate.services.repositoryTrust)
+            .environment(appDelegate.services.repositoryTrust)
         }
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1400, height: 900)
