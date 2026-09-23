@@ -9,6 +9,9 @@ package struct ProjectIdentity: Sendable, Hashable {
     /// The root path, for display only; never used as a lookup key.
     package let displayPath: String
 
+    /// The root folder's name, which is how a list names the project.
+    package var name: String { (displayPath as NSString).lastPathComponent }
+
     /// - Parameter root: The repository's resolved root directory, not a subfolder.
     package init(root: URL) {
         let path = root.standardizedFileURL.path
