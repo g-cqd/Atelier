@@ -1,3 +1,4 @@
+import AemiJSON
 public import Foundation
 
 public struct SymbolCatalog: Sendable {
@@ -17,10 +18,16 @@ public struct SymbolCatalog: Sendable {
         entries[name]
     }
 
+    /// The catalog stored at `url`. A leading UTF-8 byte-order mark is skipped, as Foundation's decoder, which read
+    /// this file before, did.
     public static func load(from url: URL) throws -> SymbolCatalog {
         let data = try Data(contentsOf: url)
-        let mappings = try JSONDecoder().decode([SymbolMappingEntry].self, from: data)
-        return SymbolCatalog(mappings: mappings)
+        let byteOrderMark: [UInt8] = [0xEF, 0xBB, 0xBF]
+        let bytes = data.starts(with: byteOrderMark) ? Array(data.dropFirst(byteOrderMark.count)) : Array(data)
+        var decoder = AemiJSON.JSONDecoder()
+        decoder.maxDecodingDepth = 64
+        decoder.options.maxDepth = 64
+        return SymbolCatalog(mappings: try decoder.decode([SymbolMappingEntry].self, from: bytes))
     }
 }
 

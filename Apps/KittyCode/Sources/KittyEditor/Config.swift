@@ -1,5 +1,6 @@
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable file_length function_body_length type_body_length
+import AemiJSON
 public import Foundation
 public import KittyCodecs
 import KittyTerminal
@@ -672,9 +673,15 @@ public struct KittyConfig: Codable, Sendable {
                 }
                 return KittyConfig()
             }
-            return try JSONDecoder().decode(KittyConfig.self, from: data)
+            var decoder = AemiJSON.JSONDecoder()
+            decoder.maxDecodingDepth = Self.maxJSONDepth
+            decoder.options.maxDepth = Self.maxJSONDepth
+            return try decoder.decode(KittyConfig.self, from: Self.utf8JSONBytes(data))
         } catch let error as DecodingError {
             KittyLogger.warning("config decode failed at \(url.path): \(error). using defaults")
+            return KittyConfig()
+        } catch let error as JSONError {
+            KittyLogger.warning("config is not valid JSON at \(url.path): \(error). using defaults")
             return KittyConfig()
         } catch {
             KittyLogger.warning("config load failed at \(url.path): \(error). using defaults")
@@ -684,6 +691,21 @@ public struct KittyConfig: Codable, Sendable {
 }
 
 extension KittyConfig {
+    /// The deepest nesting the config file may have; it nests about four levels.
+    static let maxJSONDepth = 64
+
+    /// The config file as UTF-8 without a byte-order mark. Foundation's decoder, which read this file before, also
+    /// accepted a leading UTF-8 mark and UTF-16 text, so both keep loading.
+    static func utf8JSONBytes(_ data: Data) -> [UInt8] {
+        if data.starts(with: [0xFE, 0xFF]) || data.starts(with: [0xFF, 0xFE]),
+            let text = String(data: data, encoding: .utf16)
+        {
+            return Array(text.utf8)
+        }
+        let byteOrderMark: [UInt8] = [0xEF, 0xBB, 0xBF]
+        return data.starts(with: byteOrderMark) ? Array(data.dropFirst(byteOrderMark.count)) : Array(data)
+    }
+
     /// The seconds a periodic task waits between runs: at least one, so a zero or negative interval cannot run the
     /// task back to back, and at most an hour, so the interval always converts to a `Duration`.
     static let intervalRange: ClosedRange<TimeInterval> = 1 ... 3_600
