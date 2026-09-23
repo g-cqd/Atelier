@@ -9077,11 +9077,13 @@
           }
         },
         {
-          "type": "IMMEDIATE_TOKEN",
+          "type": "ALIAS",
           "content": {
-            "type": "STRING",
-            "value": "\""
-          }
+            "type": "SYMBOL",
+            "name": "string_close"
+          },
+          "named": false,
+          "value": "\""
         }
       ]
     },
@@ -9688,6 +9690,10 @@
     {
       "type": "SYMBOL",
       "name": "string_content"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "string_close"
     },
     {
       "type": "SYMBOL",
