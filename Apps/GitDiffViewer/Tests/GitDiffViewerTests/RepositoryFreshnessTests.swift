@@ -52,6 +52,12 @@ struct RepositoryFreshnessTests {
     }
 
     @Test
+    func `classify tags the index and the git dir holding it as index`() {
+        #expect(classify("/repo/.git/index") == .index)
+        #expect(classify("/repo/.git") == .index)
+    }
+
+    @Test
     func `classify tags an ordinary tree file as tree`() {
         #expect(classify("/repo/Sources/Foo.swift") == .tree)
     }
@@ -102,7 +108,7 @@ struct RepositoryFreshnessTests {
     }
 
     @Test
-    func `attaching watches the tree root plus HEAD, packed-refs and refs`() async throws {
+    func `attaching watches the tree root plus HEAD, packed-refs, refs and the git dir`() async throws {
         let factory = WatcherFactory()
         let sut = makeSUT(factory: factory)
         let root = Self.url("/repo")
@@ -118,11 +124,14 @@ struct RepositoryFreshnessTests {
         #expect(await source.watchedDirectories.contains("/repo/.git/refs"))
         #expect(await source.watchedFiles.contains("/repo/.git/HEAD"))
         #expect(await source.watchedFiles.contains("/repo/.git/packed-refs"))
+        #expect(await source.watchedFiles.contains("/repo/.git"))
         try await drain(sut)
     }
 
     @Test
-    func `attaching to a linked worktree watches its private HEAD and the common refs, not <root>-.git`() async throws {
+    func `attaching to a linked worktree watches its private HEAD and git dir and the common refs, not <root>-.git`()
+        async throws
+    {
         func noTrailingSlash(_ path: String) -> String { path.hasSuffix("/") ? String(path.dropLast()) : path }
         let base = FileManager.default.temporaryDirectory
             .appending(path: "freshness-worktree-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -155,6 +164,7 @@ struct RepositoryFreshnessTests {
 
         #expect(await source.watchedDirectories.contains(worktreeRoot))
         #expect(await source.watchedFiles.contains(privateGitDir + "/HEAD"))
+        #expect(await source.watchedFiles.contains(privateGitDir))
         #expect(await source.watchedFiles.contains(commonGitDir + "/packed-refs"))
         #expect(await source.watchedDirectories.contains(commonGitDir + "/refs"))
         // Not the plain-repository paths, which a linked worktree's HEAD and refs never touch.
@@ -224,6 +234,28 @@ struct RepositoryFreshnessTests {
         try await fire(.fileChanged("/repo/.git/HEAD"), on: source, after: Self.refDebounce, probe: probe)
 
         #expect(treeChanges == 0)
+        try await drain(sut)
+    }
+
+    @Test
+    func `staging, reported on the git dir, fires onIndexChanged and neither a reload nor a re-comparison`()
+        async throws
+    {
+        let factory = WatcherFactory()
+        let sut = makeSUT(factory: factory)
+        let root = Self.url("/repo")
+        let probe = AsyncProbe<Void>()
+        var otherChanges = 0
+        sut.onIndexChanged = { probe.send(()) }
+        sut.onTreeChanged = { otherChanges += 1 }
+        sut.onHeadChanged = { otherChanges += 1 }
+        sut.onRefsChanged = { otherChanges += 1 }
+        sut.comparisonChanged(rightSource: .directory(root), repositoryRoot: root)
+        let source = try #require(factory.latest)
+
+        try await fire(.fileChanged("/repo/.git"), on: source, after: Self.refDebounce, probe: probe)
+
+        #expect(otherChanges == 0)
         try await drain(sut)
     }
 

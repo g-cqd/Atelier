@@ -11,6 +11,7 @@ extension DiffViewerModel {
         model.onTreeChanged = { [weak self] in self?.right.reload() }
         model.onHeadChanged = { [weak self] in self?.reloadForHeadChange() }
         model.onRefsChanged = { [weak self] in self?.refreshBothSidesRepositoryInfo() }
+        model.onIndexChanged = { [weak self] in self?.refreshBadgeStates() }
         freshness = model
         left.onFetched = { [weak self] in self?.handleFetchCompleted(for: .left) }
         right.onFetched = { [weak self] in self?.handleFetchCompleted(for: .right) }
