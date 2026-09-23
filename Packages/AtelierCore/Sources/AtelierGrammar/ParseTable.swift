@@ -141,19 +141,42 @@ extension CommentPattern: Codable {
 
 // MARK: - Lex Table
 
-/// DFA states for tokenization.
+/// A lexer's tables. A compiled grammar lexes with ``automaton``, one token at a time, in the lex mode of the parse
+/// state it is in; a table without lex modes, as tests build by hand, lexes context-free with the keyword trie in
+/// ``states`` and ``commentPatterns``.
 public struct LexTable: Sendable, Equatable, Codable {
     public var states: [LexState]
     public var keywords: [String: Int]  // keyword string → token ID
     public var commentPatterns: [CommentPattern]
+    /// The tokens ``automaton`` accepts, by index.
+    public var tokens: [LexToken]
+    /// The lexer's automaton over Unicode scalars, which every lex mode shares.
+    public var automaton: [LexAutomatonState]
+    /// Each lex mode's start state in ``automaton``: a mode reads only the tokens valid in the parse states that use
+    /// it, so a token is read as the parser expects it.
+    public var modeStarts: [Int]
+    /// The lex mode of each parse state.
+    public var stateModes: [Int]
+    /// The mode to read a token in when no stack's mode reads one: every token that may follow a separator.
+    public var errorMode: Int?
 
     public init(
         states: [LexState] = [], keywords: [String: Int] = [:],
-        commentPatterns: [CommentPattern] = []
+        commentPatterns: [CommentPattern] = [],
+        tokens: [LexToken] = [],
+        automaton: [LexAutomatonState] = [],
+        modeStarts: [Int] = [],
+        stateModes: [Int] = [],
+        errorMode: Int? = nil
     ) {
         self.states = states
         self.keywords = keywords
         self.commentPatterns = commentPatterns
+        self.tokens = tokens
+        self.automaton = automaton
+        self.modeStarts = modeStarts
+        self.stateModes = stateModes
+        self.errorMode = errorMode
     }
 }
 
