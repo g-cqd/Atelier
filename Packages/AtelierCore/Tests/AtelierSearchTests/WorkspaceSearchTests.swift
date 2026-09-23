@@ -233,4 +233,16 @@ struct WorkspaceSearchTests {
         }
         #expect(result.totalMatchCount == 1)
     }
+
+    @Test
+    func `a search over no files finds nothing`() async throws {
+        let pattern = try #require(compilePattern(SearchQuery(text: "needle")))
+
+        let result = await withPool { pool in
+            await searchWorkspace(pattern: pattern, files: [], openBuffers: [:], pool: pool, onProgress: { _ in })
+        }
+
+        #expect(result.totalMatchCount == 0)
+        #expect(result.filesSearched == 0)
+    }
 }
