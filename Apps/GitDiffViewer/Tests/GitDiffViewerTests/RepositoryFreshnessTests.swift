@@ -7,8 +7,8 @@ import Testing
 @testable import DiffGit
 
 /// How ``RepositoryFreshness`` routes what the watcher reports: each kind of change to its callback on a trailing
-/// debounce. A synthetic ``WatchEventSource`` and a virtual clock drive it; the time limit bounds a callback that
-/// never comes.
+/// debounce, and the tree's writes through the filter that judges whether a reload can show them. A synthetic
+/// ``WatchEventSource`` and a virtual clock drive it; the time limit bounds a callback that never comes.
 @MainActor
 @Suite(.timeLimit(.minutes(1)))
 struct RepositoryFreshnessTests {
@@ -104,7 +104,7 @@ struct RepositoryFreshnessTests {
     }
 
     @Test
-    func `a rescan of the root reloads the tree and re-reads HEAD, the refs and the index`()
+    func `a rescan of the root reloads without asking the filter and re-reads HEAD, the refs and the index`()
         async throws
     {
         let factory = WatcherFactory()
@@ -112,6 +112,11 @@ struct RepositoryFreshnessTests {
         let root = WatcherHarness.url("/repo")
         let tree = AsyncProbe<Void>()
         let metadata = CountProbe<String>()
+        var filterCalls = 0
+        sut.treeChangeFilter = { _ in
+            filterCalls += 1
+            return false
+        }
         sut.onTreeChanged = { tree.send(()) }
         sut.onHeadChanged = { metadata.record("head") }
         sut.onRefsChanged = { metadata.record("refs") }
@@ -126,6 +131,7 @@ struct RepositoryFreshnessTests {
         try await metadata.wait(forAtLeast: 3, timeout: TaskProviderSpy.failureBound)
 
         #expect(Set(metadata.events) == ["head", "refs", "index"])
+        #expect(filterCalls == 0)
         try await harness.drain(sut)
     }
 
@@ -149,6 +155,74 @@ struct RepositoryFreshnessTests {
             .directoryChanged("/repo/Sources/Foo.swift"), on: source, after: WatcherHarness.treeDebounce, probe: probe)
 
         #expect(treeChanges == 1)
+        try await harness.drain(sut)
+    }
+
+    @Test
+    func `the filter gets the written paths relative to the root, and a filter that finds none reloads nothing`()
+        async throws
+    {
+        let factory = WatcherFactory()
+        let sut = harness.makeSUT(factory: factory)
+        let root = WatcherHarness.url("/repo")
+        let judged = AsyncProbe<Set<String>>()
+        var treeChanges = 0
+        sut.treeChangeFilter = { paths in
+            judged.send(paths)
+            return false
+        }
+        sut.onTreeChanged = { treeChanges += 1 }
+        sut.comparisonChanged(rightSource: .directory(root), repositoryRoot: root)
+        let source = try #require(factory.latest)
+
+        source.send(.directoryChanged("/repo/build/out.o"))
+        try await harness.clock.waitForSleepers()
+        let mark = harness.clock.registrationMark()
+        source.send(.directoryChanged("/repo/App.xcodeproj/xcuserdata/UserInterfaceState.xcuserstate"))
+        try await harness.clock.waitForSleepers(1, after: mark)
+        harness.clock.advance(by: WatcherHarness.treeDebounce)
+
+        #expect(
+            try await judged.next() == ["build/out.o", "App.xcodeproj/xcuserdata/UserInterfaceState.xcuserstate"])
+        try await harness.taskProvider.waitForAllTasks()
+        #expect(treeChanges == 0)
+        try await harness.drain(sut)
+    }
+
+    @Test
+    func `a write arriving while the filter runs hands every path to the next check`() async throws {
+        let factory = WatcherFactory()
+        let sut = harness.makeSUT(factory: factory)
+        let root = WatcherHarness.url("/repo")
+        let judged = AsyncProbe<Set<String>>()
+        let neverAnswered = AsyncProbe<Bool>()
+        var checks = 0
+        let reloads = AsyncProbe<Void>()
+        sut.treeChangeFilter = { paths in
+            checks += 1
+            judged.send(paths)
+            guard checks == 1 else { return true }
+            // The first check waits until the next write cancels it.
+            return (try? await neverAnswered.next()) ?? false
+        }
+        sut.onTreeChanged = { reloads.send(()) }
+        sut.comparisonChanged(rightSource: .directory(root), repositoryRoot: root)
+        let source = try #require(factory.latest)
+        source.send(.directoryChanged("/repo/a.swift"))
+        try await harness.clock.waitForSleepers()
+        harness.clock.advance(by: WatcherHarness.treeDebounce)
+        #expect(try await judged.next() == ["a.swift"])
+
+        // The second write lands while the first check waits on its verdict, and supersedes it.
+        let mark = harness.clock.registrationMark()
+        source.send(.directoryChanged("/repo/b.swift"))
+        try await harness.clock.waitForSleepers(1, after: mark)
+        harness.clock.advance(by: WatcherHarness.treeDebounce)
+
+        #expect(try await judged.next() == ["a.swift", "b.swift"])
+        _ = try await reloads.next()
+        try await harness.taskProvider.waitForAllTasks()
+        try reloads.expectNoBufferedElements()
         try await harness.drain(sut)
     }
 }

@@ -325,3 +325,40 @@ package final class SideState {
         if notifying { onEntriesChanged?() }
     }
 }
+
+/// What an outside change makes a side read again: its files, when a write can change what it lists (GDV S2).
+extension SideState {
+    /// Whether writes at `paths`, relative to this folder, can change what a reload lists (GDV S2), sorted by
+    /// ``WorkingTreeWrites``: a listed file or folder can, and so can a new path git does not ignore, which one
+    /// `git check-ignore` judges for every unlisted path at once. When git cannot judge, the writes count, so no edit
+    /// is missed for a failed check.
+    package func listingMayChange(at paths: Set<String>) async -> Bool {
+        guard let source else { return false }
+        let writes = WorkingTreeWrites(paths) { lists($0) }
+        if writes.touchesListing { return true }
+        guard !writes.unlisted.isEmpty else { return false }
+        do {
+            let ignored = try await reader.ignoredPaths(among: writes.unlisted, in: source)
+            return writes.unlisted.contains { !ignored.contains($0) }
+        } catch is CancellationError {
+            return false
+        } catch {
+            PhaseTrace.log("git check-ignore failed for \(source.displayName): \(error.localizedDescription)")
+            return true
+        }
+    }
+
+    /// Whether `path` names a listed file, or a folder holding listed files, which ``tree`` has a node for.
+    /// - Complexity: O(depth × siblings) for a path that is not a listed file.
+    private func lists(_ path: String) -> Bool {
+        if entriesByPath[path] != nil { return true }
+        let components = path.split(separator: "/")
+        guard !components.isEmpty else { return false }
+        var level = tree
+        for component in components {
+            guard let node = level.first(where: { $0.name == component }) else { return false }
+            level = node.children ?? []
+        }
+        return true
+    }
+}
