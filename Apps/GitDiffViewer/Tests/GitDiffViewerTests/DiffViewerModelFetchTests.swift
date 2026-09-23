@@ -26,7 +26,7 @@ struct DiffViewerModelFetchTests {
     }
 
     private nonisolated func makeRunner(tree: RemoteTree) -> FakeProcessRunner {
-        FakeProcessRunner { spec in
+        FakeProcessRunner.gated(remotes: ["origin": "git@example.com:x.git"]) { spec in
             if spec.arguments.contains("fetch") { return .success("") }
             if spec.arguments.contains("remote") { return .success("origin\tgit@example.com:x.git (fetch)\n") }
             if spec.arguments.contains("rev-parse") { return .success(Self.root.path(percentEncoded: false)) }
