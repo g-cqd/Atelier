@@ -20,13 +20,17 @@ observed shapes (fenced decl + abstract; "## Multiple results" ---‑separated; 
 Returns: list items) and docIndex's signature+markdown.
 
 SDK tier (on-device Xcode docs, apple-docs declined): SDKDocumentationProvider (AtelierLSP)
-drives the existing SourceKitLSPService against a scratch root with a synthetic document
-mirroring the hovered file's imports (default Foundation/AppKit/SwiftUI) + a probe expression;
-LIVE-VERIFIED payloads: declarations always, doc comments when .swiftdoc carries them,
-overload lists; init 0.04s, first hover ~0.5s, reusable process; LRU(256) keyed
-(identifier, sortedImports), nil results cached; tier order LSP → docIndex → SDK;
-HoverContent.Source gains .sdk. Limits (honest): member names without receiver don't resolve;
-availability + online-only long-form discussion absent; old plain-comment ObjC headers give
-declaration only.
+drives one SourceKitLSPService per platform against a private scratch root with a synthetic
+document mirroring the hovered file's imports (defaults Foundation/SwiftUI + AppKit or UIKit) + a
+probe expression; the platform is the file's own (UIKit → iOS, AppKit → macOS), else its project's
+(Package.swift platforms, .xcodeproj SDKROOT), else macOS; iOS resolves against the iPhone simulator
+SDK that xcrun finds, through sourcekit-lsp's fallback build settings; LIVE-VERIFIED payloads:
+declarations always, doc comments when .swiftdoc carries them, overload lists; init 0.04s, first
+hover ~0.5s (UIKit from a cold module cache ~16s), reusable process; LRU(256) keyed (platform,
+identifier, sortedImports), answered misses cached, unanswered probes (timeouts) not; tier order
+LSP → docIndex → SDK; HoverContent.Source gains .sdk. Limits (honest): member names without
+receiver don't resolve; availability + online-only long-form discussion absent; old
+plain-comment ObjC headers give declaration only; a git blob's file has no project, so only its
+imports choose its platform.
 
 Phases: 1 presentation swap · 2 coloring · 3 structure · 4 SDK tier.
