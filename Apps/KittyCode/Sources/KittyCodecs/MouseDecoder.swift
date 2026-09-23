@@ -7,9 +7,7 @@ import AemiKernel
 /// Format: `CSI < Cb ; Cx ; Cy M` (press) or `CSI < Cb ; Cx ; Cy m` (release)
 /// Mode 1016 uses pixel coordinates instead of cell coordinates.
 public struct MouseDecoder: Sendable {
-    /// Hard cap on the in-flight buffer length. A legal SGR mouse
-    /// sequence is at most ~30 bytes; this is a defence-in-depth ceiling
-    /// against malformed streams that never reach a terminator.
+    /// Cap on the in-flight buffer against streams that never terminate; a legal sequence is about 30 bytes.
     private static let maxSequenceBytes = 256
 
     private enum State: Sendable {

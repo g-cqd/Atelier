@@ -6,10 +6,8 @@ import Testing
 
 @Suite
 struct BackBufferShiftRegressionTests {
-    /// Regression: shifting only the back buffer causes the DiffRenderer to miss
-    /// updates for cells that differ from the front buffer (what the terminal shows),
-    /// because the ScreenBuffer subscript setter doesn't mark shifted-then-confirmed
-    /// cells as dirty. This caused rendering corruption during scrolling.
+    /// Shifting only the back buffer hides the scrolled rows from the diff: the rewrites match the shifted cells, so
+    /// none is marked dirty while the terminal still shows the old rows.
     @Test
     @MainActor
     func `back-buffer-only shift causes missed terminal updates`() throws {
@@ -23,8 +21,7 @@ struct BackBufferShiftRegressionTests {
         pipeline.buffer.write("DDDDD", row: 3, col: 0, style: .default)
         try pipeline.flush()
 
-        // Frame 2: simulate scroll down by 1
-        // BUG pattern: shift back buffer, then re-render on top
+        // Frame 2: scroll down by 1 by shifting only the back buffer, then re-render on top.
         pipeline.beginFrame()
         pipeline.buffer.shiftRows(regionY: 0, regionHeight: 4, regionX: 0, regionWidth: 5, delta: 1)
         pipeline.buffer.write("BBBBB", row: 0, col: 0, style: .default)
@@ -36,14 +33,8 @@ struct BackBufferShiftRegressionTests {
         try pipeline.flush()
         let output = mock.writtenOutput
 
-        // The terminal was showing AAAAA at row 0. After scroll, it should show BBBBB.
-        // If the shift only touched the back buffer, rows 0-2 won't be dirty and
-        // the DiffRenderer won't emit updates for them — the terminal still shows old content.
-        // This test documents the known limitation: back-buffer-only shift suppresses
-        // rows 0-2 from the diff output.
+        // Rows 0-2 never reach the diff, so no 'B' is written and the terminal keeps showing AAAAA at row 0.
         let outputContainsB = output.contains(0x42)  // 'B'
-        // With back-buffer-only shift, the output will NOT contain 'B' (the bug).
-        // This test asserts the bug exists so we know not to use this pattern.
         #expect(
             !outputContainsB,
             "Back-buffer-only shift suppresses updates for scrolled rows — do NOT use this pattern without also shifting the front buffer or the terminal display"

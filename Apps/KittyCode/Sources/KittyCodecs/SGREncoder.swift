@@ -4,9 +4,7 @@ import KittyStyle
 
 // MARK: - SGR Encoder
 
-/// Converts `Style` values into ANSI/VT Select Graphic Rendition (SGR) escape sequences.
-///
-/// All methods produce raw UTF-8 byte arrays ready to be written directly to a terminal output stream.
+/// Converts `Style` values into Select Graphic Rendition (SGR) escape sequences, as raw bytes for the terminal.
 public enum SGREncoder: Sendable {
     // MARK: - Lookup table for decimal encoding (0-255 -> ASCII digits)
 
@@ -32,8 +30,6 @@ public enum SGREncoder: Sendable {
     // MARK: - Full Encode
 
     /// Encodes a style into a complete SGR escape sequence.
-    ///
-    /// Returns an empty array when `style` equals `.default`, avoiding unnecessary output.
     ///
     /// - Parameter style: The style to encode.
     /// - Returns: Raw bytes for the SGR sequence, or an empty array if the style is the default.
@@ -98,10 +94,8 @@ public enum SGREncoder: Sendable {
 
     // MARK: - Diff Encode
 
-    /// Encodes the minimal SGR sequence needed to transition from one style to another.
-    ///
-    /// Only the attributes that differ between `old` and `new` are included, reducing byte output.
-    /// Returns an empty array when the styles are identical.
+    /// Encodes the SGR transition from one style to another: a reset when `new` is the default, otherwise only the
+    /// attributes that differ.
     ///
     /// - Parameters:
     ///   - old: The currently active style.

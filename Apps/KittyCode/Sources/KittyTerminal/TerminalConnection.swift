@@ -1,7 +1,4 @@
-/// A low-level, bidirectional connection to a terminal device.
-///
-/// Conforming types provide byte-level I/O and terminal control operations.
-/// All conformances must also conform to `Sendable` to allow safe cross-isolation use.
+/// A low-level, bidirectional connection to a terminal device: byte-level I/O and terminal mode control.
 public protocol TerminalConnection: Sendable {
     /// Reads available bytes from the terminal into the given buffer.
     ///
@@ -17,10 +14,7 @@ public protocol TerminalConnection: Sendable {
     /// - Throws: `TerminalError.writeFailed` if the write syscall fails.
     func write(_ bytes: [UInt8]) throws(TerminalError)
 
-    /// Writes all bytes from a ContiguousArray to the terminal (zero-copy path).
-    ///
-    /// Default implementation bridges to `write(_:)`. Conforming types may override
-    /// for zero-copy writes using `withUnsafeBufferPointer`.
+    /// Writes all bytes from a `ContiguousArray`; the default copies into `write(_:)`, conformers may write in place.
     ///
     /// - Parameter bytes: The contiguous byte buffer to transmit.
     /// - Throws: `TerminalError.writeFailed` if the write syscall fails.
@@ -47,7 +41,6 @@ public protocol TerminalConnection: Sendable {
     func getSize() throws(TerminalError) -> TerminalSize
 }
 
-// Default implementation bridges ContiguousArray to Array
 extension TerminalConnection {
     public func writeContiguous(_ bytes: ContiguousArray<UInt8>) throws(TerminalError) {
         try write(Array(bytes))

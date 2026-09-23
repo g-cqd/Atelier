@@ -7,14 +7,10 @@ import Foundation
 public enum GraphicsEncoder: Sendable {
     private static let chunkSize = 4096
 
-    /// Encodes a graphics command into one or more Kitty APC chunks.
+    /// Encodes a graphics command into one or more APC chunks: the first carries the control header, the rest only
+    /// the continuation marker (`m=1`/`m=0`).
     ///
-    /// The command payload is base64-encoded and split into chunks of at most 4096 bytes.
-    /// When multiple chunks are required the first carries the full control header and
-    /// subsequent chunks carry only the continuation marker (`m=1`/`m=0`).
-    ///
-    /// - Parameter command: The graphics command to encode, including action, format, transmission,
-    ///   dimensions, and raw payload bytes.
+    /// - Parameter command: The graphics command to encode.
     /// - Returns: Raw bytes for the complete sequence of `ESC _ G ... ESC \` APC frames.
     public static func encode(_ command: GraphicsCommand) -> [UInt8] {
         let controlPart = buildControl(command)
@@ -24,7 +20,6 @@ public enum GraphicsEncoder: Sendable {
             return buildChunk(control: controlPart, payload: base64Payload, more: false)
         }
 
-        // Multi-chunk: first chunk has control data, subsequent chunks only have payload
         var result: [UInt8] = []
         var offset = base64Payload.startIndex
 
@@ -89,8 +84,7 @@ public enum GraphicsEncoder: Sendable {
 
     private static func buildChunk(control: String, payload: String, more: Bool) -> [UInt8] {
         var bytes: [UInt8] = []
-        // ESC_G = ESC ] _ in APC form, but Kitty uses ESC_G as custom
-        // Actually: APC = ESC _ ... ST (ESC \)
+        // APC: ESC _ G <control> ; <payload> ST
         bytes.append(0x1b)  // ESC
         bytes.append(0x5f)  // _ (APC)
         bytes.append(contentsOf: "G".utf8)

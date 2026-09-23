@@ -1,14 +1,8 @@
 import Foundation
 import Synchronization
 
-/// An in-memory `TerminalConnection` for use in tests.
-///
-/// `MockTerminalConnection` replaces real PTY or stdin/stdout I/O with in-memory
-/// buffers, allowing tests to feed input programmatically and inspect what was written
-/// without touching any file descriptor.
-///
-/// Mutable state is held inside a `Mutex` (Sendable), so the class needs no
-/// `@unchecked` escape hatch.
+/// An in-memory `TerminalConnection` for tests: input is fed programmatically and written output inspected, with no
+/// file descriptor involved. Its state sits behind a `Mutex`, so any thread may use it.
 public final class MockTerminalConnection: TerminalConnection {
     private struct State: Sendable {
         var inputBuffer: [UInt8] = []

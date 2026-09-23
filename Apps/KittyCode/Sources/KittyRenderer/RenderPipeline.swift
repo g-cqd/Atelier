@@ -2,12 +2,9 @@ import KittyCodecs
 public import KittyTerminal
 import os
 
-/// Describes a terminal-level scroll operation to apply before diffing.
-///
-/// The pipeline uses DECSTBM to restrict scrolling to the given row region,
-/// then SU or SD to physically scroll the terminal display. The front buffer
-/// is shifted to match so the subsequent diff only covers newly exposed rows
-/// and any cells (e.g. sidebar) that were incorrectly scrolled.
+/// A terminal-level scroll applied before diffing: DECSTBM confines it to the region and SU or SD moves the display,
+/// then the front buffer shifts to match, so the diff covers only the exposed rows and the cells the scroll wrongly
+/// moved, such as the sidebar's.
 public struct ScrollHint: Sendable {
     /// Zero-based row index of the top of the scroll region.
     public var regionTop: Int
@@ -24,8 +21,7 @@ public struct ScrollHint: Sendable {
     }
 }
 
-/// Signposter used for frame-phase instrumentation. Inspect in Instruments
-/// under "kittycode.render" subsystem.
+/// Frame-phase signposts, under the `com.kittytui.render` subsystem in Instruments.
 private let signposter = OSSignposter(subsystem: "com.kittytui.render", category: "frame")
 
 /// Double-buffered render pipeline with synchronized output.
@@ -58,19 +54,10 @@ public final class RenderPipeline {
     /// When `nil`, the cursor is hidden at the end of the flush sequence.
     public var cursorCol: Int?
 
-    /// Optional hint for terminal-level scrolling via DECSTBM + SU/SD.
-    ///
-    /// When set, `flush()` emits scroll region commands to physically scroll the
-    /// terminal display and shifts the front buffer to match, so DiffRenderer only
-    /// needs to emit newly exposed rows and any sidebar cells that were incorrectly
-    /// scrolled by the full-width terminal scroll.
+    /// A scroll for the next `flush()` to perform in the terminal; the flush clears it once performed.
     public var scrollHint: ScrollHint?
 
-    /// Regions the pipeline has been told are dirty for the next frame.
-    ///
-    /// Callers describe what changed via `markDirty(_:)` or `markDirtyRow(_:)`.
-    /// Phase 1 only collects the data; later phases use it to skip painting
-    /// cells outside any dirty rect.
+    /// The regions marked dirty since the last `clearDirtyRegions()`.
     public private(set) var dirtyRegions = DirtyRegions()
 
     /// The pixel chrome layer, present when the terminal can draw under its cells; the shell sets
@@ -102,28 +89,21 @@ public final class RenderPipeline {
         self.back = ScreenBuffer(columns: columns, rows: rows)
     }
 
-    /// The back buffer used for compositing the next frame.
-    ///
-    /// Write to this buffer to stage changes. They become visible on the terminal after the next
-    /// call to `flush()` or `forceRedraw()`.
+    /// The back buffer staging the next frame, shown by the next `flush()` or `forceRedraw()`.
     public var buffer: ScreenBuffer {
         get { back }
         set { back = newValue }
     }
 
-    /// Prepares for composing a new frame.
-    ///
-    /// The back buffer retains the previous frame's content so that renderers
-    /// that overwrite their entire area only mark truly changed cells as dirty.
-    /// This dramatically reduces diff output during scrolling.
+    /// Starts a frame with no cursor position, so the cursor stays hidden unless set again. The back buffer keeps
+    /// the previous frame, so repainting an area dirties only the cells that change.
     public func beginFrame() {
         cursorRow = nil
         cursorCol = nil
         activeFrameInterval = signposter.beginInterval("frame")
     }
 
-    /// Marks a screen region as needing repaint on the next frame. Coalescing
-    /// happens internally — callers can mark overlapping rects safely.
+    /// Marks a screen region for repaint on the next frame; overlapping marks are fine.
     public func markDirty(_ rect: DirtyRect) {
         dirtyRegions.mark(rect)
     }
@@ -138,8 +118,7 @@ public final class RenderPipeline {
         dirtyRegions.markAll(columns: columns, rows: rows)
     }
 
-    /// Drops collected dirty regions, typically called after a successful flush.
-    /// Phase 1 does not auto-clear; callers / future phases will.
+    /// Drops the collected dirty regions, which `flush()` leaves for the caller to clear.
     public func clearDirtyRegions() {
         dirtyRegions.clear()
     }
@@ -165,9 +144,6 @@ public final class RenderPipeline {
 
         KittySequences.appendBeginSyncUpdate(to: &outputBuffer)
 
-        // Apply terminal scroll region optimization before diffing.
-        // This physically scrolls the terminal display, then shifts the front
-        // buffer to match, so DiffRenderer only emits the delta.
         if let hint = scrollHint, hint.delta != 0, hint.regionHeight > 0,
             hint.delta.magnitude < UInt(hint.regionHeight)
         {
@@ -200,10 +176,8 @@ public final class RenderPipeline {
                     cell: .empty)
             }
 
-            // The terminal scroll moved ALL columns, but non-editor columns
-            // (sidebar, separators) weren't written to the back buffer this frame
-            // and thus aren't dirty. Mark any cell where shifted-front differs
-            // from back so DiffRenderer will re-emit it.
+            // The scroll moved every column, including ones this frame never wrote (sidebar, separators): mark any
+            // cell where the shifted front differs from back so the diff re-emits it.
             let cols = back.columns
             let regionEnd = hint.regionTop + hint.regionHeight
             for row in hint.regionTop ..< regionEnd {

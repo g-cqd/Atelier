@@ -4,17 +4,13 @@ import KittyCodecs
 
 /// Compares front and back buffers and emits minimal escape bytes for the diff.
 public enum DiffRenderer: Sendable {
-    /// Produces the minimal escape sequence bytes needed to update `front` so that it matches `back`.
-    ///
-    /// Only cells marked dirty in `back` are included in the output. Cursor movement sequences are
-    /// emitted only when the current position differs from the target position. The caller is
-    /// responsible for copying `back` into `front` and clearing the dirty tracker after this call.
+    /// Produces the escape bytes for the cells dirty in `back` that differ from `front`. The caller then copies
+    /// `back` into `front` and clears the dirty tracker.
     ///
     /// - Parameters:
     ///   - front: The buffer representing what is currently rendered on the terminal.
     ///   - back: The buffer containing the desired new state, with a populated dirty tracker.
-    /// - Returns: A byte array of ANSI/VT escape sequences that transition the terminal from
-    ///   `front` to `back`. Returns an empty array when no cells are dirty.
+    /// - Returns: The escape bytes from `front` to `back`, empty when no cell is dirty.
     public static func render(front: ScreenBuffer, back: ScreenBuffer) -> ContiguousArray<UInt8> {
         var bytes = ContiguousArray<UInt8>()
         render(front: front, back: back, into: &bytes)
