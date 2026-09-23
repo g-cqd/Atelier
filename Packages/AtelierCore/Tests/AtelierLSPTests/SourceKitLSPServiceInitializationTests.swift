@@ -15,6 +15,12 @@ private struct InitializeEnvelope: Decodable {
     let params: Params
 }
 
+/// A request the client sent, reduced to what these tests read.
+private struct SentRequest: Decodable {
+    let id: JSONRPCID
+    let method: String
+}
+
 /// Captures the first `initialize` a service sends over an in-process transport, then ends the conversation so the
 /// hover that triggered it returns.
 private func capturedInitialize(configuration: SourceKitLSPService.Configuration) async throws -> InitializeEnvelope {
@@ -64,5 +70,33 @@ struct SourceKitLSPServiceInitializationTests {
         let envelope = try await capturedInitialize(configuration: configuration)
 
         #expect(envelope.params.initializationOptions == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func `an initialize reply nested past the result depth cap still completes the handshake`() async throws {
+        let transport = PipeTransport()
+        let service = SourceKitLSPService(
+            configuration: SourceKitLSPService.Configuration(
+                serverExecutable: URL(filePath: "/usr/bin/true"),
+                workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory)),
+            clock: TestClock()
+        ) { _ in LSPConnection(transport: transport) }
+
+        async let hover = service.hover(
+            uri: "file:///workspace/a.swift", languageID: "swift", content: "let x = 1", line: 0, utf16Column: 4)
+        await transport.sink.waitForCount(1)
+        let initialize = try JSONDecoder().decode(SentRequest.self, from: unframe(await transport.sink.all[0]))
+        let capabilities = nestedValue(depth: LSPConnection.maximumResultDepth + 16)
+        transport.deliver(
+            LSPFrameCodec.frame(
+                try JSONRPCMessage.response(id: initialize.id, result: .object(["capabilities": capabilities]))))
+
+        // `initialized`, `didOpen` and the hover itself follow only a completed handshake.
+        await transport.sink.waitForCount(4)
+        let hoverRequest = try JSONDecoder().decode(SentRequest.self, from: unframe(await transport.sink.all[3]))
+        #expect(hoverRequest.method == "textDocument/hover")
+        transport.deliver(LSPFrameCodec.frame(try JSONRPCMessage.response(id: hoverRequest.id, result: .null)))
+        _ = await hover
+        transport.endIncoming()
     }
 }
