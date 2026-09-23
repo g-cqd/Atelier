@@ -159,6 +159,8 @@ final class AppServices {
     let diagnosticsRunner: HardenedProcessRunner
     let toolDiscovery: ToolDiscovery
     let diagnosticsEngine: DiagnosticsEngine
+    /// Whether and how sourcekit-lsp launches, per repository and for the SDK tier.
+    let languageServerPolicy: LanguageServerPolicy
     /// One sourcekit-lsp session per workspace root, shared by every comparison window.
     let lspRegistry: SourceKitLSPRegistry
 
@@ -173,12 +175,11 @@ final class AppServices {
         )
         diagnosticsEngine = DiagnosticsEngine(runner: diagnosticsRunner, discovery: toolDiscovery)
 
-        let toolDiscovery = toolDiscovery
+        let policy = LanguageServerPolicy(locate: LanguageServerPolicy.locate(with: toolDiscovery))
+        languageServerPolicy = policy
         lspRegistry = SourceKitLSPRegistry(
             admits: { _ in true },
-            makeConfiguration: { root in
-                await Self.sourceKitLSPConfiguration(workspaceRoot: root, toolDiscovery: toolDiscovery)
-            })
+            makeConfiguration: { root in await policy.configuration(forRoot: root) })
     }
 
     /// The resolved SDK tier; `.some(nil)` records a failed resolution, so it is attempted once per app.
@@ -187,22 +188,16 @@ final class AppServices {
     private(set) var sdkScratchService: SourceKitLSPService?
 
     /// The on-device Apple SDK documentation tier, built once over the language servers' discovery path and shared
-    /// by every window; nil when sourcekit-lsp is disabled or missing.
+    /// by every window; nil when the app-wide setting turns sourcekit-lsp off or it is missing.
     func sdkHoverProvider() async -> SDKDocumentationProvider? {
         if let resolved = sdkHoverState { return resolved }
-        let location = Self.sourceKitLSPToolLocation()
-        guard
-            sourceKitLSPDiscoveryEnabled(location),
-            let located = await toolDiscovery.locate(
-                executableName: "sourcekit-lsp", overrideVariable: "GDV_SOURCEKIT_LSP",
-                customPath: location?.customPath, searchesToolchain: true)
-        else {
+        guard let executable = await languageServerPolicy.sdkServerExecutable() else {
             sdkHoverState = .some(nil)
             return nil
         }
         let service: SourceKitLSPService
         do {
-            service = try SDKDocumentationProvider.makeScratchService(serverExecutable: located.url)
+            service = try SDKDocumentationProvider.makeScratchService(serverExecutable: executable)
         } catch {
             PhaseTrace.log("SDK documentation is off: \(error)")
             sdkHoverState = .some(nil)
@@ -217,30 +212,6 @@ final class AppServices {
     func shutdown() {
         pool.shutdown()
         diagnosticsPool.shutdown()
-    }
-
-    /// Resolves sourcekit-lsp for `workspaceRoot` the way every other tool is discovered, honoring a pinned custom
-    /// path; nil when it is disabled or missing.
-    private static func sourceKitLSPConfiguration(workspaceRoot: URL, toolDiscovery: ToolDiscovery) async
-        -> SourceKitLSPService.Configuration?
-    {
-        let location = sourceKitLSPToolLocation()
-        guard
-            sourceKitLSPDiscoveryEnabled(location),
-            let located = await toolDiscovery.locate(
-                executableName: "sourcekit-lsp", overrideVariable: "GDV_SOURCEKIT_LSP",
-                customPath: location?.customPath, searchesToolchain: true)
-        else { return nil }
-        return SourceKitLSPService.Configuration(serverExecutable: located.url, workspaceRoot: workspaceRoot)
-    }
-
-    /// sourcekit-lsp's persisted location, read under ``ViewerSettings``' `lspServerLocations` key directly, since
-    /// this service exists before any settings instance.
-    private static func sourceKitLSPToolLocation() -> ToolLocation? {
-        guard let data = UserDefaults.standard.data(forKey: "lspServerLocations"),
-            let decoded = try? JSONDecoder().decode([String: ToolLocation].self, from: data)
-        else { return nil }
-        return decoded["sourcekit-lsp"]
     }
 }
 
