@@ -1,7 +1,7 @@
 [
     {"name": "json", "extensions": [".json"], "path": "json"},
     {"name": "swift", "extensions": [".swift"], "path": "swift"},
-    {"name": "javascript", "extensions": [".js", ".mjs", ".cjs"], "path": "javascript"},
+    {"name": "javascript", "extensions": [".js", ".mjs", ".cjs", ".jsx"], "path": "javascript"},
     {"name": "typescript", "extensions": [".ts", ".mts", ".cts"], "path": "typescript"},
     {"name": "python", "extensions": [".py", ".pyi"], "path": "python"},
     {"name": "rust", "extensions": [".rs"], "path": "rust"},
@@ -10,7 +10,7 @@
     {"name": "cpp", "extensions": [".cpp", ".hpp", ".cc", ".cxx"], "path": "cpp"},
     {"name": "html", "extensions": [".html", ".htm"], "path": "html"},
     {"name": "css", "extensions": [".css"], "path": "css"},
-    {"name": "bash", "extensions": [".sh", ".bash"], "path": "bash"},
+    {"name": "bash", "extensions": [".sh", ".bash", ".bashrc", ".bash_profile", ".ebuild", ".eclass"], "path": "bash"},
     {"name": "ruby", "extensions": [".rb"], "path": "ruby"},
     {"name": "java", "extensions": [".java"], "path": "java"},
     {"name": "kotlin", "extensions": [".kt", ".kts"], "path": "kotlin"},

@@ -32,7 +32,13 @@ enum BundledLanguageManifest {
     }
 
     static func entry(forFilename filename: String) -> BundledLanguageEntry? {
-        let fileExtension = (FilePath(filename).extension ?? "").lowercased()
+        let path = FilePath(filename)
+        if let basename = path.lastComponent?.string, basename.hasPrefix("."),
+            let entry = loadedManifest()?.entriesByExtension[basename.lowercased()]
+        {
+            return entry
+        }
+        let fileExtension = (path.extension ?? "").lowercased()
         guard !fileExtension.isEmpty else { return nil }
         return loadedManifest()?.entriesByExtension[".\(fileExtension)"]
     }

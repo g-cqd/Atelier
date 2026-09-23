@@ -145,9 +145,12 @@ public final class GrammarRegistry: Sendable {
         state.withLock { $0.entriesByLanguage[languageName] }
     }
 
-    /// The entry registered for the lowercased extension of `filename`; nil when it has none.
+    /// The entry registered for the lowercased extension or exact dotfile name of `filename`.
     public func entry(forFilename filename: String) -> LanguageEntry? {
-        let ext = (filename as NSString).pathExtension.lowercased()
+        let path = filename as NSString
+        let basename = path.lastPathComponent
+        if basename.hasPrefix("."), let entry = entry(forExtension: basename) { return entry }
+        let ext = path.pathExtension.lowercased()
         guard !ext.isEmpty else { return nil }
         return entry(forExtension: ext)
     }
