@@ -104,8 +104,9 @@ struct DiffViewerModelFetchTests {
         await sut.left.fetch()
         try await taskProvider.waitForAllTasks()
         // The fetch moved the remote-tracking ref on disk, which the watcher reports as well.
+        let mark = clock.registrationMark()
         try #require(source.write("/repo/.git/refs/remotes/origin/develop"))
-        try await clock.waitForSleepers()
+        try await clock.expectSleepers(after: mark)
         clock.advance(by: .milliseconds(150))
         try await taskProvider.waitForAllTasks()
 

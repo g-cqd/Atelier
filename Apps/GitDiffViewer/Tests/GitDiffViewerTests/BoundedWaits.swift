@@ -80,6 +80,20 @@ private final class FirstOutcome<Value: Sendable>: Sendable {
     }
 }
 
+extension TestClock {
+    /// Returns once `count` sleepers have registered after `mark`, as ``waitForSleepers(_:after:)`` does, or throws
+    /// ``WaitTimeout`` once ``TaskProviderSpy/failureBound`` has passed first. Take `mark` just before the step that
+    /// puts the sleepers to sleep: the advance that follows then fires them, never an earlier sleeper alone.
+    func expectSleepers(
+        _ count: Int = 1, after mark: RegistrationMark, sourceLocation: SourceLocation = #_sourceLocation
+    ) async throws {
+        let awaited = count == 1 ? "A sleeper registered after the mark" : "\(count) sleepers registered after the mark"
+        try await withFailureBound(awaiting: awaited, sourceLocation: sourceLocation) { [self] in
+            try await waitForSleepers(count, after: mark)
+        }
+    }
+}
+
 extension AsyncProbe {
     /// The next element, as ``next()`` returns it, or ``WaitTimeout`` once ``TaskProviderSpy/failureBound`` has passed
     /// without one: a signal that never comes fails the test instead of hanging the run.

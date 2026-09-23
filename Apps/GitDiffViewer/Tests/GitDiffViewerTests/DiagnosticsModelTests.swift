@@ -43,9 +43,12 @@ struct DiagnosticsModelTests {
 
     private static let debounce: Duration = .milliseconds(250)
 
-    /// Lets the debounced run of the request just made start, on the virtual clock.
-    private func startRun(on clock: TestClock) async throws {
-        try await clock.waitForSleepers()
+    /// Makes `request` and lets the debounced run it asks for start, on the virtual clock; fails within the failure
+    /// bound when it asks for none.
+    private func startRun(on clock: TestClock, after request: () -> Void) async throws {
+        let mark = clock.registrationMark()
+        request()
+        try await clock.expectSleepers(after: mark)
         clock.advance(by: Self.debounce)
     }
 
@@ -170,10 +173,9 @@ struct DiagnosticsModelTests {
         let model = DiagnosticsModel(
             engine: runner, settings: settings, taskProvider: spy, clock: clock, debounce: Self.debounce)
 
-        model.comparisonChanged(root: Self.root, files: [target("A.swift")], corpusFingerprint: "fp")
-        // Bounded: with no tool enabled no run starts, and the clock would wait for it forever.
-        try await spy.waitForSpawnedTasks(atLeast: 1)
-        try await startRun(on: clock)
+        try await startRun(on: clock) {
+            model.comparisonChanged(root: Self.root, files: [target("A.swift")], corpusFingerprint: "fp")
+        }
         try await spy.waitForAllTasks()
 
         #expect(await Set(runner.calls) == Set(DiagnosticTool.allCases).subtracting([.swiftlint]))
@@ -194,8 +196,9 @@ struct DiagnosticsModelTests {
             changes.record()
         }
 
-        sut.model.comparisonChanged(root: Self.root, files: [target("A.swift")], corpusFingerprint: "fp")
-        try await startRun(on: clock)
+        try await startRun(on: clock) {
+            sut.model.comparisonChanged(root: Self.root, files: [target("A.swift")], corpusFingerprint: "fp")
+        }
         try await sut.spy.waitForAllTasks()
 
         #expect(changes.count == 1)
@@ -208,8 +211,9 @@ struct DiagnosticsModelTests {
         await runner.configure(.swiftlint, findings: [finding(.swiftlint, file: "A.swift")])
         let clock = TestClock()
         let sut = try makeSUT(runner: runner, clock: clock)
-        sut.model.comparisonChanged(root: Self.root, files: [target("A.swift")], corpusFingerprint: "fp")
-        try await startRun(on: clock)
+        try await startRun(on: clock) {
+            sut.model.comparisonChanged(root: Self.root, files: [target("A.swift")], corpusFingerprint: "fp")
+        }
         try await sut.spy.waitForAllTasks()
         let changes = CountProbe()
         withObservationTracking {
@@ -232,8 +236,9 @@ struct DiagnosticsModelTests {
         await runner.configure(.swiftlint, findings: [finding(.swiftlint, file: "A.swift")])
         let clock = TestClock()
         let sut = try makeSUT(runner: runner, clock: clock)
-        sut.model.comparisonChanged(root: Self.root, files: [target("A.swift")], corpusFingerprint: "fp")
-        try await startRun(on: clock)
+        try await startRun(on: clock) {
+            sut.model.comparisonChanged(root: Self.root, files: [target("A.swift")], corpusFingerprint: "fp")
+        }
         try await sut.spy.waitForAllTasks()
         let callsBefore = await runner.calls.count
 
@@ -251,9 +256,10 @@ struct DiagnosticsModelTests {
         await runner.configure(.arcleak, findings: [finding(.arcleak, file: "B.swift")])
         let clock = TestClock()
         let sut = try makeSUT(runner: runner, clock: clock)
-        sut.model.comparisonChanged(
-            root: Self.root, files: [target("A.swift"), target("B.swift")], corpusFingerprint: "one")
-        try await startRun(on: clock)
+        try await startRun(on: clock) {
+            sut.model.comparisonChanged(
+                root: Self.root, files: [target("A.swift"), target("B.swift")], corpusFingerprint: "one")
+        }
         try await sut.spy.waitForAllTasks()
         await runner.configure(.swiftlint, findings: [finding(.swiftlint, file: "C.swift")])
         let arcleakGate = TaskGate()
@@ -263,10 +269,11 @@ struct DiagnosticsModelTests {
             if paths.contains("C.swift") { swiftlintLanded.send(paths) }
         }
 
-        sut.model.comparisonChanged(
-            root: Self.root, files: [target("A.swift"), target("B.swift"), target("C.swift")],
-            corpusFingerprint: "two")
-        try await startRun(on: clock)
+        try await startRun(on: clock) {
+            sut.model.comparisonChanged(
+                root: Self.root, files: [target("A.swift"), target("B.swift"), target("C.swift")],
+                corpusFingerprint: "two")
+        }
         _ = try await swiftlintLanded.expectNext()
 
         #expect(sut.model.findingsByFile["A.swift"] == nil)
@@ -283,16 +290,18 @@ struct DiagnosticsModelTests {
         await runner.configure(.arcleak, findings: [finding(.arcleak, file: "B.swift")])
         let clock = TestClock()
         let sut = try makeSUT(runner: runner, clock: clock)
-        sut.model.comparisonChanged(
-            root: Self.root, files: [target("A.swift"), target("B.swift")], corpusFingerprint: "fp")
-        try await startRun(on: clock)
+        try await startRun(on: clock) {
+            sut.model.comparisonChanged(
+                root: Self.root, files: [target("A.swift"), target("B.swift")], corpusFingerprint: "fp")
+        }
         try await sut.spy.waitForAllTasks()
 
-        sut.settings.toolLocations[.arcleak] = ToolLocation(isEnabled: false)
+        try await startRun(on: clock) {
+            sut.settings.toolLocations[.arcleak] = ToolLocation(isEnabled: false)
 
-        #expect(sut.model.findingsByFile["B.swift"] == nil)
-        #expect(sut.model.findingsByFile["A.swift"]?.count == 1)
-        try await startRun(on: clock)
+            #expect(sut.model.findingsByFile["B.swift"] == nil)
+            #expect(sut.model.findingsByFile["A.swift"]?.count == 1)
+        }
         try await sut.spy.waitForAllTasks()
     }
 }

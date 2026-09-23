@@ -31,13 +31,15 @@ struct GapDragControllerTests {
     func `holding a handle in an edge zone reveals one more row per interval`() async throws {
         let sut = makeSUT()
         sut.handle(.began(between(), .extendsChangeAbove, lineHeight: 10))
+        let hold = clock.registrationMark()
         sut.handle(.moved(offset: 20, edgeOvershoot: GapDrag.rampDepth))
         #expect(try await applied.expectNext() == GapExpansion(below: 2, above: 0))
 
-        try await clock.waitForSleepers()
+        // The hold sleeps once per row it reveals.
+        try await clock.expectSleepers(1, after: hold)
         clock.advance(by: GapDrag.fastestHold)
         #expect(try await applied.expectNext() == GapExpansion(below: 3, above: 0))
-        try await clock.waitForSleepers()
+        try await clock.expectSleepers(2, after: hold)
         clock.advance(by: GapDrag.fastestHold)
         #expect(try await applied.expectNext() == GapExpansion(below: 4, above: 0))
 
@@ -49,9 +51,10 @@ struct GapDragControllerTests {
     func `holding stops when the pointer leaves the edge zone`() async throws {
         let sut = makeSUT()
         sut.handle(.began(between(), .extendsChangeAbove, lineHeight: 10))
+        let hold = clock.registrationMark()
         sut.handle(.moved(offset: 20, edgeOvershoot: GapDrag.rampDepth))
         _ = try await applied.expectNext()
-        try await clock.waitForSleepers()
+        try await clock.expectSleepers(after: hold)
 
         sut.handle(.moved(offset: 20, edgeOvershoot: 0))
         try await taskProvider.waitForAllTasks()
@@ -65,9 +68,10 @@ struct GapDragControllerTests {
     func `holding stops at the last row the gap hides`() async throws {
         let sut = makeSUT()
         sut.handle(.began(between(hiding: 3), .extendsChangeAbove, lineHeight: 10))
+        let hold = clock.registrationMark()
         sut.handle(.moved(offset: 20, edgeOvershoot: GapDrag.rampDepth))
         _ = try await applied.expectNext()
-        try await clock.waitForSleepers()
+        try await clock.expectSleepers(after: hold)
         clock.advance(by: GapDrag.fastestHold)
         #expect(try await applied.expectNext() == GapExpansion(below: 3, above: 0))
 
@@ -79,9 +83,10 @@ struct GapDragControllerTests {
     func `ending a drag stops its hold`() async throws {
         let sut = makeSUT()
         sut.handle(.began(between(), .extendsChangeAbove, lineHeight: 10))
+        let hold = clock.registrationMark()
         sut.handle(.moved(offset: 20, edgeOvershoot: GapDrag.rampDepth))
         _ = try await applied.expectNext()
-        try await clock.waitForSleepers()
+        try await clock.expectSleepers(after: hold)
 
         sut.handle(.ended)
         try await taskProvider.waitForAllTasks()
