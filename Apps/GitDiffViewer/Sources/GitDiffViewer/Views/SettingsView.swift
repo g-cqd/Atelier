@@ -8,9 +8,7 @@ import Foundation
 import SwiftUI
 
 /// The settings window: one tab per concern, each a grouped form that scrolls, in a window of a fixed size so it
-/// never outgrows the screen. Tab boundaries follow the questions a user asks (R2 — "what does the window look
-/// like", "what's compared and how it's matched", "how does it look", "what tools run"), not implementation; the
-/// last-viewed tab is restored from ``ViewerSettings/settingsPane``, matching HIG's "restore last pane" (P8).
+/// never outgrows the screen. It reopens on the last-viewed tab, ``ViewerSettings/settingsPane``.
 struct SettingsView: View {
     @Bindable var settings: ViewerSettings
     let runner: any ProcessRunner
@@ -35,7 +33,7 @@ struct SettingsView: View {
     }
 }
 
-/// General: window & files — everything about how the window itself is arranged, independent of any one diff.
+/// General: how the window and its files are arranged, independent of any one diff.
 private struct GeneralSettings: View {
     @Bindable var settings: ViewerSettings
 
@@ -78,9 +76,8 @@ private struct GeneralSettings: View {
     }
 }
 
-/// Diff: what's compared and how it's matched — isolation/context (moved here from General, since both are about
-/// what a diff shows), then matching (granularity, whitespace, and the heuristics behind a "Advanced matching"
-/// disclosure with captions, none of which had one before — R6).
+/// Diff: what's compared and how it's matched: isolation and context, then granularity, whitespace and the
+/// advanced matching heuristics.
 private struct DiffSettings: View {
     @Bindable var settings: ViewerSettings
 
@@ -161,8 +158,7 @@ private struct DiffSettings: View {
     }
 }
 
-/// Appearance: what the text looks like — colors, line height, layout mode and wrapping, all in one place instead
-/// of layout mode living under General and wrapping under a separate "Text" concern (A1).
+/// Appearance: colors and line height, badge colors, and the diff's layout and wrapping.
 private struct AppearanceSettings: View {
     @Bindable var settings: ViewerSettings
     let runner: any ProcessRunner
@@ -246,11 +242,8 @@ private struct AppearanceSettings: View {
     }
 }
 
-/// A tab's footer (R4): a subtle count of settings that differ from their coded default (P6 — the default is the
-/// recommendation, so deviation is worth surfacing, cheaply, without a dot per control), a button that resets
-/// just this tab's settings, and — for a tab with at least one project-scoped setting (R5) — a count of the
-/// projects currently overriding one of them, with a "Review…" affordance to look at and clear those overrides
-/// without having to reopen each project's own window.
+/// A tab's footer: how many settings differ from their coded default, a button that resets the tab, and, for a tab
+/// with project-scoped settings, how many projects override them, with a "Review…" button to clear those.
 struct SettingsRestoreDefaultsFooter: View {
     @Bindable var settings: ViewerSettings
     let category: SettingsCategory
@@ -290,12 +283,8 @@ struct SettingsRestoreDefaultsFooter: View {
     }
 }
 
-/// Lists every project overriding one of `category`'s settings (R5), each with its own "Clear" button, plus a
-/// blanket "Clear All" — the review affordance the tab footer's "Review…" button opens.
-///
-/// The registry `projectsWithOverrides` reads lives in user defaults, not in an `@Observable` property, so nothing
-/// here can rely on `settings` to trigger a redraw after a clear; `projects` is loaded into local `@State`
-/// instead and refreshed by hand right after every mutation.
+/// Lists every project overriding one of `category`'s settings, each with a "Clear" button, plus "Clear All". The
+/// registry lives in user defaults, which observation cannot see, so `projects` reloads after every clear.
 private struct ProjectOverridesReview: View {
     let settings: ViewerSettings
     let category: SettingsCategory

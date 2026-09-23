@@ -27,10 +27,8 @@ struct FileOutlineView: NSViewRepresentable {
     let uiState: ExplorerUIState
     /// Which colours a badge's letter is drawn in.
     var badgeScheme: BadgeScheme = .classic
-    /// Where every badge in this tree stands against the index -- see ``FileExplorerView``/``UnifiedExplorerView``
-    /// for how it is derived from the comparison. One value for the whole tree: this app has no per-file index
-    /// data to distinguish a staged file from an unstaged one within the same comparison (see
-    /// ``BadgeChangeState``'s doc comment there for the gap).
+    /// Where every badge in this tree stands against the index; one value for the whole tree, since the comparison
+    /// carries no per-file index state.
     var badgeState: BadgeChangeState = .staged
 
     func makeCoordinator() -> Coordinator {

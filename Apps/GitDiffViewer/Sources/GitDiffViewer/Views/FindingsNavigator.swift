@@ -2,10 +2,8 @@ import AtelierDiagnostics
 import DiffComparison
 import SwiftUI
 
-/// Toolbar item: a button showing the warning/error totals, opening a scrollable, grouped-by-file list of every
-/// finding in the comparison. The anchor for its popover is the button itself, which is the one place a plain
-/// SwiftUI `.popover` is the right call in this wave -- unlike the diagnostics squiggle's own line-anchored
-/// popover (an ``AppKit/NSPopover`` from the gutter), there is no "line" here to anchor to, only the button.
+/// Toolbar item: a button showing the warning and error totals that opens every finding of the comparison,
+/// grouped by file.
 struct FindingsNavigatorButton: View {
     let model: DiffViewerModel
     @State private var isPresented = false
@@ -59,12 +57,8 @@ private struct FindingsNavigatorPopover: View {
                             .help(group.path)
                         ForEach(Array(group.findings.enumerated()), id: \.offset) { _, finding in
                             FindingRow(finding: finding) {
-                                // The right side's own path is what every finding is anchored at
-                                // (``DiagnosticFileIndex``); the same "jump" the card header's double click already
-                                // uses, from that side. v1: select the file (which switches the detail area to it
-                                // and scrolls the file itself into view); a further scroll to the finding's own
-                                // line is not wired yet -- no existing API maps a source line to a rendered row
-                                // from outside the pane's own coordinator.
+                                // Findings are keyed by the right side's path. This opens the file; scrolling to the
+                                // finding's line needs a line-to-row mapping the pane does not expose.
                                 model.pin(finding.file, from: .right)
                                 isPresented = false
                             }
