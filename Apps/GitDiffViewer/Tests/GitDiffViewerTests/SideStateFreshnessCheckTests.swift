@@ -5,13 +5,14 @@ import Testing
 @testable import DiffComparison
 @testable import DiffGit
 
-/// The listing filter one side applies to the watcher's working-tree writes: git is asked about unlisted paths
-/// alone (GDV S2).
+/// What one side re-reads after an outside change: the ref check that reloads only when the commit moved (GDV S3),
+/// and the listing filter that asks git about unlisted paths alone (GDV S2).
 @MainActor
 struct SideStateFreshnessCheckTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
     private nonisolated static let info = RepositoryInfo(root: root, branches: ["main"], tags: [], commits: [])
     private nonisolated static let tree = ComparisonSource.directory(root)
+    private nonisolated static let main = ComparisonSource.gitRef(repository: root, ref: "main")
 
     private let reader = ScriptedGitReader()
     private let taskProvider = TaskProviderSpy.tolerant()
@@ -34,6 +35,91 @@ struct SideStateFreshnessCheckTests {
         sut.loadIgnoredEntries()
         try await taskProvider.waitForAllTasks()
         return sut
+    }
+
+    // MARK: Ref checks (GDV S3)
+
+    /// A side on `main` at commit `c1`, listed through its own load.
+    private func makeSideOnMain() async throws -> SideState {
+        reader.commits = ["main": "c1"]
+        reader.entries[Self.main] = [Self.entry("a.swift")]
+        let sut = makeSUT()
+        sut.load(Self.main, repository: Self.info)
+        try await taskProvider.waitForAllTasks()
+        return sut
+    }
+
+    @Test
+    func `a load resolves a ref before listing its tree and keeps the commit`() async throws {
+        let sut = try await makeSideOnMain()
+
+        #expect(sut.resolvedCommit == "c1")
+    }
+
+    @Test
+    func `a ref still naming the commit its entries were listed at reloads nothing`() async throws {
+        let sut = try await makeSideOnMain()
+        let listings = reader.listings(of: Self.main)
+
+        sut.reloadIfRefMoved()
+        try await taskProvider.waitForAllTasks()
+
+        #expect(reader.listings(of: Self.main) == listings)
+    }
+
+    @Test
+    func `a ref that moved reloads, and the reload keeps the new commit`() async throws {
+        let sut = try await makeSideOnMain()
+        reader.commits = ["main": "c2"]
+        reader.entries[Self.main] = [Self.entry("a.swift", "2")]
+
+        sut.reloadIfRefMoved()
+        try await taskProvider.waitForAllTasks()
+
+        #expect(sut.entriesByPath["a.swift"]?.blobID == "2")
+        #expect(sut.resolvedCommit == "c2")
+    }
+
+    @Test
+    func `two notices of one move reload once`() async throws {
+        let sut = try await makeSideOnMain()
+        let listings = reader.listings(of: Self.main)
+        reader.commits = ["main": "c2"]
+
+        sut.reloadIfRefMoved()
+        sut.reloadIfRefMoved()
+        try await taskProvider.waitForAllTasks()
+
+        #expect(reader.listings(of: Self.main) == listings + 1)
+    }
+
+    @Test
+    func `a side handed its entries without their commit reloads once to learn it`() async throws {
+        reader.commits = ["main": "c1"]
+        reader.entries[Self.main] = [Self.entry("a.swift")]
+        let sut = makeSUT()
+        sut.load(Self.main, repository: Self.info, entries: [Self.entry("a.swift")])
+
+        sut.reloadIfRefMoved()
+        try await taskProvider.waitForAllTasks()
+        sut.reloadIfRefMoved()
+        try await taskProvider.waitForAllTasks()
+
+        #expect(reader.listings(of: Self.main) == 1)
+        #expect(sut.resolvedCommit == "c1")
+    }
+
+    @Test
+    func `a working tree has no ref to check`() async throws {
+        reader.entries[Self.tree] = [Self.entry("a.swift")]
+        let sut = makeSUT()
+        sut.load(Self.tree, repository: Self.info)
+        try await taskProvider.waitForAllTasks()
+        let spawned = taskProvider.spawnedTaskCount
+
+        sut.reloadIfRefMoved()
+
+        #expect(taskProvider.spawnedTaskCount == spawned)
     }
 
     // MARK: The listing filter (GDV S2)

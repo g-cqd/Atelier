@@ -154,4 +154,95 @@ struct DiffViewerModelFreshnessTests {
         #expect(reader.ignoreChecks == [["new.swift"]])
         try await drain(sut)
     }
+
+    // MARK: Refs and HEAD
+
+    @Test
+    func `a refs change that leaves every commit in place reloads nothing and refreshes both menus`() async throws {
+        let (sut, source) = try await makeLoadedSUT()
+        let listings = (reader.listings(of: Self.head), reader.listings(of: Self.tree))
+        reader.repositories[Self.root] = Self.info(branches: ["main", "origin/main"])
+
+        // A fetch by another tool moves a remote-tracking branch, not the checked-out one.
+        try await report("/repo/.git/refs/remotes/origin/main", on: source, after: Self.refDebounce)
+
+        #expect(reader.listings(of: Self.head) == listings.0)
+        #expect(reader.listings(of: Self.tree) == listings.1)
+        #expect(sut.left.repository?.branches == ["main", "origin/main"])
+        #expect(sut.right.repository?.branches == ["main", "origin/main"])
+        #expect(reader.repositoryInfoReads == 1)
+        try await drain(sut)
+    }
+
+    @Test
+    func `a commit on the checked-out branch reloads the HEAD side alone`() async throws {
+        let (sut, source) = try await makeLoadedSUT()
+        let treeListings = reader.listings(of: Self.tree)
+        reader.commits = ["HEAD": "c2"]
+        reader.entries[Self.head] = [Self.entry("a.swift", "2")]
+
+        try await report("/repo/.git/refs/heads/main", on: source, after: Self.refDebounce)
+
+        #expect(sut.left.entriesByPath["a.swift"]?.blobID == "2")
+        #expect(sut.left.resolvedCommit == "c2")
+        #expect(reader.listings(of: Self.tree) == treeListings)
+        try await drain(sut)
+    }
+
+    @Test
+    func `a checkout that moves HEAD reloads the HEAD side, and one that keeps its commit reloads nothing`()
+        async throws
+    {
+        let (sut, source) = try await makeLoadedSUT()
+        reader.commits = ["HEAD": "c2"]
+        reader.entries[Self.head] = [Self.entry("a.swift", "2")]
+
+        try await report("/repo/.git/HEAD", on: source, after: Self.refDebounce)
+        #expect(sut.left.entriesByPath["a.swift"]?.blobID == "2")
+        let listings = reader.listings(of: Self.head)
+
+        // `git checkout -b feature` points HEAD at a new branch on the same commit.
+        try await report("/repo/.git/HEAD", on: source, after: Self.refDebounce)
+
+        #expect(reader.listings(of: Self.head) == listings)
+        try await drain(sut)
+    }
+
+    @Test
+    func `in a linked worktree, a commit reloads the HEAD side and staging refreshes the badges alone`() async throws {
+        let worktree = try LinkedWorktree()
+        defer { worktree.remove() }
+        let root = worktree.rootURL
+        let head = ComparisonSource.gitRef(repository: root, ref: "HEAD")
+        let tree = ComparisonSource.directory(root)
+        let info = RepositoryInfo(root: root, branches: ["feature"], tags: [], commits: [])
+        reader.repositories[root] = info
+        reader.commits = ["HEAD": "c1"]
+        reader.entries[head] = [Self.entry("a.swift", "1")]
+        reader.entries[tree] = [Self.entry("a.swift", "1")]
+        let sut = makeSUT()
+        sut.left.load(head, repository: info)
+        sut.right.load(tree, repository: info)
+        try await taskProvider.waitForAllTasks()
+        sut.attachFreshness(clock: clock, makeWatcher: watchers.makeWatcher)
+        let source = try #require(watchers.latest)
+        try await source.waitUntilWatching(3)
+        let treeListings = reader.listings(of: tree)
+
+        reader.commits = ["HEAD": "c2"]
+        reader.entries[head] = [Self.entry("a.swift", "2")]
+        try await report(worktree.commonGitDir + "/refs/heads/feature", on: source, after: Self.refDebounce)
+        #expect(sut.left.entriesByPath["a.swift"]?.blobID == "2")
+
+        reader.statuses[tree] =
+            GitParsers.porcelainV2(
+                Data("1 M. N... 100644 100644 100644 aaaa bbbb a.swift\u{0}".utf8)
+            )
+            .entries
+        try await report(worktree.privateGitDir + "/index", on: source, after: Self.refDebounce)
+
+        #expect(sut.right.badgeState(of: "a.swift") == .staged)
+        #expect(reader.listings(of: tree) == treeListings)
+        try await drain(sut)
+    }
 }

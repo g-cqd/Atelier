@@ -29,6 +29,10 @@ package final class SideState {
     package private(set) var errorMessage: String?
     package var customRef = ""
 
+    /// The commit this side's ref named when its entries were listed, resolved just before the listing; nil for any
+    /// other source, and until a load that resolved it lands.
+    package private(set) var resolvedCommit: String?
+
     /// Whether a fetch is running on this side right now; guards against a second one starting while it is.
     package private(set) var isFetching = false
     /// The last fetch's failure; cleared when another fetch starts or the repository changes.
@@ -49,6 +53,8 @@ package final class SideState {
     private var loadTask: Task<Void, Never>?
     private var ignoredTask: Task<Void, Never>?
     private var remoteTask: Task<Void, Never>?
+    /// The last ref check ``reloadIfRefMoved()`` queued; the next one waits for it.
+    @ObservationIgnored private var refCheckTask: Task<Void, Never>?
     /// Called whenever a load starts, so the owner can time the comparison from the source change.
     @ObservationIgnored package var onReload: (@MainActor () -> Void)?
     /// Called whenever the entries change, so the owner can recompute the comparison.
@@ -164,30 +170,42 @@ package final class SideState {
         isLoading = false
     }
 
-    /// Adopts entries the owner already read, with the badge states it read beside them (nil when it read none), so
-    /// the comparison starts without another round trip. The owner reports the change itself, so both sides can be
-    /// swapped in before anything is recomputed.
+    /// Adopts entries the owner already read, with the badge states it read beside them (nil when it read none) and,
+    /// for a ref, the commit it resolved before listing them (nil when it did not), so the comparison starts without
+    /// another round trip. The owner reports the change itself, so both sides can be swapped in before anything is
+    /// recomputed.
     package func load(
         _ source: ComparisonSource, repository: RepositoryInfo?, entries: [SourceEntry], ignored: [SourceEntry]? = nil,
-        badgeStates: BadgeChangeStates? = nil
+        badgeStates: BadgeChangeStates? = nil, resolvedCommit: String? = nil
     ) {
         loadTask?.cancel()
         self.source = source
         setRepository(repository)
         isLoading = false
         errorMessage = nil
+        self.resolvedCommit = resolvedCommit
         publish(badgeStates, generation: beginBadgeStatesRead())
         apply(entries, ignored: ignored, notifying: false)
     }
 
     /// Re-reads this side's repository info (branches, tags, commits) without touching its entries; a no-op without
     /// a repository. The result is dropped if this side moved to another repository meanwhile.
-    package func refreshRepositoryInfo() async {
-        guard let repository else { return }
+    /// - Returns: The info read, or nil when none was, so a caller can hand it to a side of the same repository.
+    @discardableResult
+    package func refreshRepositoryInfo() async -> RepositoryInfo? {
+        guard let repository else { return nil }
         let root = repository.root
-        guard let refreshed = await reader.repositoryInfo(containing: root) else { return }
-        guard self.repository?.root == root else { return }
+        guard let refreshed = await reader.repositoryInfo(containing: root) else { return nil }
+        guard self.repository?.root == root else { return nil }
         self.repository = refreshed
+        return refreshed
+    }
+
+    /// Takes repository info the other side just read, sparing a second read of the same refs; ignored when it
+    /// describes another repository than this side's.
+    package func updateRepositoryInfo(_ info: RepositoryInfo) {
+        guard repository?.root == info.root else { return }
+        repository = info
     }
 
     /// Reads this repository's remote names once; a no-op once they are known, without a repository, or without a
@@ -231,6 +249,8 @@ package final class SideState {
         onFetched?()
     }
 
+    /// Reads this side's files again, with git's status beside them for a folder and, for a ref, the commit it names
+    /// resolved first.
     package func reload() {
         guard let source else { return }
         loadTask?.cancel()
@@ -243,17 +263,19 @@ package final class SideState {
             // Git's status runs beside the listing, so the files and their badges land together.
             async let badgeStates = Self.readBadgeStates(of: source, reader: reader)
             do {
-                let entries = try await reader.entries(of: source)
+                let listing = try await Self.listing(of: source, reader: reader)
                 let states = await badgeStates
                 guard !Task.isCancelled else { return }
                 isLoading = false
+                resolvedCommit = listing.commit
                 publish(states, generation: generation)
-                apply(entries, ignored: nil, notifying: true)
+                apply(listing.entries, ignored: nil, notifying: true)
             } catch is CancellationError {
                 return
             } catch {
                 errorMessage = error.localizedDescription
                 isLoading = false
+                resolvedCommit = nil
                 apply([], ignored: nil, notifying: true)
             }
         }
@@ -326,8 +348,41 @@ package final class SideState {
     }
 }
 
-/// What an outside change makes a side read again: its files, when a write can change what it lists (GDV S2).
+/// What an outside change makes a side read again: its ref, when the commit it names moved (GDV S3), and its files,
+/// when a write can change what it lists (GDV S2).
 extension SideState {
+    /// Reloads when this side's ref now names another commit than the one its entries were listed at (GDV S3); a
+    /// no-op for any other source, and a reload when the commit is unknown or the ref no longer resolves. Checks run
+    /// one after another, each after the load then in flight, so two notices of one move, the refs watcher's and a
+    /// fetch's, reload once, and a check never reloads again what a running load already picks up.
+    package func reloadIfRefMoved() {
+        guard case .gitRef = source else { return }
+        let previous = refCheckTask
+        refCheckTask = taskProvider.task {
+            await previous?.value
+            await reloadUnlessCurrent()
+        }
+    }
+
+    private func reloadUnlessCurrent() async {
+        await loadTask?.value
+        guard case .gitRef(let repository, let ref) = source else { return }
+        let listedAt = resolvedCommit
+        let current: String?
+        do {
+            current = try await reader.resolve(ref: ref, in: repository)
+        } catch is CancellationError {
+            return
+        } catch {
+            // The ref is gone, or git fails: the reload says so where this side's errors show.
+            current = nil
+        }
+        guard !Task.isCancelled, source == .gitRef(repository: repository, ref: ref) else { return }
+        if current == nil || current != listedAt {
+            reload()
+        }
+    }
+
     /// Whether writes at `paths`, relative to this folder, can change what a reload lists (GDV S2), sorted by
     /// ``WorkingTreeWrites``: a listed file or folder can, and so can a new path git does not ignore, which one
     /// `git check-ignore` judges for every unlisted path at once. When git cannot judge, the writes count, so no edit
@@ -360,5 +415,29 @@ extension SideState {
             level = node.children ?? []
         }
         return true
+    }
+
+    /// A side's files as one read lists them.
+    package struct Listing: Sendable {
+        package let entries: [SourceEntry]
+        /// The commit a ref named just before its tree was listed; nil for any other source, and when git could not
+        /// resolve the ref, which the listing then reports.
+        package let commit: String?
+    }
+
+    /// Lists `source`, resolving a ref first: a ref that moves in between then reads as moved at the next check
+    /// (``reloadIfRefMoved()``), never as current.
+    nonisolated static func listing(of source: ComparisonSource, reader: any SourceReading) async throws -> Listing {
+        var commit: String?
+        if case .gitRef(let repository, let ref) = source {
+            do {
+                commit = try await reader.resolve(ref: ref, in: repository)
+            } catch let cancellation as CancellationError {
+                throw cancellation
+            } catch {
+                PhaseTrace.log("git rev-parse failed for \(source.displayName): \(error.localizedDescription)")
+            }
+        }
+        return Listing(entries: try await reader.entries(of: source), commit: commit)
     }
 }
