@@ -897,9 +897,53 @@ public enum ViewRenderer {
         var isLeading = true
         var charIndex = 0
         let ts = max(1, tabSize)
+        let maxCol = col + availWidth
+        let visibleEnd = hScrollOffset + availWidth
+        let plainASCII = !whitespaceConfig.isEnabledOrSelectionAware
+        let canShowLineBreak =
+            whitespaceConfig.showLineBreaks || whitespaceConfig.selectionVisibility == .boundary
 
-        for span in spans {
-            for char in span.text {
+        spanLoop: for span in spans {
+            let text = span.text.utf8Span
+            let bytes = text.span
+            var characters = text.makeCharacterIterator()
+            var offset = 0
+            let spanStyle = resolvedLineStyle(
+                from: span.style,
+                lineOverlay: lineOverlay,
+                isCurrentLine: isCurrentLine,
+                currentLineStyle: currentLineStyle
+            )
+            while offset < bytes.count {
+                if currentX >= visibleEnd && (!canShowLineBreak || currentCol == maxCol) {
+                    break spanLoop
+                }
+
+                let byte = bytes[offset]
+                let next = offset + 1
+                // An ASCII byte before a non-ASCII byte can be part of the same grapheme.
+                if plainASCII, byte &- 0x20 < 0x5F,
+                    next == bytes.count || bytes[next] < 0x80
+                {
+                    if byte != 0x20 { isLeading = false }
+                    if currentX >= hScrollOffset && currentX < visibleEnd {
+                        let style = resolveHighlightStyle(
+                            for: charIndex, highlights: highlights, base: spanStyle)
+                        buffer[row, currentCol] = Cell(
+                            character: Character(Unicode.Scalar(byte)), style: style)
+                        currentCol += 1
+                    }
+                    currentX += 1
+                    charIndex += 1
+                    offset = next
+                    continue
+                }
+
+                if characters.currentCodeUnitOffset != offset {
+                    characters.reset(roundingForwardsFrom: offset)
+                }
+                guard let char = characters.next() else { break }
+                offset = characters.currentCodeUnitOffset
                 let category: WhitespaceRenderer.CharCategory
                 var displayChar = char
                 var charStyle = span.style
@@ -950,7 +994,7 @@ public enum ViewRenderer {
                     if width == 0 { width = 1 }
                 }
 
-                if currentX >= hScrollOffset && currentX + width <= hScrollOffset + availWidth {
+                if currentX >= hScrollOffset && currentX + width <= visibleEnd {
                     var style = resolvedLineStyle(
                         from: charStyle,
                         lineOverlay: lineOverlay,
@@ -966,7 +1010,7 @@ public enum ViewRenderer {
                         into: &buffer,
                         row: row,
                         col: &currentCol,
-                        maxCol: col + availWidth,
+                        maxCol: maxCol,
                         style: style
                     )
                 }
@@ -975,7 +1019,7 @@ public enum ViewRenderer {
             }
         }
 
-        if currentCol < col + availWidth {
+        if currentCol < maxCol {
             let inSel = isInSelection(charIndex: charIndex, highlights: highlights)
             if whitespaceConfig.shouldShowLineBreaks(inSelection: inSel) {
                 let lbStyle = resolvedLineStyle(
@@ -996,7 +1040,7 @@ public enum ViewRenderer {
             isCurrentLine: isCurrentLine,
             currentLineStyle: currentLineStyle
         )
-        while currentCol < col + availWidth {
+        while currentCol < maxCol {
             buffer[row, currentCol] = Cell(character: " ", style: fillStyle)
             currentCol += 1
         }
