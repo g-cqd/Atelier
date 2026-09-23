@@ -6,10 +6,7 @@ import Testing
 
 @testable import KittyEditor
 
-/// Proves the `@Observable` macro on `EditorState` and `RenderClock` behaves
-/// correctly outside SwiftUI — i.e. plain `withObservationTracking` consumers
-/// in `ApplicationRuntime` receive `onChange` callbacks on the next state
-/// mutation. SwiftUI is not in the dependency graph at all here.
+/// `@Observable` on `EditorState` and `RenderClock` notifies plain `withObservationTracking` consumers, SwiftUI aside.
 @Suite
 @MainActor
 struct ObservationIntegrationTests {
@@ -23,13 +20,8 @@ struct ObservationIntegrationTests {
         return state
     }
 
-    // The dirty markers (`dirtyContentAll` / `dirtyChrome`) and other
-    // pure-internal state are `@ObservationIgnored` on EditorState — the
-    // public observation surface is `RenderClock.tick`, advanced by
-    // `mark*Dirty`. The two tests below confirm the macro DOES fire for
-    // properties that are NOT ignored (`mode`, `colorScheme`), which is
-    // the contract a future observer would rely on if it tracked editor
-    // state directly.
+    // The dirty markers are observation-ignored, `RenderClock.tick` being the observable surface; the next two tests
+    // check that observed properties such as `mode` and `colorScheme` still fire.
 
     @Test
     func `withObservationTracking fires when EditorState.mode changes`() async {
@@ -106,10 +98,7 @@ struct ObservationIntegrationTests {
 
     @Test
     func `synchronous burst of EditorState mutations coalesces into one onChange`() async {
-        // This is the contract the dirty pipeline relies on: a single event
-        // handler that fires several mark*Dirty calls in one main-actor entry
-        // must wake the render loop exactly once. Without it we'd risk
-        // flooding the input source with redundant .refresh injections.
+        // Several `mark*Dirty` calls in one main-actor entry must wake the render loop exactly once.
         let state = makeState()
         let clock = RenderClock()
         state.renderClock = clock

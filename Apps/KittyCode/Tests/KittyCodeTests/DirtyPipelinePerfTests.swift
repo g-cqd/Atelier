@@ -6,15 +6,8 @@ import Testing
 
 @testable import KittyEditor
 
-/// Guards that the per-keystroke edit cost no longer scales with file size
-/// after the dirty-pipeline work (phases 1–4).
-///
-/// These are correctness guards: they run a fixed sequence on a small and a
-/// large file and assert that the dirty-region marker behaviour is what the
-/// renderer will rely on — no wall-clock duration is compared in the default
-/// run (`AGENTS.md`). The one absolute-timing check is an opt-in benchmark
-/// gated behind `ATELIER_BENCH`, which prints its measurement instead of
-/// asserting on it.
+/// Guards that a keystroke's cost doesn't scale with file size: the default run checks the dirty markers on a small
+/// and a large file, and the timing benchmark is opt-in through `ATELIER_BENCH`.
 @Suite
 @MainActor
 struct DirtyPipelinePerfTests {
@@ -83,12 +76,8 @@ struct DirtyPipelinePerfTests {
         #expect(sut.state.dirtyContentLines.count == 5)
     }
 
-    /// Absolute per-keystroke time on a large file. The remaining O(N) cost
-    /// (`BufferEditSnapshot.contentFingerprint` walks the whole rope once per
-    /// edit) is bounded — for 10 000 short lines we're well under a single
-    /// rendered frame's worth of time even in debug builds. Machine-dependent
-    /// wall-clock timing may not gate the default run (`AGENTS.md`), so this
-    /// only runs and prints its measurement under `ATELIER_BENCH=1 swift test`.
+    /// The per-keystroke time on a large file, whose remaining O(n) cost is the fingerprint's walk of the rope;
+    /// wall-clock timing is opt-in: `ATELIER_BENCH=1`.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["ATELIER_BENCH"] != nil))
     func `large-file keystroke stays below 15ms in debug`() {
         let sut = makeSUT(lineCount: 10_000)

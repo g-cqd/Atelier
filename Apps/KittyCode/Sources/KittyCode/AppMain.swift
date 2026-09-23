@@ -36,13 +36,8 @@ struct KittyCodeEntry {
         }
     }
 
-    /// Writes a crash diagnostic file at `~/$TMPDIR/kittycode-crash-<pid>.log`
-    /// with owner-only permissions and `O_EXCL` to avoid overwriting an
-    /// existing path of the same PID (defence against a symlink/typesquat
-    /// attack on shared temp dirs). The error description is logged via
-    /// `os.Logger` at `.fault` with `private` redaction; only the public
-    /// path is recorded in the system log so a Console.app reader sees
-    /// where to find the file but not its contents.
+    /// Writes the error to a new owner-only `kittycode-crash-<pid>.log` in the temporary directory and logs its path;
+    /// when anything already sits at that path, a planted symlink included, it logs the failure and writes nothing.
     private static func writeCrashLog(error: any Error) {
         let pid = ProcessInfo.processInfo.processIdentifier
         let path = FileManager.default.temporaryDirectory
@@ -50,12 +45,7 @@ struct KittyCodeEntry {
             .path
         let body = "CRASH: \(error)\n"
 
-        // `O_CREAT | O_EXCL | O_WRONLY` + mode 0600 produces a file that
-        // either is freshly created with owner-only access or fails — the
-        // prior `String.write(to:atomically:)` accepted any pre-existing
-        // file at the path. We use POSIX directly because Foundation has
-        // no first-class API that combines `.exclusive` with a permission
-        // mask.
+        // POSIX, because Foundation can't combine an exclusive create with a permission mask.
         let fd = path.withCString { Darwin.open($0, O_CREAT | O_EXCL | O_WRONLY, 0o600) }
         guard fd >= 0 else {
             KittyLogger.fault(public: "kittycode crash log open failed at \(path)")
@@ -206,15 +196,8 @@ struct KittyCodeEntry {
             state.scrollOffset = max(0, state.cursorRow - 10)
         }
 
-        // Audit B.4/F11 — cleanup must run unconditionally even if
-        // `runtime.run` throws (raw-mode setup failure, terminal-size
-        // query failure, signal mid-init). The previous flat sequence
-        // skipped every line below `runtime.run` on a thrown error and
-        // leaked the file watcher, autosave manager, git refresh
-        // manager, configWatcher subscription, and the EditorState's
-        // long-lived consumer tasks. `defer` runs in reverse order on
-        // any scope exit; the `await configWatcher.stop()` happens
-        // outside `defer` because Swift `defer` body cannot suspend.
+        // Cleanup runs even when `runtime.run` throws; `configWatcher.stop()` is awaited below, as a `defer` can't
+        // suspend.
         defer {
             configWatchTask?.cancel()
             autoSaveManager?.stop()

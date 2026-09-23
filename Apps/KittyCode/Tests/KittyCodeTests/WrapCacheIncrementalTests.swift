@@ -5,13 +5,8 @@ import Testing
 
 @testable import KittyEditor
 
-/// Local helper — deletes the given selection via
-/// `TextOperations.deleteRange` and drives `textDidChange(_:)` with the
-/// resulting mutation so the wrap cache participates in the incremental
-/// patch. Takes the selection explicitly because the
-/// `EditorTestHarness.make` fixture doesn't construct an active buffer
-/// (`state.selection` forwards to `bufferManager.activeBuffer?.selection`,
-/// which is nil in that fixture).
+/// Deletes `selection` and feeds the mutation to `textDidChange(_:)`; the selection is passed explicitly because
+/// the harness fixture has no active buffer to hold one.
 @MainActor
 private func deleteSelection(_ state: EditorState, _ selection: TextSelection) {
     let previous = state.activeBufferSnapshot()
@@ -21,12 +16,8 @@ private func deleteSelection(_ state: EditorState, _ selection: TextSelection) {
     state.clearSelection()
 }
 
-/// Audit NF2 — `wrapCache.invalidate()` cleared the entire visual-row
-/// cache on every per-line edit, forcing the next viewport to walk all
-/// lines and rebuild from scratch. The new `invalidateLines(...)` path
-/// patches only the affected lines and re-fills the visual-offset
-/// prefix-sum from the change point. These tests pin both the patch
-/// arithmetic and the invariant-mismatch fallback.
+/// `invalidateLines` patches only the edited lines and refills the offsets from there; these tests pin the patch
+/// arithmetic and the fallback when the cache doesn't match.
 @Suite
 @MainActor
 struct WrapCacheIncrementalTests {
@@ -116,9 +107,7 @@ struct WrapCacheIncrementalTests {
 
     @Test
     func `invalidateLines falls back to full invalidate when contentWidth differs`() {
-        // Cache is unbuilt (contentWidth == -1). Any incremental call must
-        // degrade gracefully — the cache should remain in its empty state,
-        // not crash or partially populate.
+        // An unbuilt cache (contentWidth == -1) must stay empty, neither crashing nor partly filled.
         let sut = makeSUT(lineCount: 5)
         #expect(sut.state.wrapCache.contentWidth == -1)
 
@@ -132,12 +121,7 @@ struct WrapCacheIncrementalTests {
         #expect(sut.state.wrapCache.contentWidth == -1)
     }
 
-    /// Audit A11 — confirm that deleting a line shrinks both arrays and
-    /// re-establishes the prefix-sum invariant. The original
-    /// `WrapCacheIncrementalTests` covered insertion + same-line edits
-    /// but not the shrink path; a regression in
-    /// `WrapCache.invalidateLines` that mis-truncated `visualOffsets`
-    /// would have slipped through.
+    /// Deleting a line shrinks both arrays and restores the prefix-sum invariant.
     @Test
     func `deleting a line shrinks lineWrapCounts and visualOffsets`() {
         let sut = makeSUT(lineCount: 10)
@@ -165,10 +149,8 @@ struct WrapCacheIncrementalTests {
         #expect(sut.state.wrapCache.totalRowCount == counts.reduce(0, +))
     }
 
-    /// Multi-line replacement that shrinks line count. Cache must
-    /// collapse correctly. Predicted line counts vary depending on the
-    /// editor's exact handling of trailing newlines; the test pins the
-    /// invariant rather than the absolute count.
+    /// A multi-line replacement that shrinks the line count; the test pins the invariants rather than a count that
+    /// depends on trailing-newline handling.
     @Test
     func `replacing multiple lines with a single line preserves the prefix-sum invariant`() {
         let sut = makeSUT(lineCount: 10)

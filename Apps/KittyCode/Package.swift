@@ -17,13 +17,7 @@ let package = Package(
         .macOS(.v26)
     ],
     products: [
-        // Library products = modules an external SPM package can depend on
-        // by listing this package as a dependency. The list below is the
-        // intentional public surface; `KittyParser` and `KittySearch` are
-        // implementation details of the editor (only `KittyCode`
-        // consumes them) and are deliberately NOT promoted to products.
-        // Their internal targets still exist below; only the product
-        // declaration is dropped. Audit B5.
+        // The public surface; `KittySearch`, an editor implementation detail, stays an internal target.
         .library(name: "KittyTerminal", targets: ["KittyTerminal"]),
         .library(name: "KittyStyle", targets: ["KittyStyle"]),
         .library(name: "KittyCodecs", targets: ["KittyCodecs"]),
@@ -49,10 +43,7 @@ let package = Package(
         // Layer 0 — Raw mode, FD I/O, terminal queries
         .target(name: "KittyTerminal", swiftSettings: strict),
 
-        // Layer 0b — Pure visual-style value types (Color, UnderlineStyle,
-        // Style). No dependencies. KittySyntax depends on this directly
-        // so it doesn't transitively pull in the terminal-codec layer
-        // just to reference `Style`. Audit D2.
+        // Layer 0b — Style value types, dependency-free so syntax code can name a `Style` without the codecs
         .target(name: "KittyStyle", swiftSettings: strict),
 
         // Layer 1 — Escape sequence encoders/decoders
@@ -71,8 +62,6 @@ let package = Package(
             name: "KittyRenderer",
             dependencies: ["KittyCodecs", .product(name: "AtelierText", package: "AtelierCore"), "KittyStyle"],
             swiftSettings: strict),
-
-        // Layer 2c — Text buffer primitives
 
         // Layer 2d — File system browsing
         .target(
@@ -121,9 +110,7 @@ let package = Package(
             swiftSettings: strict
         ),
 
-        // Layer 4 — View protocol, layout, tree/text widgets.
-        // Direct dep on `KittyRenderer` (was previously transitive via
-        // `KittySyntax` before audit D2 cleaned up that layering reach).
+        // Layer 4 — View protocol, layout, tree/text widgets
         .target(
             name: "KittyWidgets", dependencies: ["KittySyntax", "KittyInput", "KittyRenderer"],
             swiftSettings: strict),
@@ -143,12 +130,7 @@ let package = Package(
             dependencies: ["KittyWidgets", "KittyInput", .product(name: "AemiCore", package: "aemi")],
             swiftSettings: strict),
 
-        // Layer 6 — Editor logic library. Holds every editor file except
-        // the executable shell (`AppMain`, `CLIArguments`, `Version`). The
-        // split lets `KittyCodeTests` depend on a library rather than the
-        // executable target (fragile across SPM versions) and creates a
-        // clean seam for future platform shells (SwiftUI wrapper, XPC
-        // service, headless mode). Audit D3.
+        // Layer 6 — Editor logic library: all but `AppMain`, so the tests depend on a library, not an executable
         .target(
             name: "KittyEditor",
             dependencies: [
@@ -164,10 +146,7 @@ let package = Package(
             ],
             swiftSettings: strict),
 
-        // KittyCode — Terminal code editor executable. Thin shell over
-        // `KittyEditor`: parses argv via `KittyEditor.CLIArguments`,
-        // loads config, applies launch overrides, wires the runtime,
-        // writes a crash log on uncaught error.
+        // KittyCode — The executable, a thin shell over `KittyEditor`: argv, config, runtime wiring, crash log
         .executableTarget(
             name: "KittyCode",
             dependencies: [
