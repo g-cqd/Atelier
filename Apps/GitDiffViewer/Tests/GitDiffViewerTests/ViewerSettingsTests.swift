@@ -108,14 +108,43 @@ struct ViewerSettingsTests {
     }
 
     @Test
-    func `analyzed sides defaults to the newer side and round trips through user defaults`() throws {
+    func `analyzed sides defaults to the right side only and round trips through user defaults`() throws {
         let defaults = try makeDefaults()
         let sut = ViewerSettings(defaults: defaults)
-        #expect(sut.analyzedSides == .newer)
+        #expect(sut.analyzedSides == .rightOnly)
 
-        sut.analyzedSides = .both
+        sut.analyzedSides = .leftOnly
         let reloaded = ViewerSettings(defaults: defaults)
-        #expect(reloaded.analyzedSides == .both)
+        #expect(reloaded.analyzedSides == .leftOnly)
+    }
+
+    @Test
+    func `a stored newer-side value reads as the right side only`() throws {
+        let defaults = try makeDefaults()
+        defaults.set("newer", forKey: "analyzedSides")
+
+        #expect(ViewerSettings(defaults: defaults).analyzedSides == .rightOnly)
+    }
+
+    @Test
+    func `a stored both-sides value reads as both sides`() throws {
+        let defaults = try makeDefaults()
+        defaults.set("both", forKey: "analyzedSides")
+
+        #expect(ViewerSettings(defaults: defaults).analyzedSides == .both)
+    }
+
+    @Test
+    func `a project's stored newer-side override reads as the right side only`() throws {
+        let defaults = try makeDefaults()
+        let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
+        defaults.set("both", forKey: "analyzedSides")
+        defaults.set("newer", forKey: "project.\(project.key).analyzedSides")
+        let sut = ViewerSettings(defaults: defaults)
+
+        sut.adoptProject(project)
+
+        #expect(sut.analyzedSides == .rightOnly)
     }
 
     @Test
@@ -246,7 +275,7 @@ struct ViewerSettingsTests {
 
         #expect(!sut.diagnosticsEnabled)
         #expect(sut.showsHoverDocumentation)
-        #expect(sut.analyzedSides == .newer)
+        #expect(sut.analyzedSides == .rightOnly)
         #expect(DiagnosticTool.allCases.allSatisfy { sut.toolLocations[$0]?.isEnabled == true })
         #expect(sut.lspServerLocations == ["sourcekit-lsp": ToolLocation()])
         #expect(sut.settingsDiffCount(.tools) == 0)

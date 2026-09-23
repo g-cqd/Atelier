@@ -49,14 +49,32 @@ package enum SidebarVisibility: String, CaseIterable, Identifiable {
     package var id: String { rawValue }
 }
 
-/// Which side of a comparison diagnostics are shown on. Tools only ever analyze the newer (on-disk) side.
+/// Which sides of a comparison the analyzers run on (DIAG-08, decision D12). Each analyzed side runs on its own
+/// files, a git ref exported first, and its findings show on its own rows only.
 package enum AnalyzedSides: String, CaseIterable, Identifiable, Codable {
-    /// Only the newer side is analyzed; the older side never shows diagnostics.
-    case newer
-    /// The newer side's findings are also echoed onto old-side rows with the same line number.
     case both
+    /// The left, older side only.
+    case leftOnly = "left"
+    /// The right, newer side only, which is the default.
+    case rightOnly = "right"
+    case none
 
     package var id: String { rawValue }
+
+    /// Reads a stored value, the two values of the older setting included: "newer" analyzed the right side only, and
+    /// "both" still means both, now each side on its own files rather than the right side's findings echoed left.
+    package init?(storedValue: String) {
+        if storedValue == "newer" {
+            self = .rightOnly
+        } else {
+            self.init(rawValue: storedValue)
+        }
+    }
+
+    /// Whether the left side is analyzed.
+    package var includesLeft: Bool { self == .both || self == .leftOnly }
+    /// Whether the right side is analyzed.
+    package var includesRight: Bool { self == .both || self == .rightOnly }
 }
 
 /// Whether the window chrome follows the system's light/dark choice or is pinned to one, independently of the theme.
@@ -372,7 +390,7 @@ package final class ViewerSettings {
             .flatMap { try? DefaultsJSON.decode([String: ToolLocation].self, from: $0) }
             ?? ["sourcekit-lsp": ToolLocation()]
         analyzedSides =
-            defaults.string(forKey: Key.analyzedSides).flatMap(AnalyzedSides.init(rawValue:)) ?? .newer
+            defaults.string(forKey: Key.analyzedSides).flatMap(AnalyzedSides.init(storedValue:)) ?? .rightOnly
         settingsPane =
             defaults.string(forKey: Key.settingsPane).flatMap(SettingsPane.init(rawValue:)) ?? .general
         appearanceScheme =

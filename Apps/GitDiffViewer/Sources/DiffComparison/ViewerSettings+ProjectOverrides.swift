@@ -172,7 +172,7 @@ extension ViewerSettings {
                 if value != lspServerLocations { lspServerLocations = value }
             case Key.analyzedSides:
                 let value =
-                    defaults.string(forKey: effectiveKey(key)).flatMap(AnalyzedSides.init(rawValue:)) ?? .newer
+                    defaults.string(forKey: effectiveKey(key)).flatMap(AnalyzedSides.init(storedValue:)) ?? .rightOnly
                 if value != analyzedSides { analyzedSides = value }
             case Key.settingsPane:
                 let value =
