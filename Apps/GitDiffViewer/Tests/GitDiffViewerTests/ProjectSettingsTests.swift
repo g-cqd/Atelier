@@ -73,17 +73,77 @@ struct ProjectSettingsTests {
     func `a non-scoped key stays global across adoption`() throws {
         let defaults = try makeDefaults()
         let sut = ViewerSettings(defaults: defaults)
-        sut.granularity = .syntax  // documented as global, not in the scoped set
+        sut.badgeScheme = .xcode  // app-wide by decision D11, not in the scoped set
 
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
         sut.adoptProject(project)
-        #expect(sut.granularity == .syntax)
+        #expect(sut.badgeScheme == .xcode)
 
-        sut.granularity = .character
-        #expect(defaults.string(forKey: "intralineGranularity") == "character")  // wrote straight to the base key
+        sut.badgeScheme = .classic
+        #expect(defaults.string(forKey: "badgeScheme") == "classic")  // wrote straight to the base key
 
         let other = ViewerSettings(defaults: defaults)
-        #expect(other.granularity == .character)  // visible without adopting any project
+        #expect(other.badgeScheme == .classic)  // visible without adopting any project
+    }
+
+    @Test
+    func `granularity round trips per project`() throws {
+        let defaults = try makeDefaults()
+        let sut = ViewerSettings(defaults: defaults)
+        let projectA = ProjectIdentity(root: URL(filePath: "/repos/a", directoryHint: .isDirectory))
+        let projectB = ProjectIdentity(root: URL(filePath: "/repos/b", directoryHint: .isDirectory))
+        sut.adoptProject(projectA)
+        sut.granularity = .syntax
+
+        sut.adoptProject(projectB)
+        #expect(sut.granularity == .word)  // project B never overrode it
+        sut.adoptProject(projectA)
+        #expect(sut.granularity == .syntax)
+        #expect(defaults.string(forKey: "intralineGranularity") == nil)  // the base was never written
+    }
+
+    // MARK: - Overrides only the user makes
+
+    @Test
+    func `switching a window from one project to another writes nothing for the second`() throws {
+        let defaults = try makeDefaults()
+        let sut = ViewerSettings(defaults: defaults)
+        let first = ProjectIdentity(root: URL(filePath: "/repos/first", directoryHint: .isDirectory))
+        let second = ProjectIdentity(root: URL(filePath: "/repos/second", directoryHint: .isDirectory))
+        sut.adoptProject(first)
+        sut.contextLines = 10  // the first project's own override
+
+        sut.adoptProject(second)
+
+        #expect(sut.contextLines == 3)  // the second project inherits the base
+        #expect(defaults.object(forKey: "project.\(second.key).contextLines") == nil)
+        #expect(sut.projectsWithOverrides(in: .diff).map(\.key) == [first.key])
+    }
+
+    @Test
+    func `re-selecting the current value writes no override`() throws {
+        let defaults = try makeDefaults()
+        let sut = ViewerSettings(defaults: defaults)
+        let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
+        sut.adoptProject(project)
+
+        sut.diffHeuristics.whitespace = sut.diffHeuristics.whitespace
+
+        #expect(defaults.object(forKey: "project.\(project.key).diffHeuristics") == nil)
+        #expect(sut.projectsWithOverrides(in: .diff).isEmpty)
+    }
+
+    @Test
+    func `restoring the appearance defaults with no theme fires no palette change`() throws {
+        let sut = ViewerSettings(defaults: try makeDefaults())
+        final class Owner {}
+        let owner = Owner()
+        var changes: [ViewerSettings.Change] = []
+        sut.addObserver(owner) { changes.append($0) }
+
+        sut.restoreDefaults(.appearance)
+
+        #expect(!changes.contains(.palette))
     }
 
     @Test
