@@ -30,8 +30,6 @@ public enum SymbolCatalogLoader {
         )
         try? writeMappings(mappings, mappingURL)
 
-        return SymbolCatalog(
-            entries: Dictionary(uniqueKeysWithValues: mappings.map { ($0.name, $0) })
-        )
+        return SymbolCatalog(mappings: mappings)
     }
 }
