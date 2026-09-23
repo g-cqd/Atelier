@@ -40,6 +40,42 @@ struct GLRParserRangeTests {
         #expect(tree.root.rangesNestInSourceOrder)
     }
 
+    @Test
+    func `A root that spans the source ends on the source's last row`() throws {
+        // An unfinished array leaves several nodes, which the parser places under one root spanning the source.
+        let parser = try BundledGrammarFixture.parser(for: BundledGrammarFixture.json)
+
+        let tree = try parser.parse("[\n[")
+
+        #expect(tree.root.type == "_start")
+        #expect(tree.root.byteRange == 0 ..< 3)
+        #expect(tree.root.pointRange == Point(row: 0, column: 0) ..< Point(row: 1, column: 1))
+    }
+
+    @Test
+    func `A root's ranges cover the comments attached to it`() throws {
+        let json = """
+            {
+                "name": "commented",
+                "rules": {
+                    "source": {"type": "STRING", "value": "x"},
+                    "comment": {"type": "TOKEN", "content": {"type": "PATTERN", "value": "\\\\/\\\\/[^\\\\n]*"}}
+                },
+                "extras": [{"type": "PATTERN", "value": "\\\\s+"}, {"type": "SYMBOL", "name": "comment"}]
+            }
+            """
+        let compiled = try ParseTableCompiler.compile(GrammarLoader.parse(Data(json.utf8)))
+        let parser = GLRParser(
+            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+
+        let tree = try parser.parse("// c\nx\n// d")
+
+        #expect(tree.root.type == "source")
+        #expect(tree.root.children.map(\.byteRange) == [0 ..< 4, 5 ..< 6, 7 ..< 11])
+        #expect(tree.root.byteRange == 0 ..< 11)
+        #expect(tree.root.pointRange == Point(row: 0, column: 0) ..< Point(row: 2, column: 4))
+    }
+
     @Test(arguments: ["a /* x */ {", "/**/ a {"])
     func `CSS that used to trap or loop parses into nested ranges`(source: String) throws {
         let parser = try BundledGrammarFixture.parser(for: BundledGrammarFixture.css)

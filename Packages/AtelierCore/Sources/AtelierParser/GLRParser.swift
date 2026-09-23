@@ -106,25 +106,12 @@ public final class GLRParser: Sendable {
         guard let best = ParseStack.takingFewestErrors(from: &stacks) else {
             throw .parsingFailed("No valid parse at the end of input")
         }
-        var root = try buildRootNode(from: consume best, source: source)
-
-        // Insert extra comment tokens into the tree so query matchers can find them
-        let extraComments = tokens.filter { $0.isExtra && $0.type == "comment" }
-        if !extraComments.isEmpty {
-            for token in extraComments {
-                root.children.append(
-                    SyntaxNode(
-                        type: "comment",
-                        byteRange: token.byteRange,
-                        pointRange: token.pointRange,
-                        isExtra: true,
-                        isNamed: true
-                    ))
-            }
-            root.children.sort { $0.byteRange.lowerBound < $1.byteRange.lowerBound }
-        }
-
-        return SyntaxTree(root: root, source: source)
+        // The lexer's tokens, extras included, cover the source, so the last one ends where the source ends.
+        let root = try buildRootNode(
+            from: consume best, byteCount: source.utf8.count, endPoint: tokens.last?.pointRange.upperBound ?? .zero)
+        return SyntaxTree(
+            root: attachingComments(tokens.filter { $0.isExtra && $0.type == "comment" }, to: consume root),
+            source: source)
     }
 
     // MARK: - Private
@@ -351,9 +338,13 @@ extension GLRParser {
         return productions[ruleIndex].fields
     }
 
-    /// The stack's only node, or a node spanning the source above its nodes. That extra level must not take the
-    /// tree past ``maxTreeDepth``: then the parse declines, freeing the stack.
-    private func buildRootNode(from stack: consuming ParseStack, source: String) throws(ParseError) -> SyntaxNode {
+    /// The stack's only node, or a node above its nodes spanning the source, `byteCount` bytes ending at `endPoint`.
+    /// That extra level must not take the tree past ``maxTreeDepth``: then the parse declines, freeing the stack.
+    private func buildRootNode(
+        from stack: consuming ParseStack,
+        byteCount: Int,
+        endPoint: Point
+    ) throws(ParseError) -> SyntaxNode {
         if stack.nodes.count == 1 {
             return stack.nodes[0]
         }
@@ -361,14 +352,39 @@ extension GLRParser {
             stack.releaseNodes()
             throw Self.treeTooDeep
         }
-        let byteEnd = source.utf8.count
         return SyntaxNode(
             type: productions.first?.name ?? "source",
             children: stack.nodes,
-            byteRange: 0 ..< byteEnd,
-            pointRange: .zero ..< Point(row: 0, column: byteEnd),
+            byteRange: 0 ..< byteCount,
+            pointRange: .zero ..< endPoint,
             isNamed: true
         )
+    }
+
+    /// `root` with a `comment` child per token of `comments`, in source order, and its ranges widened to cover them,
+    /// or a query limited to a comment's range would skip the root with the comment. `comments` is in source order.
+    private func attachingComments(_ comments: [Lexer.Token], to root: consuming SyntaxNode) -> SyntaxNode {
+        guard let first = comments.first, let last = comments.last else { return root }
+        for token in comments {
+            root.children.append(
+                SyntaxNode(
+                    type: "comment",
+                    byteRange: token.byteRange,
+                    pointRange: token.pointRange,
+                    isExtra: true,
+                    isNamed: true
+                ))
+        }
+        root.children.sort {
+            ($0.byteRange.lowerBound, $0.byteRange.upperBound) < ($1.byteRange.lowerBound, $1.byteRange.upperBound)
+        }
+        root.byteRange =
+            min(root.byteRange.lowerBound, first.byteRange.lowerBound)
+            ..< max(root.byteRange.upperBound, last.byteRange.upperBound)
+        root.pointRange =
+            min(root.pointRange.lowerBound, first.pointRange.lowerBound)
+            ..< max(root.pointRange.upperBound, last.pointRange.upperBound)
+        return root
     }
 }
 
