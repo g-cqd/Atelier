@@ -16,6 +16,8 @@ public struct SourceLoader: SourceReading {
     let offload: any BlockingOffload
     /// Hashes one listed file, on a pool thread.
     let hashFile: FileHasher
+    /// Working-tree blob ids kept across reloads, by folder.
+    let workingTreeHashes = WorkingTreeHashes()
 
     /// - Parameters:
     ///   - runner: How git is spawned; the app owns the pool behind it, tests inject a fake.
@@ -27,7 +29,7 @@ public struct SourceLoader: SourceReading {
 
     init(
         runner: any ProcessRunner, offload: any BlockingOffload,
-        hashFile: @escaping FileHasher = SourceLoader.readableBlobID(atPath:)
+        hashFile: @escaping FileHasher = SourceLoader.hashedFile(atPath:)
     ) {
         self.runner = runner
         self.offload = offload
@@ -35,15 +37,9 @@ public struct SourceLoader: SourceReading {
         patches = PatchCache(offload: offload)
     }
 
-    /// Hashes the file at a path, blocking: its git blob id, or nil when it cannot be read. The loader's own is
-    /// ``readableBlobID(atPath:)``; a test counts the calls and where they run.
-    typealias FileHasher = @Sendable (_ path: String) -> String?
-
-    /// The git blob id of the file at `path`, or nil when it cannot be read to its end: it vanished, shrank or is
-    /// not readable since it was listed.
-    static func readableBlobID(atPath path: String) -> String? {
-        try? blobID(atPath: path)
-    }
+    /// Hashes the file at a path for a folder listing, blocking; nil when it cannot be hashed. The loader's own is
+    /// ``hashedFile(atPath:)``; a test counts the calls and where they run.
+    typealias FileHasher = @Sendable (_ path: String) -> HashedFile?
 
     /// Files above this size are listed but not hashed, so they always count as different.
     public static let maximumHashedSize = 8 * 1024 * 1024
@@ -104,7 +100,8 @@ public struct SourceLoader: SourceReading {
         switch source {
             case .file(let url): FileSource(url: url, offload: offload)
             case .directory(let url):
-                DirectorySource(root: url, runner: runner, offload: offload, hashFile: hashFile)
+                DirectorySource(
+                    root: url, runner: runner, offload: offload, hashFile: hashFile, hashes: workingTreeHashes)
             case .gitRef(let repository, let ref): GitRefSource(repository: repository, ref: ref, runner: runner)
             case .patch(let url, let side): PatchSource(url: url, side: side, cache: patches)
         }
@@ -207,9 +204,7 @@ public struct FileSource: SourceProvider {
         return [
             try await offload.run {
                 let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-                let blobID =
-                    size <= SourceLoader.maximumHashedSize
-                    ? SourceLoader.readableBlobID(atPath: url.path(percentEncoded: false)) : nil
+                let blobID = SourceLoader.hashedFile(atPath: url.path(percentEncoded: false))?.blobID
                 return GitTreeEntry(relativePath: url.lastPathComponent, blobID: blobID, size: size)
             }
         ]
@@ -231,13 +226,16 @@ public struct DirectorySource: SourceProvider {
     public let runner: any ProcessRunner
     let offload: any BlockingOffload
     let hashFile: SourceLoader.FileHasher
+    let hashes: WorkingTreeHashes
 
     /// Inside a repository, the folder as git sees it: tracked and untracked files, dotfiles included, nothing
     /// git ignores. Elsewhere, a folder scan that leaves hidden files out. The `stat` pass, the scan and every hash
     /// run on the pool.
     ///
-    /// A file that cannot be hashed, because it vanished, shrank or is not readable since it was listed, is listed
-    /// without a blob id, so it counts as changed and is read when shown, instead of failing the whole folder.
+    /// Only the files whose stamp changed since the folder's last listing are read: every other one keeps the blob
+    /// id ``WorkingTreeHashes`` holds for it. A file that cannot be hashed, because it vanished, shrank or is not
+    /// readable since it was listed, is listed without a blob id, so it counts as changed and is read when shown,
+    /// instead of failing the whole folder.
     /// - Throws: `CancellationError` when the task is cancelled, even after the last file is hashed: a cancelled
     ///   listing never passes for a finished one, empty or partial.
     @concurrent
@@ -248,14 +246,34 @@ public struct DirectorySource: SourceProvider {
             } else {
                 try await Self.scan(root, on: offload)
             }
-        let entries = try await mapConcurrently(files, limit: SourceLoader.hashingConcurrency) {
-            [offload, hashFile] file in
-            let blobID =
-                file.size <= SourceLoader.maximumHashedSize ? try await offload.run { hashFile(file.fullPath) } : nil
-            return GitTreeEntry(relativePath: file.relativePath, blobID: blobID, size: file.size)
+        let folder = root.standardizedFileURL.path(percentEncoded: false)
+        let known = hashes.entries(of: folder)
+        var kept: [String: WorkingTreeHashes.Entry] = [:]
+        var stale: [File] = []
+        for file in files where file.stamp.size <= SourceLoader.maximumHashedSize {
+            if let entry = known[file.relativePath], entry.stamp == file.stamp {
+                kept[file.relativePath] = entry
+            } else {
+                stale.append(file)
+            }
         }
+        let hashed = try await mapConcurrently(stale, limit: SourceLoader.hashingConcurrency) {
+            [offload, hashFile] file in
+            (file.relativePath, try await offload.run { hashFile(file.fullPath) })
+        }
+        var fresh: [String: HashedFile] = [:]
+        for case (let path, let file?) in hashed {
+            fresh[path] = file
+            if file.isSettled { kept[path] = WorkingTreeHashes.Entry(stamp: file.stamp, blobID: file.blobID) }
+        }
+        hashes.store(kept, for: folder)
         try Task.checkCancellation()
-        return entries
+        return files.map { file in
+            let hashed = fresh[file.relativePath]
+            return GitTreeEntry(
+                relativePath: file.relativePath, blobID: hashed?.blobID ?? kept[file.relativePath]?.blobID,
+                size: hashed?.stamp.size ?? file.stamp.size)
+        }
     }
 
     /// Files git ignores, listed but neither hashed nor sized: they exist on this side alone, so there is nothing
@@ -275,7 +293,7 @@ public struct DirectorySource: SourceProvider {
     private struct File: Sendable {
         let fullPath: String
         let relativePath: String
-        let size: Int
+        let stamp: FileStamp
     }
 
     /// Paths `stat`ed per blocking job: one job for most folders, and a cancellation lands between two jobs.
@@ -299,20 +317,19 @@ public struct DirectorySource: SourceProvider {
         .flatMap(\.self)
     }
 
-    /// Keeps the regular, supported files among `paths`: an index entry whose file is gone, a submodule or an
-    /// unsupported extension is left out, as is anything under a directory the folder scan would skip.
+    /// Keeps the regular, supported files among `paths`, each with the stamp `lstat` gives it: an index entry whose
+    /// file is gone, a symbolic link, a submodule or an unsupported extension is left out, as is anything under a
+    /// directory the folder scan would skip.
     private static func stat(_ paths: [String], under root: URL) -> [File] {
-        let keys: Set<URLResourceKey> = [.isRegularFileKey, .fileSizeKey]
+        let rootPath = root.standardizedFileURL.path(percentEncoded: false)
+        let base = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
         var files: [File] = []
         files.reserveCapacity(paths.count)
         for path in paths {
             guard SourceLoader.isSupported(path: path), !liesUnderSkippedDirectory(path) else { continue }
-            let url = root.appending(path: path)
-            guard let values = try? url.resourceValues(forKeys: keys), values.isRegularFile == true else { continue }
-            files.append(
-                File(
-                    fullPath: url.standardizedFileURL.path(percentEncoded: false), relativePath: path,
-                    size: values.fileSize ?? 0))
+            let fullPath = base + path
+            guard let stamp = FileStamp(regularFileAt: fullPath) else { continue }
+            files.append(File(fullPath: fullPath, relativePath: path, stamp: stamp))
         }
         return files
     }
@@ -334,7 +351,7 @@ public struct DirectorySource: SourceProvider {
     /// The supported regular files under `root`, hidden files, package contents and skipped directories left out.
     /// - Throws: `CancellationError` once `cancellation` is raised.
     private static func scan(_ root: URL, until cancellation: CancellationFlag) throws -> [File] {
-        let keys: Set<URLResourceKey> = [.isDirectoryKey, .isRegularFileKey, .fileSizeKey, .nameKey]
+        let keys: Set<URLResourceKey> = [.isDirectoryKey, .isRegularFileKey, .nameKey]
         guard
             let enumerator = FileManager.default.enumerator(
                 at: root,
@@ -356,8 +373,9 @@ public struct DirectorySource: SourceProvider {
             }
             guard values.isRegularFile == true, SourceLoader.isSupported(path: url.lastPathComponent) else { continue }
             let fullPath = url.standardizedFileURL.path(percentEncoded: false)
+            guard let stamp = FileStamp(regularFileAt: fullPath) else { continue }
             let relativePath = String(String(fullPath.dropFirst(rootPath.count)).trimmingPrefix("/"))
-            files.append(File(fullPath: fullPath, relativePath: relativePath, size: values.fileSize ?? 0))
+            files.append(File(fullPath: fullPath, relativePath: relativePath, stamp: stamp))
         }
         return files
     }

@@ -2,6 +2,7 @@ import AemiRuntime
 import AtelierProcess
 import AtelierTestSupport
 import Darwin
+import Foundation
 import Synchronization
 
 @testable import AtelierSources
@@ -77,10 +78,13 @@ final class HashSpy: Sendable {
 
     var calls: [Call] { recorded.withLock { $0 } }
 
-    func hash(_ path: String) -> String? {
+    /// The paths hashed so far, file names only, in order.
+    var names: [String] { calls.map { URL(filePath: $0.path).lastPathComponent } }
+
+    func hash(_ path: String) -> HashedFile? {
         let call = Call(path: path, isInsideJob: pool.isInsideJob)
         recorded.withLock { $0.append(call) }
-        return SourceLoader.readableBlobID(atPath: path)
+        return SourceLoader.hashedFile(atPath: path)
     }
 }
 
