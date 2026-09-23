@@ -183,7 +183,7 @@ package final class SDKHoverTier {
 
     /// - Parameters:
     ///   - taskProvider: Spawns the one resolution.
-    ///   - resolve: Resolves the tier; ``LanguageServerPolicy/resolveSDKTier()`` in the app.
+    ///   - resolve: Resolves the tier; ``LanguageServerPolicy/resolveSDKTier(locateSDK:)`` in the app.
     package init(taskProvider: any TaskProvider = .default, resolve: @escaping @Sendable () async -> Resolved?) {
         self.taskProvider = taskProvider
         self.resolve = resolve
