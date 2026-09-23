@@ -82,8 +82,8 @@ extension ViewerSettings {
         showsHoverDocumentation = restoredValue(Key.showsHoverDocumentation, appDefault: true) {
             defaults.object(forKey: Key.showsHoverDocumentation) as? Bool ?? true
         }
-        analyzedSides = restoredValue(Key.analyzedSides, appDefault: AnalyzedSides.newer) {
-            defaults.string(forKey: Key.analyzedSides).flatMap(AnalyzedSides.init(rawValue:)) ?? .newer
+        analyzedSides = restoredValue(Key.analyzedSides, appDefault: AnalyzedSides.rightOnly) {
+            defaults.string(forKey: Key.analyzedSides).flatMap(AnalyzedSides.init(storedValue:)) ?? .rightOnly
         }
         toolLocations = restoredValue(Key.toolLocations, appDefault: Self.defaultToolLocations) {
             Self.decodeToolLocations(defaults.data(forKey: Key.toolLocations))
@@ -153,7 +153,7 @@ extension ViewerSettings {
                 .count { $0 }
             case .tools:
                 return [
-                    diagnosticsEnabled != false, showsHoverDocumentation != true, analyzedSides != .newer,
+                    diagnosticsEnabled != false, showsHoverDocumentation != true, analyzedSides != .rightOnly,
                     toolLocations != Self.defaultToolLocations, lspServerLocations != Self.defaultLSPServerLocations
                 ]
                 .count { $0 }
