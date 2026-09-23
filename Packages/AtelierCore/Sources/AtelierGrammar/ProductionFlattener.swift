@@ -45,9 +45,9 @@ struct FlatProduction: Sendable, Equatable {
     }
 }
 
-/// Flattens a grammar's rules into productions the way tree-sitter does, keeping on each step the precedence,
-/// associativity, alias and field in scope: the first two to resolve conflicts as tree-sitter does, the others to
-/// name the step's node.
+/// Flattens a grammar's syntactic rules, those of a ``LexicalGrammar``, into productions the way tree-sitter does,
+/// keeping on each step the precedence, associativity, alias and field in scope: the first two to resolve conflicts
+/// as tree-sitter does, the others to name the step's node.
 ///
 /// A repetition becomes a left-recursive helper rule, `_repeat_n → ε | _repeat_n x` or `_repeat1_n → x |
 /// _repeat1_n x`, whose steps start with no metadata, as the helper rules tree-sitter builds do.
@@ -128,10 +128,8 @@ struct ProductionFlattener {
         switch rule {
             case .symbol(let name):
                 return [FlatSequence(steps: [scope.step(name)])]
-            case .string(let value):
-                return [FlatSequence(steps: [scope.step("\"" + value + "\"")])]
-            case .pattern:
-                return [FlatSequence(steps: [scope.step("_pattern")])]
+            case .string, .pattern, .token, .immediateToken:
+                throw .invalidRuleType("A lexical rule in \(ruleName) is not a token's symbol")
             case .blank:
                 return [.empty]
             case .seq(let members):
@@ -167,8 +165,6 @@ struct ProductionFlattener {
                         if abs(sequence.dynamicPrecedence) <= abs(value) { sequence.dynamicPrecedence = value }
                         return sequence
                     }
-            case .token(let content), .immediateToken(let content):
-                return try expand(content, ruleName: ruleName, scope: scope, atEnd: atEnd)
             case .field(let name, let content):
                 var inner = scope
                 inner.field = name

@@ -208,7 +208,13 @@ extension LexTableCompiler {
         separators: [Rule],
         validTokens: [[Int]]
     ) throws(GrammarError) -> LexTable {
-        var builder = LexAutomatonBuilder(nfa: try TokenNFA(tokens: tokens, separators: separators), tokens: tokens)
+        try compile(
+            nfa: TokenNFA(tokens: tokens, separators: separators), tokens: tokens, validTokens: validTokens)
+    }
+
+    /// ``compile(tokens:separators:validTokens:)`` from the automaton of `tokens` already built.
+    static func compile(nfa: TokenNFA, tokens: [LexicalToken], validTokens: [[Int]]) throws(GrammarError) -> LexTable {
+        var builder = LexAutomatonBuilder(nfa: nfa, tokens: tokens)
         var modes: [[Int]: Int] = [:]
         var modeStarts: [Int] = []
         func mode(for valid: [Int]) throws(GrammarError) -> Int {

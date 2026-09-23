@@ -1,7 +1,11 @@
+/// Bounds on the work of compiling a grammar, so one too large for this compiler fails fast instead of grinding.
 public struct GrammarCompilationLimits: Sendable, Equatable {
     public var maxExpandedAlternativesPerRule: Int
     public var maxFlattenedProductions: Int
     public var maxProductionSymbols: Int
+    /// The most LR(1) items a state may hold. JSON's largest state holds under 500 and CSS's under 2,000; C's, Java's
+    /// and Go's pass 2,000 at once and would take 30 to 70 s to reach the state limit, and Swift's, which parses
+    /// Swift code only into errors, pass 2,200.
     public var maxItemsPerState: Int
     public var maxStates: Int
     public var maxTransitions: Int
@@ -10,7 +14,7 @@ public struct GrammarCompilationLimits: Sendable, Equatable {
         maxExpandedAlternativesPerRule: Int = 4_096,
         maxFlattenedProductions: Int = 50_000,
         maxProductionSymbols: Int = 200_000,
-        maxItemsPerState: Int = 20_000,
+        maxItemsPerState: Int = 2_000,
         maxStates: Int = 4_000,
         maxTransitions: Int = 200_000
     ) {
@@ -28,11 +32,13 @@ public struct GrammarCompilationLimits: Sendable, Equatable {
 /// Compiles a GrammarDefinition into an LR parse table.
 ///
 /// A canonical LR(1) compiler that:
-/// 1. Flattens grammar rules into productions, keeping the precedence and associativity of each step
-/// 2. Computes FIRST sets
-/// 3. Builds LR(1) item sets (states)
-/// 4. Fills action/goto tables, resolving shift/reduce conflicts by precedence and associativity as tree-sitter does
-/// 5. Keeps the conflicts precedence can't resolve, for the GLR parser to fork on
+/// 1. Splits the grammar into tokens and syntactic rules, as tree-sitter does
+/// 2. Flattens the syntactic rules into productions, keeping the precedence and associativity of each step
+/// 3. Computes FIRST sets
+/// 4. Builds LR(1) item sets (states)
+/// 5. Fills action/goto tables, resolving shift/reduce conflicts by precedence and associativity as tree-sitter does
+/// 6. Keeps the conflicts precedence can't resolve, for the GLR parser to fork on
+/// 7. Builds the lexer's automaton, with a lex mode for the tokens valid in each state
 public enum ParseTableCompiler: Sendable {
     /// Compiled result containing parse table, lex table, and production rules.
     public struct CompilationResult: Sendable, Codable {
@@ -43,14 +49,18 @@ public enum ParseTableCompiler: Sendable {
 
     /// The version of what ``compile(_:limits:)`` produces, for caches of compiled tables to key on: bumped whenever
     /// the tables compiled from the same grammar change, so no cache hands out tables an older compiler made.
-    public static let formatVersion = 4
+    public static let formatVersion = 5
 
     /// Compile a grammar definition into parse tables.
     public static func compile(
         _ grammar: GrammarDefinition,
         limits: GrammarCompilationLimits = .default
     ) throws(GrammarError) -> CompilationResult {
-        let flattened = try ProductionFlattener.flatten(grammar.rules, limits: limits)
+        let lexical = LexicalGrammar(grammar)
+        // Reading every token's pattern first fails a grammar with a pattern the lexer can't read before the costly
+        // LR construction.
+        let tokenAutomaton = try TokenNFA(tokens: lexical.tokens, separators: lexical.separators)
+        let flattened = try ProductionFlattener.flatten(lexical.syntacticRules, limits: limits)
         let nonTerminals = collectNonTerminals(flattened)
         let terminals = collectTerminals(flattened, nonTerminals: Set(nonTerminals))
         let grammarProductions = flattened.map { (name: $0.name, symbols: $0.symbols) }
@@ -87,7 +97,8 @@ public enum ParseTableCompiler: Sendable {
             )
         }
 
-        let lexTable = LexTableCompiler.compile(grammar)
+        let lexTable = try LexTableCompiler.compile(
+            nfa: tokenAutomaton, tokens: lexical.tokens, validTokens: validTokens(in: table, of: lexical.tokens))
 
         return CompilationResult(
             parseTable: table,
@@ -97,6 +108,20 @@ public enum ParseTableCompiler: Sendable {
     }
 
     // MARK: - Private
+
+    /// The tokens valid in each state of `table`, by index into `tokens`: those with an action there, and the extras,
+    /// which are valid everywhere.
+    private static func validTokens(in table: ParseTable, of tokens: [LexicalToken]) -> [[Int]] {
+        let terminalIndex = Dictionary(uniqueKeysWithValues: table.terminals.enumerated().map { ($1, $0) })
+        let extras = tokens.indices.filter { tokens[$0].isExtra }
+        let shifted = tokens.indices.compactMap { token -> (token: Int, terminal: Int)? in
+            guard !tokens[token].isExtra, let terminal = terminalIndex[tokens[token].name] else { return nil }
+            return (token, terminal)
+        }
+        return table.actions.map { row in
+            (extras + shifted.filter { row[$0.terminal] != .error }.map(\.token)).sorted()
+        }
+    }
 
     private static func collectTerminals(
         _ productions: [FlatProduction],

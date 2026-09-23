@@ -140,19 +140,19 @@ struct HighlighterTests {
         #expect(LanguageHighlighter.detectLanguage(for: "Makefile") == nil)
     }
 
-    /// The bundled JSON grammar parses an object to a bare `_start` node today (g-cqd/Atelier#2), so the session
-    /// drops to the lexical tier, which tells keys from string values on its own.
+    /// An ordinary object parses through the bundled JSON grammar, so the session stays grammar-backed and its
+    /// query styles the object: keys as properties, apart from string values, and `true` as a built-in constant.
     @Test
-    func `json keys stay distinct from string values through the lexical tier`() async {
+    func `json keys stay distinct from string values through the grammar`() async {
         var theme = Theme(defaultStyle: .default)
         let keyStyle = Style(fg: .rgb(r: 10, g: 20, b: 30))
         let stringStyle = Style(fg: .rgb(r: 40, g: 50, b: 60))
         let numberStyle = Style(fg: .rgb(r: 70, g: 80, b: 90))
-        let literalStyle = Style(fg: .rgb(r: 100, g: 110, b: 120))
+        let constantStyle = Style(fg: .rgb(r: 100, g: 110, b: 120))
         theme.setStyle(keyStyle, for: "property")
         theme.setStyle(stringStyle, for: "string")
         theme.setStyle(numberStyle, for: "number")
-        theme.setStyle(literalStyle, for: "keyword")
+        theme.setStyle(constantStyle, for: "constant")
 
         let source = #"{"name":"value","count":42,"enabled":true}"#
         let available = await LanguageHighlighter.ensureArtifacts(for: "json")
@@ -160,10 +160,10 @@ struct HighlighterTests {
         let spans = session.highlightDocument(source: source).flatMap { $0 }
 
         #expect(available)
-        #expect(!session.isGrammarBacked)
+        #expect(session.isGrammarBacked)
         #expect(spans.first(where: { $0.text == "\"name\"" })?.style == keyStyle)
         #expect(spans.first(where: { $0.text == "\"value\"" })?.style == stringStyle)
         #expect(spans.first(where: { $0.text == "42" })?.style == numberStyle)
-        #expect(spans.first(where: { $0.text == "true" })?.style == literalStyle)
+        #expect(spans.first(where: { $0.text == "true" })?.style == constantStyle)
     }
 }

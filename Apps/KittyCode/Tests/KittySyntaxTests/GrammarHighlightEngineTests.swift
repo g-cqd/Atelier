@@ -27,7 +27,8 @@ struct GrammarHighlightEngineTests {
         let session = LanguageHighlighter.makeSession(language: "json", preferGrammar: true)
         #expect(
             engine.highlight(utf8: source, language: .json) == session.highlightDocumentTokens(source: "{\"a\": 1}"))
-        // g-cqd/Atelier#2: the bundled JSON grammar yields no tree today, so both are empty until it is fixed.
-        #expect(engine.highlight(utf8: source, language: .json).isEmpty)
+        // The grammar parses the object, so its query colours the key and the number.
+        let roles = Set(engine.highlight(utf8: source, language: .json).map(\.role))
+        #expect(roles.isSuperset(of: [.property, .number]))
     }
 }
