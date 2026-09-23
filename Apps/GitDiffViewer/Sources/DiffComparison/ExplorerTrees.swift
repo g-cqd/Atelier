@@ -6,9 +6,7 @@ import DiffRendering
 import Foundation
 import Observation
 
-/// Whether the calling thread is the process' main thread; used to assert the executor contract of
-/// ``ExplorerTrees/buildOffMain(comparison:leftTree:rightTree:showsChangesOnly:showsIgnoredFiles:style:)`` stays
-/// off it, in debug builds and under tests.
+/// Whether the calling thread is the main thread, for asserting that work runs off it.
 private func isOnMainThread() -> Bool {
     pthread_main_np() != 0
 }
@@ -63,8 +61,8 @@ package struct ExplorerTrees: Sendable, Equatable {
         return trees
     }
 
-    /// Same build as ``build(comparison:leftTree:rightTree:showsChangesOnly:showsIgnoredFiles:style:)``,
-    /// guaranteed to run off the main actor (SE-0461's `@concurrent`) so a large tree never blocks it.
+    /// The same build as ``build(comparison:leftTree:rightTree:showsChangesOnly:showsIgnoredFiles:style:)``,
+    /// always off the main actor.
     @concurrent
     package static func buildOffMain(
         comparison: Comparison, leftTree: [PathNode], rightTree: [PathNode], showsChangesOnly: Bool,

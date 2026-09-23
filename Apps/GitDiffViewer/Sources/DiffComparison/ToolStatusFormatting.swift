@@ -13,10 +13,8 @@ private func originName(_ origin: ToolOrigin) -> String {
     }
 }
 
-/// Describes a tool's discovered status for display, independent of any view: fed a nil status when the tool has
-/// not been probed yet, and `pinned` when a custom path was configured, so a pinned-but-unusable path reads as
-/// broken rather than simply missing. Lives here, rather than in the app target's Settings view, so the Settings
-/// window's Tools tab and its tests can both reach it without an app-target test dependency.
+/// Describes a tool's discovered status for display: a nil `status` means not probed yet, and `pinned` makes an
+/// unusable custom path read as broken rather than missing.
 package func toolStatusDescription(_ status: ToolStatus?, pinned: Bool) -> String {
     guard let status else { return "Checking…" }
     guard let url = status.url, let origin = status.origin else {

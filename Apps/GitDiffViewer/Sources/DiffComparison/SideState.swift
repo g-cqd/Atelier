@@ -31,11 +31,9 @@ package final class SideState {
 
     /// Whether a fetch is running on this side right now; guards against a second one starting while it is.
     package private(set) var isFetching = false
-    /// The last fetch's failure, cleared as soon as another fetch starts or one succeeds; nil when the last fetch
-    /// (or none yet) did not fail.
+    /// The last fetch's failure; cleared when another fetch starts or the repository changes.
     package private(set) var lastFetchError: String?
-    /// This repository's remote names, read once (`git remote -v`) so the fetch menu can name the primary one
-    /// instead of assuming "origin"; empty until ``loadRemotesIfNeeded()`` runs, or when the repository has none.
+    /// This repository's remote names, read once so the fetch menu can name the primary one; empty until then.
     package private(set) var remoteNames: [String] = []
 
     private var loadTask: Task<Void, Never>?
@@ -47,14 +45,12 @@ package final class SideState {
     @ObservationIgnored package var onEntriesChanged: (@MainActor () -> Void)?
     /// Called once the ignored files are known, so the owner can add them to the comparison.
     @ObservationIgnored package var onIgnoredEntriesChanged: (@MainActor () -> Void)?
-    /// Called once a fetch this side ran succeeds and ``refreshRepositoryInfo()`` has already run for it, so the
-    /// owner can refresh whatever else shares this repository and re-run a comparison a moved remote-tracking ref
-    /// changed. Never called for a fetch whose repository this side has since moved away from.
+    /// Called after a successful fetch and its ``refreshRepositoryInfo()``, unless this side has since moved to
+    /// another repository.
     @ObservationIgnored package var onFetched: (@MainActor () -> Void)?
 
-    /// How git is spawned for a fetch, reused from the app's own reader when it is the production
-    /// ``SourceLoader`` -- the same width-4 pool every other git command on this side already runs on. A reader
-    /// that isn't one, every test double included, simply has no runner to share, so fetching is unavailable.
+    /// The production ``SourceLoader``'s process runner, shared for fetches; nil for any other reader, which
+    /// disables fetching.
     private var fetchRunner: (any ProcessRunner)? { (reader as? SourceLoader)?.runner }
 
     package init(label: String, reader: any SourceReading, taskProvider: any TaskProvider) {
@@ -63,11 +59,8 @@ package final class SideState {
         self.taskProvider = taskProvider
     }
 
-    /// Where this side's changes stand against the index, for the badges its files show: ``BadgeChangeState/staged``
-    /// for anything committed (a ref, a file, a patch side -- nothing here can be more or less staged than its own
-    /// content), ``BadgeChangeState/unstaged`` for a live working tree, where an uncommitted edit may or may not be
-    /// staged and this app currently has no per-file index data to tell the two apart (see ``BadgeChangeState``'s
-    /// doc comment).
+    /// Where this side's changes stand against the index, for its file badges: ``BadgeChangeState/unstaged`` for a
+    /// directory source, ``BadgeChangeState/staged`` for anything else.
     package var badgeState: BadgeChangeState {
         if case .directory = source { .unstaged } else { .staged }
     }
@@ -126,8 +119,7 @@ package final class SideState {
         setRepository(repository)
     }
 
-    /// Assigns ``repository``, clearing whatever this side read about a previous repository's fetch (its remote
-    /// names, its last failure) when the root actually changes; a refresh of the same repository keeps them.
+    /// Assigns ``repository``; a new root clears the previous repository's remote names and fetch error.
     private func setRepository(_ repository: RepositoryInfo?) {
         if repository?.root != self.repository?.root {
             remoteTask?.cancel()
@@ -162,14 +154,8 @@ package final class SideState {
         apply(entries, ignored: ignored, notifying: false)
     }
 
-    /// Re-reads this side's repository info (branches, tags, commits) without touching its entries, so a fetch or
-    /// a ref/`.git/refs` change updates whatever reads ``repository`` (the branch/tag menus) without a full
-    /// reload. A no-op before any source is chosen, since there is nothing to re-read against yet.
-    ///
-    /// Guarded the same way ``fetch()`` guards its own publication: this side may have moved on to another
-    /// repository entirely while the read was in flight, and publishing what was just read for the old one over
-    /// the new one's already-published info would make the branch/tag menu and a subsequent fetch target the
-    /// wrong repository.
+    /// Re-reads this side's repository info (branches, tags, commits) without touching its entries; a no-op without
+    /// a repository. The result is dropped if this side moved to another repository meanwhile.
     package func refreshRepositoryInfo() async {
         guard let repository else { return }
         let root = repository.root
@@ -178,9 +164,8 @@ package final class SideState {
         self.repository = refreshed
     }
 
-    /// Reads this repository's remotes once, so the fetch menu can name the primary one instead of assuming
-    /// "origin"; called when the fetch menu item is about to be shown. A no-op once names are known, before a
-    /// repository, or without a runner to read them with.
+    /// Reads this repository's remote names once; a no-op once they are known, without a repository, or without a
+    /// runner.
     package func loadRemotesIfNeeded() {
         guard remoteNames.isEmpty, remoteTask == nil, let repository, let runner = fetchRunner else { return }
         let root = repository.root
@@ -192,10 +177,9 @@ package final class SideState {
         }
     }
 
-    /// Fetches from this repository's primary remote (`origin` before one is known), then re-reads this side's
-    /// repository info so its branch and tag menus see whatever moved. One fetch at a time: a call while one is
-    /// already running does nothing. ``onFetched`` only fires once the repository this fetch ran against is still
-    /// this side's own -- a comparison that moved on in the meantime hears nothing from it.
+    /// Fetches from the primary remote (`origin` when none is known), then refreshes the repository info; a failure
+    /// lands in ``lastFetchError``. A call while a fetch runs does nothing, and nothing is published once this side
+    /// has moved to another repository.
     package func fetch() async {
         guard !isFetching, let repository, let runner = fetchRunner else { return }
         let root = repository.root
@@ -204,9 +188,7 @@ package final class SideState {
         defer { isFetching = false }
         if remoteNames.isEmpty {
             let remotes = (try? await GitClient(repository: root, runner: runner).remotes().map(\.name)) ?? []
-            // This side may already have moved to another repository while `remotes()` was in flight; publishing
-            // this fetch's own repository's remotes over whatever the new one already knows would misname the
-            // remote the rest of this fetch, still targeting the old root below, runs against.
+            // The side may have moved to another repository while `remotes()` ran.
             guard self.repository?.root == root else { return }
             remoteNames = remotes
         }

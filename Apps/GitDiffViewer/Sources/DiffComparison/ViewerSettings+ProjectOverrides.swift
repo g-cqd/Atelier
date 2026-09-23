@@ -2,9 +2,7 @@ import AtelierDiagnostics
 import DiffCore
 import Foundation
 
-/// The per-project override surface: adoption, the review affordance's queries, and override clearing.
-/// The storage conventions (scoped keys, the registry, base fallback) live on the class next to `store`,
-/// which is the other half of the same contract.
+/// The per-project override surface: adoption, cross-instance reloads, the Settings queries, and override clearing.
 extension ViewerSettings {
     /// The subset of `projectScopedKeys` a given Settings tab shows, for the "overridden in N projects" footer.
     static func scopedKeys(for category: SettingsCategory) -> Set<String> {
@@ -16,17 +14,8 @@ extension ViewerSettings {
         }
     }
 
-    /// Adopts `id` as this instance's project: every already-scoped key is re-read (falling back to the base
-    /// value when the project has never overridden it), and any value that comes out different from what this
-    /// instance currently holds is assigned through its normal setter, so it persists and notifies observers
-    /// exactly as a manual edit would. Values change once, right after `id` resolves; nothing here rebuilds the
-    /// model or the window that owns this instance.
-    ///
-    /// A base-default edit made afterward in the Settings window (a separate ``ViewerSettings`` instance backed
-    /// by the same defaults) still reaches this window's unoverridden keys without it having to reopen: writing a
-    /// base key broadcasts it (see ``baseSettingChangedNotification``), and every other instance -- this one
-    /// included, whether or not it has adopted a project -- reloads it through the very same ``reload(key:)`` this
-    /// method also uses, unless its own project override of that key takes precedence.
+    /// Adopts `id` as this instance's project and re-reads every scoped key, so each value that changes goes
+    /// through its setter exactly as a manual edit would. Nothing rebuilds the model or its window.
     package func adoptProject(_ id: ProjectIdentity?) {
         projectID = id
         reloadProjectScopedValues()
@@ -36,15 +25,8 @@ extension ViewerSettings {
         for key in Self.projectScopedKeys { reload(key: key) }
     }
 
-    /// Re-reads `key` from defaults -- resolving through ``effectiveKey(_:)`` exactly as every other read does, so
-    /// a project override of `key` wins when this instance has adopted one -- and, only when that comes out
-    /// different from what this instance currently holds, assigns it through the property's own setter, so it
-    /// persists and notifies observers exactly as a manual edit would. Both ``adoptProject(_:)`` (by way of
-    /// ``reloadProjectScopedValues()``, over every project-scoped key) and a live base-key broadcast from another
-    /// instance (over just the one key that changed -- see ``baseSettingChanged(posterID:key:)``) go through this
-    /// one dispatcher, so each setting's decode-and-compare logic is written once rather than twice. Split into
-    /// three grouped halves purely to stay under this file's complexity budget; the grouping itself carries no
-    /// meaning of its own.
+    /// Re-reads `key` through ``effectiveKey(_:)`` and assigns it through its setter only when the value changed.
+    /// The three groups exist only to stay under the complexity budget.
     func reload(key: String) {
         if reloadLayoutSetting(key) { return }
         if reloadDiffSetting(key) { return }
@@ -164,32 +146,21 @@ extension ViewerSettings {
         return true
     }
 
-    /// Posted (in-process only) right after this instance writes a *base* key -- one that either isn't project
-    /// scoped at all, or is but this instance has no project override of its own for it -- so every other
-    /// ``ViewerSettings`` instance sharing the same `UserDefaults` (one per open comparison window, plus the
-    /// Settings window's own) can pick the new value up without waiting for a window to reopen. See
-    /// ``adoptProject(_:)``'s own doc comment, which this replaces the known limitation on.
+    /// Posted in-process after an instance writes a base key, so every other instance sharing its `UserDefaults`
+    /// picks up the new value without its window reopening.
     nonisolated static let baseSettingChangedNotification = Notification.Name(
         "GitDiffViewer.ViewerSettings.baseSettingChanged")
     /// The `userInfo` key `baseSettingChangedNotification` carries the written key's name under.
     nonisolated static let baseSettingChangedKey = "key"
 
-    /// The other half of `store`'s own broadcast: kept here, off the class body, purely to leave `store` itself
-    /// (and the file it lives in) short.
+    /// Tells every other instance that this one wrote the base `key`.
     func postBaseSettingChanged(key: String) {
         NotificationCenter.default.post(
             name: Self.baseSettingChangedNotification, object: self, userInfo: [Self.baseSettingChangedKey: key])
     }
 
-    /// Reacts to another ``ViewerSettings`` instance (backed by the same `UserDefaults`) having just written a
-    /// base key: ignored if `posterID` turns out to be this very instance's own (its own post, echoed back by
-    /// `NotificationCenter`) or if this project's own override of `key` already wins; otherwise `key` is re-read
-    /// from defaults and, only if that comes out different from what this instance currently holds, assigned
-    /// through its normal setter -- see ``reload(key:)``.
-    ///
-    /// Takes the poster's identity and the changed key rather than the `Notification` itself: extracting both
-    /// `Sendable` values before crossing into `MainActor.assumeIsolated` (see `ViewerSettings.init`, where the
-    /// observer is registered) keeps the non-`Sendable` `Notification` from ever crossing that boundary.
+    /// Reloads a base key another instance just wrote, unless this instance's project override of `key` wins. Takes
+    /// `Sendable` values because the `Notification` itself must not cross into `MainActor.assumeIsolated`.
     func baseSettingChanged(posterID: ObjectIdentifier, key: String) {
         guard posterID != ObjectIdentifier(self) else { return }
         if let projectID, defaults.object(forKey: scopedKey(key, for: projectID)) != nil { return }
@@ -198,8 +169,7 @@ extension ViewerSettings {
         reload(key: key)
     }
 
-    /// Every project that currently overrides at least one setting in `category`, for the Settings review
-    /// affordance; sorted by display path since the registry itself is unordered.
+    /// Every project that overrides at least one setting in `category`, sorted by display path.
     package func projectsWithOverrides(in category: SettingsCategory) -> [(key: String, displayPath: String)] {
         let keys = Self.scopedKeys(for: category)
         guard !keys.isEmpty else { return [] }
@@ -213,12 +183,8 @@ extension ViewerSettings {
             .sorted { $0.displayPath < $1.displayPath }
     }
 
-    /// Clears every override `projectKey` holds in `category`, leaving its overrides in other categories and
-    /// every other project untouched. The project stays in the registry as long as it still overrides something
-    /// anywhere; nothing here needs to know, since the registry is keyed by project, not by category. When this
-    /// instance has itself adopted `projectKey` (the Settings window's review affordance clearing overrides for
-    /// the very project a comparison window is showing, in the same process), its in-memory values are refreshed
-    /// to match, the same way `restoreDefaults` falls back without recreating the override it just cleared.
+    /// Clears every override `projectKey` holds in `category`; the project leaves the registry once it overrides
+    /// nothing. An instance that adopted `projectKey` refreshes its in-memory values to match.
     package func clearOverrides(projectKey: String, category: SettingsCategory) {
         for key in Self.scopedKeys(for: category) {
             defaults.removeObject(forKey: Self.scopedKey(key, projectKey: projectKey))

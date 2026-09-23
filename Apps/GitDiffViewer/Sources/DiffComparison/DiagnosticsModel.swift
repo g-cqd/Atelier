@@ -4,12 +4,8 @@ package import Foundation
 import Observation
 
 /// The window's diagnostics state: wires a ``DiagnosticsSession`` to the comparison and to ``ViewerSettings``,
-/// and exposes findings grouped by file for the explorers and detail area to annotate.
-///
-/// ``DiagnosticsSession`` is core-tier and caller-driven (no stored task, no debounce): this model is the caller,
-/// so it owns the debounce (250 ms by default, coalescing a burst of comparison/settings changes into one run),
-/// the cancel-and-replace generation that supersedes a still-running analysis, and the task that drives it all
-/// through its own ``TaskProvider``.
+/// and exposes findings grouped by file. It owns the debounce and the cancel-and-replace that the caller-driven
+/// session leaves to its caller.
 @Observable
 @MainActor
 package final class DiagnosticsModel {
@@ -46,24 +42,20 @@ package final class DiagnosticsModel {
     private let taskProvider: any TaskProvider
     private let clock: any Clock<Duration>
     private let debounce: Duration
-    /// Each tool's latest findings, kept separately so one tool's fresh result replaces only its own
-    /// contribution to ``findingsByFile`` without disturbing another tool's still-in-flight one.
+    /// Each tool's latest findings, so one tool's result replaces only its own share of ``findingsByFile``.
     @ObservationIgnored private var findingsByTool: [DiagnosticTool: [Finding]] = [:]
-    /// The request the current comparison would run, kept so a settings change (such as re-enabling a tool)
-    /// can re-run it without waiting for the next comparison.
+    /// The current comparison's request, re-run when a diagnostics setting changes.
     @ObservationIgnored private var lastRequest: DiagnosticsEngine.Request?
-    /// Bumped by every ``run(_:)`` and ``cancel()``; a debounced or in-flight run whose captured generation no
-    /// longer matches has already been superseded or cancelled, and its updates are dropped when they land.
+    /// Bumped by every ``run(_:)`` and ``cancel()``; updates from an older generation are dropped.
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var task: Task<Void, Never>?
 
     /// - Parameters:
-    ///   - engine: Runs each enabled tool; the production caller passes a ``DiagnosticsEngine``, a test a fake.
+    ///   - engine: Runs each enabled tool.
     ///   - settings: Supplies which tools are enabled and whether diagnostics run at all.
     ///   - taskProvider: Spawns the debounce and the analysis it guards.
     ///   - clock: Drives the debounce; a test injects a virtual one.
-    ///   - debounce: Trailing coalesce before a run starts, kept under ``RepositoryFreshness``'s tree debounce so
-    ///     a save's diagnostics never race its freshness reload.
+    ///   - debounce: Trailing coalesce before a run starts.
     package init(
         engine: any DiagnosticsRunning, settings: ViewerSettings, taskProvider: any TaskProvider,
         clock: any Clock<Duration> = ContinuousClock(), debounce: Duration = .milliseconds(250)
@@ -76,8 +68,8 @@ package final class DiagnosticsModel {
         settings.addObserver(self) { [weak self] change in self?.settingsChanged(change) }
     }
 
-    /// Builds a request for the tools currently enabled and hands it to the session; a comparison with no root
-    /// (nothing loaded yet) or with diagnostics turned off clears whatever findings were showing instead.
+    /// Builds a request for the enabled tools and runs it; a nil `root`, diagnostics turned off or no enabled tool
+    /// clears the findings instead.
     package func comparisonChanged(root: URL?, files: [DiagnosticsEngine.FileTarget], corpusFingerprint: String?) {
         guard let root else {
             lastRequest = nil
@@ -109,8 +101,8 @@ package final class DiagnosticsModel {
         onFindingsChanged?(previousPaths)
     }
 
-    /// Validates `generation` and applies `update` in the same actor-isolated step, so a run superseded between
-    /// the check and the mutation (by a new comparison or ``cancel()``) can never repopulate cleared findings.
+    /// Checks `generation` and applies `update` in one isolated step, so a superseded run never repopulates cleared
+    /// findings.
     private func apply(_ update: DiagnosticsSession.Update, generation: Int) {
         guard self.generation == generation else { return }
         let previousPaths = Set(findingsByTool[update.result.tool]?.map(\.file) ?? [])
@@ -139,8 +131,7 @@ package final class DiagnosticsModel {
         onFindingsChanged?(previousPaths)
     }
 
-    /// The master toggle turning off cancels and clears; any other diagnostics change (a tool's enablement or
-    /// custom path) re-runs the last known request so its effect shows up without a fresh comparison.
+    /// Turning diagnostics off cancels and clears; any other diagnostics change re-runs the last request.
     private func settingsChanged(_ change: ViewerSettings.Change) {
         guard change == .diagnostics else { return }
         guard settings.diagnosticsEnabled else {
@@ -161,9 +152,7 @@ package final class DiagnosticsModel {
         run(request)
     }
 
-    /// Debounces, cancels whatever run is still in flight, and hands `request` to the session, applying each
-    /// tool's update as it streams back. The debounce and cancel-and-replace are this model's own — the session
-    /// itself is caller-driven and does neither.
+    /// Replaces any run in flight with `request` after the debounce, applying each tool's update as it streams back.
     private func run(_ request: DiagnosticsEngine.Request) {
         task?.cancel()
         generation &+= 1

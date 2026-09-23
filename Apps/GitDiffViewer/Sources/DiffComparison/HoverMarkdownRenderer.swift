@@ -1,11 +1,8 @@
 import Foundation
 package import SwiftUI
 
-/// Renders hover documentation markdown into an `AttributedString` for the hover popover: fenced code blocks
-/// (a signature, typically) are shown monospaced and verbatim, with no markdown interpretation inside them, so a
-/// `*`, `_` or back-tick in code is never mistaken for emphasis or a nested code span; everything else goes
-/// through `AttributedString`'s own markdown parser, falling back to plain text for a section that parser
-/// rejects rather than showing nothing.
+/// Renders hover markdown into an `AttributedString`: fenced code blocks verbatim in a monospaced font, the rest
+/// through the markdown parser, as plain text where the parser fails.
 package nonisolated func renderHoverMarkdown(_ markdown: String) -> AttributedString {
     var result = AttributedString()
     for section in fenceSections(of: markdown) {
@@ -41,9 +38,8 @@ private enum FenceSection {
     case prose(String)
 }
 
-/// Splits `markdown` on ` ``` ` fences, alternating prose and code starting with prose. An unterminated fence
-/// (an odd number of markers) treats everything from the last opening marker to the end as code, the same way a
-/// markdown renderer typically shows a document that forgot to close its fence.
+/// Splits `markdown` on ` ``` ` fences into alternating prose and code, starting with prose; an unterminated
+/// fence runs to the end as code.
 private nonisolated func fenceSections(of markdown: String) -> [FenceSection] {
     let pieces = markdown.components(separatedBy: "```")
     guard pieces.count > 1 else { return [.prose(markdown)] }
@@ -53,8 +49,7 @@ private nonisolated func fenceSections(of markdown: String) -> [FenceSection] {
             sections.append(.prose(piece))
         } else {
             var code = stripLanguageTag(piece)
-            // The closing fence sits on its own line, so the code capture between the markers carries one
-            // trailing newline that belongs to that line, not to the code itself.
+            // The trailing newline belongs to the closing fence's line, not to the code.
             if code.hasSuffix("\n") { code.removeLast() }
             sections.append(.code(code))
         }
@@ -62,10 +57,8 @@ private nonisolated func fenceSections(of markdown: String) -> [FenceSection] {
     return sections
 }
 
-/// A fence's own opening line is a language tag (` ```swift `) or empty (` ``` ` alone); either way the code
-/// itself starts on the next line. A first line containing whitespace is not a tag at all -- an unlabeled fence
-/// whose code happens to start immediately after the marker on the same line as more than one word -- so it is
-/// left alone rather than dropped.
+/// Drops a fence's opening line when it is a language tag or empty; a first line containing whitespace is code
+/// and stays.
 private nonisolated func stripLanguageTag(_ fenceBody: String) -> String {
     guard let newlineIndex = fenceBody.firstIndex(of: "\n") else { return fenceBody }
     let firstLine = fenceBody[fenceBody.startIndex ..< newlineIndex]
