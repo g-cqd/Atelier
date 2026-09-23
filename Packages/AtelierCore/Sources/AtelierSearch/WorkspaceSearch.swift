@@ -19,7 +19,8 @@ public func searchWorkspace(
 
     let counters = SearchCounters()
 
-    let workerCount = min(files.count, max(1, ProcessInfo.processInfo.activeProcessorCount))
+    // At least one worker, so that an empty file list divides by one.
+    let workerCount = max(1, min(files.count, ProcessInfo.processInfo.activeProcessorCount))
     let chunkSize = max(1, (files.count + workerCount - 1) / workerCount)
     let chunks = stride(from: 0, to: files.count, by: chunkSize)
         .map { start in
