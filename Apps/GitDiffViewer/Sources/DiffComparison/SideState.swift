@@ -40,6 +40,9 @@ package final class SideState {
     package private(set) var lastFetchError: String?
     /// This repository's remote names, read once so the fetch menu can name the primary one; empty until then.
     package private(set) var remoteNames: [String] = []
+    /// Whether ``remoteNames`` were read for this repository, so one without a remote is not asked again whenever a
+    /// menu is built.
+    @ObservationIgnored private var hasReadRemoteNames = false
 
     /// Where each file of this folder stands against the index, as git's status last reported it; nil for any other
     /// source, for a folder outside every repository, and until git answers.
@@ -175,6 +178,7 @@ package final class SideState {
             remoteTask?.cancel()
             remoteTask = nil
             remoteNames = []
+            hasReadRemoteNames = false
             lastFetchError = nil
         }
         self.repository = repository
@@ -231,16 +235,17 @@ package final class SideState {
         repository = info
     }
 
-    /// Reads this repository's remote names once; a no-op once they are known, without a repository, or without a
-    /// runner.
+    /// Reads this repository's remote names once, none included; a no-op once they are known, without a repository,
+    /// or without a runner. A failed read is tried again at the next call.
     package func loadRemotesIfNeeded() {
-        guard remoteNames.isEmpty, remoteTask == nil, let repository, let runner = fetchRunner else { return }
+        guard !hasReadRemoteNames, remoteTask == nil, let repository, let runner = fetchRunner else { return }
         let root = repository.root
         remoteTask = taskProvider.task {
-            let remotes = (try? await GitClient(repository: root, runner: runner).remotes()) ?? []
+            let remotes = try? await GitClient(repository: root, runner: runner).remotes()
             remoteTask = nil
-            guard self.repository?.root == root else { return }
+            guard self.repository?.root == root, let remotes else { return }
             remoteNames = remotes.map(\.name)
+            hasReadRemoteNames = true
         }
     }
 
