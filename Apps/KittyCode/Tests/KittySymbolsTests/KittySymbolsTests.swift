@@ -19,15 +19,26 @@ struct KittySymbolsTests {
 
     @Test
     func `Terminal symbol theme falls back without catalog`() {
-        let theme = TerminalSymbolTheme.make(symbolsEnabled: false, catalog: nil)
+        let theme = TerminalSymbolTheme.make(symbolsEnabled: false, loadCatalog: { nil })
 
         #expect(theme[.folderClosed].text == ">")
         #expect(theme[.file].text == "-")
     }
 
     @Test
+    func `Terminal symbol theme never loads the catalog while every role has a built-in glyph`() {
+        var catalogLoads = 0
+        _ = TerminalSymbolTheme.make(symbolsEnabled: true) {
+            catalogLoads += 1
+            return nil
+        }
+
+        #expect(catalogLoads == 0)
+    }
+
+    @Test
     func `Terminal symbol theme uses hardcoded PUA codepoints`() {
-        let theme = TerminalSymbolTheme.make(symbolsEnabled: true, catalog: nil)
+        let theme = TerminalSymbolTheme.make(symbolsEnabled: true, loadCatalog: { nil })
 
         #expect(theme[.folderClosed].prefersSymbol)
         #expect(theme[.folderClosed].text == "\u{1003ED}")
@@ -37,7 +48,7 @@ struct KittySymbolsTests {
 
     @Test
     func `All roles have non-empty fallback text`() {
-        let theme = TerminalSymbolTheme.make(symbolsEnabled: false, catalog: nil)
+        let theme = TerminalSymbolTheme.make(symbolsEnabled: false, loadCatalog: { nil })
         for role in TerminalSymbolTheme.Role.allCases {
             #expect(!theme[role].text.isEmpty, "Role \(role) has empty fallback")
         }
@@ -45,21 +56,21 @@ struct KittySymbolsTests {
 
     @Test
     func `Explorer and openDocuments roles have correct fallbacks`() {
-        let theme = TerminalSymbolTheme.make(symbolsEnabled: false, catalog: nil)
+        let theme = TerminalSymbolTheme.make(symbolsEnabled: false, loadCatalog: { nil })
         #expect(theme[.explorer].text == "F")
         #expect(theme[.openDocuments].text == "O")
     }
 
     @Test
     func `Explorer role resolves to hardcoded SF Symbol glyph`() {
-        let theme = TerminalSymbolTheme.make(symbolsEnabled: true, catalog: nil)
+        let theme = TerminalSymbolTheme.make(symbolsEnabled: true, loadCatalog: { nil })
         #expect(theme[.explorer].prefersSymbol)
         #expect(theme[.explorer].text == "\u{1003ED}")
     }
 
     @Test
     func `New git roles have correct fallbacks`() {
-        let theme = TerminalSymbolTheme.make(symbolsEnabled: false, catalog: nil)
+        let theme = TerminalSymbolTheme.make(symbolsEnabled: false, loadCatalog: { nil })
         #expect(theme[.gitModified].text == "M")
         #expect(theme[.gitAdded].text == "A")
         #expect(theme[.gitUntracked].text == "?")
