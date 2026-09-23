@@ -63,7 +63,19 @@ public struct SourceLoader: SourceReading {
     private let patches: PatchCache
 
     public static func isSupported(path: String) -> Bool {
-        !binaryExtensions.contains(URL(filePath: path).pathExtension.lowercased())
+        !binaryExtensions.contains(pathExtension(of: path).lowercased())
+    }
+
+    /// The extension of `path`'s last component, as `URL.pathExtension` gives it, without building a URL: a URL made
+    /// from a relative path resolves it against the working directory, a `getcwd` for each of the thousands of paths
+    /// a listing checks. A stem of dots only (`..x`) has no extension, and neither has one with a space in it.
+    static func pathExtension(of path: String) -> Substring {
+        var trimmed = path[...]
+        while trimmed.last == "/" { trimmed = trimmed.dropLast() }
+        let name = trimmed[(trimmed.lastIndex(of: "/").map { trimmed.index(after: $0) } ?? trimmed.startIndex)...]
+        guard let dot = name.lastIndex(of: "."), name[..<dot].contains(where: { $0 != "." }) else { return "" }
+        let pathExtension = name[name.index(after: dot)...]
+        return pathExtension.contains(" ") ? "" : pathExtension
     }
 
     /// Text of a file's bytes; a binary file, recognised by a NUL among its first bytes, becomes one line
@@ -352,17 +364,21 @@ public struct DirectorySource: SourceProvider {
     /// - Throws: `CancellationError` once `cancellation` is raised.
     private static func scan(_ root: URL, until cancellation: CancellationFlag) throws -> [File] {
         let keys: Set<URLResourceKey> = [.isDirectoryKey, .isRegularFileKey, .nameKey]
+        let base = root.standardizedFileURL
+        // Relative URLs: the enumerator hands its entries out under the folder's canonical path (`/private/var` for
+        // `/var`), and standardizing each back to the folder's own spelling `stat`s it.
         guard
             let enumerator = FileManager.default.enumerator(
-                at: root,
+                at: base,
                 includingPropertiesForKeys: Array(keys),
-                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+                options: [.skipsHiddenFiles, .skipsPackageDescendants, .producesRelativePathURLs]
             )
         else {
             throw CocoaError(.fileReadNoSuchFile)
         }
 
-        let rootPath = root.standardizedFileURL.path(percentEncoded: false)
+        let basePath = base.path(percentEncoded: false)
+        let prefix = basePath.hasSuffix("/") ? basePath : basePath + "/"
         var files: [File] = []
         while let url = enumerator.nextObject() as? URL {
             if cancellation.isRaised { throw CancellationError() }
@@ -372,9 +388,9 @@ public struct DirectorySource: SourceProvider {
                 continue
             }
             guard values.isRegularFile == true, SourceLoader.isSupported(path: url.lastPathComponent) else { continue }
-            let fullPath = url.standardizedFileURL.path(percentEncoded: false)
+            let relativePath = url.relativePath
+            let fullPath = prefix + relativePath
             guard let stamp = FileStamp(regularFileAt: fullPath) else { continue }
-            let relativePath = String(String(fullPath.dropFirst(rootPath.count)).trimmingPrefix("/"))
             files.append(File(fullPath: fullPath, relativePath: relativePath, stamp: stamp))
         }
         return files
