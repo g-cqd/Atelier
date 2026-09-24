@@ -22,6 +22,23 @@ struct ExternalGrammarCompilerTests {
     }
 
     @Test
+    func `word extracts literal keywords for contextual classification`() throws {
+        let grammar = GrammarDefinition(
+            name: "word",
+            rules: [
+                ("source", .seq([.string("let"), .symbol("identifier")])),
+                ("identifier", .pattern("[a-z]+"))
+            ],
+            extras: [], word: "identifier")
+
+        let result = try ParseTableCompiler.compile(grammar)
+
+        #expect(result.lexTable.wordToken != nil)
+        #expect(result.lexTable.keywordTokens["let"] != nil)
+        #expect(result.lexTable.modeValidTokens.count == result.lexTable.modeStarts.count)
+    }
+
+    @Test
     func `Swift emoji properties compile as lexical patterns`() throws {
         let grammar = GrammarDefinition(
             name: "emoji_identifier",

@@ -159,6 +159,12 @@ public struct LexTable: Sendable, Equatable, Codable {
     public var stateModes: [Int]
     /// The mode to read a token in when no stack's mode reads one: every token that may follow a separator.
     public var errorMode: Int?
+    /// The lexical token designated by the grammar's `word` field, if any.
+    public var wordToken: Int?
+    /// Literal keywords that the word token can also match, keyed by spelling.
+    public var keywordTokens: [String: Int]
+    /// Token indices enabled in each lexical mode, for contextual keyword classification.
+    public var modeValidTokens: [[Int]]
 
     public init(
         states: [LexState] = [], keywords: [String: Int] = [:],
@@ -167,7 +173,10 @@ public struct LexTable: Sendable, Equatable, Codable {
         automaton: [LexAutomatonState] = [],
         modeStarts: [Int] = [],
         stateModes: [Int] = [],
-        errorMode: Int? = nil
+        errorMode: Int? = nil,
+        wordToken: Int? = nil,
+        keywordTokens: [String: Int] = [:],
+        modeValidTokens: [[Int]] = []
     ) {
         self.states = states
         self.keywords = keywords
@@ -177,6 +186,9 @@ public struct LexTable: Sendable, Equatable, Codable {
         self.modeStarts = modeStarts
         self.stateModes = stateModes
         self.errorMode = errorMode
+        self.wordToken = wordToken
+        self.keywordTokens = keywordTokens
+        self.modeValidTokens = modeValidTokens
     }
 }
 
