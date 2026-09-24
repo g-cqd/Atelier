@@ -10,7 +10,8 @@ import Testing
 /// then laid out again in its own text view, the content stack laid out twice on the way. Each document is timed in
 /// phases: the document built from the markdown, off the main thread in the app; the panel's render on the panel
 /// every hover of a pane reuses, and on a new one, as a pane's first hover builds; the throwaway measurements alone;
-/// and the first display pass after a render, which lays the text views out for drawing.
+/// the first display pass after a render, which lays the text views out for drawing; and each scroll that builds the
+/// next blocks of a discussion longer than the panel.
 ///
 /// Run in release, alone on the machine: `GDV_BENCH=1 swift test -c release -Xswiftc -enable-testing
 /// --scratch-path .build-release --filter HoverBuildBenchmark`.
@@ -39,6 +40,7 @@ struct HoverBuildBenchmark {
             var firstRender: [Double] = []
             var measure: [Double] = []
             var display: [Double] = []
+            var scrolls: [Double] = []
             for _ in 0 ..< Self.runs {
                 render.append(
                     Self.milliseconds { reused.prepareOffscreenForTests(document: document, appearance: appearance) })
@@ -46,6 +48,7 @@ struct HoverBuildBenchmark {
                 let bitmap = try #require(root.bitmapImageRepForCachingDisplay(in: root.bounds))
                 display.append(Self.milliseconds { root.cacheDisplay(in: root.bounds, to: bitmap) })
                 measure.append(Self.milliseconds { Self.measureEveryBlock(of: document) })
+                scrolls += Self.scrollThrough(reused)
                 let fresh = HoverDocPanel(ordersWindowIn: false)
                 firstRender.append(
                     Self.milliseconds { fresh.prepareOffscreenForTests(document: document, appearance: appearance) })
@@ -55,7 +58,11 @@ struct HoverBuildBenchmark {
                     + "document \(Self.summary(build)); render \(Self.summary(render)); "
                     + "render on a new panel \(Self.summary(firstRender)); "
                     + "of which throwaway measurements \(Self.summary(measure)); "
-                    + "first display pass \(Self.summary(display))")
+                    + "first display pass \(Self.summary(display)); "
+                    + (scrolls.isEmpty
+                        ? "every block built by the render"
+                        : "\(scrolls.count / Self.runs) scrolls building the rest, each \(Self.summary(scrolls)), "
+                            + "longest \(String(format: "%.2f", scrolls.max() ?? 0)) ms"))
         }
     }
 
@@ -79,6 +86,19 @@ struct HoverBuildBenchmark {
         }
         return parts.joined(separator: "\n\n")
     }()
+
+    /// The time of each scroll to the end of `panel`'s body that builds more of its discussion, until it is all built.
+    private static func scrollThrough(_ panel: HoverDocPanel) -> [Double] {
+        let clip = panel.bodyScrollView.contentView
+        var samples: [Double] = []
+        while panel.pendingDiscussion != nil, samples.count < 1_000 {
+            samples.append(
+                milliseconds {
+                    clip.scroll(to: NSPoint(x: 0, y: max(panel.bodyDocument.frame.height - clip.bounds.height, 0)))
+                })
+        }
+        return samples
+    }
 
     /// Measures every text the discussion's blocks show, as the panel measures each on a throwaway stack.
     private static func measureEveryBlock(of document: HoverDocument) {
