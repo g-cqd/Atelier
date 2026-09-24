@@ -5,6 +5,19 @@ import Testing
 @Suite
 struct ExternalGrammarCompilerTests {
     @Test
+    func `a nullable lexical pattern compiles without making its rule optional`() throws {
+        let grammar = GrammarDefinition(
+            name: "nullable_token",
+            rules: [("source", .seq([.string("#!"), .pattern("[^\\r\\n]*")]))],
+            extras: [])
+
+        let result = try ParseTableCompiler.compile(grammar)
+
+        #expect(result.lexTable.tokens.contains { $0.name == "source_token1" })
+        #expect(result.productions.contains { $0.symbols == ["\"#!\"", "source_token1"] })
+    }
+
+    @Test
     func `an inline rule contributes productions without a syntax node`() throws {
         let grammar = GrammarDefinition(
             name: "inline_rule",

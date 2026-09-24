@@ -165,6 +165,10 @@ public struct LexTable: Sendable, Equatable, Codable {
     public var keywordTokens: [String: Int]
     /// Token indices enabled in each lexical mode, for contextual keyword classification.
     public var modeValidTokens: [[Int]]
+    /// The preferred nullable token in each mode, used only if no nonempty token matches.
+    public var modeEmptyTokens: [Int?]
+    /// The preferred nullable token after a separator, excluding immediate tokens.
+    public var modeEmptyAfterSeparator: [Int?]
 
     public init(
         states: [LexState] = [], keywords: [String: Int] = [:],
@@ -176,7 +180,9 @@ public struct LexTable: Sendable, Equatable, Codable {
         errorMode: Int? = nil,
         wordToken: Int? = nil,
         keywordTokens: [String: Int] = [:],
-        modeValidTokens: [[Int]] = []
+        modeValidTokens: [[Int]] = [],
+        modeEmptyTokens: [Int?] = [],
+        modeEmptyAfterSeparator: [Int?] = []
     ) {
         self.states = states
         self.keywords = keywords
@@ -189,6 +195,8 @@ public struct LexTable: Sendable, Equatable, Codable {
         self.wordToken = wordToken
         self.keywordTokens = keywordTokens
         self.modeValidTokens = modeValidTokens
+        self.modeEmptyTokens = modeEmptyTokens
+        self.modeEmptyAfterSeparator = modeEmptyAfterSeparator
     }
 }
 
