@@ -58,36 +58,39 @@ extension HoverDocPanel {
     }
 
     /// Builds the next blocks once the body's visible end comes within a panel's height of the built ones' end, and
-    /// grows the scrolling document to hold them.
+    /// grows the scrolling document by their height. The stack is neither laid out nor measured whole here: with every
+    /// block built so far in it, each scroll would cost more than the last.
     func bodyDidScroll() {
         guard pendingDiscussion != nil,
             bodyScrollView.contentView.bounds.maxY >= bodyDocument.frame.height - HoverPanelSizing.maxHeight
         else { return }
-        buildPendingBlocks()
-        bodyStack.layoutSubtreeIfNeeded()
-        bodyDocument.setFrameSize(NSSize(width: bodyDocument.frame.width, height: bodyStack.fittingSize.height))
+        let added = buildPendingBlocks()
+        bodyDocument.setFrameSize(NSSize(width: bodyDocument.frame.width, height: bodyDocument.frame.height + added))
         bodyScrollView.reflectScrolledClipView(bodyScrollView.contentView)
     }
 
     /// Builds pending blocks until they add up to the panel's greatest height, which leaves the body scrolling while
-    /// any remain, or until none is left.
-    private func buildPendingBlocks() {
-        guard var pending = pendingDiscussion else { return }
-        let (rest, last) = fill(
+    /// any remain, or until none is left; returns the height they add, their spacing included.
+    @discardableResult
+    private func buildPendingBlocks() -> CGFloat {
+        guard var pending = pendingDiscussion else { return 0 }
+        let (rest, last, height) = fill(
             bodyStack, with: pending.blocks, width: pending.width, chipBackground: pending.chipBackground,
             after: pending.last, filling: HoverPanelSizing.maxHeight)
         pending.blocks = rest
         pending.last = last
         pendingDiscussion = rest.isEmpty ? nil : pending
+        return height
     }
 
     /// Adds a view per block to `stack`, after `last`, the block already at its end, spaced wider above a heading and
-    /// tighter below it; stops once the views added are `height` tall. Returns the blocks left and the last one added.
+    /// tighter below it; stops once the views added are `height` tall. Returns the blocks left, the last one added and
+    /// the height the added ones take, measured only when there is a height to fill.
     @discardableResult
     private func fill(
         _ stack: NSStackView, with blocks: ArraySlice<HoverDocument.Block>, width: CGFloat, chipBackground: NSColor?,
         after last: HoverBuiltBlock? = nil, filling height: CGFloat = .infinity
-    ) -> (rest: ArraySlice<HoverDocument.Block>, last: HoverBuiltBlock?) {
+    ) -> (rest: ArraySlice<HoverDocument.Block>, last: HoverBuiltBlock?, height: CGFloat) {
         var previous = last
         var rest = blocks
         var filled: CGFloat = 0
@@ -108,7 +111,7 @@ extension HoverDocPanel {
             if height.isFinite { filled += spacing + view.fittingSize.height }
             previous = (view, isHeading)
         }
-        return (rest, previous)
+        return (rest, previous, filled)
     }
 
     private func blockView(_ block: HoverDocument.Block, width: CGFloat, chipBackground: NSColor?) -> NSView {
