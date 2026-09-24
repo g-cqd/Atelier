@@ -14,7 +14,7 @@ import Testing
 ///   the tree tree-sitter gives, the first divergence of each mismatch, and the ERROR nodes and bytes of the parses,
 ///   with the scanner and without it.
 /// - With `ATELIER_LARGE_SAMPLE_DIR`, each file of `<dir>/<name>/`: its parse time, ERROR nodes and bytes, and
-///   whether the highlighter highlights it from its grammar.
+///   whether the highlighter keeps the grammar for it after its quality gate.
 @Suite
 struct BundledGrammarMeasurements {
     private static let environment = ProcessInfo.processInfo.environment
