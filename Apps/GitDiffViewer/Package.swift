@@ -95,7 +95,7 @@ let package = Package(
         .testTarget(
             name: "GitDiffViewerTests",
             dependencies: [
-                "DiffComparison", "DiffGit", "DiffRendering", "DiffTextKit",
+                "DiffComparison", "DiffGit", "DiffRendering", "DiffTextKit", "GitDiffViewer",
                 .product(name: "AtelierDiagnostics", package: "AtelierCore"),
                 .product(name: "AtelierSources", package: "AtelierCore"),
                 .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),
