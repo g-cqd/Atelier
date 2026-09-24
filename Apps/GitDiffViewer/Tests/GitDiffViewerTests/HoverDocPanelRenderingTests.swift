@@ -140,6 +140,26 @@ import Testing
         #expect(contrastingPixels > 100)
     }
 
+    @Test(arguments: [false, true])
+    func `declaration text contrasts with its chip in each appearance`(dark: Bool) throws {
+        let panel = try preparedPanel(dark: dark)
+        let root = try #require(panel.contentViewForTests)
+        let declaration = try #require(
+            descendants(of: root, as: NSTextView.self).first { $0.string.contains("func greet") })
+        let nameRange = (declaration.string as NSString).range(of: "greet")
+        let color = try #require(
+            declaration.textStorage?.attribute(.foregroundColor, at: nameRange.location, effectiveRange: nil))
+        let foreground = try #require(color as? NSColor)
+        let chip = try #require(
+            sequence(first: declaration as NSView, next: \.superview).compactMap { $0 as? NSBox }.first)
+        let appearance = try #require(NSAppearance(named: dark ? .darkAqua : .aqua))
+        var ratio: CGFloat?
+        appearance.performAsCurrentDrawingAppearance {
+            ratio = contrastRatio(foreground, chip.fillColor)
+        }
+        #expect(try #require(ratio) >= 4.5)
+    }
+
     @Test(arguments: ["PARAMETERS", "name"], [false, true])
     func `section labels contrast with the panel in each appearance`(label: String, dark: Bool) throws {
         let panel = try preparedPanel(dark: dark)
