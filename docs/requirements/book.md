@@ -660,6 +660,24 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   4. When HOVER-16 lands, each tier answers only for the languages it reads.
 - **Priority:** Must. **Related:** HOVER-01, HOVER-16, LANG-01.
 
+#### HOVER-20 · The hover panel reads like Xcode's Quick Help
+- **Statement:** The documentation panel keeps the structure of what it shows, and lays a symbol out as Xcode's Quick
+  Help does.
+- **Source:** 09-24 14:57, six screenshots of a hover over `Bool` (images 28 to 33), "the oldest one is ours, the
+  others are xcode ones, we should improve". Ours runs code examples, paragraphs and headings together into one block
+  of prose; Xcode's shows the name as a title, the abstract, the declaration in a box, an Overview heading, code
+  blocks in boxes with syntax colour, section headings, a Relationships section listing what the type conforms to,
+  and an "Open in Developer Documentation" link, in a panel that scrolls.
+- **Acceptance criteria:**
+  1. Code blocks keep their lines and indentation, in a box, with Swift syntax colour.
+  2. Paragraphs, headings, lists and rules keep their structure and spacing; nothing runs into the next block.
+  3. The panel opens with the symbol's name as a title, its abstract, then its declaration in a box, then the
+     discussion under an Overview heading, and scrolls when taller than the space it has.
+  4. A Relationships section lists the protocols the symbol conforms to, when a tier can tell.
+  5. A system symbol offers a link that opens its page in Apple's developer documentation.
+- **Priority:** Must for 1 to 3, which fix what the panel shows; Should for 4 and 5. **Related:** HOVER-01, HOVER-03,
+  HOVER-13.
+
 ### DUI: Diagnostics UI
 
 #### DUI-01 · A toolbar list of every finding
@@ -1731,3 +1749,4 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R106 | 09-24 13:06 | "if it does not override the private skills go ahead for the install, don't push to the public one but create a mirror on my g-cqd please" | PROC-12 (skills repository), D23 |
 | R107 | 09-24 13:14 (mid-turn) | "sometimes disclosing lines using the gutter handles creates rendering artifacts and line misalignment" | DIFF-06, CARD-17, PERF-10, TAB-10 |
 | R108 | 09-24 13:44 (mid-turn, to an agent) | "inspect why sometimes the horizontal scroll is possible when the file width actually matches or fits the containers" | CARD-18 |
+| R109 | 09-24 14:57 | "the oldest one is ours, the others are xcode ones, we should improve" (images 28 to 33) | HOVER-20 |
