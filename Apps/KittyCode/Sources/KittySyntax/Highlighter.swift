@@ -68,27 +68,28 @@ public final class Highlighter: Sendable {
         scratch: HighlightScratch
     ) -> [StyledSpan] {
         let matches = QueryMatcher.execute(query: query, tree: tree)
-        return buildSpans(source: source, matches: matches, scratch: scratch)
+        return buildSpans(source: source, captureNames: query.captureNames, matches: matches, scratch: scratch)
     }
 
-    private func buildSpans(source: String, matches: [QueryMatch], scratch: HighlightScratch)
-        -> [StyledSpan]
-    {
+    private func buildSpans(
+        source: String, captureNames: [String], matches: [QueryMatch], scratch: HighlightScratch
+    ) -> [StyledSpan] {
         if let spans = source.utf8.withContiguousStorageIfAvailable({ utf8 in
-            buildSpans(source: source, utf8: utf8, matches: matches, scratch: scratch)
+            buildSpans(source: source, utf8: utf8, captureNames: captureNames, matches: matches, scratch: scratch)
         }) {
             return spans
         }
 
         let utf8 = Array(source.utf8)
         return utf8.withUnsafeBufferPointer { utf8 in
-            buildSpans(source: source, utf8: utf8, matches: matches, scratch: scratch)
+            buildSpans(source: source, utf8: utf8, captureNames: captureNames, matches: matches, scratch: scratch)
         }
     }
 
     private func buildSpans(
         source: String,
         utf8: UnsafeBufferPointer<UInt8>,
+        captureNames: [String],
         matches: [QueryMatch],
         scratch: HighlightScratch
     ) -> [StyledSpan] {
@@ -100,11 +101,15 @@ public final class Highlighter: Sendable {
         scratch.resetPalette(defaultStyle: defaultStyle)
         scratch.rawSpans.removeAll(keepingCapacity: true)
         scratch.rawSpans.reserveCapacity(matches.reduce(into: 0) { $0 += $1.captures.count })
+        // Each capture name's style, resolved once for the query rather than by name per capture; nil for a capture
+        // that colours no text.
+        let styleIndices = captureNames.map { name in
+            CaptureRoleMapper.colorsText(name) ? scratch.paletteIndex(for: theme.style(for: name)) : nil
+        }
 
         for match in matches {
-            for capture in match.captures where CaptureRoleMapper.colorsText(capture.name) {
-                let style = theme.style(for: capture.name)
-                let idx = scratch.paletteIndex(for: style)
+            for capture in match.captures {
+                guard let idx = styleIndices[capture.index] else { continue }
                 scratch.rawSpans.append(
                     .init(
                         byteRange: capture.node.byteRange,
@@ -169,10 +174,17 @@ public final class Highlighter: Sendable {
 
     // MARK: - Token-based highlighting
 
-    /// A token in `layer` for every capture in `matches` that colors text, roles unresolved; an earlier query pattern
-    /// gets a higher priority, so it wins on identical ranges as it does in `highlight(source:tree:query:)`.
+    /// A token in `layer` for every capture in `matches` that colors text, with the role `roles` holds for the
+    /// capture's index; an earlier query pattern gets a higher priority, so it wins on identical ranges as it does in
+    /// `highlight(source:tree:query:)`.
+    /// - Parameters:
+    ///   - matches: The matches of one query.
+    ///   - roles: The roles of that query's capture names, resolved once for it.
+    ///   - layer: The layer of every token.
+    /// - Returns: The tokens in match order, ranges in the source's bytes.
     public func buildTokens(
         matches: [QueryMatch],
+        roles: CaptureRoles,
         layer: HighlightLayer = .structural
     ) -> [HighlightToken] {
         let maxPatternIndex = matches.map(\.patternIndex).max() ?? 0
@@ -180,13 +192,13 @@ public final class Highlighter: Sendable {
         tokens.reserveCapacity(matches.reduce(into: 0) { $0 += $1.captures.count })
 
         for match in matches {
-            for capture in match.captures where CaptureRoleMapper.colorsText(capture.name) {
-                let (role, modifiers) = CaptureRoleMapper.map(capture.name)
+            for capture in match.captures {
+                guard let resolved = roles[capture.index] else { continue }
                 tokens.append(
                     HighlightToken(
                         byteRange: capture.node.byteRange,
-                        role: role,
-                        modifiers: modifiers,
+                        role: resolved.role,
+                        modifiers: resolved.modifiers,
                         layer: layer,
                         priority: maxPatternIndex - match.patternIndex
                     ))
