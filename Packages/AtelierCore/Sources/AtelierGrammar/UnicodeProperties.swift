@@ -29,6 +29,8 @@ enum UnicodeProperties {
             case "White_Space", "WSpace": return { $0.isWhitespace }
             case "Uppercase", "Upper": return { $0.isUppercase }
             case "Lowercase", "Lower": return { $0.isLowercase }
+            case "Emoji": return { $0.isEmoji }
+            case "EMod", "Emoji_Modifier": return { $0.isEmojiModifier }
             default:
                 guard let categories = generalCategories(named: name) else { return nil }
                 return { categories.contains($0.generalCategory) }
