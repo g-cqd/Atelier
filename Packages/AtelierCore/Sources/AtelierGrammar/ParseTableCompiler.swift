@@ -50,7 +50,7 @@ public enum ParseTableCompiler: Sendable {
     /// The version of what ``compile(_:limits:)`` produces, for caches of compiled tables and of failed compiles to
     /// key on: bumped whenever the outcome of compiling the same grammar changes, tables or error, which a change to
     /// the default limits can do too, so no cache hands out what an older compiler made.
-    public static let formatVersion = 9
+    public static let formatVersion = 10
 
     /// Compile a grammar definition into parse tables.
     public static func compile(
@@ -98,8 +98,19 @@ public enum ParseTableCompiler: Sendable {
             )
         }
 
+        let wordToken = grammar.word.flatMap { name in lexical.tokens.firstIndex { $0.name == name } }
+        let keywordSpellings = Set(KeywordExtractor.extract(from: grammar).keys)
+        var keywordTokens: [String: Int] = [:]
+        if wordToken != nil {
+            for (index, token) in lexical.tokens.enumerated() {
+                if let spelling = literalText(of: token.rule), keywordSpellings.contains(spelling) {
+                    keywordTokens[spelling] = index
+                }
+            }
+        }
         let lexTable = try LexTableCompiler.compile(
-            nfa: tokenAutomaton, tokens: lexical.tokens, validTokens: validTokens(in: table, of: lexical.tokens))
+            nfa: tokenAutomaton, tokens: lexical.tokens, validTokens: validTokens(in: table, of: lexical.tokens),
+            wordToken: wordToken, keywordTokens: keywordTokens)
 
         return CompilationResult(
             parseTable: table,
@@ -109,6 +120,16 @@ public enum ParseTableCompiler: Sendable {
     }
 
     // MARK: - Private
+
+    private static func literalText(of rule: Rule) -> String? {
+        switch rule {
+            case .string(let value): value
+            case .prec(_, let content), .precLeft(_, let content), .precRight(_, let content),
+                .token(let content), .immediateToken(let content):
+                literalText(of: content)
+            default: nil
+        }
+    }
 
     /// The tokens valid in each state of `table`, by index into `tokens`: those with an action there, and the extras,
     /// which are valid everywhere.
