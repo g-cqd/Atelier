@@ -205,6 +205,10 @@ import Testing
     @Test
     func `the Bool panel lays out its head and every block top to bottom`() throws {
         let (panel, root) = try preparedPanel(for: Self.build(HoverFixtures.sdkBool, source: .sdk))
+        // The body builds its last blocks as it scrolls to them; back at the top, it reads from its first.
+        panel.scrollThroughDiscussion()
+        panel.bodyScrollView.contentView.scroll(to: .zero)
+        root.layoutSubtreeIfNeeded()
         let shown = shownTexts(under: root)
         func view(startingWith prefix: String) throws -> NSView {
             try #require(shown.first { $0.text.hasPrefix(prefix) }?.view, "nothing shows \(prefix)")
