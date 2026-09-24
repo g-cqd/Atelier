@@ -104,7 +104,9 @@ import Testing
         #expect(document.title == "load(from:)")
         #expect(document.summary?.string == "Loads the configuration.")
         #expect(document.returns?.string == "The configuration.")
-        #expect(document.discussion.map(Self.kind) == ["paragraph", "code", "heading 2", "bullet list"])
+        #expect(document.parameters.map(\.name) == ["url"])
+        #expect(document.parameters.map(\.text.string) == ["Where the file is."])
+        #expect(document.discussion.map(Self.kind) == ["paragraph", "code", "heading 2"])
         #expect(
             Self.codeText(in: document.discussion) == [
                 "let config = try load(from: url)\nif config.retryCount > 0 {\n    print(config)\n}"
