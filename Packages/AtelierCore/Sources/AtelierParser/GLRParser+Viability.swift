@@ -34,10 +34,27 @@ extension GLRParser {
         return canShift(terminal, from: VirtualStates(states: stack.states, nodes: stack.nodes), budget: &budget)
     }
 
+    /// Whether the reduction of `count` symbols to `nonTerminal` leads `stack` to shift `terminal`, as
+    /// ``canShift(_:on:)`` runs it: when it does not, the reduction was made by merged lookaheads, and the parser takes
+    /// the shift precedence set against it (``ParseTable/lostShifts``).
+    func reductionShifts(_ terminal: Int, on stack: ParseStack, count: Int, nonTerminal: String) -> Bool {
+        var states = VirtualStates(states: stack.states, nodes: stack.nodes)
+        guard states.reduce(count: count, to: nonTerminal, in: self) else { return false }
+        var budget = parseTable.stateCount + stack.nodes.count
+        return canShift(terminal, from: states, budget: &budget)
+    }
+
+    /// The target of the shift of `terminal` that precedence resolved against in `state`, if it did.
+    func lostShift(of terminal: Int, in state: Int) -> Int? {
+        parseTable.lostShifts[state]?[terminal]
+    }
+
     private func canShift(_ terminal: Int, from states: VirtualStates, budget: inout Int) -> Bool {
         var states = states
         while budget > 0 {
             budget -= 1
+            // Whether the reduction there shifts the token or leads nowhere, the parser shifts it.
+            if lostShift(of: terminal, in: states.top) != nil { return true }
             switch parseTable.actions[states.top][terminal] {
                 case .shift, .accept:
                     return true

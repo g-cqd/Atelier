@@ -27,6 +27,10 @@ extension ParseTableCompiler.CompilationResult {
             && table.gotos.allSatisfy { row in
                 row.count == table.nonTerminals.count && row.allSatisfy { $0.map(states.contains) ?? true }
             }
+            && table.lostShifts.allSatisfy { state, shifts in
+                states.contains(state)
+                    && shifts.allSatisfy { table.terminals.indices.contains($0.key) && states.contains($0.value) }
+            }
     }
 
     /// Whether `action` shifts to one of `states` or reduces by a rule the tables have; a conflict, never `nested` in

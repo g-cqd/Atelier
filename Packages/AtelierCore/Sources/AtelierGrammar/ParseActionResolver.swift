@@ -26,6 +26,7 @@ struct ParseActionResolver {
 
         var actions = [[Action]](
             repeating: [Action](repeating: .error, count: terminals.count), count: itemSets.count)
+        var lostShifts: [Int: [Int: Int]] = [:]
         var gotos = [[Int?]](
             repeating: [Int?](repeating: nil, count: nonTerminals.count), count: itemSets.count)
 
@@ -45,12 +46,16 @@ struct ParseActionResolver {
                 }
             }
             for terminal in Set(shifts.keys).union(completed.keys) {
-                actions[state][terminal] = action(
+                let resolved = action(
                     on: terminals[terminal],
                     shift: shifts[terminal],
                     completedRules: completed[terminal] ?? [],
                     in: itemSet
                 )
+                actions[state][terminal] = resolved
+                if let shift = shifts[terminal], !resolved.shifts {
+                    lostShifts[state, default: [:]][terminal] = shift
+                }
             }
         }
 
@@ -60,7 +65,8 @@ struct ParseActionResolver {
             terminals: terminals,
             nonTerminals: nonTerminals,
             actions: actions,
-            gotos: gotos
+            gotos: gotos,
+            lostShifts: lostShifts
         )
     }
 
@@ -209,6 +215,17 @@ struct ParseActionResolver {
         switch entry {
             case .literal(let name): precedence == .name(name)
             case .symbol(let name): symbols.contains(name)
+        }
+    }
+}
+
+extension Action {
+    /// Whether the action shifts, alone or as one of a conflict's actions.
+    fileprivate var shifts: Bool {
+        switch self {
+            case .shift: true
+            case .conflict(let actions): actions.contains { if case .shift = $0 { true } else { false } }
+            case .reduce, .accept, .error: false
         }
     }
 }

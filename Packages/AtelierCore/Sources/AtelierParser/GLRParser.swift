@@ -244,6 +244,11 @@ public final class GLRParser: Sendable {
                     continue
                 }
                 switch parseTable.actions[stack.state][lookahead] {
+                    case .reduce(_, let count, let nonTerminal)
+                    where lostShift(of: lookahead, in: stack.state) != nil
+                        && !reductionShifts(lookahead, on: stack, count: count, nonTerminal: nonTerminal):
+                        // Merged lookaheads made this reduction: the shift phase takes the shift it won against.
+                        ready.append(stack)
                     case .reduce(let rule, let count, let nonTerminal) where budget > 0:
                         budget -= 1
                         switch reduce(&stack, rule: rule, count: count, nonTerminal: nonTerminal) {
@@ -310,7 +315,10 @@ public final class GLRParser: Sendable {
                         if case .shift(let nextState) = action { return nextState }
                         return nil
                     }
-                case .reduce, .error:
+                case .reduce:
+                    // A reduction left unmade: the shift precedence set against it, if there was one.
+                    shiftTargets = lostShift(of: lookahead, in: stack.state).map { [$0] } ?? []
+                case .error:
                     shiftTargets = []
             }
             guard let lastTarget = shiftTargets.last else {
