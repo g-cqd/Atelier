@@ -41,7 +41,7 @@ struct HoverDocPanelTests {
     private func assertNoWastedSpace(
         _ document: HoverDocument, sourceLocation: SourceLocation = #_sourceLocation
     ) throws {
-        let panel = HoverDocPanel()
+        let panel = HoverDocPanel(ordersWindowIn: false)
         let textView = makeHostTextView()
         panel.show(document: document, anchorRect: NSRect(x: 0, y: 100, width: 40, height: 16), in: textView)
         let laidOut = try #require(panel.laidOutContentHeightForTests, sourceLocation: sourceLocation)
@@ -94,11 +94,11 @@ struct HoverDocPanelTests {
             declaration: codeAttributed("struct CameraConfiguration"), provenance: .unknown,
             chipBackground: .textBackgroundColor)
 
-        let panelWith = HoverDocPanel()
+        let panelWith = HoverDocPanel(ordersWindowIn: false)
         panelWith.show(
             document: withProvenance, anchorRect: NSRect(x: 0, y: 100, width: 40, height: 16),
             in: makeHostTextView())
-        let panelWithout = HoverDocPanel()
+        let panelWithout = HoverDocPanel(ordersWindowIn: false)
         panelWithout.show(
             document: withoutProvenance, anchorRect: NSRect(x: 0, y: 100, width: 40, height: 16),
             in: makeHostTextView())
@@ -110,7 +110,7 @@ struct HoverDocPanelTests {
 
     /// Every piece of text a panel prepared offscreen shows, with no hidden ancestor.
     private func shownTexts(ofPanelFor document: HoverDocument) throws -> [String] {
-        let panel = HoverDocPanel()
+        let panel = HoverDocPanel(ordersWindowIn: false)
         panel.prepareOffscreenForTests(document: document, appearance: try #require(NSAppearance(named: .aqua)))
         let root = try #require(panel.contentViewForTests)
         root.layoutSubtreeIfNeeded()

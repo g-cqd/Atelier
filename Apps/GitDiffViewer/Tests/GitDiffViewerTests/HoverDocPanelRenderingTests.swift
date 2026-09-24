@@ -27,7 +27,7 @@ import Testing
         let appearance = try #require(NSAppearance(named: name))
         let document = HoverDocument.build(
             from: HoverContent(markdown: Self.markdown, source: .languageServer), palette: .system)
-        let panel = HoverDocPanel()
+        let panel = HoverDocPanel(ordersWindowIn: false)
         panel.prepareOffscreenForTests(document: document, appearance: appearance)
         return panel
     }
@@ -236,7 +236,7 @@ import Testing
         let markdown = Self.markdown + "\n\n" + String(repeating: "Long details wrap inside the panel. ", count: 100)
         let document = HoverDocument.build(
             from: HoverContent(markdown: markdown, source: .languageServer), palette: .system)
-        let panel = HoverDocPanel()
+        let panel = HoverDocPanel(ordersWindowIn: false)
         panel.prepareOffscreenForTests(document: document, appearance: appearance)
         let root = try #require(panel.contentViewForTests)
         let body = try #require(descendants(of: root, as: NSTextView.self).first { $0.string.contains("Long details") })

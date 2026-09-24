@@ -34,6 +34,8 @@ struct CardListHoverScrollTests {
         let textView: NSTextView
         let window: NSWindow
         let controller: DocHoverController
+        /// Shows without ordering a window in; its frame is where it would be on screen.
+        let panel: HoverDocPanel
         let rendered: RenderedText
     }
 
@@ -88,10 +90,12 @@ struct CardListHoverScrollTests {
         retainedWindows.append(window)
         card.layoutSubtreeIfNeeded()
 
-        let controller = DocHoverController(clock: clock, taskProvider: taskProvider, debounce: debounce)
+        let panel = HoverDocPanel(ordersWindowIn: false)
+        let controller = DocHoverController(clock: clock, taskProvider: taskProvider, debounce: debounce, panel: panel)
         controller.resolve = { _ in HoverDocument(summary: NSAttributedString(string: "docs")) }
         controller.attach(to: textView) { rendered }
-        return SUT(list: list, textView: textView, window: window, controller: controller, rendered: rendered)
+        return SUT(
+            list: list, textView: textView, window: window, controller: controller, panel: panel, rendered: rendered)
     }
 
     /// Column 8 of `row`, inside that row's identifier, in the text view's coordinates.
@@ -117,7 +121,7 @@ struct CardListHoverScrollTests {
     }
 
     private func panelOrigin(_ sut: SUT) throws -> NSPoint {
-        try #require(sut.window.childWindows?.first).frame.origin
+        try #require(sut.panel.frameOnScreen).origin
     }
 
     @Test

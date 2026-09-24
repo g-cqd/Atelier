@@ -150,7 +150,7 @@ import Testing
     // MARK: The panel
 
     private func preparedPanel(for document: HoverDocument) throws -> (HoverDocPanel, NSView) {
-        let panel = HoverDocPanel()
+        let panel = HoverDocPanel(ordersWindowIn: false)
         panel.prepareOffscreenForTests(document: document, appearance: try #require(NSAppearance(named: .aqua)))
         let root = try #require(panel.contentViewForTests)
         root.layoutSubtreeIfNeeded()
