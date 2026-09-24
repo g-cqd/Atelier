@@ -684,7 +684,12 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
      it (09-24, "it makes no sense to show the name of the variable below the variable signature when the only
      information about the variable is the variable itself, let's just show the signature"). This replaces
      HOVER-03's criterion 4 for the panel.
-- **Priority:** Must for 1 to 3 and 6, which fix what the panel shows; Should for 4 and 5. **Related:** HOVER-01,
+  7. The panel stays open while the pointer moves from the symbol onto it and rests over it, so it can be scrolled:
+     an invisible bridge spans the gap between the symbol and the panel, and leaving starts a short grace delay
+     before the panel closes, which re-entering cancels (09-24, "i'd like the popover of the documentation to be
+     able to stay visible when mousing hover it (means we need an invisible bridge or/and a delay before
+     dismounting the popover), so that it can be scrollable").
+- **Priority:** Must for 1 to 3, 6 and 7, which fix what the panel shows and let it be read; Should for 4 and 5. **Related:** HOVER-01,
   HOVER-03, HOVER-13.
 
 ### DUI: Diagnostics UI
@@ -1761,3 +1766,4 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R109 | 09-24 14:57 | "the oldest one is ours, the others are xcode ones, we should improve" (images 28 to 33) | HOVER-20 |
 | R110 | 09-24 | "let's just show the signature" when the only information about a variable is the variable itself | HOVER-20 (criterion 6), HOVER-03 (criterion 4 superseded) |
 | R111 | 09-24 | "1. no 2. no 3. keep 4. reassess and reorder, maybe use work to prioritize even" | D24 to D27 |
+| R112 | 09-24 | "i'd like the popover of the documentation to be able to stay visible when mousing hover it" | HOVER-20 (criterion 7) |
