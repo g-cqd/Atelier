@@ -623,15 +623,18 @@ public final class EditorState {
     }
 
     /// The spans of `viewport`'s lines, read from `document` alone: a comment or string opened above the viewport
-    /// is not seen, so the full pass restyles those lines.
+    /// is not seen, so the full pass restyles those lines. A rope's lines are read as one run of text, not split
+    /// into a string per line that the highlighter joins again.
     /// - Complexity: O(bytes of the viewport's lines), plus an O(log n) seek in a rope.
     func highlightViewport(of document: some DocumentSource, in viewport: Range<Int>) -> [[StyledSpan]] {
-        let lines = document.lines(in: viewport)
         guard syntaxHighlightingEnabled else {
             let style = colorScheme.editorText
-            return lines.map { [StyledSpan(text: $0, style: style)] }
+            return document.lines(in: viewport).map { [StyledSpan(text: $0, style: style)] }
         }
-        return currentHighlightSession().highlightLines(lines)
+        let text =
+            (document as? any JoinedLineText)?.joinedText(ofLines: viewport)
+            ?? document.lines(in: viewport).joined(separator: "\n")
+        return currentHighlightSession().highlightJoinedLines(text)
     }
 
     private func currentHighlightSession() -> LanguageHighlighter.Session {
