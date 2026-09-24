@@ -1,15 +1,11 @@
 public import AtelierParser
 
-/// Stateful iterator for query matches within a byte/point range.
+/// Stateful iterator for query matches within a byte/point range: the matches are collected when it is made.
 public struct QueryCursor: Sendable {
-    private let query: Query
-    private let tree: SyntaxTree
     private var matches: [QueryMatch]
     private var currentIndex: Int
 
     public init(query: Query, tree: SyntaxTree, byteRange: Range<Int>? = nil) {
-        self.query = query
-        self.tree = tree
         self.currentIndex = 0
 
         if let range = byteRange {
@@ -21,8 +17,6 @@ public struct QueryCursor: Sendable {
 
     /// Initialize with a point range filter (row/column).
     public init(query: Query, tree: SyntaxTree, pointRange: Range<Point>) {
-        self.query = query
-        self.tree = tree
         self.currentIndex = 0
         self.matches = QueryMatcher.execute(query: query, tree: tree, pointRange: pointRange)
     }
