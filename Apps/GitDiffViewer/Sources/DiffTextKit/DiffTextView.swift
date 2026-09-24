@@ -116,6 +116,7 @@ package struct DiffTextView: NSViewRepresentable {
         )
 
         context.coordinator.textView = textView
+        context.coordinator.followUsageBounds()
         context.coordinator.gutterView = gutterView
         context.coordinator.minimapView = minimapView
         context.coordinator.splitController = splitController
@@ -182,6 +183,7 @@ package struct DiffTextView: NSViewRepresentable {
     package static func dismantleNSView(_ pane: DiffPaneView, coordinator: Coordinator) {
         if let textView = coordinator.textView { coordinator.splitController?.unregister(textView: textView) }
         coordinator.hoverController.detach()
+        coordinator.usageObservation = nil
         NotificationCenter.default.removeObserver(coordinator)
     }
 
@@ -212,6 +214,8 @@ package final class DiffTextViewCoordinator: NSObject {
     private var diagnosticsVersion = -1
     /// ``RenderedText/measuredUnwrappedWidth()`` of the text on show, measured once per render.
     private var unwrappedWidth: (id: UUID, width: CGFloat)?
+    /// Sizes the pane again whenever TextKit's usage bounds change; see ``followUsageBounds()``.
+    fileprivate var usageObservation: NSKeyValueObservation?
 
     package override init() {
         super.init()
@@ -404,6 +408,25 @@ package final class DiffTextViewCoordinator: NSObject {
         let first = min(row(at: max(clipView.bounds.minY, 0)), lastRow)
         let last = min(max(row(at: clipView.bounds.maxY), first), lastRow)
         return first ..< (last + 1)
+    }
+
+    /// Sizes the pane from TextKit's usage bounds each time they change, as the layout manager's documentation asks of
+    /// a view sized by them.
+    ///
+    /// ``updateOverscroll(in:)`` reads those bounds, and on a new pane they are empty each time it ran before this:
+    /// when the text is applied, and when the clip view takes its size, whose new width drops what TextKit had laid
+    /// out. Sized from empty bounds, the document ends a line, less the inset, above the viewport's end. Only a resize
+    /// of the text view or of its clip view sized it again, and TextKit resizes the text view only for a text taller
+    /// than that: a shorter file kept the short document, and its pane did not scroll at all until something resized
+    /// it.
+    package func followUsageBounds() {
+        usageObservation = textView?.textLayoutManager?
+            .observe(\.usageBoundsForTextContainer) { [weak self] _, _ in
+                MainActor.assumeIsolated {
+                    guard let self, let clipView = self.textView?.enclosingScrollView?.contentView else { return }
+                    self.updateOverscroll(in: clipView)
+                }
+            }
     }
 
     @objc package func viewportDidResize(_ notification: Notification) {
