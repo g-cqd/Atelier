@@ -24,10 +24,10 @@ public enum LanguageHighlighter: Sendable {
     /// The share of a document's bytes, in percent, under ERROR nodes at which the document is highlighted lexically
     /// rather than from its grammar, until a parse of a later version of it falls under the share again.
     ///
-    /// Parses of 32 files of valid Swift, Python, JavaScript and C fall in two groups: 3 have no ERROR node, and 29
-    /// leave 12.6% to 96.5% of their bytes under them, parses gone wrong that the lexical layer highlights better.
-    /// Between the two, 5% keeps the grammar through a construct or two it misreads and drops it for a document it
-    /// fails on.
+    /// Valid code that its grammar reads leaves little under ERROR nodes: 0.6% of `ltdl.c`, 9 of 200,220 bytes in 27
+    /// of this repository's Swift files, none of 176,667 bytes of JavaScript and Python. A parse that goes wrong leaves
+    /// far more: the parser of an earlier revision left 12.6% to 96.5% of 26 of those Swift files under ERROR nodes.
+    /// Between the two, 5% keeps the grammar through a few misread constructs and drops it for a document it fails on.
     public static let maxErrorBytePercent = 5
 
     /// Whether a document is highlighted from `tree`, its parse: the parse reduced to the grammar's start rule, and
