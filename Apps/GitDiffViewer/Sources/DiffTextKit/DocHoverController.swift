@@ -32,18 +32,24 @@ package final class DocHoverController: NSObject {
     /// The hit being tracked, loading or shown; a move to the same row and column is a no-op while it is set.
     private var currentHit: HoverHit?
     private var shownHit: HoverHit?
-    private let panel = HoverDocPanel()
+    private let panel: HoverDocPanel
 
     /// Whether the documentation panel is currently on screen; for tests only.
     package var isPanelVisible: Bool { panel.isVisible }
 
+    /// - Parameters:
+    ///   - clock: Times the debounce.
+    ///   - taskProvider: Spawns the lookups.
+    ///   - debounce: How long the pointer rests on an identifier before it is looked up.
+    ///   - panel: The panel documents show in; one that orders no window in, for tests.
     package init(
         clock: any Clock<Duration> = ContinuousClock(), taskProvider: any TaskProvider = .default,
-        debounce: Duration = .milliseconds(300)
+        debounce: Duration = .milliseconds(300), panel: HoverDocPanel = HoverDocPanel()
     ) {
         self.clock = clock
         self.taskProvider = taskProvider
         self.debounce = debounce
+        self.panel = panel
         super.init()
     }
 
@@ -149,6 +155,11 @@ package final class DocHoverController: NSObject {
     @objc(mouseEntered:) package func mouseEntered(with event: NSEvent) {}
 
     @objc(mouseExited:) package func mouseExited(with event: NSEvent) {
+        pointerLeftTextView()
+    }
+
+    /// The testable core of ``mouseExited(with:)``.
+    package func pointerLeftTextView() {
         // Leaving the pane for the panel keeps the panel open.
         guard !panel.pointerIsInside else { return }
         invalidate()
