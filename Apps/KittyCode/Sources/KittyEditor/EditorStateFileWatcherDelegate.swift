@@ -12,9 +12,11 @@ extension EditorState: FileWatcherDelegate {
         statusMessage = "\(bufferName) changed on disk (unsaved changes)"
     }
 
-    public func fileWatcherDidReloadActiveBuffer(buffer: DocumentBuffer, content: String) {
+    public func fileWatcherDidReloadActiveBuffer(
+        buffer: DocumentBuffer, content: String, replaced: consuming DocumentBuffer.ReplacedContents
+    ) {
         // The old text's highlights and caches, which the buffer no longer holds, retired once replaced, below.
-        let retired = activeDocumentStorage()
+        let retired = activeDocumentStorage(replaced: consume replaced)
         // The workspace's restore, not the state's, whose refresh this would clear at once: the post-load pass below
         // highlights and measures the new text, as it does after an open.
         workspace.restoreStateFromActiveBuffer()
@@ -34,8 +36,12 @@ extension EditorState: FileWatcherDelegate {
         retire(consume retired)
     }
 
-    public func fileWatcherDidReloadInactiveBuffer(buffer: DocumentBuffer, content: String) {
+    public func fileWatcherDidReloadInactiveBuffer(
+        buffer: DocumentBuffer, content: String, replaced: consuming DocumentBuffer.ReplacedContents
+    ) {
         schedulePostLoadProcessing(for: buffer, content: content)
+        // The only reference left to the old text's highlights, which an inactive tab an open left behind still holds.
+        retire(RetiredStorage(replaced: consume replaced))
     }
 }
 
@@ -58,12 +64,16 @@ extension EditorState {
                 let reloaded = try await buffer.reloadFromDisk(offloadFileRead: offloadFileRead) {
                     if self.bufferManager.activeBuffer === buffer { self.saveStateToActiveBuffer() }
                 }
-                if let reloaded, self.bufferManager.activeBuffer === buffer {
-                    self.fileWatcherDidReloadActiveBuffer(buffer: buffer, content: reloaded.content)
-                } else if let reloaded {
-                    self.fileWatcherDidReloadInactiveBuffer(buffer: buffer, content: reloaded.content)
-                } else {
-                    self.statusMessage = "\(buffer.fileName) changed while reloading: reload again to discard it"
+                // What the buffer let go of goes to the state's consumer, which must hold its last reference.
+                switch consume reloaded {
+                    case (let file, let replaced)? where self.bufferManager.activeBuffer === buffer:
+                        self.fileWatcherDidReloadActiveBuffer(
+                            buffer: buffer, content: file.content, replaced: consume replaced)
+                    case (let file, let replaced)?:
+                        self.fileWatcherDidReloadInactiveBuffer(
+                            buffer: buffer, content: file.content, replaced: consume replaced)
+                    case nil:
+                        self.statusMessage = "\(buffer.fileName) changed while reloading: reload again to discard it"
                 }
             } catch {
                 self.statusMessage = "Cannot reload \(buffer.fileName): \(error.localizedDescription)"

@@ -141,10 +141,11 @@ public final class DocumentBuffer {
     /// - Parameters:
     ///   - offloadFileRead: Runs the blocking read, on the app's pool.
     ///   - syncLiveState: Runs just before the text is replaced: an active buffer copies its live text and cursor in.
-    /// - Returns: The file's text, or nil when the buffer kept its newer text.
+    /// - Returns: The file's text and what the buffer let go of for it, or nil when the buffer kept its newer text.
     /// - Throws: The read's error.
-    public func reloadFromDisk(offloadFileRead: BlockingFileRead, syncLiveState: () -> Void) async throws -> LoadedFile?
-    {
+    public func reloadFromDisk(
+        offloadFileRead: BlockingFileRead, syncLiveState: () -> Void
+    ) async throws -> (file: LoadedFile, replaced: ReplacedContents)? {
         let path = filePath
         let version = documentVersion
         // Read before the text, as an open does, so a change landing between the two reads as newer.
@@ -154,13 +155,23 @@ public final class DocumentBuffer {
         syncLiveState()
         let replaced = BufferEditSnapshot(
             textBuffer: textBuffer, textCursor: textCursor, lineEnding: lineEnding, selection: selection)
-        replaceContents(with: file, modifiedAt: date)
+        let replacedContents = replaceContents(with: file, modifiedAt: date)
         let reloaded = BufferEditSnapshot(textBuffer: textBuffer, textCursor: textCursor, lineEnding: lineEnding)
         editHistory.recordChange(from: replaced, to: reloaded, coalescingWindow: nil)
         editHistory.markSaved(reloaded)
         isDirty = false
         didInvalidateHistoryOnLastRefresh = false
-        return file
+        return (file, replacedContents)
+    }
+
+    /// What a reload let go of: the old text's rope, caches and highlights. A large document's storage frees one heap
+    /// object at a time, 50 ms of main-actor time for a million lines of highlights, so the buffer's owner hands this
+    /// to a consumer off the main actor rather than dropping it there.
+    public struct ReplacedContents: Sendable {
+        public var highlights: [[StyledSpan]]
+        public var textBuffer: TextBuffer
+        public var fileLines: [String]?
+        public var documentText: String?
     }
 
     /// Replaces the text with `file`'s, as a reload from disk does: the caches, highlights and selection go, the
@@ -169,7 +180,11 @@ public final class DocumentBuffer {
     /// - Parameters:
     ///   - file: The text, its rope and the line ending read from disk; the rope the read built is installed as is.
     ///   - date: The file's modification date when it was read.
-    public func replaceContents(with file: LoadedFile, modifiedAt date: Date?) {
+    /// - Returns: The storage the buffer let go of, to free off the main actor; the buffer keeps no reference to it.
+    public func replaceContents(with file: LoadedFile, modifiedAt date: Date?) -> ReplacedContents {
+        let replaced = ReplacedContents(
+            highlights: highlightedLines, textBuffer: textBuffer, fileLines: cachedFileLines,
+            documentText: cachedDocumentText)
         postOpenProcessingTask?.cancel()
         postOpenProcessingTask = nil
         textBuffer = file.textBuffer
@@ -186,6 +201,7 @@ public final class DocumentBuffer {
         textCursor.row = min(textCursor.row, max(0, lineCount - 1))
         textCursor.col = min(textCursor.col, textBuffer.line(at: textCursor.row).count)
         textCursor.scrollRow = min(textCursor.scrollRow, max(0, lineCount - 1))
+        return replaced
     }
 
     public init(

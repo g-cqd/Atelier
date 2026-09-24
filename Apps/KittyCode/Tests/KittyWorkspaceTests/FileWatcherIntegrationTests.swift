@@ -2,6 +2,8 @@ import AemiTesting
 import AtelierText
 import Foundation
 import KittyFileTree
+import KittyStyle
+import KittySyntax
 import Testing
 
 @testable import KittyWorkspace
@@ -42,11 +44,20 @@ final class WatcherDelegateSpy: FileWatcherDelegate {
         calls.record("external \(bufferName)")
     }
 
-    func fileWatcherDidReloadActiveBuffer(buffer: DocumentBuffer, content: String) {
+    /// What each reload's buffer let go of, in order.
+    private(set) var replaced: [DocumentBuffer.ReplacedContents] = []
+
+    func fileWatcherDidReloadActiveBuffer(
+        buffer: DocumentBuffer, content: String, replaced: consuming DocumentBuffer.ReplacedContents
+    ) {
+        self.replaced.append(replaced)
         calls.record("reload active \(buffer.fileName)")
     }
 
-    func fileWatcherDidReloadInactiveBuffer(buffer: DocumentBuffer, content: String) {
+    func fileWatcherDidReloadInactiveBuffer(
+        buffer: DocumentBuffer, content: String, replaced: consuming DocumentBuffer.ReplacedContents
+    ) {
+        self.replaced.append(replaced)
         calls.record("reload inactive \(buffer.fileName)")
     }
 }
@@ -176,6 +187,26 @@ struct FileWatcherIntegrationTests {
         #expect(!sut.notes.externallyModified)
         #expect(!sut.notes.hasDiskCheckPending)
         #expect(!sut.notes.isDirty)
+    }
+
+    @Test func `a reload hands the delegate the old text and highlights, which the buffer no longer holds`()
+        async throws
+    {
+        let sut = try WatchedWorkspace(content: "one\n")
+        defer { sut.removeDirectory() }
+        let highlights = [[StyledSpan(text: "one", style: .default)], []]
+        sut.notes.highlightedLines = highlights
+        try Data("two\n".utf8).write(to: URL(fileURLWithPath: sut.path))
+        sut.notes.lastModifiedDate = .distantPast
+
+        await sut.integration.reconcileWithDisk(sut.notes)
+
+        #expect(sut.delegate.calls.events == ["reload inactive notes.txt"])
+        #expect(sut.notes.textBuffer.text == "two\n")
+        #expect(sut.notes.highlightedLines.isEmpty)
+        let replaced = try #require(sut.delegate.replaced.first)
+        #expect(replaced.highlights == highlights)
+        #expect(replaced.textBuffer.text == "one\n")
     }
 
     @Test func `a dirty buffer whose file changed is flagged, not reloaded`() async throws {

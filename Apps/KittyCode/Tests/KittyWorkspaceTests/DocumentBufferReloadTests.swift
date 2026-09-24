@@ -15,7 +15,7 @@ struct DocumentBufferReloadTests {
         // Materialised on the read's rope only: a rope rebuilt from the text on the main actor starts without them.
         _ = loadedFile.textBuffer.lines
 
-        buffer.replaceContents(with: loadedFile, modifiedAt: nil)
+        _ = buffer.replaceContents(with: loadedFile, modifiedAt: nil)
 
         #expect(!buffer.textBuffer._testSnapshotCachesAreEmpty)
         #expect(buffer.textBuffer.lines(in: 0 ..< buffer.textBuffer.lineCount) == ["new", "text", ""])
