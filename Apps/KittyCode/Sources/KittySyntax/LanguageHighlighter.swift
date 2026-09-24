@@ -21,6 +21,23 @@ public enum LanguageHighlighter: Sendable {
     /// to prevent runaway memory from per-byte style arrays and token lists.
     public static let maxGrammarSourceBytes = 512_000  // 512 KB
 
+    /// The share of a document's bytes, in percent, under ERROR nodes at which the document is highlighted lexically
+    /// rather than from its grammar, until a parse of a later version of it falls under the share again.
+    ///
+    /// Parses of 32 files of valid Swift, Python, JavaScript and C fall in two groups: 3 have no ERROR node, and 29
+    /// leave 12.6% to 96.5% of their bytes under them, parses gone wrong that the lexical layer highlights better.
+    /// Between the two, 5% keeps the grammar through a construct or two it misreads and drops it for a document it
+    /// fails on.
+    public static let maxErrorBytePercent = 5
+
+    /// Whether a document is highlighted from `tree`, its parse: the parse reduced to the grammar's start rule, and
+    /// less than ``maxErrorBytePercent`` percent of its bytes lie under ERROR nodes.
+    /// - Complexity: O(1): the parse counted its ERROR bytes as it built the tree.
+    static func passesQualityGate(_ tree: SyntaxTree) -> Bool {
+        tree.root.type != "_start"
+            && (tree.errorByteCount == 0 || tree.errorByteCount * 100 < tree.source.utf8.count * maxErrorBytePercent)
+    }
+
     public final class Session {
         private enum Strategy {
             case grammar(GrammarSession)
@@ -36,6 +53,9 @@ public enum LanguageHighlighter: Sendable {
             /// The hash of the last parsed source, the quick check before `parseTree(for:)` reuses `lastParsedTree`.
             var lastParsedSourceHash: Int?
             var lastParsedTree: SyntaxTree?
+            /// Whether the last parse passed ``LanguageHighlighter/passesQualityGate(_:)``; false after a parse that
+            /// threw, true before any parse.
+            private(set) var passesQualityGate = true
 
             init(artifacts: SyntaxArtifacts, theme: Theme) {
                 parser = GrammarParser(
@@ -48,7 +68,8 @@ public enum LanguageHighlighter: Sendable {
                 highlighter = Highlighter(theme: theme)
             }
 
-            /// A parse of `source`, reusing the previous tree when the source is equal to the last one parsed.
+            /// A parse of `source`, reusing the previous tree when the source is equal to the last one parsed. Every new
+            /// parse decides `passesQualityGate` again, so a document that heals goes back to its grammar.
             func parseTree(for source: String) throws(ParseError) -> SyntaxTree {
                 let sourceHash = source.hashValue
                 if let cached = lastParsedTree,
@@ -59,9 +80,18 @@ public enum LanguageHighlighter: Sendable {
                 {
                     return cached
                 }
-                let tree = try parser.parse(source, externalScanner: scanner)
+                let tree: SyntaxTree
+                do {
+                    tree = try parser.parse(source, externalScanner: scanner)
+                } catch {
+                    lastParsedSourceHash = nil
+                    lastParsedTree = nil
+                    passesQualityGate = false
+                    throw error
+                }
                 lastParsedSourceHash = sourceHash
                 lastParsedTree = tree
+                passesQualityGate = LanguageHighlighter.passesQualityGate(tree)
                 return tree
             }
         }
@@ -86,9 +116,11 @@ public enum LanguageHighlighter: Sendable {
             return false
         }
 
+        /// Whether the session highlights from its grammar: it has one, and the last document it parsed passed
+        /// ``LanguageHighlighter/passesQualityGate(_:)``. A grammar session that has parsed nothing yet is.
         public var isGrammarBacked: Bool {
-            if case .grammar = strategy {
-                return true
+            if case .grammar(let grammarSession) = strategy {
+                return grammarSession.passesQualityGate
             }
             return false
         }
@@ -123,8 +155,7 @@ public enum LanguageHighlighter: Sendable {
                     }
                     do {
                         let tree = try grammarSession.parseTree(for: source)
-                        guard tree.root.type != "_start" else {
-                            strategy = .fallback
+                        guard grammarSession.passesQualityGate else {
                             return lexicalLines(source: source)
                         }
                         let spans = grammarSession.highlighter.highlight(
@@ -149,7 +180,7 @@ public enum LanguageHighlighter: Sendable {
         }
 
         /// The grammar's unresolved structural tokens for `source`; empty without a grammar, past
-        /// `maxGrammarSourceBytes`, or when the parse fails.
+        /// `maxGrammarSourceBytes`, or when the parse fails or does not pass the quality gate.
         public func highlightDocumentTokens(source: String) -> [HighlightToken] {
             switch strategy {
                 case .grammar(let gs):
@@ -158,7 +189,7 @@ public enum LanguageHighlighter: Sendable {
                     }
                     do {
                         let tree = try gs.parseTree(for: source)
-                        guard tree.root.type != "_start" else {
+                        guard gs.passesQualityGate else {
                             return []
                         }
                         let matches = QueryMatcher.execute(query: gs.query, tree: tree)
@@ -236,7 +267,7 @@ public enum LanguageHighlighter: Sendable {
                     }
                     do {
                         let tree = try gs.parseTree(for: source)
-                        guard tree.root.type != "_start" else {
+                        guard gs.passesQualityGate else {
                             return viewportFallback(source: source, visibleLineRange: visibleLineRange)
                         }
 
@@ -310,7 +341,7 @@ public enum LanguageHighlighter: Sendable {
             if case .grammar(let gs) = strategy {
                 if source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes {
                     if let tree = try? gs.parseTree(for: source) {
-                        if tree.root.type != "_start" {
+                        if gs.passesQualityGate {
                             let matches = QueryMatcher.execute(
                                 query: gs.query, tree: tree, byteRange: byteRange)
                             let vpCount = viewportSource.utf8.count
