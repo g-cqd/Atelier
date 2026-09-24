@@ -1467,6 +1467,19 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   4. A regression test reproduces the conditions that cut the range short.
 - **Priority:** Must. **Related:** CARD-12, CARD-14, PERF-05.
 
+#### CARD-18 · No sideways scroll when a file fits, and no bounce in code panes
+- **Statement:** A pane scrolls sideways only when its lines are wider than it, and no code pane rubber-bands past
+  its edges.
+- **Source:** 09-24 13:44 (mid-turn, to the agent fixing DIFF-06 and CARD-17), "while you're at it maybe you can inspect why sometimes the horizontal scroll is possible when
+  the file width actually matches or fits the containers / also, in the single file viewing and code scroll context,
+  i'd love to have the bouncing effect of the scroll removed".
+- **Acceptance criteria:**
+  1. A card or a single-file pane whose lines fit has no horizontal scroll range, freshly built and after a
+     re-render.
+  2. The single-file view and the cards' code panes stop at their edges, sideways and vertically, instead of
+     rubber-banding.
+- **Priority:** Must. **Related:** CARD-17, DIFF-06.
+
 ### DIFF: Diff interaction refinements (roadmap, 09-23)
 
 #### DIFF-01 · Resizable split and stacked panes
@@ -1717,3 +1730,4 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R105 | 09-24 12:30 (mid-turn) | "the swift parser and swift syntax should fail fast and only parse swift files" | HOVER-19, LANG-01 |
 | R106 | 09-24 13:06 | "if it does not override the private skills go ahead for the install, don't push to the public one but create a mirror on my g-cqd please" | PROC-12 (skills repository), D23 |
 | R107 | 09-24 13:14 (mid-turn) | "sometimes disclosing lines using the gutter handles creates rendering artifacts and line misalignment" | DIFF-06, CARD-17, PERF-10, TAB-10 |
+| R108 | 09-24 13:44 (mid-turn, to an agent) | "inspect why sometimes the horizontal scroll is possible when the file width actually matches or fits the containers" | CARD-18 |
