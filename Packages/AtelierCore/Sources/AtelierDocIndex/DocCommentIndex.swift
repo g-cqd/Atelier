@@ -1,3 +1,4 @@
+import AtelierSwiftSyntax
 import SwiftParser
 import SwiftSyntax
 
@@ -110,7 +111,7 @@ public actor DocCommentIndex {
         let limit = ProcessInfo.processInfo.activeProcessorCount
         let parsed = try await mapConcurrently(changed, limit: limit) { change in
             try Task.checkCancellation()
-            return extractor(change.file.uri, change.file.content)
+            return await SwiftSyntaxStack.run { extractor(change.file.uri, change.file.content) }
         }
         // The last check before anything lands, with no suspension until the files are in.
         try Task.checkCancellation()
@@ -258,12 +259,14 @@ public actor DocCommentIndex {
         return hasher.finalize()
     }
 
-    /// The documented declarations of one Swift file, parsed with swift-syntax.
+    /// The documented declarations of one Swift file, parsed with swift-syntax on ``AtelierSwiftSyntax/SwiftSyntaxStack``.
     public static func extractEntries(uri: String, content: String) -> [DocEntry] {
-        let tree = Parser.parse(source: content)
-        let visitor = DocCommentVisitor(uri: uri)
-        visitor.walk(tree)
-        return visitor.entries
+        SwiftSyntaxStack.run {
+            let tree = Parser.parse(source: content)
+            let visitor = DocCommentVisitor(uri: uri)
+            visitor.walk(tree)
+            return visitor.entries
+        }
     }
 }
 

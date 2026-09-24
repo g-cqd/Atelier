@@ -72,27 +72,30 @@ public struct SwiftSyntaxTokenRanges: SelectedSyntaxTokenRanging {
         }
     }
 
+    /// Parsed and walked on ``SwiftSyntaxStack``: a side whose brackets never close nests past a worker thread's stack.
     private static func swiftTokenRanges(text: String, selectedLines: [LineSpan]?) -> [Range<Int>] {
-        var collector = RangeCollector(selectedLines: selectedLines)
-        let tree = Parser.parse(source: text)
-        for token in tree.tokens(viewMode: .sourceAccurate) {
-            if let last = selectedLines?.last, token.position.utf8Offset >= last.utf8.upperBound { break }
-            var offset = token.position.utf8Offset
-            for piece in token.leadingTrivia.pieces {
-                append(trivia: piece, at: offset, to: &collector)
-                offset += piece.sourceLength.utf8Length
+        SwiftSyntaxStack.run {
+            var collector = RangeCollector(selectedLines: selectedLines)
+            let tree = Parser.parse(source: text)
+            for token in tree.tokens(viewMode: .sourceAccurate) {
+                if let last = selectedLines?.last, token.position.utf8Offset >= last.utf8.upperBound { break }
+                var offset = token.position.utf8Offset
+                for piece in token.leadingTrivia.pieces {
+                    append(trivia: piece, at: offset, to: &collector)
+                    offset += piece.sourceLength.utf8Length
+                }
+                let length = token.text.utf8.count
+                if length > 0 {
+                    collector.append(offset ..< (offset + length))
+                }
+                offset += length
+                for piece in token.trailingTrivia.pieces {
+                    append(trivia: piece, at: offset, to: &collector)
+                    offset += piece.sourceLength.utf8Length
+                }
             }
-            let length = token.text.utf8.count
-            if length > 0 {
-                collector.append(offset ..< (offset + length))
-            }
-            offset += length
-            for piece in token.trailingTrivia.pieces {
-                append(trivia: piece, at: offset, to: &collector)
-                offset += piece.sourceLength.utf8Length
-            }
+            return collector.ranges
         }
-        return collector.ranges
     }
 
     /// Comments are split into words so a changed word inside a comment is emphasized on its own.
