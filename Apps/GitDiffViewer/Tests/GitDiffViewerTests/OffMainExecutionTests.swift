@@ -6,6 +6,7 @@ import Darwin
 import DiffCore
 import DiffGit
 import Foundation
+import Synchronization
 import Testing
 
 @testable import DiffComparison
@@ -105,5 +106,39 @@ struct OffMainExecutionTests {
         try await harness.taskProvider.waitForAllTasks()
 
         #expect(sut.leftTree.map(\.id) == ["a.swift", "b.swift"])
+    }
+
+    // MARK: Repository prologue
+
+    @Test
+    func `loadSides lists and indexes both sides off the main actor`() async throws {
+        let root = URL(filePath: "/prologue", directoryHint: .isDirectory)
+        let reader = FakeSourceReader()
+        reader.repositories[root] = RepositoryInfo(root: root, branches: ["main"], tags: [], commits: [])
+        reader.entries[.gitRef(repository: root, ref: "HEAD")] = [entry("a/one.swift", "1")]
+        reader.entries[.gitRef(repository: root, ref: "main")] = [entry("b/two.swift", "2")]
+        let ranOnMain = Mutex<[Bool]>([])
+
+        #expect(isOnMainThread())
+        let loaded = try #require(
+            await DiffViewerModel.loadSides(
+                in: root, leftRef: "HEAD", rightRef: "main", reader: reader,
+                threadProbe: { ranOnMain.withLock { $0.append(isOnMainThread()) } }))
+
+        // Once as the prologue starts, then once per side as its index is built.
+        #expect(ranOnMain.withLock { $0 } == [false, false, false])
+        #expect(loaded.leftListing?.entriesByPath["a/one.swift"]?.blobID == "1")
+        #expect(loaded.leftListing?.tree.map(\.id) == ["a"])
+        #expect(loaded.rightListing?.entriesByPath["b/two.swift"]?.blobID == "2")
+        #expect(loaded.rightListing?.tree.map(\.id) == ["b"])
+    }
+
+    @Test
+    func `a prepared side index keeps the first entry listed for a path`() {
+        let listing = SideState.Listing(
+            entries: [entry("a/one.swift", "first"), entry("a/one.swift", "second")], commit: nil)
+
+        #expect(listing.entriesByPath["a/one.swift"]?.blobID == "first")
+        #expect(listing.tree.map(\.id) == ["a"])
     }
 }
