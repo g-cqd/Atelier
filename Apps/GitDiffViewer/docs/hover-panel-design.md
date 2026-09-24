@@ -14,7 +14,11 @@ no title, no divider, no "No documentation" line.
 Sizing: fixed width 440, measure via NSTextLayoutManager.usageBoundsForTextContainer, clamp
 height 420 then inner-scroll body only. Anchor at HoverHit.anchorRect converted to screen,
 below the identifier, flip at screen edges; addChildWindow(.above). DocHoverController's
-debounce/generation/tracking untouched — only show/close swap.
+debounce/generation/tracking untouched — only show/close swap. Staying open (HOVER-20): a
+corridor (HoverCorridor) spans the identifier's middle to the panel's near edge across the
+panel's width; leaving identifier, corridor and panel closes after closeGraceDelay (300 ms),
+which coming back cancels; Escape, a click off the panel and the pane's window resigning key
+close at once; another identifier replaces the panel when its own lookup lands.
 
 Coloring: CodeAttributedBuilder (DiffRendering) = LexicalHighlightEngine tokens →
 DiffPalette.color(for:), same palette instance as the hovered pane (RenderedText.palette).
