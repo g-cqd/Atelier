@@ -326,7 +326,11 @@ public final class GLRParser: Sendable {
         }
         return shifted
     }
+}
 
+// MARK: - Reducing
+
+extension GLRParser {
     /// Replaces the top `count` nodes of `stack` with one `nonTerminal` node built by production `rule`, and moves to
     /// the table's GOTO state from the state the first of those nodes was pushed in. Without that GOTO state the
     /// reduction is an error. The node takes the production's fields, its children the production's aliases, and the
