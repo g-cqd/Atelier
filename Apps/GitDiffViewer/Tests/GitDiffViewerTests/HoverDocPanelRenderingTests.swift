@@ -57,11 +57,47 @@ import Testing
             max(abs(a.blueComponent - b.blueComponent), abs(a.alphaComponent - b.alphaComponent)))
     }
 
+    /// Two bitmaps of one layout, read byte by byte: a pixel whose samples match in both is the same color, so the
+    /// comparisons below make `NSColor`s only for the pixels that differ. Making two for every pixel held the main actor
+    /// for seconds per test, and every main-actor test in the suite waited behind it.
+    private struct SameLayoutBytes {
+        private let first: NSBitmapImageRep
+        private let second: NSBitmapImageRep
+        private let firstBytes: UnsafeMutablePointer<UInt8>
+        private let secondBytes: UnsafeMutablePointer<UInt8>
+        private let bytesPerRow: Int
+        private let bytesPerPixel: Int
+
+        /// Nil unless both bitmaps store their pixels alike, meshed and whole bytes to a pixel.
+        init?(_ first: NSBitmapImageRep, _ second: NSBitmapImageRep) {
+            guard !first.isPlanar, !second.isPlanar, first.bitsPerPixel % 8 == 0,
+                first.bitsPerPixel == second.bitsPerPixel, first.bytesPerRow == second.bytesPerRow,
+                first.bitmapFormat == second.bitmapFormat, first.colorSpace == second.colorSpace,
+                first.pixelsWide == second.pixelsWide, first.pixelsHigh == second.pixelsHigh,
+                let firstBytes = first.bitmapData, let secondBytes = second.bitmapData
+            else { return nil }
+            self.first = first
+            self.second = second
+            self.firstBytes = firstBytes
+            self.secondBytes = secondBytes
+            bytesPerRow = first.bytesPerRow
+            bytesPerPixel = first.bitsPerPixel / 8
+        }
+
+        /// Whether the pixel at `x`, `y`, in row `y` as `colorAt(x:y:)` reads it, holds the same samples in both.
+        func samePixel(x: Int, y: Int) -> Bool {
+            let offset = y * bytesPerRow + x * bytesPerPixel
+            return memcmp(firstBytes + offset, secondBytes + offset, bytesPerPixel) == 0
+        }
+    }
+
     private func changedPixels(between before: NSBitmapImageRep, and after: NSBitmapImageRep) -> Int {
         guard before.pixelsWide == after.pixelsWide, before.pixelsHigh == after.pixelsHigh else { return 0 }
+        let bytes = SameLayoutBytes(before, after)
         var count = 0
         for y in 0 ..< before.pixelsHigh {
             for x in 0 ..< before.pixelsWide {
+                if bytes?.samePixel(x: x, y: y) == true { continue }
                 guard let first = before.colorAt(x: x, y: y), let second = after.colorAt(x: x, y: y) else { continue }
                 if colorDifference(first, second) > 0.08 { count += 1 }
             }
@@ -84,9 +120,11 @@ import Testing
     }
 
     private func highContrastChangedPixels(in full: NSBitmapImageRep, withoutContent blank: NSBitmapImageRep) -> Int {
+        let bytes = SameLayoutBytes(full, blank)
         var count = 0
         for y in 0 ..< full.pixelsHigh {
             for x in 0 ..< full.pixelsWide {
+                if bytes?.samePixel(x: x, y: y) == true { continue }
                 guard let ink = full.colorAt(x: x, y: y), let background = blank.colorAt(x: x, y: y),
                     colorDifference(ink, background) > 0.08,
                     let ratio = contrastRatio(ink, background)
