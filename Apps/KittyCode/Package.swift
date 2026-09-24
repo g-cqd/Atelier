@@ -105,6 +105,7 @@ let package = Package(
             dependencies: [
                 .product(name: "AtelierGrammar", package: "AtelierCore"),
                 .product(name: "AtelierParser", package: "AtelierCore"),
+                .product(name: "AtelierScanners", package: "AtelierCore"),
                 .product(name: "AtelierQuery", package: "AtelierCore"), "KittyStyle",
                 .product(name: "AtelierSyntaxModel", package: "AtelierCore"),
                 .product(name: "AtelierLexers", package: "AtelierCore"),
