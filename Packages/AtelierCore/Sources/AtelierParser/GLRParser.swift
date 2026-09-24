@@ -13,6 +13,8 @@ public final class GLRParser: Sendable {
     private let scanner: TokenScanner?
     /// The terminal index of each of the lex table's tokens; nil for an extra, which the table does not take.
     let tokenTerminals: [Int?]
+    /// The grammar's symbols in tree-sitter's order, which breaks a tie between two parses.
+    let symbolRanks: SymbolRanks
 
     public init(parseTable: ParseTable, lexTable: LexTable, productions: [ProductionRule]) {
         self.parseTable = parseTable
@@ -30,6 +32,7 @@ public final class GLRParser: Sendable {
         self.nonTerminalIndex = ntIdx
         self.scanner = TokenScanner(lexTable)
         self.tokenTerminals = lexTable.tokens.map { tIdx[$0.name] }
+        self.symbolRanks = SymbolRanks(lexTable: lexTable, parseTable: parseTable, productions: productions)
     }
 
     static let maxStacks = 256
@@ -147,7 +150,7 @@ public final class GLRParser: Sendable {
             }
         }
 
-        guard let best = ParseStack.takingBest(from: &stacks) else {
+        guard let best = ParseStack.takingBest(from: &stacks, ranks: symbolRanks) else {
             throw .parsingFailed("No valid parse at the end of input")
         }
         let errorByteCount = best.errorByteCount
@@ -188,13 +191,14 @@ public final class GLRParser: Sendable {
             ParseStack.releaseAll(&reduced)
             throw Self.treeTooDeep
         }
-        var next = ParseStack.mergingIdenticalHistories(shift(consume reduced, token: token, lookahead: lookahead))
+        var next = ParseStack.mergingIdenticalHistories(
+            shift(consume reduced, token: token, lookahead: lookahead), ranks: symbolRanks)
         guard !next.isEmpty else {
             throw .parsingFailed("No valid parse at token \(tokenIndex): \(token.type)")
         }
         // Prune stacks if count exceeds limit — keep the preferred ones
         if next.count > Self.maxStacks {
-            next.sort { $0.isPreferred(over: $1) }
+            next.sort { $0.isPreferred(over: $1, ranks: symbolRanks) }
             var pruned = Array(next[Self.maxStacks...])
             next.removeSubrange(Self.maxStacks...)
             for index in pruned.indices {

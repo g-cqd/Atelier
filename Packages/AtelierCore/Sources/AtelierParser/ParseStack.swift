@@ -68,6 +68,15 @@ struct ParseStack: Sendable {
             ? errorCount < other.errorCount : dynamicPrecedence > other.dynamicPrecedence
     }
 
+    /// Whether this stack's parse is better than `other`'s, as tree-sitter chooses between two parses: fewer errors,
+    /// then a higher dynamic precedence, then the nodes that come first by `ranks` (see ``SymbolRanks/compare(_:_:)``).
+    func isPreferred(over other: ParseStack, ranks: SymbolRanks) -> Bool {
+        guard errorCount == other.errorCount, dynamicPrecedence == other.dynamicPrecedence else {
+            return isPreferred(over: other)
+        }
+        return ranks.compare(nodes, other.nodes) < 0
+    }
+
     /// Pops the top `count` nodes, all of them if it holds fewer, and returns them oldest first; the current state
     /// becomes the one the first of them was pushed in.
     mutating func popNodes(_ count: Int) -> [SyntaxNode] {
@@ -100,9 +109,10 @@ struct ParseStack: Sendable {
         SyntaxTree.releaseIteratively(consume deepNodes)
     }
 
-    /// Takes out the preferred stack, the first of them on a tie, and releases the others; nil when `stacks` is empty.
-    static func takingBest(from stacks: inout [ParseStack]) -> ParseStack? {
-        guard let bestIndex = stacks.indices.min(by: { stacks[$0].isPreferred(over: stacks[$1]) }) else {
+    /// Takes out the stack `ranks` prefers, the first of them on a tie, and releases the others; nil when `stacks` is
+    /// empty.
+    static func takingBest(from stacks: inout [ParseStack], ranks: SymbolRanks) -> ParseStack? {
+        guard let bestIndex = stacks.indices.min(by: { stacks[$0].isPreferred(over: stacks[$1], ranks: ranks) }) else {
             return nil
         }
         let best = stacks.remove(at: bestIndex)
@@ -125,10 +135,13 @@ struct ParseStack: Sendable {
     }
 
     /// `stacks` with one stack per state history, in order: stacks with the same history parse the rest of the input
-    /// alike, so the first preferred one stands for all of them, and the others are released.
+    /// alike, so the first one `ranks` prefers stands for all of them, and the others are released.
     ///
-    /// - Complexity: O(s · d) for s stacks d states deep, comparing only stacks that share a current state.
-    static func mergingIdenticalHistories(_ stacks: consuming [ParseStack]) -> [ParseStack] {
+    /// - Complexity: O(s · d) for s stacks d states deep, comparing only stacks that share a current state, plus the
+    ///   nodes two stacks that tie on errors and dynamic precedence do not share.
+    static func mergingIdenticalHistories(
+        _ stacks: consuming [ParseStack], ranks: SymbolRanks = SymbolRanks([:])
+    ) -> [ParseStack] {
         var pending = consume stacks
         guard pending.count > 1 else { return pending }
         pending.reverse()
@@ -145,7 +158,7 @@ struct ParseStack: Sendable {
                     && kept[$0].tokenIndex == stack.tokenIndex
                     && kept[$0].extras == stack.extras
             }) {
-                if stack.isPreferred(over: kept[twin]) {
+                if stack.isPreferred(over: kept[twin], ranks: ranks) {
                     swap(&stack, &kept[twin])
                 }
                 stack.releaseNodes(sparing: kept[twin])

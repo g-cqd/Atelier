@@ -78,9 +78,9 @@ extension GLRParser {
                     throw error
                 }
             }
-            next = ParseStack.mergingIdenticalHistories(consume next)
+            next = ParseStack.mergingIdenticalHistories(consume next, ranks: symbolRanks)
             if next.count > Self.maxStacks {
-                next.sort { $0.isPreferred(over: $1) }
+                next.sort { $0.isPreferred(over: $1, ranks: symbolRanks) }
                 var dropped = Array(next[Self.maxStacks...])
                 next.removeSubrange(Self.maxStacks...)
                 ParseStack.releaseAll(&dropped)
@@ -96,7 +96,7 @@ extension GLRParser {
                 throw Self.treeTooDeep
             }
         }
-        guard let best = ParseStack.takingBest(from: &finished) else {
+        guard let best = ParseStack.takingBest(from: &finished, ranks: symbolRanks) else {
             throw .parsingFailed("No valid parse at the end of input")
         }
         let extras = best.extras
