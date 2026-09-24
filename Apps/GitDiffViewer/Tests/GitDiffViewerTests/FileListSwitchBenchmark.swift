@@ -31,12 +31,13 @@ import Testing
 /// GDV_BENCH_RUNS the switches timed per file.
 @MainActor
 struct FileListSwitchBenchmark {
-    /// Median milliseconds from the click on a file of the list to the end of the display pass that shows it: twice
-    /// the 84 to 114 ms measured on the Atelier repository, 200 cards, while nothing else loaded the machine.
-    static let openBudget = 230.0
-    /// Median milliseconds from closing the last tab to the end of the display pass that shows the whole list: twice
-    /// the 129 to 159 ms measured alongside.
-    static let closeBudget = 320.0
+    /// Median milliseconds from the click on a file of the list to the end of the display pass that shows it. Measured
+    /// on the Atelier repository, 200 cards, with nothing else loading the machine: 99 to 202 ms before PERF-10, 60 to
+    /// 77 ms after; the budget leaves a third of headroom over the slowest of those.
+    static let openBudget = 100.0
+    /// Median milliseconds from closing the last tab to the end of the display pass that shows the whole list: 149 to
+    /// 252 ms before, 70 to 77 ms after, measured alongside.
+    static let closeBudget = 110.0
 
     private let scratchDefaults = ScratchDefaults(tag: "switch-bench")
 

@@ -1,3 +1,4 @@
+import AppKit
 import DiffComparison
 import DiffCore
 import DiffGit
@@ -5,6 +6,37 @@ import DiffRendering
 import DiffTextKit
 import Foundation
 import SwiftUI
+
+/// The detail area behind a hosting boundary of its own (book PERF-10). Opening a file from the list, or closing its
+/// tab, replaces most of what the detail area holds, and a change that large reaching the window's root graph makes
+/// SwiftUI build every toolbar item anew: some 35 to 45 ms of each switch went there. In a hosting view of its own the
+/// detail area updates in its own graph, and the root, with the toolbar, never sees it.
+///
+/// The area runs beneath the toolbar as before: it ignores the column's safe area, and its hosting view takes the
+/// insets AppKit gives it, so the card list still scrolls under the toolbar and the file panes still start below it.
+struct DetailAreaHost: View {
+    let model: DiffViewerModel
+
+    var body: some View {
+        Boundary(model: model)
+            .ignoresSafeArea()
+    }
+
+    private struct Boundary: NSViewRepresentable {
+        let model: DiffViewerModel
+
+        func makeNSView(context: Context) -> NSHostingView<DiffDetailView> {
+            let view = NSHostingView(rootView: DiffDetailView(model: model))
+            // SwiftUI sizes it as it sized the detail area; it asks for no size of its own.
+            view.sizingOptions = []
+            return view
+        }
+
+        func updateNSView(_ view: NSHostingView<DiffDetailView>, context: Context) {
+            if view.rootView.model !== model { view.rootView = DiffDetailView(model: model) }
+        }
+    }
+}
 
 struct DiffDetailView: View {
     let model: DiffViewerModel
