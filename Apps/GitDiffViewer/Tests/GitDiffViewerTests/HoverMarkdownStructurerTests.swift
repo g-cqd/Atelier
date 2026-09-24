@@ -247,4 +247,19 @@ import Testing
         #expect(document.extraCandidates.isEmpty)
         #expect(document.discussion?.hasSuffix("> A quoted *note*.\n\n---\n\nClosing paragraph.") == true)
     }
+
+    /// A `/** */` comment from a file with CRLF line endings reaches the structurer with them.
+    @Test
+    func `CRLF line endings structure as LF ones do`() {
+        let markdown = [
+            "```swift", "func load() -> Int", "```", "", "Loads it.", "", "```swift", "let x = 1", "```", "",
+            "- Returns: The value."
+        ]
+        .joined(separator: "\r\n")
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(document.declaration == "func load() -> Int")
+        #expect(document.summary == "Loads it.")
+        #expect(document.discussion == "```swift\nlet x = 1\n```")
+        #expect(document.returns == "The value.")
+    }
 }

@@ -36,7 +36,8 @@ package enum HoverMarkdownStructurer {
     }
 
     package static func structure(_ markdown: String) -> Document {
-        let blocks = splitBlocks(markdown)
+        // A `/** */` comment in a file with CRLF line endings keeps them; every rule below splits on "\n".
+        let blocks = splitBlocks(markdown.replacingOccurrences(of: "\r\n", with: "\n"))
         guard let firstBlock = blocks.first else { return Document() }
         let primary = parseBlock(firstBlock)
         var document = Document()
