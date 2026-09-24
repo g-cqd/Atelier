@@ -12,7 +12,13 @@ public struct LexicalHighlightEngine: HighlightEngine {
     }
 
     public func highlight(utf8 source: [UInt8], language: Language) -> [HighlightToken] {
-        SyntaxHighlighter.tokens(utf8: source, language: language).map(Self.highlightToken)
+        highlight(utf8: source.span, language: language)
+    }
+
+    /// Lexical tokens over borrowed UTF-8 bytes, with byte offsets; the scan allocates only the returned array.
+    /// - Complexity: O(bytes + tokens)
+    public func highlight(utf8 source: Span<UInt8>, language: Language) -> [HighlightToken] {
+        SyntaxHighlighter.scan(utf8: source, language: language, as: HighlightToken.self)
     }
 
     /// Tokens over UTF-16 units with UTF-16 offsets in `byteRange`, for a store that indexes by UTF-16 unit.
@@ -22,6 +28,12 @@ public struct LexicalHighlightEngine: HighlightEngine {
 
     static func highlightToken(_ token: Token) -> HighlightToken {
         HighlightToken(byteRange: token.range, role: token.kind.role, layer: .lexical)
+    }
+}
+
+extension HighlightToken: ScannerToken {
+    init(kind: TokenKind, range: Range<Int>) {
+        self.init(byteRange: range, role: kind.role, layer: .lexical)
     }
 }
 

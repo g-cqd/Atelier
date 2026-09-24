@@ -1,57 +1,44 @@
 import AtelierSyntaxModel
 
-/// Scans C-like and script languages over UTF-16 units, driven by a `LanguageSyntax`.
-struct CodeScanner<Unit: LexerUnit> {
-    let units: [Unit]
-    let syntax: LanguageSyntax
-    private var tokens: [Token] = []
+/// Scans the code languages over borrowed UTF-8 bytes, driven by a `LanguageSyntax`: keywords, capitalized types,
+/// numbers, strings, comments and attribute words. A table of byte classes sends each byte down its path, and a
+/// keyword is looked up only when a keyword of its length starts with its first byte, so a scan allocates nothing
+/// but its token array.
+struct CodeScanner {
+    private let tables: Tables
 
-    /// Lengths and first units the language's keywords span, so the identifier scan can skip the keyword lookup.
-    private let keywordLengths: ClosedRange<Int>
-    private let keywordFirstUnits: [Bool]
-
-    init(units: [Unit], syntax: LanguageSyntax) {
-        self.units = units
-        self.syntax = syntax
-        var shortest = Int.max
-        var longest = 0
-        var firstUnits = [Bool](repeating: false, count: 128)
-        for keyword in syntax.keywords {
-            let count = keyword.utf8.count
-            shortest = min(shortest, count)
-            longest = max(longest, count)
-            if let first = keyword.utf8.first, first < 128 { firstUnits[Int(first)] = true }
-        }
-        keywordLengths = shortest <= longest ? shortest ... longest : 0 ... 0
-        keywordFirstUnits = firstUnits
+    init(language: Language) {
+        tables = Tables.all.first { $0.language == language } ?? Tables(language: language)
     }
 
-    mutating func scan() -> [Token] {
-        var index = 0
+    /// The tokens of `units`, ascending and disjoint, with byte offsets.
+    /// - Complexity: O(`units.count`)
+    func scan<Output: ScannerToken>(_ units: Span<UInt8>, as: Output.Type) -> [Output] {
+        var tokens: [Output] = []
+        tokens.reserveCapacity(units.count / 16 + 16)
+        let classes = tables.classes.span
         let count = units.count
+        var index = 0
         while index < count {
             let unit = units[index]
-            let next = index + 1 < count ? units[index + 1] : 0
-            if syntax.hasPreprocessor, unit == ASCII.hash, ASCII.isIdentifierStart(next) {
-                index = scanWord(from: index, kind: .attribute)
-            } else if unit == ASCII.at, syntax.quotes.contains(unit: next), syntax.hasPreprocessor {
-                index = scanString(from: index + 1, quote: next, prefixLength: 1)
-            } else if let comment = syntax.lineComments.first(where: { matches($0, at: index) }) {
-                index = scanLineComment(from: index, length: comment.count)
-            } else if let block = syntax.blockComment, matches(block.start, at: index) {
-                index = scanBlockComment(from: index, block: block)
-            } else if syntax.quotes.contains(unit: unit) {
-                index = scanString(from: index, quote: unit)
-            } else if syntax.hasAnnotations, unit == ASCII.at, ASCII.isIdentifierStart(next) {
-                index = scanWord(from: index, kind: .attribute)
-            } else if syntax.hasVariables, unit == ASCII.dollar,
-                ASCII.isIdentifierStart(next) || next == ASCII.openBrace
-            {
-                index = scanVariable(from: index)
-            } else if ASCII.isDigit(unit) {
-                index = scanNumber(from: index)
-            } else if ASCII.isIdentifierStart(unit) {
-                index = scanIdentifier(from: index)
+            let flags = classes[Int(unit)]
+            if flags & Class.identifierStart != 0 {
+                let start = index
+                index += 1
+                while index < count, classes[Int(units[index])] & Class.identifier != 0 { index += 1 }
+                if tables.keywords.contains(units, from: start, to: index) {
+                    tokens.append(Output(kind: .keyword, range: start ..< index))
+                } else if ASCII.isUpper(unit) {
+                    tokens.append(Output(kind: .type, range: start ..< index))
+                }
+            } else if flags & Class.digit != 0 {
+                let start = index
+                index = numberEnd(units, from: index, classes: classes)
+                tokens.append(Output(kind: .number, range: start ..< index))
+            } else if flags & Class.special != 0 {
+                let (kind, range) = scanSpecial(units, at: index, classes: classes)
+                if let kind { tokens.append(Output(kind: kind, range: range)) }
+                index = range.upperBound
             } else {
                 index += 1
             }
@@ -59,107 +46,310 @@ struct CodeScanner<Unit: LexerUnit> {
         return tokens
     }
 
-    private func matches(_ pattern: [UInt8], at index: Int) -> Bool {
-        guard index + pattern.count <= units.count else { return false }
-        for (offset, unit) in pattern.enumerated() where units[index + offset] != unit { return false }
+    /// What the special byte at `index` starts, tried in the order the languages need: a raw string, a directive, an
+    /// Objective-C string, a comment, a string, an attribute or a variable. Returns the token's kind, nil when the
+    /// byte starts none, and the range to skip, which ends where scanning resumes.
+    private func scanSpecial(
+        _ units: Span<UInt8>, at index: Int, classes: Span<UInt8>
+    ) -> (kind: TokenKind?, range: Range<Int>) {
+        let unit = units[index]
+        let next = index + 1 < units.count ? units[index + 1] : 0
+        let nextStartsWord = classes[Int(next)] & Class.identifierStart != 0
+        if tables.rawStrings, unit == ASCII.hash {
+            var quote = index
+            while quote < units.count, units[quote] == ASCII.hash { quote += 1 }
+            guard quote < units.count, units[quote] == ASCII.quote else { return (nil, index ..< quote) }
+            return (.string, index ..< stringEnd(units, from: quote, quote: ASCII.quote, hashes: quote - index))
+        }
+        let syntax = tables.syntax
+        if syntax.hasPreprocessor, unit == ASCII.hash, nextStartsWord {
+            return (.attribute, index ..< wordEnd(units, from: index + 1, classes: classes))
+        }
+        if syntax.hasPreprocessor, unit == ASCII.at, classes[Int(next)] & Class.quote != 0 {
+            return (.string, index ..< stringEnd(units, from: index + 1, quote: next, hashes: 0))
+        }
+        // Indexed: iterating an array of arrays allocates on every step of an unoptimized build.
+        var comment = 0
+        while comment < syntax.lineComments.count {
+            let pattern = syntax.lineComments[comment]
+            comment += 1
+            guard matches(pattern, in: units, at: index) else { continue }
+            var end = index + pattern.count
+            while end < units.count, units[end] != ASCII.newline { end += 1 }
+            return (.comment, index ..< end)
+        }
+        if let block = syntax.blockComment, matches(block.start, in: units, at: index) {
+            return (.comment, index ..< blockCommentEnd(units, from: index, block: block))
+        }
+        if classes[Int(unit)] & Class.quote != 0 {
+            return (.string, index ..< stringEnd(units, from: index, quote: unit, hashes: 0))
+        }
+        if syntax.hasAnnotations, unit == ASCII.at, nextStartsWord {
+            return (.attribute, index ..< wordEnd(units, from: index + 1, classes: classes))
+        }
+        if syntax.hasVariables, unit == ASCII.dollar, nextStartsWord || next == ASCII.openBrace {
+            return (.attribute, index ..< variableEnd(units, from: index, classes: classes))
+        }
+        return (nil, index ..< index + 1)
+    }
+
+    private func matches(_ pattern: [UInt8], in units: Span<UInt8>, at index: Int) -> Bool {
+        guard pattern.count <= units.count - index else { return false }
+        var offset = 0
+        while offset < pattern.count {
+            guard units[index + offset] == pattern[offset] else { return false }
+            offset += 1
+        }
         return true
     }
 
-    private mutating func scanLineComment(from start: Int, length: Int) -> Int {
-        var index = start + length
-        while index < units.count, units[index] != ASCII.newline { index += 1 }
-        tokens.append(Token(kind: .comment, range: start ..< index))
+    /// The end of the identifier characters from `index`.
+    private func wordEnd(_ units: Span<UInt8>, from index: Int, classes: Span<UInt8>) -> Int {
+        var end = index
+        while end < units.count, classes[Int(units[end])] & Class.identifier != 0 { end += 1 }
+        return end
+    }
+
+    /// The end of a number: identifier characters, and dots followed by a digit or ending the text.
+    private func numberEnd(_ units: Span<UInt8>, from start: Int, classes: Span<UInt8>) -> Int {
+        var index = start
+        while index < units.count {
+            let unit = units[index]
+            if classes[Int(unit)] & Class.identifier != 0 {
+                index += 1
+            } else if unit == ASCII.dot, index + 1 == units.count || classes[Int(units[index + 1])] & Class.digit != 0 {
+                index += 1
+            } else {
+                break
+            }
+        }
         return index
     }
 
-    private mutating func scanBlockComment(from start: Int, block: (start: [UInt8], end: [UInt8])) -> Int {
+    /// The end of `$name` or `${…}`, the latter closing at `}` or, unclosed, just past the end of its line.
+    private func variableEnd(_ units: Span<UInt8>, from start: Int, classes: Span<UInt8>) -> Int {
+        guard start + 1 < units.count, units[start + 1] == ASCII.openBrace else {
+            return wordEnd(units, from: start + 1, classes: classes)
+        }
+        var index = start + 1
+        while index < units.count, units[index] != ASCII.closeBrace, units[index] != ASCII.newline { index += 1 }
+        return min(index + 1, units.count)
+    }
+
+    /// The end of a block comment that opens at `start`, nested when the language nests them; the end of the text
+    /// when it never closes.
+    private func blockCommentEnd(
+        _ units: Span<UInt8>, from start: Int, block: (start: [UInt8], end: [UInt8])
+    ) -> Int {
+        let nests = tables.syntax.nestsBlockComments
+        let opening = block.start[0]
+        let closing = block.end[0]
         var index = start + block.start.count
         var depth = 1
         while index < units.count, depth > 0 {
-            if syntax.nestsBlockComments, matches(block.start, at: index) {
+            let unit = units[index]
+            if nests, unit == opening, matches(block.start, in: units, at: index) {
                 depth += 1
                 index += block.start.count
-            } else if matches(block.end, at: index) {
+            } else if unit == closing, matches(block.end, in: units, at: index) {
                 depth -= 1
                 index += block.end.count
             } else {
                 index += 1
             }
         }
-        tokens.append(Token(kind: .comment, range: start ..< index))
         return index
     }
 
-    private mutating func scanString(from start: Int, quote: Unit, prefixLength: Int = 0) -> Int {
+    /// The end of a string whose opening quote is at `start`, preceded by `hashes` hashes for a raw string: a raw
+    /// string closes only at a quote followed by as many hashes, and escapes only with a backslash followed by as
+    /// many. A tripled quote or a multi-line quote runs across lines; any other string stops at the end of its line.
+    private func stringEnd(_ units: Span<UInt8>, from start: Int, quote: UInt8, hashes: Int) -> Int {
+        let quoteFlags = tables.classes[Int(quote)]
         let isTriple =
-            syntax.tripleQuotes.contains(unit: quote) && start + 2 < units.count
+            quoteFlags & Class.tripleQuote != 0 && start + 2 < units.count
             && units[start + 1] == quote && units[start + 2] == quote
-        let spansLines = isTriple || syntax.multilineQuotes.contains(unit: quote)
-        var index = start + (isTriple ? 3 : 1)
+        let spansLines = isTriple || quoteFlags & Class.multilineQuote != 0
+        let quotes = isTriple ? 3 : 1
+        var index = start + quotes
         while index < units.count {
             let unit = units[index]
             if unit == ASCII.backslash {
-                index += 2
-                continue
-            }
-            if isTriple {
-                if unit == quote, index + 2 < units.count, units[index + 1] == quote, units[index + 2] == quote {
-                    index += 3
-                    break
+                if hashes == 0 {
+                    index += 2
+                    continue
+                }
+                var escape = index + 1
+                while escape < units.count, escape - index - 1 < hashes, units[escape] == ASCII.hash { escape += 1 }
+                if escape - index - 1 == hashes {
+                    index = escape + 1
+                    continue
                 }
             } else if unit == quote {
-                index += 1
-                break
+                if closes(units, at: index, quote: quote, quotes: quotes, hashes: hashes) {
+                    return index + quotes + hashes
+                }
             } else if unit == ASCII.newline, !spansLines {
-                break
+                return index
             }
             index += 1
         }
-        index = min(index, units.count)
-        tokens.append(Token(kind: .string, range: (start - prefixLength) ..< index))
-        return index
+        return units.count
     }
 
-    private mutating func scanVariable(from start: Int) -> Int {
-        var index = start + 1
-        if index < units.count, units[index] == ASCII.openBrace {
-            while index < units.count, units[index] != ASCII.closeBrace, units[index] != ASCII.newline { index += 1 }
-            index = min(index + 1, units.count)
-        } else {
-            while index < units.count, ASCII.isIdentifier(units[index]) { index += 1 }
+    /// Whether `quotes` quotes and then `hashes` hashes start at `index`.
+    private func closes(_ units: Span<UInt8>, at index: Int, quote: UInt8, quotes: Int, hashes: Int) -> Bool {
+        guard quotes + hashes <= units.count - index else { return false }
+        for offset in 1 ..< quotes where units[index + offset] != quote { return false }
+        for offset in quotes ..< quotes + hashes where units[index + offset] != ASCII.hash { return false }
+        return true
+    }
+}
+
+extension CodeScanner {
+    /// The bits of a byte's class.
+    fileprivate enum Class {
+        static let identifierStart: UInt8 = 1
+        static let identifier: UInt8 = 2
+        static let digit: UInt8 = 4
+        /// Can start a comment, a string, an attribute or a variable: the byte goes through `scanSpecial`.
+        static let special: UInt8 = 8
+        static let quote: UInt8 = 16
+        static let tripleQuote: UInt8 = 32
+        static let multilineQuote: UInt8 = 64
+    }
+
+    /// A language's syntax as the scanner reads it, built once per language.
+    fileprivate struct Tables: Sendable {
+        static let all = Language.allCases.map(Tables.init)
+
+        let language: Language
+        let syntax: LanguageSyntax
+        /// The `Class` bits of each byte value.
+        let classes: [UInt8]
+        let keywords: KeywordTable
+        /// Swift's `#"…"#` raw strings.
+        let rawStrings: Bool
+
+        init(language: Language) {
+            let syntax = LanguageSyntax.syntax(for: language)
+            let rawStrings = language == .swift
+            self.language = language
+            self.syntax = syntax
+            self.rawStrings = rawStrings
+            keywords = KeywordTable(syntax.keywords)
+            var classes = [UInt8](repeating: 0, count: 256)
+            for value in 0 ..< 256 {
+                let byte = UInt8(value)
+                var flags: UInt8 = 0
+                if ASCII.isIdentifierStart(byte) { flags |= Class.identifierStart | Class.identifier }
+                if ASCII.isDigit(byte) { flags |= Class.identifier | Class.digit }
+                if syntax.quotes.contains(byte) { flags |= Class.quote | Class.special }
+                if syntax.tripleQuotes.contains(byte) { flags |= Class.tripleQuote }
+                if syntax.multilineQuotes.contains(byte) { flags |= Class.multilineQuote }
+                let startsComment =
+                    syntax.lineComments.contains { $0.first == byte } || syntax.blockComment?.start.first == byte
+                // `#`, `@` and `$` where the language gives them a meaning: a directive or a raw string, an Objective-C
+                // string or an attribute, a variable.
+                let isSigil =
+                    byte == ASCII.hash && (syntax.hasPreprocessor || rawStrings)
+                    || byte == ASCII.at && (syntax.hasPreprocessor || syntax.hasAnnotations)
+                    || byte == ASCII.dollar && syntax.hasVariables
+                if startsComment || isSigil { flags |= Class.special }
+                classes[value] = flags
+            }
+            self.classes = classes
         }
-        tokens.append(Token(kind: .attribute, range: start ..< index))
-        return index
     }
 
-    private mutating func scanNumber(from start: Int) -> Int {
-        var index = start
-        while index < units.count, ASCII.isIdentifier(units[index]) || units[index] == ASCII.dot {
-            if units[index] == ASCII.dot, index + 1 < units.count, !ASCII.isDigit(units[index + 1]) { break }
-            index += 1
+    /// Keywords of up to sixteen bytes packed into two little-endian words and hashed into open-addressed slots;
+    /// longer ones in a list. A lookup packs and hashes only a word whose first byte starts a keyword of its length.
+    fileprivate struct KeywordTable: Sendable {
+        private struct Slot: Sendable {
+            var low: UInt64 = 0
+            var high: UInt64 = 0
+            /// Zero for an empty slot.
+            var length = 0
         }
-        tokens.append(Token(kind: .number, range: start ..< index))
-        return index
-    }
 
-    private mutating func scanWord(from start: Int, kind: TokenKind) -> Int {
-        var index = start + 1
-        while index < units.count, ASCII.isIdentifier(units[index]) { index += 1 }
-        tokens.append(Token(kind: kind, range: start ..< index))
-        return index
-    }
+        /// Bit `n` of `lengths[b]` is set when a keyword of `n` bytes starts with byte `b`; bit 31 stands for 31 or more.
+        private let lengths: [UInt32]
+        private let slots: [Slot]
+        private let longKeywords: [[UInt8]]
 
-    private mutating func scanIdentifier(from start: Int) -> Int {
-        var index = start
-        while index < units.count, ASCII.isIdentifier(units[index]) { index += 1 }
-        // Only a word that could be a keyword by length and first unit pays for a String; most identifiers do not.
-        if keywordLengths.contains(index - start), units[start] < 128, keywordFirstUnits[Int(units[start])],
-            syntax.keywords.contains(Unit.text(units[start ..< index]))
-        {
-            tokens.append(Token(kind: .keyword, range: start ..< index))
-        } else if ASCII.isUpper(units[start]) {
-            tokens.append(Token(kind: .type, range: start ..< index))
+        init(_ words: Set<String>) {
+            var lengths = [UInt32](repeating: 0, count: 256)
+            var capacity = 16
+            while capacity < words.count * 2 { capacity *= 2 }
+            var slots = [Slot](repeating: Slot(), count: capacity)
+            var longKeywords: [[UInt8]] = []
+            for word in words.sorted() {
+                let bytes = Array(word.utf8)
+                guard let first = bytes.first else { continue }
+                lengths[Int(first)] |= 1 << UInt32(min(bytes.count, 31))
+                guard bytes.count <= 16 else {
+                    longKeywords.append(bytes)
+                    continue
+                }
+                let packed = Self.pack(bytes.span, from: 0, to: bytes.count)
+                var slot = Self.hash(packed) & (capacity - 1)
+                while slots[slot].length != 0 { slot = (slot + 1) & (capacity - 1) }
+                slots[slot] = packed
+            }
+            self.lengths = lengths
+            self.slots = slots
+            self.longKeywords = longKeywords
         }
-        return index
+
+        /// Whether the bytes from `start` to `end` spell a keyword.
+        func contains(_ units: Span<UInt8>, from start: Int, to end: Int) -> Bool {
+            let length = end - start
+            guard lengths[Int(units[start])] & 1 << UInt32(min(length, 31)) != 0 else { return false }
+            guard length <= 16 else { return containsLong(units, from: start, to: end) }
+            let packed = Self.pack(units, from: start, to: end)
+            var slot = Self.hash(packed) & (slots.count - 1)
+            while slots[slot].length != 0 {
+                let candidate = slots[slot]
+                if candidate.low == packed.low, candidate.high == packed.high, candidate.length == length {
+                    return true
+                }
+                slot = (slot + 1) & (slots.count - 1)
+            }
+            return false
+        }
+
+        /// Whether the bytes from `start` to `end`, more than sixteen, spell one of the long keywords.
+        private func containsLong(_ units: Span<UInt8>, from start: Int, to end: Int) -> Bool {
+            var index = 0
+            while index < longKeywords.count {
+                let keyword = longKeywords[index]
+                index += 1
+                guard keyword.count == end - start else { continue }
+                var offset = 0
+                while offset < keyword.count, units[start + offset] == keyword[offset] { offset += 1 }
+                if offset == keyword.count { return true }
+            }
+            return false
+        }
+
+        /// The bytes from `start` to `end`, at most sixteen, as two little-endian words.
+        private static func pack(_ units: Span<UInt8>, from start: Int, to end: Int) -> Slot {
+            var packed = Slot(length: end - start)
+            for index in start ..< min(end, start + 8) {
+                packed.low |= UInt64(units[index]) << UInt64(8 * (index - start))
+            }
+            for index in min(end, start + 8) ..< end {
+                packed.high |= UInt64(units[index]) << UInt64(8 * (index - start - 8))
+            }
+            return packed
+        }
+
+        private static func hash(_ slot: Slot) -> Int {
+            var value = slot.low ^ (slot.high &* 0x9E37_79B9_7F4A_7C15) ^ UInt64(slot.length)
+            value ^= value >> 33
+            value &*= 0xFF51_AFD7_ED55_8CCD
+            value ^= value >> 33
+            return Int(truncatingIfNeeded: value)
+        }
     }
 }

@@ -12,7 +12,7 @@ public enum TokenKind: Sendable {
     case entity
 }
 
-/// A syntax token with a range in UTF-16 offsets.
+/// A syntax token whose range is in the unit its entry point documents: UTF-8 bytes or UTF-16 units.
 public struct Token: Sendable, Equatable {
     public let kind: TokenKind
     public let range: Range<Int>
@@ -23,41 +23,130 @@ public struct Token: Sendable, Equatable {
     }
 }
 
-/// Hand-rolled, allocation-light scanners over UTF-8 bytes or UTF-16 units; the offsets come out in whichever
-/// unit was scanned, so neither side of the umbrella converts.
+/// What a scanner emits: `Token` for `SyntaxHighlighter`, `HighlightToken` for the engine, built in place.
+protocol ScannerToken {
+    init(kind: TokenKind, range: Range<Int>)
+}
+
+extension Token: ScannerToken {}
+
+/// Hand-written scanners over borrowed UTF-8 bytes; the HTML and CSS scanners still copy them into an array. The UTF-16
+/// entry points convert the byte offsets once, for callers that index a `String` or a TextKit store.
 public enum SyntaxHighlighter {
-    /// Tokens over the UTF-16 units of `text`, with ranges in UTF-16 offsets.
+    /// Tokens over `text`, with ranges in UTF-16 offsets.
+    /// - Complexity: O(UTF-8 length of `text` + tokens)
     public static func tokens(in text: String, language: Language) -> [Token] {
-        tokens(utf16: Array(text.utf16), language: language)
+        guard language != .plain else { return [] }
+        let utf8 = text.utf8Span
+        var found = tokens(utf8: utf8.span, language: language)
+        if !utf8.isKnownASCII { moveToUTF16(&found, over: utf8.span) }
+        return found
     }
 
-    /// Tokens over UTF-16 units, with ranges in UTF-16 offsets: what a TextKit store maps onto `NSRange`.
+    /// Tokens over UTF-16 units, with ranges in UTF-16 offsets. An unpaired surrogate scans as U+FFFD, which takes
+    /// one unit as well, so every offset still falls where it does in `units`.
+    /// - Complexity: O(`units.count` + tokens)
     public static func tokens(utf16 units: [UInt16], language: Language) -> [Token] {
-        scan(units, language: language)
+        guard language != .plain else { return [] }
+        let bytes = utf8(of: units)
+        var found = tokens(utf8: bytes.span, language: language)
+        if bytes.count != units.count { moveToUTF16(&found, over: bytes.span) }
+        return found
     }
 
-    /// Tokens over UTF-8 bytes, with ranges in byte offsets: what a byte rope indexes by.
+    /// The UTF-8 of `units`, with U+FFFD for an unpaired surrogate as `String(decoding:as:)` has, but written directly:
+    /// the generic decoder costs about 130 ns a unit.
+    private static func utf8(of units: [UInt16]) -> [UInt8] {
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(units.count + units.count / 2)
+        var index = 0
+        while index < units.count {
+            let unit = UInt32(units[index])
+            index += 1
+            if unit < 0x80 {
+                bytes.append(UInt8(unit))
+            } else if unit < 0x800 {
+                bytes.append(UInt8(0xC0 | unit >> 6))
+                bytes.append(UInt8(0x80 | unit & 0x3F))
+            } else if unit & 0xFC00 == 0xD800, index < units.count, units[index] & 0xFC00 == 0xDC00 {
+                let scalar = 0x10000 + (unit - 0xD800) << 10 + (UInt32(units[index]) - 0xDC00)
+                index += 1
+                bytes.append(UInt8(0xF0 | scalar >> 18))
+                bytes.append(UInt8(0x80 | scalar >> 12 & 0x3F))
+                bytes.append(UInt8(0x80 | scalar >> 6 & 0x3F))
+                bytes.append(UInt8(0x80 | scalar & 0x3F))
+            } else {
+                let scalar = unit & 0xF800 == 0xD800 ? 0xFFFD : unit
+                bytes.append(UInt8(0xE0 | scalar >> 12))
+                bytes.append(UInt8(0x80 | scalar >> 6 & 0x3F))
+                bytes.append(UInt8(0x80 | scalar & 0x3F))
+            }
+        }
+        return bytes
+    }
+
+    /// Tokens over UTF-8 bytes, with ranges in byte offsets.
+    /// - Complexity: O(`bytes.count` + tokens)
     public static func tokens(utf8 bytes: [UInt8], language: Language) -> [Token] {
-        scan(bytes, language: language)
+        tokens(utf8: bytes.span, language: language)
     }
 
-    private static func scan<Unit: LexerUnit>(_ units: [Unit], language: Language) -> [Token] {
+    /// Tokens over borrowed UTF-8 bytes, with ranges in byte offsets.
+    /// - Complexity: O(`bytes.count` + tokens)
+    public static func tokens(utf8 bytes: Span<UInt8>, language: Language) -> [Token] {
+        scan(utf8: bytes, language: language, as: Token.self)
+    }
+
+    /// The tokens of `bytes` in `language`, built as `Output`, ascending and disjoint, in byte offsets.
+    static func scan<Output: ScannerToken>(
+        utf8 bytes: Span<UInt8>, language: Language, as: Output.Type
+    ) -> [Output] {
         switch language {
             case .swift, .objectiveC, .kotlin, .java, .javascript, .typescript, .c, .cpp, .python, .shell, .fish,
                 .rust, .go, .ruby, .lua:
-                var scanner = CodeScanner(units: units, syntax: LanguageSyntax.syntax(for: language))
-                return scanner.scan()
+                return CodeScanner(language: language).scan(bytes, as: Output.self)
             case .html:
-                var scanner = HTMLScanner(units: units)
-                return scanner.scan()
+                var scanner = HTMLScanner(units: owned(bytes))
+                return scanner.scan().map { Output(kind: $0.kind, range: $0.range) }
             case .css:
-                var scanner = CSSScanner(units: units)
-                return scanner.scan()
+                var scanner = CSSScanner(units: owned(bytes))
+                return scanner.scan().map { Output(kind: $0.kind, range: $0.range) }
             case .json, .yaml, .toml:
-                var scanner = DataScanner(units: units, format: language)
-                return scanner.scan()
+                return DataScanner(format: language).scan(bytes, as: Output.self)
             case .plain:
                 return []
+        }
+    }
+
+    /// An owned copy of `bytes`, for the scanners that still run over an array.
+    private static func owned(_ bytes: Span<UInt8>) -> [UInt8] {
+        var copy: [UInt8] = []
+        copy.reserveCapacity(bytes.count)
+        for index in bytes.indices { copy.append(bytes[index]) }
+        return copy
+    }
+
+    /// Moves `tokens`, ascending and disjoint in byte offsets over `bytes`, to UTF-16 offsets, in one pass over the
+    /// bytes up to the last token's end.
+    private static func moveToUTF16(_ tokens: inout [Token], over bytes: Span<UInt8>) {
+        var byte = 0
+        var unit = 0
+        for index in tokens.indices {
+            let token = tokens[index]
+            advance(&byte, to: token.range.lowerBound, in: bytes, counting: &unit)
+            let start = unit
+            advance(&byte, to: token.range.upperBound, in: bytes, counting: &unit)
+            tokens[index] = Token(kind: token.kind, range: start ..< unit)
+        }
+    }
+
+    /// Moves `byte` forward to `end`, adding to `unit` the UTF-16 units of the characters it passes: one for a lead
+    /// byte, two for the lead of a four-byte character, none for a continuation byte.
+    private static func advance(_ byte: inout Int, to end: Int, in bytes: Span<UInt8>, counting unit: inout Int) {
+        while byte < end {
+            let value = bytes[byte]
+            unit += (value & 0xC0 == 0x80 ? 0 : 1) + (value >= 0xF0 ? 1 : 0)
+            byte += 1
         }
     }
 }
