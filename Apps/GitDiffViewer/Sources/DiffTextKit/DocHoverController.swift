@@ -39,7 +39,10 @@ package final class DocHoverController: NSObject {
     private var shownHit: HoverHit?
     /// The shown identifier's rect in the text view, as last measured, the scrolls it followed included.
     private var shownAnchor: NSRect?
-    private let panel: HoverDocPanel
+    /// Builds the panel on the first hover: most panes are never hovered, and a panel holds three text views.
+    private let makePanel: @MainActor () -> HoverDocPanel
+    /// The panel documents show in, from the first hover until the pane detaches; nil while there is none.
+    private var panel: HoverDocPanel?
     /// Closes the panel once the grace delay passes; nil while nothing is to close it. Always cancelled before it is
     /// replaced, on the main actor, so a close that wakes cancelled does nothing.
     private var closeTask: Task<Void, Never>?
@@ -53,23 +56,27 @@ package final class DocHoverController: NSObject {
     private static let escapeKeyCode: UInt16 = 53
 
     /// Whether the documentation panel is currently on screen; for tests only.
-    package var isPanelVisible: Bool { panel.isVisible }
+    package var isPanelVisible: Bool { panel?.isVisible == true }
+
+    /// The panel, once a hover has built it and until the pane detaches; for tests only.
+    package var panelForTests: HoverDocPanel? { panel }
 
     /// - Parameters:
     ///   - clock: Times the debounce.
     ///   - taskProvider: Spawns the lookups.
     ///   - debounce: How long the pointer rests on an identifier before it is looked up.
-    ///   - panel: The panel documents show in; one that orders no window in, for tests.
+    ///   - panel: Builds the panel documents show in, on the first hover and again on the first after a detach;
+    ///     one that orders no window in, for tests.
     package init(
         clock: any Clock<Duration> = ContinuousClock(), taskProvider: any TaskProvider = .default,
-        debounce: Duration = .milliseconds(300), panel: HoverDocPanel = HoverDocPanel()
+        debounce: Duration = .milliseconds(300),
+        panel: @autoclosure @escaping @MainActor () -> HoverDocPanel = HoverDocPanel()
     ) {
         self.clock = clock
         self.taskProvider = taskProvider
         self.debounce = debounce
-        self.panel = panel
+        makePanel = panel
         super.init()
-        panel.onPointerInsideChange = { [weak self] inside in self?.pointerOverPanelChanged(inside) }
     }
 
     isolated deinit {
@@ -94,10 +101,11 @@ package final class DocHoverController: NSObject {
             self, selector: #selector(windowDidResignKey(_:)), name: NSWindow.didResignKeyNotification, object: nil)
     }
 
-    /// Removes the tracking area and observers from the previously attached view, if any, and closes any open
-    /// panel.
+    /// Removes the tracking area and observers from the previously attached view, if any, and closes and releases
+    /// any panel.
     package func detach() {
         invalidate()
+        panel = nil
         if let trackingArea, let textView {
             textView.removeTrackingArea(trackingArea)
         }
@@ -153,7 +161,7 @@ package final class DocHoverController: NSObject {
         guard scrollOrigins[key] != clipView.bounds.origin else { return }
         scrollOrigins[key] = clipView.bounds.origin
         dropPendingLookup()
-        guard panel.isVisible, let shownHit, let textView else {
+        guard let panel, panel.isVisible, let shownHit, let textView else {
             invalidate()
             return
         }
@@ -190,7 +198,7 @@ package final class DocHoverController: NSObject {
     /// The testable core of ``mouseExited(with:)``: a shown panel closes after the grace delay unless the pointer is
     /// over it or comes back; anything still loading is dropped.
     package func pointerLeftTextView() {
-        guard panel.isVisible else {
+        guard let panel, panel.isVisible else {
             invalidate()
             return
         }
@@ -209,7 +217,7 @@ package final class DocHoverController: NSObject {
             return
         }
         // Over the panel, the pointer is not over the text: nothing beneath it is looked up or re-anchored.
-        guard !panel.pointerIsInside else { return }
+        guard panel?.pointerIsInside != true else { return }
         followEnclosingClipViews()
         let onBridge = isOnBridge(point, in: textView)
         guard let hit = HoverHitTester.hit(at: point, textView: textView, rendered: rendered) else {
@@ -259,7 +267,7 @@ package final class DocHoverController: NSObject {
 
     /// ``handleLocalEvent(_:)`` for an event in `window`, which a test names, since an event it makes has no window.
     package func handleLocalEvent(_ event: NSEvent, in window: NSWindow?) -> NSEvent? {
-        guard panel.isVisible else { return event }
+        guard let panel, panel.isVisible else { return event }
         switch event.type {
             case .keyDown where event.keyCode == Self.escapeKeyCode:
                 invalidate()
@@ -285,7 +293,7 @@ package final class DocHoverController: NSObject {
 
     /// Whether `point`, in the text view's coordinates, is on the shown identifier or the corridor to its panel.
     private func isOnBridge(_ point: NSPoint, in textView: NSTextView) -> Bool {
-        guard panel.isVisible, let anchor = shownAnchor else { return false }
+        guard let panel, panel.isVisible, let anchor = shownAnchor else { return false }
         if anchor.contains(point) { return true }
         guard let frame = panel.frameOnScreen, let window = textView.window else { return false }
         let panelRect = textView.convert(window.convertFromScreen(frame), from: nil)
@@ -303,7 +311,7 @@ package final class DocHoverController: NSObject {
     /// Closes the shown panel once ``closeGraceDelay`` passes, unless something cancels it first; a no-op while a close
     /// is already pending or nothing shows.
     private func scheduleClose() {
-        guard panel.isVisible, closeTask == nil else { return }
+        guard isPanelVisible, closeTask == nil else { return }
         closeTask = taskProvider.task { [weak self, clock] in
             try? await clock.sleep(for: Self.closeGraceDelay)
             guard let self, !Task.isCancelled else { return }
@@ -319,6 +327,7 @@ package final class DocHoverController: NSObject {
 
     private func show(document: HoverDocument, for hit: HoverHit) {
         guard let textView else { return }
+        let panel = panel ?? builtPanel()
         panel.show(document: document, anchorRect: hit.anchorRect, in: textView)
         // A panel that could not show, as over a pane with no window, leaves no shown identifier behind.
         guard panel.isVisible else { return }
@@ -334,9 +343,16 @@ package final class DocHoverController: NSObject {
         }
     }
 
+    private func builtPanel() -> HoverDocPanel {
+        let panel = makePanel()
+        panel.onPointerInsideChange = { [weak self] inside in self?.pointerOverPanelChanged(inside) }
+        self.panel = panel
+        return panel
+    }
+
     private func closePanel() {
         cancelClose()
-        panel.close()
+        panel?.close()
         shownHit = nil
         shownAnchor = nil
         if let eventMonitor {
