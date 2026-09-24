@@ -40,4 +40,29 @@ struct DiffTabsTests {
         #expect(tabs.tabs.isEmpty)
         #expect(tabs.activePath == nil)
     }
+
+    @Test
+    func `the next and previous tabs wrap around at either end`() {
+        var tabs = DiffTabs()
+        tabs.pin("a.swift")
+        tabs.pin("b.swift")
+        tabs.pin("c.swift")
+        #expect(tabs.neighbour(.next)?.path == "a.swift")
+        #expect(tabs.neighbour(.previous)?.path == "b.swift")
+
+        tabs.activate(tabs.tabs[0].id)
+        #expect(tabs.neighbour(.next)?.path == "b.swift")
+        #expect(tabs.neighbour(.previous)?.path == "c.swift")
+    }
+
+    @Test
+    func `a lone tab is its own neighbour, and no tab has none`() {
+        var tabs = DiffTabs()
+        #expect(tabs.neighbour(.next) == nil)
+        #expect(tabs.neighbour(.previous) == nil)
+
+        tabs.open("a.swift")
+        #expect(tabs.neighbour(.next)?.path == "a.swift")
+        #expect(tabs.neighbour(.previous)?.path == "a.swift")
+    }
 }

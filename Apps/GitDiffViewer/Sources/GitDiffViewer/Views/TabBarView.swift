@@ -60,6 +60,31 @@ struct TabBarView: View {
             }
             .padding(tabBarGap)
         }
+        .background { TabSwitchShortcuts(model: model) }
+    }
+}
+
+/// Invisible buttons that carry ⌃Tab and ⌃⇧Tab, moving to the next and previous file tab and wrapping around.
+/// They exist only while the bar shows, so with no file tab open the keys fall through to the Window menu's own
+/// window tab commands; ⌘⇧] and ⌘⇧[ are left to those commands at all times.
+private struct TabSwitchShortcuts: View {
+    let model: DiffViewerModel
+
+    var body: some View {
+        Group {
+            Button("Show Next Tab") { step(.next) }
+                .keyboardShortcut(.tab, modifiers: .control)
+            Button("Show Previous Tab") { step(.previous) }
+                .keyboardShortcut(.tab, modifiers: [.control, .shift])
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .accessibilityHidden(true)
+    }
+
+    private func step(_ step: DiffTabs.Step) {
+        guard let tab = model.tabs.neighbour(step) else { return }
+        model.activateTab(tab.id)
     }
 }
 
