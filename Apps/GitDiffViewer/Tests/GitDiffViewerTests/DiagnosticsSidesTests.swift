@@ -19,6 +19,7 @@ struct DiagnosticsSidesTests {
     private static let onlySwiftLint = Dictionary(
         uniqueKeysWithValues: DiagnosticTool.allCases.map { ($0, ToolLocation(isEnabled: $0 == .swiftlint)) })
     private static let debounce: Duration = .milliseconds(250)
+    private let scratchDefaults = ScratchDefaults(tag: "sides")
 
     private static func folder(_ root: URL, files: [String] = ["A.swift"]) -> DiagnosticsSideTarget {
         DiagnosticsSideTarget(
@@ -106,9 +107,7 @@ struct DiagnosticsSidesTests {
     }
 
     private func makeSUT(mode: AnalyzedSides, findings: [URL: [Finding]] = [:]) throws -> SUT {
-        let name = "GitDiffViewerTests.sides.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
+        let defaults = scratchDefaults.defaults
         let settings = ViewerSettings(defaults: defaults)
         settings.diagnosticsEnabled = true
         settings.analyzedSides = mode

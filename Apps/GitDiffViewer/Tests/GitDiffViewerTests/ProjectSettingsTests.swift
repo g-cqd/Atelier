@@ -10,6 +10,8 @@ import Testing
 
 @MainActor
 struct ProjectSettingsTests {
+    private let scratchDefaults = ScratchDefaults(tag: "projectSettings")
+
     // MARK: - ProjectIdentity
 
     @Test
@@ -34,7 +36,7 @@ struct ProjectSettingsTests {
 
     @Test
     func `a project-scoped key falls back to the base value until the project writes its own`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         sut.contextLines = 8  // base edit, before any project is adopted
 
@@ -54,7 +56,7 @@ struct ProjectSettingsTests {
 
     @Test
     func `a scoped override in one project does not affect another`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         let projectA = ProjectIdentity(root: URL(filePath: "/repos/a", directoryHint: .isDirectory))
         let projectB = ProjectIdentity(root: URL(filePath: "/repos/b", directoryHint: .isDirectory))
@@ -71,7 +73,7 @@ struct ProjectSettingsTests {
 
     @Test
     func `a non-scoped key stays global across adoption`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         sut.badgeScheme = .xcode  // app-wide by decision D11, not in the scoped set
 
@@ -88,7 +90,7 @@ struct ProjectSettingsTests {
 
     @Test
     func `granularity round trips per project`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         let projectA = ProjectIdentity(root: URL(filePath: "/repos/a", directoryHint: .isDirectory))
         let projectB = ProjectIdentity(root: URL(filePath: "/repos/b", directoryHint: .isDirectory))
@@ -124,7 +126,7 @@ struct ProjectSettingsTests {
 
     @Test
     func `restoring a project's tab leaves the app-wide settings alone`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         sut.badgeScheme = .xcode  // an app-wide value, set before any project
         sut.adoptProject(ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory)))
@@ -141,7 +143,7 @@ struct ProjectSettingsTests {
 
     @Test
     func `switching a window from one project to another writes nothing for the second`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         let first = ProjectIdentity(root: URL(filePath: "/repos/first", directoryHint: .isDirectory))
         let second = ProjectIdentity(root: URL(filePath: "/repos/second", directoryHint: .isDirectory))
@@ -157,7 +159,7 @@ struct ProjectSettingsTests {
 
     @Test
     func `re-selecting the current value writes no override`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
         sut.adoptProject(project)
@@ -170,7 +172,7 @@ struct ProjectSettingsTests {
 
     @Test
     func `restoring the appearance defaults with no theme fires no palette change`() throws {
-        let sut = ViewerSettings(defaults: try makeDefaults())
+        let sut = ViewerSettings(defaults: scratchDefaults.defaults)
         final class Owner {}
         let owner = Owner()
         var changes: [ViewerSettings.Change] = []
@@ -183,7 +185,7 @@ struct ProjectSettingsTests {
 
     @Test
     func `adoptProject fires Change only for keys that actually differ`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         sut.contextLines = 8  // base edit shared by every project until overridden
 
@@ -200,7 +202,7 @@ struct ProjectSettingsTests {
 
     @Test
     func `adoptProject fires Change for a scoped key that differs from what this instance already holds`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let writer = ViewerSettings(defaults: defaults)
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
         writer.adoptProject(project)
@@ -223,7 +225,7 @@ struct ProjectSettingsTests {
 
     @Test
     func `a scoped write registers the project, and clearing removes it once nothing is left overridden`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
         sut.adoptProject(project)
@@ -242,7 +244,7 @@ struct ProjectSettingsTests {
 
     @Test
     func `clearAllOverrides removes every category's overrides for a project`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
         sut.adoptProject(project)
@@ -264,7 +266,7 @@ struct ProjectSettingsTests {
         `restoreDefaults under adoption clears the project override and falls back to the base, not the coded default`()
         throws
     {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         sut.contextLines = 11  // base edit, made before any project is adopted
 
@@ -280,16 +282,9 @@ struct ProjectSettingsTests {
 
     @Test
     func `restoreDefaults with no project adopted still resets to the coded default`() throws {
-        let sut = ViewerSettings(defaults: try makeDefaults())
+        let sut = ViewerSettings(defaults: scratchDefaults.defaults)
         sut.contextLines = 11
         sut.restoreDefaults(.diff)
         #expect(sut.contextLines == 3)
-    }
-
-    private func makeDefaults() throws -> UserDefaults {
-        let name = "GitDiffViewerTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
-        return defaults
     }
 }

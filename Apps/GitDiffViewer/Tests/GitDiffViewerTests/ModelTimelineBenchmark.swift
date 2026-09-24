@@ -18,6 +18,8 @@ import Testing
 /// task provider spy settles it when every task the model spawned has finished. No polling, no sleeps.
 @MainActor
 struct ModelTimelineBenchmark {
+    private let scratchDefaults = ScratchDefaults(tag: "bench")
+
     @Test(
         .timeLimit(.minutes(5)),
         .enabled(
@@ -28,12 +30,12 @@ struct ModelTimelineBenchmark {
         let repo = URL(filePath: environment["GDV_BENCH_REPO"] ?? ".", directoryHint: .isDirectory)
         let leftRef = environment["GDV_BENCH_LEFT"] ?? "HEAD~1"
         let rightRef = environment["GDV_BENCH_RIGHT"] ?? "HEAD"
-        let defaults = UserDefaults(suiteName: "gdv-bench-\(UUID().uuidString)") ?? .standard
         let spy = TaskProviderSpy(label: "benchmark", defaultTimeout: .seconds(120))
         let pool = BlockingOffloadPool(width: 4)
         defer { pool.shutdown() }
         let loader = SourceLoader(runner: HardenedProcessRunner(pool: pool), pool: pool)
-        let model = DiffViewerModel(settings: ViewerSettings(defaults: defaults), reader: loader, taskProvider: spy)
+        let model = DiffViewerModel(
+            settings: ViewerSettings(defaults: scratchDefaults.defaults), reader: loader, taskProvider: spy)
         let clock = ContinuousClock()
 
         var start = clock.now

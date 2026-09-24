@@ -13,6 +13,7 @@ import Testing
 struct UnifiedTreeTests {
     private let taskProvider = TaskProviderSpy.tolerant()
     private let reader = FakeSourceReader()
+    private let scratchDefaults = ScratchDefaults(tag: "unified")
 
     @Test
     func `the unified tree merges both sides and folders take the aggregate status of their files`() async throws {
@@ -53,10 +54,8 @@ struct UnifiedTreeTests {
     private static let rightURL = URL(filePath: "/right", directoryHint: .isDirectory)
 
     private func makeSUT() -> DiffViewerModel {
-        let suite = "GitDiffViewerTests.unified.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite) ?? .standard
-        defaults.removePersistentDomain(forName: suite)
-        return DiffViewerModel(settings: ViewerSettings(defaults: defaults), reader: reader, taskProvider: taskProvider)
+        DiffViewerModel(
+            settings: ViewerSettings(defaults: scratchDefaults.defaults), reader: reader, taskProvider: taskProvider)
     }
 
     private func entry(_ path: String, _ blob: String) -> SourceEntry {
