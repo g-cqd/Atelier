@@ -13,8 +13,12 @@ struct LexAutomatonBuilder {
     private let nfa: TokenNFA
     private let tokens: [LexicalToken]
     private(set) var states: [LexAutomatonState] = []
-    private var stateIDs: [[Int]: Int] = [:]
-    private var unpopulated: [(id: Int, nfaStates: [Int])] = []
+    private struct StateKey: Hashable {
+        var nfaStates: [Int]
+        var hasReadTokenScalar: Bool
+    }
+    private var stateIDs: [StateKey: Int] = [:]
+    private var unpopulated: [(id: Int, key: StateKey)] = []
 
     init(nfa: TokenNFA, tokens: [LexicalToken]) {
         self.nfa = nfa
@@ -24,15 +28,16 @@ struct LexAutomatonBuilder {
     /// The start state of the mode in which the tokens at `validTokens` are valid, with every state it reaches.
     /// - Throws: `GrammarError.resourceLimitExceeded` past ``maxStates``.
     mutating func startState(for validTokens: [Int]) throws(GrammarError) -> Int {
-        let start = try state(for: nfa.closure(of: validTokens.map { nfa.starts[$0] }))
-        while let (id, nfaStates) = unpopulated.popLast() {
-            try populate(id, nfaStates: nfaStates)
+        let start = try state(for: nfa.closure(of: validTokens.map { nfa.starts[$0] }), hasReadTokenScalar: false)
+        while let (id, key) = unpopulated.popLast() {
+            try populate(id, key: key)
         }
         return start
     }
 
-    private mutating func state(for nfaStates: [Int]) throws(GrammarError) -> Int {
-        if let id = stateIDs[nfaStates] {
+    private mutating func state(for nfaStates: [Int], hasReadTokenScalar: Bool) throws(GrammarError) -> Int {
+        let key = StateKey(nfaStates: nfaStates, hasReadTokenScalar: hasReadTokenScalar)
+        if let id = stateIDs[key] {
             return id
         }
         guard states.count < Self.maxStates else {
@@ -40,17 +45,18 @@ struct LexAutomatonBuilder {
         }
         let id = states.count
         states.append(LexAutomatonState(transitions: [], accept: nil))
-        stateIDs[nfaStates] = id
-        unpopulated.append((id, nfaStates))
+        stateIDs[key] = id
+        unpopulated.append((id, key))
         return id
     }
 
-    private mutating func populate(_ id: Int, nfaStates: [Int]) throws(GrammarError) {
+    private mutating func populate(_ id: Int, key: StateKey) throws(GrammarError) {
         var completion: Completion?
         var hasSeparator = false
-        for nfaState in nfaStates {
+        for nfaState in key.nfaStates {
             switch nfa.states[nfaState] {
                 case .accept(let token, let precedence):
+                    if !key.hasReadTokenScalar && nfa.nullableTokens.contains(token) { continue }
                     let candidate = Completion(token: token, precedence: precedence)
                     if let current = completion, prefers(current, over: candidate) { continue }
                     completion = candidate
@@ -62,9 +68,10 @@ struct LexAutomatonBuilder {
         }
 
         var transitions: [LexTransition] = []
-        for group in transitionGroups(of: nfaStates) {
+        for group in transitionGroups(of: key.nfaStates) {
             if let completion, !prefers(group, over: completion, hasSeparator: hasSeparator) { continue }
-            let target = try state(for: nfa.closure(of: group.targets))
+            let target = try state(
+                for: nfa.closure(of: group.targets), hasReadTokenScalar: !group.isSeparator)
             for range in group.characters.ranges {
                 transitions.append(
                     LexTransition(

@@ -224,6 +224,8 @@ extension LexTableCompiler {
         var modes: [[Int]: Int] = [:]
         var modeStarts: [Int] = []
         var modeValidTokens: [[Int]] = []
+        var modeEmptyTokens: [Int?] = []
+        var modeEmptyAfterSeparator: [Int?] = []
         func mode(for valid: [Int]) throws(GrammarError) -> Int {
             if let existing = modes[valid] {
                 return existing
@@ -231,6 +233,9 @@ extension LexTableCompiler {
             modes[valid] = modeStarts.count
             modeStarts.append(try builder.startState(for: valid))
             modeValidTokens.append(valid)
+            modeEmptyTokens.append(preferredEmptyToken(in: valid, nfa: nfa, tokens: tokens, afterSeparator: false))
+            modeEmptyAfterSeparator.append(
+                preferredEmptyToken(in: valid, nfa: nfa, tokens: tokens, afterSeparator: true))
             return modeStarts.count - 1
         }
         var stateModes: [Int] = []
@@ -247,7 +252,32 @@ extension LexTableCompiler {
             errorMode: errorMode,
             wordToken: wordToken,
             keywordTokens: keywordTokens,
-            modeValidTokens: modeValidTokens
+            modeValidTokens: modeValidTokens,
+            modeEmptyTokens: modeEmptyTokens,
+            modeEmptyAfterSeparator: modeEmptyAfterSeparator
         )
+    }
+
+    /// The highest-priority nullable token that may start here, applying the same tie-breaks as the automaton.
+    private static func preferredEmptyToken(
+        in valid: [Int], nfa: TokenNFA, tokens: [LexicalToken], afterSeparator: Bool
+    ) -> Int? {
+        var preferred: Int?
+        for token in valid where nfa.nullableTokens.contains(token) && (!afterSeparator || !tokens[token].isImmediate) {
+            guard let current = preferred else {
+                preferred = token
+                continue
+            }
+            let candidate = tokens[token]
+            let incumbent = tokens[current]
+            if candidate.completionPrecedence > incumbent.completionPrecedence
+                || candidate.completionPrecedence == incumbent.completionPrecedence
+                    && (candidate.implicitPrecedence > incumbent.implicitPrecedence
+                        || candidate.implicitPrecedence == incumbent.implicitPrecedence && token < current)
+            {
+                preferred = token
+            }
+        }
+        return preferred
     }
 }
