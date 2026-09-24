@@ -159,15 +159,19 @@ package enum DiffRenderer {
 
     // MARK: Attributed text
 
+    /// The lexical tokens of `text`, one array per line of `lines`, in UTF-8 offsets from the line's start; the render
+    /// converts them to UTF-16 when it styles a row. A plain-text file is not scanned.
+    /// - Complexity: O(bytes of `text` + lines + tokens)
     package static func tokensByLine(text: String, lines: [Substring], language: Language) -> [[HighlightToken]] {
+        guard language != .plain else { return [[HighlightToken]](repeating: [], count: lines.count) }
         var lineStarts: [Int] = []
         lineStarts.reserveCapacity(lines.count)
         var offset = 0
         for line in lines {
             lineStarts.append(offset)
-            offset += line.utf16.count + 1
+            offset += line.utf8.count + 1
         }
-        let tokens = LexicalHighlightEngine().highlight(utf16: Array(text.utf16), language: language)
+        let tokens = LexicalHighlightEngine().highlight(utf8: text.utf8Span.span, language: language)
         // The last line ends where its text does: a token running to the end of a text that closes with a newline
         // (an unterminated string, say) must not spill past the line's own length.
         return HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: max(0, offset - 1))
@@ -195,14 +199,7 @@ package enum DiffRenderer {
                         text.append(contentsOf: spans.placeholders.reveal(shown.line, at: offset))
                         length = shown.line.utf16.count
                         for unit in shown.line.utf16 where unit == 9 { tabs += 1 }
-                        for token in shown.tokens {
-                            spans.tokens.append(
-                                (
-                                    NSRange(
-                                        location: offset + token.byteRange.lowerBound, length: token.byteRange.count),
-                                    token.role
-                                ))
-                        }
+                        appendTokens(shown.tokens, of: shown.line, at: offset, to: &spans.tokens)
                         for range in shown.ref.emphasis {
                             spans.emphasis.append(
                                 (NSRange(location: offset + range.lowerBound, length: range.count), kind))
@@ -341,6 +338,45 @@ package enum DiffRenderer {
             case (.modified, .old): return .removed
             case (.modified, .new): return .added
             default: return row.kind
+        }
+    }
+}
+
+extension DiffRenderer {
+    /// Appends `tokens`, in UTF-8 offsets from the start of `line`, to `ranges` as UTF-16 ranges of the assembled text,
+    /// in which the line starts at `offset`. These are the source line's UTF-16 offsets, which the shown row keeps: a
+    /// bidi placeholder takes the one unit of the control it stands for.
+    /// - Complexity: O(tokens) for an ASCII line; otherwise O(tokens + bytes up to the last token's end).
+    fileprivate static func appendTokens(
+        _ tokens: [HighlightToken], of line: Substring, at offset: Int, to ranges: inout [(NSRange, HighlightRole)]
+    ) {
+        guard !tokens.isEmpty else { return }
+        var utf8 = line.utf8Span
+        if utf8.checkForASCII() {
+            for token in tokens {
+                ranges.append(
+                    (NSRange(location: offset + token.byteRange.lowerBound, length: token.byteRange.count), token.role))
+            }
+            return
+        }
+        let bytes = utf8.span
+        var byte = 0
+        var unit = 0
+        for token in tokens {
+            advance(&byte, to: min(token.byteRange.lowerBound, bytes.count), in: bytes, counting: &unit)
+            let start = unit
+            advance(&byte, to: min(token.byteRange.upperBound, bytes.count), in: bytes, counting: &unit)
+            ranges.append((NSRange(location: offset + start, length: unit - start), token.role))
+        }
+    }
+
+    /// Moves `byte` forward to `end`, adding to `unit` the UTF-16 units of the characters it passes: one for a lead
+    /// byte, two for the lead of a four-byte character, none for a continuation byte.
+    private static func advance(_ byte: inout Int, to end: Int, in bytes: Span<UInt8>, counting unit: inout Int) {
+        while byte < end {
+            let value = bytes[byte]
+            unit += (value & 0xC0 == 0x80 ? 0 : 1) + (value >= 0xF0 ? 1 : 0)
+            byte += 1
         }
     }
 }
