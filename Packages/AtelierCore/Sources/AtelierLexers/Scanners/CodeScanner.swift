@@ -26,7 +26,10 @@ struct CodeScanner {
                 let start = index
                 index += 1
                 while index < count, classes[Int(units[index])] & Class.identifier != 0 { index += 1 }
-                if tables.keywords.contains(units, from: start, to: index) {
+                if !tables.compoundKeywords.isEmpty, let end = compoundKeywordEnd(units, from: start, wordEnd: index) {
+                    index = end
+                    tokens.append(Output(kind: .keyword, range: start ..< index))
+                } else if tables.keywords.contains(units, from: start, to: index) {
                     tokens.append(Output(kind: .keyword, range: start ..< index))
                 } else if ASCII.isUpper(unit) {
                     tokens.append(Output(kind: .type, range: start ..< index))
@@ -68,6 +71,10 @@ struct CodeScanner {
         if syntax.hasPreprocessor, unit == ASCII.at, classes[Int(next)] & Class.quote != 0 {
             return (.string, index ..< stringEnd(units, from: index + 1, quote: next, hashes: 0))
         }
+        // A block comment first: Lua's `--[[` starts with its line comment's `--`.
+        if let block = syntax.blockComment, matches(block.start, in: units, at: index) {
+            return (.comment, index ..< blockCommentEnd(units, from: index, block: block))
+        }
         // Indexed: iterating an array of arrays allocates on every step of an unoptimized build.
         var comment = 0
         while comment < syntax.lineComments.count {
@@ -77,9 +84,6 @@ struct CodeScanner {
             var end = index + pattern.count
             while end < units.count, units[end] != ASCII.newline { end += 1 }
             return (.comment, index ..< end)
-        }
-        if let block = syntax.blockComment, matches(block.start, in: units, at: index) {
-            return (.comment, index ..< blockCommentEnd(units, from: index, block: block))
         }
         if classes[Int(unit)] & Class.quote != 0 {
             return (.string, index ..< stringEnd(units, from: index, quote: unit, hashes: 0))
@@ -91,6 +95,21 @@ struct CodeScanner {
             return (.attribute, index ..< variableEnd(units, from: index, classes: classes))
         }
         return (nil, index ..< index + 1)
+    }
+
+    /// The end of the compound keyword spelled from `start`, whose word part ends at `wordEnd`, such as Ruby's
+    /// `defined?` or Java's `non-sealed`; nil when none is, or when an identifier byte follows it.
+    private func compoundKeywordEnd(_ units: Span<UInt8>, from start: Int, wordEnd: Int) -> Int? {
+        var index = 0
+        while index < tables.compoundKeywords.count {
+            let keyword = tables.compoundKeywords[index]
+            index += 1
+            let end = start + keyword.count
+            guard end > wordEnd, matches(keyword, in: units, at: start) else { continue }
+            guard end == units.count || !ASCII.isIdentifier(units[end]) else { continue }
+            return end
+        }
+        return nil
     }
 
     private func matches(_ pattern: [UInt8], in units: Span<UInt8>, at index: Int) -> Bool {
@@ -228,6 +247,9 @@ extension CodeScanner {
         /// The `Class` bits of each byte value.
         let classes: [UInt8]
         let keywords: KeywordTable
+        /// Keywords holding a byte that ends a word, such as Ruby's `defined?` and Java's `non-sealed`: the word scan
+        /// stops before that byte, so they are matched from the word's start instead.
+        let compoundKeywords: [[UInt8]]
         /// Swift's `#"…"#` raw strings.
         let rawStrings: Bool
 
@@ -238,6 +260,10 @@ extension CodeScanner {
             self.syntax = syntax
             self.rawStrings = rawStrings
             keywords = KeywordTable(syntax.keywords)
+            compoundKeywords = syntax.keywords.sorted().map { Array($0.utf8) }
+                .filter { word in
+                    word.contains { !ASCII.isIdentifier($0) }
+                }
             var classes = [UInt8](repeating: 0, count: 256)
             for value in 0 ..< 256 {
                 let byte = UInt8(value)

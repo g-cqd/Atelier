@@ -11,6 +11,8 @@ struct LexerCorpusTests {}
 extension LexerCorpusTests {
     /// The scanners' tokens over generated corpora, pinned to the checksums the array-backed scanners produced on the
     /// same corpora (commit 384d6e1): byte offsets from the UTF-8 entry point, UTF-16 offsets from the string one.
+    /// Ruby's and Lua's were pinned again when `defined?` became a keyword and `--[[` a block comment; those were
+    /// the only tokens that changed.
     struct Checksums {
         struct Pinned: Sendable, CustomTestStringConvertible {
             let language: Language
@@ -39,8 +41,8 @@ extension LexerCorpusTests {
             Pinned(language: .fish, utf8: 17_160_067_375_318_534_466, utf16: 11_894_179_055_712_592_768),
             Pinned(language: .rust, utf8: 7_605_693_228_853_812_802, utf16: 8_598_047_877_825_995_739),
             Pinned(language: .go, utf8: 14_243_606_034_042_225_803, utf16: 7_989_937_377_641_077_313),
-            Pinned(language: .ruby, utf8: 11_457_615_042_929_066_073, utf16: 9_238_854_783_838_614_976),
-            Pinned(language: .lua, utf8: 14_898_676_696_684_299_821, utf16: 7_511_330_456_059_097_927)
+            Pinned(language: .ruby, utf8: 1_524_950_182_278_493_854, utf16: 9_183_146_328_383_197_431),
+            Pinned(language: .lua, utf8: 16_817_558_350_193_199_188, utf16: 1_630_209_837_564_898_524)
         ]
 
         @Test(arguments: pinned)
