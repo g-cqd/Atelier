@@ -278,7 +278,8 @@ public struct TextEditor: View, Sendable {
             return [StyledSpan(text: "", style: editorStyle)]
         }
 
-        if index < lineSpans.count {
+        // A line without spans has not been highlighted yet: draw its text plain rather than nothing.
+        if index < lineSpans.count, !lineSpans[index].isEmpty {
             return lineSpans[index]
         }
 
