@@ -2,6 +2,11 @@ import AtelierGrammar
 
 /// Scanner-backed parsing keeps lexical state and input position with each GLR branch.
 extension GLRParser {
+    /// The most stacks a parse with an external scanner keeps, the preferred ones. Each stack reads the input on its
+    /// own, a scanner call and a lex per token, so a stack costs as much as a parse; tree-sitter keeps at most 6
+    /// versions, and 10 while it merges. The pinned Swift and JavaScript corpora parse alike with 32 stacks and 256.
+    static let maxScanningStacks = 32
+
     /// Rejects malformed scanner metadata before a parse branch indexes its validity row.
     func validateExternalTable() throws(ParseError) {
         guard parseTable.validExternals.count == parseTable.stateCount,
@@ -39,7 +44,7 @@ extension GLRParser {
                     if readCount.isMultiple(of: Self.cancellationCheckInterval), isCancelled() {
                         throw ParseError.cancelled(atToken: readCount)
                     }
-                    guard readCount < Self.maxTokens * Self.maxStacks else {
+                    guard readCount < Self.maxTokens * Self.maxScanningStacks else {
                         throw ParseError.tooManyTokens(limit: Self.maxTokens)
                     }
                     let start = stack.cursor
@@ -79,10 +84,11 @@ extension GLRParser {
                 }
             }
             next = ParseStack.mergingIdenticalHistories(consume next, ranks: symbolRanks)
-            if next.count > Self.maxStacks {
+            next = ParseStack.droppingOutdone(consume next, finished: finished)
+            if next.count > Self.maxScanningStacks {
                 next.sort { $0.isPreferred(over: $1, ranks: symbolRanks) }
-                var dropped = Array(next[Self.maxStacks...])
-                next.removeSubrange(Self.maxStacks...)
+                var dropped = Array(next[Self.maxScanningStacks...])
+                next.removeSubrange(Self.maxScanningStacks...)
                 ParseStack.releaseAll(&dropped)
             }
             active = next
