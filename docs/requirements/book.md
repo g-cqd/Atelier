@@ -159,6 +159,8 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
 | D18 | 09-23 14:53 | An Xcode diff palette? | "Yes, later, off by default (Recommended)": an "Xcode" choice for the diff colors, independent of the badge scheme, built with DIFF-03 | DIFF-05, SET-07 |
 | D19 | 09-23 14:53 | Commit titles from now on | "<Scope>: <sentence>, short (Recommended)": under about 72 characters, the detail in the body | PROC-09 |
 | D20 | 09-23 14:53 | Should deadwood keep refusing to follow links out of the repository? | "Keep containment (Recommended)": never follow links out of the repository, and make baselines stable under that rule | DIAG-01 |
+| D21 | 09-24 05:25 | Codex is out of credits until 09-30 20:43, with four jobs stopped mid-work. How should the remaining work continue? | "Claude agents (Recommended)": finish the interrupted jobs and the rest of the queue with Claude subagents, from the saved `wip/*` branches, reviewed and tested the same way before anything merges | PROC-11 |
+| D22 | 09-24 05:25 | Which git identity should Atelier's future commits use? | "Keep the global one": change nothing; history stays as it is | PROC-09 |
 
 ## Answered questions (09-23 09:37)
 
