@@ -318,11 +318,13 @@ package final class DocHoverController: NSObject {
 
     private func show(document: HoverDocument, for hit: HoverHit) {
         guard let textView else { return }
+        panel.show(document: document, anchorRect: hit.anchorRect, in: textView)
+        // A panel that could not show, as over a pane with no window, leaves no shown identifier behind.
+        guard panel.isVisible else { return }
         cancelClose()
         shownHit = hit
         shownAnchor = hit.anchorRect
-        panel.show(document: document, anchorRect: hit.anchorRect, in: textView)
-        guard panel.isVisible, eventMonitor == nil else { return }
+        guard eventMonitor == nil else { return }
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [
             .keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown
         ]) { [weak self] event in
