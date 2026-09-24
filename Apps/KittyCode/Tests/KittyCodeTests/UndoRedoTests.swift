@@ -28,7 +28,7 @@ struct UndoRedoTests {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         let pipeline = makePipeline()
 
         state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "a", language: nil)
@@ -60,7 +60,7 @@ struct UndoRedoTests {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
 
         state.beginNewFile()
         state.mode = .editor
@@ -79,7 +79,7 @@ struct UndoRedoTests {
         config.tabRibbon.position = .hidden
         config.editor.undoCoalescingEnabled = false
 
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.beginNewFile()
         state.mode = .editor
 
@@ -97,7 +97,7 @@ struct UndoRedoTests {
     func `undo restores selection state`() {
         var config = KittyConfig()
         config.editor.undoCoalescingEnabled = false
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.beginNewFile()
         state.mode = .editor
 
@@ -125,7 +125,7 @@ struct UndoRedoTests {
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
         config.editor.undoCoalescingEnabled = false
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
 
         state.beginNewFile()
         state.mode = .editor
@@ -141,7 +141,7 @@ struct UndoRedoTests {
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
         config.editor.undoCoalescingEnabled = false
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
 
         state.beginNewFile()
         state.mode = .editor
@@ -159,7 +159,7 @@ struct UndoRedoTests {
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
         config.editor.undoCoalescingEnabled = false
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
 
         state.beginNewFile()
         state.mode = .editor
@@ -177,7 +177,7 @@ struct UndoRedoTests {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
 
         state.beginNewFile()
         state.mode = .editor
@@ -193,7 +193,7 @@ struct UndoRedoTests {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
 
         state.beginNewFile()
         state.mode = .editor
@@ -206,7 +206,7 @@ struct UndoRedoTests {
 
     @Test
     func `buffer undo invalidates after external refresh divergence`() throws {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         state.beginNewFile()
         state.mode = .editor
         insertText("local", into: state)

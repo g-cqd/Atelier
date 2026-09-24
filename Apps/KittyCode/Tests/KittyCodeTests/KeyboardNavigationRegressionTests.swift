@@ -56,7 +56,7 @@ struct KeyboardNavigationRegressionTests {
         config.tabRibbon.position = .hidden
         config.editor.arrowKeysWrapAcrossLines = true
 
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.fileContent = ["ab", "cde"]
         state.cursorRow = 1
@@ -86,7 +86,7 @@ struct KeyboardNavigationRegressionTests {
         config.tabRibbon.position = .hidden
         config.editor.arrowKeysWrapAcrossLines = true
 
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.fileContent = ["ab", "cde"]
         state.cursorRow = 0
@@ -171,7 +171,7 @@ struct KeyboardNavigationRegressionTests {
         config.statusBar.show = false
         config.editor.wrapLines = true
 
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.sidebarCollapsed = true
         state.fileContent = [
@@ -248,7 +248,7 @@ struct KeyboardNavigationRegressionTests {
         config.tabRibbon.position = .hidden
         config.keybindingMode = .vim
 
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.vimMode = .normal
         state.fileContent = ["one", "two", "three"]

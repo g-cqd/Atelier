@@ -12,7 +12,7 @@ import Testing
 struct EditorStateForwarderTests {
     @Test
     func `a line replaced through the state is edited in the workspace's own storage`() {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         defer { state.shutdown() }
         state.highlightedLines = (0 ..< 10_000).map { [StyledSpan(text: "line \($0)", style: .default)] }
         let storage = state.workspace.highlightedLines.withUnsafeBufferPointer { $0.baseAddress }

@@ -181,7 +181,7 @@ struct KittyCodeConfigTests {
     @Test
     @MainActor
     func `Color scheme uses terminal default backgrounds`() {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         #expect(state.colorScheme.editorText.bg == .default)
         #expect(state.colorScheme.treeBg.bg == .default)
         #expect(state.colorScheme.statusBar.bg == .default)

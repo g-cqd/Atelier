@@ -13,7 +13,7 @@ struct RegexReplaceTests {
     private static func searching(_ pattern: String, replacingWith template: String, in lines: [String]) -> (
         state: EditorState, pipeline: RenderPipeline
     ) {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         state.fileContent = lines
         state.mode = .editor
         var search = EditorState.InFileSearch(

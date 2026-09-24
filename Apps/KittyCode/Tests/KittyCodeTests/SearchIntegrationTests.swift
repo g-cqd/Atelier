@@ -18,7 +18,8 @@ private func makeSearchContext(
     rows: Int = 24
 ) -> (state: EditorState, pipeline: RenderPipeline) {
     let config = KittyConfig()
-    let state = EditorState(rootPath: ".", config: config, taskProvider: TaskProviderSpy())
+    let state = EditorState(
+        rootPath: ".", config: config, taskProvider: TaskProviderSpy(), searchPool: EditorTestPool.shared)
     state.fileContent = fileContent
     state.mode = .editor
     let pipeline = RenderPipeline(

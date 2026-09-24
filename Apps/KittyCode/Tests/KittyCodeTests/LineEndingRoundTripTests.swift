@@ -18,7 +18,10 @@ struct LineEndingRoundTripTests {
         config.tabRibbon.position = .hidden
         config.syntax.enabled = false
         let taskProvider = TaskProviderSpy()
-        return (EditorState(rootPath: root, config: config, taskProvider: taskProvider), taskProvider)
+        return (
+            EditorState(rootPath: root, config: config, taskProvider: taskProvider, searchPool: EditorTestPool.shared),
+            taskProvider
+        )
     }
 
     private func bytes(at path: String) throws -> [UInt8] {

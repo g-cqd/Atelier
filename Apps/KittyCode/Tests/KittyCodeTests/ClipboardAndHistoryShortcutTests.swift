@@ -69,7 +69,7 @@ struct ClipboardAndHistoryShortcutTests {
         config.tabRibbon.position = .hidden
         config.keybindings.clipboardModifier = .control
 
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.bufferManager.open(
             filePath: "/a.txt", fileName: "a.txt", content: "hello world", language: nil)
@@ -104,7 +104,7 @@ struct ClipboardAndHistoryShortcutTests {
         config.tabRibbon.position = .hidden
         config.keybindings.historyModifier = .control
 
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.bufferManager.open(
             filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)

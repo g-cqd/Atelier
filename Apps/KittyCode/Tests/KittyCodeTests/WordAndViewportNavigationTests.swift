@@ -23,7 +23,7 @@ struct WordAndViewportNavigationTests {
 
     @Test
     func `Word jump forward moves to next token`() {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         state.fileContent = ["alpha   beta"]
         state.cursorRow = 0
         state.cursorCol = 0
@@ -34,7 +34,7 @@ struct WordAndViewportNavigationTests {
 
     @Test
     func `Word jump backward moves to previous token start`() {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         state.fileContent = ["alpha   beta"]
         state.cursorRow = 0
         state.cursorCol = 12
@@ -45,7 +45,7 @@ struct WordAndViewportNavigationTests {
 
     @Test
     func `ensureEditorVisible updates horizontal scroll`() {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         state.fileContent = ["0123456789abcdefghijklmnopqrstuvwxyz"]
         state.cursorRow = 0
         state.cursorCol = 25
@@ -59,7 +59,7 @@ struct WordAndViewportNavigationTests {
 
     @Test
     func `ensureTreeVisible scrolls selected row into viewport`() {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         // Populate the underlying FileNode tree and flatten it
         state.treeNodes = (0 ..< 40)
             .map { i in

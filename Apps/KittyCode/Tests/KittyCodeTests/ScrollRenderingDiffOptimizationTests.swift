@@ -88,7 +88,7 @@ struct ScrollRenderingDiffOptimizationTests {
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
         config.statusBar.show = false
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.sidebarCollapsed = true
         state.mode = .editor
         state.fileContent = (0 ..< 100).map { "line \($0) content here" }

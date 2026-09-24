@@ -50,7 +50,8 @@ struct EditorLargeFileBenchmark {
 
     /// The document open in a buffer, fully highlighted and measured, with the cursor and a 60-row screen halfway down.
     private func makeHighlightedState(taskProvider: any TaskProvider = .default) -> EditorState {
-        let state = EditorState(rootPath: ".", config: KittyConfig(), taskProvider: taskProvider)
+        let state = EditorState(
+            rootPath: ".", config: KittyConfig(), taskProvider: taskProvider, searchPool: EditorTestPool.shared)
         state.bufferManager.open(
             filePath: "/bench/large.swift", fileName: "large.swift", content: Self.text, language: "swift")
         state.restoreStateFromActiveBuffer()
@@ -133,7 +134,8 @@ struct EditorLargeFileBenchmark {
         var samples: [Duration] = []
         for _ in 0 ..< 5 {
             let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
-            let state = EditorState(rootPath: ".", config: KittyConfig(), taskProvider: tasks)
+            let state = EditorState(
+                rootPath: ".", config: KittyConfig(), taskProvider: tasks, searchPool: EditorTestPool.shared)
             let pipeline = RenderPipeline(
                 connection: MockTerminalConnection(size: TerminalSize(columns: 200, rows: 60)), columns: 200, rows: 60)
             let requestID = state.nextOpenRequestID()
@@ -153,7 +155,8 @@ struct EditorLargeFileBenchmark {
 
     /// The document as an open leaves it: highlighted by a full pass, whose lines the buffer and the screen share.
     private func makeOpenedState(tasks: TaskProviderSpy) async throws -> EditorState {
-        let state = EditorState(rootPath: ".", config: KittyConfig(), taskProvider: tasks)
+        let state = EditorState(
+            rootPath: ".", config: KittyConfig(), taskProvider: tasks, searchPool: EditorTestPool.shared)
         let spawned = tasks.spawnedTaskCount
         state.bufferManager.open(
             filePath: "/bench/large.swift", fileName: "large.swift", content: Self.text, language: "swift")
@@ -267,7 +270,8 @@ struct EditorLargeFileBenchmark {
         var samples: [Duration] = []
         for _ in 0 ..< 11 {
             let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
-            let state = EditorState(rootPath: ".", config: KittyConfig(), taskProvider: tasks)
+            let state = EditorState(
+                rootPath: ".", config: KittyConfig(), taskProvider: tasks, searchPool: EditorTestPool.shared)
             state.config.tabRibbon.persistence = .preview
             state.lastRenderRows = 60
             state.finishOpeningFile(

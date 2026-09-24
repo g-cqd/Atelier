@@ -43,7 +43,7 @@ struct KittyCodeSyntaxWiringTests {
     @Test
     @MainActor
     func `EditorState refreshHighlights populates per-line styled output`() {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         state.fileContent = ["true", "42"]
         state.currentLanguage = "json"
 
@@ -57,7 +57,7 @@ struct KittyCodeSyntaxWiringTests {
     @Test
     @MainActor
     func `EditorState fallback highlighting reuses line-based input for unsupported languages`() {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         state.fileContent = ["// comment", "value"]
         state.currentLanguage = "unknown_lang"
 
@@ -71,7 +71,7 @@ struct KittyCodeSyntaxWiringTests {
     @Test
     @MainActor
     func `EditorState re-scans the visible window after an edit and leaves off-screen lines alone`() throws {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         state.currentLanguage = "unknown_lang"
         var lines = ["hello", "world", "tail"]
         lines.append(contentsOf: (3 ..< 200).map { "line \($0)" })
