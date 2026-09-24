@@ -945,9 +945,14 @@ public final class EditorState {
     }
 
     public func switchToTab(_ index: Int) {
+        // The outgoing document's highlights and caches: the switch evicts the buffer's copy and the restore lets go
+        // of the workspace's, so they are retired once it has, below. Its rope stays with its buffer.
+        let retired = RetiredStorage(
+            highlights: highlightedLines, fileLines: cachedFileLines, documentText: cachedDocumentText)
         workspace.switchToTab(index)
         refreshHighlightsIfIncomplete()
         markEverythingDirty()
+        retire(consume retired)
     }
 
     /// Refreshes the highlights of an active buffer brought back without them or without its width, as a tab is once
@@ -1442,6 +1447,16 @@ public final class EditorState {
         RetiredStorage(
             highlights: highlightedLines, textBuffer: textBuffer, fileLines: cachedFileLines,
             documentText: cachedDocumentText, buffer: closedBuffer)
+    }
+
+    /// The preview buffer an open in preview mode replaces, and the active document's storage when it is that buffer.
+    func replacedPreviewStorage() -> RetiredStorage {
+        guard config.tabRibbon.persistence == .preview, let index = bufferManager.previewIndex else {
+            return RetiredStorage()
+        }
+        let preview = bufferManager.buffers[index]
+        return index == bufferManager.activeIndex
+            ? activeDocumentStorage(closing: preview) : RetiredStorage(buffer: preview)
     }
 
     private var currentHighlightRequest: HighlightRequest {
