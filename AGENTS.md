@@ -21,7 +21,7 @@ One `BlockingOffloadPool` per app, created in the composition root and injected;
   diff code lives in the umbrella.
 - Highlighting goes through `HighlightEngine` (`AtelierSyntaxModel`): the scanners are `LexicalHighlightEngine`
   (`AtelierLexers`, UTF-8 or UTF-16 units, `.lexical` layer), the grammar stack is the `.structural` layer. Tokens
-  are `HighlightToken`s with `HighlightRole`s; `HighlightToken.byLine` splits them per line; themes are
+  are `HighlightToken`s with `HighlightRole`s; `LineTokens` splits them per line into one flat buffer; themes are
   `SyntaxTheme`s keyed by role (`AtelierTheme`), bridged to `NSColor`/`Style` only in the apps.
 - Subprocesses go through `AtelierProcess.ProcessRunner`; git through `AtelierGit.GitClient` and the pure
   `GitParsers`; tests script them with `AtelierTestSupport.FakeProcessRunner`.
