@@ -40,10 +40,9 @@ package final class DocHoverController: NSObject {
     /// The shown identifier's rect in the text view, as last measured, the scrolls it followed included.
     private var shownAnchor: NSRect?
     private let panel: HoverDocPanel
-    /// Closes the panel once the grace delay passes; nil while nothing is to close it.
+    /// Closes the panel once the grace delay passes; nil while nothing is to close it. Always cancelled before it is
+    /// replaced, on the main actor, so a close that wakes cancelled does nothing.
     private var closeTask: Task<Void, Never>?
-    /// Bumped by every scheduled or cancelled close, so a close that wakes after its cancellation does nothing.
-    private var closeGeneration = 0
     /// Watches for Escape and clicks while the panel shows.
     private var eventMonitor: Any?
 
@@ -300,18 +299,15 @@ package final class DocHoverController: NSObject {
     /// is already pending or nothing shows.
     private func scheduleClose() {
         guard panel.isVisible, closeTask == nil else { return }
-        closeGeneration += 1
-        let myGeneration = closeGeneration
         closeTask = taskProvider.task { [weak self, clock] in
             try? await clock.sleep(for: Self.closeGraceDelay)
-            guard let self, self.closeGeneration == myGeneration, !Task.isCancelled else { return }
+            guard let self, !Task.isCancelled else { return }
             self.closeTask = nil
             self.closePanel()
         }
     }
 
     private func cancelClose() {
-        closeGeneration += 1
         closeTask?.cancel()
         closeTask = nil
     }
