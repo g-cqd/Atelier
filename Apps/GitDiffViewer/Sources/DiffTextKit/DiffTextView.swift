@@ -73,6 +73,9 @@ package struct DiffTextView: NSViewRepresentable {
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.automaticallyAdjustsContentInsets = false
+        // The pane stops at its edges, down, up and sideways, instead of rubber-banding past them.
+        scrollView.verticalScrollElasticity = .none
+        scrollView.horizontalScrollElasticity = .none
 
         let textView = scrollView.documentView as? NSTextView ?? DiffPaneTextView(usingTextLayoutManager: true)
         textView.isEditable = false
@@ -405,16 +408,7 @@ package final class DiffTextViewCoordinator: NSObject {
         guard let clipView = notification.object as? NSClipView else { return }
         metrics.width = max(clipView.bounds.width, textView?.frame.width ?? 0)
         updateOverscroll(in: clipView)
-        updateHorizontalScrolling(in: clipView)
         splitController?.scheduleAlignment()
-    }
-
-    /// A pane scrolls sideways only while one of its own lines runs past its viewport. Otherwise a sideways
-    /// swipe would only rubber-band, and in a split the narrower side would bounce while the wider one scrolls.
-    package func updateHorizontalScrolling(in clipView: NSClipView) {
-        guard let textView, let scrollView = textView.enclosingScrollView else { return }
-        let scrollsSideways = textView.frame.width > clipView.bounds.width + 0.5
-        scrollView.horizontalScrollElasticity = scrollsSideways ? .automatic : .none
     }
 
     /// Lets the last line scroll up to the top of the pane, and no further, by giving the text view trailing space
@@ -475,6 +469,5 @@ package final class DiffTextViewCoordinator: NSObject {
         guard let textView, let clipView = textView.enclosingScrollView?.contentView else { return }
         metrics.width = max(clipView.bounds.width, textView.frame.width)
         updateOverscroll(in: clipView)
-        updateHorizontalScrolling(in: clipView)
     }
 }
