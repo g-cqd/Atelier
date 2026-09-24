@@ -14,15 +14,17 @@ struct ParseActionResolver {
     /// The grammar's `precedences`: each list orders its names and rules, earlier over later.
     let precedences: [[PrecedenceEntry]]
 
-    /// The table of `itemSets` and their `transitions`, over `terminals` then `nonTerminals`.
+    /// The table of the states `propagated` gives and their `transitions`, over `terminals` then `nonTerminals`.
     func parseTable(
-        itemSets: [ItemSet],
+        states propagated: CoreItemSetBuilder.PropagatedStates,
         transitions: [Int: [(symbol: String, target: Int)]],
         terminals: [String],
         nonTerminals: [String]
     ) -> ParseTable {
+        let itemSets = propagated.states
         let terminalIndex = Dictionary(uniqueKeysWithValues: terminals.enumerated().map { ($1, $0) })
         let nonTerminalIndex = Dictionary(uniqueKeysWithValues: nonTerminals.enumerated().map { ($1, $0) })
+        let lookaheadTerminals = propagated.terminals.map { terminalIndex[$0] }
 
         var actions = [[Action]](
             repeating: [Action](repeating: .error, count: terminals.count), count: itemSets.count)
@@ -40,9 +42,11 @@ struct ParseActionResolver {
                 }
             }
             var completed: [Int: [Int]] = [:]
-            for item in itemSet.items where item.dotPosition == productions[item.ruleIndex].steps.count {
-                if let terminal = terminalIndex[item.lookahead] {
-                    completed[terminal, default: []].append(item.ruleIndex)
+            for (index, item) in itemSet.items.enumerated() where item.dot == productions[item.rule].steps.count {
+                itemSet.forEachLookahead(ofItemAt: index) { lookahead in
+                    if let terminal = lookaheadTerminals[lookahead] {
+                        completed[terminal, default: []].append(item.rule)
+                    }
                 }
             }
             for terminal in Set(shifts.keys).union(completed.keys) {
@@ -73,7 +77,9 @@ struct ParseActionResolver {
     /// The action on `lookahead` in the state of `itemSet`: its shift to `shift`, if any, against the reductions of
     /// `completedRules`, the productions that end there with that lookahead. A conflict lists its reductions by rule
     /// index, then its shift, so the parser forks in the same order on every run.
-    private func action(on lookahead: String, shift: Int?, completedRules: [Int], in itemSet: ItemSet) -> Action {
+    private func action(
+        on lookahead: String, shift: Int?, completedRules: [Int], in itemSet: LookaheadItemSet
+    ) -> Action {
         // The augmented rule's end is the accept.
         guard !completedRules.contains(0) else { return .accept }
 
@@ -153,17 +159,19 @@ struct ParseActionResolver {
         case higher
     }
 
-    private func winner(shifting lookahead: String, in itemSet: ItemSet, against reductions: Reductions) -> Winner {
+    private func winner(
+        shifting lookahead: String, in itemSet: LookaheadItemSet, against reductions: Reductions
+    ) -> Winner {
         var shiftIsHigher = false
         var shiftIsLower = false
-        for item in itemSet.items where item.dotPosition > 0 {
-            let steps = productions[item.ruleIndex].steps
-            guard item.dotPosition < steps.count,
-                firstSets[steps[item.dotPosition].symbol]?.contains(lookahead) ?? false
-            else { continue }
+        for item in itemSet.items where item.dot > 0 {
+            let steps = productions[item.rule].steps
+            guard item.dot < steps.count, firstSets[steps[item.dot].symbol]?.contains(lookahead) ?? false else {
+                continue
+            }
             switch compare(
-                steps[item.dotPosition - 1].precedence, [productions[item.ruleIndex].name], reductions.precedence,
-                reductions.symbols)
+                steps[item.dot - 1].precedence, [productions[item.rule].name], reductions.precedence, reductions.symbols
+            )
             {
                 case .higher: shiftIsHigher = true
                 case .lower: shiftIsLower = true
