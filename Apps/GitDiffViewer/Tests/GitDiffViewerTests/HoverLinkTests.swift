@@ -70,7 +70,7 @@ struct HoverLinkTests {
     private static let everySlot = HoverDocument(
         declaration: NSAttributedString(string: "func open(path: String) -> Bool"),
         summary: linkedProse("Opens a file."),
-        discussion: linkedProse("Reads it whole."),
+        discussion: [.paragraph(linkedProse("Reads it whole."))],
         parameters: [HoverDocument.Field(name: "path", text: linkedProse("Where the file lives."))],
         returns: linkedProse("Whether it opened."),
         extraCandidates: [
@@ -153,7 +153,9 @@ struct HoverLinkTests {
             """
         let document = HoverDocument.build(from: HoverContent(markdown: markdown, source: .docIndex), palette: .system)
         let sections = [
-            try #require(document.summary), try #require(document.discussion),
+            try #require(document.summary),
+            try #require(
+                document.discussion.compactMap { if case .paragraph(let text) = $0 { text } else { nil } }.first),
             try #require(document.parameters.first?.text), try #require(document.returns),
             try #require(document.extraCandidates.first?.summary)
         ]
@@ -171,8 +173,9 @@ struct HoverLinkTests {
         let panel = shownPanel(recordingInto: opened)
         let textViews = Self.descendants(of: try #require(panel.contentViewForTests), as: NSTextView.self)
 
-        // Declaration, body, returns, and the candidate's declaration and summary.
-        #expect(textViews.count == 5)
+        // Declaration, abstract, the Overview heading, the discussion's paragraph, returns, and the candidate's
+        // declaration and summary.
+        #expect(textViews.count == 7)
         for textView in textViews {
             let delegate = try #require(textView.delegate)
             // `true` tells `NSTextView` the click is handled; anything else makes it open the link itself.
@@ -187,7 +190,7 @@ struct HoverLinkTests {
         let panel = shownPanel(recordingInto: opened)
         let textViews = Self.descendants(of: try #require(panel.contentViewForTests), as: NSTextView.self)
 
-        #expect(textViews.count == 5)
+        #expect(textViews.count == 7)
         for textView in textViews {
             let delegate = try #require(textView.delegate)
             #expect(delegate.textView?(textView, clickedOnLink: Self.https, at: 0) == true)

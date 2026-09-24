@@ -51,7 +51,9 @@ package enum HoverPanelMetrics {
 }
 
 /// The rich hover panel: an arrow-less, non-activating child window styled like Xcode's Quick Help, sized to its
-/// content and anchored under the hovered identifier.
+/// content and anchored under the hovered identifier. A documented symbol reads as Quick Help does: its name as a
+/// title, its abstract, its declaration in a box, a divider, then the discussion under an Overview heading, block by
+/// block, scrolling past the panel's height. A symbol with nothing but its declaration shows the declaration alone.
 @MainActor
 package final class HoverDocPanel {
     /// Whether the panel is currently on screen.
@@ -64,11 +66,17 @@ package final class HoverDocPanel {
     private var trackingArea: NSTrackingArea?
 
     /// The delegate of every text view the panel builds; `NSTextView.delegate` is weak, so the panel keeps it.
-    private let linkDelegate: HoverLinkDelegate
+    let linkDelegate: HoverLinkDelegate
+    private let titleLabel = HoverDocPanel.makeTitleLabel()
+    private let summaryView: NSTextView
     private let declarationView: NSTextView
     /// The declaration's backing, filled with ``HoverDocument/chipBackground``.
     private let declarationChip = HoverDocPanel.makeChip()
-    private let bodyTextView: NSTextView
+    /// Sets the head (title, abstract, declaration) apart from what follows it.
+    private let headDivider = HoverDocPanel.makeDivider()
+    /// The discussion's blocks, top to bottom, in the body's scrolling document view.
+    let bodyStack = HoverDocPanel.makeBlockStack()
+    private let bodyDocument = HoverFlippedView()
     private let bodyScrollView = NSScrollView()
     private let parametersGrid = NSGridView(numberOfColumns: 2, rows: 0)
     private let parametersHeader = HoverDocPanel.makeSectionLabel("Parameters")
@@ -79,6 +87,7 @@ package final class HoverDocPanel {
     private let contentStack = NSStackView()
 
     // `NSTextView` has no intrinsic size, so the text slots need explicit heights, recomputed by every render.
+    private var summaryHeight: NSLayoutConstraint?
     private var declarationHeight: NSLayoutConstraint?
     private var bodyHeight: NSLayoutConstraint?
     private var returnsHeight: NSLayoutConstraint?
@@ -88,8 +97,8 @@ package final class HoverDocPanel {
     package init(openLink: @escaping @MainActor (URL) -> Void = HoverDocPanel.openInDefaultApp) {
         let linkDelegate = HoverLinkDelegate(open: openLink)
         self.linkDelegate = linkDelegate
+        summaryView = HoverDocPanel.makeProseTextView(linkDelegate: linkDelegate)
         declarationView = HoverDocPanel.makeCodeTextView(linkDelegate: linkDelegate)
-        bodyTextView = HoverDocPanel.makeProseTextView(linkDelegate: linkDelegate)
         returnsView = HoverDocPanel.makeProseTextView(linkDelegate: linkDelegate)
     }
 
@@ -212,7 +221,13 @@ package final class HoverDocPanel {
             right: HoverPanelMetrics.edgeInset)
         contentStack.translatesAutoresizingMaskIntoConstraints = false
 
-        bodyScrollView.documentView = bodyTextView
+        bodyDocument.addSubview(bodyStack)
+        NSLayoutConstraint.activate([
+            bodyStack.topAnchor.constraint(equalTo: bodyDocument.topAnchor),
+            bodyStack.leadingAnchor.constraint(equalTo: bodyDocument.leadingAnchor),
+            bodyStack.widthAnchor.constraint(equalToConstant: HoverPanelSizing.width - 2 * HoverPanelMetrics.edgeInset)
+        ])
+        bodyScrollView.documentView = bodyDocument
         bodyScrollView.drawsBackground = false
         bodyScrollView.hasVerticalScroller = false
         bodyScrollView.borderType = .noBorder
@@ -232,15 +247,18 @@ package final class HoverDocPanel {
         Self.configureChip(declarationChip, around: declarationView)
 
         for view in [
-            declarationChip, bodyScrollView, parametersHeader, parametersGrid, returnsHeader, returnsView,
-            candidatesStack, diagnosticsStack
+            titleLabel, summaryView, declarationChip, headDivider, bodyScrollView, parametersHeader, parametersGrid,
+            returnsHeader, returnsView, candidatesStack, diagnosticsStack
         ] {
             contentStack.addArrangedSubview(view)
             view.widthAnchor.constraint(equalToConstant: HoverPanelSizing.width - 24).isActive = true
         }
+        contentStack.setCustomSpacing(HoverPanelMetrics.headerToContentSpacing, after: titleLabel)
         contentStack.setCustomSpacing(HoverPanelMetrics.headerToContentSpacing, after: parametersHeader)
         contentStack.setCustomSpacing(HoverPanelMetrics.headerToContentSpacing, after: returnsHeader)
 
+        summaryHeight = summaryView.heightAnchor.constraint(equalToConstant: 0)
+        summaryHeight?.isActive = true
         declarationHeight = declarationChip.heightAnchor.constraint(equalToConstant: 0)
         declarationHeight?.isActive = true
         bodyHeight = bodyScrollView.heightAnchor.constraint(equalToConstant: 0)
@@ -271,6 +289,18 @@ package final class HoverDocPanel {
     private func render(_ document: HoverDocument) -> CGFloat {
         let innerWidth = HoverPanelSizing.width - 2 * HoverPanelMetrics.edgeInset
         let chipInnerWidth = innerWidth - 2 * HoverPanelMetrics.chipHorizontalPadding
+        let hasDiscussion = !document.discussion.isEmpty
+        let hasFields = !document.parameters.isEmpty || document.returns != nil
+        // The title names what the documentation is about; over a bare declaration it would only repeat it.
+        let hasDocumentation = document.summary != nil || hasDiscussion || hasFields
+
+        titleLabel.stringValue = document.title ?? ""
+        titleLabel.isHidden = !hasDocumentation || document.title == nil
+
+        let summary = document.summary ?? NSAttributedString()
+        summaryView.textStorage?.setAttributedString(summary)
+        summaryView.isHidden = document.summary == nil
+        summaryHeight?.constant = summaryView.isHidden ? 0 : Self.measuredHeight(of: summary, width: innerWidth)
 
         let declaration = document.declaration ?? NSAttributedString()
         declarationView.textStorage?.setAttributedString(declaration)
@@ -281,12 +311,9 @@ package final class HoverDocPanel {
             ? 0
             : Self.measuredHeight(of: declaration, width: chipInnerWidth) + 2 * HoverPanelMetrics.chipVerticalPadding
 
-        let body = NSMutableAttributedString()
-        if let summary = document.summary { body.append(summary) }
-        if let discussion = document.discussion {
-            if body.length > 0 { body.append(NSAttributedString(string: "\n\n")) }
-            body.append(discussion)
-        }
+        let hasHead = !titleLabel.isHidden || !summaryView.isHidden || !declarationChip.isHidden
+        headDivider.isHidden = !(hasHead && (hasDiscussion || hasFields))
+
         renderParameters(document.parameters)
         parametersHeader.isHidden = document.parameters.isEmpty
         parametersGrid.isHidden = document.parameters.isEmpty
@@ -303,13 +330,14 @@ package final class HoverDocPanel {
         renderDiagnostics(document.diagnostics)
         diagnosticsStack.isHidden = document.diagnostics.isEmpty
 
-        // A bare declaration stands alone: a line under it would say nothing the declaration does not.
-        bodyTextView.textStorage?.setAttributedString(body)
-        bodyScrollView.isHidden = body.length == 0
-
-        let bodyFullHeight = bodyScrollView.isHidden ? 0 : Self.measuredHeight(of: body, width: innerWidth)
-        // The scroll view keeps its zero-size document view unless we give the text its measured bounds.
-        bodyTextView.setFrameSize(NSSize(width: innerWidth, height: bodyFullHeight))
+        renderDiscussion(document.discussion, chipBackground: document.chipBackground, width: innerWidth)
+        bodyScrollView.isHidden = !hasDiscussion
+        bodyStack.layoutSubtreeIfNeeded()
+        let bodyFullHeight = bodyScrollView.isHidden ? 0 : bodyStack.fittingSize.height
+        // The scroll view keeps its zero-size document view unless we give it the blocks' measured bounds.
+        bodyDocument.setFrameSize(NSSize(width: innerWidth, height: bodyFullHeight))
+        bodyScrollView.contentView.scroll(to: .zero)
+        bodyScrollView.reflectScrolledClipView(bodyScrollView.contentView)
         bodyHeight?.constant = 0
         contentStack.layoutSubtreeIfNeeded()
         let chromeHeight = contentStack.fittingSize.height
@@ -397,7 +425,7 @@ extension HoverDocPanel {
     }
 
     /// The height `text` lays out to at `width`, measured on a throwaway TextKit 2 stack so no slot's view is touched.
-    fileprivate static func measuredHeight(of text: NSAttributedString, width: CGFloat) -> CGFloat {
+    static func measuredHeight(of text: NSAttributedString, width: CGFloat) -> CGFloat {
         guard text.length > 0 else { return 0 }
         let contentStorage = NSTextContentStorage()
         let layoutManager = NSTextLayoutManager()
@@ -411,7 +439,7 @@ extension HoverDocPanel {
 
     /// A declaration chip: an `NSBox`, whose fill and border colors resolve at draw time and so follow appearance
     /// changes, unlike a layer's baked `CGColor`s.
-    fileprivate static func makeChip() -> NSBox {
+    static func makeChip() -> NSBox {
         let box = NSBox()
         box.boxType = .custom
         box.cornerRadius = HoverPanelMetrics.chipCornerRadius
@@ -422,7 +450,7 @@ extension HoverDocPanel {
     }
 
     /// Pins `textView` inside `chip`, inset by the chip padding on every edge.
-    fileprivate static func configureChip(_ chip: NSBox, around textView: NSTextView) {
+    static func configureChip(_ chip: NSBox, around textView: NSTextView) {
         chip.addSubview(textView)
         NSLayoutConstraint.activate([
             textView.leadingAnchor.constraint(
@@ -436,7 +464,7 @@ extension HoverDocPanel {
     }
 
     /// A selectable, read-only text view whose link clicks go through `linkDelegate`.
-    fileprivate static func makeCodeTextView(linkDelegate: HoverLinkDelegate) -> NSTextView {
+    static func makeCodeTextView(linkDelegate: HoverLinkDelegate) -> NSTextView {
         let view = NSTextView()
         view.isEditable = false
         view.isSelectable = true
@@ -449,7 +477,7 @@ extension HoverDocPanel {
     }
 
     /// A selectable, read-only text view that wraps to its width, whose link clicks go through `linkDelegate`.
-    fileprivate static func makeProseTextView(linkDelegate: HoverLinkDelegate) -> NSTextView {
+    static func makeProseTextView(linkDelegate: HoverLinkDelegate) -> NSTextView {
         let view = NSTextView()
         view.isEditable = false
         view.isSelectable = true
@@ -515,7 +543,7 @@ extension HoverDocument.DiagnosticEntry.Severity {
 /// Opens a clicked link through `open` only when ``HoverDocument/openableURL(forLink:)`` allows it, and reports every
 /// click handled: `NSTextView` opens any link its delegate leaves unhandled, whatever its scheme.
 @MainActor
-private final class HoverLinkDelegate: NSObject, NSTextViewDelegate {
+final class HoverLinkDelegate: NSObject, NSTextViewDelegate {
     private let open: @MainActor (URL) -> Void
 
     init(open: @escaping @MainActor (URL) -> Void) {

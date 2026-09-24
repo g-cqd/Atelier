@@ -4,8 +4,13 @@ Verdict: replace NSPopover with an arrow-less anchored NSPanel child window (Xco
 style). NSPopover's chrome is a hard ceiling (hasFullSizeContent only extends into the arrow
 region; verified). Panel: [.borderless, .nonactivatingPanel], floating, clear/soft-shadow,
 NSVisualEffectView .popover material, 8pt continuous corners, appearance matched to the pane.
-Content stack: symbol header row · token-colored declaration chip · doc body (NSTextView,
-selectable, links) · parameter NSGridView · diagnostics slot (reserved) · provenance footer.
+Content stack (HOVER-20, Quick Help's order): the symbol's name as a title (HoverDeclarationName,
+from the declaration) · the abstract · token-colored declaration chip · divider · doc body, a
+flipped document view holding one view per markdown block under an "Overview" heading
+(HoverMarkdownBlock reads Foundation's PresentationIntents: paragraphs and headings as selectable
+NSTextViews, code blocks as chips colored like the declaration, lists, quotes, rules) · parameter
+NSGridView · diagnostics slot (reserved). A declaration with nothing else shows the chip alone:
+no title, no divider, no "No documentation" line.
 Sizing: fixed width 440, measure via NSTextLayoutManager.usageBoundsForTextContainer, clamp
 height 420 then inner-scroll body only. Anchor at HoverHit.anchorRect converted to screen,
 below the identifier, flip at screen edges; addChildWindow(.above). DocHoverController's
