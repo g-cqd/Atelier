@@ -13,6 +13,7 @@ public enum BundledScanners {
         "typescript": TypeScriptExternalScanner.self,
         "python": PythonExternalScanner.self,
         "rust": RustExternalScanner.self,
-        "cpp": CppExternalScanner.self
+        "cpp": CppExternalScanner.self,
+        "css": CSSExternalScanner.self
     ]
 }
