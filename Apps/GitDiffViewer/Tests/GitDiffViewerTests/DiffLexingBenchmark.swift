@@ -33,7 +33,7 @@ struct DiffLexingBenchmark {
         var checksum: UInt64 = 0
         for iteration in 0 ..< Self.iterations {
             // Each result is released before the next timed call, so no call pays for freeing another's.
-            var lexed: [[[HighlightToken]]] = []
+            var lexed: [LineTokens] = []
             let lexing = Self.milliseconds {
                 lexed.append(DiffRenderer.tokensByLine(text: old, lines: oldLines, language: .swift))
                 lexed.append(DiffRenderer.tokensByLine(text: new, lines: newLines, language: .swift))
@@ -51,7 +51,7 @@ struct DiffLexingBenchmark {
             }
             let utf8Counts = scanned.map(\.count)
             #expect(utf8Counts == utf16Counts)
-            var skipped: [[[HighlightToken]]] = []
+            var skipped: [LineTokens] = []
             let plain = Self.milliseconds {
                 skipped.append(DiffRenderer.tokensByLine(text: old, lines: oldLines, language: .plain))
                 skipped.append(DiffRenderer.tokensByLine(text: new, lines: newLines, language: .plain))

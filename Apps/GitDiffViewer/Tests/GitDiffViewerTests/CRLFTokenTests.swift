@@ -16,7 +16,7 @@ struct CRLFTokenTests {
         let last = 3 // no newline at the end
         """
 
-    private static func tokens(_ text: String) -> [[HighlightToken]] {
+    private static func tokens(_ text: String) -> LineTokens {
         DiffRenderer.tokensByLine(text: text, lines: DiffModel.lines(of: text), language: .swift)
     }
 
