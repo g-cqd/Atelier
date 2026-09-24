@@ -61,7 +61,7 @@ struct TreeRefreshRegressionTests {
         defer { try? FileManager.default.removeItem(at: rootURL) }
         try Data().write(to: rootURL.appendingPathComponent("listed.txt"))
 
-        let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
+        let state = EditorState(rootPath: rootURL.path, config: KittyConfig(), searchPool: EditorTestPool.shared)
         defer { state.shutdown() }
 
         #expect(state.treeNodes.isEmpty)

@@ -14,7 +14,7 @@ struct ObservationIntegrationTests {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.fileContent = ["alpha", "beta", "gamma"]
         _ = state.drainDirtyState()
         return state

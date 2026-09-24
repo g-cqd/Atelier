@@ -19,7 +19,10 @@ struct EditorOpenAndWidthTests {
 
     private func makeState() -> (state: EditorState, tasks: TaskProviderSpy) {
         let tasks = TaskProviderSpy(defaultTimeout: .seconds(20))
-        return (EditorState(rootPath: ".", config: KittyConfig(), taskProvider: tasks), tasks)
+        return (
+            EditorState(rootPath: ".", config: KittyConfig(), taskProvider: tasks, searchPool: EditorTestPool.shared),
+            tasks
+        )
     }
 
     /// Opens `text` in a new buffer and waits for the full pass its restore asks for, so it starts highlighted and

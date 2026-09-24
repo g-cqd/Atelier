@@ -27,7 +27,8 @@ struct EditorHighlightPipelineTests {
         lines: [String] = (0 ..< lineCount).map(line), scrollOffset: Int = 1_000
     ) -> (state: EditorState, tasks: TaskProviderSpy, threads: PassThreads) {
         let tasks = TaskProviderSpy(defaultTimeout: .seconds(20))
-        let state = EditorState(rootPath: ".", config: KittyConfig(), taskProvider: tasks)
+        let state = EditorState(
+            rootPath: ".", config: KittyConfig(), taskProvider: tasks, searchPool: EditorTestPool.shared)
         state.bufferManager.open(
             filePath: "/project/large.swift", fileName: "large.swift", content: lines.joined(separator: "\n"),
             language: "swift")

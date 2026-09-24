@@ -20,7 +20,7 @@ struct VimCommandLineTests {
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
         config.keybindingMode = .vim
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.vimMode = .normal
         state.bufferManager.open(

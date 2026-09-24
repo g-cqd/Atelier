@@ -22,7 +22,7 @@ struct TreeFileOperationTests {
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
-        let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
+        let state = EditorState(rootPath: rootURL.path, config: KittyConfig(), searchPool: EditorTestPool.shared)
         await state.loadInitialTree(validateHistory: false)
 
         let fileURL = rootURL.appendingPathComponent("created.txt")
@@ -43,7 +43,7 @@ struct TreeFileOperationTests {
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
-        let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
+        let state = EditorState(rootPath: rootURL.path, config: KittyConfig(), searchPool: EditorTestPool.shared)
         await state.loadInitialTree(validateHistory: false)
 
         // Create file A, then file B
@@ -73,7 +73,7 @@ struct TreeFileOperationTests {
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
-        let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
+        let state = EditorState(rootPath: rootURL.path, config: KittyConfig(), searchPool: EditorTestPool.shared)
         await state.loadInitialTree(validateHistory: false)
 
         // Create file A via the editor
@@ -95,7 +95,7 @@ struct TreeFileOperationTests {
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
-        let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
+        let state = EditorState(rootPath: rootURL.path, config: KittyConfig(), searchPool: EditorTestPool.shared)
         await state.loadInitialTree(validateHistory: false)
 
         let fileURL = rootURL.appendingPathComponent("hello.swift")
@@ -115,7 +115,7 @@ struct TreeFileOperationTests {
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
-        let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
+        let state = EditorState(rootPath: rootURL.path, config: KittyConfig(), searchPool: EditorTestPool.shared)
         await state.loadInitialTree(validateHistory: false)
 
         // Create A, B, C
@@ -151,7 +151,7 @@ struct TreeFileOperationTests {
 
         var config = KittyConfig()
         config.editor.maxTreeUndoSteps = 3
-        let state = EditorState(rootPath: rootURL.path, config: config)
+        let state = EditorState(rootPath: rootURL.path, config: config, searchPool: EditorTestPool.shared)
         await state.loadInitialTree(validateHistory: false)
 
         for i in 1 ... 5 {
@@ -177,7 +177,7 @@ struct TreeFileOperationTests {
 
         var config = KittyConfig()
         config.editor.snapshotMaxFiles = 5
-        let state = EditorState(rootPath: rootURL.path, config: config)
+        let state = EditorState(rootPath: rootURL.path, config: config, searchPool: EditorTestPool.shared)
 
         // Create a directory with more files than the threshold
         let bigDir = rootURL.appendingPathComponent("bigdir")
@@ -201,7 +201,7 @@ struct TreeFileOperationTests {
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
-        let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
+        let state = EditorState(rootPath: rootURL.path, config: KittyConfig(), searchPool: EditorTestPool.shared)
 
         let smallDir = rootURL.appendingPathComponent("smalldir")
         try FileManager.default.createDirectory(at: smallDir, withIntermediateDirectories: true)

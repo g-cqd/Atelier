@@ -21,7 +21,7 @@ struct SelectionEditingTests {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.bufferManager.open(
             filePath: "/test.txt", fileName: "test.txt",

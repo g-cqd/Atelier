@@ -19,7 +19,7 @@ struct LayoutMetricsTests {
     func `editorStart with sidebar visible`() {
         var config = KittyConfig()
         config.activityBar.show = true
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.treePanelWidth = 20
         state.sidebarCollapsed = false
 
@@ -35,7 +35,7 @@ struct LayoutMetricsTests {
     func `editorStart with sidebar collapsed`() {
         var config = KittyConfig()
         config.activityBar.show = true
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.sidebarCollapsed = true
 
         let layout = LayoutMetrics(state: state, columns: 80, rows: 24)
@@ -50,7 +50,7 @@ struct LayoutMetricsTests {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbon.position = .top
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.sidebarCollapsed = true
         // Need at least one buffer for tab ribbon to show
         state.bufferManager.open(filePath: "/a.txt", fileName: "a.txt", content: "", language: nil)
@@ -65,7 +65,7 @@ struct LayoutMetricsTests {
     func `static editorStart matches instance editorStart`() {
         var config = KittyConfig()
         config.activityBar.show = true
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.treePanelWidth = 15
         state.sidebarCollapsed = false
 
@@ -78,7 +78,7 @@ struct LayoutMetricsTests {
     func `sidebarWidth is clamped to half of columns`() {
         var config = KittyConfig()
         config.activityBar.show = false
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.treePanelWidth = 100
         state.sidebarCollapsed = false
 
@@ -93,7 +93,7 @@ struct LayoutMetricsTests {
 struct PixelChromeLayoutTests {
     @Test
     func `pixel chrome gives the separator column back to the editor`() {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         state.treePanelWidth = 20
         state.sidebarCollapsed = false
 

@@ -19,7 +19,7 @@ struct EditorNavigationSelectionTests {
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
         config.keybindingMode = .nano
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.bufferManager.open(
             filePath: "/test.txt", fileName: "test.txt",

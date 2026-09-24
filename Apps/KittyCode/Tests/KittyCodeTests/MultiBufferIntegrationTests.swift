@@ -21,7 +21,7 @@ struct MultiBufferIntegrationTests {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
 
         // Simulate opening first file via bufferManager
         state.bufferManager.open(
@@ -56,7 +56,7 @@ struct MultiBufferIntegrationTests {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
 
         state.bufferManager.open(
             filePath: "/a.txt",
@@ -96,7 +96,7 @@ struct MultiBufferIntegrationTests {
     func `textDidChange marks active buffer dirty`() {
         var config = KittyConfig()
         config.activityBar.show = false
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
 
         state.bufferManager.open(
             filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
@@ -129,7 +129,8 @@ struct MultiBufferIntegrationTests {
         // tests contending for the same lock elsewhere in the suite.
         config.syntax.enabled = false
         let taskProvider = TaskProviderSpy()
-        let state = EditorState(rootPath: rootURL.path, config: config, taskProvider: taskProvider)
+        let state = EditorState(
+            rootPath: rootURL.path, config: config, taskProvider: taskProvider, searchPool: EditorTestPool.shared)
 
         state.openFilePath(firstFileURL.path, name: "first.txt")
         try await taskProvider.waitForAllTasks(timeout: .seconds(30))

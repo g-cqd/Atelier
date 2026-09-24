@@ -42,7 +42,7 @@ struct TerminalInputRoutingTests {
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
         config.syntax.themeFromTerminal = themeFromTerminal
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.fileContent = [""]
         let pipeline = RenderPipeline(

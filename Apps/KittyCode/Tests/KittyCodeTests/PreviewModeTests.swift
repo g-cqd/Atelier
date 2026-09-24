@@ -51,7 +51,7 @@ struct PreviewModeTests {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbon.persistence = .preview
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.bufferManager.openPreview(
             filePath: "/a.txt", fileName: "a.txt", content: "hello", language: nil)
         state.restoreStateFromActiveBuffer()

@@ -20,7 +20,7 @@ struct StatusBarAndPromptTests {
     func `beginSavePrompt defaults to last selected directory`() {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
             UUID().uuidString, isDirectory: true)
-        let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
+        let state = EditorState(rootPath: rootURL.path, config: KittyConfig(), searchPool: EditorTestPool.shared)
 
         state.noteSelectedPath(
             rootURL.appendingPathComponent("Sources/App/main.swift").path, isDirectory: false)
@@ -32,7 +32,7 @@ struct StatusBarAndPromptTests {
 
     @Test
     func `prompt accepts alt modified unicode fallback text`() {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         let pipeline = RenderPipeline(
             connection: MockTerminalConnection(size: TerminalSize(columns: 40, rows: 10)),
             columns: 40,
@@ -58,7 +58,7 @@ struct StatusBarAndPromptTests {
         config.statusBar.leftItems = [.file]
         config.statusBar.rightItems = [.language, .lineEnding, .git, .position]
 
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.beginNewFile()
         state.mode = .editor
         state.fileName = "note.swift"
@@ -89,7 +89,7 @@ struct StatusBarAndPromptTests {
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
-        let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
+        let state = EditorState(rootPath: rootURL.path, config: KittyConfig(), searchPool: EditorTestPool.shared)
         state.beginNewFile()
         state.fileContent = ["alpha", "beta", ""]
         state.currentLineEnding = .carriageReturnLineFeed

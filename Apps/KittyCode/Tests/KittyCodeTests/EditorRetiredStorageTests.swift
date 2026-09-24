@@ -32,7 +32,8 @@ struct EditorRetiredStorageTests {
     /// A Swift file open in the only tab, as a preview when `preview`, its highlights shared by the buffer and the
     /// screen as an open leaves them, with `retire` recorded from here on.
     private func makeState(preview: Bool = false) -> (state: EditorState, log: RetiredLog) {
-        let state = EditorState(rootPath: ".", config: KittyConfig(), taskProvider: TaskProviderSpy())
+        let state = EditorState(
+            rootPath: ".", config: KittyConfig(), taskProvider: TaskProviderSpy(), searchPool: EditorTestPool.shared)
         let content = Self.lines.joined(separator: "\n")
         if preview {
             state.config.tabRibbon.persistence = .preview
