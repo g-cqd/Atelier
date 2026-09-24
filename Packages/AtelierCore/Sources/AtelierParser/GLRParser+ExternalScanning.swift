@@ -107,6 +107,44 @@ extension GLRParser {
             root: attachingExtras(extras, to: consume root), source: source, errorByteCount: errorByteCount)
     }
 
+    /// The token the external scanner reads at `stack`'s cursor with `validSymbols`, which becomes the stack's; nil when
+    /// the scanner reads none, or reads one the parse ignores: in error mode, as tree-sitter ignores it, an empty token
+    /// that leaves the scanner's state as it was; otherwise an empty one that changes neither that state nor the
+    /// parse's.
+    private func externalToken(
+        for stack: inout ParseStack,
+        utf8: UnsafeBufferPointer<UInt8>,
+        externalScanner: inout any GrammarExternalScanner,
+        validSymbols: [Bool],
+        inErrorMode: Bool
+    ) throws(ParseError) -> ParseToken? {
+        externalScanner.deserialize(stack.scannerState[...])
+        var lexer = BufferScannerLexer(utf8, at: stack.cursor)
+        guard externalScanner.scan(&lexer, validSymbols: validSymbols) else { return nil }
+        guard parseTable.externalNames.indices.contains(lexer.resultSymbol), lexer.tokenEnd.offset <= utf8.count
+        else { throw .parsingFailed("External scanner returned an invalid token") }
+        var state: [UInt8] = []
+        externalScanner.serialize(into: &state)
+        guard state.count <= maximumSerializedScannerStateSize else {
+            throw .parsingFailed("External scanner state exceeded its size limit")
+        }
+        let name = parseTable.externalSymbols[lexer.resultSymbol]
+        let changesParseState =
+            !inErrorMode && (terminalIndex[name].map { parseTable.actions[stack.state][$0] != .error } ?? false)
+        guard lexer.tokenEnd.offset > stack.cursor.offset || state != stack.scannerState || changesParseState else {
+            return nil
+        }
+        stack.scannerState = state
+        stack.cursor = lexer.tokenEnd
+        let start = lexer.tokenStart.offset > lexer.tokenEnd.offset ? lexer.tokenEnd : lexer.tokenStart
+        return ParseToken(
+            terminal: terminalIndex[name], type: name,
+            byteRange: start.offset ..< lexer.tokenEnd.offset,
+            pointRange: start.point ..< lexer.tokenEnd.point,
+            isNamed: !name.hasPrefix("_") && !name.hasPrefix("\""),
+            isExtra: parseTable.externalIsExtra[lexer.resultSymbol])
+    }
+
     /// Reads an external token first when one is valid, then the current state's internal lexical mode.
     private func nextToken(
         for stack: inout ParseStack,
@@ -114,37 +152,14 @@ extension GLRParser {
         scanner: TokenScanner,
         externalScanner: inout any GrammarExternalScanner
     ) throws(ParseError) -> ParseToken? {
-        let valid =
-            stack.isRecovering
-            ? [Bool](repeating: true, count: parseTable.externalNames.count)
-            : viableExternals(for: stack)
-        if valid.contains(true) {
-            externalScanner.deserialize(stack.scannerState[...])
-            var lexer = BufferScannerLexer(utf8, at: stack.cursor)
-            if externalScanner.scan(&lexer, validSymbols: valid) {
-                guard parseTable.externalNames.indices.contains(lexer.resultSymbol),
-                    lexer.tokenEnd.offset <= utf8.count
-                else { throw .parsingFailed("External scanner returned an invalid token") }
-                var state: [UInt8] = []
-                externalScanner.serialize(into: &state)
-                guard state.count <= maximumSerializedScannerStateSize else {
-                    throw .parsingFailed("External scanner state exceeded its size limit")
-                }
-                let name = parseTable.externalSymbols[lexer.resultSymbol]
-                let changesParseState =
-                    terminalIndex[name].map { parseTable.actions[stack.state][$0] != .error } ?? false
-                if lexer.tokenEnd.offset > stack.cursor.offset || state != stack.scannerState || changesParseState {
-                    stack.scannerState = state
-                    stack.cursor = lexer.tokenEnd
-                    let start = lexer.tokenStart.offset > lexer.tokenEnd.offset ? lexer.tokenEnd : lexer.tokenStart
-                    return ParseToken(
-                        terminal: terminalIndex[name], type: name,
-                        byteRange: start.offset ..< lexer.tokenEnd.offset,
-                        pointRange: start.point ..< lexer.tokenEnd.point,
-                        isNamed: !name.hasPrefix("_") && !name.hasPrefix("\""),
-                        isExtra: parseTable.externalIsExtra[lexer.resultSymbol])
-                }
-            }
+        let everyExternal = [Bool](repeating: true, count: parseTable.externalNames.count)
+        let valid = stack.isRecovering ? everyExternal : viableExternals(for: stack)
+        if valid.contains(true),
+            let token = try externalToken(
+                for: &stack, utf8: utf8, externalScanner: &externalScanner, validSymbols: valid,
+                inErrorMode: stack.isRecovering)
+        {
+            return token
         }
 
         let mode = scanner.mode(ofState: stack.state) ?? scanner.errorMode
@@ -152,8 +167,20 @@ extension GLRParser {
         var outcome =
             mode.map { scanner.scan(utf8, from: stack.cursor, mode: $0, suppressEmptyAt: suppressEmptyAt) }
             ?? .none(start: stack.cursor)
-        if case .none = outcome, let errorMode = scanner.errorMode, errorMode != mode {
-            outcome = scanner.scan(utf8, from: stack.cursor, mode: errorMode, suppressEmptyAt: suppressEmptyAt)
+        if case .none = outcome {
+            // What tree-sitter does when a state's mode reads nothing: it lexes in the error state's mode, whose
+            // scanner call has every external valid. Swift's scanner reads `#if` only where a raw string may start,
+            // so a directive between two class members is read this way, and the state takes it.
+            if !stack.isRecovering, valid != everyExternal, !everyExternal.isEmpty,
+                let token = try externalToken(
+                    for: &stack, utf8: utf8, externalScanner: &externalScanner, validSymbols: everyExternal,
+                    inErrorMode: true)
+            {
+                return token
+            }
+            if let errorMode = scanner.errorMode, errorMode != mode {
+                outcome = scanner.scan(utf8, from: stack.cursor, mode: errorMode, suppressEmptyAt: suppressEmptyAt)
+            }
         }
         switch outcome {
             case .token(let scanned):
