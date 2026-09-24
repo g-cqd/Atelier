@@ -1,5 +1,5 @@
-/// ASCII code points as bytes; every predicate and comparison also accepts a wider code unit, so one table
-/// serves the UTF-8 and the UTF-16 scanners.
+/// ASCII code points as bytes, and the character classes the scanners test UTF-8 bytes against. A byte of 128 or more
+/// belongs to a multi-byte character, which counts as identifier text.
 enum ASCII {
     static let newline: UInt8 = 10
     static let carriageReturn: UInt8 = 13
