@@ -482,9 +482,12 @@ extension DiffGutterView {
             scrollToVisible(target)
             return
         }
-        // The pane's gutter stays put beside its scroll view: the text scrolls under it instead.
+        // The pane's gutter stays put beside its scroll view: the text scrolls under it instead, never past its end,
+        // where no text is drawn.
         let delta = target.maxY > visible.maxY ? target.maxY - visible.maxY : target.minY - visible.minY
-        clipView.scroll(to: NSPoint(x: clipView.bounds.origin.x, y: clipView.bounds.origin.y + delta))
+        let end = max((clipView.documentView?.frame.height ?? 0) - clipView.bounds.height, 0)
+        let y = min(max(clipView.bounds.origin.y + delta, 0), end)
+        clipView.scroll(to: NSPoint(x: clipView.bounds.origin.x, y: y))
         clipView.enclosingScrollView?.reflectScrolledClipView(clipView)
     }
 }
