@@ -113,7 +113,15 @@ package final class HoverDocPanel {
         summaryView = HoverDocPanel.makeProseTextView(linkDelegate: linkDelegate)
         declarationView = HoverDocPanel.makeCodeTextView(linkDelegate: linkDelegate)
         returnsView = HoverDocPanel.makeProseTextView(linkDelegate: linkDelegate)
+        Self.liveCount += 1
     }
+
+    isolated deinit {
+        Self.liveCount -= 1
+    }
+
+    /// How many panels are alive; for tests that check the panes build theirs only when hovered and release them.
+    package private(set) static var liveCount = 0
 
     /// Opens `url` in the user's default app for it, logging a failure.
     package static func openInDefaultApp(_ url: URL) {
