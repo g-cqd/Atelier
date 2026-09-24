@@ -254,13 +254,18 @@ package final class DocHoverController: NSObject {
     /// The testable core of the event monitor that runs while the panel shows: Escape closes the panel and is
     /// consumed; a click anywhere but the panel closes it and goes on to its target. Nil for a consumed event.
     package func handleLocalEvent(_ event: NSEvent) -> NSEvent? {
+        handleLocalEvent(event, in: event.window)
+    }
+
+    /// ``handleLocalEvent(_:)`` for an event in `window`, which a test names, since an event it makes has no window.
+    package func handleLocalEvent(_ event: NSEvent, in window: NSWindow?) -> NSEvent? {
         guard panel.isVisible else { return event }
         switch event.type {
             case .keyDown where event.keyCode == Self.escapeKeyCode:
                 invalidate()
                 return nil
             case .leftMouseDown, .rightMouseDown, .otherMouseDown:
-                if !panel.owns(event.window) { invalidate() }
+                if !panel.owns(window) { invalidate() }
                 return event
             default:
                 return event
