@@ -59,11 +59,23 @@ public enum ParseTableCompiler: Sendable {
         _ grammar: GrammarDefinition,
         limits: GrammarCompilationLimits = .default
     ) throws(GrammarError) -> CompilationResult {
+        try compile(grammar, limits: limits, onPhase: nil)
+    }
+
+    /// The compiler pipeline with optional phase checkpoints for opt-in profiling.
+    static func compile(
+        _ grammar: GrammarDefinition,
+        limits: GrammarCompilationLimits,
+        onPhase: ((String) -> Void)?
+    ) throws(GrammarError) -> CompilationResult {
         let lexical = try LexicalGrammar(grammar)
+        onPhase?("lexical grammar")
         // Reading every token's pattern first fails a grammar with a pattern the lexer can't read before the costly
         // LR construction.
         let tokenAutomaton = try TokenNFA(tokens: lexical.tokens, separators: lexical.separators)
+        onPhase?("token NFA")
         let flattened = try ProductionFlattener.flatten(lexical.syntacticRules, limits: limits)
+        onPhase?("production flattening")
         let nonTerminals = collectNonTerminals(flattened)
         let terminals = collectTerminals(flattened, nonTerminals: Set(nonTerminals))
         let grammarProductions = flattened.map { (name: $0.name, symbols: $0.symbols) }
@@ -75,20 +87,24 @@ public enum ParseTableCompiler: Sendable {
         )
 
         let rulesByNT = buildRuleIndex(grammarProductions, nonTerminals: Set(nonTerminals))
+        onPhase?("symbols and FIRST sets")
 
         // Build item sets
-        let (itemSets, transitions) = try CoreItemSetBuilder.build(
+        let (states, transitions) = try CoreItemSetBuilder.build(
             productions: grammarProductions,
             firstSets: firstSets,
             rulesByNonTerminal: rulesByNT,
-            limits: limits
+            limits: limits,
+            onPhase: onPhase
         )
+        onPhase?("LR item sets")
 
         var table = ParseActionResolver(
             productions: flattened, firstSets: firstSets, precedences: grammar.precedences
         )
-        .parseTable(itemSets: itemSets, transitions: transitions, terminals: terminals, nonTerminals: nonTerminals)
+        .parseTable(states: states, transitions: transitions, terminals: terminals, nonTerminals: nonTerminals)
         populateExternalSymbols(in: &table, grammar: grammar, lexical: lexical)
+        onPhase?("parse actions")
 
         let productions = flattened.map { production in
             ProductionRule(
@@ -111,9 +127,11 @@ public enum ParseTableCompiler: Sendable {
                 }
             }
         }
+        onPhase?("productions and keywords")
         let lexTable = try LexTableCompiler.compile(
             nfa: tokenAutomaton, tokens: lexical.tokens, validTokens: validTokens(in: table, of: lexical.tokens),
             wordToken: wordToken, keywordTokens: keywordTokens)
+        onPhase?("lex modes")
 
         return CompilationResult(
             parseTable: table,

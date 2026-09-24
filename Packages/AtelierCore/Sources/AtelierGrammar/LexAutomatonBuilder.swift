@@ -22,6 +22,9 @@ struct LexAutomatonBuilder {
     /// Each state's key, and whether its accepted token and moves are set yet.
     private var keys: [StateKey] = []
     private var populated: [Bool] = []
+    /// The state each set of move targets leads to, by the targets before their closure: many moves share targets,
+    /// and the closure of one is the automaton's costliest step.
+    private var targetStates: [StateKey: Int] = [:]
 
     init(nfa: TokenNFA, tokens: [LexTokenPriority]) {
         self.nfa = nfa
@@ -93,8 +96,14 @@ struct LexAutomatonBuilder {
         var transitions: [LexTransition] = []
         for group in transitionGroups(of: key.nfaStates) {
             if let completion, !prefers(group, over: completion, hasSeparator: hasSeparator) { continue }
-            let target = try state(
-                for: nfa.closure(of: group.targets), hasReadTokenScalar: !group.isSeparator)
+            let targetKey = StateKey(nfaStates: group.targets, hasReadTokenScalar: !group.isSeparator)
+            let target: Int
+            if let known = targetStates[targetKey] {
+                target = known
+            } else {
+                target = try state(for: nfa.closure(of: group.targets), hasReadTokenScalar: !group.isSeparator)
+                targetStates[targetKey] = target
+            }
             for range in group.characters.ranges {
                 transitions.append(
                     LexTransition(
