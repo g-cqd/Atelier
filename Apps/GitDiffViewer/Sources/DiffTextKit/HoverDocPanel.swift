@@ -60,6 +60,8 @@ package final class HoverDocPanel {
     package private(set) var isVisible = false
     /// Whether the pointer is over the panel, so leaving the pane for the panel does not dismiss it.
     package private(set) var pointerIsInside = false
+    /// Told each time the pointer comes over the panel (true) or leaves it (false).
+    package var onPointerInsideChange: (@MainActor (Bool) -> Void)?
 
     private var panel: NSPanel?
     private weak var attachedWindow: NSWindow?
@@ -517,10 +519,25 @@ extension HoverDocPanel {
     @objc(mouseExited:) fileprivate func mouseExited(with event: NSEvent) { pointerExited() }
 
     /// The pointer came over the panel: the testable core of its tracking area's `mouseEntered`.
-    package func pointerEntered() { pointerIsInside = true }
+    package func pointerEntered() {
+        pointerIsInside = true
+        onPointerInsideChange?(true)
+    }
 
     /// The pointer left the panel: the testable core of its tracking area's `mouseExited`.
-    package func pointerExited() { pointerIsInside = false }
+    package func pointerExited() {
+        pointerIsInside = false
+        onPointerInsideChange?(false)
+    }
+
+    /// The panel's frame in screen coordinates while it shows; nil otherwise.
+    package var frameOnScreen: NSRect? { isVisible ? panel?.frame : nil }
+
+    /// Whether `window` is the panel's own window, as for an event inside it.
+    package func owns(_ window: NSWindow?) -> Bool {
+        guard let window, let panel else { return false }
+        return window === panel
+    }
 
     /// A hairline separator sized to the panel's inner width, set ahead of the first candidate.
     fileprivate static func makeCandidatesSeparator() -> NSBox {
