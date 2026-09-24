@@ -21,7 +21,7 @@ extension HighlightMerger {
     /// Token ranges are relative to the slice's start index.
     /// - Complexity: O(bytes + tokens)
     public static func resolveToSpans(
-        tokens: [HighlightToken],
+        tokens: some Collection<HighlightToken>,
         utf8: ArraySlice<UInt8>,
         resolver: RoleBasedThemeResolver,
         defaultStyle: Style
@@ -64,14 +64,15 @@ extension HighlightMerger {
         for (offset, byte) in utf8.enumerated() where byte == 0x0A {
             lineStarts.append(offset + 1)
         }
-        let byLine = HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: utf8.count)
+        let lineTokens = LineTokens(tokens, lineStarts: lineStarts, textLength: utf8.count)
         var lines: [[StyledSpan]] = []
         lines.reserveCapacity(lineStarts.count)
         for (index, start) in lineStarts.enumerated() {
             let end = index + 1 < lineStarts.count ? lineStarts[index + 1] - 1 : utf8.count
             lines.append(
                 resolveToSpans(
-                    tokens: byLine[index], utf8: utf8[start ..< end], resolver: resolver, defaultStyle: defaultStyle))
+                    tokens: lineTokens[index], utf8: utf8[start ..< end], resolver: resolver,
+                    defaultStyle: defaultStyle))
         }
         return lines
     }
