@@ -40,6 +40,8 @@ struct TokenScanner: Sendable {
     private let wordToken: Int?
     private let keywordTrie: [KeywordNode]
     private let modeValidTokens: [Set<Int>]
+    private let modeEmptyTokens: [Int?]
+    private let modeEmptyAfterSeparator: [Int?]
 
     private struct KeywordNode: Sendable {
         var next: [UInt8: Int] = [:]
@@ -66,6 +68,8 @@ struct TokenScanner: Sendable {
         self.errorMode = table.errorMode
         self.wordToken = table.wordToken
         self.modeValidTokens = table.wordToken == nil ? [] : table.modeValidTokens.map(Set.init)
+        self.modeEmptyTokens = table.modeEmptyTokens
+        self.modeEmptyAfterSeparator = table.modeEmptyAfterSeparator
         var trie = [KeywordNode()]
         if table.wordToken != nil {
             for spelling in table.keywordTokens.keys.sorted() {
@@ -95,11 +99,16 @@ struct TokenScanner: Sendable {
     /// the last token it accepted on the way is the one read.
     ///
     /// - Complexity: O(n) in the scalars the automaton reads.
-    func scan(_ utf8: UnsafeBufferPointer<UInt8>, from cursor: Cursor, mode: Int) -> Outcome {
+    func scan(
+        _ utf8: UnsafeBufferPointer<UInt8>, from cursor: Cursor, mode: Int,
+        suppressEmptyAt: Int? = nil
+    ) -> Outcome {
         var state = modeStarts[mode]
         var position = cursor
         var tokenStart = cursor
-        var scanned: Scanned?
+        var scanned: Scanned? =
+            accepts[state] >= 0
+            ? Scanned(token: Int(accepts[state]), start: cursor, end: cursor) : nil
         while position.offset < utf8.count {
             let (scalar, length) = Self.decode(utf8, at: position.offset)
             let move = self.move(from: state, on: scalar)
@@ -134,6 +143,10 @@ struct TokenScanner: Sendable {
                 }
             }
             return .token(scanned)
+        }
+        let emptyTokens = tokenStart.offset == cursor.offset ? modeEmptyTokens : modeEmptyAfterSeparator
+        if emptyTokens.indices.contains(mode), let empty = emptyTokens[mode], tokenStart.offset != suppressEmptyAt {
+            return .token(Scanned(token: empty, start: tokenStart, end: tokenStart))
         }
         return tokenStart.offset == utf8.count ? .end(tokenStart) : .none(start: tokenStart)
     }

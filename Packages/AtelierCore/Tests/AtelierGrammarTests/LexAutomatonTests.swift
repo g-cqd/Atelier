@@ -61,8 +61,7 @@ struct LexAutomatonTests {
     }
 
     @Test
-    func `A token that matches the empty string fails the compile`() throws {
-        // `word` would end before reading anything, and a mode it is valid in could then read no other token.
+    func `a nullable token waits outside the automaton for other matches`() throws {
         let json = """
             {
                 "name": "empty",
@@ -76,10 +75,19 @@ struct LexAutomatonTests {
             }
             """
         let grammar = try GrammarLoader.parse(Data(json.utf8))
+        let compiled = try ParseTableCompiler.compile(grammar)
+        let word = try #require(compiled.lexTable.tokens.firstIndex { $0.name == "word" })
+        let a = try #require(compiled.parseTable.terminals.firstIndex(of: "\"a\""))
+        let afterA = try #require(
+            { () -> Int? in
+                if case .shift(let state) = compiled.parseTable.actions[0][a] { return state }
+                return nil
+            }())
+        let mode = compiled.lexTable.stateModes[afterA]
+        let start = compiled.lexTable.modeStarts[mode]
 
-        #expect(throws: GrammarError.invalidRuleType("Token `word` matches the empty string")) {
-            try ParseTableCompiler.compile(grammar)
-        }
+        #expect(compiled.lexTable.automaton[start].accept == nil)
+        #expect(compiled.lexTable.modeEmptyTokens[mode] == word)
     }
 
     private struct Lexed: Equatable {

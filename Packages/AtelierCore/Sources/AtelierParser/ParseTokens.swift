@@ -34,6 +34,7 @@ struct ScannedTokenSource: ParseTokenSource {
     private let externalScanner: (any ExternalScanner)?
     private let utf8: UnsafeBufferPointer<UInt8>
     private var cursor = TokenScanner.Cursor.start
+    private var lastEmptyOffset: Int?
     private(set) var end = Point.zero
 
     /// `tokenTerminals` gives each token's terminal index; `terminalIndex` those of an external scanner's tokens.
@@ -58,15 +59,18 @@ struct ScannedTokenSource: ParseTokenSource {
             return token
         }
         let preferred = preferredMode(for: stacks)
-        var outcome = preferred.map { scanner.scan(utf8, from: cursor, mode: $0) } ?? .none(start: cursor)
+        var outcome =
+            preferred.map { scanner.scan(utf8, from: cursor, mode: $0, suppressEmptyAt: lastEmptyOffset) }
+            ?? .none(start: cursor)
         if case .none = outcome {
             for mode in fallbackModes(for: stacks, besides: preferred) {
-                outcome = scanner.scan(utf8, from: cursor, mode: mode)
+                outcome = scanner.scan(utf8, from: cursor, mode: mode, suppressEmptyAt: lastEmptyOffset)
                 guard case .none = outcome else { break }
             }
         }
         switch outcome {
             case .token(let scanned):
+                lastEmptyOffset = scanned.start.offset == scanned.end.offset ? scanned.end.offset : nil
                 cursor = scanned.end
                 return ParseToken(
                     terminal: tokenTerminals[scanned.token],
@@ -81,6 +85,7 @@ struct ScannedTokenSource: ParseTokenSource {
                 end = sourceEnd.point
                 return nil
             case .none(let tokenStart):
+                lastEmptyOffset = nil
                 return errorToken(at: tokenStart)
         }
     }
