@@ -118,9 +118,13 @@ package final class StaticTextLayout {
         RowSpacing.rowHeights(in: layoutManager)
     }
 
-    /// Sets each row's paragraph spacing so paired rows across two layouts share a height.
+    /// Sets each row's paragraph spacing so paired rows across two layouts share a height. A wrapped text is measured
+    /// again at once, so ``height`` answers the new height without laying the document out itself.
     package func apply(spacing: [Double]) {
         if RowSpacing.apply(spacing, to: contentStorage, rendered: rendered) { measuredHeight = nil }
+        guard let laidOut, laidOut.mode != .none, measuredHeight == nil else { return }
+        layoutManager.ensureLayout(for: layoutManager.documentRange)
+        measuredHeight = (layoutManager.usageBoundsForTextContainer.height + inset + bottomInset).rounded(.up)
     }
 }
 

@@ -91,6 +91,26 @@ struct TextLayoutTests {
         #expect(old.height == new.height)
     }
 
+    @Test
+    func `the wrapped height after a respacing is what a fresh layout with that spacing measures`() throws {
+        let text = "short\n" + String(repeating: "long word ", count: 60) + "\nlast\n"
+        let rendered = try #require(DiffRenderer.render(oldText: text, newText: text, language: .plain).new)
+        let sut = StaticTextLayout(rendered: rendered)
+        sut.layOut(mode: .viewport, viewportWidth: 120)
+        sut.apply(spacing: Array(repeating: 3, count: rendered.rows.count))
+        let earlier = sut.height
+
+        sut.apply(spacing: Array(repeating: 7, count: rendered.rows.count))
+
+        let fresh = StaticTextLayout(rendered: rendered)
+        fresh.layOut(mode: .viewport, viewportWidth: 120)
+        fresh.apply(spacing: Array(repeating: 7, count: rendered.rows.count))
+        fresh.layoutManager.ensureLayout(for: fresh.layoutManager.documentRange)
+        let measured = fresh.layoutManager.usageBoundsForTextContainer.height + fresh.inset + fresh.bottomInset
+        #expect(sut.height == measured.rounded(.up))
+        #expect(sut.height > earlier)
+    }
+
     // MARK: EmbeddedDiffTextView
 
     @Test
