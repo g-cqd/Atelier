@@ -16,4 +16,18 @@ struct LiteralPatternTests {
         // The pair's colon, not the string content that reads ":".
         #expect(matches.flatMap(\.captures).map(\.node.byteRange) == [4 ..< 5])
     }
+
+    @Test
+    func `A quoted pattern matches an anonymous node by its bytes, a multi-byte one included`() throws {
+        let arrow = SyntaxNode(type: "→", byteRange: 2 ..< 5, isNamed: false)
+        let plus = SyntaxNode(type: "+", byteRange: 6 ..< 7, isNamed: false)
+        let root = SyntaxNode(type: "expression", children: [arrow, plus], byteRange: 0 ..< 9)
+        let tree = SyntaxTree(root: root, source: "a → + b")
+
+        let query = try QueryParser.parse(#""→" @arrow "+" @plus "-" @minus "→→" @double"#)
+        let captures = QueryMatcher.execute(query: query, tree: tree).flatMap(\.captures)
+
+        #expect(captures.map(\.name) == ["arrow", "plus"])
+        #expect(captures.map(\.node.byteRange) == [2 ..< 5, 6 ..< 7])
+    }
 }

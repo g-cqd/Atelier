@@ -49,7 +49,10 @@ public enum QueryMatcher: Sendable {
         pointRange: Range<Point>?,
         indexed: Bool = true
     ) -> [QueryMatch] {
-        let source = tree.source
+        // A literal pattern reads the node's bytes in place: one contiguous view of the source for the whole walk.
+        var source = tree.source
+        source.makeContiguousUTF8()
+        let bytes = source.utf8Span.span
         let everyPattern = Array(query.patterns.indices)
         var matches: [QueryMatch] = []
         // One entry per level of the current path: that level's siblings and the next one to visit.
@@ -66,7 +69,9 @@ public enum QueryMatcher: Sendable {
             if let pointRange, !node.pointRange.overlaps(pointRange) { continue }
             for patternIndex in indexed ? query.candidatePatterns(forType: node.type) : everyPattern {
                 var captures: [QueryMatch.Capture] = []
-                if matchPattern(query.patterns[patternIndex], against: node, source: source, captures: &captures) {
+                if matchPattern(
+                    query.patterns[patternIndex], against: node, source: source, bytes: bytes, captures: &captures)
+                {
                     matches.append(QueryMatch(patternIndex: patternIndex, captures: captures))
                 }
             }
@@ -82,6 +87,7 @@ public enum QueryMatcher: Sendable {
         _ pattern: QueryPattern,
         against node: SyntaxNode,
         source: String,
+        bytes: Span<UInt8>,
         captures: inout [QueryMatch.Capture]
     ) -> Bool {
         switch pattern {
@@ -95,8 +101,8 @@ public enum QueryMatcher: Sendable {
                             guard let fieldNode = node.child(forField: name) else { return false }
                             var fieldCaptures = localCaptures
                             if !matchPattern(
-                                fieldPattern, against: fieldNode, source: source, captures: &fieldCaptures)
-                            {
+                                fieldPattern, against: fieldNode, source: source, bytes: bytes, captures: &fieldCaptures
+                            ) {
                                 return false
                             }
                             localCaptures = fieldCaptures
@@ -116,6 +122,7 @@ public enum QueryMatcher: Sendable {
                                             inner,
                                             against: node.children[childCursor],
                                             source: source,
+                                            bytes: bytes,
                                             captures: &candidateCaptures
                                         )
                                     else {
@@ -141,6 +148,7 @@ public enum QueryMatcher: Sendable {
                                         childPattern,
                                         against: node.children[childCursor],
                                         source: source,
+                                        bytes: bytes,
                                         captures: &candidateCaptures
                                     ) {
                                         childCursor += 1
@@ -163,7 +171,7 @@ public enum QueryMatcher: Sendable {
             case .literal(let value, let capture):
                 // A quoted pattern names an anonymous node, as in tree-sitter; a named node that reads the same, such
                 // as a JSON string's content `:`, or a node built over one, is not it.
-                guard !node.isNamed, node.text(from: source) == value else { return false }
+                guard !node.isNamed, Self.bytes(of: node, in: bytes, equal: value) else { return false }
                 if let capture {
                     captures.append(QueryMatch.Capture(node: node, name: capture.name, index: capture.index))
                 }
@@ -178,7 +186,7 @@ public enum QueryMatcher: Sendable {
             case .alternation(let alternatives):
                 for alt in alternatives {
                     var altCaptures: [QueryMatch.Capture] = []
-                    if matchPattern(alt, against: node, source: source, captures: &altCaptures) {
+                    if matchPattern(alt, against: node, source: source, bytes: bytes, captures: &altCaptures) {
                         captures.append(contentsOf: altCaptures)
                         return true
                     }
@@ -188,7 +196,7 @@ public enum QueryMatcher: Sendable {
             case .fieldMatch(let name, let fieldPattern):
                 guard let fieldNode = node.child(forField: name) else { return false }
                 return matchPattern(
-                    fieldPattern, against: fieldNode, source: source, captures: &captures)
+                    fieldPattern, against: fieldNode, source: source, bytes: bytes, captures: &captures)
 
             case .negatedField(let name):
                 return node.fields[name] == nil
@@ -198,7 +206,8 @@ public enum QueryMatcher: Sendable {
 
             case .sequence(let patterns):
                 var localCaptures = captures
-                for p in patterns where !matchPattern(p, against: node, source: source, captures: &localCaptures) {
+                for p in patterns
+                where !matchPattern(p, against: node, source: source, bytes: bytes, captures: &localCaptures) {
                     return false
                 }
                 captures = localCaptures
@@ -211,17 +220,34 @@ public enum QueryMatcher: Sendable {
                     case .optional, .zeroOrMore:
                         // Zero matches is acceptable — try matching but don't fail
                         var tryCaptures = captures
-                        _ = matchPattern(inner, against: node, source: source, captures: &tryCaptures)
+                        _ = matchPattern(inner, against: node, source: source, bytes: bytes, captures: &tryCaptures)
                         captures = tryCaptures
                         return true
                     case .oneOrMore:
                         // Must match at least once
-                        return matchPattern(inner, against: node, source: source, captures: &captures)
+                        return matchPattern(inner, against: node, source: source, bytes: bytes, captures: &captures)
                 }
 
             case .anchor:
                 return true
         }
+    }
+
+    /// Whether `node`'s bytes in the source are `value`'s UTF-8, compared in place, byte for byte, as tree-sitter
+    /// compares a token's text: no string is built for the node, and a node that reaches outside the source matches
+    /// nothing.
+    /// - Complexity: O(1) when the lengths differ; O(`value`'s UTF-8 length) otherwise.
+    private static func bytes(of node: SyntaxNode, in source: Span<UInt8>, equal value: String) -> Bool {
+        let range = node.byteRange
+        guard range.lowerBound >= 0, range.upperBound <= source.count, range.count == value.utf8.count else {
+            return false
+        }
+        var offset = range.lowerBound
+        for byte in value.utf8 {
+            guard source[offset] == byte else { return false }
+            offset += 1
+        }
+        return true
     }
 
     private static func evaluatePredicate(
