@@ -1,0 +1,129 @@
+import AemiTesting
+import Foundation
+import KittyStyle
+import KittySyntax
+import KittyWorkspace
+import Synchronization
+import Testing
+
+@testable import AtelierText
+@testable import KittyEditor
+
+/// Closing a tab and reloading a file hand the old document's storage to `retire`, whose consumer frees it off the
+/// main actor, and keep no other reference to it, so the consumer's is the last.
+@Suite
+@MainActor
+struct EditorRetiredStorageTests {
+    /// What the state handed to `retire`.
+    private final class RetiredLog: Sendable {
+        let entries = Mutex<[EditorState.RetiredStorage]>([])
+
+        /// Moves the entries out, so that the log holds no reference to what they hold.
+        func take() -> [EditorState.RetiredStorage] {
+            entries.withLock { entries in
+                defer { entries = [] }
+                return entries
+            }
+        }
+    }
+
+    private static let lines = (0 ..< 200).map { "let value\($0) = compute(\($0)) // a note long enough for the heap" }
+
+    /// A Swift file open in the only tab, its highlights shared by the buffer and the screen as an open leaves them,
+    /// with `retire` recorded from here on.
+    private func makeState() -> (state: EditorState, log: RetiredLog) {
+        let state = EditorState(rootPath: ".", config: KittyConfig(), taskProvider: TaskProviderSpy())
+        state.bufferManager.open(
+            filePath: "/project/file.swift", fileName: "file.swift", content: Self.lines.joined(separator: "\n"),
+            language: "swift")
+        state.workspace.restoreStateFromActiveBuffer()
+        state.highlightedLines = Self.lines.map { [StyledSpan(text: $0, style: .default)] }
+        state.saveStateToActiveBuffer()
+        let log = RetiredLog()
+        state.retire = { storage in log.entries.withLock { $0.append(storage) } }
+        return (state, log)
+    }
+
+    /// Whether `array` holds the only reference to its storage: mutable access copies shared storage first.
+    private func isUniquelyReferenced<Element>(_ array: inout [Element]) -> Bool {
+        let shared = array.withUnsafeBufferPointer { $0.baseAddress }
+        let owned = array.withUnsafeMutableBufferPointer { UnsafePointer($0.baseAddress) }
+        return shared == owned
+    }
+
+    /// Expects the closed buffer, then the highlights it shares, to be held by the retired storage alone.
+    private func expectOnlyRetiredReferences(
+        buffer retiredBuffer: inout DocumentBuffer?, highlights: inout [[StyledSpan]]
+    ) throws {
+        var buffer = try #require(retiredBuffer)
+        retiredBuffer = nil
+        #expect(isKnownUniquelyReferenced(&buffer))
+        // The buffer's own copy of the highlights goes with it.
+        buffer.highlightedLines = []
+        #expect(isUniquelyReferenced(&highlights))
+    }
+
+    @Test
+    func `closing the last tab retires the document's highlights, text and buffer and keeps none of them`() throws {
+        let (state, log) = makeState()
+        defer { state.shutdown() }
+        let hash = state.textBuffer.contentHash
+        let closedID = ObjectIdentifier(try #require(state.bufferManager.activeBuffer))
+
+        state.closeCurrentTab()
+
+        var entries = log.take()
+        try #require(entries.count == 1)
+        var retired = entries.removeFirst()
+        #expect(retired.buffer.map(ObjectIdentifier.init) == closedID)
+        #expect(retired.textBuffer?.contentHash == hash)
+        var highlights = retired.highlights
+        retired.highlights = []
+        #expect(highlights == Self.lines.map { [StyledSpan(text: $0, style: .default)] })
+        try expectOnlyRetiredReferences(buffer: &retired.buffer, highlights: &highlights)
+    }
+
+    @Test
+    func `closing a tab with another open retires the closed document and keeps none of it`() throws {
+        let (state, log) = makeState()
+        defer { state.shutdown() }
+        state.bufferManager.open(filePath: "/project/other.txt", fileName: "other.txt", content: "other", language: nil)
+        state.bufferManager.switchTo(index: 0)
+        _ = log.take()
+
+        state.closeCurrentTab()
+
+        #expect(state.fileName == "other.txt")
+        var entries = log.take()
+        let index = try #require(entries.firstIndex { $0.buffer != nil })
+        var retired = entries.remove(at: index)
+        var highlights = retired.highlights
+        retired.highlights = []
+        #expect(highlights.count == Self.lines.count)
+        try expectOnlyRetiredReferences(buffer: &retired.buffer, highlights: &highlights)
+    }
+
+    @Test
+    func `reloading the active file retires the old text's highlights and lines and keeps no highlight`() throws {
+        let (state, log) = makeState()
+        defer { state.shutdown() }
+        _ = state.fileContent
+        let buffer = try #require(state.bufferManager.activeBuffer)
+        let file = LoadedFile(content: "changed on disk\n", lineEnding: .lineFeed)
+
+        // What the file watcher does once its read lands.
+        state.saveStateToActiveBuffer()
+        buffer.replaceContents(with: file, modifiedAt: nil)
+        state.fileWatcherDidReloadActiveBuffer(buffer: buffer, content: file.content)
+
+        #expect(state.textBuffer.text == "changed on disk\n")
+        var entries = log.take()
+        let index = try #require(entries.firstIndex { $0.highlights.count == Self.lines.count })
+        var retired = entries.remove(at: index)
+        // The lines are also the old rope's cache, which the reload's undo step keeps.
+        #expect(retired.fileLines == Self.lines)
+        var highlights = retired.highlights
+        retired.highlights = []
+        #expect(isUniquelyReferenced(&highlights))
+    }
+}

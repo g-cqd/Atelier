@@ -150,4 +150,56 @@ struct EditorLargeFileBenchmark {
         }
         print("BENCH open to first frame, main actor, 1M lines: \(Self.summary(samples))")
     }
+
+    /// The document as an open leaves it: highlighted by a full pass, whose lines the buffer and the screen share.
+    private func makeOpenedState(tasks: TaskProviderSpy) async throws -> EditorState {
+        let state = EditorState(rootPath: ".", config: KittyConfig(), taskProvider: tasks)
+        let spawned = tasks.spawnedTaskCount
+        state.bufferManager.open(
+            filePath: "/bench/large.swift", fileName: "large.swift", content: Self.text, language: "swift")
+        state.lastRenderRows = 60
+        state.restoreStateFromActiveBuffer()
+        try await awaitFullPass(tasks, after: spawned)
+        state.saveStateToActiveBuffer()
+        return state
+    }
+
+    /// The main actor's share of closing the only tab, which lets go of the document's rope and its highlights.
+    @Test func `closing the last tab of a million-line file`() async throws {
+        let clock = ContinuousClock()
+        var samples: [Duration] = []
+        for _ in 0 ..< 11 {
+            let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
+            let state = try await makeOpenedState(tasks: tasks)
+            samples.append(clock.measure { state.closeCurrentTab() })
+            try await tasks.waitForAllTasks()
+            state.shutdown()
+        }
+        print("BENCH close the last tab, main actor, 1M lines: \(Self.summary(samples))")
+    }
+
+    /// The main actor's share of reloading a changed file once its read has finished: the reload's undo step, then
+    /// installing the new text in place of the old text's highlights.
+    @Test func `reloading a changed million-line file`() async throws {
+        let changed = try WorkspaceFileLoading.decode(Data((Self.text + "\n// changed on disk").utf8))
+        let clock = ContinuousClock()
+        var samples: [Duration] = []
+        for _ in 0 ..< 11 {
+            let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
+            let state = try await makeOpenedState(tasks: tasks)
+            let buffer = try #require(state.bufferManager.activeBuffer)
+            samples.append(
+                try await clock.measure {
+                    let reloaded = try await buffer.reloadFromDisk(offloadFileRead: { _ in changed }) {
+                        state.saveStateToActiveBuffer()
+                    }
+                    let content = try #require(reloaded).content
+                    state.fileWatcherDidReloadActiveBuffer(buffer: buffer, content: content)
+                })
+            // The post-load pass lands before the next sample.
+            try await tasks.waitForAllTasks()
+            state.shutdown()
+        }
+        print("BENCH reload a changed file, main actor, 1M lines: \(Self.summary(samples))")
+    }
 }
