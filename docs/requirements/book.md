@@ -1409,12 +1409,22 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   rate at an edge, and a gap between two changes offers a handle on each side.
 - **Source:** 09-23, "when dragging the gutter line shower in the opposite direction … it still expands the line …
   holding the dragger to an edge of the view port or view container should continue to disclose lines (not too fast
-  though) … we need to show 2 different drag controls, with hover effect".
+  though) … we need to show 2 different drag controls, with hover effect". 09-24, "when at the top or the end of a
+  file there should be no line other than the dragger and the dragger should stick to the edge, a dragger gap line
+  should only be of the size of 1 line, not more, and when there are 2 draggers, the line separation should also be of
+  1 line only in total and the separator should run from the gutter to the trailing edge of the file text view,
+  draggers should be slightly smaller".
 - **Acceptance criteria:**
   1. A drag against the reveal direction never discloses lines.
   2. Holding a handle at an edge keeps revealing at a bounded rate.
   3. A gap between two changes shows two handles with hover feedback.
-- **Priority:** Should. Reference: Xcode's comparison view, images 19 to 21 (DIFF-05).
+  4. A gap takes exactly one row, whether it offers one handle or two.
+  5. At the top or the end of a file, the lone handle sits flat against that edge, and nothing else is drawn.
+  6. Between two changes, the two handles share the row, split by a separator that runs from the gutter to the text
+     view's trailing edge.
+  7. The handles are small enough that two fit in one row.
+- **Priority:** Should. Reference: Xcode's comparison view, images 19 to 21 (DIFF-05). Criteria 4 to 7 are met at
+  `bf5ffad` and `e33fa11`.
 
 #### DIFF-03 · A gutter scope ribbon
 - **Statement:** The gutter shows scope indicators and fold controls without growing much wider.
