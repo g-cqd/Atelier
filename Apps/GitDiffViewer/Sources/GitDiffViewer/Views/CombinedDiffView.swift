@@ -52,7 +52,8 @@ private struct FileCard: View {
 
 /// What a card's header shows.
 private struct CardTitle: Equatable {
-    let displayPath: String
+    /// The file's path, and for a renamed file the path it had, which only card headers show (D14).
+    let label: CardPathLabel
     let summary: FileChangeSummary
     /// Nil while diagnostics are off.
     let diagnostics: DiagnosticSeverityCounts?
@@ -61,7 +62,7 @@ private struct CardTitle: Equatable {
     let badgeState: BadgeChangeState
 
     init(file: RenderedFile, model: DiffViewerModel) {
-        displayPath = model.displayPath(for: file.path)
+        label = model.comparison.cardLabel(for: file.path)
         summary = model.changeSummary(for: file.path, rendered: file.rendered)
         diagnostics = model.settings.diagnosticsEnabled ? model.diagnosticSeverityCounts(for: file.path) : nil
         badgeScheme = model.settings.badgeScheme
@@ -352,7 +353,7 @@ private struct FileCardHeader: View {
                 .foregroundStyle(.secondary)
                 .imageScale(.small)
             Image(systemName: "doc.text")
-            Text(title.displayPath)
+            pathText
                 .font(.system(.body, design: .monospaced))
                 .lineLimit(2)
                 .truncationMode(.middle)
@@ -374,7 +375,14 @@ private struct FileCardHeader: View {
         // The single click must not wait for a double click: it folds at once, and the double click then opens.
         .onTapGesture(perform: toggle)
         .simultaneousGesture(TapGesture(count: 2).onEnded(open))
-        .help("Click to fold, double-click to open \(title.displayPath)")
+        .help("Click to fold, double-click to open \(title.label.text)")
+    }
+
+    /// The path, then for a renamed file an arrow and the old path, grayed as Xcode grays it.
+    private var pathText: Text {
+        guard let previousPath = title.label.previousPath else { return Text(title.label.path) }
+        let previous = Text("\(CardPathLabel.arrow) \(previousPath)").foregroundStyle(.secondary)
+        return Text("\(title.label.path) \(previous)")
     }
 }
 

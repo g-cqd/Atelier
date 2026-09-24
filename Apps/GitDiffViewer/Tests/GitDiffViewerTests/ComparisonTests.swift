@@ -48,6 +48,21 @@ struct ComparisonTests {
     }
 
     @Test
+    func `a renamed file's card label reads new then old, while its display path stays the new one`() {
+        let comparison = Comparison(
+            left: [entry("old/name.swift", "3"), entry("same.swift", "1")],
+            right: [entry("new/name.swift", "3"), entry("same.swift", "2")],
+            leftSource: nil, rightSource: nil
+        )
+
+        #expect(comparison.cardLabel(for: "old/name.swift").text == "new/name.swift ← old/name.swift")
+        #expect(comparison.cardLabel(for: "old/name.swift").previousPath == "old/name.swift")
+        #expect(comparison.displayPath(for: "old/name.swift") == "new/name.swift")
+        #expect(comparison.cardLabel(for: "same.swift").text == "same.swift")
+        #expect(comparison.cardLabel(for: "same.swift").previousPath == nil)
+    }
+
+    @Test
     func `explorer trees carry directory statuses and honour the filter and style`() {
         let comparison = Comparison(
             left: [entry("z/same.swift", "1"), entry("a/x/changed.swift", "2")],

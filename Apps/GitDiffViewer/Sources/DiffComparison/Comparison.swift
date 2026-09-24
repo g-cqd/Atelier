@@ -184,6 +184,12 @@ package struct Comparison: Sendable, Equatable {
         renames.byLeft[leftPath] ?? leftPath
     }
 
+    /// How a card header names a file: a renamed file reads `new ← old`, as Xcode writes a rename. Only card headers
+    /// carry the old name (D14); the file list, the tabs and the status bar keep ``displayPath(for:)``.
+    package func cardLabel(for leftPath: String) -> CardPathLabel {
+        CardPathLabel(path: displayPath(for: leftPath), previousPath: renames.byLeft[leftPath] == nil ? nil : leftPath)
+    }
+
     /// Whether a renamed file's content changed as well.
     package func isRenamedWithChanges(_ leftPath: String) -> Bool {
         guard let rightPath = renames.byLeft[leftPath], let old = leftEntries[leftPath],
@@ -208,4 +214,17 @@ package struct Comparison: Sendable, Equatable {
         guard let left = lhs.blobID, let right = rhs.blobID else { return false }
         return left == right
     }
+}
+
+/// A card header's name for a file: the path it is shown under and, when it was renamed, the path it had before.
+package struct CardPathLabel: Equatable, Sendable {
+    /// What stands between the new path and the old one.
+    package static let arrow = "←"
+
+    package let path: String
+    /// The left-side path of a renamed file; nil for any other file.
+    package let previousPath: String?
+
+    /// The whole label as one string, `new ← old` for a rename.
+    package var text: String { previousPath.map { "\(path) \(Self.arrow) \($0)" } ?? path }
 }
