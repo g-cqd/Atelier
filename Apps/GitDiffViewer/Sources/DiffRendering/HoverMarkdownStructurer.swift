@@ -55,12 +55,19 @@ package enum HoverMarkdownStructurer {
 
     // MARK: Block splitting
 
-    /// Splits on lines that are exactly `---`, dropping the "## Multiple results" heading and empty blocks.
+    /// Splits on the `---` lines that separate overload candidates, dropping the "## Multiple results" heading and
+    /// empty blocks. A separator stands outside every fence and opens onto the next candidate's fenced declaration, so
+    /// a thematic break in the prose, or a `---` line inside a code block, stays in its block.
     private static func splitBlocks(_ markdown: String) -> [String] {
         let lines = markdown.components(separatedBy: "\n")
         var blocks: [[String]] = [[]]
-        for line in lines {
-            if line.trimmingCharacters(in: .whitespaces) == "---" {
+        var fence = FenceTracker()
+        for (index, line) in lines.enumerated() {
+            let wasInFence = fence.isOpen
+            fence.consume(line)
+            if !wasInFence, line.trimmingCharacters(in: .whitespaces) == "---", leadingSpaces(line) < 4,
+                nextNonBlankLine(in: lines, after: index).map(FenceTracker.opensFence) == true
+            {
                 blocks.append([])
             } else {
                 blocks[blocks.count - 1].append(line)
@@ -78,6 +85,10 @@ package enum HoverMarkdownStructurer {
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
+    private static func nextNonBlankLine(in lines: [String], after index: Int) -> String? {
+        lines[(index + 1)...].first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+
     // MARK: Block parsing
 
     private struct ParsedBlock {
@@ -92,18 +103,93 @@ package enum HoverMarkdownStructurer {
         let (declaration, rest) = extractLeadingDeclaration(text)
         let lines = rest.components(separatedBy: "\n")
         let (proseLines, parameters, returns) = extractLists(lines)
-        let proseText = proseLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        let paragraphs =
-            proseText.components(separatedBy: "\n\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        let (summary, discussion) = splitAbstract(proseLines)
         var block = ParsedBlock()
         block.declaration = declaration
-        block.summary = paragraphs.first
-        block.discussion = paragraphs.count > 1 ? paragraphs.dropFirst().joined(separator: "\n\n") : nil
+        block.summary = summary
+        block.discussion = discussion
         block.parameters = parameters
         block.returns = returns
         return block
+    }
+
+    /// The prose's opening paragraph, its abstract, and the rest verbatim, every line's indentation kept so indented
+    /// code blocks stay code. No abstract when the prose opens with anything but a paragraph, such as a code block, a
+    /// heading or a list.
+    private static func splitAbstract(_ lines: [String]) -> (summary: String?, discussion: String?) {
+        var body = ArraySlice(lines)
+        while let first = body.first, isBlank(first) { body = body.dropFirst() }
+        while let last = body.last, isBlank(last) { body = body.dropLast() }
+        guard let first = body.first else { return (nil, nil) }
+        guard !opensOtherBlock(first) else { return (nil, discussion(from: body)) }
+        var end = body.startIndex + 1
+        while end < body.endIndex, !isBlank(body[end]), !interruptsParagraph(body[end]) { end += 1 }
+        // A paragraph underlined by `===` or `---` is a heading; the loop stops at a `---` line and runs over `===`.
+        let underlineRange = (body.startIndex + 1) ..< min(end + 1, body.endIndex)
+        if body[underlineRange].contains(where: isSetextUnderline) {
+            return (nil, discussion(from: body))
+        }
+        let summary = body[body.startIndex ..< end].joined(separator: "\n").trimmingCharacters(in: .whitespaces)
+        return (summary, discussion(from: body[end...]))
+    }
+
+    private static func discussion(from lines: ArraySlice<String>) -> String? {
+        var lines = lines
+        while let first = lines.first, isBlank(first) { lines = lines.dropFirst() }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+
+    private static func isBlank(_ line: String) -> Bool {
+        line.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// Whether `line` starts a block other than a paragraph: an indented or fenced code block, a heading, a quote, a
+    /// list item or a thematic break.
+    private static func opensOtherBlock(_ line: String) -> Bool {
+        guard leadingSpaces(line) < 4 else { return true }
+        if interruptsParagraph(line) { return true }
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        let digits = trimmed.prefix { $0.isNumber }
+        let afterDigits = trimmed.dropFirst(digits.count)
+        return !digits.isEmpty && (afterDigits.hasPrefix(". ") || afterDigits.hasPrefix(") "))
+    }
+
+    /// Whether `line` ends the paragraph above it and starts another block: a fence, a heading, a quote, a bullet
+    /// item or a thematic break. An indented line continues the paragraph instead.
+    private static func interruptsParagraph(_ line: String) -> Bool {
+        guard leadingSpaces(line) < 4 else { return false }
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        let hashes = trimmed.prefix { $0 == "#" }.count
+        let afterHashes = trimmed.dropFirst(hashes)
+        let isHeading = (1 ... 6).contains(hashes) && (afterHashes.isEmpty || afterHashes.first == " ")
+        if FenceTracker.opensFence(line) || isHeading || trimmed.hasPrefix(">") { return true }
+        if ["- ", "* ", "+ "].contains(where: { trimmed.hasPrefix($0) }) { return true }
+        return isThematicBreak(trimmed)
+    }
+
+    private static func isThematicBreak(_ trimmed: String) -> Bool {
+        let marks = trimmed.filter { !$0.isWhitespace }
+        guard marks.count >= 3, let mark = marks.first, "-*_".contains(mark) else { return false }
+        return marks.allSatisfy { $0 == mark }
+    }
+
+    private static func isSetextUnderline(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard leadingSpaces(line) < 4, let mark = trimmed.first, mark == "=" || mark == "-" else { return false }
+        return trimmed.allSatisfy { $0 == mark }
+    }
+
+    /// The count of spaces opening `line`, a tab counting as four.
+    private static func leadingSpaces(_ line: String) -> Int {
+        var count = 0
+        for character in line {
+            switch character {
+                case " ": count += 1
+                case "\t": count += 4
+                default: return count
+            }
+        }
+        return count
     }
 
     /// The block's leading fenced declaration and everything after its closing fence; a nil declaration when the
@@ -142,9 +228,18 @@ package enum HoverMarkdownStructurer {
         var prose: [String] = []
         var parameters: [Field] = []
         var returns: String?
+        var fence = FenceTracker()
         var index = 0
         while index < lines.count {
             let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+            let wasInFence = fence.isOpen
+            fence.consume(lines[index])
+            // A code block's lines are prose, whatever they say.
+            if wasInFence || fence.isOpen || leadingSpaces(lines[index]) >= 4 {
+                prose.append(lines[index])
+                index += 1
+                continue
+            }
             if trimmed == "- Parameters:" {
                 index += 1
                 while index < lines.count, isIndented(lines[index]) {
@@ -188,5 +283,34 @@ package enum HoverMarkdownStructurer {
     private static func isContinuation(_ line: String) -> Bool {
         guard isIndented(line) else { return false }
         return !line.trimmingCharacters(in: .whitespaces).hasPrefix("- ")
+    }
+}
+
+/// Follows fenced code blocks line by line: a fence of three or more backticks or tildes, indented less than four
+/// spaces, opens a block that a fence of the same character, at least as long and with nothing after it, closes.
+private struct FenceTracker {
+    private var open: (mark: Character, length: Int)?
+
+    var isOpen: Bool { open != nil }
+
+    static func opensFence(_ line: String) -> Bool { fence(in: line) != nil }
+
+    mutating func consume(_ line: String) {
+        guard let fence = Self.fence(in: line) else { return }
+        guard let current = open else {
+            open = fence
+            return
+        }
+        let rest = line.trimmingCharacters(in: .whitespaces).drop { $0 == current.mark }
+        if fence.mark == current.mark, fence.length >= current.length, rest.isEmpty { open = nil }
+    }
+
+    private static func fence(in line: String) -> (mark: Character, length: Int)? {
+        let indent = line.prefix { $0 == " " }.count
+        guard indent < 4 else { return nil }
+        let trimmed = line.dropFirst(indent)
+        guard let mark = trimmed.first, mark == "`" || mark == "~" else { return nil }
+        let length = trimmed.prefix { $0 == mark }.count
+        return length >= 3 ? (mark, length) : nil
     }
 }
