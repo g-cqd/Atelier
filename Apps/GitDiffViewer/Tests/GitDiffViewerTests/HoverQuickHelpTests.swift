@@ -130,7 +130,8 @@ import Testing
         #expect(document.returns?.string == "The configuration.")
         #expect(document.parameters.map(\.name) == ["url"])
         #expect(document.parameters.map(\.text.string) == ["Where the file is."])
-        #expect(document.discussion.map(Self.kind) == ["paragraph", "code", "heading 2"])
+        // Its "## Errors" heading stood over the fields alone, which show in sections of their own.
+        #expect(document.discussion.map(Self.kind) == ["paragraph", "code"])
         #expect(
             Self.codeText(in: document.discussion) == [
                 "let config = try load(from: url)\nif config.retryCount > 0 {\n    print(config)\n}"

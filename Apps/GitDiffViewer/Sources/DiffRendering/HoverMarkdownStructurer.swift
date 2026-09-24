@@ -161,10 +161,7 @@ package enum HoverMarkdownStructurer {
     private static func interruptsParagraph(_ line: String) -> Bool {
         guard leadingSpaces(line) < 4 else { return false }
         let trimmed = line.trimmingCharacters(in: .whitespaces)
-        let hashes = trimmed.prefix { $0 == "#" }.count
-        let afterHashes = trimmed.dropFirst(hashes)
-        let isHeading = (1 ... 6).contains(hashes) && (afterHashes.isEmpty || afterHashes.first == " ")
-        if FenceTracker.opensFence(line) || isHeading || trimmed.hasPrefix(">") { return true }
+        if FenceTracker.opensFence(line) || atxHeadingLevel(line) != nil || trimmed.hasPrefix(">") { return true }
         if ["- ", "* ", "+ "].contains(where: { trimmed.hasPrefix($0) }) { return true }
         return isThematicBreak(trimmed)
     }
@@ -226,9 +223,10 @@ package enum HoverMarkdownStructurer {
 
     /// Pulls a `- Parameters:` list, `- Parameter name:` items and a `- Returns:` item out of `lines`, in whatever
     /// order and position they appear, the parameters in the order they come; everything else is prose, in its
-    /// original order.
+    /// original order, less any heading the fields leave with nothing under it.
     private static func extractLists(_ lines: [String]) -> (prose: [String], parameters: [Field], returns: String?) {
-        var prose: [String] = []
+        // A nil line stands where a field was drawn out.
+        var prose: [String?] = []
         var parameters: [Field] = []
         var returns: String?
         var fence = FenceTracker()
@@ -244,6 +242,7 @@ package enum HoverMarkdownStructurer {
                 continue
             }
             if callout("Parameters:", opening: trimmed)?.isEmpty == true {
+                prose.append(nil)
                 index += 1
                 while index < lines.count, isIndented(lines[index]) {
                     let item = lines[index].trimmingCharacters(in: .whitespaces)
@@ -263,6 +262,7 @@ package enum HoverMarkdownStructurer {
                 continue
             }
             if let (name, text) = singularParameter(trimmed) {
+                prose.append(nil)
                 var fieldText = text
                 index += 1
                 while index < lines.count, isContinuation(lines[index]) {
@@ -273,6 +273,7 @@ package enum HoverMarkdownStructurer {
                 continue
             }
             if let rest = callout("Returns:", opening: trimmed) {
+                prose.append(nil)
                 var text = rest.trimmingCharacters(in: .whitespaces)
                 index += 1
                 while index < lines.count, isContinuation(lines[index]) {
@@ -285,7 +286,7 @@ package enum HoverMarkdownStructurer {
             prose.append(lines[index])
             index += 1
         }
-        return (prose, parameters, returns)
+        return (droppingHeadingsEmptiedByFields(prose), parameters, returns)
     }
 
     /// The name and text of a `- Parameter name: text` item, the form that documents one parameter on its own; nil
@@ -319,6 +320,60 @@ package enum HoverMarkdownStructurer {
     private static func isContinuation(_ line: String) -> Bool {
         guard isIndented(line) else { return false }
         return !line.trimmingCharacters(in: .whitespaces).hasPrefix("- ")
+    }
+}
+
+// MARK: - Headings
+// Kept outside the enum body so it stays under `type_body_length`.
+extension HoverMarkdownStructurer {
+    /// `lines` without their nil lines, the fields drawn out, and without any heading whose section held nothing but
+    /// fields: the fields show in sections of their own, and the heading would stand over nothing. A section runs to
+    /// the next heading of its level or above, so a heading left empty by the removal of its subsections goes too.
+    fileprivate static func droppingHeadingsEmptiedByFields(_ lines: [String?]) -> [String] {
+        var lines = lines
+        var headings: [(index: Int, span: Int, level: Int)] = []
+        var fence = FenceTracker()
+        var index = 0
+        while index < lines.count {
+            guard let line = lines[index] else {
+                index += 1
+                continue
+            }
+            let wasInFence = fence.isOpen
+            fence.consume(line)
+            if !wasInFence, !fence.isOpen {
+                if let level = atxHeadingLevel(line) {
+                    headings.append((index, 1, level))
+                } else if index + 1 < lines.count, let underline = lines[index + 1], isSetextUnderline(underline),
+                    !isBlank(line), !opensOtherBlock(line), index == 0 || lines[index - 1].map(isBlank) ?? true
+                {
+                    headings.append((index, 2, underline.contains("=") ? 1 : 2))
+                    index += 2
+                    continue
+                }
+            }
+            index += 1
+        }
+        for (position, heading) in headings.enumerated().reversed() {
+            let bodyStart = heading.index + heading.span
+            let bodyEnd =
+                headings[(position + 1)...].first { $0.level <= heading.level && lines[$0.index] != nil }?.index
+                ?? lines.count
+            let body = lines[bodyStart ..< bodyEnd]
+            guard body.contains(where: { $0 == nil }), body.allSatisfy({ $0.map(isBlank) ?? true }) else { continue }
+            for line in heading.index ..< bodyStart { lines[line] = nil }
+        }
+        return lines.compactMap(\.self)
+    }
+
+    /// The level of the ATX heading `line` opens, `#` to `######`; nil when it is no such heading.
+    fileprivate static func atxHeadingLevel(_ line: String) -> Int? {
+        guard leadingSpaces(line) < 4 else { return nil }
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        let hashes = trimmed.prefix { $0 == "#" }.count
+        let afterHashes = trimmed.dropFirst(hashes)
+        guard (1 ... 6).contains(hashes), afterHashes.isEmpty || afterHashes.first == " " else { return nil }
+        return hashes
     }
 }
 
