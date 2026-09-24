@@ -13,6 +13,13 @@ struct ParseStack: Sendable {
     private(set) var errorCount: Int
     /// The sum of the dynamic precedences of the productions reduced so far.
     private(set) var dynamicPrecedence = 0
+    /// The input position, scanner state, and extras belonging to this GLR branch.
+    var cursor = TokenScanner.Cursor.start
+    var scannerState: [UInt8] = []
+    var extras: [ParseToken] = []
+    var tokenIndex = 0
+    var zeroWidthCount = 0
+    var isRecovering = false
 
     /// The current LR state.
     var state: Int {
@@ -125,7 +132,14 @@ struct ParseStack: Sendable {
         var keptIndicesByState: [Int: [Int]] = [:]
         while var stack = pending.popLast() {
             let candidates = keptIndicesByState[stack.state, default: []]
-            if let twin = candidates.first(where: { kept[$0].states == stack.states }) {
+            if let twin = candidates.first(where: {
+                kept[$0].states == stack.states && kept[$0].cursor == stack.cursor
+                    && kept[$0].scannerState == stack.scannerState
+                    && kept[$0].isRecovering == stack.isRecovering
+                    && kept[$0].zeroWidthCount == stack.zeroWidthCount
+                    && kept[$0].tokenIndex == stack.tokenIndex
+                    && kept[$0].extras == stack.extras
+            }) {
                 if stack.isPreferred(over: kept[twin]) {
                     swap(&stack, &kept[twin])
                 }

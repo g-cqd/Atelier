@@ -1,7 +1,7 @@
 import AtelierGrammar
 
 /// A token as the parser takes it: its terminal, if the table has one, and its leaf.
-struct ParseToken: Sendable {
+struct ParseToken: Sendable, Equatable {
     /// The terminal's index in the parse table; nil for a token the table does not know, which every stack takes as
     /// an error.
     var terminal: Int?
@@ -30,34 +30,25 @@ struct ScannedTokenSource: ParseTokenSource {
     private let scanner: TokenScanner
     private let tokens: [LexToken]
     private let tokenTerminals: [Int?]
-    private let terminalIndex: [String: Int]
-    private let externalScanner: (any ExternalScanner)?
     private let utf8: UnsafeBufferPointer<UInt8>
     private var cursor = TokenScanner.Cursor.start
     private var lastEmptyOffset: Int?
     private(set) var end = Point.zero
 
-    /// `tokenTerminals` gives each token's terminal index; `terminalIndex` those of an external scanner's tokens.
+    /// `tokenTerminals` gives each token's terminal index.
     init(
         _ utf8: UnsafeBufferPointer<UInt8>,
         scanner: TokenScanner,
         tokens: [LexToken],
-        tokenTerminals: [Int?],
-        terminalIndex: [String: Int],
-        externalScanner: (any ExternalScanner)?
+        tokenTerminals: [Int?]
     ) {
         self.utf8 = utf8
         self.scanner = scanner
         self.tokens = tokens
         self.tokenTerminals = tokenTerminals
-        self.terminalIndex = terminalIndex
-        self.externalScanner = externalScanner
     }
 
     mutating func next(for stacks: [ParseStack]) -> ParseToken? {
-        if let token = externalToken() {
-            return token
-        }
         let preferred = preferredMode(for: stacks)
         var outcome =
             preferred.map { scanner.scan(utf8, from: cursor, mode: $0, suppressEmptyAt: lastEmptyOffset) }
@@ -124,27 +115,6 @@ struct ScannedTokenSource: ParseTokenSource {
         return ParseToken(
             terminal: nil,
             type: Unicode.Scalar(scalar).map { String(Character($0)) } ?? "\u{FFFD}",
-            byteRange: start.offset ..< next.offset,
-            pointRange: start.point ..< next.point
-        )
-    }
-
-    /// The external scanner's token at the cursor, if it has one.
-    private mutating func externalToken() -> ParseToken? {
-        guard let externalScanner, !externalScanner.validSymbols.isEmpty,
-            let result = externalScanner.scan(
-                source: utf8, position: cursor.offset, validSymbols: Set(externalScanner.validSymbols)),
-            result.length > 0, result.length <= utf8.count - cursor.offset
-        else { return nil }
-        let start = cursor
-        var next = cursor
-        for offset in start.offset ..< start.offset + result.length {
-            next = advanced(next, by: 1, ending: utf8[offset] == 0x0A)
-        }
-        cursor = next
-        return ParseToken(
-            terminal: terminalIndex[result.type],
-            type: result.type,
             byteRange: start.offset ..< next.offset,
             pointRange: start.point ..< next.point
         )

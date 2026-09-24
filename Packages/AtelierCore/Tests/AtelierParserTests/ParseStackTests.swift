@@ -53,4 +53,18 @@ struct ParseStackTests {
 
         #expect(merged.map { $0.nodes.map(\.type) } == [["x"], ["y"], ["z", "w"]])
     }
+    @Test
+    func `Stacks with different extra tokens stay apart`() {
+        let plain = ParseStack(state: 0)
+        var commented = ParseStack(state: 0)
+        commented.extras.append(
+            ParseToken(
+                terminal: nil, type: "comment", byteRange: 0 ..< 2,
+                pointRange: .zero ..< Point(row: 0, column: 2), isExtra: true))
+
+        let merged = ParseStack.mergingIdenticalHistories([plain, commented])
+
+        #expect(merged.count == 2)
+        #expect(merged.map { $0.extras.count } == [0, 1])
+    }
 }

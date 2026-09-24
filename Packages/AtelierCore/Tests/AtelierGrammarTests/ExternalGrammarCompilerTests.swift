@@ -18,6 +18,34 @@ struct ExternalGrammarCompilerTests {
     }
 
     @Test
+    func `a literal external shares the internal token terminal`() throws {
+        let grammar = GrammarDefinition(
+            name: "shared_external",
+            rules: [("source", .string("x"))], extras: [], externals: [.string("x")])
+
+        let result = try ParseTableCompiler.compile(grammar)
+
+        #expect(result.parseTable.externalNames == ["x"])
+        #expect(result.parseTable.externalSymbols == ["\"x\""])
+        #expect(result.parseTable.validExternals[0] == [true])
+        #expect(result.lexTable.tokens.contains { $0.name == "\"x\"" })
+    }
+
+    @Test
+    func `a pattern external shares its lexical token terminal`() throws {
+        let grammar = GrammarDefinition(
+            name: "pattern_external",
+            rules: [("source", .pattern("x+"))], extras: [], externals: [.pattern("x+")])
+
+        let compiled = try ParseTableCompiler.compile(grammar)
+        let token = try #require(compiled.lexTable.tokens.first?.name)
+
+        #expect(compiled.parseTable.externalNames == ["x+"])
+        #expect(compiled.parseTable.externalSymbols == [token])
+        #expect(compiled.parseTable.validExternals[0] == [true])
+    }
+
+    @Test
     func `an inline rule contributes productions without a syntax node`() throws {
         let grammar = GrammarDefinition(
             name: "inline_rule",

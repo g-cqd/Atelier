@@ -1,6 +1,7 @@
 import Synchronization
 import Testing
 
+@testable import AtelierGrammar
 @testable import AtelierParser
 
 @Suite
@@ -57,16 +58,20 @@ struct GLRParserCancellationTests {
     }
 
     @Test
-    func `A parse cancelled at its first check has read only the first token`() throws {
-        let parser = try BundledGrammarFixture.parser(for: BundledGrammarFixture.json)
+    func `A cancelled parse does not call the external scanner`() throws {
+        let grammar = GrammarDefinition(
+            name: "cancelled_scan",
+            rules: [("source", .choice([.symbol("counted"), .string("x")]))],
+            extras: [], externals: [.symbol("counted")])
+        let compiled = try ParseTableCompiler.compile(grammar)
+        let parser = GLRParser(
+            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
         let scanner = CountingScanner()
 
         #expect(throws: ParseError.cancelled(atToken: 0)) {
-            // Strings of three letters: a lexer that reads the whole source first asks the scanner 9,000 times.
-            try parser.parse(
-                String(repeating: #""abc" "#, count: 3_000), externalScanner: scanner, isCancelled: { true })
+            try parser.parse("x", externalScanner: scanner, isCancelled: { true })
         }
-        #expect(scanner.scans == 1)
+        #expect(scanner.scans == 0)
     }
 
     private static func parseError(_ parser: GLRParser) -> ParseError? {
@@ -80,19 +85,20 @@ struct GLRParserCancellationTests {
 }
 
 /// An external scanner that finds nothing and counts how often the lexer asks it: once for each token it reads.
-private final class CountingScanner: ExternalScanner {
+private final class CountingScanner: GrammarExternalScanner {
     private let count = Mutex(0)
 
     var scans: Int { count.withLock { $0 } }
 
-    var validSymbols: [String] { ["counted"] }
+    static let externalNames = ["counted"]
 
-    func scan(
-        source: UnsafeBufferPointer<UInt8>,
-        position: Int,
-        validSymbols: Set<String>
-    ) -> (type: String, length: Int)? {
+    required init() {}
+
+    func scan(_ lexer: inout some ScannerLexer, validSymbols: [Bool]) -> Bool {
         count.withLock { $0 += 1 }
-        return nil
+        return false
     }
+
+    func serialize(into buffer: inout [UInt8]) {}
+    func deserialize(_ state: ArraySlice<UInt8>) {}
 }
