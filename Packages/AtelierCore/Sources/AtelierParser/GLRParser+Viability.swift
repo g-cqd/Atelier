@@ -31,7 +31,7 @@ extension GLRParser {
             case .reduce, .conflict: break
         }
         var budget = parseTable.stateCount + stack.nodes.count
-        return canShift(terminal, from: VirtualStates(states: stack.states), budget: &budget)
+        return canShift(terminal, from: VirtualStates(states: stack.states, nodes: stack.nodes), budget: &budget)
     }
 
     private func canShift(_ terminal: Int, from states: VirtualStates, budget: inout Int) -> Bool {
@@ -73,30 +73,39 @@ extension GLRParser {
     }
 }
 
-/// A stack's states as reductions change them, the stack's own array untouched: the states still standing from it, and
+/// A stack's states as reductions change them, the stack's own arrays untouched: the nodes still standing from it, and
 /// the states pushed since, one per symbol a reduction made.
 private struct VirtualStates {
     /// The stack's states: the one each node was pushed in, then the current one.
     let states: [Int]
+    /// The stack's nodes; a skipped token's ERROR node among them is no symbol, and no reduction counts it.
+    let nodes: [SyntaxNode]
     /// How many of the stack's nodes still stand.
     var standing: Int
     var pushed: [Int] = []
 
-    init(states: [Int]) {
+    init(states: [Int], nodes: [SyntaxNode]) {
         self.states = states
-        standing = states.count - 1
+        self.nodes = nodes
+        standing = nodes.count
     }
 
     var top: Int { pushed.last ?? states[standing] }
 
-    /// Pops `count` nodes as `ParseStack.popNodes` does, and pushes the GOTO state from the state then on top; false
-    /// when the table has none.
+    /// Pops `count` symbols as `ParseStack.popSymbols` does, skipped tokens aside, and pushes the GOTO state from the
+    /// state then on top; false when the table has none.
     mutating func reduce(count: Int, to nonTerminal: String, in parser: GLRParser) -> Bool {
         var remaining = max(count, 0)
         let fromPushed = min(remaining, pushed.count)
         pushed.removeLast(fromPushed)
         remaining -= fromPushed
-        standing -= min(remaining, standing)
+        if remaining > 0 {
+            while standing > 0, nodes[standing - 1].isError { standing -= 1 }
+            while standing > 0, remaining > 0 {
+                standing -= 1
+                if !nodes[standing].isError { remaining -= 1 }
+            }
+        }
         guard let target = parser.gotoState(from: top, on: nonTerminal) else { return false }
         pushed.append(target)
         return true

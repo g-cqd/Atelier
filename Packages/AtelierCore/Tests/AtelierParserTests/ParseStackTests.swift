@@ -5,17 +5,33 @@ import Testing
 @Suite
 struct ParseStackTests {
     @Test(arguments: [(1, 7), (2, 3), (3, 0)])
-    func `Popping nodes restores the state the first of them was pushed in`(count: Int, restoredState: Int) {
+    func `Popping symbols restores the state the first of them was pushed in`(count: Int, restoredState: Int) {
         var stack = ParseStack(state: 0)
         for (type, nextState) in [("a", 3), ("b", 7), ("c", 9)] {
             stack.pushNode(SyntaxNode(type: type))
             stack.state = nextState
         }
 
-        let popped = stack.popNodes(count)
+        let popped = stack.popSymbols(count)
 
-        #expect(popped.map(\.type) == Array(["a", "b", "c"].suffix(count)))
+        #expect(popped.symbols.map(\.type) == Array(["a", "b", "c"].suffix(count)))
         #expect(stack.state == restoredState)
+    }
+
+    @Test
+    func `Popping symbols takes the skipped tokens between them and hands back those above them`() {
+        var stack = ParseStack(state: 0)
+        for (type, isError, nextState) in [("a", false, 3), ("ERROR", true, 3), ("b", false, 7), ("ERROR", true, 7)] {
+            stack.pushNode(SyntaxNode(type: type, isError: isError))
+            stack.state = nextState
+        }
+
+        let popped = stack.popSymbols(2)
+
+        #expect(popped.symbols.map(\.type) == ["a", "ERROR", "b"])
+        #expect(popped.skippedAbove.map(\.type) == ["ERROR"])
+        #expect(stack.state == 0)
+        #expect(stack.errorCount == 2)
     }
 
     @Test
@@ -25,7 +41,7 @@ struct ParseStackTests {
         clean.state = 4
         var faulty = ParseStack(state: 0)
         faulty.pushNode(SyntaxNode(type: "ERROR", isError: true))
-        _ = faulty.popNodes(1)
+        _ = faulty.popSymbols(1)
         faulty.pushNode(SyntaxNode(type: "x", children: [SyntaxNode(type: "b")]))
         faulty.state = 4
 
