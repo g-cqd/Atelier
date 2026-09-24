@@ -129,7 +129,10 @@ struct HTMLScanner {
         _ units: Span<UInt8>, from start: Int, tokens: inout [Output]
     ) -> Int {
         var index = start + 1
-        while index < units.count, index - start < 12, ASCII.isIdentifier(units[index]) || units[index] == ASCII.hash {
+        // Entity names are ASCII, which keeps the 12-byte cap the same length in UTF-8 and in UTF-16.
+        while index < units.count, index - start < 12,
+            ASCII.isAlpha(units[index]) || ASCII.isDigit(units[index]) || units[index] == ASCII.hash
+        {
             index += 1
         }
         guard index < units.count, units[index] == ASCII.semicolon, index > start + 1 else { return start + 1 }
