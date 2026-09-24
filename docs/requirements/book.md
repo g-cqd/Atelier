@@ -1498,7 +1498,9 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
      all of its content.
   3. Scrolling never stops responding to input.
   4. A regression test reproduces the conditions that cut the range short.
-- **Priority:** Must. **Related:** CARD-12, CARD-14, PERF-05.
+  5. A file opened from the list, by a single or a double click, small or large, always scrolls (R115, reported
+     after the first fix).
+- **Priority:** Must. **Related:** CARD-12, CARD-14, PERF-05, DIFF-08.
 
 #### CARD-18 · No sideways scroll when a file fits, and no bounce in code panes
 - **Statement:** A pane scrolls sideways only when its lines are wider than it, and no code pane rubber-bands past
@@ -1603,6 +1605,20 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   2. A file with a change keeps its isolated hunks and gaps.
   3. The card list is not affected: a card for such a file shows its header alone (D28).
 - **Priority:** Must. **Related:** DIFF-02, CARD-09.
+
+#### DIFF-08 · A file opens on its first change, placed right, and the scroll can be turned off
+- **Statement:** Opening a file scrolls to its first change, which lands a few lines below the top of the visible
+  area and clear of the toolbar and the tab bar; a setting turns the scroll off, so files open at their top.
+- **Source:** 09-24, "the auto scrolling to the first change in the file is not working correctly, it's offset, and
+  this should be a toggleable behaviour, add that to the roadmap".
+- **Acceptance criteria:**
+  1. The first change's first row sits three rows below the top of the visible area, never under the toolbar or the
+     tab bar, in the inline, side-by-side and stacked layouts, wrapped or not, with the explorers above the diff or in
+     the sidebar. A Findings row's reveal, which centres its line, is placed the same way.
+  2. A setting, on by default, chooses whether opening a file scrolls to its first change; off, a file opens at its
+     top. It sits with the diff settings and in the view options.
+  3. A file tab that comes back to where it was left (TAB-10) keeps that position whatever the setting.
+- **Priority:** Must (criterion 1, a reported bug); Should (criteria 2 and 3). **Related:** TAB-10, PERF-10, CARD-17.
 
 ### REND: A text renderer of our own
 
@@ -1783,3 +1799,5 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R112 | 09-24 | "i'd like the popover of the documentation to be able to stay visible when mousing hover it" | HOVER-20 (criterion 7) |
 | R113 | 09-24 | "when changes are isolated, some "renamed" files show empty content in single file viewing"; "imo we should still show the content" | DIFF-07 |
 | R114 | 09-24 | "header only in the file list" | D28, DIFF-07 |
+| R115 | 09-24 | "sometimes, double clicking a file or selecting it in the file list opens it in a completely unscrollable state, it can be for a small or big file, i'm completely unable to scroll" | CARD-17 (criterion 5) |
+| R116 | 09-24 | "the auto scrolling to the first change in the file is not working correctly, it's offset, and this should be a toggleable behaviour, add that to the roadmap" | DIFF-08 |
