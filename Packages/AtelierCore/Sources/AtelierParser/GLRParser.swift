@@ -1,4 +1,5 @@
 public import AtelierGrammar
+import Synchronization
 
 /// GLR parser: forks on a conflict, keeps every fork reducing, and merges stacks that reach the same state history.
 public final class GLRParser: Sendable {
@@ -15,6 +16,8 @@ public final class GLRParser: Sendable {
     let tokenTerminals: [Int?]
     /// The grammar's symbols in tree-sitter's order, which breaks a tie between two parses.
     let symbolRanks: SymbolRanks
+    /// The lex modes built for stacks that can take only some of their state's tokens, by those tokens.
+    let viableModes = Mutex<[[Int]: LazyLexMode]>([:])
 
     public init(parseTable: ParseTable, lexTable: LexTable, productions: [ProductionRule]) {
         self.parseTable = parseTable

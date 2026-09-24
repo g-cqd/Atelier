@@ -66,6 +66,7 @@ extension LexTable {
             && (wordToken.map(tokens.indices.contains) ?? true)
             && keywordTokens.values.allSatisfy(tokens.indices.contains)
             && (errorMode.map(modeStarts.indices.contains) ?? true)
+            && (modeSource.map { $0.isConsistent(tokenCount: tokens.count) } ?? true)
             && automaton.allSatisfy { state in
                 (state.accept.map(tokens.indices.contains) ?? true) && movesAreConsistent(state.transitions)
             }
@@ -81,5 +82,25 @@ extension LexTable {
             next = move.upper + 1
         }
         return true
+    }
+}
+
+extension LexModeSource {
+    /// Whether the token automaton's moves and starts land inside it, and its tokens and priorities are the table's
+    /// `tokenCount` tokens.
+    func isConsistent(tokenCount: Int) -> Bool {
+        let tokens = 0 ..< tokenCount
+        return nfa.starts.count == tokenCount && priorities.count == tokenCount
+            && nfa.owners.count == nfa.states.count
+            && nfa.starts.allSatisfy(nfa.states.indices.contains)
+            && nfa.owners.allSatisfy(tokens.contains)
+            && nfa.nullableTokens.allSatisfy(tokens.contains)
+            && nfa.states.allSatisfy { state in
+                switch state {
+                    case .advance(_, let next, _, _): nfa.states.indices.contains(next)
+                    case .split(let targets): targets.allSatisfy(nfa.states.indices.contains)
+                    case .accept(let token, _): tokens.contains(token)
+                }
+            }
     }
 }

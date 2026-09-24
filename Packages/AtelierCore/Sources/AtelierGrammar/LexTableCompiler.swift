@@ -221,7 +221,8 @@ extension LexTableCompiler {
         nfa: TokenNFA, tokens: [LexicalToken], validTokens: [[Int]],
         wordToken: Int? = nil, keywordTokens: [String: Int] = [:]
     ) throws(GrammarError) -> LexTable {
-        var builder = LexAutomatonBuilder(nfa: nfa, tokens: tokens)
+        let priorities = tokens.map(\.priority)
+        var builder = LexAutomatonBuilder(nfa: nfa, tokens: priorities)
         var modes: [[Int]: Int] = [:]
         var modeStarts: [Int] = []
         var modeValidTokens: [[Int]] = []
@@ -234,9 +235,9 @@ extension LexTableCompiler {
             modes[valid] = modeStarts.count
             modeStarts.append(try builder.startState(for: valid))
             modeValidTokens.append(valid)
-            modeEmptyTokens.append(preferredEmptyToken(in: valid, nfa: nfa, tokens: tokens, afterSeparator: false))
+            modeEmptyTokens.append(preferredEmptyToken(in: valid, nfa: nfa, tokens: priorities, afterSeparator: false))
             modeEmptyAfterSeparator.append(
-                preferredEmptyToken(in: valid, nfa: nfa, tokens: tokens, afterSeparator: true))
+                preferredEmptyToken(in: valid, nfa: nfa, tokens: priorities, afterSeparator: true))
             return modeStarts.count - 1
         }
         var stateModes: [Int] = []
@@ -260,13 +261,14 @@ extension LexTableCompiler {
             keywordTokens: keywordTokens,
             modeValidTokens: modeValidTokens,
             modeEmptyTokens: modeEmptyTokens,
-            modeEmptyAfterSeparator: modeEmptyAfterSeparator
+            modeEmptyAfterSeparator: modeEmptyAfterSeparator,
+            modeSource: LexModeSource(nfa: nfa, priorities: priorities)
         )
     }
 
     /// The highest-priority nullable token that may start here, applying the same tie-breaks as the automaton.
-    private static func preferredEmptyToken(
-        in valid: [Int], nfa: TokenNFA, tokens: [LexicalToken], afterSeparator: Bool
+    static func preferredEmptyToken(
+        in valid: [Int], nfa: TokenNFA, tokens: [LexTokenPriority], afterSeparator: Bool
     ) -> Int? {
         var preferred: Int?
         for token in valid where nfa.nullableTokens.contains(token) && (!afterSeparator || !tokens[token].isImmediate) {
