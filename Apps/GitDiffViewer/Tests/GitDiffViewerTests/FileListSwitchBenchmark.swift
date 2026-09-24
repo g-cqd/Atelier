@@ -26,6 +26,9 @@ import Testing
 /// area's height in the first depends on how the split view divides the window, so the number of cards on screen is
 /// printed with each result.
 ///
+/// A second run goes back to the list through the file list's fixed tab (book TAB-10), after a folder's tab and a file's
+/// tab showed in between, and holds that return to the close budget.
+///
 /// Run in release, alone on the machine: `GDV_BENCH=1 GDV_BENCH_REPO=path swift test -c release -Xswiftc
 /// -enable-testing --filter FileListSwitchBenchmark`. GDV_BENCH_LEFT and GDV_BENCH_RIGHT pick the refs, and
 /// GDV_BENCH_RUNS the switches timed per file.
@@ -81,6 +84,46 @@ struct FileListSwitchBenchmark {
             #expect(Self.median(open.shown) <= Self.openBudget, "opening \(path)")
             #expect(Self.median(close.shown) <= Self.closeBudget, "closing \(path)")
         }
+    }
+
+    // Serialized for the same reason as the switches above.
+    @Test(
+        .serialized, .timeLimit(.minutes(10)),
+        .enabled(
+            if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil
+                && ProcessInfo.processInfo.environment["GDV_BENCH_REPO"] != nil),
+        arguments: [ExplorerPlacement.top, .sidebar])
+    func `going back to the list through its fixed tab after a folder and a file showed`(
+        placement: ExplorerPlacement
+    ) async throws {
+        let environment = ProcessInfo.processInfo.environment
+        let repo = URL(filePath: environment["GDV_BENCH_REPO"] ?? ".", directoryHint: .isDirectory)
+        let leftRef = environment["GDV_BENCH_LEFT"] ?? "HEAD~1"
+        let rightRef = environment["GDV_BENCH_RIGHT"] ?? "HEAD"
+        let runs = environment["GDV_BENCH_RUNS"].flatMap(Int.init) ?? 9
+        let bench = try await SwitchBench(
+            repo: repo, leftRef: leftRef, rightRef: rightRef, placement: placement, defaults: scratchDefaults)
+        defer { bench.close() }
+        let folder = try #require(bench.folderToOpen(), "no changed file sits in a folder of its own")
+        let file = try #require(bench.filesToOpen().first)
+        try await bench.pin(folder)
+        try await bench.pin(file)
+
+        var back = SwitchSamples()
+        // One round first, which the samples leave out.
+        for run in 0 ... runs {
+            try await bench.showTab(folder)
+            try await bench.showTab(file)
+            let timing = try await bench.showFileList()
+            guard run > 0 else { continue }
+            back.append(timing)
+        }
+        print(
+            "BENCH \(placement.rawValue) back to the list through its tab after \(folder) and \(file), "
+                + "\(bench.cardCount) cards, \(back.cardsOnScreen.max() ?? 0) on screen: "
+                + "to first card \(Self.summary(back.firstCard)), to whole list \(Self.summary(back.shown)), "
+                + "main thread \(Self.summary(back.mainThread)); footprint \(Self.megabytes(back.footprint))")
+        #expect(Self.median(back.shown) <= Self.closeBudget, "back to the list after \(folder) and \(file)")
     }
 
     static func median(_ samples: [Double]) -> Double {
@@ -185,6 +228,20 @@ final class SwitchBench {
         return [first.path] + (largest.map { $0.path == first.path ? [] : [$0.path] } ?? [])
     }
 
+    /// The folder of the first changed file that sits in one, when that folder holds fewer changed files than the
+    /// whole list, so its tab shows a list of its own.
+    func folderToOpen() -> String? {
+        let paths = model.renderedFiles.map(\.path)
+        return paths.lazy
+            .compactMap { path -> String? in
+                let folder = (path as NSString).deletingLastPathComponent
+                guard !folder.isEmpty else { return nil }
+                let count = paths.count { $0.hasPrefix(folder + "/") }
+                return count < paths.count ? folder : nil
+            }
+            .first
+    }
+
     func rows(of path: String) -> Int {
         model.renderedFiles.first { $0.path == path }.map(rows(of:)) ?? 0
     }
@@ -210,14 +267,50 @@ final class SwitchBench {
         return SwitchTiming(firstCard: shown, shown: shown, mainThread: mainThread, footprint: Self.footprint())
     }
 
+    /// Opens `path` in a tab of its own, as a double click in the explorer does, and lets it settle.
+    func pin(_ path: String) async throws {
+        model.pin(path)
+        try await rendered()
+    }
+
+    /// Shows the open tab of `path`, as a click on it does, and lets it settle.
+    func showTab(_ path: String) async throws {
+        let tab = try #require(model.tabs.tabs.first { $0.path == path })
+        model.activateTab(tab.id)
+        try await rendered()
+    }
+
+    /// Waits for the render the last switch started to land, then draws it.
+    private func rendered() async throws {
+        while model.isRendering || (model.rendered == nil && model.renderedFiles.isEmpty) {
+            await Self.nextChange {
+                _ = model.isRendering
+                _ = model.rendered
+                _ = model.renderedFiles
+            }
+        }
+        try await settle()
+    }
+
     /// Closes the active tab, the last one, as its close button does, and times it until the display pass that draws
     /// the first card, and until the one that draws the whole list.
     func closeTab() async throws -> SwitchTiming {
         let tab = try #require(model.tabs.active)
+        return try await backToList { model.closeTab(tab.id) }
+    }
+
+    /// Goes back to the list through its fixed tab, as a click on it does, and times it as ``closeTab()`` does.
+    func showFileList() async throws -> SwitchTiming {
+        try await backToList { model.showFileList() }
+    }
+
+    /// Runs `action`, which leaves a file for the whole list, and times it until the display pass that draws the first
+    /// card, and until the one that draws the whole list.
+    private func backToList(_ action: () -> Void) async throws -> SwitchTiming {
         let count = model.combinedFiles.count
         let start = clock.now
         let cpu = Self.mainThreadCPU()
-        model.closeTab(tab.id)
+        action()
         while model.renderedFiles.isEmpty {
             await Self.nextChange { _ = model.renderedFiles }
         }
