@@ -18,7 +18,7 @@ struct EditorNavigationDispatcherTests {
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
         config.keybindingMode = .nano
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.fileContent = ["hello world", "second line", "third line", "fourth line"]
         let pipeline = RenderPipeline(

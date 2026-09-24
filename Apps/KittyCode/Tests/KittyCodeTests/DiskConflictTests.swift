@@ -42,7 +42,8 @@ struct DiskConflictTests {
         config.syntax.enabled = false
         config.keybindingMode = keybindingMode
         let taskProvider = TaskProviderSpy()
-        let state = EditorState(rootPath: root, config: config, taskProvider: taskProvider)
+        let state = EditorState(
+            rootPath: root, config: config, taskProvider: taskProvider, searchPool: EditorTestPool.shared)
         state.openFilePath(path, name: "notes.txt")
         try await taskProvider.waitForAllTasks(timeout: .seconds(30))
         insertText("mine ", into: state)

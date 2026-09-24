@@ -158,7 +158,7 @@ struct VimSequenceCommandDispatchTests {
         config.keybindingMode = .vim
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.vimMode = .normal
         state.fileContent = lines

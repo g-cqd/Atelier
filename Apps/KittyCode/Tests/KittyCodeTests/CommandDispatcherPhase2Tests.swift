@@ -18,7 +18,7 @@ struct CommandDispatcherPhase2Tests {
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
         config.keybindingMode = keybindingMode
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.fileContent = ["hello world", "second line", "third line"]
         let pipeline = RenderPipeline(

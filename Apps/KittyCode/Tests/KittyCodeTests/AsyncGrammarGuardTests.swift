@@ -17,7 +17,7 @@ import Testing
 struct AsyncGrammarGuardTests {
     @Test
     func `scroll position unchanged after refreshHighlights`() {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         state.fileContent = (0 ..< 50).map { "line \($0)" }
         state.scrollOffset = 20
         state.hScrollOffset = 5
@@ -31,7 +31,7 @@ struct AsyncGrammarGuardTests {
 
     @Test
     func `isLoadingGrammar defaults to false`() {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+        let state = EditorState(rootPath: ".", config: KittyConfig(), searchPool: EditorTestPool.shared)
         #expect(state.isLoadingGrammar == false)
     }
 }

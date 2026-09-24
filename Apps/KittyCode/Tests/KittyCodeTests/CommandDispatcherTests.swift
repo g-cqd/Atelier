@@ -16,7 +16,7 @@ struct CommandDispatcherTests {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.mode = .editor
         state.fileContent = ["line one", "line two"]
         let pipeline = RenderPipeline(

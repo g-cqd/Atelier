@@ -66,7 +66,8 @@ struct ReloadBenchmark {
         try versions[0].write(to: file)
 
         let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
-        let state = EditorState(rootPath: directory.path, config: KittyConfig(), taskProvider: tasks)
+        let state = EditorState(
+            rootPath: directory.path, config: KittyConfig(), taskProvider: tasks, searchPool: EditorTestPool.shared)
         defer { state.shutdown() }
         state.lastRenderRows = 60
         state.openFileByPath(file.path)

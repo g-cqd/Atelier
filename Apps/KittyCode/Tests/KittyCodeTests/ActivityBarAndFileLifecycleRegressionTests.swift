@@ -86,7 +86,7 @@ struct ActivityBarAndFileLifecycleRegressionTests {
         var config = KittyConfig()
         config.activityBar.show = false
         config.tabRibbon.position = .hidden
-        let state = EditorState(rootPath: rootURL.path, config: config)
+        let state = EditorState(rootPath: rootURL.path, config: config, searchPool: EditorTestPool.shared)
         let pipeline = RenderPipeline(
             connection: MockTerminalConnection(size: TerminalSize(columns: 40, rows: 10)),
             columns: 40,

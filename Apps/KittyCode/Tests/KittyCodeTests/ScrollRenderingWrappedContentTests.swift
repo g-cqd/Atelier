@@ -28,7 +28,7 @@ struct ScrollRenderingWrappedContentTests {
         config.editor.wrapLines = true
         config.editor.scrollLines = 1
         config.editor.scrollAccelerationEnabled = false
-        let state = EditorState(rootPath: ".", config: config)
+        let state = EditorState(rootPath: ".", config: config, searchPool: EditorTestPool.shared)
         state.sidebarCollapsed = true
         state.mode = .editor
         state.fileContent = ["AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH", "after"]
@@ -80,7 +80,8 @@ struct ScrollRenderingWrappedContentTests {
         config.editor.scrollAccelerationMaxExtraLines = 8
         let taskProvider = TaskProviderSpy()
         let clock = TestClock()
-        let state = EditorState(rootPath: ".", config: config, taskProvider: taskProvider, clock: clock)
+        let state = EditorState(
+            rootPath: ".", config: config, taskProvider: taskProvider, clock: clock, searchPool: EditorTestPool.shared)
         state.sidebarCollapsed = true
         state.mode = .editor
         state.fileContent = ["AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH", "after", "tail", "done"]
