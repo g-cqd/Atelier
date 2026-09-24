@@ -7,7 +7,8 @@ extension GLRParser {
     static let maxViableModes = 64
     /// The most stacks a parse with an external scanner keeps, the preferred ones. Each stack reads the input on its
     /// own, a scanner call and a lex per token, so a stack costs as much as a parse; tree-sitter keeps at most 6
-    /// versions, and 10 while it merges. The pinned Swift and JavaScript corpora parse alike with 32 stacks and 256.
+    /// versions, and 10 while it merges. The pinned Swift and JavaScript corpora parse alike with 32 stacks and 256,
+    /// and this repository's larger Swift files parse two to four times faster.
     static let maxScanningStacks = 32
 
     /// Rejects malformed scanner metadata before a parse branch indexes its validity row.
