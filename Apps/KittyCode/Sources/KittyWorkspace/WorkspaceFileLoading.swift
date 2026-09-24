@@ -5,10 +5,14 @@ public import Foundation
 
 public struct LoadedFile: Sendable {
     public let content: String
+    /// `content` as a rope, built where the file is read so that opening it only installs the rope on the main actor.
+    public let textBuffer: TextBuffer
     public let lineEnding: TextDocument.LineEnding
 
+    /// - Complexity: O(n) in the UTF-8 length of `content`, to build its rope.
     public init(content: String, lineEnding: TextDocument.LineEnding) {
         self.content = content
+        self.textBuffer = TextBuffer(content)
         self.lineEnding = lineEnding
     }
 }
@@ -37,8 +41,8 @@ public enum WorkspaceFileLoading {
     ///   - path: The file to read.
     ///   - maximumSize: A file larger than this is refused before any of it is read.
     ///   - offload: Runs the blocking read: the app's pool, never a cooperative thread.
-    /// - Returns: The text with every line break as LF, the one break a buffer holds, and the line ending the file
-    ///   used, which a save writes back.
+    /// - Returns: The text with every line break as LF, the one break a buffer holds, its rope, built on the thread
+    ///   `offload` runs the read on, and the line ending the file used, which a save writes back.
     /// - Throws: `CancellationError`; `CocoaError(.fileReadTooLarge)` past `maximumSize`;
     ///   `CocoaError(.fileReadInapplicableStringEncoding)` when the file is not UTF-8; otherwise the `CocoaError`
     ///   Foundation's own reads give, a file that shrank while it was read among them.
@@ -82,7 +86,7 @@ public enum WorkspaceFileLoading {
         }
     }
 
-    /// The UTF-8 text of a file's bytes, with every line break as LF, and the line ending the bytes used.
+    /// The UTF-8 text of a file's bytes, with every line break as LF, its rope, and the line ending the bytes used.
     /// - Throws: `CocoaError(.fileReadInapplicableStringEncoding)` when `data` is not UTF-8.
     /// - Complexity: O(n) in the size of `data`.
     static func decode(_ data: Data) throws -> LoadedFile {

@@ -155,10 +155,9 @@ extension EditorState {
                     requestID: requestID,
                     path: path,
                     name: name,
-                    content: loadedFile.content,
+                    loadedFile: loadedFile,
                     language: language,
-                    modificationDate: modDate,
-                    lineEnding: loadedFile.lineEnding
+                    modificationDate: modDate
                 )
             } catch {
                 guard self.isCurrentOpenRequest(requestID) else { return }
@@ -432,45 +431,49 @@ extension EditorState {
         }
     }
 
-    private func finishOpeningFile(
+    /// Shows the file `loadedFile` read as the active buffer, installing the rope its read built rather than splitting
+    /// its text again on the main actor; the whole-document highlight and the width come from the post-load pass.
+    func finishOpeningFile(
         requestID: UInt64,
         path: String,
         name: String,
-        content: String,
+        loadedFile: LoadedFile,
         language: String?,
-        modificationDate: Date?,
-        lineEnding: TextDocument.LineEnding
+        modificationDate: Date?
     ) {
         guard isCurrentOpenRequest(requestID) else { return }
 
+        // A buffer that is already open keeps its own text, as opening it again never replaced it.
+        let isAlreadyOpen = bufferManager.bufferIndex(forPath: path) != nil
         let newIndex: Int
         if config.tabRibbon.persistence == .preview {
             newIndex = bufferManager.openPreview(
                 filePath: path,
                 fileName: name,
-                content: content,
+                content: "",
                 language: language,
-                lineEnding: lineEnding,
+                lineEnding: loadedFile.lineEnding,
                 maxUndoSteps: config.editor.maxUndoSteps
             )
         } else {
             newIndex = bufferManager.open(
                 filePath: path,
                 fileName: name,
-                content: content,
+                content: "",
                 language: language,
-                lineEnding: lineEnding,
+                lineEnding: loadedFile.lineEnding,
                 maxUndoSteps: config.editor.maxUndoSteps
             )
         }
 
         let buffer = bufferManager.buffers[newIndex]
+        if !isAlreadyOpen { buffer.textBuffer = loadedFile.textBuffer }
         buffer.lastModifiedDate = modificationDate
         buffer.selection = nil
         buffer.highlightedLines = []
         buffer.highlightSession = nil
         buffer.cachedMaxLineWidth = nil
-        buffer.lineEnding = lineEnding
+        buffer.lineEnding = loadedFile.lineEnding
         buffer.didInvalidateHistoryOnLastRefresh = false
         buffer.editHistory.reset(
             to: BufferEditSnapshot(
@@ -480,12 +483,13 @@ extension EditorState {
             )
         )
 
-        restoreStateFromActiveBuffer()
+        // The workspace's restore, not the state's: the post-load pass below highlights and measures the new buffer.
+        workspace.restoreStateFromActiveBuffer()
         prompt = nil
         highlightedLines = []
         highlightSession = nil
         cachedMaxLineWidth = nil
-        currentLineEnding = lineEnding
+        currentLineEnding = loadedFile.lineEnding
         noteSelectedPath(path, isDirectory: false)
 
         gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
@@ -499,7 +503,7 @@ extension EditorState {
 
         fileWatcherIntegration?.watchOpenedFile(path)
         renderRefreshSource?.invalidate()
-        schedulePostLoadProcessing(for: buffer, content: content)
+        schedulePostLoadProcessing(for: buffer, content: loadedFile.content)
     }
 
     public func schedulePostLoadProcessing(for buffer: DocumentBuffer, content: String) {
@@ -566,16 +570,22 @@ extension EditorState {
                 return (resolvedMaxLineWidth, resolvedHighlightedLines)
             }
 
+            // A cancelled pass was replaced, and whoever cancelled it cleared the handle.
             guard !Task.isCancelled else { return }
             guard let self, let buffer else { return }
-            guard buffer.documentVersion == version else { return }
+            // Cleared on every other way out too: while it is set, the state's full pass leaves the buffer to this one.
+            buffer.postOpenProcessingTask = nil
+            guard buffer.documentVersion == version else {
+                // The text changed without cancelling this pass, so nothing else will highlight and measure it.
+                if self.bufferManager.activeBuffer === buffer { self.requestFullHighlight() }
+                return
+            }
 
             buffer.cachedMaxLineWidth = maxLineWidth
             if let highlightedLines {
                 buffer.highlightedLines = highlightedLines
                 buffer.highlightSession = nil
             }
-            buffer.postOpenProcessingTask = nil
 
             if self.bufferManager.activeBuffer === buffer {
                 self.cachedMaxLineWidth = maxLineWidth

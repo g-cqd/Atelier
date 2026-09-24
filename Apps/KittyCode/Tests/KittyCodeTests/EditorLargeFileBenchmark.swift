@@ -2,14 +2,16 @@ import AemiCore
 import AemiTesting
 import AtelierText
 import Foundation
+import KittyRenderer
 import KittyStyle
 import KittySyntax
-import KittyWorkspace
+import KittyTerminal
 import Testing
 
 import func AemiTestKit.mallocDelta
 
 @testable import KittyEditor
+@testable import KittyWorkspace
 
 /// Release timings of the editor's main-actor work on a million-line Swift-like file, printed rather than asserted:
 /// `GDV_BENCH=1 swift test -c release --filter EditorLargeFileBenchmark`. The one assertion counts allocations, and the
@@ -121,5 +123,31 @@ struct EditorLargeFileBenchmark {
         }
         print("BENCH undo, 1M lines: \(Self.summary(undo))")
         print("BENCH redo, 1M lines: \(Self.summary(redo))")
+    }
+
+    /// The main actor's share of an open once the read has finished, which built the rope: installing the file, then
+    /// the first frame.
+    @Test func `opening a million-line file`() async throws {
+        let loadedFile = try WorkspaceFileLoading.decode(Data(Self.text.utf8))
+        let clock = ContinuousClock()
+        var samples: [Duration] = []
+        for _ in 0 ..< 5 {
+            let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
+            let state = EditorState(rootPath: ".", config: KittyConfig(), taskProvider: tasks)
+            let pipeline = RenderPipeline(
+                connection: MockTerminalConnection(size: TerminalSize(columns: 200, rows: 60)), columns: 200, rows: 60)
+            let requestID = state.nextOpenRequestID()
+            samples.append(
+                clock.measure {
+                    state.finishOpeningFile(
+                        requestID: requestID, path: "/bench/large.swift", name: "large.swift", loadedFile: loadedFile,
+                        language: "swift", modificationDate: nil)
+                    renderFrame(pipeline: pipeline, state: state)
+                })
+            // The post-load pass lands before the next sample.
+            try await tasks.waitForAllTasks()
+            state.shutdown()
+        }
+        print("BENCH open to first frame, main actor, 1M lines: \(Self.summary(samples))")
     }
 }

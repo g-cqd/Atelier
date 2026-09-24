@@ -22,6 +22,13 @@ struct WorkspaceFileLoadingTests {
         #expect(loaded.lineEnding == lineEnding)
     }
 
+    @Test func `a file's rope holds its text with LF line breaks`() throws {
+        let loaded = try WorkspaceFileLoading.decode(Data("é\r\nline\r\n".utf8))
+
+        #expect(loaded.textBuffer.lines(in: 0 ..< loaded.textBuffer.lineCount) == ["é", "line", ""])
+        #expect(loaded.textBuffer.byteCount == loaded.content.utf8.count)
+    }
+
     @Test func `bytes that are not UTF-8 are refused`() {
         #expect(throws: CocoaError.self) {
             try WorkspaceFileLoading.decode(Data([0x61, 0xFF, 0x62]))
