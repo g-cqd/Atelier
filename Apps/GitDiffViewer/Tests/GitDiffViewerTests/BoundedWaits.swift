@@ -114,6 +114,21 @@ extension Task where Failure == Never {
     }
 }
 
+extension Task where Failure == any Error {
+    /// The task's value, or ``WaitTimeout`` once ``TaskProviderSpy/failureBound`` has passed first, as the non-throwing
+    /// task's ``expectValue(sourceLocation:)`` does; the task's own error is rethrown.
+    func expectValue(sourceLocation: SourceLocation = #_sourceLocation) async throws -> Success {
+        try await expectResult(sourceLocation: sourceLocation).get()
+    }
+
+    /// The task's result, its error included, or ``WaitTimeout`` once ``TaskProviderSpy/failureBound`` has passed first.
+    func expectResult(sourceLocation: SourceLocation = #_sourceLocation) async throws -> Result<Success, any Error> {
+        try await withFailureBound(awaiting: "The task's result", sourceLocation: sourceLocation) { [self] in
+            await result
+        }
+    }
+}
+
 extension AsyncProbe {
     /// The next element, as ``next()`` returns it, or ``WaitTimeout`` once ``TaskProviderSpy/failureBound`` has passed
     /// without one: a signal that never comes fails the test instead of hanging the run.
