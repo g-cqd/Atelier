@@ -1,12 +1,13 @@
 import AemiJSON
 import AemiKernel
 public import AtelierGrammar
+import AtelierParser
+import AtelierScanners
 import Foundation
 import Synchronization
 
 /// The runtime registry of language grammars: registered entries, loaded grammars, and compiled parse tables and
-/// failed compiles, cached in memory and on disk. Its state sits behind a `Mutex`, so synchronous callers on any
-/// thread can use it.
+/// failed compiles, cached in memory and on disk. Its state sits behind a `Mutex`.
 public final class GrammarRegistry: Sendable {
     /// The process-wide registry, which the highlighter consults before `BundledLanguageManifest`.
     public static let shared = GrammarRegistry()
@@ -20,6 +21,9 @@ public final class GrammarRegistry: Sendable {
         var loadedGrammars: [String: LoadedGrammar] = [:]
         /// What compiling each grammar file gave, tables or the compiler's error: the same bytes compile the same way.
         var compileOutcomes: [CompiledTableCache.Key: Result<ParseTableCompiler.CompilationResult, GrammarError>] = [:]
+        /// One task per file and compiler version while a compile or disk read is in progress.
+        var compilesInFlight:
+            [CompiledTableCache.Key: Task<Result<ParseTableCompiler.CompilationResult, GrammarError>, Never>] = [:]
     }
 
     /// A language's grammar and the cache key of the bytes it was parsed from, so tables compiled from it are never
@@ -31,7 +35,8 @@ public final class GrammarRegistry: Sendable {
 
     private let state = Mutex(State())
     private let diskCache: CompiledTableCache
-    private let compile: @Sendable (GrammarDefinition) throws(GrammarError) -> ParseTableCompiler.CompilationResult
+    private let compile:
+        @Sendable (GrammarDefinition) async throws(GrammarError) -> ParseTableCompiler.CompilationResult
 
     public struct LanguageEntry: Sendable, Equatable {
         public var name: String
@@ -54,7 +59,8 @@ public final class GrammarRegistry: Sendable {
     /// A registry that keeps its disk cache in `cacheDirectory` and compiles grammars with `compile`.
     init(
         cacheDirectory: URL,
-        compile: @escaping @Sendable (GrammarDefinition) throws(GrammarError) -> ParseTableCompiler.CompilationResult
+        compile:
+            @escaping @Sendable (GrammarDefinition) async throws(GrammarError) -> ParseTableCompiler.CompilationResult
     ) {
         self.diskCache = CompiledTableCache(directory: cacheDirectory)
         self.compile = compile
@@ -145,6 +151,11 @@ public final class GrammarRegistry: Sendable {
         state.withLock { $0.entriesByLanguage[languageName] }
     }
 
+    /// The bundled scanner for a grammar, when one has been ported and registered.
+    func scannerType(forGrammar name: String) -> (any GrammarExternalScanner.Type)? {
+        BundledScanners.byGrammarName[name]
+    }
+
     /// The entry registered for the lowercased extension or exact dotfile name of `filename`.
     public func entry(forFilename filename: String) -> LanguageEntry? {
         let path = filename as NSString
@@ -187,21 +198,44 @@ public final class GrammarRegistry: Sendable {
     public func compiledResult(
         for languageName: String,
         grammarsPath: String
-    ) throws(GrammarError) -> ParseTableCompiler.CompilationResult {
+    ) async throws(GrammarError) -> ParseTableCompiler.CompilationResult {
         let grammar = try loadedGrammar(for: languageName, grammarsPath: grammarsPath)
         if let outcome = state.withLock({ $0.compileOutcomes[grammar.key] }) {
             return try outcome.get()
         }
-
-        let outcome: Result<ParseTableCompiler.CompilationResult, GrammarError>
-        if let stored = diskCache.outcome(for: grammar.key) {
-            outcome = stored
-        } else {
-            outcome = Result { () throws(GrammarError) in try compile(grammar.definition) }
-            diskCache.store(outcome, for: grammar.key)
+        let task = state.withLock { state in
+            if let existing = state.compilesInFlight[grammar.key] { return existing }
+            let task = Task.detached(priority: .utility) { [compile, diskCache] in
+                if let stored = diskCache.outcome(for: grammar.key) { return stored }
+                let outcome: Result<ParseTableCompiler.CompilationResult, GrammarError>
+                do {
+                    outcome = .success(try await compile(grammar.definition))
+                } catch let error as GrammarError {
+                    outcome = .failure(error)
+                } catch {
+                    outcome = .failure(.invalidRuleType("Unexpected compiler failure: \(error)"))
+                }
+                diskCache.store(outcome, for: grammar.key)
+                return outcome
+            }
+            state.compilesInFlight[grammar.key] = task
+            return task
         }
-        state.withLock { $0.compileOutcomes[grammar.key] = outcome }
+        let outcome = await task.value
+        state.withLock { state in
+            state.compileOutcomes[grammar.key] = outcome
+            state.compilesInFlight[grammar.key] = nil
+        }
         return try outcome.get()
+    }
+
+    /// Reads a compiled table only when it is already cached; prewarming never starts a compile.
+    func cachedResult(
+        for languageName: String, grammarsPath: String
+    ) throws(GrammarError) -> ParseTableCompiler.CompilationResult? {
+        let grammar = try loadedGrammar(for: languageName, grammarsPath: grammarsPath)
+        guard let stored = diskCache.outcome(for: grammar.key) else { return nil }
+        return try stored.get()
     }
 
     /// The path of `languageName`'s grammar file, from its registered entry, else its bundled one.

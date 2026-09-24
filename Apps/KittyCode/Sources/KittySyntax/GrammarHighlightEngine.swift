@@ -2,7 +2,7 @@ public import AtelierSyntaxModel
 
 /// The grammar tier behind the shared engine interface: tree-sitter grammars parsed by the GLR parser, queried for
 /// captures, and emitted as structural tokens. A language is supported once its artifacts are loaded
-/// (`LanguageHighlighter.ensureArtifacts(for:)`) and its grammar needs no external scanner.
+/// (`LanguageHighlighter.ensureArtifacts(for:)`) and any scanner its grammar needs is bundled.
 public struct GrammarHighlightEngine: HighlightEngine {
     public init() {}
 

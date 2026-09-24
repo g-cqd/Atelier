@@ -106,6 +106,21 @@ struct GrammarRegistryJSONTests {
         }
     }
 
+    @Test
+    func `bundled JSON parses without error nodes`() throws {
+        let compiled = try compiledJSONGrammar()
+        let parser = GrammarParser(
+            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+        let tree = try parser.parse(#"{"name":"value","enabled":true,"count":3}"#)
+        var pending = [tree.root]
+        var errorCount = 0
+        while let node = pending.popLast() {
+            if node.isError { errorCount += 1 }
+            pending.append(contentsOf: node.children)
+        }
+        #expect(errorCount == 0)
+    }
+
     private func compiledJSONGrammar() throws -> ParseTableCompiler.CompilationResult {
         let resourcePath = try #require(KittySyntaxResources.bundle.resourcePath)
         return try ParseTableCompiler.compile(GrammarLoader.load(from: "\(resourcePath)/Grammars/json/grammar.json"))
