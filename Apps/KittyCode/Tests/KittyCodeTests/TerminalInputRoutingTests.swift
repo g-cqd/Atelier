@@ -20,12 +20,19 @@ struct TerminalInputRoutingTests {
         let state: EditorState
         let pipeline: RenderPipeline
 
-        /// Routes `bytes` as one read and hands every event to the editor.
-        func receive(_ bytes: [UInt8]) {
-            var router = SequenceRouter()
-            for event in router.feedAll(bytes) {
+        /// Routes `bytes` as one read, off the main actor as the input loop does, and hands every event to the editor.
+        func receive(_ bytes: [UInt8]) async {
+            for event in await route(bytes) {
                 _ = handleEvent(event: event, state: state, pipeline: pipeline)
             }
+        }
+
+        /// The events `bytes` completes. A debug build routes a megabyte in about a second, which on the main actor
+        /// would delay every other test's hop to it, and so their bounded waits.
+        @concurrent
+        private nonisolated func route(_ bytes: [UInt8]) async -> [InputEvent] {
+            var router = SequenceRouter()
+            return router.feedAll(bytes)
         }
     }
 
@@ -49,65 +56,66 @@ struct TerminalInputRoutingTests {
     }
 
     @Test
-    func `Palette replies from the terminal apply the derived theme and type nothing`() {
+    func `Palette replies from the terminal apply the derived theme and type nothing`() async {
         let editor = makeEditor(themeFromTerminal: true)
 
-        editor.receive(Array("\u{1B}]10;rgb:e6e6/e6e6/e6e6\u{1B}\\\u{1B}]4;5;rgb:c8/1e/c8\u{07}\u{1B}[?62;22c".utf8))
+        await editor.receive(
+            Array("\u{1B}]10;rgb:e6e6/e6e6/e6e6\u{1B}\\\u{1B}]4;5;rgb:c8/1e/c8\u{07}\u{1B}[?62;22c".utf8))
 
         #expect(editor.state.syntaxTheme.style(for: "keyword").fg == .rgb(r: 200, g: 30, b: 200))
         #expect(editor.state.fileContent == [""])
     }
 
     @Test
-    func `A paste over the cap types nothing and says why`() {
+    func `A paste over the cap types nothing and says why`() async {
         let editor = makeEditor()
         let body = [UInt8](repeating: 0x61, count: SequenceRouter.maxPasteSize + 1024)
 
-        editor.receive(Array("\u{1B}[200~".utf8) + body + Array("\u{1B}[201~".utf8))
+        await editor.receive(Array("\u{1B}[200~".utf8) + body + Array("\u{1B}[201~".utf8))
 
         #expect(editor.state.fileContent == [""])
         #expect(editor.state.statusMessage == "Paste too large (over 1 MiB): nothing pasted")
     }
 
     @Test
-    func `The clipboard reply to a paste request is pasted`() {
+    func `The clipboard reply to a paste request is pasted`() async {
         let editor = makeEditor()
         editor.state.terminalWriter = { _ in }
         handlePasteRequest(state: editor.state)
 
-        editor.receive(clipboardReply(Data("hello".utf8).base64EncodedString()))
+        await editor.receive(clipboardReply(Data("hello".utf8).base64EncodedString()))
 
         #expect(editor.state.fileContent == ["hello"])
     }
 
     @Test
-    func `A clipboard reply that no paste request waits on is ignored`() {
+    func `A clipboard reply that no paste request waits on is ignored`() async {
         let editor = makeEditor()
 
-        editor.receive(clipboardReply(Data("hello".utf8).base64EncodedString()))
+        await editor.receive(clipboardReply(Data("hello".utf8).base64EncodedString()))
 
         #expect(editor.state.fileContent == [""])
     }
 
     @Test
-    func `An empty clipboard reply pastes nothing and says why`() {
+    func `An empty clipboard reply pastes nothing and says why`() async {
         let editor = makeEditor()
         editor.state.terminalWriter = { _ in }
         handlePasteRequest(state: editor.state)
 
-        editor.receive(clipboardReply(""))
+        await editor.receive(clipboardReply(""))
 
         #expect(editor.state.fileContent == [""])
         #expect(editor.state.statusMessage == "Nothing to paste: the clipboard is empty or the terminal declined")
     }
 
     @Test
-    func `A clipboard reply over the cap types nothing and says why`() {
+    func `A clipboard reply over the cap types nothing and says why`() async {
         let editor = makeEditor()
         editor.state.terminalWriter = { _ in }
         handlePasteRequest(state: editor.state)
 
-        editor.receive(clipboardReply(String(repeating: "QUFB", count: SequenceRouter.maxPasteSize / 4 + 256)))
+        await editor.receive(clipboardReply(String(repeating: "QUFB", count: SequenceRouter.maxPasteSize / 4 + 256)))
 
         #expect(editor.state.fileContent == [""])
         #expect(editor.state.statusMessage == "Clipboard too large to paste (over 1 MiB)")
