@@ -1,3 +1,4 @@
+import AemiTesting
 import AtelierText
 import Foundation
 import KittyCodecs
@@ -17,7 +18,7 @@ private func makeSearchContext(
     rows: Int = 24
 ) -> (state: EditorState, pipeline: RenderPipeline) {
     let config = KittyConfig()
-    let state = EditorState(rootPath: ".", config: config)
+    let state = EditorState(rootPath: ".", config: config, taskProvider: TaskProviderSpy())
     state.fileContent = fileContent
     state.mode = .editor
     let pipeline = RenderPipeline(
@@ -26,6 +27,12 @@ private func makeSearchContext(
         rows: rows
     )
     return (state, pipeline)
+}
+
+@MainActor
+private func settleSearch(_ state: EditorState) async throws {
+    let tasks = try #require(state.taskProvider as? TaskProviderSpy)
+    try await tasks.waitForAllTasks(timeout: .seconds(15))
 }
 
 @Suite("In-File Search")
@@ -41,7 +48,7 @@ struct SearchIntegrationTests {
     }
 
     @Test("typing updates query and finds matches")
-    @MainActor func typingUpdatesQueryAndFindsMatches() {
+    @MainActor func typingUpdatesQueryAndFindsMatches() async throws {
         let (state, pipeline) = makeSearchContext()
         openInFileSearch(state: state)
 
@@ -53,13 +60,14 @@ struct SearchIntegrationTests {
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settleSearch(state)
         #expect(state.inFileSearch?.query == "hello")
         #expect(state.inFileSearch?.matches.count == 2)
         #expect(state.inFileSearch?.activeMatchIndex == 0)
     }
 
     @Test("next and previous cycle through matches with wrap-around")
-    @MainActor func nextPreviousCycle() {
+    @MainActor func nextPreviousCycle() async throws {
         let (state, pipeline) = makeSearchContext()
         openInFileSearch(state: state)
 
@@ -70,6 +78,7 @@ struct SearchIntegrationTests {
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settleSearch(state)
         #expect(state.inFileSearch?.activeMatchIndex == 0)
 
         // Next
@@ -99,7 +108,7 @@ struct SearchIntegrationTests {
     }
 
     @Test("pre-fill from single-line selection")
-    @MainActor func prefillFromSelection() {
+    @MainActor func prefillFromSelection() async throws {
         let (state, _) = makeSearchContext()
         // Need an active buffer for selection to be stored
         _ = state.bufferManager.open(
@@ -113,6 +122,8 @@ struct SearchIntegrationTests {
         )
 
         openInFileSearch(state: state)
+
+        try await settleSearch(state)
 
         #expect(state.inFileSearch?.query == "hello")
         #expect(state.inFileSearch?.matches.count == 2)
@@ -128,7 +139,7 @@ struct SearchIntegrationTests {
     }
 
     @Test("search matches are on correct rows with correct data")
-    @MainActor func searchMatchesCorrectRows() {
+    @MainActor func searchMatchesCorrectRows() async throws {
         let (state, pipeline) = makeSearchContext()
         openInFileSearch(state: state)
 
@@ -139,6 +150,7 @@ struct SearchIntegrationTests {
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settleSearch(state)
         let search = state.inFileSearch!
         #expect(search.matches.count == 2)
         #expect(search.matches[0].row == 0)
@@ -152,7 +164,7 @@ struct SearchIntegrationTests {
     }
 
     @Test("status bar shows match count")
-    @MainActor func statusBarShowsMatchCount() {
+    @MainActor func statusBarShowsMatchCount() async throws {
         let (state, pipeline) = makeSearchContext()
         openInFileSearch(state: state)
 
@@ -163,12 +175,13 @@ struct SearchIntegrationTests {
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settleSearch(state)
         let segments = state.statusBarSegments(columns: 80, rows: 24)
         #expect(segments.left.contains("Match 1/2"))
     }
 
     @Test("status bar shows no matches for non-matching query")
-    @MainActor func statusBarShowsNoMatches() {
+    @MainActor func statusBarShowsNoMatches() async throws {
         let (state, pipeline) = makeSearchContext()
         openInFileSearch(state: state)
 
@@ -179,12 +192,13 @@ struct SearchIntegrationTests {
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settleSearch(state)
         let segments = state.statusBarSegments(columns: 80, rows: 24)
         #expect(segments.left.contains("No matches"))
     }
 
     @Test("backspace removes last char and re-searches")
-    @MainActor func backspaceResearches() {
+    @MainActor func backspaceResearches() async throws {
         let (state, pipeline) = makeSearchContext()
         openInFileSearch(state: state)
 
@@ -195,6 +209,7 @@ struct SearchIntegrationTests {
                 eventType: .press, associatedText: String(char))
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
+        try await settleSearch(state)
         #expect(state.inFileSearch?.matches.count == 0)
 
         // Backspace to fix
@@ -202,6 +217,7 @@ struct SearchIntegrationTests {
             keyCode: Key.backspace.rawValue, modifiers: [], eventType: .press, associatedText: "")
         _ = handleSearchKey(bsKey, state: state, pipeline: pipeline)
 
+        try await settleSearch(state)
         #expect(state.inFileSearch?.query == "hello")
         #expect(state.inFileSearch?.matches.count == 2)
     }
@@ -231,7 +247,7 @@ struct SearchIntegrationTests {
     }
 
     @Test("cursor jumps to match position")
-    @MainActor func cursorJumpsToMatch() {
+    @MainActor func cursorJumpsToMatch() async throws {
         let (state, pipeline) = makeSearchContext(
             fileContent: ["aaa", "bbb hello", "ccc"])
         state.cursorRow = 0
@@ -245,6 +261,7 @@ struct SearchIntegrationTests {
             _ = handleSearchKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settleSearch(state)
         #expect(state.cursorRow == 1)
         #expect(state.cursorCol == 4)
     }

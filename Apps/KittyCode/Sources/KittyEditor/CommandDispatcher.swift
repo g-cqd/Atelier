@@ -161,6 +161,7 @@ public func dispatchCommand(
             return true
 
         case .searchClose:
+            cancelInFileSearch(state: state)
             state.inFileSearch = nil
             state.workspaceSearchTask?.cancel()
             state.workspaceSearchTask = nil
