@@ -1,4 +1,5 @@
 import AppKit
+import AtelierSyntaxModel
 import Foundation
 import Testing
 
@@ -105,5 +106,33 @@ struct HoverDocPanelTests {
         let heightWith = try #require(panelWith.laidOutContentHeightForTests)
         let heightWithout = try #require(panelWithout.laidOutContentHeightForTests)
         #expect(abs(heightWith - heightWithout) < 1)
+    }
+
+    /// Every piece of text a panel prepared offscreen shows, with no hidden ancestor.
+    private func shownTexts(ofPanelFor document: HoverDocument) throws -> [String] {
+        let panel = HoverDocPanel()
+        panel.prepareOffscreenForTests(document: document, appearance: try #require(NSAppearance(named: .aqua)))
+        let root = try #require(panel.contentViewForTests)
+        root.layoutSubtreeIfNeeded()
+        var texts: [String] = []
+        var pending = [root]
+        while let view = pending.popLast() {
+            pending.append(contentsOf: view.subviews)
+            guard !view.isHiddenOrHasHiddenAncestor else { continue }
+            if let textView = view as? NSTextView, !textView.string.isEmpty { texts.append(textView.string) }
+            if let field = view as? NSTextField, !field.stringValue.isEmpty { texts.append(field.stringValue) }
+        }
+        return texts
+    }
+
+    /// 09-24: over a symbol with nothing but its declaration, anything under it, a "No documentation" line or the
+    /// symbol's name again, says nothing the declaration does not. Fixtures from the language server and the SDK tier;
+    /// the doc-comment tier answers only for a documented symbol.
+    @Test(arguments: [HoverFixtures.languageServerUndocumentedVariable, HoverFixtures.sdkUndocumentedProperty])
+    func `an undocumented symbol's hover shows its declaration alone`(markdown: String) throws {
+        let document = HoverDocument.build(
+            from: HoverContent(markdown: markdown, source: .languageServer), palette: .system)
+        let declaration = try #require(document.declaration?.string)
+        #expect(try shownTexts(ofPanelFor: document) == [declaration])
     }
 }

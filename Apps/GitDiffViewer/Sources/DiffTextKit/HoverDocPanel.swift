@@ -303,12 +303,7 @@ package final class HoverDocPanel {
         renderDiagnostics(document.diagnostics)
         diagnosticsStack.isHidden = document.diagnostics.isEmpty
 
-        // A bare declaration says so, so an otherwise empty panel does not read as broken.
-        if body.length == 0, !declarationChip.isHidden, parametersGrid.isHidden, returnsView.isHidden,
-            candidatesStack.isHidden, diagnosticsStack.isHidden
-        {
-            body.append(Self.noDocumentationPlaceholder)
-        }
+        // A bare declaration stands alone: a line under it would say nothing the declaration does not.
         bodyTextView.textStorage?.setAttributedString(body)
         bodyScrollView.isHidden = body.length == 0
 
@@ -325,13 +320,6 @@ package final class HoverDocPanel {
 
         return bodyScrollView.isHidden ? chromeHeight : chromeHeight + bodyFullHeight
     }
-
-    private static let noDocumentationPlaceholder = NSAttributedString(
-        string: "No documentation",
-        attributes: [
-            .font: NSFont.systemFont(ofSize: 12, weight: .regular), .foregroundColor: NSColor.tertiaryLabelColor
-        ]
-    )
 }
 
 // MARK: - Slot rendering, measurement, and view factories
