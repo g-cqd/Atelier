@@ -291,7 +291,8 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
                     // [Aa] toggle
                     state.inFileSearch?.isCaseSensitive.toggle()
                     if var search = state.inFileSearch {
-                        executeSearch(&search, lines: state.fileContent)
+                        scheduleInFileSearch(
+                            &search, state: state, pipeline: pipeline, moveCursorOnCompletion: false)
                         state.inFileSearch = search
                     }
                     if state.searchTarget == .workspace {
@@ -301,7 +302,8 @@ public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: Rende
                     // [.*] toggle
                     state.inFileSearch?.isRegex.toggle()
                     if var search = state.inFileSearch {
-                        executeSearch(&search, lines: state.fileContent)
+                        scheduleInFileSearch(
+                            &search, state: state, pipeline: pipeline, moveCursorOnCompletion: false)
                         state.inFileSearch = search
                     }
                     if state.searchTarget == .workspace {

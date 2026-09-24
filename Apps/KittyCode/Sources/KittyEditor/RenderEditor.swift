@@ -196,8 +196,9 @@ private func activeHighlights(
     }
 
     if let search = state.inFileSearch {
-        for (index, match) in search.matches.enumerated()
-        where match.colEnd > match.colStart && visible.contains(match.row) {
+        for index in visibleSearchMatchRange(in: search.matches, rows: visible) {
+            let match = search.matches[index]
+            guard match.colEnd > match.colStart else { continue }
             let isActive = index == search.activeMatchIndex
             highlights[match.row, default: []]
                 .append(
@@ -270,7 +271,8 @@ private func pixelEditorElements(
             }
         }
         if let search = state.inFileSearch {
-            for (index, match) in search.matches.enumerated() where visible.contains(match.row) {
+            for index in visibleSearchMatchRange(in: search.matches, rows: visible) {
+                let match = search.matches[index]
                 let style =
                     index == search.activeMatchIndex
                     ? state.colorScheme.activeSearchMatch : state.colorScheme.searchMatch
@@ -298,6 +300,24 @@ private func pixelEditorElements(
 
     elements.append(contentsOf: pixelScrollBar(editor: editor, rect: rect, cell: cell))
     return elements
+}
+
+/// Returns the indices whose sorted match rows fall in the visible row range.
+func visibleSearchMatchRange(in matches: [SearchMatch], rows: Range<Int>) -> Range<Int> {
+    func lowerBound(_ row: Int) -> Int {
+        var lower = 0
+        var upper = matches.count
+        while lower < upper {
+            let middle = lower + (upper - lower) / 2
+            if matches[middle].row < row {
+                lower = middle + 1
+            } else {
+                upper = middle
+            }
+        }
+        return lower
+    }
+    return lowerBound(rows.lowerBound) ..< lowerBound(rows.upperBound)
 }
 
 /// The vertical scroll bar as a one-pixel track and a thumb whose height and position are pixel-exact.

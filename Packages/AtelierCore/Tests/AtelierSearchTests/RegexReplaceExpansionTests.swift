@@ -7,7 +7,7 @@ import Testing
 struct RegexReplaceExpansionTests {
     private static func replacingAll(_ pattern: String, with template: String, in line: String) throws -> String {
         let compiled = try #require(compilePattern(SearchQuery(text: pattern, isCaseSensitive: true, isRegex: true)))
-        let matches = findMatches(in: [line], pattern: compiled)
+        let matches = findMatches(in: [line], pattern: compiled, maxMatches: 10_000)
         return applyReplacements(to: [line], matches: matches, pattern: compiled, replacement: template).newLines[0]
     }
 
@@ -42,7 +42,7 @@ struct RegexReplaceExpansionTests {
     func `no replacement ever writes an unexpanded capture reference`(pattern: String) throws {
         let lines = ["let x = 1;", "call(arg); a1 b22", "ab abc abx", "(x) (yy);", "", "é e\u{301}"]
         let compiled = try #require(compilePattern(SearchQuery(text: pattern, isCaseSensitive: true, isRegex: true)))
-        let matches = findMatches(in: lines, pattern: compiled)
+        let matches = findMatches(in: lines, pattern: compiled, maxMatches: 10_000)
         #expect(!matches.isEmpty)
         let replaced = applyReplacements(to: lines, matches: matches, pattern: compiled, replacement: "$1")
         #expect(replaced.newLines.allSatisfy { !$0.contains("$1") })

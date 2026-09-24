@@ -66,10 +66,11 @@ extension EditorState {
             // Otherwise will be cleared on next render cycle.
         }
 
-        if let search = inFileSearch, search.pattern != nil {
-            return search.totalCount == 0
-                ? "No matches"
-                : "Match \(search.activeMatchIndex + 1)/\(search.totalCount)"
+        if let search = inFileSearch, !search.query.isEmpty {
+            if search.isSearching { return "Searching…" }
+            if search.didHitLimit { return "\(search.totalCount)+ matches (limit)" }
+            if !search.isComplete { return "Search incomplete" }
+            return search.totalCount == 0 ? "No matches" : "Match \(search.activeMatchIndex + 1)/\(search.totalCount)"
         }
 
         if isLoadingGrammar {

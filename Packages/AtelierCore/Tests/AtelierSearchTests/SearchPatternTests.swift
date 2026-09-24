@@ -65,7 +65,7 @@ struct SearchPatternTests {
         }
         // Verify case-insensitive matching works
         let line = "HELLO world"
-        let matches = findMatches(in: [line], pattern: pattern)
+        let matches = findMatches(in: [line], pattern: pattern, maxMatches: 10_000)
         #expect(matches.count == 1)
     }
 
@@ -77,7 +77,7 @@ struct SearchPatternTests {
             return
         }
         let line = "HELLO world"
-        let matches = findMatches(in: [line], pattern: pattern)
+        let matches = findMatches(in: [line], pattern: pattern, maxMatches: 10_000)
         #expect(matches.count == 0)
     }
 
@@ -91,7 +91,7 @@ struct SearchPatternTests {
             return
         }
         let line = "foo bar baz"
-        let matches = findMatches(in: [line], pattern: pattern)
+        let matches = findMatches(in: [line], pattern: pattern, maxMatches: 10_000)
         #expect(matches.count == 1)
     }
 
@@ -103,7 +103,7 @@ struct SearchPatternTests {
             return
         }
         let line = "foobar foobaz"
-        let matches = findMatches(in: [line], pattern: pattern)
+        let matches = findMatches(in: [line], pattern: pattern, maxMatches: 10_000)
         #expect(matches.count == 0)
     }
 
@@ -115,7 +115,7 @@ struct SearchPatternTests {
             return
         }
         let line = "foo and foo again"
-        let matches = findMatches(in: [line], pattern: pattern)
+        let matches = findMatches(in: [line], pattern: pattern, maxMatches: 10_000)
         #expect(matches.count == 2)
     }
 
@@ -127,7 +127,7 @@ struct SearchPatternTests {
             return
         }
         let line = "FOO bar"
-        let matches = findMatches(in: [line], pattern: pattern)
+        let matches = findMatches(in: [line], pattern: pattern, maxMatches: 10_000)
         #expect(matches.count == 1)
     }
 
@@ -139,7 +139,7 @@ struct SearchPatternTests {
             return
         }
         let line = "FOO bar"
-        let matches = findMatches(in: [line], pattern: pattern)
+        let matches = findMatches(in: [line], pattern: pattern, maxMatches: 10_000)
         #expect(matches.count == 0)
     }
 
@@ -153,7 +153,7 @@ struct SearchPatternTests {
             return
         }
         let line = "foo bar"
-        let matches = findMatches(in: [line], pattern: pattern)
+        let matches = findMatches(in: [line], pattern: pattern, maxMatches: 10_000)
         #expect(matches.count == 1)
     }
 
@@ -165,7 +165,7 @@ struct SearchPatternTests {
             return
         }
         let line = "foobar"
-        let matches = findMatches(in: [line], pattern: pattern)
+        let matches = findMatches(in: [line], pattern: pattern, maxMatches: 10_000)
         #expect(matches.count == 0)
     }
 
@@ -177,7 +177,7 @@ struct SearchPatternTests {
             return
         }
         let line = "FOO bar"
-        let matches = findMatches(in: [line], pattern: pattern)
+        let matches = findMatches(in: [line], pattern: pattern, maxMatches: 10_000)
         #expect(matches.count == 1)
     }
 }

@@ -6,6 +6,19 @@ import Testing
 
 @Suite("WorkspaceSearch")
 struct WorkspaceSearchTests {
+    @Test
+    func `one file can report more matches than the old implicit cap`() async {
+        let path = "/virtual/large.swift"
+        let lines = Array(repeating: "id1", count: 12_000)
+        let result = await withPool { pool in
+            await searchWorkspace(
+                query: SearchQuery(text: "id"), files: [path], openBuffers: [path: lines],
+                pool: pool, maxResults: 50_000, onProgress: { _ in })
+        }
+        #expect(result.totalMatchCount == 12_000)
+        #expect(result.results.first?.matches.count == 12_000)
+    }
+
     /// One worker is enough: these tests exercise correctness, not concurrency, and a fresh pool per
     /// test keeps its (real, joined-on-shutdown) thread scoped to the test that owns it.
     private func withPool<T>(_ body: (BlockingOffloadPool) async throws -> T) async rethrows -> T {
