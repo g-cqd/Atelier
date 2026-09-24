@@ -11,6 +11,8 @@ package final class SplitPaneController: NSObject {
         let scrollView: NSScrollView?
         weak var textView: NSTextView?
         var rendered: RenderedText?
+        /// Called once an alignment pass has changed the member's rows.
+        let didAlign: (@MainActor () -> Void)?
     }
 
     private var members: [Member] = []
@@ -37,9 +39,12 @@ package final class SplitPaneController: NSObject {
     /// Mirrors vertical scrolling between the panes; horizontal scrolling is always independent.
     package var syncsScrolling = true
 
-    package func register(_ scrollView: NSScrollView?, textView: NSTextView) {
+    /// Keeps `textView`'s pane in step with the other; `didAlign` is called each time an alignment pass changes its rows.
+    package func register(
+        _ scrollView: NSScrollView?, textView: NSTextView, didAlign: (@MainActor () -> Void)? = nil
+    ) {
         guard !members.contains(where: { $0.textView === textView }) else { return }
-        members.append(Member(scrollView: scrollView, textView: textView, rendered: nil))
+        members.append(Member(scrollView: scrollView, textView: textView, rendered: nil, didAlign: didAlign))
         guard let scrollView else { return }
         scrollView.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(
@@ -96,29 +101,30 @@ package final class SplitPaneController: NSObject {
             left.rows.count == right.rows.count
         else { return }
 
-        guard wrapsLines else {
-            apply(spacing: [], to: leftView, rendered: left)
-            apply(spacing: [], to: rightView, rendered: right)
-            return
-        }
-
-        let spacing = RowAlignment.spacing(left: rowHeights(of: leftView), right: rowHeights(of: rightView))
-        apply(spacing: spacing.left, to: leftView, rendered: left)
-        apply(spacing: spacing.right, to: rightView, rendered: right)
+        let spacing =
+            wrapsLines
+            ? RowAlignment.spacing(left: rowHeights(of: leftView), right: rowHeights(of: rightView))
+            : (left: [], right: [])
+        let changedLeft = apply(spacing: spacing.left, to: leftView, rendered: left)
+        let changedRight = apply(spacing: spacing.right, to: rightView, rendered: right)
+        guard changedLeft || changedRight else { return }
+        for member in members { member.didAlign?() }
     }
 
     private func rowHeights(of textView: NSTextView) -> [Double] {
         textView.textLayoutManager.map(RowSpacing.rowHeights(in:)) ?? []
     }
 
-    private func apply(spacing: [Double], to textView: NSTextView, rendered: RenderedText) {
-        guard let contentStorage = textView.textContentStorage else { return }
+    /// Applies `spacing` to `textView`'s rows, and tells whether it changed them.
+    private func apply(spacing: [Double], to textView: NSTextView, rendered: RenderedText) -> Bool {
+        guard let contentStorage = textView.textContentStorage else { return false }
         // A pass that changes no row (the common case after a debounce burst) costs a full attribute walk otherwise.
         let key = ObjectIdentifier(textView)
-        if appliedSpacing[key]?.rendered === rendered, appliedSpacing[key]?.spacing == spacing { return }
+        if appliedSpacing[key]?.rendered === rendered, appliedSpacing[key]?.spacing == spacing { return false }
         RowSpacing.apply(spacing, to: contentStorage, rendered: rendered)
         appliedSpacing[key] = (rendered, spacing)
         textView.enclosingScrollView?.superview?.needsDisplay = true
+        return true
     }
 
     /// The spacing last applied to each pane and the text it was applied to.

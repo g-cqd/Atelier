@@ -9,6 +9,14 @@ package final class DiffPaneTextView: NSTextView {
     /// The name a text view that is not rich writes its plain text under when no type is asked for.
     private static let legacyString = NSPasteboard.PasteboardType("NSStringPboardType")
 
+    /// Called at the end of each layout pass, once TextKit has laid out what shows.
+    package var onLayout: (() -> Void)?
+
+    package override func layout() {
+        super.layout()
+        onLayout?()
+    }
+
     package override func writeSelection(to pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
         guard type == .string || type == Self.legacyString, let storage = textStorage else {
             return super.writeSelection(to: pboard, type: type)

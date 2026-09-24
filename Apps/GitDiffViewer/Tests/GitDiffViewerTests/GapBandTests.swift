@@ -183,6 +183,7 @@ struct GapBandTests {
         let sut = DiffTextViewCoordinator()
         sut.textView = textView
         sut.wrapsLines = false
+        sut.scrollsPastEnd = true
         DiffTextViewCoordinator.configureWrapping(
             false, column: 0, font: rendered.palette.font, textView: textView, scrollView: scrollView)
         sut.apply(rendered)

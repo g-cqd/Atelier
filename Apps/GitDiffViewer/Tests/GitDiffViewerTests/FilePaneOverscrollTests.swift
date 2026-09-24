@@ -6,7 +6,7 @@ import Testing
 @testable import DiffRendering
 @testable import DiffTextKit
 
-/// A file pane scrolled to its end shows its last line whole, at the top of the pane.
+/// A file pane that scrolls past its end, scrolled to its end, shows its last line whole, at the top of the pane.
 @MainActor
 struct FilePaneOverscrollTests {
     private let paneHeight: CGFloat = 300
@@ -22,6 +22,7 @@ struct FilePaneOverscrollTests {
         let sut = DiffTextViewCoordinator()
         sut.textView = textView
         sut.wrapsLines = wrapsLines
+        sut.scrollsPastEnd = true
         DiffTextViewCoordinator.configureWrapping(
             wrapsLines, column: 0, font: text.palette.font, textView: textView, scrollView: scrollView)
         sut.apply(text)
@@ -97,7 +98,9 @@ private final class HostedFilePane {
     }
 
     private static func pane(_ rendered: RenderedText, keepingScroll: Bool) -> DiffTextView {
-        DiffTextView(rendered: rendered, gutter: .dual, keepsScrollPosition: keepingScroll, wrapsLines: false)
+        DiffTextView(
+            rendered: rendered, gutter: .dual, keepsScrollPosition: keepingScroll, wrapsLines: false,
+            scrollsPastEnd: true)
     }
 
     private var textView: NSTextView? { Self.first(NSTextView.self, in: host) }

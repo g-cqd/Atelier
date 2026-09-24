@@ -7,32 +7,38 @@ import SwiftUI
 import Testing
 
 @testable import DiffComparison
+@testable import DiffRendering
 @testable import DiffTextKit
 @testable import GitDiffViewer
 
-/// A file opened from the list, by a click into the temporary tab or by a double click into a pinned one, scrolls in
-/// the window's whole content, with the explorers above the detail area or in the sidebar, inline or side by side: each
-/// of its panes ends past its viewport by what puts its last line at the top. The file is shorter than the pane in either placement, which is
-/// what left a pane with nothing to scroll (`FilePaneScrollRangeTests`).
+/// A file opened from the list, by a click into the temporary tab or by a double click into a pinned one, in the
+/// window's whole content, with the explorers above the detail area or in the sidebar, inline or side by side: a file
+/// that fits its pane shows whole from its top, and a longer one opens with its first change three lines below the
+/// pane's top (book DIFF-08). Either way each pane's text view covers its text: a pane sized while TextKit had laid
+/// nothing out ended above its text and did not scroll (`FilePaneScrollRangeTests`).
 @MainActor
 struct FileTabScrollRangeTests {
     private let harness = ModelTestHarness()
 
     @Test(arguments: [ExplorerPlacement.top, .sidebar], [ViewMode.inline, .split])
-    func `a short file opened from the list scrolls, in the temporary tab and in a pinned one`(
+    func `a file opened from the list shows whole when it fits, else from its first change`(
         placement: ExplorerPlacement, mode: ViewMode
     ) async throws {
-        let lines = (1 ... 10).map { "let value\($0) = \($0)" }
-        var changed = lines
-        changed[4] = "let changed = true"
-        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]
-        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "2")]
-        harness.reader.blobContents["1"] = lines.joined(separator: "\n") + "\n"
-        harness.reader.blobContents["2"] = changed.joined(separator: "\n") + "\n"
+        let short = (1 ... 10).map { "let value\($0) = \($0)" }
+        let long = (1 ... 200).map { "let value\($0) = \($0)" }
+        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [
+            harness.entry("long.swift", "3"), harness.entry("short.swift", "1")
+        ]
+        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [
+            harness.entry("long.swift", "4"), harness.entry("short.swift", "2")
+        ]
+        harness.reader.blobContents["1"] = Self.text(short)
+        harness.reader.blobContents["2"] = Self.text(short, changing: 9)
+        harness.reader.blobContents["3"] = Self.text(long)
+        harness.reader.blobContents["4"] = Self.text(long, changing: 120)
         let model = harness.makeSUT()
         model.settings.explorerPlacement = placement
         model.settings.mode = mode
-        let panes = mode == .inline ? 1 : 2
         let window = Self.window(showing: model)
         defer { window.close() }
         let content = try #require(window.contentView)
@@ -40,15 +46,51 @@ struct FileTabScrollRangeTests {
         try await settle(window)
         #expect(model.detailState == .cards)
 
-        model.select("a.swift")
+        model.select("short.swift")
         try await settle(window)
-        try expectEachFilePaneScrollsToItsLastLine(in: content, count: panes, "opened by a click")
+        try Self.expectWhole(in: content, "opened by a click")
 
         model.closeTab(try #require(model.tabs.active).id)
         try await settle(window)
-        model.pin("a.swift")
+        model.pin("short.swift")
         try await settle(window)
-        try expectEachFilePaneScrollsToItsLastLine(in: content, count: panes, "opened by a double click")
+        try Self.expectWhole(in: content, "opened by a double click")
+
+        model.select("long.swift")
+        try await settle(window)
+        let row = try #require(model.scrollRequest?.row)
+        for pane in try Self.panes(in: content) {
+            #expect(pane.textView.frame.height >= pane.rowsHeight)
+            let below = try pane.top(ofRow: row) - pane.clip.bounds.minY
+            #expect(abs(below - 3 * pane.lineHeight) < 1, "the row is \(below) below the pane's top")
+        }
+    }
+
+    private static func text(_ lines: [String], changing changed: Int? = nil) -> String {
+        var lines = lines
+        if let changed { lines[changed] = "let changed = true" }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// Each file pane shows its text whole, from its top.
+    private static func expectWhole(in content: NSView, _ comment: Comment) throws {
+        for pane in try panes(in: content) {
+            #expect(pane.clip.bounds.minY == 0, comment)
+            #expect(pane.textView.frame.height >= pane.rowsHeight, comment)
+            #expect(try pane.bottom(ofRow: pane.lastRow) + pane.below <= pane.clip.bounds.height, comment)
+        }
+    }
+
+    /// The file panes: the text views that scroll, which a card's do not.
+    private static func panes(in content: NSView) throws -> [ShownPane] {
+        let textViews = subviews(of: DiffPaneTextView.self, in: content).filter { $0.enclosingScrollView != nil }
+        try #require(!textViews.isEmpty)
+        return try textViews.map { textView in
+            let gutter = try #require(subviews(of: DiffGutterView.self, in: content).first { $0.source === textView })
+            return ShownPane(
+                textView: textView, clip: try #require(textView.enclosingScrollView?.contentView),
+                rendered: try #require(gutter.rendered))
+        }
     }
 
     /// The window's content, toolbar and explorers included, as the app makes it, in a window that is never ordered in.
