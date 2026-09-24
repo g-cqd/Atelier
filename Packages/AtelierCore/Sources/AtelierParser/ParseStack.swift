@@ -36,14 +36,33 @@ struct ParseStack: Sendable {
         self.errorCount = 0
     }
 
-    /// The state the stack returns to once its top `count` nodes are popped, all of them if it holds fewer.
-    func state(poppingNodes count: Int) -> Int {
-        states[nodes.count - min(max(count, 0), nodes.count)]
+    /// The state the stack returns to once its top `count` symbols are popped, all of them if it holds fewer.
+    func state(poppingSymbols count: Int) -> Int {
+        states[symbolRange(ofTop: count).lowerBound]
     }
 
-    /// How many levels tall the tallest of the top `count` nodes is, 0 for none.
-    func height(ofTop count: Int) -> Int {
-        heights.suffix(max(count, 0)).max() ?? 0
+    /// How many levels tall the tallest of the stack's nodes is, 0 for none.
+    var tallestHeight: Int { heights.max() ?? 0 }
+
+    /// How many levels tall the tallest node among the top `count` symbols is, 0 for none.
+    func height(ofTopSymbols count: Int) -> Int {
+        heights[symbolRange(ofTop: count)].max() ?? 0
+    }
+
+    /// The nodes a reduction of `count` symbols takes: from the first of the top `count` symbols, all of them if the
+    /// stack holds fewer, to the last symbol. The ERROR nodes of the tokens error recovery skipped are no symbols, as
+    /// tree-sitter's are extras: a reduction takes those between its symbols as children and leaves those above them.
+    private func symbolRange(ofTop count: Int) -> Range<Int> {
+        var end = nodes.count
+        guard count > 0 else { return end ..< end }
+        while end > 0, nodes[end - 1].isError { end -= 1 }
+        var start = end
+        var remaining = count
+        while start > 0, remaining > 0 {
+            start -= 1
+            if !nodes[start].isError { remaining -= 1 }
+        }
+        return start ..< end
     }
 
     /// Pushes `node`, `height` levels tall, in the current state, which stays current until the caller sets another.
@@ -77,16 +96,27 @@ struct ParseStack: Sendable {
         return ranks.compare(nodes, other.nodes) < 0
     }
 
-    /// Pops the top `count` nodes, all of them if it holds fewer, and returns them oldest first; the current state
-    /// becomes the one the first of them was pushed in.
-    mutating func popNodes(_ count: Int) -> [SyntaxNode] {
-        let start = nodes.count - min(max(count, 0), nodes.count)
-        guard start < nodes.count else { return [] }
-        let popped = Array(nodes[start...])
-        nodes.removeSubrange(start...)
-        heights.removeSubrange(start...)
-        states.removeSubrange((start + 1)...)
+    /// Pops the top `count` symbols, all of them if it holds fewer, with the skipped tokens' ERROR nodes between and
+    /// above them. Returns the nodes from the first symbol to the last, oldest first, which a reduction takes as
+    /// children, and the ERROR nodes above the last, for ``restoreSkipped(_:)`` to push back over the reduction's node.
+    /// The current state becomes the one the first symbol was pushed in.
+    mutating func popSymbols(_ count: Int) -> (symbols: [SyntaxNode], skippedAbove: [SyntaxNode]) {
+        let range = symbolRange(ofTop: count)
+        let popped = (Array(nodes[range]), Array(nodes[range.upperBound...]))
+        nodes.removeSubrange(range.lowerBound...)
+        heights.removeSubrange(range.lowerBound...)
+        states.removeSubrange((range.lowerBound + 1)...)
         return popped
+    }
+
+    /// Pushes back, in the current state, the ERROR nodes ``popSymbols(_:)`` popped above a reduction's symbols; they
+    /// are counted already.
+    mutating func restoreSkipped(_ skipped: [SyntaxNode]) {
+        for node in skipped {
+            nodes.append(node)
+            heights.append(1)
+            states.append(state)
+        }
     }
 
     /// Empties the stack without recursing into a deep subtree: a node taller than `recursiveReleaseHeight` is freed

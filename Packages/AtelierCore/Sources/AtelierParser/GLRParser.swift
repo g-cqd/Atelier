@@ -346,13 +346,15 @@ extension GLRParser {
     /// if there is none. The nodes on a stack therefore stay in source order, so a node always ends after it starts.
     private func reduce(_ stack: inout ParseStack, rule: Int, count: Int, nonTerminal: String) -> Reduction {
         guard let nonTerminalIdx = nonTerminalIndex[nonTerminal],
-            let target = parseTable.gotos[stack.state(poppingNodes: count)][nonTerminalIdx]
+            let target = parseTable.gotos[stack.state(poppingSymbols: count)][nonTerminalIdx]
         else {
             return .missingGoto
         }
-        let height = stack.height(ofTop: count) + 1
+        let height = stack.height(ofTopSymbols: count) + 1
         guard height <= Self.maxTreeDepth else { return .tooDeep }
-        var children = stack.popNodes(count)
+        var (children, skippedAbove) = stack.popSymbols(count)
+        // The production's steps are its symbols; a skipped token's ERROR node between them takes no step.
+        let steps = children.indices.filter { !children[$0].isError }
 
         let byteRange: Range<Int>
         let pointRange: Range<Point>
@@ -368,12 +370,12 @@ extension GLRParser {
         var nodeFields: [String: [SyntaxNode]] = [:]
         var dynamicPrecedence = 0
         if productions.indices.contains(rule) {
-            for (index, alias) in productions[rule].aliases where index < children.count {
-                children[index].type = alias.type
-                children[index].isNamed = alias.isNamed
+            for (step, alias) in productions[rule].aliases where step < steps.count {
+                children[steps[step]].type = alias.type
+                children[steps[step]].isNamed = alias.isNamed
             }
-            for (index, fieldName) in productions[rule].fields where index < children.count {
-                nodeFields[fieldName, default: []].append(children[index])
+            for (step, fieldName) in productions[rule].fields where step < steps.count {
+                nodeFields[fieldName, default: []].append(children[steps[step]])
             }
             dynamicPrecedence = productions[rule].dynamicPrecedence
         }
@@ -390,6 +392,7 @@ extension GLRParser {
             height: height)
         stack.addDynamicPrecedence(dynamicPrecedence)
         stack.state = target
+        stack.restoreSkipped(skippedAbove)
         return .reduced
     }
 }
@@ -397,8 +400,10 @@ extension GLRParser {
 // MARK: - Tree Building
 
 extension GLRParser {
-    /// The stack's only node, or a node above its nodes spanning the source, `byteCount` bytes ending at `endPoint`.
-    /// That extra level must not take the tree past ``maxTreeDepth``: then the parse declines, freeing the stack.
+    /// The stack's only symbol, with the ERROR nodes of the tokens error recovery skipped around it as children, as
+    /// tree-sitter's root holds them; otherwise a node above the stack's nodes spanning the source, `byteCount` bytes
+    /// ending at `endPoint`. That extra level must not take the tree past ``maxTreeDepth``: then the parse declines,
+    /// freeing the stack.
     func buildRootNode(
         from stack: consuming ParseStack,
         byteCount: Int,
@@ -407,7 +412,26 @@ extension GLRParser {
         if stack.nodes.count == 1 {
             return stack.nodes[0]
         }
-        guard stack.height(ofTop: stack.nodes.count) < Self.maxTreeDepth else {
+        // Indices, not copies: a copy of a deep node outliving the stack would free it recursively.
+        let symbols = stack.nodes.indices.filter { !stack.nodes[$0].isError }
+        if symbols.count == 1, let symbol = symbols.first {
+            var root = stack.nodes[symbol]
+            let skipped = stack.nodes.filter(\.isError)
+            root.children.append(contentsOf: skipped)
+            root.children.sort {
+                ($0.byteRange.lowerBound, $0.byteRange.upperBound) < ($1.byteRange.lowerBound, $1.byteRange.upperBound)
+            }
+            for node in skipped {
+                root.byteRange =
+                    min(root.byteRange.lowerBound, node.byteRange.lowerBound)
+                    ..< max(root.byteRange.upperBound, node.byteRange.upperBound)
+                root.pointRange =
+                    min(root.pointRange.lowerBound, node.pointRange.lowerBound)
+                    ..< max(root.pointRange.upperBound, node.pointRange.upperBound)
+            }
+            return root
+        }
+        guard stack.tallestHeight < Self.maxTreeDepth else {
             stack.releaseNodes()
             throw Self.treeTooDeep
         }
