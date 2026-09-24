@@ -125,30 +125,89 @@ struct TokenScanner: Sendable {
                 scanned = Scanned(token: Int(accepts[state]), start: tokenStart, end: position)
             }
         }
-        if var scanned {
-            if scanned.token == wordToken, modeValidTokens.indices.contains(mode) {
-                var node = 0
-                var matched = true
-                for offset in scanned.start.offset ..< scanned.end.offset {
-                    guard let next = keywordTrie[node].next[utf8[offset]] else {
-                        matched = false
-                        break
-                    }
-                    node = next
-                }
-                if matched, let keyword = keywordTrie[node].token,
-                    modeValidTokens[mode].contains(keyword)
-                {
-                    scanned.token = keyword
-                }
-            }
-            return .token(scanned)
+        if let scanned {
+            guard modeValidTokens.indices.contains(mode) else { return .token(scanned) }
+            return .token(classifyingKeyword(scanned, in: utf8, validTokens: modeValidTokens[mode]))
         }
         let emptyTokens = tokenStart.offset == cursor.offset ? modeEmptyTokens : modeEmptyAfterSeparator
         if emptyTokens.indices.contains(mode), let empty = emptyTokens[mode], tokenStart.offset != suppressEmptyAt {
             return .token(Scanned(token: empty, start: tokenStart, end: tokenStart))
         }
         return tokenStart.offset == utf8.count ? .end(tokenStart) : .none(start: tokenStart)
+    }
+
+    /// `scanned` as the keyword its text spells, when it is the word token and `validTokens` holds that keyword: as
+    /// tree-sitter does, the lexer reads a word and then looks it up among the grammar's keywords.
+    func classifyingKeyword(
+        _ scanned: Scanned, in utf8: UnsafeBufferPointer<UInt8>, validTokens: Set<Int>
+    ) -> Scanned {
+        guard scanned.token == wordToken else { return scanned }
+        var node = 0
+        for offset in scanned.start.offset ..< scanned.end.offset {
+            guard let next = keywordTrie[node].next[utf8[offset]] else { return scanned }
+            node = next
+        }
+        guard let keyword = keywordTrie[node].token, validTokens.contains(keyword) else { return scanned }
+        var classified = scanned
+        classified.token = keyword
+        return classified
+    }
+
+    /// The token `mode` reads at `cursor`, read as ``scan(_:from:mode:suppressEmptyAt:)`` reads a mode of the table,
+    /// with the mode building the states the read passes through; nil when the mode's automaton passes its limit.
+    ///
+    /// - Complexity: O(n) in the scalars read, plus the states built on the way.
+    func scan(
+        _ utf8: UnsafeBufferPointer<UInt8>, from cursor: Cursor, lazyMode mode: inout LazyLexMode,
+        suppressEmptyAt: Int? = nil
+    ) -> Outcome? {
+        do throws(GrammarError) {
+            var state = try mode.state(mode.start)
+            var position = cursor
+            var tokenStart = cursor
+            var scanned = state.accept.map { Scanned(token: $0, start: cursor, end: cursor) }
+            while position.offset < utf8.count {
+                let (scalar, length) = Self.decode(utf8, at: position.offset)
+                guard let transition = Self.transition(in: state.transitions, on: scalar) else { break }
+                position.offset += length
+                position.point =
+                    scalar == 0x0A
+                    ? Point(row: position.point.row + 1, column: 0)
+                    : Point(row: position.point.row, column: position.point.column + length)
+                state = try mode.state(transition.target)
+                if transition.skips {
+                    tokenStart = position
+                } else if let accept = state.accept {
+                    scanned = Scanned(token: accept, start: tokenStart, end: position)
+                }
+            }
+            if let scanned {
+                return .token(classifyingKeyword(scanned, in: utf8, validTokens: Set(mode.validTokens)))
+            }
+            let empty = tokenStart.offset == cursor.offset ? mode.emptyToken : mode.emptyTokenAfterSeparator
+            if let empty, tokenStart.offset != suppressEmptyAt {
+                return .token(Scanned(token: empty, start: tokenStart, end: tokenStart))
+            }
+            return tokenStart.offset == utf8.count ? .end(tokenStart) : .none(start: tokenStart)
+        } catch {
+            return nil
+        }
+    }
+
+    /// The move of `transitions`, sorted and disjoint, that reads `scalar`.
+    private static func transition(in transitions: [LexTransition], on scalar: UInt32) -> LexTransition? {
+        var low = 0
+        var high = transitions.count
+        while low < high {
+            let middle = (low + high) / 2
+            if transitions[middle].upper < scalar {
+                low = middle + 1
+            } else {
+                high = middle
+            }
+        }
+        guard low < transitions.count, transitions[low].lower <= scalar else { return nil }
+        return transitions[low]
     }
 
     /// `target << 1 | skips` for the move from `state` on `scalar`, or -1.

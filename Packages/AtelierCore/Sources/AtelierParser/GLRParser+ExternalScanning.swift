@@ -1,7 +1,10 @@
 import AtelierGrammar
+import Synchronization
 
 /// Scanner-backed parsing keeps lexical state and input position with each GLR branch.
 extension GLRParser {
+    /// The most on-demand lex modes a parser keeps; past it, it forgets them all and builds them again as needed.
+    static let maxViableModes = 64
     /// The most stacks a parse with an external scanner keeps, the preferred ones. Each stack reads the input on its
     /// own, a scanner call and a lex per token, so a stack costs as much as a parse; tree-sitter keeps at most 6
     /// versions, and 10 while it merges. The pinned Swift and JavaScript corpora parse alike with 32 stacks and 256.
@@ -113,6 +116,39 @@ extension GLRParser {
             root: attachingExtras(extras, to: consume root), source: source, errorByteCount: errorByteCount)
     }
 
+    /// `scanned`, which `mode` read, when `stack` can take it or it is an extra; otherwise the token a mode reading only
+    /// the tokens of `mode` that `stack` can take reads at the same place, if it reads one.
+    ///
+    /// A state's mode reads the tokens valid in every context the state stands for, so a token of another context can
+    /// win there: in Swift, the text of a string literal, which runs to the next quote, where an identifier ends a
+    /// statement. Tree-sitter's lex modes hold no such token, as its states hold no such context.
+    private func viableToken(
+        _ scanned: TokenScanner.Scanned, readIn mode: Int, by scanner: TokenScanner, for stack: ParseStack,
+        utf8: UnsafeBufferPointer<UInt8>, suppressEmptyAt: Int?
+    ) -> TokenScanner.Scanned {
+        guard !lexTable.tokens[scanned.token].isExtra, let terminal = tokenTerminals[scanned.token],
+            !canShift(terminal, on: stack), lexTable.modeValidTokens.indices.contains(mode)
+        else { return scanned }
+        let tokens = lexTable.modeValidTokens[mode]
+        let viable = tokens.filter { token in
+            lexTable.tokens[token].isExtra || (tokenTerminals[token].map { canShift($0, on: stack) } ?? false)
+        }
+        guard viable.count < tokens.count, viable.contains(where: { !lexTable.tokens[$0].isExtra }) else {
+            return scanned
+        }
+        let outcome: TokenScanner.Outcome? = viableModes.withLock { modes in
+            // A mode that cannot be built leaves the token as read: the parse takes it as an error.
+            guard var viableMode = modes[viable] ?? (try? lexTable.lazyMode(reading: viable)) else { return nil }
+            let outcome = scanner.scan(
+                utf8, from: stack.cursor, lazyMode: &viableMode, suppressEmptyAt: suppressEmptyAt)
+            if modes[viable] == nil, modes.count >= Self.maxViableModes { modes.removeAll() }
+            modes[viable] = viableMode
+            return outcome
+        }
+        guard case .token(let relexed)? = outcome else { return scanned }
+        return relexed
+    }
+
     /// The token the external scanner reads at `stack`'s cursor with `validSymbols`, which becomes the stack's; nil when
     /// the scanner reads none, or reads one the parse ignores: in error mode, as tree-sitter ignores it, an empty token
     /// that leaves the scanner's state as it was; otherwise an empty one that changes neither that state nor the
@@ -173,7 +209,11 @@ extension GLRParser {
         var outcome =
             mode.map { scanner.scan(utf8, from: stack.cursor, mode: $0, suppressEmptyAt: suppressEmptyAt) }
             ?? .none(start: stack.cursor)
-        if case .none = outcome {
+        if case .token(let scanned) = outcome, let mode {
+            outcome = .token(
+                viableToken(
+                    scanned, readIn: mode, by: scanner, for: stack, utf8: utf8, suppressEmptyAt: suppressEmptyAt))
+        } else if case .none = outcome {
             // What tree-sitter does when a state's mode reads nothing: it lexes in the error state's mode, whose
             // scanner call has every external valid. Swift's scanner reads `#if` only where a raw string may start,
             // so a directive between two class members is read this way, and the state takes it.

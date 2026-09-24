@@ -11,7 +11,7 @@ struct LexAutomatonBuilder {
     static let maxStates = 50_000
 
     private let nfa: TokenNFA
-    private let tokens: [LexicalToken]
+    private let tokens: [LexTokenPriority]
     private(set) var states: [LexAutomatonState] = []
     private struct StateKey: Hashable {
         var nfaStates: [Int]
@@ -19,8 +19,11 @@ struct LexAutomatonBuilder {
     }
     private var stateIDs: [StateKey: Int] = [:]
     private var unpopulated: [(id: Int, key: StateKey)] = []
+    /// Each state's key, and whether its accepted token and moves are set yet.
+    private var keys: [StateKey] = []
+    private var populated: [Bool] = []
 
-    init(nfa: TokenNFA, tokens: [LexicalToken]) {
+    init(nfa: TokenNFA, tokens: [LexTokenPriority]) {
         self.nfa = nfa
         self.tokens = tokens
     }
@@ -28,11 +31,27 @@ struct LexAutomatonBuilder {
     /// The start state of the mode in which the tokens at `validTokens` are valid, with every state it reaches.
     /// - Throws: `GrammarError.resourceLimitExceeded` past ``maxStates``.
     mutating func startState(for validTokens: [Int]) throws(GrammarError) -> Int {
-        let start = try state(for: nfa.closure(of: validTokens.map { nfa.starts[$0] }), hasReadTokenScalar: false)
+        let start = try lazyStartState(for: validTokens)
         while let (id, key) = unpopulated.popLast() {
             try populate(id, key: key)
         }
         return start
+    }
+
+    /// The start state of the mode in which the tokens at `validTokens` are valid, set up alone: ``populated(_:)``
+    /// sets up each other state the first time it is asked for, so a mode read a few times builds only the states
+    /// those reads reach.
+    mutating func lazyStartState(for validTokens: [Int]) throws(GrammarError) -> Int {
+        let start = try state(for: nfa.closure(of: validTokens.map { nfa.starts[$0] }), hasReadTokenScalar: false)
+        try populate(start, key: keys[start])
+        return start
+    }
+
+    /// State `id` with its accepted token and moves, set up now if they were not yet.
+    /// - Throws: `GrammarError.resourceLimitExceeded` past ``maxStates``.
+    mutating func populated(_ id: Int) throws(GrammarError) -> LexAutomatonState {
+        if !populated[id] { try populate(id, key: keys[id]) }
+        return states[id]
     }
 
     private mutating func state(for nfaStates: [Int], hasReadTokenScalar: Bool) throws(GrammarError) -> Int {
@@ -46,11 +65,15 @@ struct LexAutomatonBuilder {
         let id = states.count
         states.append(LexAutomatonState(transitions: [], accept: nil))
         stateIDs[key] = id
+        keys.append(key)
+        populated.append(false)
         unpopulated.append((id, key))
         return id
     }
 
     private mutating func populate(_ id: Int, key: StateKey) throws(GrammarError) {
+        guard !populated[id] else { return }
+        populated[id] = true
         var completion: Completion?
         var hasSeparator = false
         for nfaState in key.nfaStates {

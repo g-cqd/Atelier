@@ -13,13 +13,28 @@ struct LexicalToken: Sendable, Equatable {
     var completionPrecedence = 0
     /// Breaks ties between tokens of equal precedence: a string beats a pattern, an immediate token a plain one.
     var implicitPrecedence = 0
+
+    /// What choosing between this token and another reads of it.
+    var priority: LexTokenPriority {
+        LexTokenPriority(
+            completionPrecedence: completionPrecedence, implicitPrecedence: implicitPrecedence, isImmediate: isImmediate
+        )
+    }
+}
+
+/// How a token ranks when several could end at one place, and whether it may follow a separator: all the lexer's
+/// automaton needs of a token besides its path through the ``TokenNFA``.
+struct LexTokenPriority: Sendable, Equatable, Codable {
+    var completionPrecedence: Int
+    var implicitPrecedence: Int
+    var isImmediate: Bool
 }
 
 /// A nondeterministic automaton over Unicode scalars for a grammar's tokens, built as tree-sitter builds its lexical
 /// one: each token has its own path from its own start state, and a token that may follow a separator starts with a
 /// loop over the separators, whose moves are marked so the lexer can leave them out of the token.
-struct TokenNFA: Sendable {
-    enum State: Sendable {
+struct TokenNFA: Sendable, Equatable, Codable {
+    enum State: Sendable, Equatable, Codable {
         /// Reads one scalar of `characters` and moves to `next`, inside a `prec` of `precedence`.
         case advance(ScalarRanges, next: Int, precedence: Int, isSeparator: Bool)
         /// Moves, reading nothing, to each of the states.
@@ -40,7 +55,17 @@ struct TokenNFA: Sendable {
     /// Tokens whose rule reaches its accept state without reading a scalar.
     private(set) var nullableTokens: Set<Int> = []
 
+    /// The patterns parsed so far, by source; only building the automaton reads them.
     private var patterns: [String: PatternNode] = [:]
+
+    private enum CodingKeys: String, CodingKey {
+        case states, owners, starts, nullableTokens
+    }
+
+    static func == (lhs: TokenNFA, rhs: TokenNFA) -> Bool {
+        lhs.states == rhs.states && lhs.owners == rhs.owners && lhs.starts == rhs.starts
+            && lhs.nullableTokens == rhs.nullableTokens
+    }
 
     /// - Throws: `GrammarError.invalidRuleType` for a token that names a rule or has a pattern it can't parse;
     ///   `.resourceLimitExceeded` past

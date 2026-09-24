@@ -205,6 +205,9 @@ public struct LexTable: Sendable, Equatable, Codable {
     public var modeEmptyTokens: [Int?]
     /// The preferred nullable token after a separator, excluding immediate tokens.
     public var modeEmptyAfterSeparator: [Int?]
+    /// The tokens' automaton, for ``mode(reading:)`` to build a mode no parse state has; nil for a table built by
+    /// hand.
+    var modeSource: LexModeSource?
 
     public init(
         states: [LexState] = [], keywords: [String: Int] = [:],
@@ -220,6 +223,28 @@ public struct LexTable: Sendable, Equatable, Codable {
         modeEmptyTokens: [Int?] = [],
         modeEmptyAfterSeparator: [Int?] = []
     ) {
+        self.init(
+            states: states, keywords: keywords, commentPatterns: commentPatterns, tokens: tokens, automaton: automaton,
+            modeStarts: modeStarts, stateModes: stateModes, errorMode: errorMode, wordToken: wordToken,
+            keywordTokens: keywordTokens, modeValidTokens: modeValidTokens, modeEmptyTokens: modeEmptyTokens,
+            modeEmptyAfterSeparator: modeEmptyAfterSeparator, modeSource: nil)
+    }
+
+    init(
+        states: [LexState] = [], keywords: [String: Int] = [:],
+        commentPatterns: [CommentPattern] = [],
+        tokens: [LexToken] = [],
+        automaton: [LexAutomatonState] = [],
+        modeStarts: [Int] = [],
+        stateModes: [Int] = [],
+        errorMode: Int? = nil,
+        wordToken: Int? = nil,
+        keywordTokens: [String: Int] = [:],
+        modeValidTokens: [[Int]] = [],
+        modeEmptyTokens: [Int?] = [],
+        modeEmptyAfterSeparator: [Int?] = [],
+        modeSource: LexModeSource?
+    ) {
         self.states = states
         self.keywords = keywords
         self.commentPatterns = commentPatterns
@@ -233,7 +258,53 @@ public struct LexTable: Sendable, Equatable, Codable {
         self.modeValidTokens = modeValidTokens
         self.modeEmptyTokens = modeEmptyTokens
         self.modeEmptyAfterSeparator = modeEmptyAfterSeparator
+        self.modeSource = modeSource
     }
+
+    /// A lex mode reading exactly the tokens `validTokens` lists, built from the tokens' automaton as reads reach its
+    /// states: for a parser whose stack can take only some of the tokens its state's mode reads. Nil for a table
+    /// without the automaton, as one built by hand, or for an index outside ``tokens``.
+    /// - Throws: `GrammarError.resourceLimitExceeded` when the mode's automaton passes its limit.
+    public func lazyMode(reading validTokens: [Int]) throws(GrammarError) -> LazyLexMode? {
+        guard let modeSource, validTokens.allSatisfy(tokens.indices.contains) else { return nil }
+        return try LazyLexMode(source: modeSource, validTokens: validTokens)
+    }
+}
+
+/// A lex mode for some of a table's tokens whose automaton states are built the first time a read reaches them, so a
+/// mode read a few times costs the states those reads pass through rather than every state the mode could reach.
+public struct LazyLexMode: Sendable {
+    private var builder: LexAutomatonBuilder
+    /// The start state.
+    public let start: Int
+    /// The tokens the mode reads, sorted.
+    public let validTokens: [Int]
+    /// The preferred token of the mode that matches the empty string, read where no other token matches.
+    public let emptyToken: Int?
+    /// The same, after a separator: immediate tokens left out.
+    public let emptyTokenAfterSeparator: Int?
+
+    init(source: LexModeSource, validTokens: [Int]) throws(GrammarError) {
+        builder = LexAutomatonBuilder(nfa: source.nfa, tokens: source.priorities)
+        start = try builder.lazyStartState(for: validTokens)
+        self.validTokens = validTokens.sorted()
+        emptyToken = LexTableCompiler.preferredEmptyToken(
+            in: validTokens, nfa: source.nfa, tokens: source.priorities, afterSeparator: false)
+        emptyTokenAfterSeparator = LexTableCompiler.preferredEmptyToken(
+            in: validTokens, nfa: source.nfa, tokens: source.priorities, afterSeparator: true)
+    }
+
+    /// State `id` with its accepted token and moves, built now if no read reached it before.
+    /// - Throws: `GrammarError.resourceLimitExceeded` when the automaton passes its limit.
+    public mutating func state(_ id: Int) throws(GrammarError) -> LexAutomatonState {
+        try builder.populated(id)
+    }
+}
+
+/// What building a lex mode takes besides the table's tokens: their automaton, and how each ranks against the others.
+struct LexModeSource: Sendable, Equatable, Codable {
+    var nfa: TokenNFA
+    var priorities: [LexTokenPriority]
 }
 
 /// A single DFA state for lexing.
