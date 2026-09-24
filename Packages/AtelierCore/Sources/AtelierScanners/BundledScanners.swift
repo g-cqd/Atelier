@@ -8,6 +8,7 @@ public enum BundledScanners {
         "swift": SwiftExternalScanner.self,
         "kotlin": KotlinExternalScanner.self,
         "ruby": RubyExternalScanner.self,
-        "lua": LuaExternalScanner.self
+        "lua": LuaExternalScanner.self,
+        "javascript": JavaScriptExternalScanner.self
     ]
 }
