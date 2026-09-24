@@ -7,6 +7,7 @@ public enum BundledScanners {
     public static let byGrammarName: [String: any GrammarExternalScanner.Type] = [
         "swift": SwiftExternalScanner.self,
         "kotlin": KotlinExternalScanner.self,
-        "ruby": RubyExternalScanner.self
+        "ruby": RubyExternalScanner.self,
+        "lua": LuaExternalScanner.self
     ]
 }
