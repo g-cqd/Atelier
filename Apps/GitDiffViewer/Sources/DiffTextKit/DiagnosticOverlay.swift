@@ -13,7 +13,7 @@ private func isOnMainThread() -> Bool {
 package final class DiagnosticOverlay: Sendable {
     /// Everything a row needs to draw its diagnostics: the worst severity present, how many findings landed on
     /// it, the findings themselves (for a click to show), and where to underline within the row's text.
-    package struct RowDiagnostics: Sendable {
+    package struct RowDiagnostics: Equatable, Sendable {
         /// The most severe finding on the row.
         package let severity: Finding.Severity
         package let count: Int
@@ -31,7 +31,7 @@ package final class DiagnosticOverlay: Sendable {
 
     /// A span to underline, zero-based UTF-16 columns within the row's own text. `end` is `nil` when the finding's
     /// range runs past the row (a multi-line span, or no end column reported), which underlines to the row's end.
-    package struct SquiggleRange: Sendable {
+    package struct SquiggleRange: Equatable, Sendable {
         package let start: Int
         package let end: Int?
         package let severity: Finding.Severity
@@ -56,6 +56,11 @@ package final class DiagnosticOverlay: Sendable {
 
     package func row(_ index: Int) -> RowDiagnostics? {
         storage.withLock { $0[index] }
+    }
+
+    /// Every row's diagnostics as one value, so a pane can copy them and tell which rows a later replace changed.
+    package func snapshot() -> [Int: RowDiagnostics] {
+        storage.withLock { $0 }
     }
 
     package var isEmpty: Bool {
