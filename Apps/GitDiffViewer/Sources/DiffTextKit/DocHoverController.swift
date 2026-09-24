@@ -149,13 +149,14 @@ package final class DocHoverController: NSObject {
     }
 
     /// Keeps the panel on its identifier as any clip view above the pane scrolls, re-measured from
-    /// ``HoverHit/identifierRange``, and closes it once the identifier leaves the visible rect; a scroll before the
-    /// panel shows drops the hover, whose identifier has moved from under the pointer.
+    /// ``HoverHit/identifierRange``, and closes it once the identifier leaves the visible rect. A scroll drops any
+    /// pending hover, shown panel or not: its identifier has moved from under the pointer.
     @objc private func clipViewBoundsDidChange(_ notification: Notification) {
         guard let clipView = notification.object as? NSClipView else { return }
         let key = ObjectIdentifier(clipView)
         guard scrollOrigins[key] != clipView.bounds.origin else { return }
         scrollOrigins[key] = clipView.bounds.origin
+        dropPendingLookup()
         guard panel.isVisible, let shownHit, let textView else {
             invalidate()
             return

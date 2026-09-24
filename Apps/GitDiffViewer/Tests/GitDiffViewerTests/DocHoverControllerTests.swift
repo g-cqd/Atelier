@@ -529,4 +529,34 @@ struct DocHoverControllerTests {
         #expect(sut.spy.calls.map(\.row) == [0])
         #expect(sut.controller.isPanelVisible)
     }
+
+    @Test
+    func `a scroll drops a pending hover while a panel shows`() async throws {
+        let rendered = try manyLinesRendered()
+        let (scrollView, view) = scrollingTextView(showing: rendered)
+        let taskProvider = TaskProviderSpy.tolerant()
+        let clock = TestClock()
+        let controller = DocHoverController(
+            clock: clock, taskProvider: taskProvider, debounce: .milliseconds(300),
+            panel: HoverDocPanel(ordersWindowIn: false))
+        let spy = ResolverSpy(holdsLookups: false)
+        controller.resolve = { hit in await spy.resolve(hit) }
+        controller.attach(to: view) { rendered }
+        var mark = clock.registrationMark()
+        controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
+        try await clock.expectSleepers(after: mark)
+        clock.advance(by: controller.debounce)
+        try await taskProvider.waitForAllTasks()
+        try #require(controller.isPanelVisible)
+
+        mark = clock.registrationMark()
+        controller.pointerMoved(to: point(row: 1, column: 8, in: rendered))
+        try await clock.expectSleepers(after: mark)
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: 5))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        clock.advance(by: controller.debounce)
+        try await taskProvider.waitForAllTasks()
+
+        #expect(spy.calls.map(\.row) == [0])
+    }
 }
