@@ -1,0 +1,246 @@
+import AppKit
+import DiffCore
+import SwiftUI
+import Testing
+
+@testable import DiffRendering
+@testable import DiffTextKit
+
+/// A card pane that never wraps shows each row where the card measured it, however far into the card the list is
+/// scrolled when its text changes (book DIFF-06, CARD-17). TextKit lays out only what shows; a row it lays out below
+/// rows it has not laid out goes where it estimates those rows end, and it estimates a long line as two.
+@MainActor
+struct CardPaneRowPlacementTests {
+    /// `count` lines; every seventh is long enough that TextKit, estimating it before laying it out, takes it for
+    /// two lines.
+    private static func lines(_ count: Int) -> [String] {
+        let tail = String(repeating: "long ", count: 32)
+        return (1 ... count).map { $0.isMultiple(of: 7) ? "let value\($0) = \(tail)" : "let value\($0) = \($0)" }
+    }
+
+    /// Six hundred lines changed every forty, three lines of context around each change, `expansions` revealed.
+    private static func changes(revealing expansions: [GapKey: GapExpansion] = [:]) -> RenderedDiff {
+        let old = lines(600)
+        var new = old
+        for line in stride(from: 20, to: 600, by: 40) { new[line] = "let value\(line + 1) = changed" }
+        let prepared = PreparedDiff(
+            FileDiffInput(
+                title: "", oldText: old.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
+                language: .plain), granularity: .word)
+        return DiffRenderer.render(
+            prepared: [prepared], options: DiffRenderer.Options(sides: [.unified]),
+            layout: .changes(context: 3, expansions: expansions), withHeaders: false)
+    }
+
+    private static func file(lines count: Int) -> RenderedDiff {
+        let text = lines(count).joined(separator: "\n") + "\n"
+        return DiffRenderer.render(oldText: text, newText: text, language: .plain)
+    }
+
+    @Test
+    func `after a reveal deep in a card, line numbers and the separator sit on the rows the card measured`() throws {
+        let before = Self.changes()
+        let sut = CardInList(showing: before)
+        sut.scroll(toCardY: 1_200)
+        let text = try #require(before.unified)
+        let visible = try #require(sut.textView).visibleRect
+        let measuredBefore = MeasuredRows(text)
+        // A gap between two changes whose band shows, clear of the list's edges.
+        let gap = try #require(
+            text.gaps.first { gap in
+                let top = measuredBefore.top(ofRow: gap.boundary) + sut.inset
+                return gap.hasSeparator && top > visible.minY + 60 && top < visible.maxY - 60
+            })
+
+        let after = Self.changes(revealing: [gap.marker.key: GapExpansion(below: 3, above: 2)])
+        sut.show(after)
+
+        let revealed = try #require(after.unified)
+        let measured = MeasuredRows(revealed)
+        // Read first: asking the gutter lays rows out, which moves the ones TextKit placed from its estimates.
+        let shown = sut.shownRows()
+        try #require(shown.count > 10)
+        for (row, y) in shown {
+            #expect(abs(y - (measured.top(ofRow: row) + sut.inset)) < 0.5, "row \(row) where the card measured it")
+        }
+        let numbers = sut.gutterRows()
+        for (row, y) in shown {
+            #expect(abs((numbers[row] ?? .nan) - y) < 0.5, "line number of row \(row) on its row")
+        }
+        let boundary = try #require(revealed.gaps.first { $0.marker.key == gap.marker.key }).boundary
+        let rowBelow = try #require(shown[boundary])
+        let band = try #require(sut.gutterBands()[gap.marker.key])
+        let separator = band.minY + GapHandleLayout.separatorOffset(bandHeight: band.height)
+        #expect(separator >= rowBelow - revealed.gapBandHeight && separator < rowBelow)
+    }
+
+    @Test
+    func `a card that grows while scrolled deep still shows its last line at its end`() throws {
+        let sut = CardInList(showing: Self.file(lines: 400))
+        sut.scroll(toCardY: 3_000)
+
+        let grown = Self.file(lines: 600)
+        sut.show(grown)
+        sut.scrollToEnd()
+
+        let text = try #require(grown.unified)
+        let last = text.rows.count - 1
+        let lastTop = try #require(sut.shownRows()[last])
+        #expect(abs(lastTop - (MeasuredRows(text).top(ofRow: last) + sut.inset)) < 0.5)
+        #expect(lastTop + text.lineHeight <= sut.cardHeight)
+    }
+}
+
+/// Where a fully laid-out text puts each row: the tops a card's height counts on.
+@MainActor
+private struct MeasuredRows {
+    private let tops: [Int: CGFloat]
+
+    init(_ rendered: RenderedText) {
+        let layout = StaticTextLayout(rendered: rendered)
+        // A column no row reaches lays the whole text out, one line per row, as the card measures it.
+        layout.layOut(mode: .column(100_000), viewportWidth: 600)
+        let layoutManager = layout.layoutManager
+        var tops: [Int: CGFloat] = [:]
+        let start = layoutManager.documentRange.location
+        layoutManager.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
+            guard let content = layoutManager.textContentManager else { return false }
+            let offset = content.offset(from: start, to: fragment.rangeInElement.location)
+            tops[rendered.rowIndex(containing: offset)] = fragment.layoutFragmentFrame.minY
+            return true
+        }
+        self.tops = tops
+    }
+
+    func top(ofRow row: Int) -> CGFloat {
+        tops[row] ?? .nan
+    }
+}
+
+private final class FlippedDocument: NSView {
+    override var isFlipped: Bool { true }
+}
+
+/// A card pane that never wraps, in a list that shows part of it, as the card list hosts one: measured by its
+/// hosting controller's `sizeThatFits`, placed in the list's document, in a window that is never ordered in.
+@MainActor
+private final class CardInList {
+    private static let width: CGFloat = 600
+    /// Where the card starts in the list's document.
+    private static let cardTop: CGFloat = 40
+
+    private let window: NSWindow
+    private let list: NSScrollView
+    private let document = FlippedDocument()
+    private let body: NSHostingController<EmbeddedDiffTextView>
+
+    init(showing rendered: RenderedDiff) {
+        body = NSHostingController(rootView: Self.pane(rendered))
+        body.sizingOptions = []
+        body.safeAreaRegions = []
+        list = NSScrollView(frame: NSRect(x: 0, y: 0, width: Self.width, height: 300))
+        list.hasVerticalScroller = true
+        list.automaticallyAdjustsContentInsets = false
+        list.documentView = document
+        document.addSubview(body.view)
+        window = NSWindow(
+            contentRect: list.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = list
+        place()
+    }
+
+    private static func pane(_ rendered: RenderedDiff) -> EmbeddedDiffTextView {
+        EmbeddedDiffTextView(
+            layouts: CardLayouts(rendered: rendered), side: .unified, gutter: .dual, width: width, wrapMode: .none)
+    }
+
+    var textView: NSTextView? { Self.first(NSTextView.self, in: body.view) }
+    private var gutter: DiffGutterView? { Self.first(DiffGutterView.self, in: body.view) }
+    var cardHeight: CGFloat { body.view.frame.height }
+    /// The space above the card's first row.
+    var inset: CGFloat { textView?.textContainerInset.height ?? .nan }
+    /// The card's y at the list's top edge.
+    var visibleCardTop: CGFloat { list.contentView.bounds.minY - Self.cardTop }
+
+    /// Shows a new render of the card, as the list does when a reveal or a reload renders it again.
+    func show(_ rendered: RenderedDiff) {
+        body.rootView = Self.pane(rendered)
+        place()
+    }
+
+    func scroll(toCardY y: CGFloat) {
+        list.contentView.scroll(to: NSPoint(x: 0, y: Self.cardTop + y))
+        list.reflectScrolledClipView(list.contentView)
+        settle()
+    }
+
+    func scrollToEnd() {
+        list.contentView.scroll(to: NSPoint(x: 0, y: document.frame.height - list.contentView.bounds.height))
+        list.reflectScrolledClipView(list.contentView)
+        settle()
+    }
+
+    /// The rows TextKit has laid out in what shows of the card, each with its top in the card, read without laying
+    /// anything out: where the card's text shows them.
+    func shownRows() -> [Int: CGFloat] {
+        guard let textView, let layoutManager = textView.textLayoutManager,
+            let content = layoutManager.textContentManager, let rendered = gutter?.rendered
+        else { return [:] }
+        let visible = textView.visibleRect
+        let origin = textView.textContainerOrigin.y
+        let start = layoutManager.documentRange.location
+        var rows: [Int: CGFloat] = [:]
+        layoutManager.enumerateTextLayoutFragments(from: start) { fragment in
+            let frame = fragment.layoutFragmentFrame.offsetBy(dx: 0, dy: origin)
+            guard fragment.state == .layoutAvailable, frame.maxY > visible.minY, frame.minY < visible.maxY else {
+                return true
+            }
+            let offset = content.offset(from: start, to: fragment.rangeInElement.location)
+            rows[rendered.rowIndex(containing: offset)] = frame.minY
+            return true
+        }
+        return rows
+    }
+
+    /// The y the gutter gives each row's line number that shows, in the card.
+    func gutterRows() -> [Int: CGFloat] {
+        guard let gutter, let textView else { return [:] }
+        var rows: [Int: CGFloat] = [:]
+        gutter.forEachFragment(in: gutter.convert(textView.visibleRect, from: textView)) { _, _, row, y in
+            rows[row] = y
+        }
+        return rows
+    }
+
+    /// The band the gutter gives each gap that shows, in the card.
+    func gutterBands() -> [GapKey: NSRect] {
+        guard let gutter, let textView else { return [:] }
+        var bands: [GapKey: NSRect] = [:]
+        gutter.forEachGap(in: gutter.convert(textView.visibleRect, from: textView)) { gap, band in
+            bands[gap.marker.key] = band
+        }
+        return bands
+    }
+
+    /// Measures the card as the list does, places it, and lets the change reach the screen.
+    private func place() {
+        let height = body.sizeThatFits(in: CGSize(width: Self.width, height: .greatestFiniteMagnitude)).height
+        document.frame = NSRect(x: 0, y: 0, width: Self.width, height: Self.cardTop + height + Self.cardTop)
+        body.view.frame = NSRect(x: 0, y: Self.cardTop, width: Self.width, height: height)
+        settle()
+    }
+
+    /// Lays out and displays what needs it, and lets the run loop turn once, as it does between two events.
+    private func settle() {
+        window.contentView?.layoutSubtreeIfNeeded()
+        window.displayIfNeeded()
+        CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 0, true)
+        window.contentView?.layoutSubtreeIfNeeded()
+        window.displayIfNeeded()
+    }
+
+    private static func first<View: NSView>(_ type: View.Type, in view: NSView) -> View? {
+        if let match = view as? View { return match }
+        return view.subviews.lazy.compactMap { first(type, in: $0) }.first
+    }
+}
