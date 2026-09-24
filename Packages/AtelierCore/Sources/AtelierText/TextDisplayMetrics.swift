@@ -42,6 +42,18 @@ public enum TextDisplayMetrics {
 
     /// Computes the display width of a line accounting for tab stops.
     public static func displayWidth(of line: String, tabSize: Int = 4) -> Int {
+        var utf8 = line.utf8Span
+        if utf8.isKnownASCII || utf8.checkForASCII() {
+            let span = utf8.span
+            let tabSpan = max(1, tabSize)
+            var column = 0
+            for index in span.indices {
+                let byte = span[index]
+                if byte == 10, index > 0, span[index - 1] == 13 { continue }
+                column += byte == 9 ? tabSpan - column % tabSpan : (byte == 0 ? 0 : 1)
+            }
+            return column
+        }
         var column = 0
         for char in line {
             if char == "\t" {

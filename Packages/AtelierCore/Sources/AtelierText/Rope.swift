@@ -1,11 +1,14 @@
 public import Foundation
 import Synchronization
 
+// The persistent tree and its storage share one file; the size exception is tracked in g-cqd/Atelier#1.
+// swiftlint:disable file_length
+
 /// A persistent, value-typed UTF-8 byte rope.
 ///
 /// `Rope` is the lowest layer of the document storage stack. Bytes are stored
-/// as a tree of leaves so insertions and deletions cost O(log n) regardless
-/// of where they occur. Each subtree caches its byte count and newline count
+/// as a tree of leaves so localized edits touch O(log n) branches plus the bytes
+/// changed. Each subtree caches its byte count and newline count
 /// so the line-indexed queries `TextBuffer` exposes (`line(at:)`,
 /// `byteOffset(forLine:)`) are also O(log n).
 ///
@@ -34,7 +37,7 @@ public struct Rope: Sendable {
 
     /// Creates a rope from raw UTF-8 bytes.
     public init(bytes: Data) {
-        storage = Storage(root: Self.buildBalanced(from: bytes))
+        storage = Storage(root: Self.buildBalanced(from: bytes, in: bytes.startIndex ..< bytes.endIndex))
     }
 
     // MARK: - Queries
@@ -58,7 +61,7 @@ public struct Rope: Sendable {
     ///
     /// Faster than calling `line(at:)` in a loop because it visits each leaf
     /// exactly once instead of walking from the root for every line. The
-    /// result is memoized on the CoW storage and invalidated on mutation.
+    /// result is memoized on the CoW storage and invalidated on mutation. A cold read costs O(document bytes).
     public var allLines: [String] {
         if let cached = storage.cachedLines { return cached }
         var lines: [String] = []
@@ -103,6 +106,12 @@ public struct Rope: Sendable {
         storage.cachedText == nil && storage.cachedLines == nil
     }
 
+    var _testTreeShape: (height: Int, leafCount: Int) {
+        (storage.root.height, storage.root.leafCount)
+    }
+
+    var _testAllNodesBalanced: Bool { storage.root._testIsAVL }
+
     /// Byte range of line `line` excluding its terminating newline.
     public func lineRange(forLine line: Int) -> Range<Int> {
         guard line >= 0, line < lineCount else { return 0 ..< 0 }
@@ -124,7 +133,13 @@ public struct Rope: Sendable {
         if let cached = storage.cachedLines {
             return cached[index]
         }
-        return String(decoding: bytes(in: lineRange(forLine: index)), as: UTF8.self)
+        var remainingNewlines = index
+        var foundStart = false
+        var finished = false
+        var data = Data()
+        storage.root.appendLine(
+            after: &remainingNewlines, foundStart: &foundStart, finished: &finished, to: &data)
+        return String(decoding: data, as: UTF8.self)
     }
 
     /// The lines with indices in `range`, clamped to the rope, without the terminating newlines.
@@ -189,34 +204,18 @@ public struct Rope: Sendable {
         }
     }
 
-    // MARK: - Cache-aware editing
+    // MARK: - Line editing
 
-    /// Replaces line `lineIndex` with `value` and, if the rope had a
-    /// materialized `lines` cache before the edit and the line count is
-    /// unchanged, patches the cache in place so the next read stays O(1).
+    /// Replaces line `lineIndex` with `value` and drops any materialized line snapshot.
     public mutating func replaceLine(at lineIndex: Int, with value: String) {
         guard lineIndex >= 0, lineIndex < lineCount else { return }
-        let range = lineRange(forLine: lineIndex)
-        let cacheBefore = storage.cachedLines
-        let countBefore = lineCount
-        replace(range, with: value)
-        if let cache = cacheBefore,
-            countBefore == lineCount,
-            !value.contains("\n"),
-            cache.count == lineCount
-        {
-            var patched = cache
-            patched[lineIndex] = value
-            storage.cachedLines = patched
-        }
+        replace(lineRange(forLine: lineIndex), with: value)
     }
 
     /// Inserts a new line containing `value` at logical position `lineIndex`.
-    /// Patches the lines cache in place if it was already materialized.
+    /// Drops any materialized line snapshot.
     public mutating func insertLine(_ value: String, at lineIndex: Int) {
         guard lineIndex >= 0, lineIndex <= lineCount else { return }
-        let cacheBefore = storage.cachedLines
-        let payload = value.contains("\n") ? nil : value
 
         if lineIndex == lineCount {
             insert("\n" + value, atByteOffset: byteCount)
@@ -224,29 +223,18 @@ public struct Rope: Sendable {
             let offset = byteOffset(forLine: lineIndex)
             insert(value + "\n", atByteOffset: offset)
         }
-
-        if let cache = cacheBefore, let payload {
-            var patched = cache
-            patched.insert(payload, at: lineIndex)
-            if patched.count == lineCount {
-                storage.cachedLines = patched
-            }
-        }
     }
 
-    /// Removes line `lineIndex`. Patches the lines cache in place if present.
+    /// Removes line `lineIndex` and drops any materialized line snapshot.
     @discardableResult
     public mutating func removeLine(at lineIndex: Int) -> String {
         ensureUnique()
         guard lineIndex >= 0, lineIndex < lineCount else { return "" }
         let removed = line(at: lineIndex)
-        let cacheBefore = storage.cachedLines
         let count = lineCount
 
         if count == 1 {
             storage.root = .leaf(LeafNode(data: Data(), newlineCount: 0))
-            storage.cachedLines = [""]
-            storage.cachedText = ""
             return removed
         }
 
@@ -259,13 +247,6 @@ public struct Rope: Sendable {
             remove(lineStart ..< nextStart)
         }
 
-        if let cache = cacheBefore, cache.count == count {
-            var patched = cache
-            patched.remove(at: lineIndex)
-            if patched.count == lineCount {
-                storage.cachedLines = patched
-            }
-        }
         return removed
     }
 
@@ -284,18 +265,21 @@ public struct Rope: Sendable {
     }
 
     /// Builds a balanced tree from a contiguous byte buffer in one pass.
-    private static func buildBalanced(from data: Data) -> RopeNode {
-        if data.count <= maxLeafSize {
-            return .leaf(LeafNode(data: data, newlineCount: countNewlines(in: data)))
+    private static func buildBalanced(from data: Data, in range: Range<Int>) -> RopeNode {
+        if range.count <= maxLeafSize {
+            return RopeNode.makeLeaf(data.subdata(in: range))
         }
-        let mid = data.count / 2
-        let left = buildBalanced(from: data.subdata(in: 0 ..< mid))
-        let right = buildBalanced(from: data.subdata(in: mid ..< data.count))
+        let mid = range.lowerBound + range.count / 2
+        let left = buildBalanced(from: data, in: range.lowerBound ..< mid)
+        let right = buildBalanced(from: data, in: mid ..< range.upperBound)
         return RopeNode.makeBranch(left, right)
     }
 
     static func countNewlines(in data: Data) -> Int {
-        data.count(where: { $0 == 0x0A })
+        let bytes = data.span
+        var count = 0
+        for index in bytes.indices where bytes[index] == 0x0A { count &+= 1 }
+        return count
     }
 }
 
@@ -372,6 +356,8 @@ final class BranchNode: @unchecked Sendable {
     let right: RopeNode
     let byteCount: Int
     let newlineCount: Int
+    let height: Int
+    let leafCount: Int
     /// Per-branch hash combined from `(left.nodeHash, right.nodeHash)` at
     /// construction. Mutations produce new branches whose hash compute is
     /// O(1) per node — total per-edit hash cost is bounded by the depth of
@@ -383,6 +369,8 @@ final class BranchNode: @unchecked Sendable {
         self.right = right
         self.byteCount = left.byteCount + right.byteCount
         self.newlineCount = left.newlineCount + right.newlineCount
+        self.height = max(left.height, right.height) + 1
+        self.leafCount = left.leafCount + right.leafCount
         var hasher = Hasher()
         hasher.combine(left.nodeHash)
         hasher.combine(right.nodeHash)
@@ -408,6 +396,32 @@ enum RopeNode: Sendable {
         switch self {
             case .leaf(let leaf): return leaf.newlineCount
             case .branch(let branch): return branch.newlineCount
+        }
+    }
+
+    var height: Int {
+        switch self {
+            case .leaf: 1
+            case .branch(let branch): branch.height
+        }
+    }
+
+    var leafCount: Int {
+        switch self {
+            case .leaf: 1
+            case .branch(let branch): branch.leafCount
+        }
+    }
+
+    var _testIsAVL: Bool {
+        switch self {
+            case .leaf: true
+            case .branch(let branch):
+                abs(branch.left.height - branch.right.height) <= 1
+                    && branch.height == max(branch.left.height, branch.right.height) + 1
+                    && branch.byteCount == branch.left.byteCount + branch.right.byteCount
+                    && branch.newlineCount == branch.left.newlineCount + branch.right.newlineCount
+                    && branch.left._testIsAVL && branch.right._testIsAVL
         }
     }
 
@@ -440,9 +454,10 @@ enum RopeNode: Sendable {
         switch self {
             case .leaf(let leaf):
                 let bytes = leaf.data
+                let span = bytes.span
                 var start = bytes.startIndex
-                for (offset, byte) in bytes.enumerated() where byte == 0x0A {
-                    let split = bytes.index(bytes.startIndex, offsetBy: offset)
+                for offset in span.indices where span[offset] == 0x0A {
+                    let split = bytes.startIndex + offset
                     if start < split {
                         current.append(bytes[start ..< split])
                     }
@@ -456,6 +471,48 @@ enum RopeNode: Sendable {
             case .branch(let branch):
                 branch.left.collectLines(into: &lines, current: &current)
                 branch.right.collectLines(into: &lines, current: &current)
+        }
+    }
+
+    /// Skips whole subtrees until the requested line and copies only its bytes.
+    func appendLine(
+        after remainingNewlines: inout Int, foundStart: inout Bool, finished: inout Bool, to out: inout Data
+    ) {
+        if finished { return }
+        if !foundStart, remainingNewlines > newlineCount {
+            remainingNewlines -= newlineCount
+            return
+        }
+        switch self {
+            case .leaf(let leaf):
+                let bytes = leaf.data.span
+                var start = foundStart ? 0 : nil
+                for index in bytes.indices {
+                    let byte = bytes[index]
+                    if !foundStart {
+                        guard remainingNewlines == 0 else {
+                            if byte == 0x0A { remainingNewlines -= 1 }
+                            continue
+                        }
+                        foundStart = true
+                        start = index
+                    }
+                    if byte == 0x0A {
+                        if let start, start < index {
+                            out.append(leaf.data[start ..< index])
+                        }
+                        finished = true
+                        return
+                    }
+                }
+                if let start, start < bytes.count {
+                    out.append(leaf.data[start ..< bytes.count])
+                }
+            case .branch(let branch):
+                branch.left.appendLine(
+                    after: &remainingNewlines, foundStart: &foundStart, finished: &finished, to: &out)
+                branch.right.appendLine(
+                    after: &remainingNewlines, foundStart: &foundStart, finished: &finished, to: &out)
         }
     }
 
@@ -489,13 +546,10 @@ enum RopeNode: Sendable {
         switch self {
             case .leaf(let leaf):
                 var seen = 0
-                var index = 0
-                for byte in leaf.data {
-                    if byte == 0x0A {
-                        seen += 1
-                        if seen == n { return index + 1 }
-                    }
-                    index += 1
+                let bytes = leaf.data.span
+                for index in bytes.indices where bytes[index] == 0x0A {
+                    seen += 1
+                    if seen == n { return index + 1 }
                 }
                 return leaf.data.count
             case .branch(let branch):
@@ -519,15 +573,18 @@ enum RopeNode: Sendable {
                 let leftCount = branch.left.byteCount
                 guard offset <= leftCount else {
                     let newRight = branch.right.inserting(bytes, at: offset - leftCount)
-                    return RopeNode.makeBranch(branch.left, newRight)
+                    return RopeNode.join(branch.left, newRight)
                 }
                 let newLeft = branch.left.inserting(bytes, at: offset)
-                return RopeNode.makeBranch(newLeft, branch.right)
+                return RopeNode.join(newLeft, branch.right)
         }
     }
 
     func removing(_ range: Range<Int>) -> RopeNode {
         if range.isEmpty { return self }
+        if range.lowerBound <= 0, range.upperBound >= byteCount {
+            return .leaf(LeafNode(data: Data(), newlineCount: 0))
+        }
         switch self {
             case .leaf(let leaf):
                 var data = leaf.data
@@ -564,17 +621,17 @@ enum RopeNode: Sendable {
         if data.count <= Rope.maxLeafSize {
             return makeLeaf(data)
         }
-        return splitLargeLeaf(data)
+        return splitLargeLeaf(data, in: 0 ..< data.count)
     }
 
-    private static func splitLargeLeaf(_ data: Data) -> RopeNode {
-        if data.count <= Rope.maxLeafSize {
-            return makeLeaf(data)
+    private static func splitLargeLeaf(_ data: Data, in range: Range<Int>) -> RopeNode {
+        if range.count <= Rope.maxLeafSize {
+            return makeLeaf(data.subdata(in: range))
         }
-        let mid = data.count / 2
-        let leftData = data.subdata(in: 0 ..< mid)
-        let rightData = data.subdata(in: mid ..< data.count)
-        return makeBranch(splitLargeLeaf(leftData), splitLargeLeaf(rightData))
+        let mid = range.lowerBound + range.count / 2
+        return makeBranch(
+            splitLargeLeaf(data, in: range.lowerBound ..< mid),
+            splitLargeLeaf(data, in: mid ..< range.upperBound))
     }
 
     static func makeLeaf(_ data: Data) -> RopeNode {
@@ -590,6 +647,41 @@ enum RopeNode: Sendable {
             l.data.count + r.data.count <= Rope.maxLeafSize
         {
             return makeLeaf(l.data + r.data)
+        }
+        return join(left, right)
+    }
+
+    /// Joins AVL subtrees whose heights can differ by more than one after an edit.
+    static func join(_ left: RopeNode, _ right: RopeNode) -> RopeNode {
+        if case .leaf(let leaf) = left, leaf.data.isEmpty { return right }
+        if case .leaf(let leaf) = right, leaf.data.isEmpty { return left }
+        if left.height > right.height + 1, case .branch(let branch) = left {
+            return balance(branch.left, join(branch.right, right))
+        }
+        if right.height > left.height + 1, case .branch(let branch) = right {
+            return balance(join(left, branch.left), branch.right)
+        }
+        return makeBranch(left, right)
+    }
+
+    private static func balance(_ left: RopeNode, _ right: RopeNode) -> RopeNode {
+        if left.height > right.height + 1, case .branch(let branch) = left {
+            if branch.left.height >= branch.right.height {
+                return makeBranch(branch.left, makeBranch(branch.right, right))
+            }
+            if case .branch(let middle) = branch.right {
+                return makeBranch(
+                    makeBranch(branch.left, middle.left), makeBranch(middle.right, right))
+            }
+        }
+        if right.height > left.height + 1, case .branch(let branch) = right {
+            if branch.right.height >= branch.left.height {
+                return makeBranch(makeBranch(left, branch.left), branch.right)
+            }
+            if case .branch(let middle) = branch.left {
+                return makeBranch(
+                    makeBranch(left, middle.left), makeBranch(middle.right, branch.right))
+            }
         }
         return makeBranch(left, right)
     }
