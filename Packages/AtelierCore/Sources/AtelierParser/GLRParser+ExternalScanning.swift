@@ -115,7 +115,7 @@ extension GLRParser {
         let valid =
             stack.isRecovering
             ? [Bool](repeating: true, count: parseTable.externalNames.count)
-            : parseTable.validExternals[stack.state]
+            : viableExternals(for: stack)
         if valid.contains(true) {
             externalScanner.deserialize(stack.scannerState[...])
             var lexer = BufferScannerLexer(utf8, at: stack.cursor)

@@ -8,7 +8,7 @@ public final class GLRParser: Sendable {
     /// O(1) terminal name -> index lookup.
     let terminalIndex: [String: Int]
     /// O(1) non-terminal name -> index lookup.
-    private let nonTerminalIndex: [String: Int]
+    let nonTerminalIndex: [String: Int]
     /// The lex table's automaton laid out for reading; nil for a table without lex modes.
     private let scanner: TokenScanner?
     /// The terminal index of each of the lex table's tokens; nil for an extra, which the table does not take.
