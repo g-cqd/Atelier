@@ -9,8 +9,8 @@ import Testing
 @testable import AtelierText
 @testable import KittyEditor
 
-/// Closing a tab and reloading a file hand the old document's storage to `retire`, whose consumer frees it off the
-/// main actor, and keep no other reference to it, so the consumer's is the last.
+/// Closing, switching away from or replacing a tab and reloading a file hand the old document's storage to `retire`,
+/// whose consumer frees it off the main actor, and keep no other reference to it, so the consumer's is the last.
 @Suite
 @MainActor
 struct EditorRetiredStorageTests {
@@ -29,13 +29,19 @@ struct EditorRetiredStorageTests {
 
     private static let lines = (0 ..< 200).map { "let value\($0) = compute(\($0)) // a note long enough for the heap" }
 
-    /// A Swift file open in the only tab, its highlights shared by the buffer and the screen as an open leaves them,
-    /// with `retire` recorded from here on.
-    private func makeState() -> (state: EditorState, log: RetiredLog) {
+    /// A Swift file open in the only tab, as a preview when `preview`, its highlights shared by the buffer and the
+    /// screen as an open leaves them, with `retire` recorded from here on.
+    private func makeState(preview: Bool = false) -> (state: EditorState, log: RetiredLog) {
         let state = EditorState(rootPath: ".", config: KittyConfig(), taskProvider: TaskProviderSpy())
-        state.bufferManager.open(
-            filePath: "/project/file.swift", fileName: "file.swift", content: Self.lines.joined(separator: "\n"),
-            language: "swift")
+        let content = Self.lines.joined(separator: "\n")
+        if preview {
+            state.config.tabRibbon.persistence = .preview
+            state.bufferManager.openPreview(
+                filePath: "/project/file.swift", fileName: "file.swift", content: content, language: "swift")
+        } else {
+            state.bufferManager.open(
+                filePath: "/project/file.swift", fileName: "file.swift", content: content, language: "swift")
+        }
         state.workspace.restoreStateFromActiveBuffer()
         state.highlightedLines = Self.lines.map { [StyledSpan(text: $0, style: .default)] }
         state.saveStateToActiveBuffer()
@@ -125,5 +131,83 @@ struct EditorRetiredStorageTests {
         var highlights = retired.highlights
         retired.highlights = []
         #expect(isUniquelyReferenced(&highlights))
+    }
+
+    /// Opens a short file through the open path once its read has finished, as a click in the tree does.
+    private func openOtherFile(in state: EditorState) {
+        state.saveStateToActiveBuffer()
+        state.finishOpeningFile(
+            requestID: state.nextOpenRequestID(), path: "/project/other.swift", name: "other.swift",
+            loadedFile: LoadedFile(content: "let other = 1\n", lineEnding: .lineFeed), language: "swift",
+            modificationDate: nil)
+    }
+
+    @Test
+    func `switching away from a tab retires its highlights and keeps none of them`() throws {
+        let (state, log) = makeState()
+        defer { state.shutdown() }
+        _ = state.fileContent
+        state.bufferManager.open(filePath: "/project/other.txt", fileName: "other.txt", content: "other", language: nil)
+        state.bufferManager.switchTo(index: 0)
+        _ = log.take()
+
+        state.switchToTab(1)
+
+        #expect(state.fileName == "other.txt")
+        var entries = log.take()
+        let index = try #require(entries.firstIndex { $0.highlights.count == Self.lines.count })
+        var retired = entries.remove(at: index)
+        // The lines are also the rope's own cache, which stays with the outgoing buffer.
+        #expect(retired.fileLines == Self.lines)
+        #expect(retired.textBuffer == nil)
+        var highlights = retired.highlights
+        retired.highlights = []
+        #expect(highlights == Self.lines.map { [StyledSpan(text: $0, style: .default)] })
+        #expect(isUniquelyReferenced(&highlights))
+    }
+
+    @Test
+    func `opening a file in preview mode retires the active preview it replaces and keeps none of it`() throws {
+        let (state, log) = makeState(preview: true)
+        defer { state.shutdown() }
+        let previewID = ObjectIdentifier(try #require(state.bufferManager.activeBuffer))
+        let hash = state.textBuffer.contentHash
+
+        openOtherFile(in: state)
+
+        #expect(state.bufferManager.buffers.map(\.fileName) == ["other.swift"])
+        var entries = log.take()
+        let index = try #require(entries.firstIndex { $0.buffer != nil })
+        var retired = entries.remove(at: index)
+        #expect(retired.buffer.map(ObjectIdentifier.init) == previewID)
+        #expect(retired.textBuffer?.contentHash == hash)
+        var highlights = retired.highlights
+        retired.highlights = []
+        #expect(highlights.count == Self.lines.count)
+        try expectOnlyRetiredReferences(buffer: &retired.buffer, highlights: &highlights)
+    }
+
+    @Test
+    func `opening a file in preview mode retires an inactive preview it replaces and keeps none of it`() throws {
+        let (state, log) = makeState(preview: true)
+        defer { state.shutdown() }
+        let previewID = ObjectIdentifier(try #require(state.bufferManager.activeBuffer))
+        // A pinned tab in front of the preview, which keeps its highlights.
+        state.bufferManager.open(filePath: "/project/other.txt", fileName: "other.txt", content: "other", language: nil)
+        state.workspace.restoreStateFromActiveBuffer()
+        _ = log.take()
+
+        openOtherFile(in: state)
+
+        #expect(state.bufferManager.buffers.map(\.fileName) == ["other.txt", "other.swift"])
+        var entries = log.take()
+        let index = try #require(entries.firstIndex { $0.buffer != nil })
+        var retired = entries.remove(at: index)
+        #expect(retired.buffer.map(ObjectIdentifier.init) == previewID)
+        // The workspace held the pinned tab, not the preview.
+        #expect(retired.textBuffer == nil)
+        var highlights = try #require(retired.buffer).highlightedLines
+        #expect(highlights.count == Self.lines.count)
+        try expectOnlyRetiredReferences(buffer: &retired.buffer, highlights: &highlights)
     }
 }

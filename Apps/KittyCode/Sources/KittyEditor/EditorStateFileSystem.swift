@@ -418,6 +418,9 @@ extension EditorState {
         // A buffer that is already open keeps its own text, as opening it again never replaced it.
         let isAlreadyOpen = bufferManager.bufferIndex(forPath: path) != nil
         let newIndex: Int
+        // The preview this open replaces, with the workspace's copy of its document when it is the active one: taken
+        // before the state lets go of them, and retired once it has, below.
+        let retired = isAlreadyOpen ? RetiredStorage() : replacedPreviewStorage()
         if config.tabRibbon.persistence == .preview {
             newIndex = bufferManager.openPreview(
                 filePath: path,
@@ -476,6 +479,7 @@ extension EditorState {
         fileWatcherIntegration?.watchOpenedFile(path)
         renderRefreshSource?.invalidate()
         schedulePostLoadProcessing(for: buffer, content: loadedFile.content)
+        retire(consume retired)
     }
 
     public func schedulePostLoadProcessing(for buffer: DocumentBuffer, content: String) {
