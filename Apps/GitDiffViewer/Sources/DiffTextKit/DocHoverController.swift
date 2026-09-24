@@ -270,8 +270,15 @@ package final class DocHoverController: NSObject {
         }
     }
 
+    /// Over the panel, the reader is reading it: a lookup the path to it started, over another identifier, would
+    /// replace it under the pointer, so it is dropped with the close.
     private func pointerOverPanelChanged(_ inside: Bool) {
-        if inside { cancelClose() } else { scheduleClose() }
+        guard inside else {
+            scheduleClose()
+            return
+        }
+        dropPendingLookup()
+        cancelClose()
     }
 
     /// Whether `point`, in the text view's coordinates, is on the shown identifier or the corridor to its panel.

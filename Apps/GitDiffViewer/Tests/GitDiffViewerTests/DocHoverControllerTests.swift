@@ -513,4 +513,20 @@ struct DocHoverControllerTests {
 
         #expect(!sut.controller.isPanelVisible)
     }
+
+    @Test
+    func `a lookup pending when the pointer reaches the panel does not replace it`() async throws {
+        let sut = try makeStayOpenSUT()
+        try await showPanelOnRowZero(sut)
+
+        let mark = sut.clock.registrationMark()
+        sut.controller.pointerMoved(to: point(row: 1, column: 8, in: sut.rendered))
+        try await sut.clock.expectSleepers(after: mark)
+        sut.panel.pointerEntered()
+        sut.clock.advance(by: sut.controller.debounce)
+        try await sut.taskProvider.waitForAllTasks()
+
+        #expect(sut.spy.calls.map(\.row) == [0])
+        #expect(sut.controller.isPanelVisible)
+    }
 }
