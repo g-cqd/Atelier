@@ -168,4 +168,40 @@ struct EditorOpenAndWidthTests {
         try await awaitFullPass(tasks, after: spawned)
         #expect(state.maxLineWidth == Self.widestLine.count)
     }
+
+    @Test
+    func `closing a tab refreshes the one it brings back, evicted while inactive, once`() async throws {
+        let (state, tasks) = makeState()
+        defer { state.shutdown() }
+        try await open(in: state, tasks: tasks)
+        try await open("short", path: "/project/short.txt", in: state, tasks: tasks)
+        state.switchToTab(0)
+        state.switchToTab(1)
+        let passes = state.highlightGeneration
+
+        state.closeCurrentTab()
+
+        #expect(state.filePath == "/project/wide.txt")
+        #expect(state.highlightGeneration == passes + 1)
+        #expect(state.highlightedLines.count == Self.lines.count)
+        #expect(state.highlightedLines[0].map(\.text).joined() == Self.lines[0])
+    }
+
+    @Test
+    func `closing a tab keeps the highlights and width of the one it brings back when it has them`() async throws {
+        let (state, tasks) = makeState()
+        defer { state.shutdown() }
+        try await open(in: state, tasks: tasks)
+        // An open leaves the first tab with its highlights and width.
+        try await open("short", path: "/project/short.txt", in: state, tasks: tasks)
+        let highlights = state.bufferManager.buffers[0].highlightedLines
+        let passes = state.highlightGeneration
+
+        state.closeCurrentTab()
+
+        #expect(state.filePath == "/project/wide.txt")
+        #expect(state.highlightGeneration == passes)
+        #expect(state.highlightedLines == highlights)
+        #expect(state.maxLineWidth == Self.widestLine.count)
+    }
 }

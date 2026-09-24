@@ -354,8 +354,9 @@ extension EditorState {
                     mode = .tree
                     statusMessage = "All buffers closed"
                 } else {
+                    // As a switch does, the restore refreshes a tab brought back without its highlights or width, and
+                    // only such a tab: a second refresh would build and highlight them all over again.
                     restoreStateFromActiveBuffer()
-                    refreshHighlights()
                     gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
                 }
                 retire(consume retired)
