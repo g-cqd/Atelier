@@ -62,7 +62,7 @@ struct BashExternalScannerTests {
                 "regex", "_regex_no_slash", "_regex_no_space", "_expansion_word", "extglob_pattern",
                 "_bare_dollar", "_brace_start", "_immediate_double_hash", "_external_expansion_sym_hash",
                 "_external_expansion_sym_bang", "_external_expansion_sym_equal", "}", "]", "<<", "<<-",
-                "\n", "(", "esac", "__error_recovery"
+                "\\n", "(", "esac", "__error_recovery"
             ])
         #expect(BundledScanners.byGrammarName["bash"] != nil)
     }
@@ -255,13 +255,13 @@ struct BashExternalScannerTests {
     func `newline gate controls multiline test operators`() {
         var scanner = BashExternalScanner()
         #expect(scan("\n-eq ", offering: ["test_operator"], scanner: &scanner).name == "test_operator")
-        #expect(scan("\n-eq ", offering: ["test_operator", "\n"], scanner: &scanner).name == nil)
+        #expect(scan("\n-eq ", offering: ["test_operator", "\\n"], scanner: &scanner).name == nil)
     }
 
     @Test
     func `esac and punctuation are parser gates rather than scanner results`() {
         var scanner = BashExternalScanner()
-        for (input, name) in [("esac", "esac"), ("}", "}"), ("]", "]"), ("(", "("), ("\n", "\n")] {
+        for (input, name) in [("esac", "esac"), ("}", "}"), ("]", "]"), ("(", "("), ("\n", "\\n")] {
             #expect(scan(input, offering: [name], scanner: &scanner).name == nil)
         }
         let esac = scan("esac ", offering: ["extglob_pattern"], scanner: &scanner)

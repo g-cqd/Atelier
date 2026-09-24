@@ -42,14 +42,15 @@ public struct BashExternalScanner: GrammarExternalScanner {
     var extSawOutsideQuote = false
     var heredocs: [Heredoc] = []
 
-    /// The externals of the bundled Bash grammar, in grammar order.
+    /// The externals of the bundled Bash grammar, in grammar order. The newline is the pattern `/\n/`, which the tables
+    /// name by its source: a backslash and an `n`.
     public static let externalNames = [
         "heredoc_start", "simple_heredoc_body", "_heredoc_body_beginning", "heredoc_content",
         "heredoc_end", "file_descriptor", "_empty_value", "_concat", "variable_name", "test_operator",
         "regex", "_regex_no_slash", "_regex_no_space", "_expansion_word", "extglob_pattern",
         "_bare_dollar", "_brace_start", "_immediate_double_hash", "_external_expansion_sym_hash",
         "_external_expansion_sym_bang", "_external_expansion_sym_equal", "}", "]", "<<", "<<-",
-        "\n", "(", "esac", "__error_recovery"
+        "\\n", "(", "esac", "__error_recovery"
     ]
 
     /// Creates a scanner with no pending heredocs or glob context.
