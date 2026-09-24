@@ -23,8 +23,24 @@ package struct DiffTabs: Equatable, Sendable {
 
     package init() {}
 
+    /// A step through the tabs, as ⌃Tab and ⌃⇧Tab take it.
+    package enum Step: Sendable {
+        case next, previous
+    }
+
     package var active: DiffTab? { tabs.first { $0.id == activeID } }
     package var activePath: String? { active?.path }
+
+    /// The tab one `step` away from the active one, wrapping around at either end; the first or last tab when none
+    /// is active, and nil when no tab is open.
+    package func neighbour(_ step: Step) -> DiffTab? {
+        guard !tabs.isEmpty else { return nil }
+        guard let index = tabs.firstIndex(where: { $0.id == activeID }) else {
+            return step == .next ? tabs.first : tabs.last
+        }
+        let offset = step == .next ? 1 : tabs.count - 1
+        return tabs[(index + offset) % tabs.count]
+    }
 
     /// Shows `path` in the temporary tab, creating it after the active tab when there is none.
     package mutating func open(_ path: String) {
