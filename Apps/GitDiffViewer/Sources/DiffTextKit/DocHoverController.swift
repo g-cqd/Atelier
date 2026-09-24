@@ -111,10 +111,7 @@ package final class DocHoverController: NSObject {
 
     /// Cancels any in-flight resolution and closes the panel, without detaching from the text view.
     package func invalidate() {
-        generation += 1
-        pendingTask?.cancel()
-        pendingTask = nil
-        currentHit = nil
+        dropPendingLookup()
         closePanel()
     }
 
@@ -291,7 +288,8 @@ package final class DocHoverController: NSObject {
         return HoverCorridor.rect(anchor: anchor, panel: panelRect).contains(point)
     }
 
-    /// Stops whatever lookup is pending, leaving a shown panel as it is.
+    /// Stops whatever lookup is pending, leaving a shown panel as it is. The task stays referenced, cancelled, so the
+    /// next lookup still waits for it to end: one lookup at a time.
     private func dropPendingLookup() {
         generation += 1
         pendingTask?.cancel()
