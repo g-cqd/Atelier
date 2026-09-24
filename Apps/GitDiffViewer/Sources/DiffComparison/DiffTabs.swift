@@ -16,7 +16,9 @@ package struct DiffTab: Identifiable, Equatable, Sendable {
 }
 
 /// Editor-style tabs: a single click opens a temporary tab, or reuses the existing temporary one; a double click
-/// pins. With no tab open, the whole list of changed files shows.
+/// pins. With no tab open, the whole list of changed files shows. While a tab is open, that list is one more stop,
+/// fixed first, which shows while no tab is active (book TAB-10): it is not a ``DiffTab``, so nothing can close or
+/// move it, and every tab lands after it.
 package struct DiffTabs: Equatable, Sendable {
     package private(set) var tabs: [DiffTab] = []
     package private(set) var activeID: DiffTab.ID?
@@ -28,18 +30,41 @@ package struct DiffTabs: Equatable, Sendable {
         case next, previous
     }
 
+    /// One place of the bar: the fixed file list, or a tab.
+    package enum Stop: Equatable, Sendable {
+        case fileList
+        case tab(DiffTab)
+
+        /// The tab's path; nil for the file list, which shows every changed file.
+        package var path: String? {
+            if case .tab(let tab) = self { tab.path } else { nil }
+        }
+    }
+
+    /// The bar's places in order: the file list first, then every tab; none while no tab is open.
+    package var stops: [Stop] {
+        tabs.isEmpty ? [] : [.fileList] + tabs.map(Stop.tab)
+    }
+
+    /// Whether the file list shows: no tab is active, whether tabs are open or not.
+    package var isShowingFileList: Bool { active == nil }
+
+    /// Shows the file list; every tab stays open as it is.
+    package mutating func activateFileList() {
+        activeID = nil
+    }
+
     package var active: DiffTab? { tabs.first { $0.id == activeID } }
     package var activePath: String? { active?.path }
 
-    /// The tab one `step` away from the active one, wrapping around at either end; the first or last tab when none
-    /// is active, and nil when no tab is open.
-    package func neighbour(_ step: Step) -> DiffTab? {
-        guard !tabs.isEmpty else { return nil }
-        guard let index = tabs.firstIndex(where: { $0.id == activeID }) else {
-            return step == .next ? tabs.first : tabs.last
-        }
-        let offset = step == .next ? 1 : tabs.count - 1
-        return tabs[(index + offset) % tabs.count]
+    /// The stop one `step` away from the one showing, the file list counting as the first, wrapping around at either
+    /// end; nil when no tab is open.
+    package func neighbour(_ step: Step) -> Stop? {
+        let stops = stops
+        guard !stops.isEmpty else { return nil }
+        let index = tabs.firstIndex { $0.id == activeID }.map { $0 + 1 } ?? 0
+        let offset = step == .next ? 1 : stops.count - 1
+        return stops[(index + offset) % stops.count]
     }
 
     /// Shows `path` in the temporary tab, creating it after the active tab when there is none.
