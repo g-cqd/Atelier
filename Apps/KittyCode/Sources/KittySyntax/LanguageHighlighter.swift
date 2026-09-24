@@ -29,6 +29,7 @@ public enum LanguageHighlighter: Sendable {
 
         private final class GrammarSession {
             let parser: GrammarParser
+            let scanner: (any GrammarExternalScanner)?
             let query: Query
             let highlighter: Highlighter
             let scratch = HighlightScratch()
@@ -42,6 +43,7 @@ public enum LanguageHighlighter: Sendable {
                     lexTable: artifacts.lexTable,
                     productions: artifacts.productions
                 )
+                scanner = artifacts.scannerType?.init()
                 query = artifacts.query
                 highlighter = Highlighter(theme: theme)
             }
@@ -57,7 +59,7 @@ public enum LanguageHighlighter: Sendable {
                 {
                     return cached
                 }
-                let tree = try parser.parse(source)
+                let tree = try parser.parse(source, externalScanner: scanner)
                 lastParsedSourceHash = sourceHash
                 lastParsedTree = tree
                 return tree
@@ -495,7 +497,7 @@ public enum LanguageHighlighter: Sendable {
         for language: String, taskProvider: any TaskProvider = .default
     ) async -> Bool {
         await taskProvider.detachedTask(role: .work, priority: .userInitiated) {
-            SyntaxArtifactsCache.loadIfNeeded(for: language)
+            await SyntaxArtifactsCache.loadIfNeeded(for: language)
             return SyntaxArtifactsCache.artifacts(for: language) != nil
         }
         .value
@@ -514,6 +516,7 @@ private struct SyntaxArtifacts: Sendable {
     let productions: [ProductionRule]
     let query: Query
     let needsExternalScanner: Bool
+    let scannerType: (any GrammarExternalScanner.Type)?
 }
 
 private struct SplitLinesScratch {
@@ -527,11 +530,11 @@ private enum SyntaxArtifactsCache {
         storage.withLock { $0[language] } ?? nil
     }
 
-    static func loadIfNeeded(for language: String) {
+    static func loadIfNeeded(for language: String) async {
         let alreadyCached: Bool = storage.withLock { $0[language] != nil }
         guard !alreadyCached else { return }
 
-        let loaded = loadArtifacts(for: language)
+        let loaded = await loadArtifacts(for: language, cachedOnly: false)
         storage.withLock { cache in
             guard !cache.keys.contains(language) else { return }
             cache[language] = loaded
@@ -547,11 +550,12 @@ private enum SyntaxArtifactsCache {
         await withTaskGroup(of: (String, SyntaxArtifacts?).self) { group in
             for language in uncachedLanguages {
                 group.addTask {
-                    (language, loadArtifacts(for: language))
+                    (language, await loadArtifacts(for: language, cachedOnly: true))
                 }
             }
 
             for await (language, loadedArtifacts) in group {
+                guard let loadedArtifacts else { continue }
                 storage.withLock { cache in
                     guard !cache.keys.contains(language) else { return }
                     cache[language] = loadedArtifacts
@@ -570,7 +574,7 @@ private enum SyntaxArtifactsCache {
             })
     }
 
-    private static func loadArtifacts(for language: String) -> SyntaxArtifacts? {
+    private static func loadArtifacts(for language: String, cachedOnly: Bool) async -> SyntaxArtifacts? {
         // A runtime registration wins over the bundled manifest; either way `entry.path` names a `Grammars/` directory.
         let entry: GrammarRegistry.LanguageEntry
         if let registered = GrammarRegistry.shared.entry(forLanguage: language) {
@@ -610,10 +614,12 @@ private enum SyntaxArtifactsCache {
         }
 
         let needsExternals = !grammar.externals.isEmpty
+        let scannerType = GrammarRegistry.shared.scannerType(forGrammar: grammar.name)
 
         // Without its external scanners a grammar can't parse, so a session never reads its table, and compiling one
         // (bash's especially) can take gigabytes: store empty tables and keep the flag for capability reporting.
-        if needsExternals {
+        if needsExternals && scannerType == nil {
+            if cachedOnly { return nil }
             return SyntaxArtifacts(
                 parseTable: ParseTable(
                     stateCount: 0, symbols: [], terminals: [], nonTerminals: [],
@@ -621,14 +627,23 @@ private enum SyntaxArtifactsCache {
                 lexTable: LexTable(),
                 productions: [],
                 query: query,
-                needsExternalScanner: true
+                needsExternalScanner: true,
+                scannerType: nil
             )
         }
 
         let compiled: ParseTableCompiler.CompilationResult
         do {
-            compiled = try GrammarRegistry.shared.compiledResult(
-                for: entry.name, grammarsPath: grammarsPath)
+            if cachedOnly {
+                guard
+                    let stored = try GrammarRegistry.shared.cachedResult(
+                        for: entry.name, grammarsPath: grammarsPath)
+                else { return nil }
+                compiled = stored
+            } else {
+                compiled = try await GrammarRegistry.shared.compiledResult(
+                    for: entry.name, grammarsPath: grammarsPath)
+            }
         } catch {
             return nil
         }
@@ -638,7 +653,8 @@ private enum SyntaxArtifactsCache {
             lexTable: compiled.lexTable,
             productions: compiled.productions,
             query: query,
-            needsExternalScanner: false
+            needsExternalScanner: false,
+            scannerType: scannerType
         )
     }
 }

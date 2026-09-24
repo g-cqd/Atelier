@@ -148,10 +148,26 @@ struct HighlighterTests {
 
     @Test
     func `LanguageHighlighter prewarms bundled grammar artifacts used by kittycode`() async {
+        _ = await LanguageHighlighter.ensureArtifacts(for: "json")
         let warmed = await LanguageHighlighter.prewarmArtifacts(for: ["json", "unknown_lang"])
 
         #expect(warmed.contains("json"))
         #expect(!warmed.contains("unknown_lang"))
+    }
+
+    @Test
+    func `prewarm leaves an uncached grammar for the first opened file`() async {
+        let language = "uncached_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+        GrammarRegistry.shared.register(
+            GrammarRegistry.LanguageEntry(name: language, extensions: [], path: "json"))
+
+        let warmed = await LanguageHighlighter.prewarmArtifacts(for: [language])
+
+        #expect(!warmed.contains(language))
+        #expect(!LanguageHighlighter.makeSession(language: language).isGrammarBacked)
+        let loaded = await LanguageHighlighter.ensureArtifacts(for: language)
+        #expect(loaded)
+        #expect(LanguageHighlighter.makeSession(language: language).isGrammarBacked)
     }
 
     @Test

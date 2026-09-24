@@ -37,11 +37,13 @@ struct MemoryLeakRegressionTests {
         greet world
         """
 
+    /// With its scanner registered, bash's grammar is compiled rather than stood in for by empty tables, and it passes
+    /// the compiler's 4,000-state limit: its artifacts decline, and bash highlights lexically, as it did.
     @Test
-    func `bash grammar artifacts load successfully`() async {
+    func `bash grammar artifacts decline without hanging while its grammar passes the state limit`() async {
         // A runaway bash compile would hang this test outright, so it needs no time bound.
         let loaded = await LanguageHighlighter.ensureArtifacts(for: "bash")
-        #expect(loaded == true, "bash artifacts failed to load")
+        #expect(loaded == false, "bash artifacts loaded")
     }
 
     /// Repeated loads must hit the cache. They run on a detached task, out of `mallocDelta`'s reach, so this only
