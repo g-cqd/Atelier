@@ -433,8 +433,10 @@ package final class DiffTextViewCoordinator: NSObject {
         // Less what lies below the text, which the last line would otherwise scroll past the top by.
         let overscroll = max(clipView.bounds.height - lineHeight - below, 0)
         if !wrapsLines, let rendered {
-            // One line per row: the document's size needs no layout.
-            let contentHeight = inset + rendered.unwrappedTextHeight + below
+            // One line per row: the width needs no layout. The height is TextKit's, as when lines wrap: it lays out
+            // only what shows, after its estimates of the rows above, so a height counted from the rows could end
+            // before the rows it places last (book CARD-17).
+            let contentHeight = inset + layoutManager.usageBoundsForTextContainer.height + below
             let size = NSSize(
                 width: max(clipView.bounds.width, unwrappedWidth(of: rendered)),
                 height: (contentHeight + overscroll).rounded(.up))
