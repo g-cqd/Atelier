@@ -37,8 +37,32 @@ import Testing
         let document = Self.build(HoverFixtures.sdkBool, source: .sdk)
         #expect(document.title == "Bool")
         #expect(document.summary?.string == "A value type whose instances are either true or false.")
-        #expect(document.declaration?.string == "@frozen struct Bool : Sendable")
+        #expect(document.declaration?.string == "@frozen\nstruct Bool : Sendable")
         #expect(document.discussion.map(Self.kind).count == 9)
+    }
+
+    /// Quick Help shows a declaration's attributes above it, one to a line, their arguments whole; an attribute on a
+    /// parameter's type stays where it is. The title still reads the declared name.
+    @Test(arguments: [
+        ("@frozen struct Bool : Sendable", "@frozen\nstruct Bool : Sendable"),
+        (
+            "@available(macOS 14, *) @MainActor public func run(_ body: @escaping () -> Void)",
+            "@available(macOS 14, *)\n@MainActor\npublic func run(_ body: @escaping () -> Void)"
+        ),
+        (
+            "@MainActor @preconcurrency\n@frozen\nstruct StateObject<ObjectType>",
+            "@MainActor\n@preconcurrency\n@frozen\nstruct StateObject<ObjectType>"
+        ),
+        (
+            #"@available(*, deprecated, message: "Use run(_:) (the async one)") func start()"#,
+            #"@available(*, deprecated, message: "Use run(_:) (the async one)")\#nfunc start()"#
+        ),
+        ("func contains(_ element: Element) -> Bool", "func contains(_ element: Element) -> Bool")
+    ])
+    func `a declaration's attributes each go on a line of their own`(declaration: String, shown: String) {
+        let document = Self.build("```swift\n\(declaration)\n```\n\nDoes it.", source: .languageServer)
+        #expect(document.declaration?.string == shown)
+        #expect(document.title == HoverDeclarationName.name(fromDeclaration: declaration))
     }
 
     @Test
@@ -188,7 +212,7 @@ import Testing
             descendants(of: root, as: NSBox.self).first { $0.boxType == .separator && !$0.isHiddenOrHasHiddenAncestor })
         let ordered: [NSView] = [
             try #require(shown.first { $0.text == "Bool" }?.view), try view(startingWith: "A value type"),
-            try view(startingWith: "@frozen struct Bool"), divider, try view(startingWith: "Overview"),
+            try view(startingWith: "@frozen\nstruct Bool"), divider, try view(startingWith: "Overview"),
             try view(startingWith: "Bool represents"), try view(startingWith: "var godotHasArrived"),
             try view(startingWith: "Swift uses only"), try view(startingWith: "For example"),
             try view(startingWith: "var i = 5"), try view(startingWith: "The correct approach"),

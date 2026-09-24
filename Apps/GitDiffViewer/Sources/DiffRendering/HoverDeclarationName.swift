@@ -38,6 +38,54 @@ package enum HoverDeclarationName {
         return nil
     }
 
+    /// `declaration` with the attributes that open it each on a line of their own above the rest, as Quick Help shows
+    /// `@frozen` above `struct Bool : Sendable`. An attribute keeps its arguments whole, and one further in, as on a
+    /// parameter's type, stays where it is.
+    package static func withAttributesOnTheirOwnLines(_ declaration: String) -> String {
+        var attributes: [Substring] = []
+        var rest = declaration[...]
+        while true {
+            let next = rest.drop(while: \.isWhitespace)
+            guard let end = attributeEnd(in: next) else { break }
+            attributes.append(next[..<end])
+            rest = next[end...]
+        }
+        guard !attributes.isEmpty else { return declaration }
+        let body = rest.drop(while: \.isWhitespace)
+        return (attributes + (body.isEmpty ? [] : [body])).joined(separator: "\n")
+    }
+
+    /// The index after the attribute opening `text`, with its arguments when a parenthesis follows its name, string
+    /// literals and their escapes skipped whole; nil when `text` opens with no attribute, or its arguments never close.
+    private static func attributeEnd(in text: Substring) -> Substring.Index? {
+        guard text.first == "@" else { return nil }
+        let nameStart = text.index(after: text.startIndex)
+        var index = nameStart
+        while index < text.endIndex, text[index].isLetter || text[index].isNumber || text[index] == "_" {
+            index = text.index(after: index)
+        }
+        guard index > nameStart else { return nil }
+        guard index < text.endIndex, text[index] == "(" else { return index }
+        var depth = 0
+        var inString = false
+        while index < text.endIndex {
+            switch (text[index], inString) {
+                case ("\\", true):
+                    // The escaped character, whatever it is, is part of the literal.
+                    index = text.index(after: index)
+                    guard index < text.endIndex else { return nil }
+                case ("\"", _): inString.toggle()
+                case ("(", false): depth += 1
+                case (")", false):
+                    depth -= 1
+                    if depth == 0 { return text.index(after: index) }
+                default: break
+            }
+            index = text.index(after: index)
+        }
+        return nil
+    }
+
     private static func name(introducedBy keyword: String, tokens: [String], after start: Int) -> String? {
         switch keyword {
             case "init", "deinit", "subscript":

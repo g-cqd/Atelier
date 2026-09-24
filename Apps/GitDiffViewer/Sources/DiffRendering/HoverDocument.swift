@@ -120,15 +120,18 @@ package struct HoverDocument: @unchecked Sendable {
     /// prose through Foundation's markdown parser with a plain-text fallback.
     package static func build(from content: HoverContent, palette: DiffPalette) -> HoverDocument {
         let parsed = HoverMarkdownStructurer.structure(content.markdown)
-        func code(_ text: String?) -> NSAttributedString? {
-            text.map { CodeAttributedBuilder.attributedString(for: $0, palette: palette) }
+        func declaration(_ text: String?) -> NSAttributedString? {
+            text.map {
+                CodeAttributedBuilder.attributedString(
+                    for: HoverDeclarationName.withAttributesOnTheirOwnLines($0), palette: palette)
+            }
         }
         func prose(_ text: String?) -> NSAttributedString? {
             text.map { Self.renderProse($0) }
         }
         return HoverDocument(
             title: parsed.declaration.flatMap(HoverDeclarationName.name(fromDeclaration:)),
-            declaration: code(parsed.declaration),
+            declaration: declaration(parsed.declaration),
             summary: prose(parsed.summary),
             discussion: parsed.discussion.map { Self.blocks(fromMarkdown: $0, palette: palette) } ?? [],
             parameters: parsed.parameters.map { field in
@@ -137,7 +140,7 @@ package struct HoverDocument: @unchecked Sendable {
             returns: prose(parsed.returns),
             provenance: Provenance(content.source),
             extraCandidates: parsed.extraCandidates.map { candidate in
-                Candidate(declaration: code(candidate.declaration), summary: prose(candidate.summary))
+                Candidate(declaration: declaration(candidate.declaration), summary: prose(candidate.summary))
             },
             diagnostics: [],
             // Just short of opaque, so a trace of the panel's material keeps the chip set into the glass.
