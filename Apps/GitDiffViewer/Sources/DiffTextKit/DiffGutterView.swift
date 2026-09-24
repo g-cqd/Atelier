@@ -130,9 +130,11 @@ package final class DiffGutterView: NSView {
 
     package override var isFlipped: Bool { true }
 
+    /// The gutter's width, on a whole point: the text beside it starts on one, so its clip view is not scrolled
+    /// sideways by the fraction AppKit aligns it by.
     package var thickness: CGFloat {
         let columns: CGFloat = style == .dual ? 2 : 1
-        return padding * 2 + columns * metrics.columnWidth + (columns - 1) * columnGap
+        return (padding * 2 + columns * metrics.columnWidth + (columns - 1) * columnGap).rounded(.up)
     }
 
     package override var intrinsicContentSize: NSSize {
