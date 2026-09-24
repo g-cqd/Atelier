@@ -818,6 +818,20 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   (controls, selection, badges).
 - **Priority:** Could.
 
+#### SET-09 · Scrolling settings
+- **Statement:** How code panes scroll is a setting: whether they bounce at their edges, whether they scroll past the
+  last line, and whether opening a file scrolls to its first change.
+- **Source:** 09-24, "the bouncing of scroll (and the fact we disabled it) should be a setting", with R116's "this
+  should be a toggleable behaviour" (DIFF-08) and R117's overscroll report (CARD-19).
+- **Acceptance criteria:**
+  1. "Bounce at the edges", off by default as CARD-18 left it, makes the single-file view and the cards' code panes
+     rubber-band at their edges; the card list keeps its own bounce either way (D25).
+  2. "Scroll past the last line", off by default (CARD-19), lets the last line scroll up to the top of the pane.
+  3. "Scroll to the first change when a file opens", on by default (DIFF-08).
+  4. The three sit together in the settings, apply at once to every open pane, and follow the per-project override
+     rules of the other view settings.
+- **Priority:** Should. **Related:** CARD-18, CARD-19, DIFF-08.
+
 ### CARD: The card list and file badges
 
 #### CARD-01 · Sticky file headers
@@ -1515,6 +1529,19 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
      rubber-banding. The card list itself keeps its bounce (D25).
 - **Priority:** Must. **Related:** CARD-17, DIFF-06.
 
+#### CARD-19 · A pane's scroll range ends where its file does
+- **Statement:** Scrolled to its end, a pane stops with its last line at the bottom, with no empty space below it,
+  unless scrolling past the end is turned on (SET-09).
+- **Source:** 09-24, "there's a bug with the overscroll that creates a lot of empty space below the file that allows
+  for more scrolling than necessary".
+- **Acceptance criteria:**
+  1. With scrolling past the end off, the default, a pane scrolled to its end shows its last line at the bottom, with
+     nothing below it but the pane's inset and any band of a gap at the end of the file.
+  2. With it on, the last line can scroll up to the top of the pane and no further.
+  3. Estimates of lines not yet laid out never add space or cut the range short: once the end has been laid out, the
+     range matches the content, in short and long files, wrapped or not, in the single-file view and in the cards.
+- **Priority:** Must. **Related:** CARD-17, CARD-18, SET-09.
+
 ### DIFF: Diff interaction refinements (roadmap, 09-23)
 
 #### DIFF-01 · Resizable split and stacked panes
@@ -1801,3 +1828,4 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R114 | 09-24 | "header only in the file list" | D28, DIFF-07 |
 | R115 | 09-24 | "sometimes, double clicking a file or selecting it in the file list opens it in a completely unscrollable state, it can be for a small or big file, i'm completely unable to scroll" | CARD-17 (criterion 5) |
 | R116 | 09-24 | "the auto scrolling to the first change in the file is not working correctly, it's offset, and this should be a toggleable behaviour, add that to the roadmap" | DIFF-08 |
+| R117 | 09-24 | "there's a bug with the overscroll that creates a lot of empty space below the file that allows for more scrolling than necessary, the bouncing of scroll (and the fact we disabled it) should be a setting" | CARD-19, SET-09 |
