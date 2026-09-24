@@ -100,7 +100,8 @@ struct DiffDetailView: View {
                         showsMinimap: model.settings.showsMinimap,
                         scrollRequest: model.scrollRequest,
                         onGapDrag: { model.handleGapDrag($0) },
-                        onDisplayed: { model.noteDisplayed(rendered.id) }
+                        onDisplayed: { model.noteDisplayed(rendered.id) },
+                        scrollMemoryPath: model.renderedPath
                     )
                 }
             case .split, .stacked:
@@ -117,7 +118,8 @@ struct DiffDetailView: View {
                         syncsScrolling: model.settings.syncsScrolling,
                         scrollRequest: model.scrollRequest,
                         onGapDrag: { model.handleGapDrag($0) },
-                        onDisplayed: { model.noteDisplayed(rendered.id) }
+                        onDisplayed: { model.noteDisplayed(rendered.id) },
+                        scrollMemoryPath: model.renderedPath
                     )
                 }
         }
@@ -137,6 +139,7 @@ private struct SplitDiffView: View {
     let scrollRequest: ScrollRequest?
     let onGapDrag: (GapDragEvent) -> Void
     let onDisplayed: () -> Void
+    let scrollMemoryPath: String?
 
     @State private var controller = SplitPaneController()
 
@@ -147,14 +150,14 @@ private struct SplitDiffView: View {
                 model: model, rendered: old, gutter: .old, keepsScrollPosition: keepsScrollPosition,
                 wrapsLines: wrapsLines, wrapColumn: wrapColumn, showsMinimap: showsMinimap,
                 syncsScrolling: syncsScrolling, scrollRequest: scrollRequest, splitController: controller,
-                onGapDrag: onGapDrag
+                onGapDrag: onGapDrag, scrollMemoryPath: scrollMemoryPath
             )
             Divider()
             DiagnosticDiffTextView(
                 model: model, rendered: new, gutter: .new, keepsScrollPosition: keepsScrollPosition,
                 wrapsLines: wrapsLines, wrapColumn: wrapColumn, showsMinimap: showsMinimap,
                 syncsScrolling: syncsScrolling, scrollRequest: scrollRequest, splitController: controller,
-                onGapDrag: onGapDrag
+                onGapDrag: onGapDrag, scrollMemoryPath: scrollMemoryPath
             )
         }
         .onAppear { controller.wrapsLines = wrapsLines }

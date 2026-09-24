@@ -32,6 +32,11 @@ package struct DiffTextView: NSViewRepresentable {
     /// Called with a row's findings and the clicked line number's frame, in the gutter's coordinates.
     package var onDiagnosticClick:
         ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)?
+    /// Where the pane records its scroll position as its file leaves it, and finds it again when the file comes back
+    /// (book TAB-10); nil remembers nothing.
+    package var scrollMemory: PaneScrollMemory?
+    /// The left-side path of the file shown, under which ``scrollMemory`` keeps this pane's position.
+    package var scrollMemoryPath: String?
     /// Whether the pane scrolls past the end of its text until the last line reaches the top; otherwise it stops with
     /// the last line at the bottom.
     package var scrollsPastEnd = false
@@ -47,8 +52,11 @@ package struct DiffTextView: NSViewRepresentable {
         diagnosticOverlay: DiagnosticOverlay? = nil, diagnosticsVersion: Int = 0,
         onDiagnosticClick: ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)? =
             nil,
+        scrollMemory: PaneScrollMemory? = nil, scrollMemoryPath: String? = nil,
         scrollsPastEnd: Bool = false
     ) {
+        self.scrollMemory = scrollMemory
+        self.scrollMemoryPath = scrollMemoryPath
         self.scrollsPastEnd = scrollsPastEnd
         self.rendered = rendered
         self.gutter = gutter
@@ -146,7 +154,8 @@ package struct DiffTextView: NSViewRepresentable {
             name: NSView.frameDidChangeNotification,
             object: textView
         )
-        context.coordinator.apply(rendered)
+        context.coordinator.scrollMemory = scrollMemory
+        context.coordinator.show(rendered, keepingScroll: false, key: memoryKey)
         // A new pane shows its first render here, and `updateNSView` only reports the renders that replace it.
         onDisplayed?()
         context.coordinator.hoverController.attach(to: textView) { [weak coordinator = context.coordinator] in
@@ -184,8 +193,9 @@ package struct DiffTextView: NSViewRepresentable {
         coordinator.hoverController.isEnabled = hoverEnabled
         coordinator.hoverController.resolve = hoverResolver
         coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
+        coordinator.scrollMemory = scrollMemory
         if coordinator.rendered?.id != rendered.id {
-            coordinator.apply(rendered, keepingScroll: keepsScrollPosition)
+            coordinator.show(rendered, keepingScroll: keepsScrollPosition, key: memoryKey)
             onDisplayed?()
         }
         if let scrollRequest, coordinator.handledScrollRequest != scrollRequest.id {
@@ -195,6 +205,7 @@ package struct DiffTextView: NSViewRepresentable {
     }
 
     package static func dismantleNSView(_ pane: DiffPaneView, coordinator: Coordinator) {
+        coordinator.rememberPosition()
         if let textView = coordinator.textView { coordinator.splitController?.unregister(textView: textView) }
         coordinator.hoverController.detach()
         coordinator.usageObservation = nil
@@ -203,6 +214,17 @@ package struct DiffTextView: NSViewRepresentable {
 
     /// The coordinator, declared at file scope to keep this type under `type_body_length`.
     package typealias Coordinator = DiffTextViewCoordinator
+
+    /// This pane's place in ``scrollMemory``: its file, and which of the file's panes it is.
+    private var memoryKey: PaneScrollMemory.Key? {
+        let pane: PaneScrollMemory.Pane =
+            switch gutter {
+                case .dual: .unified
+                case .old: .old
+                case .new: .new
+            }
+        return scrollMemoryPath.map { PaneScrollMemory.Key(path: $0, pane: pane) }
+    }
 }
 
 @MainActor
@@ -218,6 +240,12 @@ package final class DiffTextViewCoordinator: NSObject {
     package var wrapColumn = 0
     package private(set) var rendered: RenderedText?
     package var handledScrollRequest: UUID?
+    /// Where this pane records and finds its scroll position; nil remembers nothing.
+    package var scrollMemory: PaneScrollMemory?
+    /// The key the text on show is remembered under.
+    private var memoryKey: PaneScrollMemory.Key?
+    /// A remembered position waiting for the pane to be given a size to scroll in.
+    private var pendingPosition: PaneScrollPosition?
     /// The diagnostics this pane draws: one overlay for the pane's lifetime, which every fragment and the gutter
     /// hold, and into which ``updateDiagnostics(_:version:)`` copies the caller's rows. A fragment keeps the overlay
     /// it was laid out with, so an overlay passed in place of another would reach new fragments only.
@@ -298,6 +326,68 @@ package final class DiffTextViewCoordinator: NSObject {
                 let dirty = NSRect(x: frame.minX, y: band.lowerBound, width: frame.width, height: height)
                 view.setNeedsDisplay(view.convert(dirty, from: textView).intersection(view.bounds))
             }
+        }
+    }
+
+    /// Shows `rendered`, the file remembered under `key`. Another file than the one on show first records where the
+    /// pane was for that one, then comes back where it was itself, or starts at its top when it has no position; the
+    /// same file keeps its position when `keepingScroll`, and starts at its top otherwise, as ``apply(_:keepingScroll:)``
+    /// does.
+    package func show(_ rendered: RenderedText, keepingScroll: Bool, key: PaneScrollMemory.Key?) {
+        let isAnotherFile = key != memoryKey
+        if isAnotherFile { rememberPosition() }
+        memoryKey = key
+        pendingPosition = nil
+        apply(rendered, keepingScroll: keepingScroll && !isAnotherFile)
+        if isAnotherFile, let key, let position = scrollMemory?.position(for: key) { restore(position) }
+    }
+
+    /// Records where the pane is scrolled for the file on show.
+    package func rememberPosition() {
+        guard let memoryKey, let scrollMemory, let position = currentPosition() else { return }
+        scrollMemory.record(position, for: memoryKey)
+    }
+
+    /// The row at the top of the pane and how far into it the pane is scrolled; nil with nothing laid out.
+    private func currentPosition() -> PaneScrollPosition? {
+        guard let textView, let rendered, !rendered.rows.isEmpty, let layoutManager = textView.textLayoutManager,
+            let contentManager = layoutManager.textContentManager,
+            let clipView = textView.enclosingScrollView?.contentView
+        else { return nil }
+        let top = clipView.bounds.minY
+        let inset = textView.textContainerInset.height
+        let row =
+            layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: max(top - inset, 0)))
+            .map {
+                rendered.rowIndex(
+                    containing: contentManager.offset(
+                        from: layoutManager.documentRange.location, to: $0.rangeInElement.location))
+            } ?? rendered.rows.count - 1
+        guard let rowTop = self.top(ofRow: row) else { return nil }
+        return PaneScrollPosition(row: row, offset: Double(top - rowTop), x: Double(clipView.bounds.minX))
+    }
+
+    /// Scrolls to `position` now, or once the pane has a size when it has none yet, as a pane just made.
+    private func restore(_ position: PaneScrollPosition) {
+        guard let rendered, !rendered.rows.isEmpty, let clipView = textView?.enclosingScrollView?.contentView else {
+            return
+        }
+        guard clipView.bounds.height > 0 else {
+            pendingPosition = position
+            return
+        }
+        pendingPosition = nil
+        let row = min(position.row, rendered.rows.count - 1)
+        // Laying the viewport out where the row lands can move it: the rows above it were only estimated. A second
+        // pass puts it back where it belongs, now that they are laid out.
+        for _ in 0 ..< 2 {
+            guard let rowTop = top(ofRow: row) else { return }
+            let target = NSPoint(x: max(0, position.x), y: max(0, rowTop + position.offset))
+            guard clipView.bounds.origin != target else { return }
+            // Laying out down to the row may have grown the text; give it the room to scroll there.
+            updateOverscroll(in: clipView)
+            scroll(clipView, to: target)
+            textView?.textLayoutManager?.textViewportLayoutController.layoutViewport()
         }
     }
 
@@ -399,6 +489,7 @@ package final class DiffTextViewCoordinator: NSObject {
     /// laid out the text it shows, which a text applied in the same update has not: a row placed any earlier sat where
     /// the layout, the size or the text of the moment put it, and the pane showed it elsewhere.
     package func scroll(toRow row: Int, in scrollView: NSScrollView, centered: Bool = false) {
+        pendingPosition = nil
         pendingScroll = RowPlacement(row: row, centered: centered)
         textView?.needsLayout = true
     }
@@ -534,6 +625,7 @@ package final class DiffTextViewCoordinator: NSObject {
         guard let clipView = notification.object as? NSClipView else { return }
         metrics.width = max(clipView.bounds.width, textView?.frame.width ?? 0)
         updateOverscroll(in: clipView)
+        if let pendingPosition { restore(pendingPosition) }
         if pendingScroll != nil { textView?.needsLayout = true }
         splitController?.scheduleAlignment()
     }
