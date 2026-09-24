@@ -90,6 +90,24 @@ struct DiffViewerModelTreeTests {
     }
 
     @Test
+    func `a file moved without changes shows every line on its own while changes are isolated`() async throws {
+        let sut = harness.makeSUT()
+        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("old/name.swift", "1")]
+        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("new/name.swift", "1")]
+        harness.reader.blobContents["1"] = "one\ntwo\nthree\n"
+        try await harness.load(sut)
+        sut.settings.isolatesChanges = true
+
+        sut.select("new/name.swift", from: .right)
+        try await harness.taskProvider.waitForAllTasks()
+
+        let rendered = try #require(sut.rendered)
+        let pane = try #require(rendered.unified ?? rendered.new)
+        #expect(pane.rows.count == 3)
+        #expect(pane.gaps.isEmpty)
+    }
+
+    @Test
     func `renames reported by git pair changed files across paths`() async throws {
         let sut = harness.makeSUT()
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]

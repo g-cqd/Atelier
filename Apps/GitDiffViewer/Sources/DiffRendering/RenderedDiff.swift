@@ -47,8 +47,9 @@ package struct RowMeta: Sendable {
 /// How much of a file is rendered.
 package enum RenderLayout: Sendable, Equatable {
     case full
-    /// Only the hunks, with `context` rows around each change and the user's revealed rows.
-    case changes(context: Int, expansions: [GapKey: GapExpansion])
+    /// Only the hunks, with `context` rows around each change and the user's revealed rows. A file without a change
+    /// has no hunk, so it shows nothing, unless `wholeWhenUnchanged`: then it shows every row, as `full` does.
+    case changes(context: Int, expansions: [GapKey: GapExpansion], wholeWhenUnchanged: Bool = false)
 }
 
 /// A file's diff and tokens, computed once per selection so re-layouts (gap drags, layout toggles) stay cheap.

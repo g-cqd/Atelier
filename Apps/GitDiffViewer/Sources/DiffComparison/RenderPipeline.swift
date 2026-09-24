@@ -352,9 +352,14 @@ package final class RenderPipeline {
         layout.isolates || target.isCards
     }
 
+    /// A single file without a change shows whole even while changes are isolated, since its changes alone would
+    /// leave the pane empty (DIFF-07); a card for such a file keeps showing nothing below its header.
     private func renderLayout(for target: Target) -> RenderLayout {
         showsChangesOnly(target)
-            ? .changes(context: layout.context, expansions: carriedExpansions(into: target)) : .full
+            ? .changes(
+                context: layout.context, expansions: carriedExpansions(into: target),
+                wholeWhenUnchanged: !target.isCards)
+            : .full
     }
 
     /// The stamp the file at `index` of `target` is current under.

@@ -27,6 +27,35 @@ struct DiffRendererTests {
     }
 
     @Test
+    func `a file without a change shows every row when the layout asks for it, and a changed file keeps its gaps`()
+        throws
+    {
+        let whole = try #require(
+            DiffRenderer.render(
+                oldText: old, newText: old, language: .plain,
+                layout: .changes(context: 2, expansions: [:], wholeWhenUnchanged: true)
+            )
+            .unified)
+        #expect(whole.rows.count == 30)
+        #expect(whole.gaps.isEmpty)
+
+        let hidden = try #require(
+            DiffRenderer.render(
+                oldText: old, newText: old, language: .plain, layout: .changes(context: 2, expansions: [:])
+            )
+            .unified)
+        #expect(hidden.rows.isEmpty)
+
+        let changed = try #require(
+            DiffRenderer.render(
+                oldText: old, newText: new, language: .plain,
+                layout: .changes(context: 2, expansions: [:], wholeWhenUnchanged: true)
+            )
+            .unified)
+        #expect(changed.gaps.map(\.marker.hiddenRows) == [7, 10, 3])
+    }
+
+    @Test
     func `a hidden run takes no row of its own`() throws {
         let rendered = try #require(
             DiffRenderer.render(

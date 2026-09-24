@@ -100,11 +100,15 @@ package enum DiffRenderer {
         switch layout {
             case .full:
                 rows += all.map { .diff($0, fileIndex: fileIndex, file: file) }
-            case .changes(let context, let expansions):
+            case .changes(let context, let expansions, let wholeWhenUnchanged):
+                let changeRanges = split ? file.model.splitChangeRanges : file.model.unifiedChangeRanges
+                if wholeWhenUnchanged, changeRanges.isEmpty {
+                    rows += all.map { .diff($0, fileIndex: fileIndex, file: file) }
+                    return rows
+                }
                 let fileExpansions = Dictionary(
                     uniqueKeysWithValues: expansions.filter { $0.key.fileIndex == fileIndex }
                         .map { ($0.key.gapIndex, $0.value) })
-                let changeRanges = split ? file.model.splitChangeRanges : file.model.unifiedChangeRanges
                 let layout = HunkLayout.layout(
                     changeRanges: changeRanges, rowCount: all.count, context: context, expansions: fileExpansions)
                 var cursor = 0
