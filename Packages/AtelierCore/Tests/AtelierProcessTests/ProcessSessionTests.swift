@@ -70,7 +70,9 @@ struct ProcessSessionTests {
 
     @Test(.timeLimit(.minutes(1)))
     func `terminate kills a long runner and ends its output`() async throws {
-        let session = Self.session("/bin/cat")
+        // A child that never reads its input, so only the signal can end it: terminating also closes the input,
+        // and `cat` sometimes read that end of input first and exited with status 0.
+        let session = Self.session("/bin/sleep", ["60"])
         try await session.start()
         let reader = Task { try await Self.drain(session.output) }
         await session.terminate()
