@@ -56,8 +56,8 @@ package enum RenderLayout: Sendable, Equatable {
 package final class PreparedDiff: Sendable {
     package let title: String
     package let model: DiffModel
-    package let oldTokens: [[HighlightToken]]
-    package let newTokens: [[HighlightToken]]
+    package let oldTokens: LineTokens
+    package let newTokens: LineTokens
 
     package init(
         _ input: FileDiffInput, granularity: IntralineGranularity, heuristics: DiffHeuristics = DiffHeuristics()
