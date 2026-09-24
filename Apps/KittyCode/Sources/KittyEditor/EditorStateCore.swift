@@ -1254,9 +1254,10 @@ public final class EditorState {
     /// Advanced by every `refreshHighlights()`: a pass that read the document before it may style it with a theme, a
     /// language or a setting that no longer holds.
     @ObservationIgnored private var highlightGeneration: UInt64 = 0
-    /// Highlighted lines the state no longer shows, freed off the main actor by a consumer `init` starts and
-    /// `shutdown()` ends.
-    @ObservationIgnored private let retiredHighlights: AsyncStream<[[StyledSpan]]>.Continuation
+    /// Hands storage the state no longer shows to a consumer `init` starts and `shutdown()` ends, which frees it off the
+    /// main actor; a test substitutes it to see what a close or a reload lets go of.
+    @ObservationIgnored var retire: @Sendable (consuming RetiredStorage) -> Void
+    @ObservationIgnored private let retiredStorage: AsyncStream<RetiredStorage>.Continuation
     /// The full pass itself, run on a detached task; a test substitutes it to see where and when a pass runs.
     @ObservationIgnored var fullHighlightCompute: @Sendable (FullHighlightInput) async -> FullHighlightResult = {
         EditorState.computeFullHighlight($0)
@@ -1313,8 +1314,9 @@ public final class EditorState {
         let (stream, cont) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         self.fullHighlightSignal = stream
         self.fullHighlightContinuation = cont
-        let (retiredStream, retired) = AsyncStream<[[StyledSpan]]>.makeStream()
-        self.retiredHighlights = retired
+        let (retiredStream, retired) = AsyncStream<RetiredStorage>.makeStream()
+        self.retiredStorage = retired
+        self.retire = { retired.yield($0) }
         let (searchStream, searchCont) = AsyncStream<Void>
             .makeStream(
                 bufferingPolicy: .bufferingNewest(1))
@@ -1373,7 +1375,7 @@ public final class EditorState {
         fullHighlightTask?.cancel()
         fullHighlightWorkTask?.cancel()
         fullHighlightWorkTask = nil
-        retiredHighlights.finish()
+        retiredStorage.finish()
         workspaceSearchDebounceContinuation.finish()
         workspaceSearchDebounceTask?.cancel()
         workspaceSearchDebounceTask = nil
@@ -1423,9 +1425,17 @@ public final class EditorState {
     /// Installs `lines` and retires the previous highlights: freeing a large document's spans one heap object at a
     /// time held the main actor for 75 ms at a million lines.
     private func replaceHighlightedLines(with lines: [[StyledSpan]]) {
-        let previous = highlightedLines
+        let previous = RetiredStorage(highlights: highlightedLines)
         highlightedLines = lines
-        retiredHighlights.yield(previous)
+        retire(consume previous)
+    }
+
+    /// The active document's highlights, rope and line and text caches, and `closedBuffer`, to hand to `retire` once
+    /// the state has replaced them, so that the last reference to each goes with the consumer.
+    func activeDocumentStorage(closing closedBuffer: DocumentBuffer? = nil) -> RetiredStorage {
+        RetiredStorage(
+            highlights: highlightedLines, textBuffer: textBuffer, fileLines: cachedFileLines,
+            documentText: cachedDocumentText, buffer: closedBuffer)
     }
 
     private var currentHighlightRequest: HighlightRequest {
@@ -1496,8 +1506,9 @@ public final class EditorState {
             buffer.cachedDocumentText = nil
             buffer.cachedMaxLineWidth = cachedMaxLineWidth
             buffer.cachedSerializedByteCount = nil
-            retiredHighlights.yield(buffer.highlightedLines)
+            let replaced = RetiredStorage(highlights: buffer.highlightedLines)
             buffer.highlightedLines = []
+            retire(consume replaced)
             buffer.highlightSession = nil
             buffer.documentVersion += 1
             buffer.isDirty = buffer.editHistory.isDirty(current: snapshot)
@@ -1618,6 +1629,18 @@ extension EditorState {
     struct FullHighlightResult: Sendable {
         let highlightedLines: [[StyledSpan]]?
         let maxLineWidth: Int
+    }
+
+    /// Storage the state has let go of, which the consumer `init` starts frees off the main actor. A large document's
+    /// storage frees one heap object at a time: a million lines of spans held the main actor for 70-110 ms when a
+    /// close or a reload let go of them there.
+    struct RetiredStorage: Sendable {
+        var highlights: [[StyledSpan]] = []
+        var textBuffer: TextBuffer?
+        var fileLines: [String]?
+        var documentText: String?
+        /// A closed tab's buffer, with its undo history and its own copy of the highlights.
+        var buffer: DocumentBuffer?
     }
 
     /// The state a full pass starts from; its result is installed only while the state is unchanged.

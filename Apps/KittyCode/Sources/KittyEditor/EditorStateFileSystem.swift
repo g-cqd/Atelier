@@ -357,12 +357,15 @@ extension EditorState {
     public func closeCurrentTab() {
         guard bufferManager.count > 0 else { return }
         let index = bufferManager.activeIndex
-        let closedPath = bufferManager.buffers[index].filePath
+        let closed = bufferManager.buffers[index]
+        let closedPath = closed.filePath
         let result = bufferManager.close(at: index)
         switch result {
             case .promptSave:
                 statusMessage = "Buffer has unsaved changes. Save first (^O) or force close."
             case .closed:
+                // Taken before the state lets go of the closed document, and retired once it has, below.
+                let retired = activeDocumentStorage(closing: consume closed)
                 if !closedPath.isEmpty {
                     fileWatcherIntegration?.unwatchClosedFile(closedPath)
                 }
@@ -387,6 +390,7 @@ extension EditorState {
                     refreshHighlights()
                     gitDecorationManager?.scheduleRefreshForActiveBuffer(debounced: false)
                 }
+                retire(consume retired)
         }
     }
 

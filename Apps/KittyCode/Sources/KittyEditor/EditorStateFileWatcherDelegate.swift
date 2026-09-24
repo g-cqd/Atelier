@@ -11,7 +11,11 @@ extension EditorState: FileWatcherDelegate {
     }
 
     public func fileWatcherDidReloadActiveBuffer(buffer: DocumentBuffer, content: String) {
-        restoreStateFromActiveBuffer()
+        // The old text's highlights and caches, which the buffer no longer holds, retired once replaced, below.
+        let retired = activeDocumentStorage()
+        // The workspace's restore, not the state's, whose refresh this would clear at once: the post-load pass below
+        // highlights and measures the new text, as it does after an open.
+        workspace.restoreStateFromActiveBuffer()
         highlightedLines = []
         invalidateHighlightSession()
         isLoadingGrammar = false
@@ -25,6 +29,7 @@ extension EditorState: FileWatcherDelegate {
         } else {
             statusMessage = "\(buffer.fileName) reloaded from disk"
         }
+        retire(consume retired)
     }
 
     public func fileWatcherDidReloadInactiveBuffer(buffer: DocumentBuffer, content: String) {
