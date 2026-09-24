@@ -25,7 +25,7 @@ struct ParseTableCompilerTests {
     }
 
     @Test
-    func `repeat compiles to recursive zero or more productions`() throws {
+    func `repeat compiles to a one-or-more helper or nothing, as tree-sitter reads it`() throws {
         let json = """
             {
                 "name": "repeat_test",
@@ -48,13 +48,13 @@ struct ParseTableCompilerTests {
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let result = try ParseTableCompiler.compile(grammar)
 
-        let sourceRule = try #require(result.productions.first { $0.name == "source" })
-        let helperName = try #require(sourceRule.symbols.first)
-        #expect(helperName.starts(with: "_repeat_"))
+        let sourceRules = result.productions.filter { $0.name == "source" }
+        let helperName = try #require(sourceRules.first?.symbols.first)
+        #expect(helperName.starts(with: "_repeat1_"))
+        #expect(sourceRules.map(\.symbols) == [[helperName], []])
 
         let helperRules = result.productions.filter { $0.name == helperName }
-        #expect(helperRules.contains { $0.symbols.isEmpty })
-        #expect(helperRules.contains { $0.symbols == [helperName, "item"] })
+        #expect(helperRules.map(\.symbols) == [["item"], [helperName, "item"]])
     }
 
     @Test

@@ -1,4 +1,8 @@
 /// Bounds on the work of compiling a grammar, so one too large for this compiler fails fast instead of grinding.
+///
+/// The defaults leave about twice the room the largest bundled grammars take, as big as tree-sitter's own tables for
+/// them: Bash's 8,911 states (tree-sitter's: 7,571) and TypeScript's 8,876 (5,986), TypeScript's largest state at under
+/// 4,000 production positions, and Kotlin's 345,000 actions and gotos.
 public struct GrammarCompilationLimits: Sendable, Equatable {
     public var maxExpandedAlternativesPerRule: Int
     public var maxFlattenedProductions: Int
@@ -14,10 +18,10 @@ public struct GrammarCompilationLimits: Sendable, Equatable {
         maxExpandedAlternativesPerRule: Int = 4_096,
         maxFlattenedProductions: Int = 50_000,
         maxProductionSymbols: Int = 200_000,
-        maxItemsPerState: Int = 2_000,
-        maxStates: Int = 4_000,
-        maxTransitions: Int = 200_000,
-        maxLookaheadItems: Int = 10_000_000
+        maxItemsPerState: Int = 8_000,
+        maxStates: Int = 20_000,
+        maxTransitions: Int = 1_000_000,
+        maxLookaheadItems: Int = 50_000_000
     ) {
         self.maxExpandedAlternativesPerRule = maxExpandedAlternativesPerRule
         self.maxFlattenedProductions = maxFlattenedProductions
@@ -52,7 +56,7 @@ public enum ParseTableCompiler: Sendable {
     /// The version of what ``compile(_:limits:)`` produces, for caches of compiled tables and of failed compiles to
     /// key on: bumped whenever the outcome of compiling the same grammar changes, tables or error, which a change to
     /// the default limits can do too, so no cache hands out what an older compiler made.
-    public static let formatVersion = 17
+    public static let formatVersion = 18
 
     /// Compile a grammar definition into parse tables.
     public static func compile(
