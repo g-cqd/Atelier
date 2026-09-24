@@ -135,8 +135,19 @@ package struct HoverDocument: @unchecked Sendable {
             },
             diagnostics: [],
             // Just short of opaque, so a trace of the panel's material keeps the chip set into the glass.
-            chipBackground: palette.background.withAlphaComponent(0.94)
+            chipBackground: chipColor(for: palette.background)
         )
+    }
+
+    /// Preserves a system background's light and dark variants when giving the declaration chip its translucency.
+    private static func chipColor(for background: NSColor) -> NSColor {
+        NSColor(name: nil) { appearance in
+            var resolved = background
+            appearance.performAsCurrentDrawingAppearance {
+                resolved = (background.usingColorSpace(.sRGB) ?? background).withAlphaComponent(0.94)
+            }
+            return resolved
+        }
     }
 
     /// Renders a prose piece through Foundation's markdown parser, as plain text where it fails. Runs without a color
