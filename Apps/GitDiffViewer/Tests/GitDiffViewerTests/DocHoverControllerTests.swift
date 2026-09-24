@@ -298,4 +298,219 @@ struct DocHoverControllerTests {
         #expect(spy.calls.map(\.row) == [0, 1])
         #expect(controller.isPanelVisible == true)
     }
+
+    // MARK: Staying open under the pointer (HOVER-20, criterion 7)
+
+    /// A controller whose panel orders no window in, on a text view in a window placed well inside the screen, so the
+    /// panel opens below its identifier, and a test clock that drives both the debounce and the grace delay.
+    private struct StayOpenSUT {
+        let controller: DocHoverController
+        let panel: HoverDocPanel
+        let spy: ResolverSpy
+        let taskProvider: TaskProviderSpy
+        let clock: TestClock
+        let textView: NSTextView
+        let rendered: RenderedText
+    }
+
+    private func makeStayOpenSUT() throws -> StayOpenSUT {
+        let rendered = try rendered()
+        let view = textView(showing: rendered)
+        view.frame = NSRect(x: 0, y: 0, width: 800, height: 200)
+        try #require(view.window).setFrame(NSRect(x: 200, y: 400, width: 800, height: 200), display: false)
+        let taskProvider = TaskProviderSpy.tolerant()
+        let clock = TestClock()
+        let panel = HoverDocPanel(ordersWindowIn: false)
+        let controller = DocHoverController(
+            clock: clock, taskProvider: taskProvider, debounce: .milliseconds(300), panel: panel)
+        let spy = ResolverSpy(holdsLookups: false)
+        controller.resolve = { hit in await spy.resolve(hit) }
+        controller.attach(to: view) { rendered }
+        return StayOpenSUT(
+            controller: controller, panel: panel, spy: spy, taskProvider: taskProvider, clock: clock, textView: view,
+            rendered: rendered)
+    }
+
+    /// Rests on `alphaBeta` through the debounce, so its panel shows.
+    private func showPanelOnRowZero(_ sut: StayOpenSUT) async throws {
+        let mark = sut.clock.registrationMark()
+        sut.controller.pointerMoved(to: point(row: 0, column: 8, in: sut.rendered))
+        try await sut.clock.expectSleepers(after: mark)
+        sut.clock.advance(by: sut.controller.debounce)
+        try await sut.taskProvider.waitForAllTasks()
+        try #require(sut.controller.isPanelVisible)
+    }
+
+    /// Row 0 at `column`, `fraction` of the way down the line.
+    private func point(row: Int, column: Double, lineFraction fraction: CGFloat, in rendered: RenderedText) -> NSPoint {
+        let charWidth = ("0" as NSString).size(withAttributes: [.font: rendered.palette.font]).width
+        return NSPoint(
+            x: DiffPaneMetrics.lineFragmentPadding + CGFloat(column) * charWidth,
+            y: DiffPaneMetrics.containerInset + (CGFloat(row) + fraction) * rendered.lineHeight)
+    }
+
+    /// Over the space between `let` and `alphaBeta`, in the line's top quarter: off the symbol, the corridor below it
+    /// and the panel.
+    private func awayPoint(_ sut: StayOpenSUT) -> NSPoint {
+        point(row: 0, column: 3.5, lineFraction: 0.25, in: sut.rendered)
+    }
+
+    @Test
+    func `moving from the symbol through the corridor onto the panel keeps it open`() async throws {
+        let sut = try makeStayOpenSUT()
+        try await showPanelOnRowZero(sut)
+
+        // Past `alphaBeta`, over ` = 1`, in the lower half of its line, which the panel below lies along.
+        sut.controller.pointerMoved(to: point(row: 0, column: 14.5, lineFraction: 0.85, in: sut.rendered))
+        sut.panel.pointerEntered()
+        sut.clock.advance(by: .seconds(5))
+        try await sut.taskProvider.waitForAllTasks()
+
+        #expect(sut.controller.isPanelVisible)
+        #expect(sut.spy.calls.count == 1)
+    }
+
+    @Test
+    func `leaving the symbol, the corridor and the panel closes it after the grace delay, and not before`()
+        async throws
+    {
+        let sut = try makeStayOpenSUT()
+        try await showPanelOnRowZero(sut)
+
+        let mark = sut.clock.registrationMark()
+        sut.controller.pointerMoved(to: awayPoint(sut))
+        try await sut.clock.expectSleepers(after: mark)
+        sut.clock.advance(by: DocHoverController.closeGraceDelay - .milliseconds(1))
+        #expect(sut.controller.isPanelVisible)
+
+        sut.clock.advance(by: .milliseconds(1))
+        try await sut.taskProvider.waitForAllTasks()
+        #expect(!sut.controller.isPanelVisible)
+    }
+
+    enum Return: CaseIterable, Sendable { case symbol, panel }
+
+    @Test(arguments: Return.allCases)
+    func `coming back within the grace delay cancels the close`(to destination: Return) async throws {
+        let sut = try makeStayOpenSUT()
+        try await showPanelOnRowZero(sut)
+
+        let mark = sut.clock.registrationMark()
+        sut.controller.pointerMoved(to: awayPoint(sut))
+        try await sut.clock.expectSleepers(after: mark)
+        sut.clock.advance(by: DocHoverController.closeGraceDelay / 2)
+        switch destination {
+            case .symbol: sut.controller.pointerMoved(to: point(row: 0, column: 8, in: sut.rendered))
+            case .panel: sut.panel.pointerEntered()
+        }
+        sut.clock.advance(by: .seconds(5))
+        try await sut.taskProvider.waitForAllTasks()
+
+        #expect(sut.controller.isPanelVisible)
+        // Back on its own symbol, the panel is not looked up again.
+        #expect(sut.spy.calls.count == 1)
+    }
+
+    @Test
+    func `leaving the pane for anywhere but the panel closes it after the grace delay`() async throws {
+        let sut = try makeStayOpenSUT()
+        try await showPanelOnRowZero(sut)
+
+        let mark = sut.clock.registrationMark()
+        sut.controller.pointerLeftTextView()
+        try await sut.clock.expectSleepers(after: mark)
+        #expect(sut.controller.isPanelVisible)
+        sut.clock.advance(by: DocHoverController.closeGraceDelay)
+        try await sut.taskProvider.waitForAllTasks()
+
+        #expect(!sut.controller.isPanelVisible)
+    }
+
+    @Test
+    func `leaving the panel closes it after the grace delay`() async throws {
+        let sut = try makeStayOpenSUT()
+        try await showPanelOnRowZero(sut)
+        sut.panel.pointerEntered()
+
+        let mark = sut.clock.registrationMark()
+        sut.panel.pointerExited()
+        try await sut.clock.expectSleepers(after: mark)
+        #expect(sut.controller.isPanelVisible)
+        sut.clock.advance(by: DocHoverController.closeGraceDelay)
+        try await sut.taskProvider.waitForAllTasks()
+
+        #expect(!sut.controller.isPanelVisible)
+    }
+
+    /// Over the panel, the pointer is not over the text: a move the pane still reports looks nothing up.
+    @Test
+    func `while the pointer is over the panel, moves beneath it look nothing up`() async throws {
+        let sut = try makeStayOpenSUT()
+        try await showPanelOnRowZero(sut)
+        let spawned = sut.taskProvider.spawnedTaskCount
+
+        sut.panel.pointerEntered()
+        sut.controller.pointerMoved(to: point(row: 1, column: 8, in: sut.rendered))
+
+        #expect(sut.taskProvider.spawnedTaskCount == spawned)
+        #expect(sut.controller.isPanelVisible)
+    }
+
+    @Test
+    func `hovering another symbol replaces the panel after the debounce, the first staying until then`()
+        async throws
+    {
+        let sut = try makeStayOpenSUT()
+        try await showPanelOnRowZero(sut)
+
+        let mark = sut.clock.registrationMark()
+        sut.controller.pointerMoved(to: point(row: 1, column: 8, in: sut.rendered))
+        #expect(sut.controller.isPanelVisible)
+        try await sut.clock.expectSleepers(after: mark)
+        sut.clock.advance(by: sut.controller.debounce)
+        try await sut.taskProvider.waitForAllTasks()
+
+        #expect(sut.spy.calls.map(\.row) == [0, 1])
+        #expect(sut.controller.isPanelVisible)
+        // The new symbol's panel does not close on the grace delay the old one's would have started.
+        sut.clock.advance(by: .seconds(5))
+        try await sut.taskProvider.waitForAllTasks()
+        #expect(sut.controller.isPanelVisible)
+    }
+
+    @Test
+    func `escape closes the panel`() async throws {
+        let sut = try makeStayOpenSUT()
+        try await showPanelOnRowZero(sut)
+        let escape = try #require(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+                characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
+
+        #expect(sut.controller.handleLocalEvent(escape) == nil)
+        #expect(!sut.controller.isPanelVisible)
+    }
+
+    @Test
+    func `a click outside the panel closes it and still reaches its target`() async throws {
+        let sut = try makeStayOpenSUT()
+        try await showPanelOnRowZero(sut)
+        let click = try #require(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+
+        #expect(sut.controller.handleLocalEvent(click) === click)
+        #expect(!sut.controller.isPanelVisible)
+    }
+
+    @Test
+    func `the pane's window resigning key closes the panel`() async throws {
+        let sut = try makeStayOpenSUT()
+        try await showPanelOnRowZero(sut)
+
+        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: sut.textView.window)
+
+        #expect(!sut.controller.isPanelVisible)
+    }
 }
