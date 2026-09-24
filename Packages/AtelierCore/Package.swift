@@ -59,7 +59,7 @@ let package = Package(
             dependencies: ["AtelierSyntaxModel", .product(name: "AemiKernel", package: "aemi")],
             swiftSettings: strict
         ),
-        // Hand-written, allocation-free scanners over UTF-16 units for the lexical tier.
+        // Hand-written scanners over borrowed UTF-8 bytes for the lexical tier; a scan allocates only its token array.
         .target(name: "AtelierLexers", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
         // swift-syntax support: the syntax tier's token provider, and the deep stack every swift-syntax parse and
         // tree walk runs on.
