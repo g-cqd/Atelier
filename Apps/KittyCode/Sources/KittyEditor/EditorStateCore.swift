@@ -587,53 +587,45 @@ public final class EditorState {
         return true
     }
 
-    private static let viewportHighlightThreshold = 1000
+    /// The lines below the screen that a refresh also highlights at once, so a short scroll finds them styled.
+    private static let viewportHighlightMargin = 20
 
+    /// Highlights the lines on screen from the rope, reading no other line, and hands the rest of the document to the
+    /// background full pass. Until that pass lands, every other line holds no spans, which the editor draws as plain
+    /// text, so the text itself never waits for highlighting.
+    /// - Complexity: O(bytes on screen) to highlight, plus an O(line count) array of empty placeholders.
     public func refreshHighlights() {
-        guard syntaxHighlightingEnabled else {
-            highlightedLines = fileContent.map { line in
-                [StyledSpan(text: line, style: colorScheme.editorText)]
-            }
-            return
-        }
-        let session = currentHighlightSession()
-        if session.prefersLineInput {
-            highlightedLines = session.highlightLines(fileContent)
-            return
-        }
-
+        highlightGeneration &+= 1
         let lineCount = fileLineCount
-        let source = documentText
-
-        // For small files, highlight everything synchronously
-        guard lineCount > Self.viewportHighlightThreshold else {
-            highlightedLines = session.highlightDocument(source: source)
-            return
+        let viewport = highlightViewportRange(lineCount: lineCount)
+        var lines = Array(repeating: [StyledSpan](), count: lineCount)
+        let viewportHighlights = highlightViewport(of: textBuffer, in: viewport)
+        if viewportHighlights.count == viewport.count {
+            lines.replaceSubrange(viewport, with: viewportHighlights)
         }
-
-        // Viewport-first: highlight only visible lines, then schedule full in background
-        let visibleStart = max(0, scrollOffset)
-        let visibleEnd = min(lineCount, visibleStart + lastRenderRows + 20)
-        let visibleRange = visibleStart ..< visibleEnd
-
-        // Start with plain text for all lines
-        let defaultStyle = colorScheme.editorText
-        var lines = fileContent.map { line in
-            [StyledSpan(text: line, style: defaultStyle)]
+        replaceHighlightedLines(with: lines)
+        // Plain text needs no pass: an empty line of spans already draws as plain text.
+        if syntaxHighlightingEnabled, viewport != 0 ..< lineCount {
+            requestFullHighlight()
         }
+    }
 
-        // Highlight the viewport synchronously
-        let viewportHighlights = session.highlightViewport(
-            source: source, visibleLineRange: visibleRange)
-        for (i, highlight) in viewportHighlights.enumerated() {
-            let lineIdx = visibleStart + i
-            if lineIdx < lines.count {
-                lines[lineIdx] = highlight
-            }
+    /// The lines on screen and a margin below them.
+    private func highlightViewportRange(lineCount: Int) -> Range<Int> {
+        let start = min(max(0, scrollOffset), lineCount - 1)
+        return start ..< min(lineCount, start + lastRenderRows + Self.viewportHighlightMargin)
+    }
+
+    /// The spans of `viewport`'s lines, read from `document` alone: a comment or string opened above the viewport
+    /// is not seen, so the full pass restyles those lines.
+    /// - Complexity: O(bytes of the viewport's lines), plus an O(log n) seek in a rope.
+    func highlightViewport(of document: some DocumentSource, in viewport: Range<Int>) -> [[StyledSpan]] {
+        let lines = document.lines(in: viewport)
+        guard syntaxHighlightingEnabled else {
+            let style = colorScheme.editorText
+            return lines.map { [StyledSpan(text: $0, style: style)] }
         }
-        highlightedLines = lines
-
-        fullHighlightContinuation.yield(())
+        return currentHighlightSession().highlightLines(lines)
     }
 
     private func currentHighlightSession() -> LanguageHighlighter.Session {
@@ -672,16 +664,16 @@ public final class EditorState {
         highlightedLines.replaceSubrange(mutation.originalLineRange, with: updatedHighlights)
 
         // A comment or string the edit opened or closed restyles what follows it: re-scan the visible window with
-        // some lookback so the screen is right at once, and hand the rest of the document to the coalesced full
-        // pass when the window's last line changed style, which is the sign of a construct running past it.
+        // some lookback so the screen is right at once, and hand the rest of the document to the full pass when the
+        // window's last line changed style, which is the sign of a construct running past it.
         let window = highlightWindow(around: mutation.updatedLineRange, lineCount: lineCount)
         guard window != mutation.updatedLineRange, window.upperBound <= highlightedLines.count else { return }
         let before = highlightedLines[window.upperBound - 1]
         let windowHighlights = session.highlightLines(textBuffer.lines(in: window))
         guard windowHighlights.count == window.count else { return }
         highlightedLines.replaceSubrange(window, with: windowHighlights)
-        if windowHighlights[windowHighlights.count - 1] != before, lineCount > Self.viewportHighlightThreshold {
-            fullHighlightContinuation.yield(())
+        if windowHighlights[windowHighlights.count - 1] != before, window.upperBound < lineCount {
+            requestFullHighlight()
         }
     }
 
@@ -1233,11 +1225,23 @@ public final class EditorState {
     @ObservationIgnored public var lastKeyRepeatProcessedAt: ClockInstant?
     @ObservationIgnored public var pendingKeySequence: [KeyStroke] = []
     @ObservationIgnored public var pendingKeySequenceTime: ClockInstant?
-    /// The consumer of `fullHighlightSignal`, started by `init`: `bufferingNewest(1)` turns a burst of highlight
-    /// requests into one full-document pass, with no task spawned per keystroke.
+    /// The consumer of `fullHighlightSignal`, started by `init`. It waits for each full pass before taking the next
+    /// request, so passes never overlap, and `bufferingNewest(1)` turns the requests of a burst into one pass.
     @ObservationIgnored public var fullHighlightTask: Task<Void, Never>?
     @ObservationIgnored public let fullHighlightSignal: AsyncStream<Void>
     @ObservationIgnored public let fullHighlightContinuation: AsyncStream<Void>.Continuation
+    /// The detached task running the current full pass; `shutdown()` cancels it.
+    @ObservationIgnored private var fullHighlightWorkTask: Task<Void, Never>?
+    /// Advanced by every `refreshHighlights()`: a pass that read the document before it may style it with a theme, a
+    /// language or a setting that no longer holds.
+    @ObservationIgnored private var highlightGeneration: UInt64 = 0
+    /// Highlighted lines the state no longer shows, freed off the main actor by a consumer `init` starts and
+    /// `shutdown()` ends.
+    @ObservationIgnored private let retiredHighlights: AsyncStream<[[StyledSpan]]>.Continuation
+    /// The full pass itself, run on a detached task; a test substitutes it to see where and when a pass runs.
+    @ObservationIgnored var fullHighlightCompute: @Sendable (FullHighlightInput) async -> FullHighlightResult = {
+        EditorState.computeFullHighlight($0)
+    }
     public var fileTreeHistory = FileTreeOperationHistory()
 
     public var maxLineWidth: Int {
@@ -1295,6 +1299,8 @@ public final class EditorState {
         let (stream, cont) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         self.fullHighlightSignal = stream
         self.fullHighlightContinuation = cont
+        let (retiredStream, retired) = AsyncStream<[[StyledSpan]]>.makeStream()
+        self.retiredHighlights = retired
         let (searchStream, searchCont) = AsyncStream<Void>
             .makeStream(
                 bufferingPolicy: .bufferingNewest(1))
@@ -1310,6 +1316,10 @@ public final class EditorState {
         }
 
         startFullHighlightConsumer()
+        taskProvider.detachedTask(role: .observation, priority: .utility) {
+            // Each array is freed here, on this task's thread, when the loop lets go of it.
+            for await _ in retiredStream {}
+        }
         startWorkspaceSearchDebounceConsumer()
         refreshHighlights()
     }
@@ -1342,11 +1352,14 @@ public final class EditorState {
         }
     }
 
-    /// Stops the full-highlight and search-debounce consumers and an owned search pool, so no task outlives the
-    /// state; `AppMain` calls it alongside `GitDecorationManager.stop()`.
+    /// Stops the full-highlight and search-debounce consumers, a full pass in flight and an owned search pool, so no
+    /// task outlives the state; `AppMain` calls it alongside `GitDecorationManager.stop()`.
     public func shutdown() {
         fullHighlightContinuation.finish()
         fullHighlightTask?.cancel()
+        fullHighlightWorkTask?.cancel()
+        fullHighlightWorkTask = nil
+        retiredHighlights.finish()
         workspaceSearchDebounceContinuation.finish()
         workspaceSearchDebounceTask?.cancel()
         workspaceSearchDebounceTask = nil
@@ -1354,22 +1367,54 @@ public final class EditorState {
         if ownsSearchPool { searchPool.shutdown() }
     }
 
-    /// The full-document pass over the current state, not the signal's; a result the document has outrun is dropped.
+    /// Runs one full pass over a snapshot of the document on a detached task, which installs the result on the main
+    /// actor, and waits for it.
     private func performFullHighlight() async {
         guard syntaxHighlightingEnabled else { return }
-        let session = currentHighlightSession()
+        let request = currentHighlightRequest
+        let input = FullHighlightInput(textBuffer: textBuffer, language: currentLanguage, theme: syntaxTheme)
+        let compute = fullHighlightCompute
+        let work = taskProvider.detachedTask(role: .work) { [weak self] in
+            let result = await compute(input)
+            guard !Task.isCancelled else { return }
+            await self?.installFullHighlight(result, for: request)
+        }
+        fullHighlightWorkTask = work
+        await work.value
+        if fullHighlightWorkTask == work { fullHighlightWorkTask = nil }
+    }
 
-        let lineCount = fileLineCount
-        guard lineCount > Self.viewportHighlightThreshold else { return }
-
-        let source = documentText
-        let fullHighlights =
-            session.prefersLineInput ? session.highlightLines(fileContent) : session.highlightDocument(source: source)
-
-        guard documentText == source else { return }
-        highlightedLines = fullHighlights
+    /// Installs a finished pass while the buffer, its version, its text and the refresh the pass followed are still
+    /// the ones it read. A pass its own document has outrun asks for another, since the edits that outran it may not.
+    private func installFullHighlight(_ result: FullHighlightResult, for request: HighlightRequest) {
+        let current = currentHighlightRequest
+        guard request == current, result.highlightedLines.count == fileLineCount else {
+            if request.bufferID == current.bufferID { requestFullHighlight() }
+            return
+        }
+        replaceHighlightedLines(with: result.highlightedLines)
         markContentAllDirty()
         renderRefreshSource?.invalidate()
+    }
+
+    /// Installs `lines` and retires the previous highlights: freeing a large document's spans one heap object at a
+    /// time held the main actor for 75 ms at a million lines.
+    private func replaceHighlightedLines(with lines: [[StyledSpan]]) {
+        let previous = highlightedLines
+        highlightedLines = lines
+        retiredHighlights.yield(previous)
+    }
+
+    private var currentHighlightRequest: HighlightRequest {
+        let buffer = bufferManager.activeBuffer
+        return HighlightRequest(
+            bufferID: buffer.map(ObjectIdentifier.init), documentVersion: buffer?.documentVersion ?? 0,
+            contentHash: textBuffer.contentHash, generation: highlightGeneration)
+    }
+
+    /// Asks the consumer for a full pass; the requests of a burst make one pass.
+    private func requestFullHighlight() {
+        fullHighlightContinuation.yield(())
     }
 
     public func nextOpenRequestID() -> UInt64 {
@@ -1419,7 +1464,6 @@ public final class EditorState {
         cachedMaxLineWidth = TextDocument.computeMaxLineWidth(
             in: snapshot.textBuffer, tabSize: config.editor.tabSize)
         highlightSession = nil
-        highlightedLines = []
         selection = snapshot.selection
         wrapCache.invalidate()
 
@@ -1433,6 +1477,7 @@ public final class EditorState {
             buffer.cachedDocumentText = nil
             buffer.cachedMaxLineWidth = cachedMaxLineWidth
             buffer.cachedSerializedByteCount = nil
+            retiredHighlights.yield(buffer.highlightedLines)
             buffer.highlightedLines = []
             buffer.highlightSession = nil
             buffer.documentVersion += 1
@@ -1534,5 +1579,44 @@ public final class EditorState {
         refreshHighlights()
         // Theme / config / symbol-theme swap touches every visible cell.
         markEverythingDirty()
+    }
+}
+
+// MARK: - Full-document highlighting
+
+extension EditorState {
+    /// What a full pass reads: a snapshot of the rope, O(1) to take, and the language and theme to highlight with.
+    struct FullHighlightInput: Sendable {
+        let textBuffer: TextBuffer
+        let language: String?
+        let theme: Theme
+    }
+
+    /// A full pass's product: the spans of every line.
+    struct FullHighlightResult: Sendable {
+        let highlightedLines: [[StyledSpan]]
+    }
+
+    /// The state a full pass starts from; its result is installed only while the state is unchanged.
+    struct HighlightRequest: Equatable, Sendable {
+        /// The active buffer, so a pass started in another tab never lands in this one.
+        let bufferID: ObjectIdentifier?
+        /// The buffer's version, which every edit, undo and redo advances.
+        let documentVersion: Int
+        /// The rope's O(1) hash, for text replaced without a buffer or a version.
+        let contentHash: Int
+        /// The refresh the pass follows, for a theme, language or setting changed since.
+        let generation: UInt64
+    }
+
+    /// The whole document highlighted lexically in one scan, so a comment or string spanning lines is styled as one.
+    /// Reads the rope's bytes without caching its text, since the live buffer and the undo history share the storage.
+    /// - Complexity: O(document bytes).
+    nonisolated private static func computeFullHighlight(_ input: FullHighlightInput) -> FullHighlightResult {
+        let rope = input.textBuffer.ropeSnapshot
+        let source = String(decoding: rope.bytes(in: 0 ..< rope.byteCount), as: UTF8.self)
+        let session = LanguageHighlighter.makeSession(
+            language: input.language, theme: input.theme, preferGrammar: false)
+        return FullHighlightResult(highlightedLines: session.highlightDocument(source: source))
     }
 }
