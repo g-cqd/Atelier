@@ -2,17 +2,17 @@ public import AtelierGrammar
 
 /// GLR parser: forks on a conflict, keeps every fork reducing, and merges stacks that reach the same state history.
 public final class GLRParser: Sendable {
-    private let parseTable: ParseTable
-    private let lexTable: LexTable
+    let parseTable: ParseTable
+    let lexTable: LexTable
     private let productions: [ProductionRule]
     /// O(1) terminal name -> index lookup.
-    private let terminalIndex: [String: Int]
+    let terminalIndex: [String: Int]
     /// O(1) non-terminal name -> index lookup.
     private let nonTerminalIndex: [String: Int]
     /// The lex table's automaton laid out for reading; nil for a table without lex modes.
     private let scanner: TokenScanner?
     /// The terminal index of each of the lex table's tokens; nil for an extra, which the table does not take.
-    private let tokenTerminals: [Int?]
+    let tokenTerminals: [Int?]
 
     public init(parseTable: ParseTable, lexTable: LexTable, productions: [ProductionRule]) {
         self.parseTable = parseTable
@@ -32,8 +32,8 @@ public final class GLRParser: Sendable {
         self.tokenTerminals = lexTable.tokens.map { tIdx[$0.name] }
     }
 
-    private static let maxStacks = 256
-    private static let maxTokens = 100_000
+    static let maxStacks = 256
+    static let maxTokens = 100_000
     /// The deepest tree a parse builds: well past 5,000 levels of JSON nesting, which take about 15,000 levels of
     /// objects or 10,000 of arrays, and well within what a consumer that still recurses survives on the 8 MB main
     /// thread in a release build.
@@ -60,7 +60,7 @@ public final class GLRParser: Sendable {
     ///   (at most the table's state count plus the stack's depth d), and d for merging stacks.
     public func parse(
         _ source: String,
-        externalScanner: (any ExternalScanner)? = nil
+        externalScanner: (any GrammarExternalScanner)? = nil
     ) throws(ParseError) -> SyntaxTree {
         try parse(source, externalScanner: externalScanner, isCancelled: { Task.isCancelled })
     }
@@ -72,29 +72,34 @@ public final class GLRParser: Sendable {
     /// table without them is lexed context-free, all at once.
     func parse(
         _ source: String,
-        externalScanner: (any ExternalScanner)?,
+        externalScanner: (any GrammarExternalScanner)?,
         isCancelled: () -> Bool
     ) throws(ParseError) -> SyntaxTree {
+        if let externalScanner, let scanner, !parseTable.externalNames.isEmpty {
+            guard type(of: externalScanner).externalNames == parseTable.externalNames else {
+                throw .parsingFailed("External scanner symbols do not match the grammar")
+            }
+            try validateExternalTable()
+            let outcome = Self.withUTF8(of: source) { utf8 in
+                Result { () throws(ParseError) in
+                    try parseWithExternals(
+                        source, utf8: utf8, scanner: scanner,
+                        externalScanner: externalScanner, isCancelled: isCancelled)
+                }
+            }
+            return try outcome.get()
+        }
         guard let scanner else {
-            let lexer = Lexer(lexTable: lexTable, externalScanner: externalScanner)
+            let lexer = Lexer(lexTable: lexTable)
             var tokens = TokenizedSource(lexer.tokenize(source), terminalIndex: terminalIndex)
             return try parse(source, from: &tokens, isCancelled: isCancelled)
         }
         let outcome = Self.withUTF8(of: source) { utf8 in
             var tokens = ScannedTokenSource(
-                utf8, scanner: scanner, tokens: lexTable.tokens, tokenTerminals: tokenTerminals,
-                terminalIndex: terminalIndex, externalScanner: externalScanner)
+                utf8, scanner: scanner, tokens: lexTable.tokens, tokenTerminals: tokenTerminals)
             return Result { () throws(ParseError) in try parse(source, from: &tokens, isCancelled: isCancelled) }
         }
         return try outcome.get()
-    }
-
-    /// `body` over the UTF-8 bytes of `source`, copied only when the string does not store them contiguously.
-    private static func withUTF8<Value>(of source: String, _ body: (UnsafeBufferPointer<UInt8>) -> Value) -> Value {
-        if let value = source.utf8.withContiguousStorageIfAvailable(body) {
-            return value
-        }
-        return Array(source.utf8).withUnsafeBufferPointer(body)
     }
 
     /// Parses `source` from the tokens `tokens` reads out of it.
@@ -153,7 +158,7 @@ public final class GLRParser: Sendable {
 
     /// Moves every stack past `token`: its reductions, then its shift, then merging and pruning. Throws
     /// ``treeTooDeep`` when a reduction would build a node deeper than ``maxTreeDepth``, after releasing every stack.
-    private func advance(
+    func advance(
         _ stacks: consuming [ParseStack],
         past token: ParseToken,
         at tokenIndex: Int
@@ -170,6 +175,7 @@ public final class GLRParser: Sendable {
             )
             for index in marked.indices {
                 marked[index].pushNode(node)
+                marked[index].isRecovering = true
             }
             return marked
         }
@@ -209,7 +215,7 @@ public final class GLRParser: Sendable {
     ///
     /// A reduction that would build a node taller than ``maxTreeDepth`` sets `exceededDepth` and stops all reducing:
     /// every stack comes out as it is, for the caller to release.
-    private func applyReduces(
+    func applyReduces(
         to stacks: consuming [ParseStack],
         lookahead: Int,
         exceededDepth: inout Bool
@@ -284,6 +290,7 @@ public final class GLRParser: Sendable {
                 case .shift(let nextState):
                     stack.pushNode(leaf)
                     stack.state = nextState
+                    stack.isRecovering = false
                     shifted.append(stack)
                     continue
                 case .accept:
@@ -300,6 +307,7 @@ public final class GLRParser: Sendable {
             guard let lastTarget = shiftTargets.last else {
                 stack.pushNode(
                     SyntaxNode(type: "ERROR", byteRange: token.byteRange, pointRange: token.pointRange, isError: true))
+                stack.isRecovering = true
                 shifted.append(stack)
                 continue
             }
@@ -308,10 +316,12 @@ public final class GLRParser: Sendable {
                 var fork = stack
                 fork.pushNode(leaf)
                 fork.state = nextState
+                fork.isRecovering = false
                 shifted.append(fork)
             }
             stack.pushNode(leaf)
             stack.state = lastTarget
+            stack.isRecovering = false
             shifted.append(stack)
         }
         return shifted
@@ -379,7 +389,7 @@ public final class GLRParser: Sendable {
 extension GLRParser {
     /// The stack's only node, or a node above its nodes spanning the source, `byteCount` bytes ending at `endPoint`.
     /// That extra level must not take the tree past ``maxTreeDepth``: then the parse declines, freeing the stack.
-    private func buildRootNode(
+    func buildRootNode(
         from stack: consuming ParseStack,
         byteCount: Int,
         endPoint: Point
@@ -403,7 +413,7 @@ extension GLRParser {
     /// `root` with an extra child per token of `extras`, such as a comment, in source order, and its ranges widened to
     /// cover them, or a query limited to a comment's range would skip the root with the comment. `extras` is in source
     /// order.
-    private func attachingExtras(_ extras: [ParseToken], to root: consuming SyntaxNode) -> SyntaxNode {
+    func attachingExtras(_ extras: [ParseToken], to root: consuming SyntaxNode) -> SyntaxNode {
         guard let first = extras.first, let last = extras.last else { return root }
         for token in extras {
             root.children.append(

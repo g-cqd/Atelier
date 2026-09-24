@@ -185,7 +185,8 @@ let package = Package(
             name: "AtelierThemeTests", dependencies: ["AtelierTheme", "AtelierSyntaxModel"], swiftSettings: strict),
         .testTarget(name: "AtelierTextTests", dependencies: ["AtelierText"], swiftSettings: strict),
         .testTarget(name: "AtelierGrammarTests", dependencies: ["AtelierGrammar"], swiftSettings: strict),
-        .testTarget(name: "AtelierParserTests", dependencies: ["AtelierParser"], swiftSettings: strict),
+        .testTarget(
+            name: "AtelierParserTests", dependencies: ["AtelierParser", "AtelierScanners"], swiftSettings: strict),
         .testTarget(name: "AtelierQueryTests", dependencies: ["AtelierQuery"], swiftSettings: strict),
         .testTarget(
             name: "AtelierScannersTests", dependencies: ["AtelierScanners", "AtelierParser"], swiftSettings: strict),

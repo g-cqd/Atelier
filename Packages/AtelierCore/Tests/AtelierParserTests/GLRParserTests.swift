@@ -50,17 +50,4 @@ struct GLRParserTests {
         #expect(tree.root.children.map(\.type) == ["a", "b"])
         #expect(tree.root.child(forField: "rhs")?.type == "b")
     }
-
-    @Test
-    func `NullExternalScanner serialize returns empty`() {
-        let scanner = NullExternalScanner()
-        #expect(scanner.serialize().isEmpty)
-    }
-
-    @Test
-    func `NullExternalScanner deserialize is no-op`() {
-        var scanner = NullExternalScanner()
-        scanner.deserialize([1, 2, 3])
-        #expect(scanner.serialize().isEmpty)
-    }
 }

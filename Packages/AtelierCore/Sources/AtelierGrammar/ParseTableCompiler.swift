@@ -52,7 +52,7 @@ public enum ParseTableCompiler: Sendable {
     /// The version of what ``compile(_:limits:)`` produces, for caches of compiled tables and of failed compiles to
     /// key on: bumped whenever the outcome of compiling the same grammar changes, tables or error, which a change to
     /// the default limits can do too, so no cache hands out what an older compiler made.
-    public static let formatVersion = 12
+    public static let formatVersion = 13
 
     /// Compile a grammar definition into parse tables.
     public static func compile(
@@ -84,10 +84,11 @@ public enum ParseTableCompiler: Sendable {
             limits: limits
         )
 
-        let table = ParseActionResolver(
+        var table = ParseActionResolver(
             productions: flattened, firstSets: firstSets, conflicts: grammar.conflicts.map(Set.init)
         )
         .parseTable(itemSets: itemSets, transitions: transitions, terminals: terminals, nonTerminals: nonTerminals)
+        populateExternalSymbols(in: &table, grammar: grammar, lexical: lexical)
 
         let productions = flattened.map { production in
             ProductionRule(
@@ -122,6 +123,55 @@ public enum ParseTableCompiler: Sendable {
     }
 
     // MARK: - Private
+
+    /// The name the tables give each of `grammar`'s externals, in grammar order: a symbol's name, a string's text, or a
+    /// pattern's source. A scanner declares the same names, and the parser checks them before calling it.
+    static func externalNames(of grammar: GrammarDefinition) -> [String] {
+        grammar.externals.enumerated()
+            .map { index, rule in
+                switch rule {
+                    case .symbol(let name): name
+                    case .string(let value): value
+                    case .pattern(let value): value
+                    default: "_external_\(index)"
+                }
+            }
+    }
+
+    /// Gives each external its terminal and per-state validity in grammar order.
+    private static func populateExternalSymbols(
+        in table: inout ParseTable, grammar: GrammarDefinition, lexical: LexicalGrammar
+    ) {
+        table.externalNames = externalNames(of: grammar)
+        table.externalSymbols = grammar.externals.enumerated()
+            .map { index, rule in
+                switch rule {
+                    case .symbol(let name): name
+                    case .string(let value): "\"\(value)\""
+                    case .pattern:
+                        lexical.tokens.first(where: { $0.rule == rule })?.name ?? table.externalNames[index]
+                    default: table.externalNames[index]
+                }
+            }
+        let extraNames = Set(
+            grammar.extras.compactMap { rule -> String? in
+                switch rule {
+                    case .symbol(let name): name
+                    case .string(let value): "\"\(value)\""
+                    default: nil
+                }
+            })
+        table.externalIsExtra = table.externalSymbols.map { extraNames.contains($0) }
+        let terminalIndex = Dictionary(uniqueKeysWithValues: table.terminals.enumerated().map { ($1, $0) })
+        table.validExternals = table.actions.map { row in
+            table.externalSymbols.enumerated()
+                .map { external, name in
+                    if table.externalIsExtra[external] { return true }
+                    guard let terminal = terminalIndex[name] else { return false }
+                    return row[terminal] != .error
+                }
+        }
+    }
 
     private static func literalText(of rule: Rule) -> String? {
         switch rule {

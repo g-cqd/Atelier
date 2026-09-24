@@ -16,6 +16,11 @@ extension ParseTableCompiler.CompilationResult {
         let states = 0 ..< table.stateCount
         guard table.stateCount > 0, table.actions.count == table.stateCount, table.gotos.count == table.stateCount
         else { return false }
+        guard table.externalSymbols.count == table.externalNames.count,
+            table.externalIsExtra.count == table.externalNames.count,
+            table.validExternals.count == table.stateCount,
+            table.validExternals.allSatisfy({ $0.count == table.externalNames.count })
+        else { return false }
         return table.actions.allSatisfy { row in
             row.count == table.terminals.count && row.allSatisfy { isValid($0, states: states, nested: false) }
         }
