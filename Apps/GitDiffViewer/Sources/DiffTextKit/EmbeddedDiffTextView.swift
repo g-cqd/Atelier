@@ -124,14 +124,15 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
 
     /// Sizes the text view to the layout. Lines that fit take the clip view's width exactly and follow it: the width
     /// the card measured can differ from the clip by a point or two, and a text view wider by that much would scroll
-    /// sideways by that much.
+    /// sideways by that much. Before the pane has a width the clip has none either, and the text view starts at none
+    /// too, so that following the clip as it widens leaves it exactly as wide.
     private func size(
         _ textView: NSTextView, in pane: DiffPaneView, for layout: StaticTextLayout, textWidth: CGFloat,
         coordinator: Coordinator
     ) {
         let scrollView = pane.contentView as? NSScrollView
         let fits = layout.contentWidth <= textWidth + 0.5
-        let viewWidth = fits ? max(scrollView?.contentView.bounds.width ?? textWidth, 1) : layout.contentWidth
+        let viewWidth = fits ? max(scrollView?.contentView.bounds.width ?? textWidth, 0) : layout.contentWidth
         let frameSize = NSSize(width: viewWidth, height: layout.height)
         guard coordinator.appliedSize != frameSize || coordinator.appliedMode != wrapMode else { return }
         coordinator.appliedSize = frameSize
