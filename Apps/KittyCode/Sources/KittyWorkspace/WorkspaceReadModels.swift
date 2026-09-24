@@ -11,7 +11,7 @@ public protocol ActiveDocumentView: AnyObject {
     var filePath: String { get }
     var currentLanguage: String? { get }
     var currentLineEnding: TextDocument.LineEnding { get }
-    var highlightedLines: [[StyledSpan]] { get }
+    var highlightedLines: LineHighlights { get }
     var fileLineCount: Int { get }
     var isFileEmpty: Bool { get }
     var serializedByteCount: Int { get }
