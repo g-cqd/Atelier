@@ -49,6 +49,31 @@ struct NamedPrecedenceTests {
         #expect(Self.sexp(tree.root) == "(program (statement_block))")
     }
 
+    /// JavaScript's block holds `repeat(statement)`. Flattened into a helper that derives the empty string, the empty
+    /// block had to reduce that helper before its `}` while the object shifted it: a shift against a reduction of a
+    /// helper that no precedence list names, where tree-sitter compares the two rules themselves.
+    @Test
+    func `an empty repetition leaves the choice between two rules to their precedence`() throws {
+        let grammar = GrammarDefinition(
+            name: "block_with_statements",
+            rules: [
+                ("program", .repeat(.symbol("_statement"))),
+                ("_statement", .choice([.symbol("statement_block"), .symbol("expression_statement")])),
+                ("expression_statement", .seq([.symbol("object"), .optional(.string(";"))])),
+                ("object", .prec(.name("object"), .seq([.string("{"), .string("}")]))),
+                (
+                    "statement_block",
+                    .precRight(0, .seq([.string("{"), .repeat(.symbol("_statement")), .string("}")]))
+                )
+            ],
+            extras: [.pattern(#"\s"#)],
+            precedences: [[.symbol("statement_block"), .literal("object")]])
+
+        let tree = try Self.parser(grammar).parse("{}")
+
+        #expect(Self.sexp(tree.root) == "(program (statement_block))")
+    }
+
     private static func parser(_ grammar: GrammarDefinition) throws -> GLRParser {
         let compiled = try ParseTableCompiler.compile(grammar)
         return GLRParser(
