@@ -99,6 +99,65 @@ struct RenderPipelineShelfTests {
     }
 
     @Test
+    func `the whole list comes back at once after a folder's list and a file showed in between`() async throws {
+        harness.render(pairs, keepingPublished: false)
+        try await harness.taskProvider.waitForAllTasks()
+        let list = harness.sut.cards.map(\.rendered.id)
+        harness.render([pairs[1]], keepingPublished: false)
+        try await harness.taskProvider.waitForAllTasks()
+        let folder = harness.sut.cards.map(\.rendered.id)
+        showFile(pairs[0])
+        try await harness.taskProvider.waitForAllTasks()
+        let start = harness.events.all.count
+
+        harness.render(pairs, keepingPublished: false)
+
+        #expect(harness.sut.cards.map(\.rendered.id) == list)
+        #expect(!harness.sut.isRendering)
+        #expect(harness.events.publishes(since: start) == 1)
+
+        showFile(pairs[0])
+        try await harness.taskProvider.waitForAllTasks()
+        harness.render([pairs[1]], keepingPublished: false)
+        #expect(harness.sut.cards.map(\.rendered.id) == folder)
+        #expect(!harness.sut.isRendering)
+    }
+
+    @Test
+    func `the whole list comes back at once straight from a folder's list`() async throws {
+        harness.render(pairs, keepingPublished: false)
+        try await harness.taskProvider.waitForAllTasks()
+        let list = harness.sut.cards.map(\.rendered.id)
+        harness.render([pairs[1]], keepingPublished: false)
+        try await harness.taskProvider.waitForAllTasks()
+        let start = harness.events.all.count
+
+        harness.render(pairs, keepingPublished: false)
+
+        #expect(harness.sut.cards.map(\.rendered.id) == list)
+        #expect(!harness.sut.isRendering)
+        #expect(harness.events.publishes(since: start) == 1)
+    }
+
+    @Test
+    func `only the lists shown last are kept, so memory stays bounded`() async throws {
+        harness.render(pairs, keepingPublished: false)
+        try await harness.taskProvider.waitForAllTasks()
+        let list = harness.sut.cards.map(\.rendered.id)
+        for folder in 1 ... RenderPipeline.shelfCapacity {
+            harness.render([harness.pair("b\(folder).swift", version: 1)], keepingPublished: false)
+            try await harness.taskProvider.waitForAllTasks()
+        }
+        showFile(pairs[0])
+        try await harness.taskProvider.waitForAllTasks()
+
+        harness.render(pairs, keepingPublished: false)
+        try await harness.taskProvider.waitForAllTasks()
+
+        #expect(Set(harness.sut.cards.map(\.rendered.id)).isDisjoint(with: list))
+    }
+
+    @Test
     func `a cleared pipeline keeps no list to go back to`() async throws {
         let list = try await openFileFromList()
         harness.sut.clear()
