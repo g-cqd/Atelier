@@ -233,6 +233,9 @@ package final class DiffTextViewCoordinator: NSObject {
         textView.selectedTextAttributes = [.backgroundColor: rendered.palette.selection]
         contentStorage.performEditingTransaction {
             guard let storage = contentStorage.textStorage else { return }
+            // TextKit replaces a large text in place in time quadratic in its length; emptying the storage first, in
+            // the same transaction, avoids that (PaneStorageReplacementBenchmark).
+            if storage.length > 0 { storage.setAttributedString(NSAttributedString()) }
             storage.setAttributedString(rendered.attributed)
             rendered.padEmptyLastRow(in: storage)
         }
