@@ -197,7 +197,7 @@ public struct KittyConfig: Codable, Sendable {
         public var showTabRibbonStatus: Bool = true
         public var showOpenFilesStatus: Bool = true
         public var lineChangeDebounceMilliseconds: UInt64 = 150
-        public var maxLineDiffBytes: Int = 1_000_000
+        public var maxLineDiffBytes: Int = 8_000_000
 
         public init() {}
 
