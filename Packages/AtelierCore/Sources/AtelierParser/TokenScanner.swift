@@ -37,6 +37,14 @@ struct TokenScanner: Sendable {
     private let modeStarts: [Int]
     private let stateModes: [Int]
     let errorMode: Int?
+    private let wordToken: Int?
+    private let keywordTrie: [KeywordNode]
+    private let modeValidTokens: [Set<Int>]
+
+    private struct KeywordNode: Sendable {
+        var next: [UInt8: Int] = [:]
+        var token: Int?
+    }
 
     /// Nil for a table without lex modes.
     init?(_ table: LexTable) {
@@ -56,6 +64,26 @@ struct TokenScanner: Sendable {
         self.modeStarts = table.modeStarts
         self.stateModes = table.stateModes
         self.errorMode = table.errorMode
+        self.wordToken = table.wordToken
+        self.modeValidTokens = table.wordToken == nil ? [] : table.modeValidTokens.map(Set.init)
+        var trie = [KeywordNode()]
+        if table.wordToken != nil {
+            for spelling in table.keywordTokens.keys.sorted() {
+                guard let token = table.keywordTokens[spelling] else { continue }
+                var node = 0
+                for byte in spelling.utf8 {
+                    if let next = trie[node].next[byte] {
+                        node = next
+                    } else {
+                        trie[node].next[byte] = trie.count
+                        node = trie.count
+                        trie.append(KeywordNode())
+                    }
+                }
+                trie[node].token = token
+            }
+        }
+        self.keywordTrie = trie
     }
 
     /// The lex mode of parse state `state`.
@@ -88,7 +116,23 @@ struct TokenScanner: Sendable {
                 scanned = Scanned(token: Int(accepts[state]), start: tokenStart, end: position)
             }
         }
-        if let scanned {
+        if var scanned {
+            if scanned.token == wordToken, modeValidTokens.indices.contains(mode) {
+                var node = 0
+                var matched = true
+                for offset in scanned.start.offset ..< scanned.end.offset {
+                    guard let next = keywordTrie[node].next[utf8[offset]] else {
+                        matched = false
+                        break
+                    }
+                    node = next
+                }
+                if matched, let keyword = keywordTrie[node].token,
+                    modeValidTokens[mode].contains(keyword)
+                {
+                    scanned.token = keyword
+                }
+            }
             return .token(scanned)
         }
         return tokenStart.offset == utf8.count ? .end(tokenStart) : .none(start: tokenStart)

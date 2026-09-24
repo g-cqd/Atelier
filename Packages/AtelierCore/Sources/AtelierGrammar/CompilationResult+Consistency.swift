@@ -52,6 +52,10 @@ extension LexTable {
             && stateModes.count == stateCount
             && modeStarts.allSatisfy(automaton.indices.contains)
             && stateModes.allSatisfy(modeStarts.indices.contains)
+            && modeValidTokens.count == modeStarts.count
+            && modeValidTokens.allSatisfy { $0.allSatisfy(tokens.indices.contains) }
+            && (wordToken.map(tokens.indices.contains) ?? true)
+            && keywordTokens.values.allSatisfy(tokens.indices.contains)
             && (errorMode.map(modeStarts.indices.contains) ?? true)
             && automaton.allSatisfy { state in
                 (state.accept.map(tokens.indices.contains) ?? true) && movesAreConsistent(state.transitions)

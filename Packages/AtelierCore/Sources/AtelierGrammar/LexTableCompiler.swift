@@ -206,23 +206,31 @@ extension LexTableCompiler {
     static func compile(
         tokens: [LexicalToken],
         separators: [Rule],
-        validTokens: [[Int]]
+        validTokens: [[Int]],
+        wordToken: Int? = nil,
+        keywordTokens: [String: Int] = [:]
     ) throws(GrammarError) -> LexTable {
         try compile(
-            nfa: TokenNFA(tokens: tokens, separators: separators), tokens: tokens, validTokens: validTokens)
+            nfa: TokenNFA(tokens: tokens, separators: separators), tokens: tokens, validTokens: validTokens,
+            wordToken: wordToken, keywordTokens: keywordTokens)
     }
 
     /// ``compile(tokens:separators:validTokens:)`` from the automaton of `tokens` already built.
-    static func compile(nfa: TokenNFA, tokens: [LexicalToken], validTokens: [[Int]]) throws(GrammarError) -> LexTable {
+    static func compile(
+        nfa: TokenNFA, tokens: [LexicalToken], validTokens: [[Int]],
+        wordToken: Int? = nil, keywordTokens: [String: Int] = [:]
+    ) throws(GrammarError) -> LexTable {
         var builder = LexAutomatonBuilder(nfa: nfa, tokens: tokens)
         var modes: [[Int]: Int] = [:]
         var modeStarts: [Int] = []
+        var modeValidTokens: [[Int]] = []
         func mode(for valid: [Int]) throws(GrammarError) -> Int {
             if let existing = modes[valid] {
                 return existing
             }
             modes[valid] = modeStarts.count
             modeStarts.append(try builder.startState(for: valid))
+            modeValidTokens.append(valid)
             return modeStarts.count - 1
         }
         var stateModes: [Int] = []
@@ -236,7 +244,10 @@ extension LexTableCompiler {
             automaton: builder.states,
             modeStarts: modeStarts,
             stateModes: stateModes,
-            errorMode: errorMode
+            errorMode: errorMode,
+            wordToken: wordToken,
+            keywordTokens: keywordTokens,
+            modeValidTokens: modeValidTokens
         )
     }
 }
