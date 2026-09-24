@@ -2,10 +2,15 @@ import Foundation
 
 /// Merges highlight tokens from multiple layers into a single non-overlapping sequence.
 ///
-/// Precedence rules:
-/// 1. Higher layer wins (semantic > structural > lexical)
-/// 2. Within the same layer, higher priority wins
-/// 3. Within the same layer and priority, narrower range wins
+/// Where tokens overlap, each byte takes the token that wins it:
+/// 1. The higher layer wins: semantic over structural over lexical, however narrow the lower token.
+/// 2. Within a layer, the narrower token wins, so a token nested in another shows through it: an escape sequence keeps
+///    its colour inside a string, although the query lists the string's pattern first.
+/// 3. Within a layer and a width, the higher priority wins: on identical ranges, the earlier query pattern, which
+///    `buildTokens` gives the higher priority.
+///
+/// The merge sorts the tokens by layer, then by width, wider first, then by priority, lower first, and paints them in
+/// that order, so each token overwrites the bytes of those it wins over.
 public enum HighlightMerger: Sendable {
     /// Merge tokens from multiple layers into non-overlapping tokens.
     /// The input tokens may overlap; the output tokens will not.
@@ -15,13 +20,12 @@ public enum HighlightMerger: Sendable {
     ) -> [HighlightToken] {
         guard !tokens.isEmpty, sourceByteCount > 0 else { return [] }
 
-        // Sort: broader ranges first, then lower layer/priority first,
-        // so that later (higher-priority) writes overwrite earlier ones.
+        // Painted in this order, a later token overwrites an earlier one: layer, then width, then priority.
         let sorted = tokens.sorted { a, b in
+            if a.layer != b.layer { return a.layer < b.layer }
             let aSize = a.byteRange.count
             let bSize = b.byteRange.count
             if aSize != bSize { return aSize > bSize }
-            if a.layer != b.layer { return a.layer < b.layer }
             if a.priority != b.priority { return a.priority < b.priority }
             return a.byteRange.lowerBound < b.byteRange.lowerBound
         }
