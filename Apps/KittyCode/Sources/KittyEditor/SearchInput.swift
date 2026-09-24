@@ -156,20 +156,12 @@ struct InFileSearchRequest: Sendable, Equatable {
     let contentHash: Int
 }
 
-@MainActor
-// Track 3B will move these jobs into editor state alongside the other background state.
-private enum InFileSearchJobs {
-    struct Job {
-        let generation: UInt64
-        let task: Task<Void, Never>
-    }
-    static var nextGeneration: UInt64 = 0
-    static var jobs: [ObjectIdentifier: Job] = [:]
-}
-
+/// Cancels `state`'s in-file search, if one runs, so that its result never applies.
 @MainActor
 func cancelInFileSearch(state: EditorState) {
-    InFileSearchJobs.jobs.removeValue(forKey: ObjectIdentifier(state))?.task.cancel()
+    state.inFileSearchGeneration &+= 1
+    state.inFileSearchTask?.cancel()
+    state.inFileSearchTask = nil
 }
 
 /// Starts the current query on the blocking search pool and leaves only its query visible until the result arrives.
@@ -199,22 +191,18 @@ func scheduleInFileSearch(
         contentHash: rope.contentHash)
     let maxMatches = max(0, state.config.search.maxResults)
     let pool = state.searchPool
-    let id = ObjectIdentifier(state)
-    InFileSearchJobs.nextGeneration &+= 1
-    let generation = InFileSearchJobs.nextGeneration
-    let task = state.taskProvider.task(role: .work) { @MainActor [weak state] in
+    // The cancellation above advanced the generation, so this search's is its own.
+    let generation = state.inFileSearchGeneration
+    state.inFileSearchTask = state.taskProvider.task(role: .work) { @MainActor [weak state] in
         defer {
-            if InFileSearchJobs.jobs[id]?.generation == generation { InFileSearchJobs.jobs[id] = nil }
+            if let state, state.inFileSearchGeneration == generation { state.inFileSearchTask = nil }
         }
         let result = await runInFileSearch(query: query, rope: rope, maxMatches: maxMatches, pool: pool)
-        guard let state, !Task.isCancelled,
-            InFileSearchJobs.jobs[id]?.generation == generation
-        else { return }
+        guard let state, !Task.isCancelled, state.inFileSearchGeneration == generation else { return }
         _ = applyInFileSearchResult(
             state: state, request: request, pattern: result.0, scan: result.1, pipeline: pipeline,
             advanceToNext: advanceToNext, moveCursorOnCompletion: moveCursorOnCompletion)
     }
-    InFileSearchJobs.jobs[id] = .init(generation: generation, task: task)
 }
 
 private func runInFileSearch(

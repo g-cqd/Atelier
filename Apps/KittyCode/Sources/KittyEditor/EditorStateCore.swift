@@ -487,6 +487,11 @@ public final class EditorState {
         didSet { markChromeDirty() }
     }
     @ObservationIgnored public var workspaceSearchTask: Task<Void, Never>?
+    /// The in-file search running on `searchPool`; a newer search, `cancelInFileSearch(state:)` and `shutdown()`
+    /// cancel it.
+    @ObservationIgnored var inFileSearchTask: Task<Void, Never>?
+    /// Advanced by every in-file search started or cancelled: a search applies its result only while it is current.
+    @ObservationIgnored var inFileSearchGeneration: UInt64 = 0
     /// The consumer debouncing search as you type: each find-field keystroke signals it, and `bufferingNewest(1)`
     /// turns a burst into one `triggerWorkspaceSearch` after the debounce window.
     @ObservationIgnored public var workspaceSearchDebounceTask: Task<Void, Never>?
@@ -1368,8 +1373,8 @@ public final class EditorState {
         }
     }
 
-    /// Stops the full-highlight and search-debounce consumers, a full pass in flight and an owned search pool, so no
-    /// task outlives the state; `AppMain` calls it alongside `GitDecorationManager.stop()`.
+    /// Stops the full-highlight and search-debounce consumers, a full pass and an in-file search in flight and an owned
+    /// search pool, so no task outlives the state; `AppMain` calls it alongside `GitDecorationManager.stop()`.
     public func shutdown() {
         fullHighlightContinuation.finish()
         fullHighlightTask?.cancel()
@@ -1380,6 +1385,7 @@ public final class EditorState {
         workspaceSearchDebounceTask?.cancel()
         workspaceSearchDebounceTask = nil
         fullHighlightTask = nil
+        cancelInFileSearch(state: self)
         if ownsSearchPool { searchPool.shutdown() }
     }
 
