@@ -37,6 +37,21 @@ struct ParseStackTests {
     }
 
     @Test
+    func `Of two equally good stacks with one history, the one whose nodes come first in grammar order stays`() {
+        let ranks = SymbolRanks(["target": 0, "_expression": 1, "_type": 2])
+        var viaType = ParseStack(state: 0)
+        viaType.pushNode(SyntaxNode(type: "target", children: [SyntaxNode(type: "_type")]))
+        viaType.state = 4
+        var viaExpression = ParseStack(state: 0)
+        viaExpression.pushNode(SyntaxNode(type: "target", children: [SyntaxNode(type: "_expression")]))
+        viaExpression.state = 4
+
+        let merged = ParseStack.mergingIdenticalHistories([viaType, viaExpression], ranks: ranks)
+
+        #expect(merged.map { $0.nodes.first?.children.first?.type } == ["_expression"])
+    }
+
+    @Test
     func `Stacks with different state histories stay apart, in order`() {
         var first = ParseStack(state: 0)
         first.pushNode(SyntaxNode(type: "x"))
