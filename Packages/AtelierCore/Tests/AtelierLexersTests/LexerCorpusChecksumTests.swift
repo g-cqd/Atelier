@@ -57,6 +57,13 @@ extension LexerCorpusTests {
             #expect(Self.checksum(tokens) == pinned.utf16)
         }
 
+        @Test(arguments: pinned)
+        func `the utf16 array entry keeps the checksum too`(_ pinned: Pinned) {
+            let text = LexerCorpus.text(pinned.language)
+            let tokens = SyntaxHighlighter.tokens(utf16: Array(text.utf16), language: pinned.language)
+            #expect(Self.checksum(tokens) == pinned.utf16)
+        }
+
         /// FNV-1a over each token's kind and range.
         private static func checksum(_ tokens: [Token]) -> UInt64 {
             var hash: UInt64 = 14_695_981_039_346_656_037
