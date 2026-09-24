@@ -1,3 +1,5 @@
+import AemiCore
+import AemiTesting
 import AtelierText
 import Foundation
 import KittyStyle
@@ -45,8 +47,8 @@ struct EditorLargeFileBenchmark {
     }
 
     /// The document open in a buffer, fully highlighted and measured, with the cursor and a 60-row screen halfway down.
-    private func makeHighlightedState() -> EditorState {
-        let state = EditorState(rootPath: ".", config: KittyConfig())
+    private func makeHighlightedState(taskProvider: any TaskProvider = .default) -> EditorState {
+        let state = EditorState(rootPath: ".", config: KittyConfig(), taskProvider: taskProvider)
         state.bufferManager.open(
             filePath: "/bench/large.swift", fileName: "large.swift", content: Self.text, language: "swift")
         state.restoreStateFromActiveBuffer()
@@ -73,5 +75,51 @@ struct EditorLargeFileBenchmark {
             "BENCH keystroke, 1M lines: \(Self.summary(samples)); one replaceSubrange through the state: "
                 + "\(allocations.map { "\($0) allocations" } ?? "not counted")")
         if let allocations { #expect(allocations == 0) }
+    }
+
+    /// Lets the full pass the last action asked for land, so it never runs during the next timed sample.
+    private func awaitFullPass(_ tasks: TaskProviderSpy, after spawned: Int) async throws {
+        try await tasks.waitForSpawnedTasks(atLeast: spawned + 1)
+        try await tasks.waitForAllTasks()
+    }
+
+    @Test func `refreshing the highlights of a million-line file`() async throws {
+        let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
+        let state = makeHighlightedState(taskProvider: tasks)
+        defer { state.shutdown() }
+        let clock = ContinuousClock()
+        var refresh: [Duration] = []
+        for _ in 0 ..< 5 {
+            let spawned = tasks.spawnedTaskCount
+            refresh.append(clock.measure { state.refreshHighlights() })
+            try await awaitFullPass(tasks, after: spawned)
+        }
+        let onScreen = 499_980 ..< 500_040
+        let viewport = (0 ..< 31)
+            .map { _ in
+                clock.measure { _ = state.highlightViewport(of: state.textBuffer, in: onScreen) }
+            }
+        print("BENCH refreshHighlights, 1M lines: \(Self.summary(refresh))")
+        print("BENCH viewport highlight of 60 lines, 1M lines: \(Self.summary(viewport))")
+    }
+
+    @Test func `undoing and redoing a keystroke in a million-line file`() async throws {
+        let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
+        let state = makeHighlightedState(taskProvider: tasks)
+        defer { state.shutdown() }
+        insertText("x", into: state)
+        let clock = ContinuousClock()
+        var undo: [Duration] = []
+        var redo: [Duration] = []
+        for _ in 0 ..< 5 {
+            var spawned = tasks.spawnedTaskCount
+            undo.append(clock.measure { state.undoActiveBuffer() })
+            try await awaitFullPass(tasks, after: spawned)
+            spawned = tasks.spawnedTaskCount
+            redo.append(clock.measure { state.redoActiveBuffer() })
+            try await awaitFullPass(tasks, after: spawned)
+        }
+        print("BENCH undo, 1M lines: \(Self.summary(undo))")
+        print("BENCH redo, 1M lines: \(Self.summary(redo))")
     }
 }

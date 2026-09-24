@@ -16,6 +16,20 @@ struct TextEditorTests {
     }
 
     @Test
+    func `a line without spans draws its text in the editor style`() {
+        let editorStyle = Style(fg: .indexed(4))
+        let keyword = Style(fg: .indexed(1))
+        let editor = TextEditor(
+            lines: ["not highlighted yet", "let"],
+            lineSpans: [[], [StyledSpan(text: "let", style: keyword)]],
+            editorStyle: editorStyle
+        )
+
+        #expect(editor.spans(at: 0) == [StyledSpan(text: "not highlighted yet", style: editorStyle)])
+        #expect(editor.spans(at: 1) == [StyledSpan(text: "let", style: keyword)])
+    }
+
+    @Test
     func `Gutter width includes decoration column when enabled`() {
         let editor = TextEditor(
             content: "a",
