@@ -1,3 +1,4 @@
+import AtelierScanners
 import Foundation
 import Testing
 
@@ -71,5 +72,14 @@ struct GrammarLoaderBundledGrammarTests {
         let resourcePath = try #require(KittySyntaxResources.bundle.resourcePath)
         let grammar = try GrammarLoader.load(from: "\(resourcePath)/Grammars/\(language)/grammar.json")
         #expect(grammar.name == language)
+    }
+
+    /// The parser refuses a scanner whose names differ from its grammar's externals, which leaves every parse throwing.
+    @Test(arguments: BundledScanners.byGrammarName.keys.sorted())
+    func `every bundled scanner names its grammar's externals in order`(language: String) throws {
+        let resourcePath = try #require(KittySyntaxResources.bundle.resourcePath)
+        let grammar = try GrammarLoader.load(from: "\(resourcePath)/Grammars/\(language)/grammar.json")
+        let scanner = try #require(BundledScanners.byGrammarName[language])
+        #expect(scanner.externalNames == ParseTableCompiler.externalNames(of: grammar))
     }
 }
