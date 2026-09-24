@@ -323,6 +323,21 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
      aemi dependency switches in the same step, so SwiftPM sees one aemi.
 - **Priority:** Must. **Related:** PROC-04, JSON-02, QUAL-09.
 
+#### PROC-13 · Work runs in order, validity before everything
+- **Statement:** Tasks, their increments and the work around them run first in, first out. A regression that breaks
+  validity is fixed at once, before the work lands; a regression or shortfall that costs only performance does not
+  hold the work back, and goes to the end of the work queue.
+- **Source:** 09-24, "it would be interesting to work on the tasks and increments in FIFO within them and in the
+  surroundings of them, and not fifo, as in for example, an implementation work is done, but then a regression is
+  detected, if impact is not validity, but rather performance, the regression topic should be queued in the list of
+  things to do".
+- **Acceptance criteria:**
+  1. The fix plan keeps the work queue in order, each item with its origin and the date it was queued.
+  2. Work lands with every validity regression it caused fixed; a performance regression or missed performance
+     target found in it becomes a queue item instead of blocking it.
+  3. Queue items are taken in order, oldest first.
+- **Priority:** Must. **Related:** PROC-09, PROC-11.
+
 ### DIAG: Diagnostics tools
 
 #### DIAG-01 · Run the five Swift analyzers on the compared project
