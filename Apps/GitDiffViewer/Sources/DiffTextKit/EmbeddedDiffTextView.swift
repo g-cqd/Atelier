@@ -61,6 +61,10 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         scrollView.borderType = .noBorder
 
         let textView = DiffPaneTextView(usingTextLayoutManager: true)
+        // Each row where the card measured it: see ContiguousTextContainer.
+        if let container = textView.textContainer {
+            textView.replaceTextContainer(ContiguousTextContainer(size: container.size))
+        }
         textView.isEditable = false
         textView.isSelectable = true
         textView.isRichText = false
@@ -199,4 +203,17 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
             layout = nil
         }
     }
+}
+
+/// A text container TextKit lays out from its top, so a card's text view places every row it shows after the rows
+/// above it, where the card measured them (book DIFF-06, CARD-17).
+///
+/// TextKit 2 otherwise lays out only what shows and places it after estimates of the rows above that it has not laid
+/// out, which take a line nearly as wide as the container for two. A card that never wraps measures its rows without
+/// laying them out, and a new text, from a reveal or a reload, drops the text view's layout: the rows it then showed
+/// sat away from where the card measured them, its gutter drew their numbers and separators elsewhere, and its last
+/// rows fell past its end. A container that is not a simple rectangle turns that estimated layout off
+/// (`NSTextLayoutManager.textContainer`). A card that wraps is laid out whole either way.
+private final class ContiguousTextContainer: NSTextContainer {
+    override var isSimpleRectangularTextContainer: Bool { false }
 }
