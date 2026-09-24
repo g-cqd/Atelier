@@ -42,7 +42,7 @@ func requireLiteral(_ pattern: QueryPattern) throws -> (value: String, capture: 
     guard case .literal(let value, let capture) = pattern else {
         throw QueryPatternExpectationError.expectedLiteral
     }
-    return (value, capture)
+    return (value, capture?.name)
 }
 
 func requireMatchPredicate(_ pattern: QueryPattern) throws -> (
@@ -59,7 +59,7 @@ func requireNodeMatch(_ pattern: QueryPattern) throws -> (type: String, capture:
     guard case .nodeMatch(let type, _, let capture) = pattern else {
         throw QueryPatternExpectationError.expectedNodeMatch
     }
-    return (type, capture)
+    return (type, capture?.name)
 }
 
 func requireSequence(_ pattern: QueryPattern) throws -> [QueryPattern] {
@@ -80,5 +80,5 @@ func requireWildcard(_ pattern: QueryPattern) throws -> String? {
     guard case .wildcard(let capture) = pattern else {
         throw QueryPatternExpectationError.expectedWildcard
     }
-    return capture
+    return capture?.name
 }
