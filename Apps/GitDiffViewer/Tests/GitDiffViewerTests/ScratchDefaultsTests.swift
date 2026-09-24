@@ -11,21 +11,22 @@ import Testing
 /// suite, or the harness that holds it for its models, is released.
 @MainActor
 struct ScratchDefaultsTests {
-    private static let preferences = URL.libraryDirectory.appending(path: "Preferences", directoryHint: .isDirectory)
+    private nonisolated static let preferences = URL.libraryDirectory.appending(
+        path: "Preferences", directoryHint: .isDirectory)
 
     @Test
-    func `a scratch suite keeps its plist out of the user's preferences`() throws {
+    func `a scratch suite keeps its plist out of the user's preferences`() async throws {
         let scratch = ScratchDefaults(tag: "kept")
 
         scratch.defaults.set(true, forKey: "written")
 
-        let inPreferences = try Self.entries(in: Self.preferences, containing: scratch.name)
+        let inPreferences = try await Self.entries(in: Self.preferences, containing: scratch.name)
         #expect(FileManager.default.fileExists(atPath: scratch.plist.path(percentEncoded: false)))
         #expect(inPreferences == [])
     }
 
     @Test
-    func `a released scratch suite leaves no plist of its name behind`() throws {
+    func `a released scratch suite leaves no plist of its name behind`() async throws {
         var scratch: ScratchDefaults? = ScratchDefaults(tag: "released")
         let name = try #require(scratch?.name)
         let plist = try #require(scratch?.plist)
@@ -35,7 +36,7 @@ struct ScratchDefaultsTests {
 
         scratch = nil
 
-        let leftovers = try Self.leftovers(of: name)
+        let leftovers = try await Self.leftovers(of: name)
         #expect(!FileManager.default.fileExists(atPath: plist.path(percentEncoded: false)))
         #expect(leftovers == [])
     }
@@ -44,7 +45,7 @@ struct ScratchDefaultsTests {
     func `a model run leaves none of its settings on disk once its harness is released`() async throws {
         let name = try await runModel()
 
-        let leftovers = try Self.leftovers(of: name)
+        let leftovers = try await Self.leftovers(of: name)
         #expect(leftovers == [])
     }
 
@@ -66,13 +67,33 @@ struct ScratchDefaultsTests {
     }
 
     /// Everything named after `name` in the user's preferences or in the temporary directory.
-    private static func leftovers(of name: String) throws -> [String] {
-        try entries(in: preferences, containing: name)
+    private nonisolated static func leftovers(of name: String) async throws -> [String] {
+        try await entries(in: preferences, containing: name)
             + entries(in: FileManager.default.temporaryDirectory, containing: name)
     }
 
-    private static func entries(in directory: URL, containing name: String) throws -> [String] {
-        try FileManager.default.contentsOfDirectory(atPath: directory.path(percentEncoded: false))
-            .filter { $0.contains(name) }
+    /// The names in `directory` that contain `name`, hidden ones included, read with `readdir` and off the main actor.
+    ///
+    /// The temporary directory is shared with every other tool on the machine and can hold tens of thousands of
+    /// entries. `FileManager` took seconds to list that many, and it did so on the main actor, where every main-actor
+    /// test in the run waited behind it. `readdir` takes a fraction of that, only the names that match become strings,
+    /// and the listing runs beside the main actor rather than on it.
+    @concurrent
+    private nonisolated static func entries(in directory: URL, containing name: String) async throws -> [String] {
+        guard let stream = opendir(directory.path(percentEncoded: false)) else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        defer { closedir(stream) }
+        var matches: [String] = []
+        while let entry = readdir(stream) {
+            let capacity = MemoryLayout.size(ofValue: entry.pointee.d_name)
+            let match = withUnsafePointer(to: entry.pointee.d_name) { tuple in
+                tuple.withMemoryRebound(to: CChar.self, capacity: capacity) { entryName in
+                    strstr(entryName, name) != nil ? String(cString: entryName) : nil
+                }
+            }
+            if let match { matches.append(match) }
+        }
+        return matches
     }
 }
