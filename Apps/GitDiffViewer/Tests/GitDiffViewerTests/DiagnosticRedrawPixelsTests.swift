@@ -196,16 +196,12 @@ private final class HostedPane {
         let root = try #require(host.layer)
         let width = Int(root.bounds.width)
         let height = Int(root.bounds.height)
-        let device = try #require(MTLCreateSystemDefaultDevice())
-        let queue = try #require(device.makeCommandQueue())
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false)
-        descriptor.usage = [.renderTarget, .shaderRead]
-        descriptor.storageMode = .shared
-        let texture = try #require(device.makeTexture(descriptor: descriptor))
-        let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
-        let renderer = CARenderer(
-            mtlTexture: texture, options: [kCARendererColorSpace: colorSpace, kCARendererMetalCommandQueue: queue])
+        let compositor = try Compositor.shared(width: width, height: height)
+        let renderer = compositor.renderer
+        let region = MTLRegionMake2D(0, 0, width, height)
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        // The texture starts each frame empty, so that nothing an earlier pane left in it shows through.
+        compositor.texture.replace(region: region, mipmapLevel: 0, withBytes: bytes, bytesPerRow: width * 4)
         renderer.layer = root
         renderer.bounds = CGRect(x: 0, y: 0, width: width, height: height)
         // The renderer draws what was committed.
@@ -214,19 +210,53 @@ private final class HostedPane {
         renderer.addUpdate(renderer.bounds)
         renderer.render()
         renderer.endFrame()
-        // The renderer encodes on `queue`, so a buffer committed after its work completes after it.
-        let fence = try #require(queue.makeCommandBuffer())
+        // The renderer encodes on the compositor's queue, so a buffer committed after its work completes after it.
+        let fence = try #require(compositor.queue.makeCommandBuffer())
         fence.commit()
         fence.waitUntilCompleted()
         renderer.layer = nil
-        var bytes = [UInt8](repeating: 0, count: width * height * 4)
-        texture.getBytes(&bytes, bytesPerRow: width * 4, from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0)
+        compositor.texture.getBytes(&bytes, bytesPerRow: width * 4, from: region, mipmapLevel: 0)
         return LayerPixels(width: width, height: height, bytes: bytes)
     }
 
     private static func first<View: NSView>(_ type: View.Type, in view: NSView) -> View? {
         if let match = view as? View { return match }
         return view.subviews.lazy.compactMap { first(type, in: $0) }.first
+    }
+}
+
+/// Core Animation's renderer, the texture it draws into and the queue it encodes on, one for each size of window.
+///
+/// Making a renderer loads Core Animation's Metal shaders, which took tens of milliseconds on the main actor for each
+/// frame read, so the suite makes one per size and reuses it, as the window server composites every frame with one.
+@MainActor
+private final class Compositor {
+    let renderer: CARenderer
+    let texture: any MTLTexture
+    let queue: any MTLCommandQueue
+
+    private static var bySize: [SIMD2<Int>: Compositor] = [:]
+
+    /// The compositor for a window of `width` by `height` points, made the first time one is asked for.
+    static func shared(width: Int, height: Int) throws -> Compositor {
+        let size = SIMD2(width, height)
+        if let compositor = bySize[size] { return compositor }
+        let compositor = try Compositor(width: width, height: height)
+        bySize[size] = compositor
+        return compositor
+    }
+
+    private init(width: Int, height: Int) throws {
+        let device = try #require(MTLCreateSystemDefaultDevice())
+        queue = try #require(device.makeCommandQueue())
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false)
+        descriptor.usage = [.renderTarget, .shaderRead]
+        descriptor.storageMode = .shared
+        texture = try #require(device.makeTexture(descriptor: descriptor))
+        let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+        renderer = CARenderer(
+            mtlTexture: texture, options: [kCARendererColorSpace: colorSpace, kCARendererMetalCommandQueue: queue])
     }
 }
 
