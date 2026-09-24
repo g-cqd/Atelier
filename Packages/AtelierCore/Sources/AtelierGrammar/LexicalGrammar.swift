@@ -228,7 +228,7 @@ struct LexicalGrammar: Sendable {
     /// The precedence a token completes with: that of a `prec` around its whole text.
     private static func completionPrecedence(of rule: Rule) -> Int {
         switch rule {
-            case .prec(let value, _), .precLeft(let value, _), .precRight(let value, _): value
+            case .prec(let value, _), .precLeft(let value, _), .precRight(let value, _): value.lexicalValue
             default: 0
         }
     }

@@ -43,8 +43,8 @@ public enum GrammarLoader: Sendable {
     ///   its root, or has a `rules` member that is not an object; `.missingField` or `.invalidRuleType` when a member
     ///   a grammar needs is absent or has the wrong shape.
     /// - Complexity: O(n) in the size of the data.
-    /// - Note: `RESERVED` keeps its content rule, but its context's reserved words are ignored. Named precedence
-    ///   labels keep their associativity but not their ordering until the compiler supports either feature.
+    /// - Note: `RESERVED` keeps its content rule, but its context's reserved words are ignored until the compiler
+    ///   supports them.
     public static func parse(_ data: Data) throws(GrammarError) -> GrammarDefinition {
         let document: JSONDocument
         do {
@@ -232,10 +232,10 @@ public enum GrammarLoader: Sendable {
         return value
     }
 
-    /// Named precedence ordering is not represented by `Rule`; preserve the rule with neutral precedence.
-    private static func precedenceValue(_ node: JSON?) throws(GrammarError) -> Int {
-        if node?.string != nil { return 0 }
-        return try requiredInteger(node)
+    /// A precedence: a name, which the grammar's `precedences` orders, or an integer.
+    private static func precedenceValue(_ node: JSON?) throws(GrammarError) -> Precedence {
+        if let name = node?.string { return .name(name) }
+        return .integer(try requiredInteger(node))
     }
 
     /// `node` as an integer: a number with an exact integer value, or a boolean as 1 or 0.

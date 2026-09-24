@@ -164,7 +164,7 @@ struct GrammarLoaderJSONShapeTests {
         let grammar = try GrammarLoader.parse(
             grammar(rules: #""r": {"type": "PREC", "value": \#(value), "content": {"type": "BLANK"}}"#))
 
-        #expect(grammar.rules.map(\.rule) == [.prec(expected, .blank)])
+        #expect(grammar.rules.map(\.rule) == [.prec(.integer(expected), .blank)])
     }
 
     @Test(arguments: ["1.5", "null", "[1]"])

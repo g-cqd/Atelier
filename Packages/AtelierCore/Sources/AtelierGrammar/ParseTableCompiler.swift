@@ -52,7 +52,7 @@ public enum ParseTableCompiler: Sendable {
     /// The version of what ``compile(_:limits:)`` produces, for caches of compiled tables and of failed compiles to
     /// key on: bumped whenever the outcome of compiling the same grammar changes, tables or error, which a change to
     /// the default limits can do too, so no cache hands out what an older compiler made.
-    public static let formatVersion = 15
+    public static let formatVersion = 16
 
     /// Compile a grammar definition into parse tables.
     public static func compile(
@@ -85,7 +85,7 @@ public enum ParseTableCompiler: Sendable {
         )
 
         var table = ParseActionResolver(
-            productions: flattened, firstSets: firstSets, conflicts: grammar.conflicts.map(Set.init)
+            productions: flattened, firstSets: firstSets, precedences: grammar.precedences
         )
         .parseTable(itemSets: itemSets, transitions: transitions, terminals: terminals, nonTerminals: nonTerminals)
         populateExternalSymbols(in: &table, grammar: grammar, lexical: lexical)
