@@ -24,9 +24,9 @@ private let tabBadgeSize: CGFloat = 14
 /// How the tab and its close button answer the pointer's arrival and departure.
 private let hoverAnimation = Animation.easeInOut(duration: 0.12)
 
-/// Editor-style tabs over the detail area, each a Liquid Glass capsule. The bar draws no background:
-/// ``DiffDetailView`` hosts it as a safe-area bar, so a scroll view running beneath it supplies the system's scroll
-/// edge effect.
+/// Editor-style tabs over the detail area, each a Liquid Glass capsule, after the file list's own fixed tab. The bar
+/// draws no background: ``DiffDetailView`` hosts it as a safe-area bar, so a scroll view running beneath it supplies
+/// the system's scroll edge effect.
 struct TabBarView: View {
     let model: DiffViewerModel
 
@@ -35,6 +35,8 @@ struct TabBarView: View {
             // One container for the whole row: several glass shapes render best inside a shared container.
             GlassEffectContainer(spacing: tabBarGap) {
                 HStack(spacing: tabBarGap) {
+                    // Outside the tabs' `ForEach`: nothing that moves or closes a tab reaches it.
+                    FileListTab(isActive: model.tabs.isShowingFileList) { model.showFileList() }
                     ForEach(model.tabs.tabs) { tab in
                         TabItem(
                             tab: tab, isActive: tab.id == model.tabs.activeID,
@@ -80,6 +82,48 @@ private struct TabSwitchShortcuts: View {
         .frame(width: 0, height: 0)
         .opacity(0)
         .accessibilityHidden(true)
+    }
+}
+
+/// The file list's tab, fixed first while any tab is open (book TAB-10): it shows every changed file and closes no
+/// tab. It has no close button and no pin, and draws as a kept-open tab does.
+private struct FileListTab: View {
+    /// What the tab reads: the status bar counts the list's cards as changed files.
+    static let title = "Changed files"
+
+    let isActive: Bool
+    let activate: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        let appearance = TabAppearance.fixed(isActive: isActive, isHovering: isHovering)
+        HStack(spacing: 5) {
+            // The toolbar's symbol for the changed-file count.
+            Image(systemName: "doc.on.doc")
+                .frame(width: ChangeGlyph.size, height: ChangeGlyph.size)
+            Text(Self.title)
+                .lineLimit(1)
+        }
+        .font(.callout)
+        .foregroundStyle(appearance.usesPrimaryInk ? .primary : .secondary)
+        .padding(.leading, tabInset)
+        .padding(.trailing, tabTrailingInset)
+        .padding(.vertical, tabInset)
+        .background(Capsule().fill(Color.primary.opacity(appearance.washOpacity)))
+        .overlay(Capsule().strokeBorder(Color.primary.opacity(appearance.outlineOpacity)))
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .shadow(color: .black.opacity(0.12), radius: 1.5, y: 1)
+        .contentShape(Capsule())
+        .onTapGesture(perform: activate)
+        .onHover { hovering in
+            withAnimation(hoverAnimation) { isHovering = hovering }
+        }
+        .help("Every changed file as a list. The other tabs stay open (⌃Tab)")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Self.title)
+        .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction(.default, activate)
     }
 }
 

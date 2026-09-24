@@ -55,6 +55,17 @@ struct TabBarLayoutTests {
         #expect(appearance.isItalic)
     }
 
+    @Test(arguments: [false, true], [false, true])
+    func `the file list's fixed tab shows an upright name with neither pin nor close disc`(
+        isActive: Bool, isHovering: Bool
+    ) {
+        let appearance = TabAppearance.fixed(isActive: isActive, isHovering: isHovering)
+        #expect(!appearance.showsPin)
+        #expect(!appearance.isItalic)
+        #expect(appearance.closeDiscOpacity == 0)
+        #expect(appearance.usesPrimaryInk == isActive)
+    }
+
     @Test(arguments: [false, true])
     func `hovering tones the capsule with a faint wash, and resting leaves it clear`(isActive: Bool) {
         let resting = TabAppearance.resolve(

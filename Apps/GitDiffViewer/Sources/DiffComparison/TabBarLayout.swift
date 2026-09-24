@@ -45,4 +45,12 @@ package struct TabAppearance: Equatable, Sendable {
             outlineOpacity: isActive ? 0.28 : 0.1, washOpacity: isHovering ? 0.03 : 0,
             closeDiscOpacity: isHovering && isHoveringClose ? 0.12 : 0)
     }
+
+    /// The look of the file list's fixed tab: a kept-open tab's, upright, with neither pin nor close button.
+    package static func fixed(isActive: Bool, isHovering: Bool) -> TabAppearance {
+        let tab = resolve(isPinned: true, isActive: isActive, isHovering: isHovering, isHoveringClose: false)
+        return TabAppearance(
+            isItalic: false, showsPin: false, usesPrimaryInk: tab.usesPrimaryInk, outlineOpacity: tab.outlineOpacity,
+            washOpacity: tab.washOpacity, closeDiscOpacity: 0)
+    }
 }
