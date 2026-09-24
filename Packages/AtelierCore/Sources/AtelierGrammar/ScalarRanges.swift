@@ -2,7 +2,7 @@
 ///
 /// The character classes of a token's pattern, and the labels of the lexer automaton's transitions, are sets of this
 /// kind; every value lies in `0 ... 0x10FFFF`.
-struct ScalarRanges: Sendable, Hashable {
+struct ScalarRanges: Sendable, Hashable, Codable {
     static let maxScalar: UInt32 = 0x10_FFFF
 
     static let empty = ScalarRanges(normalized: [])
