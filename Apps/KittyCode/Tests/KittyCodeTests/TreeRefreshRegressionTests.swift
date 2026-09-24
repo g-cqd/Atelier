@@ -51,6 +51,24 @@ struct TreeRefreshRegressionTests {
         #expect(sut.state.selectedTreeIndex == 7)
     }
 
+    /// A new state lists nothing: `loadInitialTree()` scans its root on the pool. A scan in the initializer would hold
+    /// the main actor for every state built there, which is every editor test's, and delay the others' bounded waits.
+    @Test
+    func `a new state lists its root only once loadInitialTree scans it off the main actor`() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        try Data().write(to: rootURL.appendingPathComponent("listed.txt"))
+
+        let state = EditorState(rootPath: rootURL.path, config: KittyConfig())
+        defer { state.shutdown() }
+
+        #expect(state.treeNodes.isEmpty)
+        await state.loadInitialTree(validateHistory: false)
+        #expect(state.treeNodes.map(\.name) == ["listed.txt"])
+    }
+
     @Test
     func `tree refresh clamps scroll offset when tree shrinks`() {
         let sut = makeSUT(columns: 40, rows: 10)
