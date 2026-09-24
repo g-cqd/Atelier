@@ -196,10 +196,10 @@ struct TokenPipelineBenchmark {
     private static func collectCaptureNames(_ pattern: QueryPattern, into names: inout [String]) {
         switch pattern {
             case .nodeMatch(_, let children, let capture):
-                if let capture { names.append(capture) }
+                if let capture { names.append(capture.name) }
                 for child in children { collectCaptureNames(child, into: &names) }
             case .literal(_, let capture), .wildcard(let capture):
-                if let capture { names.append(capture) }
+                if let capture { names.append(capture.name) }
             case .fieldMatch(_, let inner), .quantified(let inner, _):
                 collectCaptureNames(inner, into: &names)
             case .alternation(let patterns), .sequence(let patterns):

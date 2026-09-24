@@ -58,7 +58,7 @@ public enum QueryParser: Sendable {
 
         // Check for trailing captures after pattern (e.g., (identifier) @var @name)
         scanner.skipWhitespaceAndComments()
-        var allCaptures: [String] = []
+        var allCaptures: [QueryPattern.Capture] = []
         while scanner.peek() == "@" {
             if let capture = try parseCapture(&scanner) {
                 allCaptures.append(capture)
@@ -84,7 +84,7 @@ public enum QueryParser: Sendable {
         return pattern
     }
 
-    private static func attachCapture(_ capture: String?, to pattern: QueryPattern) -> QueryPattern {
+    private static func attachCapture(_ capture: QueryPattern.Capture?, to pattern: QueryPattern) -> QueryPattern {
         guard let capture else { return pattern }
         switch pattern {
             case .nodeMatch(let type, let children, let existing):
@@ -280,14 +280,15 @@ public enum QueryParser: Sendable {
         }
     }
 
-    private static func parseCapture(_ scanner: inout Scanner) throws(QueryError) -> String? {
+    /// The capture at the scanner, unnumbered: ``Query`` numbers the captures of the patterns it holds.
+    private static func parseCapture(_ scanner: inout Scanner) throws(QueryError) -> QueryPattern.Capture? {
         guard scanner.peek() == "@" else { return nil }
         scanner.advance()
         let name = scanner.readCaptureName()
         guard !name.isEmpty else {
             throw .invalidCapture("Empty capture name")
         }
-        return name
+        return QueryPattern.Capture(name)
     }
 
     // swiftlint:disable:next cyclomatic_complexity

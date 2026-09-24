@@ -55,7 +55,7 @@ public enum QueryMatcher: Sendable {
             if let byteRange, !node.byteRange.overlaps(byteRange) { continue }
             if let pointRange, !node.pointRange.overlaps(pointRange) { continue }
             for (patternIndex, pattern) in query.patterns.enumerated() {
-                var captures: [(node: SyntaxNode, name: String)] = []
+                var captures: [QueryMatch.Capture] = []
                 if matchPattern(pattern, against: node, source: source, captures: &captures) {
                     matches.append(QueryMatch(patternIndex: patternIndex, captures: captures))
                 }
@@ -72,7 +72,7 @@ public enum QueryMatcher: Sendable {
         _ pattern: QueryPattern,
         against node: SyntaxNode,
         source: String,
-        captures: inout [(node: SyntaxNode, name: String)]
+        captures: inout [QueryMatch.Capture]
     ) -> Bool {
         switch pattern {
             case .nodeMatch(let type, let children, let capture):
@@ -144,8 +144,8 @@ public enum QueryMatcher: Sendable {
                             }
                     }
                 }
-                if let captureName = capture {
-                    localCaptures.append((node: node, name: captureName))
+                if let capture {
+                    localCaptures.append(QueryMatch.Capture(node: node, name: capture.name, index: capture.index))
                 }
                 captures = localCaptures
                 return true
@@ -154,20 +154,20 @@ public enum QueryMatcher: Sendable {
                 // A quoted pattern names an anonymous node, as in tree-sitter; a named node that reads the same, such
                 // as a JSON string's content `:`, or a node built over one, is not it.
                 guard !node.isNamed, node.text(from: source) == value else { return false }
-                if let captureName = capture {
-                    captures.append((node: node, name: captureName))
+                if let capture {
+                    captures.append(QueryMatch.Capture(node: node, name: capture.name, index: capture.index))
                 }
                 return true
 
             case .wildcard(let capture):
-                if let captureName = capture {
-                    captures.append((node: node, name: captureName))
+                if let capture {
+                    captures.append(QueryMatch.Capture(node: node, name: capture.name, index: capture.index))
                 }
                 return true
 
             case .alternation(let alternatives):
                 for alt in alternatives {
-                    var altCaptures: [(node: SyntaxNode, name: String)] = []
+                    var altCaptures: [QueryMatch.Capture] = []
                     if matchPattern(alt, against: node, source: source, captures: &altCaptures) {
                         captures.append(contentsOf: altCaptures)
                         return true
@@ -216,7 +216,7 @@ public enum QueryMatcher: Sendable {
 
     private static func evaluatePredicate(
         _ predicate: Predicate,
-        captures: [(node: SyntaxNode, name: String)],
+        captures: [QueryMatch.Capture],
         source: String
     ) -> Bool {
         Predicates.evaluate(predicate, captures: captures, source: source)
