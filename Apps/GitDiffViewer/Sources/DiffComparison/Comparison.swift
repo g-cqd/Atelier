@@ -198,6 +198,14 @@ package struct Comparison: Sendable, Equatable {
         return !Self.isSame(old, new)
     }
 
+    /// Whether `leftPath` names a file renamed with its content unchanged: nothing of it differs but its path.
+    package func isRenamedWithoutChanges(_ leftPath: String) -> Bool {
+        guard let rightPath = renames.byLeft[leftPath], let old = leftEntries[leftPath],
+            let new = rightEntries[rightPath]
+        else { return false }
+        return Self.isSame(old, new)
+    }
+
     package func summaryKind(for leftPath: String, directoryStatus: PathStatus?) -> FileChangeSummary.Kind {
         if directoryStatus == nil, ignoredPaths.contains(leftPath) {
             return leftEntries[leftPath] != nil ? .deleted : .added

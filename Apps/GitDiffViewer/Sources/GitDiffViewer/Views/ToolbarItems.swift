@@ -97,7 +97,7 @@ struct CollapseAllButton: View {
         Button("Collapse", systemImage: "rectangle.compress.vertical") {
             withAnimation(.easeOut(duration: 0.12)) { model.setAllCollapsed(true) }
         }
-        .disabled(model.renderedFiles.isEmpty || model.collapsedFiles.count == model.renderedFiles.count)
+        .disabled(model.collapsedFiles.count == model.foldableFiles.count)
         .help("Fold every file of the list")
     }
 }
