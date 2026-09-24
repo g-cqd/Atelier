@@ -126,26 +126,43 @@ struct DocHoverControllerTests {
             y: DiffPaneMetrics.containerInset + (CGFloat(row) + 0.5) * rendered.lineHeight)
     }
 
-    private func makeSUT(debounce: Duration = .milliseconds(5), holdingLookups: Bool = false) -> (
-        controller: DocHoverController, spy: ResolverSpy, taskProvider: TaskProviderSpy
+    private func makeSUT(holdingLookups: Bool = false) -> (
+        controller: DocHoverController, spy: ResolverSpy, taskProvider: TaskProviderSpy, clock: TestClock
     ) {
         let taskProvider = TaskProviderSpy.tolerant()
+        let clock = TestClock()
         let controller = DocHoverController(
-            taskProvider: taskProvider, debounce: debounce, panel: HoverDocPanel(ordersWindowIn: false))
+            clock: clock, taskProvider: taskProvider, debounce: .milliseconds(300),
+            panel: HoverDocPanel(ordersWindowIn: false))
         let spy = ResolverSpy(holdsLookups: holdingLookups)
         controller.resolve = { hit in await spy.resolve(hit) }
-        return (controller, spy, taskProvider)
+        return (controller, spy, taskProvider, clock)
+    }
+
+    /// Rests the pointer at `point` until the debounce has passed on `clock`, so its lookup starts.
+    private func rest(
+        _ controller: DocHoverController, at point: NSPoint, clock: TestClock,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async throws {
+        let mark = clock.registrationMark()
+        controller.pointerMoved(to: point)
+        try await clock.expectSleepers(after: mark, sourceLocation: sourceLocation)
+        clock.advance(by: controller.debounce)
     }
 
     @Test
     func `two rapid moves to different hits resolve only the last`() async throws {
         let rendered = try rendered()
         let view = textView(showing: rendered)
-        let (controller, spy, taskProvider) = makeSUT()
+        let (controller, spy, taskProvider, clock) = makeSUT()
         controller.attach(to: view) { rendered }
 
+        // The first move's task finds itself superseded before it sleeps; only the second one's sleeps.
+        let mark = clock.registrationMark()
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
         controller.pointerMoved(to: point(row: 1, column: 8, in: rendered))
+        try await clock.expectSleepers(after: mark)
+        clock.advance(by: controller.debounce)
         try await taskProvider.waitForAllTasks()
 
         let calls = spy.calls
@@ -157,10 +174,10 @@ struct DocHoverControllerTests {
     func `moving within the same identifier does not re-resolve`() async throws {
         let rendered = try rendered()
         let view = textView(showing: rendered)
-        let (controller, spy, taskProvider) = makeSUT()
+        let (controller, spy, taskProvider, clock) = makeSUT()
         controller.attach(to: view) { rendered }
 
-        controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
+        try await rest(controller, at: point(row: 0, column: 8, in: rendered), clock: clock)
         try await taskProvider.waitForAllTasks()
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
         try await taskProvider.waitForAllTasks()
@@ -173,10 +190,12 @@ struct DocHoverControllerTests {
     func `invalidating before the debounce elapses discards the resolution and shows nothing`() async throws {
         let rendered = try rendered()
         let view = textView(showing: rendered)
-        let (controller, spy, taskProvider) = makeSUT()
+        let (controller, spy, taskProvider, clock) = makeSUT()
         controller.attach(to: view) { rendered }
 
+        let mark = clock.registrationMark()
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
+        try await clock.expectSleepers(after: mark)
         controller.invalidate()
         try await taskProvider.waitForAllTasks()
 
@@ -190,7 +209,7 @@ struct DocHoverControllerTests {
     func `pointerMoved with no rendered content does zero resolver or hit-test work`() throws {
         let rendered = try rendered()
         let view = textView(showing: rendered)
-        let (controller, spy, taskProvider) = makeSUT()
+        let (controller, spy, taskProvider, _) = makeSUT()
         controller.attach(to: view) { nil }
 
         controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
@@ -205,7 +224,7 @@ struct DocHoverControllerTests {
     func `disabling the controller never calls the resolver`() throws {
         let rendered = try rendered()
         let view = textView(showing: rendered)
-        let (controller, spy, taskProvider) = makeSUT()
+        let (controller, spy, taskProvider, _) = makeSUT()
         controller.isEnabled = false
         controller.attach(to: view) { rendered }
 
@@ -226,10 +245,10 @@ struct DocHoverControllerTests {
     func `scrolling while the panel is visible keeps it open, repositioned, not closed`() async throws {
         let rendered = try manyLinesRendered()
         let (scrollView, view) = scrollingTextView(showing: rendered)
-        let (controller, _, taskProvider) = makeSUT()
+        let (controller, _, taskProvider, clock) = makeSUT()
         controller.attach(to: view) { rendered }
 
-        controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
+        try await rest(controller, at: point(row: 0, column: 8, in: rendered), clock: clock)
         try await taskProvider.waitForAllTasks()
         #expect(controller.isPanelVisible == true)
 
@@ -244,10 +263,10 @@ struct DocHoverControllerTests {
     func `scrolling the hovered identifier entirely out of view closes the panel`() async throws {
         let rendered = try manyLinesRendered()
         let (scrollView, view) = scrollingTextView(showing: rendered)
-        let (controller, _, taskProvider) = makeSUT()
+        let (controller, _, taskProvider, clock) = makeSUT()
         controller.attach(to: view) { rendered }
 
-        controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
+        try await rest(controller, at: point(row: 0, column: 8, in: rendered), clock: clock)
         try await taskProvider.waitForAllTasks()
         #expect(controller.isPanelVisible == true)
 
@@ -262,10 +281,10 @@ struct DocHoverControllerTests {
     func `a bounds-changed notification with no actual scroll offset is a no-op`() async throws {
         let rendered = try manyLinesRendered()
         let (scrollView, view) = scrollingTextView(showing: rendered)
-        let (controller, _, taskProvider) = makeSUT()
+        let (controller, _, taskProvider, clock) = makeSUT()
         controller.attach(to: view) { rendered }
 
-        controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
+        try await rest(controller, at: point(row: 0, column: 8, in: rendered), clock: clock)
         try await taskProvider.waitForAllTasks()
         #expect(controller.isPanelVisible == true)
 
@@ -284,13 +303,16 @@ struct DocHoverControllerTests {
     {
         let rendered = try rendered()
         let view = textView(showing: rendered)
-        let (controller, spy, taskProvider) = makeSUT(holdingLookups: true)
+        let (controller, spy, taskProvider, clock) = makeSUT(holdingLookups: true)
         controller.attach(to: view) { rendered }
 
-        controller.pointerMoved(to: point(row: 0, column: 8, in: rendered))
+        try await rest(controller, at: point(row: 0, column: 8, in: rendered), clock: clock)
         try await spy.started.wait(forAtLeast: 1, timeout: TaskProviderSpy.failureBound)
+        let mark = clock.registrationMark()
         controller.pointerMoved(to: point(row: 1, column: 8, in: rendered))
         spy.releaseOldest()
+        try await clock.expectSleepers(after: mark)
+        clock.advance(by: controller.debounce)
         try await spy.started.wait(forAtLeast: 2, timeout: TaskProviderSpy.failureBound)
         spy.releaseOldest()
         try await taskProvider.waitForAllTasks()
@@ -357,13 +379,12 @@ struct DocHoverControllerTests {
     }
 
     @Test
-    func `moving from the symbol through the corridor onto the panel keeps it open`() async throws {
+    func `resting in the corridor between the symbol and the panel keeps it open`() async throws {
         let sut = try makeStayOpenSUT()
         try await showPanelOnRowZero(sut)
 
         // Past `alphaBeta`, over ` = 1`, in the lower half of its line, which the panel below lies along.
         sut.controller.pointerMoved(to: point(row: 0, column: 14.5, lineFraction: 0.85, in: sut.rendered))
-        sut.panel.pointerEntered()
         sut.clock.advance(by: .seconds(5))
         try await sut.taskProvider.waitForAllTasks()
 
@@ -383,6 +404,10 @@ struct DocHoverControllerTests {
         try await sut.clock.expectSleepers(after: mark)
         sut.clock.advance(by: DocHoverController.closeGraceDelay - .milliseconds(1))
         #expect(sut.controller.isPanelVisible)
+        // The close is still asleep: its sleeper has not fired.
+        try await withFailureBound(awaiting: "The close's sleeper, still queued") { [clock = sut.clock] in
+            try await clock.waitForSleepers(count: 1)
+        }
 
         sut.clock.advance(by: .milliseconds(1))
         try await sut.taskProvider.waitForAllTasks()
@@ -582,5 +607,40 @@ struct DocHoverControllerTests {
         try await sut.taskProvider.waitForAllTasks()
 
         #expect(sut.spy.calls.map(\.row) == [0, 0])
+    }
+
+    @Test
+    func `a click on the panel keeps it open`() async throws {
+        let sut = try makeStayOpenSUT()
+        try await showPanelOnRowZero(sut)
+        let panelWindow = try #require(sut.panel.contentViewForTests?.window)
+        let click = try #require(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+
+        #expect(sut.controller.handleLocalEvent(click, in: panelWindow) === click)
+        #expect(sut.controller.isPanelVisible)
+    }
+}
+
+/// The corridor between an identifier and its panel, in a flipped view's coordinates.
+struct HoverCorridorTests {
+    private let anchor = NSRect(x: 30, y: 20, width: 50, height: 16)
+
+    @Test
+    func `below the identifier, the corridor runs from its middle to past the panel's top, across the panel`() {
+        let panel = NSRect(x: 30, y: 40, width: 440, height: 200)
+        #expect(
+            HoverCorridor.rect(anchor: anchor, panel: panel)
+                == NSRect(x: 30, y: 28, width: 440, height: 12 + HoverCorridor.slack))
+    }
+
+    @Test
+    func `flipped above the identifier, the corridor runs from past the panel's bottom to its middle`() {
+        let panel = NSRect(x: 10, y: -210, width: 440, height: 200)
+        #expect(
+            HoverCorridor.rect(anchor: anchor, panel: panel)
+                == NSRect(x: 10, y: -10 - HoverCorridor.slack, width: 440, height: 38 + HoverCorridor.slack))
     }
 }
