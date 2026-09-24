@@ -1,13 +1,13 @@
 import AemiTesting
 import Darwin
 import KittyStyle
-import KittySyntax
 import KittyWorkspace
 import Synchronization
 import Testing
 
 @testable import AtelierText
 @testable import KittyEditor
+@testable import KittySyntax
 
 /// The highlight pipeline on large documents: the lines on screen are highlighted from the rope at once, and the rest
 /// of the document by a full pass off the main actor that installs only onto the text it read.
@@ -54,9 +54,10 @@ struct EditorHighlightPipelineTests {
         state.highlightedLines.indices.filter { !state.highlightedLines[$0].isEmpty }
     }
 
-    private func fullHighlight(of state: EditorState) -> [[StyledSpan]] {
-        LanguageHighlighter.makeSession(language: "swift", theme: state.syntaxTheme, preferGrammar: false)
+    private func fullHighlight(of state: EditorState) -> LineHighlights {
+        let lines = LanguageHighlighter.makeSession(language: "swift", theme: state.syntaxTheme, preferGrammar: false)
             .highlightLines(state.textBuffer.lines(in: 0 ..< state.fileLineCount))
+        return LineHighlights(lines)
     }
 
     @Test
@@ -68,6 +69,16 @@ struct EditorHighlightPipelineTests {
 
         #expect(state.highlightedLines.count == Self.lineCount)
         #expect(styledLines(of: state) == Array(1_000 ..< 1_030))
+    }
+
+    @Test
+    func `a refresh stores the lines on screen alone, not a placeholder for every other line`() {
+        let (state, _, _) = makeState()
+        defer { state.shutdown() }
+
+        state.refreshHighlights()
+
+        #expect(state.highlightedLines.storedLines.count == 30)
     }
 
     @Test

@@ -60,7 +60,7 @@ struct EditorLargeFileBenchmark {
         state.cursorCol = 4
         state.scrollOffset = 499_980
         let session = LanguageHighlighter.makeSession(language: "swift", theme: state.syntaxTheme, preferGrammar: false)
-        state.highlightedLines = session.highlightLines(Self.lines)
+        state.highlightedLines = LineHighlights(session.highlightLines(Self.lines))
         state.cachedMaxLineWidth = TextDocument.computeMaxLineWidth(for: Self.lines)
         return state
     }

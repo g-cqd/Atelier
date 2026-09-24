@@ -560,14 +560,14 @@ extension EditorState {
 
             buffer.cachedMaxLineWidth = maxLineWidth
             if let highlightedLines {
-                buffer.highlightedLines = highlightedLines
+                buffer.highlightedLines = LineHighlights(highlightedLines)
                 buffer.highlightSession = nil
             }
 
             if self.bufferManager.activeBuffer === buffer {
                 self.cachedMaxLineWidth = maxLineWidth
-                if let highlightedLines {
-                    self.highlightedLines = highlightedLines
+                if highlightedLines != nil {
+                    self.highlightedLines = buffer.highlightedLines
                     self.markContentAllDirty()
                 }
                 self.isLoadingGrammar = false

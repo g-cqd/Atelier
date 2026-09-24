@@ -222,7 +222,7 @@ struct TextEditorTests {
         let lines = ["abcdef", "ghijkl", "mnopqr"]
         let editor = TextEditor(
             lines: lines,
-            lineSpans: lines.map { [StyledSpan(text: $0, style: .default)] },
+            lineSpans: LineHighlights(lines.map { [StyledSpan(text: $0, style: .default)] }),
             showLineNumbers: true,
             wrapLines: false,
             showsVerticalScrollIndicator: true
@@ -278,7 +278,7 @@ struct TextEditorTests {
         let lines = Array(repeating: "abcdef", count: 4)
         let editor = TextEditor(
             lines: lines,
-            lineSpans: lines.map { [StyledSpan(text: $0, style: .default)] },
+            lineSpans: LineHighlights(lines.map { [StyledSpan(text: $0, style: .default)] }),
             showLineNumbers: false,
             wrapLines: true,
             showsVerticalScrollIndicator: true

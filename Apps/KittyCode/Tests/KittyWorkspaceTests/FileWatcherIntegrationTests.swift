@@ -194,7 +194,7 @@ struct FileWatcherIntegrationTests {
     {
         let sut = try WatchedWorkspace(content: "one\n")
         defer { sut.removeDirectory() }
-        let highlights = [[StyledSpan(text: "one", style: .default)], []]
+        let highlights: LineHighlights = [[StyledSpan(text: "one", style: .default)], []]
         sut.notes.highlightedLines = highlights
         try Data("two\n".utf8).write(to: URL(fileURLWithPath: sut.path))
         sut.notes.lastModifiedDate = .distantPast

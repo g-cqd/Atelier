@@ -19,7 +19,7 @@ public final class WorkspaceSession: ActiveDocumentView, WorkspaceCommands {
     public var currentLanguage: String?
     public var currentLineEnding: TextDocument.LineEnding = .lineFeed
     public var highlightSession: LanguageHighlighter.Session?
-    public var highlightedLines: [[StyledSpan]] = [[StyledSpan(text: "", style: .default)]]
+    public var highlightedLines: LineHighlights = [[StyledSpan(text: "", style: .default)]]
 
     // MARK: - Document caches
     //

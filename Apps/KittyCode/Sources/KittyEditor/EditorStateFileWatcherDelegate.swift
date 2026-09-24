@@ -3,6 +3,8 @@ import Foundation
 import KittyApp
 public import KittyWorkspace
 
+import struct KittySyntax.LineHighlights
+
 extension EditorState: FileWatcherDelegate {
     public func fileWatcherDidDetectDirectoryChange() async {
         await loadInitialTree()

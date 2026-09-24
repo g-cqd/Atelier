@@ -1,13 +1,13 @@
 import AemiTesting
 import Foundation
 import KittyStyle
-import KittySyntax
 import KittyWorkspace
 import Synchronization
 import Testing
 
 @testable import AtelierText
 @testable import KittyEditor
+@testable import KittySyntax
 
 /// Closing, switching away from or replacing a tab and reloading a file hand the old document's storage to `retire`,
 /// whose consumer frees it off the main actor, and keep no other reference to it, so the consumer's is the last.
@@ -44,7 +44,7 @@ struct EditorRetiredStorageTests {
                 filePath: "/project/file.swift", fileName: "file.swift", content: content, language: "swift")
         }
         state.workspace.restoreStateFromActiveBuffer()
-        state.highlightedLines = Self.lines.map { [StyledSpan(text: $0, style: .default)] }
+        state.highlightedLines = LineHighlights(Self.lines.map { [StyledSpan(text: $0, style: .default)] })
         state.saveStateToActiveBuffer()
         let log = RetiredLog()
         state.retire = { storage in log.entries.withLock { $0.append(storage) } }
@@ -60,14 +60,14 @@ struct EditorRetiredStorageTests {
 
     /// Expects the closed buffer, then the highlights it shares, to be held by the retired storage alone.
     private func expectOnlyRetiredReferences(
-        buffer retiredBuffer: inout DocumentBuffer?, highlights: inout [[StyledSpan]]
+        buffer retiredBuffer: inout DocumentBuffer?, highlights: inout LineHighlights
     ) throws {
         var buffer = try #require(retiredBuffer)
         retiredBuffer = nil
         #expect(isKnownUniquelyReferenced(&buffer))
         // The buffer's own copy of the highlights goes with it.
         buffer.highlightedLines = []
-        #expect(isUniquelyReferenced(&highlights))
+        #expect(isUniquelyReferenced(&highlights.storedLines))
     }
 
     @Test
@@ -86,7 +86,7 @@ struct EditorRetiredStorageTests {
         #expect(retired.textBuffer?.contentHash == hash)
         var highlights = retired.highlights
         retired.highlights = []
-        #expect(highlights == Self.lines.map { [StyledSpan(text: $0, style: .default)] })
+        #expect(highlights == LineHighlights(Self.lines.map { [StyledSpan(text: $0, style: .default)] }))
         try expectOnlyRetiredReferences(buffer: &retired.buffer, highlights: &highlights)
     }
 
@@ -134,7 +134,7 @@ struct EditorRetiredStorageTests {
         // The buffer's own copy of the highlights, which it let go of, goes with them.
         #expect(retired.replaced?.highlights.count == Self.lines.count)
         retired.replaced = nil
-        #expect(isUniquelyReferenced(&highlights))
+        #expect(isUniquelyReferenced(&highlights.storedLines))
     }
 
     /// Opens a short file through the open path once its read has finished, as a click in the tree does.
@@ -166,8 +166,8 @@ struct EditorRetiredStorageTests {
         #expect(retired.textBuffer == nil)
         var highlights = retired.highlights
         retired.highlights = []
-        #expect(highlights == Self.lines.map { [StyledSpan(text: $0, style: .default)] })
-        #expect(isUniquelyReferenced(&highlights))
+        #expect(highlights == LineHighlights(Self.lines.map { [StyledSpan(text: $0, style: .default)] }))
+        #expect(isUniquelyReferenced(&highlights.storedLines))
     }
 
     @Test
@@ -239,7 +239,7 @@ struct EditorRetiredStorageTests {
         #expect(retired.textBuffer.text == oldText)
         var highlights = retired.highlights
         retired.highlights = []
-        #expect(highlights == Self.lines.map { [StyledSpan(text: $0, style: .default)] })
-        #expect(isUniquelyReferenced(&highlights))
+        #expect(highlights == LineHighlights(Self.lines.map { [StyledSpan(text: $0, style: .default)] }))
+        #expect(isUniquelyReferenced(&highlights.storedLines))
     }
 }
