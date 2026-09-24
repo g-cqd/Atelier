@@ -1,4 +1,5 @@
 import AtelierSyntaxModel
+import KittyStyle
 import Testing
 
 @testable import KittyCodecs
@@ -6,6 +7,30 @@ import Testing
 
 @Suite
 struct RoleBasedThemeResolverTests {
+    /// A theme that styles some roles by their full capture name, some by a prefix only, and leaves the rest to its
+    /// default, so each kind of lookup is checked.
+    private static let partialTheme = Theme(
+        styles: [
+            "keyword": Style(fg: .rgb(r: 1, g: 2, b: 3), bold: true), "keyword.return": Style(italic: true),
+            "function": Style(fg: .rgb(r: 4, g: 5, b: 6)), "comment": Style(dim: true)
+        ],
+        defaultStyle: Style(fg: .rgb(r: 7, g: 8, b: 9)))
+
+    @Test(arguments: [Theme.monokai, partialTheme])
+    func `a resolver that looks every role up at once resolves each as one that looks it up per token`(theme: Theme) {
+        let perToken = RoleBasedThemeResolver(theme: theme)
+        let precomputed = RoleBasedThemeResolver(precomputingStylesOf: theme)
+        let modifierSets: [HighlightModifierSet] = [[], .deprecated, .documentation, .definition, [.definition, .async]]
+
+        for role in HighlightRole.allCases {
+            for modifiers in modifierSets {
+                #expect(
+                    precomputed.resolve(role: role, modifiers: modifiers)
+                        == perToken.resolve(role: role, modifiers: modifiers))
+            }
+        }
+    }
+
     @Test
     func `Role maps to correct theme style`() {
         let resolver = RoleBasedThemeResolver(theme: .monokai)

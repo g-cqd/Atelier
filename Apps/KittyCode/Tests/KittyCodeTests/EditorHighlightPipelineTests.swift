@@ -103,7 +103,7 @@ struct EditorHighlightPipelineTests {
 
         let highlights = state.highlightViewport(of: document, in: 50_000 ..< 50_030)
 
-        #expect(document.reads.withLock { $0 } == [.lines(50_000 ..< 50_030)])
+        #expect(document.reads.withLock { $0 } == [.joinedText(50_000 ..< 50_030)])
         #expect(highlights == session.highlightLines((50_000 ..< 50_030).map(Self.line)))
     }
 
@@ -253,6 +253,7 @@ private final class RecordingDocument: DocumentSource {
         case isEmpty
         case line(Int)
         case lines(Range<Int>)
+        case joinedText(Range<Int>)
         case serializedByteCount
         case maxLineWidth(Range<Int>)
     }
@@ -292,5 +293,12 @@ private final class RecordingDocument: DocumentSource {
     func maxLineWidth(in range: Range<Int>, tabSize: Int) -> Int {
         reads.withLock { $0.append(.maxLineWidth(range)) }
         return buffer.maxLineWidth(in: range, tabSize: tabSize)
+    }
+}
+
+extension RecordingDocument: JoinedLineText {
+    func joinedText(ofLines range: Range<Int>) -> String {
+        reads.withLock { $0.append(.joinedText(range)) }
+        return buffer.joinedText(ofLines: range)
     }
 }
