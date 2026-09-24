@@ -14,6 +14,7 @@ public enum BundledScanners {
         "python": PythonExternalScanner.self,
         "rust": RustExternalScanner.self,
         "cpp": CppExternalScanner.self,
-        "css": CSSExternalScanner.self
+        "css": CSSExternalScanner.self,
+        "toml": TOMLExternalScanner.self
     ]
 }
