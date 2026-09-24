@@ -12,9 +12,9 @@ public final class WorkspaceTreeState {
 
     public init() {}
 
+    /// An empty tree for `rootPath`: `EditorState.loadInitialTree()` scans the root on the editor's pool, so building
+    /// a state on the main actor never holds it for disk reads.
     public init(rootPath: String) {
-        self.treeNodes = DirectoryScanner.scan(rootPath, maxDepth: 1, withinRoot: rootPath)
-        self.cachedFlatTree = FileTreeNavigator.flatten(treeNodes)
         self.lastSelectedDirectoryPath = rootPath
     }
 
