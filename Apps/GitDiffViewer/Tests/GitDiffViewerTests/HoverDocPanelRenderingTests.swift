@@ -84,6 +84,12 @@ import Testing
             bytesPerPixel = first.bitsPerPixel / 8
         }
 
+        /// Whether row `y`, as `colorAt(x:y:)` reads it, holds the same samples in both, pixel for pixel. Most rows do,
+        /// and a row compared whole costs one call where its pixels cost one each.
+        func sameRow(_ y: Int) -> Bool {
+            memcmp(firstBytes + y * bytesPerRow, secondBytes + y * bytesPerRow, first.pixelsWide * bytesPerPixel) == 0
+        }
+
         /// Whether the pixel at `x`, `y`, in row `y` as `colorAt(x:y:)` reads it, holds the same samples in both.
         func samePixel(x: Int, y: Int) -> Bool {
             let offset = y * bytesPerRow + x * bytesPerPixel
@@ -95,7 +101,7 @@ import Testing
         guard before.pixelsWide == after.pixelsWide, before.pixelsHigh == after.pixelsHigh else { return 0 }
         let bytes = SameLayoutBytes(before, after)
         var count = 0
-        for y in 0 ..< before.pixelsHigh {
+        for y in 0 ..< before.pixelsHigh where bytes?.sameRow(y) != true {
             for x in 0 ..< before.pixelsWide {
                 if bytes?.samePixel(x: x, y: y) == true { continue }
                 guard let first = before.colorAt(x: x, y: y), let second = after.colorAt(x: x, y: y) else { continue }
@@ -122,7 +128,7 @@ import Testing
     private func highContrastChangedPixels(in full: NSBitmapImageRep, withoutContent blank: NSBitmapImageRep) -> Int {
         let bytes = SameLayoutBytes(full, blank)
         var count = 0
-        for y in 0 ..< full.pixelsHigh {
+        for y in 0 ..< full.pixelsHigh where bytes?.sameRow(y) != true {
             for x in 0 ..< full.pixelsWide {
                 if bytes?.samePixel(x: x, y: y) == true { continue }
                 guard let ink = full.colorAt(x: x, y: y), let background = blank.colorAt(x: x, y: y),
