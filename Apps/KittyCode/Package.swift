@@ -205,7 +205,8 @@ let package = Package(
             dependencies: [
                 "KittyEditor", "KittyFileTree", "KittyWorkspace",
                 .product(name: "AtelierText", package: "AtelierCore"),
-                .product(name: "AemiTesting", package: "aemi")
+                .product(name: "AemiTesting", package: "aemi"),
+                .product(name: "AemiTestKit", package: "aemi")
             ],
             swiftSettings: strict),
         .testTarget(
