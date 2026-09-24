@@ -1,7 +1,8 @@
 import Foundation
 
 /// Parses the hover markdown sourcekit-lsp and the doc-comment index produce into plain-text pieces: a leading
-/// fenced declaration, a summary paragraph and discussion, a `- Parameters:` list and a `- Returns:` item. Blocks
+/// fenced declaration, a summary paragraph and discussion, a `- Parameters:` list or `- Parameter name:` items, and a
+/// `- Returns:` item. Blocks
 /// separated by a `---` line are overload candidates; the first is the primary document.
 package enum HoverMarkdownStructurer {
     package struct Field: Sendable, Equatable {
@@ -223,8 +224,9 @@ package enum HoverMarkdownStructurer {
         return kept.joined(separator: "\n")
     }
 
-    /// Pulls a `- Parameters:` list and a `- Returns:` item out of `lines`, in whatever order and position they
-    /// appear; everything else is prose, in its original order.
+    /// Pulls a `- Parameters:` list, `- Parameter name:` items and a `- Returns:` item out of `lines`, in whatever
+    /// order and position they appear, the parameters in the order they come; everything else is prose, in its
+    /// original order.
     private static func extractLists(_ lines: [String]) -> (prose: [String], parameters: [Field], returns: String?) {
         var prose: [String] = []
         var parameters: [Field] = []
@@ -260,6 +262,16 @@ package enum HoverMarkdownStructurer {
                 }
                 continue
             }
+            if let (name, text) = singularParameter(trimmed) {
+                var fieldText = text
+                index += 1
+                while index < lines.count, isContinuation(lines[index]) {
+                    fieldText += " " + lines[index].trimmingCharacters(in: .whitespaces)
+                    index += 1
+                }
+                parameters.append(Field(name: name, text: fieldText))
+                continue
+            }
             if trimmed.hasPrefix("- Returns:") {
                 var text = String(trimmed.dropFirst("- Returns:".count)).trimmingCharacters(in: .whitespaces)
                 index += 1
@@ -274,6 +286,17 @@ package enum HoverMarkdownStructurer {
             index += 1
         }
         return (prose, parameters, returns)
+    }
+
+    /// The name and text of a `- Parameter name: text` item, the form that documents one parameter on its own; nil
+    /// for any other line, and for an item whose name is empty or holds a space.
+    private static func singularParameter(_ trimmed: String) -> (name: String, text: String)? {
+        let marker = "- Parameter "
+        guard trimmed.hasPrefix(marker), let colon = trimmed.firstIndex(of: ":") else { return nil }
+        let name = trimmed[trimmed.index(trimmed.startIndex, offsetBy: marker.count) ..< colon]
+        guard !name.isEmpty, !name.contains(where: \.isWhitespace) else { return nil }
+        let text = trimmed[trimmed.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+        return (String(name), text)
     }
 
     private static func isIndented(_ line: String) -> Bool {

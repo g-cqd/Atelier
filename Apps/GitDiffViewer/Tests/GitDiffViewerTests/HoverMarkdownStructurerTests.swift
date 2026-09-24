@@ -248,6 +248,49 @@ import Testing
         #expect(document.discussion?.hasSuffix("> A quoted *note*.\n\n---\n\nClosing paragraph.") == true)
     }
 
+    /// Swift's markup documents a parameter alone with `- Parameter name:`, or several under `- Parameters:`: both
+    /// join the Parameters grid, in the order they come, and neither is left in the prose as a bullet list.
+    @Test
+    func `singular Parameter items join the Parameters grid with their continuation lines`() {
+        let markdown = """
+            ```swift
+            func move(_ point: Point, by offset: Double) -> Point
+            ```
+
+            Moves a point.
+
+            - Parameter point: The point to move.
+            - Parameter offset: How far to move it,
+              in points.
+            - Returns: The moved point.
+            """
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(
+            document.parameters == [
+                .init(name: "point", text: "The point to move."),
+                .init(name: "offset", text: "How far to move it, in points.")
+            ])
+        #expect(document.returns == "The moved point.")
+        #expect(document.summary == "Moves a point.")
+        #expect(document.discussion == nil)
+    }
+
+    @Test
+    func `a singular Parameter line inside a code block stays in the code`() {
+        let markdown = "```swift\nfunc f()\n```\n\nParses.\n\n```swift\n- Parameter x: not a field\n```"
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(document.parameters.isEmpty)
+        #expect(document.discussion == "```swift\n- Parameter x: not a field\n```")
+    }
+
+    @Test
+    func `a Parameter line with no name before its colon stays in the prose`() {
+        let markdown = "```swift\nfunc f()\n```\n\nParses.\n\n- Parameter : nameless"
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(document.parameters.isEmpty)
+        #expect(document.discussion == "- Parameter : nameless")
+    }
+
     /// A `/** */` comment from a file with CRLF line endings reaches the structurer with them.
     @Test
     func `CRLF line endings structure as LF ones do`() {
