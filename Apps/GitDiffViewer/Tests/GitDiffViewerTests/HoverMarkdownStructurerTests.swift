@@ -204,4 +204,47 @@ import Testing
                 == "@GenerateStub public struct Reference: Identifiable, Decodable, Sendable")
         #expect(document.extraCandidates[1].summary == "A size reference embedded in a widget response.")
     }
+
+    // MARK: HOVER-20: code blocks stay code
+
+    /// The SDK documents `Bool` with indented code blocks holding blank lines: trimming each paragraph took their
+    /// indentation, and with it the parser's only sign that they were code.
+    @Test
+    func `the SDK's Bool answer keeps its abstract apart and its indented code intact`() throws {
+        let document = HoverMarkdownStructurer.structure(HoverFixtures.sdkBool)
+        #expect(document.declaration == "@frozen struct Bool : Sendable")
+        #expect(document.summary == "A value type whose instances are either `true` or `false`.")
+        let discussion = try #require(document.discussion)
+        #expect(
+            discussion.contains(
+                "to a variable or constant.\n\n    var godotHasArrived = false\n\n    let numbers = 1...5\n"
+            ))
+        #expect(discussion.contains("    while i {\n        print(i)\n        i -= 1\n    }\n"))
+        #expect(discussion.contains("Using Imported Boolean values\n=============================\n"))
+        #expect(discussion.hasSuffix("have a consistent type interface."))
+    }
+
+    @Test
+    func `prose that opens with code has no abstract, and the code keeps its indentation`() {
+        let markdown = "```swift\nfunc f()\n```\n\n    let x = 1\n\nThen prose."
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(document.summary == nil)
+        #expect(document.discussion == "    let x = 1\n\nThen prose.")
+    }
+
+    @Test
+    func `a Returns line inside a code block stays in the code`() {
+        let markdown = "```swift\nfunc f()\n```\n\nParses.\n\n```swift\n- Returns: not a field\n```"
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(document.returns == nil)
+        #expect(document.discussion == "```swift\n- Returns: not a field\n```")
+    }
+
+    /// Only a `---` that opens onto another fenced declaration separates overloads; one in the prose is a rule.
+    @Test
+    func `a thematic break in the prose is not an overload separator`() {
+        let document = HoverMarkdownStructurer.structure(HoverFixtures.everyBlockKind)
+        #expect(document.extraCandidates.isEmpty)
+        #expect(document.discussion?.hasSuffix("> A quoted *note*.\n\n---\n\nClosing paragraph.") == true)
+    }
 }
