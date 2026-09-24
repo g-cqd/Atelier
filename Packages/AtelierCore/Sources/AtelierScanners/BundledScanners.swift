@@ -16,6 +16,7 @@ public enum BundledScanners {
         "cpp": CppExternalScanner.self,
         "css": CSSExternalScanner.self,
         "toml": TOMLExternalScanner.self,
-        "html": HTMLExternalScanner.self
+        "html": HTMLExternalScanner.self,
+        "bash": BashExternalScanner.self
     ]
 }
