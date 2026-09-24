@@ -167,12 +167,12 @@ public final class DocumentBuffer {
     /// cursor is clamped into the new text, and the buffer is no longer externally modified. The edit history is the
     /// caller's to update.
     /// - Parameters:
-    ///   - file: The text and line ending read from disk.
+    ///   - file: The text, its rope and the line ending read from disk; the rope the read built is installed as is.
     ///   - date: The file's modification date when it was read.
     public func replaceContents(with file: LoadedFile, modifiedAt date: Date?) {
         postOpenProcessingTask?.cancel()
         postOpenProcessingTask = nil
-        textBuffer = TextBuffer(file.content)
+        textBuffer = file.textBuffer
         lineEnding = file.lineEnding
         lastModifiedDate = date
         externallyModified = false

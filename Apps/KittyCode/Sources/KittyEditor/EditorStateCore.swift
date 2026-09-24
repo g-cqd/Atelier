@@ -604,8 +604,9 @@ public final class EditorState {
             lines.replaceSubrange(viewport, with: viewportHighlights)
         }
         replaceHighlightedLines(with: lines)
-        // Plain text needs no pass: an empty line of spans already draws as plain text.
-        if syntaxHighlightingEnabled, viewport != 0 ..< lineCount {
+        // Plain text needs no highlighting pass, as a line without spans draws plain; an unknown width needs measuring.
+        let leavesLinesUnhighlighted = syntaxHighlightingEnabled && viewport != 0 ..< lineCount
+        if leavesLinesUnhighlighted || cachedMaxLineWidth == nil {
             requestFullHighlight()
         }
     }
@@ -784,8 +785,7 @@ public final class EditorState {
         }
         invalidateTextSnapshotCache()
         if let buf = bufferManager.activeBuffer {
-            buf.postOpenProcessingTask?.cancel()
-            buf.postOpenProcessingTask = nil
+            cancelPostOpenProcessing(of: buf)
             if buf.isPreview { buf.isPreview = false }
             buf.documentVersion += 1
             isLoadingGrammar = false
@@ -823,8 +823,7 @@ public final class EditorState {
         invalidateTextSnapshotCache()
         cachedMaxLineWidth = knownMaxLineWidth
         if let buf = bufferManager.activeBuffer {
-            buf.postOpenProcessingTask?.cancel()
-            buf.postOpenProcessingTask = nil
+            cancelPostOpenProcessing(of: buf)
             if buf.isPreview { buf.isPreview = false }
             buf.documentVersion += 1
             isLoadingGrammar = false
@@ -937,11 +936,31 @@ public final class EditorState {
 
     public func restoreStateFromActiveBuffer() {
         workspace.restoreStateFromActiveBuffer()
+        refreshHighlightsIfIncomplete()
     }
 
     public func switchToTab(_ index: Int) {
         workspace.switchToTab(index)
+        refreshHighlightsIfIncomplete()
         markEverythingDirty()
+    }
+
+    /// Refreshes the highlights of an active buffer brought back without them or without its width, as a tab is once
+    /// evicted while inactive; the width is then measured by the full pass, never here.
+    private func refreshHighlightsIfIncomplete() {
+        guard bufferManager.activeBuffer != nil,
+            highlightedLines.count != fileLineCount || cachedMaxLineWidth == nil
+        else { return }
+        refreshHighlights()
+    }
+
+    /// Cancels `buffer`'s post-load pass, if it has one pending, and hands its whole-document highlight and
+    /// measurement to the full pass, since nothing else may ask for them.
+    private func cancelPostOpenProcessing(of buffer: DocumentBuffer) {
+        guard let pending = buffer.postOpenProcessingTask else { return }
+        pending.cancel()
+        buffer.postOpenProcessingTask = nil
+        requestFullHighlight()
     }
 
     public func ensureActiveTabVisible(ribbonWidth: Int) {
@@ -1244,15 +1263,10 @@ public final class EditorState {
     }
     public var fileTreeHistory = FileTreeOperationHistory()
 
+    /// The widest line's display width, or 0 while the post-load or full pass is still measuring it: a document is
+    /// never measured on the main actor.
     public var maxLineWidth: Int {
-        if let cachedMaxLineWidth {
-            return cachedMaxLineWidth
-        }
-
-        let computed = TextDocument.computeMaxLineWidth(
-            in: textBuffer, tabSize: config.editor.tabSize)
-        cachedMaxLineWidth = computed
-        return computed
+        cachedMaxLineWidth ?? 0
     }
 
     public var hasActiveSelection: Bool {
@@ -1368,11 +1382,17 @@ public final class EditorState {
     }
 
     /// Runs one full pass over a snapshot of the document on a detached task, which installs the result on the main
-    /// actor, and waits for it.
+    /// actor, and waits for it. A buffer whose post-load pass is still running is left to that pass, which highlights
+    /// and measures it too.
     private func performFullHighlight() async {
-        guard syntaxHighlightingEnabled else { return }
+        let highlightsSyntax = syntaxHighlightingEnabled
+        guard highlightsSyntax || cachedMaxLineWidth == nil,
+            bufferManager.activeBuffer?.postOpenProcessingTask == nil
+        else { return }
         let request = currentHighlightRequest
-        let input = FullHighlightInput(textBuffer: textBuffer, language: currentLanguage, theme: syntaxTheme)
+        let input = FullHighlightInput(
+            textBuffer: textBuffer, language: currentLanguage, theme: syntaxTheme, highlightsSyntax: highlightsSyntax,
+            tabSize: config.editor.tabSize)
         let compute = fullHighlightCompute
         let work = taskProvider.detachedTask(role: .work) { [weak self] in
             let result = await compute(input)
@@ -1388,11 +1408,14 @@ public final class EditorState {
     /// the ones it read. A pass its own document has outrun asks for another, since the edits that outran it may not.
     private func installFullHighlight(_ result: FullHighlightResult, for request: HighlightRequest) {
         let current = currentHighlightRequest
-        guard request == current, result.highlightedLines.count == fileLineCount else {
+        guard request == current, result.highlightedLines.map({ $0.count == fileLineCount }) ?? true else {
             if request.bufferID == current.bufferID { requestFullHighlight() }
             return
         }
-        replaceHighlightedLines(with: result.highlightedLines)
+        if let highlightedLines = result.highlightedLines {
+            replaceHighlightedLines(with: highlightedLines)
+        }
+        cachedMaxLineWidth = result.maxLineWidth
         markContentAllDirty()
         renderRefreshSource?.invalidate()
     }
@@ -1413,7 +1436,7 @@ public final class EditorState {
     }
 
     /// Asks the consumer for a full pass; the requests of a burst make one pass.
-    private func requestFullHighlight() {
+    func requestFullHighlight() {
         fullHighlightContinuation.yield(())
     }
 
@@ -1433,12 +1456,9 @@ public final class EditorState {
         workspace.isCurrentOpenRequest(requestID)
     }
 
+    /// Grows a known width to cover the lines in `range`; an unknown width stays unknown, left to the pass measuring it.
     private func widenCachedMaxLineWidth(for range: Range<Int>) {
-        guard let cachedWidth = cachedMaxLineWidth else {
-            cachedMaxLineWidth = TextDocument.computeMaxLineWidth(
-                in: textBuffer, tabSize: config.editor.tabSize)
-            return
-        }
+        guard let cachedWidth = cachedMaxLineWidth else { return }
 
         let lowerBound = max(0, range.lowerBound)
         let upperBound = min(fileLineCount, range.upperBound)
@@ -1460,9 +1480,8 @@ public final class EditorState {
         textBuffer = snapshot.textBuffer
         textCursor = snapshot.textCursor
         currentLineEnding = snapshot.lineEnding
+        // Clears the width too, which the full pass the refresh below asks for measures.
         invalidateTextSnapshotCache()
-        cachedMaxLineWidth = TextDocument.computeMaxLineWidth(
-            in: snapshot.textBuffer, tabSize: config.editor.tabSize)
         highlightSession = nil
         selection = snapshot.selection
         wrapCache.invalidate()
@@ -1585,16 +1604,20 @@ public final class EditorState {
 // MARK: - Full-document highlighting
 
 extension EditorState {
-    /// What a full pass reads: a snapshot of the rope, O(1) to take, and the language and theme to highlight with.
+    /// What a full pass reads: a snapshot of the rope, O(1) to take, and the settings to highlight and measure with.
     struct FullHighlightInput: Sendable {
         let textBuffer: TextBuffer
         let language: String?
         let theme: Theme
+        /// False when syntax highlighting is off: the pass then only measures, as a line without spans draws plain.
+        let highlightsSyntax: Bool
+        let tabSize: Int
     }
 
-    /// A full pass's product: the spans of every line.
+    /// A full pass's product: the spans of every line, unless it only measured, and the widest line's display width.
     struct FullHighlightResult: Sendable {
-        let highlightedLines: [[StyledSpan]]
+        let highlightedLines: [[StyledSpan]]?
+        let maxLineWidth: Int
     }
 
     /// The state a full pass starts from; its result is installed only while the state is unchanged.
@@ -1609,14 +1632,20 @@ extension EditorState {
         let generation: UInt64
     }
 
-    /// The whole document highlighted lexically in one scan, so a comment or string spanning lines is styled as one.
-    /// Reads the rope's bytes without caching its text, since the live buffer and the undo history share the storage.
+    /// The widest line of the document, and the document highlighted lexically in one scan, so that a comment or
+    /// string spanning lines is styled as one. Reads the rope's bytes without caching its text, since the live buffer
+    /// and the undo history share the storage.
     /// - Complexity: O(document bytes).
     nonisolated private static func computeFullHighlight(_ input: FullHighlightInput) -> FullHighlightResult {
+        let maxLineWidth = TextDocument.computeMaxLineWidth(in: input.textBuffer, tabSize: input.tabSize)
+        guard input.highlightsSyntax else {
+            return FullHighlightResult(highlightedLines: nil, maxLineWidth: maxLineWidth)
+        }
         let rope = input.textBuffer.ropeSnapshot
         let source = String(decoding: rope.bytes(in: 0 ..< rope.byteCount), as: UTF8.self)
         let session = LanguageHighlighter.makeSession(
             language: input.language, theme: input.theme, preferGrammar: false)
-        return FullHighlightResult(highlightedLines: session.highlightDocument(source: source))
+        return FullHighlightResult(
+            highlightedLines: session.highlightDocument(source: source), maxLineWidth: maxLineWidth)
     }
 }
