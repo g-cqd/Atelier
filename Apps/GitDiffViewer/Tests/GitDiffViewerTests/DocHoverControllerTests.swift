@@ -559,4 +559,27 @@ struct DocHoverControllerTests {
 
         #expect(spy.calls.map(\.row) == [0])
     }
+
+    /// A panel that could not show, as for a pane with no window, is no shown identifier: coming back to its
+    /// identifier looks it up again.
+    @Test
+    func `an identifier whose panel could not show is looked up again`() async throws {
+        let sut = try makeStayOpenSUT()
+        sut.textView.removeFromSuperview()
+        var mark = sut.clock.registrationMark()
+        sut.controller.pointerMoved(to: point(row: 0, column: 8, in: sut.rendered))
+        try await sut.clock.expectSleepers(after: mark)
+        sut.clock.advance(by: sut.controller.debounce)
+        try await sut.taskProvider.waitForAllTasks()
+        #expect(!sut.controller.isPanelVisible)
+
+        sut.controller.pointerMoved(to: awayPoint(sut))
+        mark = sut.clock.registrationMark()
+        sut.controller.pointerMoved(to: point(row: 0, column: 8, in: sut.rendered))
+        try await sut.clock.expectSleepers(after: mark)
+        sut.clock.advance(by: sut.controller.debounce)
+        try await sut.taskProvider.waitForAllTasks()
+
+        #expect(sut.spy.calls.map(\.row) == [0, 0])
+    }
 }
