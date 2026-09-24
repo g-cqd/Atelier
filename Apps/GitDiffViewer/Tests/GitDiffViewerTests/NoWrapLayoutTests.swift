@@ -69,7 +69,9 @@ struct NoWrapLayoutTests {
     }
 
     @Test
-    func `a file pane that never wraps tracks its view and is sized from its rows`() throws {
+    func `a file pane that never wraps tracks its view, as wide as its longest line and as tall as its rows lay out`()
+        throws
+    {
         let text = try #require(rendered().unified)
         let scrollView = NSTextView.scrollableTextView()
         scrollView.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
@@ -81,6 +83,10 @@ struct NoWrapLayoutTests {
         DiffTextViewCoordinator.configureWrapping(
             false, column: 0, font: text.palette.font, textView: textView, scrollView: scrollView)
         sut.apply(text)
+        // The height is TextKit's; laid out whole, as scrolling through the pane lays it out, it is the rows'.
+        let layoutManager = try #require(textView.textLayoutManager)
+        layoutManager.ensureLayout(for: layoutManager.documentRange)
+        sut.updateOverscroll(in: scrollView.contentView)
 
         let clip = scrollView.contentView.bounds
         // The rows and the gaps' bands between them; above, the band of a gap at the top in place of the pane's inset;
