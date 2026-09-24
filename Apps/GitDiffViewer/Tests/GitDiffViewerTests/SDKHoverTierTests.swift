@@ -36,21 +36,54 @@ private final class ResolutionSpy: Sendable {
 
 @MainActor
 struct SDKHoverTierTests {
+    /// Calls a fresh tier twice, the second call once `awaitingEntry` has seen the first one's resolution start, and
+    /// returns both calls' providers.
+    ///
+    /// The calls are tasks awaited within the failure bound, and the gate opens on every way out: a call waits on the
+    /// resolution, which waits on the gate, so an `async let` call would be awaited forever once `awaitingEntry` threw.
+    private func twoConcurrentFirstCalls(
+        _ spy: ResolutionSpy, awaitingEntry: @Sendable () async throws -> Void
+    ) async throws -> (first: SDKDocumentationProvider?, second: SDKDocumentationProvider?) {
+        let tier = SDKHoverTier(taskProvider: TaskProviderSpy.tolerant()) { await spy.resolve() }
+        defer { spy.gate.open() }
+        let first = Task { await tier.provider() }
+        try await awaitingEntry()
+        // The first resolution is suspended inside its own work: a second call must join it, not start another.
+        let second = Task { await tier.provider() }
+        spy.gate.open()
+        return (try await first.expectValue(), try await second.expectValue())
+    }
+
     @Test
     func `two concurrent first calls share one resolution and one scratch session`() async throws {
         let spy = try ResolutionSpy()
-        let tier = SDKHoverTier(taskProvider: TaskProviderSpy.tolerant()) { await spy.resolve() }
 
-        async let first = tier.provider()
-        try await spy.entered.expectOpen()
-        // The first resolution is suspended inside its own work: a second call must join it, not start another.
-        async let second = tier.provider()
-        spy.gate.open()
-        let (firstProvider, secondProvider) = await (first, second)
+        let (firstProvider, secondProvider) = try await twoConcurrentFirstCalls(spy) {
+            try await spy.entered.expectOpen()
+        }
 
         #expect(spy.resolutions == 1)
         #expect(firstProvider != nil)
         #expect(firstProvider === secondProvider)
+    }
+
+    /// A main actor held past the failure bound, as a loaded machine can, fails the wait for the first resolution; the
+    /// test must then fail with that wait's error, not wait forever on a call the unopened gate holds.
+    @Test
+    func `a failed wait for the first resolution ends the two calls instead of hanging them`() async throws {
+        struct EntryNotSeen: Error {}
+        let spy = try ResolutionSpy()
+
+        let failedWithTheWait = try await withFailureBound(awaiting: "The two calls' end after a failed wait") {
+            do {
+                _ = try await twoConcurrentFirstCalls(spy) { throw EntryNotSeen() }
+                return false
+            } catch is EntryNotSeen {
+                return true
+            }
+        }
+
+        #expect(failedWithTheWait)
     }
 
     @Test
