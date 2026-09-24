@@ -19,7 +19,7 @@ package struct DiffTextView: NSViewRepresentable {
     package var splitController: SplitPaneController?
     /// Reports a gap handle's drag in the gutter.
     package var onGapDrag: ((GapDragEvent) -> Void)?
-    /// Called once the pane shows a new render.
+    /// Called once the pane shows a new render, its first included.
     package var onDisplayed: (() -> Void)?
     /// Shows documentation for the identifier under the pointer after it rests there.
     package var hoverEnabled = false
@@ -136,6 +136,8 @@ package struct DiffTextView: NSViewRepresentable {
             object: textView
         )
         context.coordinator.apply(rendered)
+        // A new pane shows its first render here, and `updateNSView` only reports the renders that replace it.
+        onDisplayed?()
         context.coordinator.hoverController.attach(to: textView) { [weak coordinator = context.coordinator] in
             coordinator?.rendered
         }
