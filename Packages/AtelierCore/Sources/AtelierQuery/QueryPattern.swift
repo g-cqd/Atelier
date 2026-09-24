@@ -7,15 +7,68 @@ public import AtelierParser
 /// Building a query numbers its captures: ``captureNames`` lists each name once, in the order the query's text first
 /// names it, and every capture in ``patterns`` carries its name's index there, as each capture of a match does. A
 /// caller resolves what it needs per capture name once per query, such as a highlight role, and reads it by index.
+///
+/// It also indexes its patterns by the node types their roots can match, so a matcher tries at each node only the
+/// patterns that can match it.
 public struct Query: Sendable, Equatable {
     public let patterns: [QueryPattern]
     /// Every capture name the patterns use, each once, in the order the query's text first names it.
     public let captureNames: [String]
+    /// For each node type some pattern's root names, the patterns that can match a node of that type, in query order:
+    /// those whose root names it, and those whose root can match any type.
+    private let candidatesByType: [String: [Int]]
+    /// The patterns whose root can match a node of any type, in query order: all that can match any other type.
+    private let untypedCandidates: [Int]
 
     public init(patterns: [QueryPattern] = []) {
         var numbering = CaptureNumbering()
         self.patterns = patterns.map { numbering.number($0) }
         captureNames = numbering.names
+        var byType: [String: [Int]] = [:]
+        var untyped: [Int] = []
+        for (index, pattern) in patterns.enumerated() {
+            if let types = Self.rootTypes(of: pattern) {
+                for type in types { byType[type, default: []].append(index) }
+            } else {
+                untyped.append(index)
+            }
+        }
+        candidatesByType = byType.mapValues { ($0 + untyped).sorted() }
+        untypedCandidates = untyped
+    }
+
+    /// The indices of the patterns that can match a node of type `type`, in query order.
+    /// - Complexity: O(1) on average: one lookup of `type`.
+    func candidatePatterns(forType type: String) -> [Int] {
+        candidatesByType[type] ?? untypedCandidates
+    }
+
+    /// The node types `pattern` can match at its root, or nil when it can match a node of any type.
+    ///
+    /// A node match names its type. A sequence matches each part against the same node, so any part that names types
+    /// bounds them. An alternation matches one of its alternatives, so it can match the types they name together, or
+    /// any type if one of them can. A literal matches an anonymous node by its text, whatever its type.
+    static func rootTypes(of pattern: QueryPattern) -> Set<String>? {
+        switch pattern {
+            case .nodeMatch(let type, _, _):
+                return [type]
+            case .sequence(let parts):
+                for part in parts {
+                    if let types = rootTypes(of: part) { return types }
+                }
+                return nil
+            case .alternation(let alternatives):
+                var types: Set<String> = []
+                for alternative in alternatives {
+                    guard let alternativeTypes = rootTypes(of: alternative) else { return nil }
+                    types.formUnion(alternativeTypes)
+                }
+                return types
+            case .quantified(let inner, .oneOrMore):
+                return rootTypes(of: inner)
+            case .quantified, .literal, .wildcard, .fieldMatch, .negatedField, .predicate, .anchor:
+                return nil
+        }
     }
 
     public static func == (lhs: Query, rhs: Query) -> Bool {
