@@ -1,3 +1,4 @@
+import AtelierSwiftSyntax
 import SwiftParser
 import SwiftSyntax
 import Synchronization
@@ -10,11 +11,14 @@ public enum IdentifierLocator {
     /// - Complexity: O(n) in the length of `content`, which is parsed on every call; ``ParsedSourceCache`` keeps a
     ///   parse for repeated lookups in one document.
     public static func identifier(in content: String, line: Int, utf16Column: Int) -> String? {
-        let source = ParsedSource(content: content, tree: Parser.parse(source: content))
-        return identifier(in: source, line: line, utf16Column: utf16Column)
+        SwiftSyntaxStack.run {
+            let source = ParsedSource(content: content, tree: Parser.parse(source: content))
+            return identifier(in: source, line: line, utf16Column: utf16Column)
+        }
     }
 
-    /// The identifier token covering `(line, utf16Column)` in an already parsed document.
+    /// The identifier token covering `(line, utf16Column)` in an already parsed document. The token search descends
+    /// the tree, so call this on ``AtelierSwiftSyntax/SwiftSyntaxStack``.
     static func identifier(in source: ParsedSource, line: Int, utf16Column: Int) -> String? {
         guard let offset = source.utf8Offset(line: line, utf16Column: utf16Column),
             let token = source.tree.token(at: AbsolutePosition(utf8Offset: offset))
@@ -84,7 +88,8 @@ final class ParsedSourceCache: Sendable {
         self.parse = parse
     }
 
-    /// `content` parsed, from the cache when it is the document parsed last.
+    /// `content` parsed, from the cache when it is the document parsed last. A parse recurses as deep as the document
+    /// nests, so call this on ``AtelierSwiftSyntax/SwiftSyntaxStack``.
     func source(for content: String) -> ParsedSource {
         if let cached = last.withLock({ $0 }), cached.content == content { return cached }
         let source = ParsedSource(content: content, tree: parse(content))

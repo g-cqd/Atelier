@@ -1,3 +1,4 @@
+import AtelierSwiftSyntax
 public import AtelierSyntaxModel
 
 /// A `HoverProvider` backed by a `DocCommentIndex`: resolves the identifier at the query position and formats its
@@ -26,9 +27,12 @@ public struct DocIndexHoverProvider: HoverProvider {
         // it: their brackets open levels that never close. Its answer would be wrong anyway, so anything but a Swift
         // document ends here.
         guard Self.isSwift(query.documentURI) else { return nil }
-        let source = sources.source(for: query.content)
-        guard let name = IdentifierLocator.identifier(in: source, line: query.line, utf16Column: query.utf16Column)
-        else { return nil }
+        let sources = sources
+        let located = await SwiftSyntaxStack.run {
+            IdentifierLocator.identifier(
+                in: sources.source(for: query.content), line: query.line, utf16Column: query.utf16Column)
+        }
+        guard let name = located else { return nil }
         let entries = await index.documentation(forIdentifier: name, preferringURI: query.documentURI, side: side)
         guard !entries.isEmpty else { return nil }
         let sameURI = entries.filter { $0.uri == query.documentURI }

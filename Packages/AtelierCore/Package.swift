@@ -61,7 +61,8 @@ let package = Package(
         ),
         // Hand-written, allocation-free scanners over UTF-16 units for the lexical tier.
         .target(name: "AtelierLexers", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
-        // The swift-syntax backed token provider for the syntax tier; the one target that links swift-syntax.
+        // swift-syntax support: the syntax tier's token provider, and the deep stack every swift-syntax parse and
+        // tree walk runs on.
         .target(
             name: "AtelierSwiftSyntax",
             dependencies: [
@@ -106,7 +107,7 @@ let package = Package(
         .target(
             name: "AtelierDocIndex",
             dependencies: [
-                "AtelierSyntaxModel",
+                "AtelierSwiftSyntax", "AtelierSyntaxModel",
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "AemiRuntime", package: "aemi")
@@ -219,7 +220,11 @@ let package = Package(
             dependencies: ["AtelierLexers", "AtelierSyntaxModel", .product(name: "AemiTestKit", package: "aemi")],
             swiftSettings: strict),
         .testTarget(
-            name: "AtelierSwiftSyntaxTests", dependencies: ["AtelierSwiftSyntax", "AtelierDiff", "AtelierSyntaxModel"],
+            name: "AtelierSwiftSyntaxTests",
+            dependencies: [
+                "AtelierSwiftSyntax", "AtelierDiff", "AtelierSyntaxModel",
+                .product(name: "AemiTestKit", package: "aemi")
+            ],
             swiftSettings: strict),
         .testTarget(
             name: "AtelierDiagnosticsTests",
@@ -238,7 +243,8 @@ let package = Package(
             swiftSettings: strict
         ),
         .testTarget(
-            name: "AtelierDocIndexTests", dependencies: ["AtelierDocIndex", "AtelierSyntaxModel"],
+            name: "AtelierDocIndexTests",
+            dependencies: ["AtelierDocIndex", "AtelierSyntaxModel", .product(name: "AemiTestKit", package: "aemi")],
             swiftSettings: strict)
     ]
 )
