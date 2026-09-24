@@ -198,28 +198,30 @@ package final class HoverDocumentationModel {
     }
 
     /// Answers a hover hit, in ``DiffTextKit/HoverHit``'s coordinates, through ``AtelierLSP/TieredHoverProviders``:
-    /// the language server (new side of an on-disk Swift file only), the doc-comment index of the hovered side, then
-    /// the SDK tier.
+    /// the language server (new side of an on-disk file only), the doc-comment index of the hovered side, then the SDK
+    /// tier. Only a Swift file has a hover.
     package func hover(fileIndex: Int, side: HoverQuerySide, line: Int, utf16Column: Int) async -> HoverContent? {
         guard let file = filesByIndex[fileIndex] else { return nil }
+        let path = side == .new ? (file.rightPath ?? file.leftPath) : file.leftPath
+        // Every tier reads Swift: the language server and the SDK tier ask sourcekit-lsp, and the doc-comment index
+        // parses with swift-syntax, to which another language's comments and strings are code whose brackets never
+        // close. Another language gets no hover rather than a wrong one, and is never parsed.
+        guard Language(fileExtension: URL(filePath: path).pathExtension) == .swift else { return nil }
         let content = side == .new ? file.newText : file.oldText
         guard !content.isEmpty else { return nil }
-        let path = side == .new ? (file.rightPath ?? file.leftPath) : file.leftPath
         let blobID = side == .new ? file.newBlobID : file.oldBlobID
         let onDiskRoot = side == .new ? repositoryRoot : nil
         let uri = Self.uri(path: path, blobID: blobID, onDiskRoot: onDiskRoot)
         let query = HoverQuery(documentURI: uri, content: content, line: line, utf16Column: utf16Column)
 
-        let primary = await primaryProvider(side: side, path: path, onDiskRoot: onDiskRoot)
+        let primary = await primaryProvider(side: side, onDiskRoot: onDiskRoot)
         let docs = side == .new ? newSideDocs : oldSideDocs
         let tiers = [primary, docs, sdkProvider].compactMap { $0 }
         return try? await TieredHoverProviders(tiers).hover(query)
     }
 
-    private func primaryProvider(side: HoverQuerySide, path: String, onDiskRoot: URL?) async -> (any HoverProvider)? {
-        guard side == .new, let onDiskRoot, let lspRegistry,
-            Language(fileExtension: URL(filePath: path).pathExtension) == .swift
-        else { return nil }
+    private func primaryProvider(side: HoverQuerySide, onDiskRoot: URL?) async -> (any HoverProvider)? {
+        guard side == .new, let onDiskRoot, let lspRegistry else { return nil }
         guard let service = await lspRegistry.service(forRoot: onDiskRoot) else { return nil }
         return LSPHoverProvider(service: service)
     }

@@ -163,6 +163,24 @@ private final class ParseCounter: Sendable {
         #expect(content?.source == .docIndex)
     }
 
+    @Test
+    func `a file that is not Swift has no hover, and asks no tier`() async throws {
+        let model = makeSUT()
+        let sdk = RecordingHoverTier()
+        model.sdkProvider = sdk
+        let script = HoverDocumentationModel.FileEntry(
+            index: 1, leftPath: "tools/run.py", rightPath: "tools/run.py", oldText: "value = double(3)\n",
+            newText: "value = double(3)\n", oldBlobID: "old-script", newBlobID: "new-script")
+
+        try await feed(model, [caller(), script], reader: makeReader(), corpus: [restEntry()])
+
+        // The index documents `double`; in the script it sits at columns 8..<14.
+        #expect(await model.hover(fileIndex: 1, side: .new, line: 0, utf16Column: 10) == nil)
+        #expect(await model.hover(fileIndex: 1, side: .old, line: 0, utf16Column: 10) == nil)
+        #expect(sdk.queryCount == 0)
+        #expect(await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 13) != nil)
+    }
+
     // MARK: Corpus
 
     @Test
@@ -478,5 +496,17 @@ extension HoverDocumentationModelTests {
         model.comparisonChanged(root: root, files: [entry])
         _ = await model.hover(fileIndex: 0, side: .new, line: 1, utf16Column: 6)
         #expect(callCount.withLock { $0 } == 1)
+    }
+}
+
+/// A hover tier that records every query and answers each one, so a test sees whether a hover reached it.
+private final class RecordingHoverTier: HoverProvider {
+    private let queries = Mutex<[HoverQuery]>([])
+
+    var queryCount: Int { queries.withLock { $0.count } }
+
+    func hover(_ query: HoverQuery) async throws -> HoverContent? {
+        queries.withLock { $0.append(query) }
+        return HoverContent(markdown: "Recorded.", source: .sdk)
     }
 }
