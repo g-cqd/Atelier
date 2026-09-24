@@ -15,7 +15,7 @@ import Testing
 struct FileAppearanceTimingTests {
     private let harness = ModelTestHarness()
 
-    @Test(arguments: [ViewMode.inline])
+    @Test(arguments: [ViewMode.inline, .split, .stacked])
     func `a file opened in new panes is timed to their appearance`(mode: ViewMode) async throws {
         let sut = harness.makeSUT()
         sut.settings.mode = mode
