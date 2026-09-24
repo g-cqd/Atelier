@@ -105,6 +105,8 @@ public enum LanguageHighlighter: Sendable {
         private let theme: Theme
         private var strategy: Strategy
         private var splitScratch = SplitLinesScratch()
+        /// The theme's style for every role, looked up once, on the session's first highlight.
+        private lazy var resolver = RoleBasedThemeResolver(precomputingStylesOf: theme)
 
         /// Optional semantic token provider (e.g. LSP) for `.semantic` layer merging.
         public var semanticProvider: (any SemanticTokenProvider)?
@@ -227,7 +229,6 @@ public enum LanguageHighlighter: Sendable {
             }
 
             let merged = HighlightMerger.merge(allTokens, sourceByteCount: source.utf8.count)
-            let resolver = RoleBasedThemeResolver(theme: theme)
             let spans = HighlightMerger.resolveToSpans(
                 tokens: merged,
                 source: source,
@@ -253,7 +254,7 @@ public enum LanguageHighlighter: Sendable {
             let utf8 = Array(source.utf8)
             return HighlightMerger.resolveToLines(
                 tokens: LexicalHighlightEngine().highlight(utf8: utf8, language: lexicalLanguage),
-                utf8: utf8, resolver: RoleBasedThemeResolver(theme: theme), defaultStyle: theme.defaultStyle)
+                utf8: utf8, resolver: resolver, defaultStyle: theme.defaultStyle)
         }
 
         /// Highlights only the visible lines, querying the tree over their byte range; without a usable parse the
@@ -283,7 +284,6 @@ public enum LanguageHighlighter: Sendable {
                             return viewportFallback(source: source, visibleLineRange: visibleLineRange)
                         }
 
-                        let resolver = RoleBasedThemeResolver(theme: theme)
                         let viewportSource = extractViewportSource(
                             source: source, byteRange: byteRange)
                         let vpByteCount = viewportSource.utf8.count
@@ -389,7 +389,6 @@ public enum LanguageHighlighter: Sendable {
 
             let merged = HighlightMerger.merge(
                 allTokens, sourceByteCount: viewportSource.utf8.count)
-            let resolver = RoleBasedThemeResolver(theme: theme)
             let spans = HighlightMerger.resolveToSpans(
                 tokens: merged, source: viewportSource, resolver: resolver,
                 defaultStyle: theme.defaultStyle)
@@ -450,12 +449,17 @@ public enum LanguageHighlighter: Sendable {
 
         public func highlightLines<C: Collection>(_ lines: C) -> [[StyledSpan]]
         where C.Element == String {
+            highlightJoinedLines(lines.joined(separator: "\n"))
+        }
+
+        /// The lines of `text`, split on `\n`, highlighted as ``highlightLines(_:)`` highlights them once joined:
+        /// for text a document reads as one run, which splitting into lines first would only copy.
+        public func highlightJoinedLines(_ text: String) -> [[StyledSpan]] {
             switch strategy {
                 case .fallback:
-                    return lexicalLines(source: lines.joined(separator: "\n"))
+                    return lexicalLines(source: text)
                 case .grammar:
-                    let source = lines.isEmpty ? "" : lines.joined(separator: "\n")
-                    return highlightDocument(source: source)
+                    return highlightDocument(source: text)
             }
         }
     }

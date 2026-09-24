@@ -5,9 +5,26 @@ public import KittyStyle
 /// using the existing `Theme` with role-hierarchy fallback and modifier overrides.
 public struct RoleBasedThemeResolver: Sendable {
     private let theme: Theme
+    /// Every role's base style, at the index of its raw value, when ``init(precomputingStylesOf:)`` looked them up.
+    private let baseStyles: [Style]?
 
     public init(theme: Theme) {
         self.theme = theme
+        self.baseStyles = nil
+    }
+
+    /// A resolver that looks up every role's style once, here, for one that resolves many tokens: resolving a role
+    /// then reads an array rather than searching the theme by capture name, a string hash per token.
+    /// - Complexity: O(roles) theme lookups.
+    public init(precomputingStylesOf theme: Theme) {
+        self.theme = theme
+        let unresolved = RoleBasedThemeResolver(theme: theme)
+        let size = (HighlightRole.allCases.map { Int($0.rawValue) }.max() ?? -1) + 1
+        var styles = Array(repeating: theme.defaultStyle, count: size)
+        for role in HighlightRole.allCases {
+            styles[Int(role.rawValue)] = unresolved.baseStyle(for: role)
+        }
+        self.baseStyles = styles
     }
 
     /// Resolve a role and modifiers to a concrete style.
@@ -31,6 +48,7 @@ public struct RoleBasedThemeResolver: Sendable {
     // MARK: - Private
 
     private func baseStyle(for role: HighlightRole) -> Style {
+        if let baseStyles { return baseStyles[Int(role.rawValue)] }
         // Map role to capture name and use theme's hierarchical fallback
         let captureName = Self.roleToCaptureNameLookup[role] ?? "variable"
         return theme.style(for: captureName)
