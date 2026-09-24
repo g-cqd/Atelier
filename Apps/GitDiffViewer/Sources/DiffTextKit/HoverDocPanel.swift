@@ -88,7 +88,9 @@ package final class HoverDocPanel {
     private let candidatesStack = NSStackView()
     private let contentStack = NSStackView()
 
-    // `NSTextView` has no intrinsic size, so the text slots need explicit heights, recomputed by every render.
+    // `NSTextView` has no intrinsic size, so the text slots need explicit heights, recomputed by every render. The
+    // declaration's is its text view's, not its chip's: the chip pads the text view on every edge, so a chip of zero
+    // height would conflict with the padding.
     private var summaryHeight: NSLayoutConstraint?
     private var declarationHeight: NSLayoutConstraint?
     private var bodyHeight: NSLayoutConstraint?
@@ -266,7 +268,10 @@ package final class HoverDocPanel {
             returnsHeader, returnsView, candidatesStack, diagnosticsStack
         ] {
             contentStack.addArrangedSubview(view)
-            view.widthAnchor.constraint(equalToConstant: HoverPanelSizing.width - 24).isActive = true
+            let width = view.widthAnchor.constraint(equalToConstant: HoverPanelSizing.width - 24)
+            // The grid's columns set its width when it has no rows: its own gives way to them rather than conflict.
+            if view === parametersGrid { width.priority = .required - 1 }
+            width.isActive = true
         }
         contentStack.setCustomSpacing(HoverPanelMetrics.headerToContentSpacing, after: titleLabel)
         contentStack.setCustomSpacing(HoverPanelMetrics.headerToContentSpacing, after: parametersHeader)
@@ -274,7 +279,7 @@ package final class HoverDocPanel {
 
         summaryHeight = summaryView.heightAnchor.constraint(equalToConstant: 0)
         summaryHeight?.isActive = true
-        declarationHeight = declarationChip.heightAnchor.constraint(equalToConstant: 0)
+        declarationHeight = declarationView.heightAnchor.constraint(equalToConstant: 0)
         declarationHeight?.isActive = true
         bodyHeight = bodyScrollView.heightAnchor.constraint(equalToConstant: 0)
         bodyHeight?.isActive = true
@@ -322,9 +327,7 @@ package final class HoverDocPanel {
         declarationChip.isHidden = document.declaration == nil
         declarationChip.fillColor = document.chipBackground ?? .clear
         declarationHeight?.constant =
-            declarationChip.isHidden
-            ? 0
-            : Self.measuredHeight(of: declaration, width: chipInnerWidth) + 2 * HoverPanelMetrics.chipVerticalPadding
+            declarationChip.isHidden ? 0 : Self.measuredHeight(of: declaration, width: chipInnerWidth)
 
         let hasHead = !titleLabel.isHidden || !summaryView.isHidden || !declarationChip.isHidden
         headDivider.isHidden = !(hasHead && (hasDiscussion || hasFields))
@@ -370,8 +373,13 @@ package final class HoverDocPanel {
 extension HoverDocPanel {
     fileprivate func renderParameters(_ parameters: [HoverDocument.Field]) {
         while parametersGrid.numberOfRows > 0 {
+            let row = parametersGrid.row(at: parametersGrid.numberOfRows - 1)
+            // Removing a row leaves its cells' views in the grid, unplaced: they go with it.
+            let views = (0 ..< row.numberOfCells).compactMap { row.cell(at: $0).contentView }
             parametersGrid.removeRow(at: parametersGrid.numberOfRows - 1)
+            views.forEach { $0.removeFromSuperview() }
         }
+        var nameColumnWidth: CGFloat = 0
         for parameter in parameters {
             let nameLabel = NSTextField(labelWithString: parameter.name)
             nameLabel.font = .monospacedSystemFont(ofSize: 11, weight: .semibold)
@@ -381,7 +389,11 @@ extension HoverDocPanel {
             textLabel.preferredMaxLayoutWidth =
                 HoverPanelSizing.width - 2 * HoverPanelMetrics.edgeInset - 90
             parametersGrid.addRow(with: [nameLabel, textLabel])
+            nameColumnWidth = max(nameColumnWidth, ceil(nameLabel.intrinsicContentSize.width))
         }
+        // The names' column is as wide as the widest name, and the text's takes the rest of the grid's width: sized
+        // to their content alone, the two columns would share that rest in no set way.
+        parametersGrid.column(at: 0).width = parameters.isEmpty ? NSGridView.sizedForContent : nameColumnWidth
     }
 
     /// Rebuilds the candidates group: a chip per declaration and a prose row per summary, each sized to its text.
