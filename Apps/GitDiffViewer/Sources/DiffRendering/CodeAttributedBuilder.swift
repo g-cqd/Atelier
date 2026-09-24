@@ -5,13 +5,13 @@ import Foundation
 /// Colors a source snippet, such as a hover's declaration, the way a diff pane would: the lexical highlighting tier
 /// mapped through the pane's ``DiffPalette``.
 package enum CodeAttributedBuilder {
-    /// `code` colored over `palette`'s font and text color, lexed as the fence's `languageTag`; an unrecognized or
-    /// missing tag lexes as Swift.
+    /// `code` colored over `palette`'s font and text color, lexed as the fence's `languageTag`: as Swift when there is
+    /// no tag, and as plain text when the tag names a language the lexers do not know.
     package static func attributedString(
         for code: String, languageTag: String? = nil, palette: DiffPalette
     ) -> NSAttributedString {
         guard !code.isEmpty else { return NSAttributedString() }
-        let language = languageTag.flatMap { Language(name: $0) } ?? .swift
+        let language = languageTag.map { Language(name: $0) ?? .plain } ?? .swift
         let result = NSMutableAttributedString(
             string: code, attributes: [.font: palette.font, .foregroundColor: palette.textColor])
         guard language != .plain else { return result }
