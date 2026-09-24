@@ -87,6 +87,7 @@ struct TokenPipelineBenchmark {
 
         // What `buildTokens` did per capture before the roles were resolved once per query: two lookups by name.
         var byName: [Double] = []
+        var byNameSum = 0
         for iteration in 0 ..< Self.iterations {
             var sum = 0
             let elapsed = Self.milliseconds {
@@ -98,16 +99,35 @@ struct TokenPipelineBenchmark {
                 }
             }
             #expect(sum > 0)
+            byNameSum = sum
             if iteration >= Self.warmUps { byName.append(elapsed * 1e6 / Double(captureCount)) }
         }
         Self.report("json capture-role by-name (ns per capture)", byName, unit: "ns")
+
+        // What it does since: one read of the query's roles by the capture's index.
+        let roles = CaptureRoles(captureNames: query.captureNames)
+        var byIndex: [Double] = []
+        for iteration in 0 ..< Self.iterations {
+            var sum = 0
+            let elapsed = Self.milliseconds {
+                for match in matches {
+                    for capture in match.captures {
+                        guard let resolved = roles[capture.index] else { continue }
+                        sum &+= Int(resolved.role.rawValue) &+ Int(resolved.modifiers.rawValue)
+                    }
+                }
+            }
+            #expect(sum == byNameSum)
+            if iteration >= Self.warmUps { byIndex.append(elapsed * 1e6 / Double(captureCount)) }
+        }
+        Self.report("json capture-role by-index (ns per capture)", byIndex, unit: "ns")
 
         let highlighter = Highlighter(theme: .monokai)
         var tokenSamples: [Double] = []
         var tokenChecksum: UInt64 = 0
         for iteration in 0 ..< Self.iterations {
             var tokens: [HighlightToken] = []
-            let elapsed = Self.milliseconds { tokens = highlighter.buildTokens(matches: matches) }
+            let elapsed = Self.milliseconds { tokens = highlighter.buildTokens(matches: matches, roles: roles) }
             if iteration == 0 { tokenChecksum = Self.checksum(of: [tokens]) }
             if iteration >= Self.warmUps { tokenSamples.append(elapsed) }
         }
@@ -134,17 +154,23 @@ struct TokenPipelineBenchmark {
     func `resolves the capture roles of every bundled query`() throws {
         let resources = try #require(KittySyntaxResources.bundle.resourcePath)
         var names: [String] = []
+        // Each query's roles, and its captures' indices in the order `names` lists their names.
+        var queries: [(roles: CaptureRoles, indices: [Int])] = []
         for entry in BundledLanguageManifest.entries {
             let path = "\(resources)/Grammars/\(entry.path)/highlights.scm"
             guard let text = try? String(contentsOfFile: path, encoding: .utf8),
                 let query = try? QueryParser.parse(text)
             else { continue }
-            for pattern in query.patterns { Self.collectCaptureNames(pattern, into: &names) }
+            var captures: [QueryPattern.Capture] = []
+            for pattern in query.patterns { Self.collectCaptures(pattern, into: &captures) }
+            names.append(contentsOf: captures.map(\.name))
+            queries.append((CaptureRoles(captureNames: query.captureNames), captures.map(\.index)))
         }
         try #require(!names.isEmpty)
         var stream: [String] = []
         while stream.count < 100_000 { stream.append(contentsOf: names) }
         var byName: [Double] = []
+        var byNameSum = 0
         for iteration in 0 ..< Self.iterations {
             var sum = 0
             let elapsed = Self.milliseconds {
@@ -154,10 +180,31 @@ struct TokenPipelineBenchmark {
                 }
             }
             #expect(sum > 0)
+            byNameSum = sum
             if iteration >= Self.warmUps { byName.append(elapsed * 1e6 / Double(stream.count)) }
         }
         print("BENCH bundled capture names \(names.count) stream \(stream.count)")
         Self.report("bundled capture-role by-name (ns per capture)", byName, unit: "ns")
+
+        // The same captures, the same number of times, each read by index from its own query's roles.
+        let repeats = stream.count / names.count
+        var byIndex: [Double] = []
+        for iteration in 0 ..< Self.iterations {
+            var sum = 0
+            let elapsed = Self.milliseconds {
+                for _ in 0 ..< repeats {
+                    for query in queries {
+                        for index in query.indices {
+                            guard let resolved = query.roles[index] else { continue }
+                            sum &+= Int(resolved.role.rawValue) &+ Int(resolved.modifiers.rawValue)
+                        }
+                    }
+                }
+            }
+            #expect(sum == byNameSum)
+            if iteration >= Self.warmUps { byIndex.append(elapsed * 1e6 / Double(stream.count)) }
+        }
+        Self.report("bundled capture-role by-index (ns per capture)", byIndex, unit: "ns")
     }
 
     // MARK: - Inputs
@@ -193,17 +240,18 @@ struct TokenPipelineBenchmark {
         return "[\n" + records.joined(separator: ",\n") + "\n]\n"
     }
 
-    private static func collectCaptureNames(_ pattern: QueryPattern, into names: inout [String]) {
+    /// The captures of `pattern` in the order the name stream has always listed them: a node's before its children's.
+    private static func collectCaptures(_ pattern: QueryPattern, into captures: inout [QueryPattern.Capture]) {
         switch pattern {
             case .nodeMatch(_, let children, let capture):
-                if let capture { names.append(capture.name) }
-                for child in children { collectCaptureNames(child, into: &names) }
+                if let capture { captures.append(capture) }
+                for child in children { collectCaptures(child, into: &captures) }
             case .literal(_, let capture), .wildcard(let capture):
-                if let capture { names.append(capture.name) }
+                if let capture { captures.append(capture) }
             case .fieldMatch(_, let inner), .quantified(let inner, _):
-                collectCaptureNames(inner, into: &names)
+                collectCaptures(inner, into: &captures)
             case .alternation(let patterns), .sequence(let patterns):
-                for inner in patterns { collectCaptureNames(inner, into: &names) }
+                for inner in patterns { collectCaptures(inner, into: &captures) }
             case .negatedField, .predicate, .anchor:
                 break
         }

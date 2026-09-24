@@ -119,7 +119,8 @@ struct HighlighterTests {
             highlighter.highlight(source: tree.source, tree: tree, query: query) == [
                 StyledSpan(text: "// note", style: commentStyle)
             ])
-        #expect(highlighter.buildTokens(matches: matches).map(\.role) == [.comment])
+        let roles = CaptureRoles(captureNames: query.captureNames)
+        #expect(highlighter.buildTokens(matches: matches, roles: roles).map(\.role) == [.comment])
     }
 
     @Test

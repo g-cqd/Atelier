@@ -48,6 +48,8 @@ public enum LanguageHighlighter: Sendable {
             let parser: GrammarParser
             let scanner: (any GrammarExternalScanner)?
             let query: Query
+            /// The role of each of `query`'s capture names, resolved when the language's artifacts loaded.
+            let roles: CaptureRoles
             let highlighter: Highlighter
             let scratch = HighlightScratch()
             /// The hash of the last parsed source, the quick check before `parseTree(for:)` reuses `lastParsedTree`.
@@ -65,6 +67,7 @@ public enum LanguageHighlighter: Sendable {
                 )
                 scanner = artifacts.scannerType?.init()
                 query = artifacts.query
+                roles = artifacts.roles
                 highlighter = Highlighter(theme: theme)
             }
 
@@ -193,7 +196,7 @@ public enum LanguageHighlighter: Sendable {
                             return []
                         }
                         let matches = QueryMatcher.execute(query: gs.query, tree: tree)
-                        return gs.highlighter.buildTokens(matches: matches, layer: .structural)
+                        return gs.highlighter.buildTokens(matches: matches, roles: gs.roles, layer: .structural)
                     } catch {
                         return []
                     }
@@ -274,7 +277,7 @@ public enum LanguageHighlighter: Sendable {
                         let byteRange = lineRangeToByteRange(source: source, lineRange: visibleLineRange)
                         let matches = QueryMatcher.execute(
                             query: gs.query, tree: tree, byteRange: byteRange)
-                        let tokens = gs.highlighter.buildTokens(matches: matches, layer: .structural)
+                        let tokens = gs.highlighter.buildTokens(matches: matches, roles: gs.roles, layer: .structural)
 
                         guard !tokens.isEmpty else {
                             return viewportFallback(source: source, visibleLineRange: visibleLineRange)
@@ -347,7 +350,7 @@ public enum LanguageHighlighter: Sendable {
                             let vpCount = viewportSource.utf8.count
                             structuralTokens = gs.highlighter
                                 .buildTokens(
-                                    matches: matches, layer: .structural
+                                    matches: matches, roles: gs.roles, layer: .structural
                                 )
                                 .compactMap { token -> HighlightToken? in
                                     let start = token.byteRange.lowerBound - byteRange.lowerBound
@@ -546,8 +549,23 @@ private struct SyntaxArtifacts: Sendable {
     let lexTable: LexTable
     let productions: [ProductionRule]
     let query: Query
+    /// The role of each of `query`'s capture names, resolved once per language.
+    let roles: CaptureRoles
     let needsExternalScanner: Bool
     let scannerType: (any GrammarExternalScanner.Type)?
+
+    init(
+        parseTable: ParseTable, lexTable: LexTable, productions: [ProductionRule], query: Query,
+        needsExternalScanner: Bool, scannerType: (any GrammarExternalScanner.Type)?
+    ) {
+        self.parseTable = parseTable
+        self.lexTable = lexTable
+        self.productions = productions
+        self.query = query
+        roles = CaptureRoles(captureNames: query.captureNames)
+        self.needsExternalScanner = needsExternalScanner
+        self.scannerType = scannerType
+    }
 }
 
 private struct SplitLinesScratch {

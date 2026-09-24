@@ -21,7 +21,8 @@ struct HighlightTokenTests {
             .nodeMatch(type: "keyword", children: [], capture: "keyword")
         ])
         let matches = QueryMatcher.execute(query: query, tree: tree)
-        let tokens = highlighter.buildTokens(matches: matches, layer: .structural)
+        let tokens = highlighter.buildTokens(
+            matches: matches, roles: CaptureRoles(captureNames: query.captureNames), layer: .structural)
 
         #expect(tokens.count == 1)
         #expect(tokens[0].role == .keyword)
@@ -97,7 +98,8 @@ struct HighlightTokenTests {
         // Token path
         let highlighter = Highlighter(theme: theme)
         let matches = QueryMatcher.execute(query: query, tree: tree)
-        let tokens = highlighter.buildTokens(matches: matches, layer: .structural)
+        let tokens = highlighter.buildTokens(
+            matches: matches, roles: CaptureRoles(captureNames: query.captureNames), layer: .structural)
         let merged = HighlightMerger.merge(tokens, sourceByteCount: 6)
         let resolver = RoleBasedThemeResolver(theme: theme)
         let tokenResult = HighlightMerger.resolveToSpans(
