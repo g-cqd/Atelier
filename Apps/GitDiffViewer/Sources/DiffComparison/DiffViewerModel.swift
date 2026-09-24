@@ -291,7 +291,9 @@ package final class DiffViewerModel {
         tabs.keepOnly { comparison.contains($0) }
         if let selectedPath, !comparison.contains(selectedPath) {
             applySelection(tabs.activePath, keepingPublished: true)
-        } else if selectedPath == nil, let singleFiles = comparison.singleFiles {
+        } else if selectedPath == nil, tabs.tabs.isEmpty, let singleFiles = comparison.singleFiles {
+            // Only before any tab is open: with one open, a missing selection is the file list's tab, shown on
+            // purpose.
             tabs.open(singleFiles.left)
             applySelection(singleFiles.left, keepingPublished: true)
         } else {
@@ -402,6 +404,14 @@ package final class DiffViewerModel {
         let leftPath = side == .left ? path : comparison.counterpartPath(of: path, in: .right)
         tabs.pin(leftPath)
         applySelection(leftPath, keepingPublished: false)
+    }
+
+    /// Shows every changed file in the file list's fixed tab; every tab stays open (book TAB-10).
+    package func showFileList() {
+        tabs.activateFileList()
+        guard selectedPath != nil else { return }
+        timer.begin()
+        applySelection(nil, keepingPublished: false)
     }
 
     package func activateTab(_ id: DiffTab.ID) {
