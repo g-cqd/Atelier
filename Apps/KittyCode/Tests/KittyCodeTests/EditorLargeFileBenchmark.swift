@@ -193,8 +193,9 @@ struct EditorLargeFileBenchmark {
                     let reloaded = try await buffer.reloadFromDisk(offloadFileRead: { _ in changed }) {
                         state.saveStateToActiveBuffer()
                     }
-                    let content = try #require(reloaded).content
-                    state.fileWatcherDidReloadActiveBuffer(buffer: buffer, content: content)
+                    let (file, replaced) = try #require(consume reloaded)
+                    state.fileWatcherDidReloadActiveBuffer(
+                        buffer: buffer, content: file.content, replaced: consume replaced)
                 })
             // The post-load pass lands before the next sample.
             try await tasks.waitForAllTasks()
@@ -263,5 +264,30 @@ struct EditorLargeFileBenchmark {
             state.shutdown()
         }
         print("BENCH replace a large preview, main actor, 1M lines: \(Self.summary(samples))")
+    }
+
+    /// The main actor's share of reloading a changed million-line file in an inactive tab once its read has finished:
+    /// the tab went inactive by an open, which keeps its highlights, and the reload replaces its text.
+    @Test func `reloading a changed million-line file in an inactive tab`() async throws {
+        let changed = try WorkspaceFileLoading.decode(Data((Self.text + "\n// changed on disk").utf8))
+        let clock = ContinuousClock()
+        var samples: [Duration] = []
+        for _ in 0 ..< 11 {
+            let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
+            let state = try await makeOpenedState(tasks: tasks)
+            let buffer = try #require(state.bufferManager.activeBuffer)
+            try await openSmallFile(in: state, tasks: tasks)
+            samples.append(
+                try await clock.measure {
+                    let reloaded = try await buffer.reloadFromDisk(offloadFileRead: { _ in changed }) {}
+                    let (file, replaced) = try #require(consume reloaded)
+                    state.fileWatcherDidReloadInactiveBuffer(
+                        buffer: buffer, content: file.content, replaced: consume replaced)
+                })
+            // The post-load pass lands before the next sample.
+            try await tasks.waitForAllTasks()
+            state.shutdown()
+        }
+        print("BENCH reload a changed file in an inactive tab, main actor, 1M lines: \(Self.summary(samples))")
     }
 }

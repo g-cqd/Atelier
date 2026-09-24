@@ -119,8 +119,8 @@ struct EditorRetiredStorageTests {
 
         // What the file watcher does once its read lands.
         state.saveStateToActiveBuffer()
-        buffer.replaceContents(with: file, modifiedAt: nil)
-        state.fileWatcherDidReloadActiveBuffer(buffer: buffer, content: file.content)
+        let replaced = buffer.replaceContents(with: file, modifiedAt: nil)
+        state.fileWatcherDidReloadActiveBuffer(buffer: buffer, content: file.content, replaced: consume replaced)
 
         #expect(state.textBuffer.text == "changed on disk\n")
         var entries = log.take()
@@ -130,6 +130,9 @@ struct EditorRetiredStorageTests {
         #expect(retired.fileLines == Self.lines)
         var highlights = retired.highlights
         retired.highlights = []
+        // The buffer's own copy of the highlights, which it let go of, goes with them.
+        #expect(retired.replaced?.highlights.count == Self.lines.count)
+        retired.replaced = nil
         #expect(isUniquelyReferenced(&highlights))
     }
 
@@ -209,5 +212,33 @@ struct EditorRetiredStorageTests {
         var highlights = try #require(retired.buffer).highlightedLines
         #expect(highlights.count == Self.lines.count)
         try expectOnlyRetiredReferences(buffer: &retired.buffer, highlights: &highlights)
+    }
+
+    @Test
+    func `reloading an inactive tab retires its old text's highlights and keeps none of them`() throws {
+        let (state, log) = makeState()
+        defer { state.shutdown() }
+        let buffer = try #require(state.bufferManager.activeBuffer)
+        let oldText = state.textBuffer.text
+        // An open leaves the tab it leaves with its highlights.
+        openOtherFile(in: state)
+        #expect(buffer.highlightedLines.count == Self.lines.count)
+        _ = log.take()
+        let file = LoadedFile(content: "changed on disk\n", lineEnding: .lineFeed)
+
+        // What the file watcher does once its read lands.
+        let replaced = buffer.replaceContents(with: file, modifiedAt: nil)
+        state.fileWatcherDidReloadInactiveBuffer(buffer: buffer, content: file.content, replaced: consume replaced)
+
+        #expect(buffer.textBuffer.text == "changed on disk\n")
+        #expect(state.fileName == "other.swift")
+        var entries = log.take()
+        try #require(entries.count == 1)
+        var retired = try #require(entries.removeFirst().replaced)
+        #expect(retired.textBuffer.text == oldText)
+        var highlights = retired.highlights
+        retired.highlights = []
+        #expect(highlights == Self.lines.map { [StyledSpan(text: $0, style: .default)] })
+        #expect(isUniquelyReferenced(&highlights))
     }
 }
