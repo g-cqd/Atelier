@@ -40,6 +40,20 @@ struct TokenPipelineBenchmark {
         }
         print("BENCH tokens-per-line lines \(lineStarts.count) tokens \(tokens.count) checksum \(checksum)")
         Self.report("tokens-per-line byLine", samples)
+
+        var flatSamples: [Double] = []
+        var flatChecksum: UInt64 = 0
+        for iteration in 0 ..< Self.iterations {
+            var lines = LineTokens(emptyLines: 0)
+            let elapsed = Self.milliseconds {
+                lines = LineTokens(tokens, lineStarts: lineStarts, textLength: bytes.count)
+            }
+            if iteration == 0 { flatChecksum = Self.checksum(of: lines.map(Array.init)) }
+            if iteration >= Self.warmUps { flatSamples.append(elapsed) }
+        }
+        #expect(flatChecksum == checksum)
+        print("BENCH tokens-per-line LineTokens checksum \(flatChecksum)")
+        Self.report("tokens-per-line LineTokens", flatSamples)
     }
 
     /// The JSON highlight query over a generated document: the match, the role of each capture, and the tokens and
