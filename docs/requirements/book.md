@@ -499,7 +499,8 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
      or not the language server answers.
   2. This holds for a documented computed property declared inside an extension (image 09).
   3. It holds while a large card list is still streaming in.
-  4. A symbol with no documentation says "No documentation" instead of showing blank space.
+  4. A symbol with no documentation says "No documentation" instead of showing blank space. Superseded on 09-24
+     by HOVER-20's criterion 6: such a symbol shows its declaration alone.
 - **Priority:** Must. **Related:** HOVER-07, PERF-08.
 
 #### HOVER-04 · System APIs are documented from on-device documentation
@@ -675,8 +676,12 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
      discussion under an Overview heading, and scrolls when taller than the space it has.
   4. A Relationships section lists the protocols the symbol conforms to, when a tier can tell.
   5. A system symbol offers a link that opens its page in Apple's developer documentation.
-- **Priority:** Must for 1 to 3, which fix what the panel shows; Should for 4 and 5. **Related:** HOVER-01, HOVER-03,
-  HOVER-13.
+  6. A symbol with nothing but its declaration shows the declaration alone: no title, and no name repeated beneath
+     it (09-24, "it makes no sense to show the name of the variable below the variable signature when the only
+     information about the variable is the variable itself, let's just show the signature"). This replaces
+     HOVER-03's criterion 4 for the panel.
+- **Priority:** Must for 1 to 3 and 6, which fix what the panel shows; Should for 4 and 5. **Related:** HOVER-01,
+  HOVER-03, HOVER-13.
 
 ### DUI: Diagnostics UI
 
@@ -1750,3 +1755,4 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R107 | 09-24 13:14 (mid-turn) | "sometimes disclosing lines using the gutter handles creates rendering artifacts and line misalignment" | DIFF-06, CARD-17, PERF-10, TAB-10 |
 | R108 | 09-24 13:44 (mid-turn, to an agent) | "inspect why sometimes the horizontal scroll is possible when the file width actually matches or fits the containers" | CARD-18 |
 | R109 | 09-24 14:57 | "the oldest one is ours, the others are xcode ones, we should improve" (images 28 to 33) | HOVER-20 |
+| R110 | 09-24 | "let's just show the signature" when the only information about a variable is the variable itself | HOVER-20 (criterion 6), HOVER-03 (criterion 4 superseded) |
