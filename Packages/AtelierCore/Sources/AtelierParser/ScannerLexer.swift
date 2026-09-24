@@ -30,8 +30,8 @@ public protocol ScannerLexer {
 
 /// A grammar's external scanner, shaped after tree-sitter's `tree_sitter_<language>_external_scanner_*` functions.
 ///
-/// A value holds the scanner's state. The parser keeps one value per parse stack, saves it with ``serialize(into:)``
-/// after every external token and restores it with ``deserialize(_:)`` when it resumes a stack, as tree-sitter does.
+/// A value holds the scanner's state. The parser saves serialized bytes with each parse stack after an external
+/// token and restores those bytes into the scanner before scanning on that stack, as tree-sitter does.
 public protocol GrammarExternalScanner: Sendable {
     /// The grammar's `externals`, in order. `validSymbols` and ``ScannerLexer/resultSymbol`` index into it.
     static var externalNames: [String] { get }
@@ -67,7 +67,6 @@ public struct StringScannerLexer: ScannerLexer {
     public var tokenEnd: Int { markedEnd ?? position }
     public var resultSymbol = 0
     private var markedEnd: Int?
-    private var hasTokenStarted = false
 
     /// A lexer over `text` whose current position is `offset` bytes in.
     public init(_ text: String, at offset: Int = 0) {
@@ -90,11 +89,7 @@ public struct StringScannerLexer: ScannerLexer {
     public mutating func advance(skip: Bool) {
         guard !isAtEnd else { return }
         position += Self.decode(bytes, at: position).length
-        if skip && !hasTokenStarted {
-            tokenStart = position
-        } else {
-            hasTokenStarted = true
-        }
+        if skip { tokenStart = position }
     }
 
     public mutating func markEnd() {

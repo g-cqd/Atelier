@@ -8,6 +8,14 @@ public struct ParseTable: Sendable, Equatable, Codable {
     public var nonTerminals: [String]
     public var actions: [[Action]]  // [state][symbolIndex] → Action
     public var gotos: [[Int?]]  // [state][nonTerminalIndex] → state or nil
+    /// External symbol names in the grammar's declared order.
+    public var externalNames: [String]
+    /// The parse-table terminal for each external, including quoted literal terminal names.
+    public var externalSymbols: [String]
+    /// The external scanner's validity array for each parse state, in ``externalNames`` order.
+    public var validExternals: [[Bool]]
+    /// External symbols that the grammar treats as extras in every state.
+    public var externalIsExtra: [Bool]
 
     public init(
         stateCount: Int,
@@ -15,7 +23,11 @@ public struct ParseTable: Sendable, Equatable, Codable {
         terminals: [String],
         nonTerminals: [String],
         actions: [[Action]],
-        gotos: [[Int?]]
+        gotos: [[Int?]],
+        externalNames: [String] = [],
+        externalSymbols: [String] = [],
+        validExternals: [[Bool]] = [],
+        externalIsExtra: [Bool] = []
     ) {
         self.stateCount = stateCount
         self.symbols = symbols
@@ -23,6 +35,29 @@ public struct ParseTable: Sendable, Equatable, Codable {
         self.nonTerminals = nonTerminals
         self.actions = actions
         self.gotos = gotos
+        self.externalNames = externalNames
+        self.externalSymbols = externalSymbols
+        self.validExternals = validExternals
+        self.externalIsExtra = externalIsExtra
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case stateCount, symbols, terminals, nonTerminals, actions, gotos, externalNames, externalSymbols
+        case validExternals, externalIsExtra
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        stateCount = try values.decode(Int.self, forKey: .stateCount)
+        symbols = try values.decode([String].self, forKey: .symbols)
+        terminals = try values.decode([String].self, forKey: .terminals)
+        nonTerminals = try values.decode([String].self, forKey: .nonTerminals)
+        actions = try values.decode([[Action]].self, forKey: .actions)
+        gotos = try values.decode([[Int?]].self, forKey: .gotos)
+        externalNames = try values.decodeIfPresent([String].self, forKey: .externalNames) ?? []
+        externalSymbols = try values.decodeIfPresent([String].self, forKey: .externalSymbols) ?? externalNames
+        validExternals = try values.decodeIfPresent([[Bool]].self, forKey: .validExternals) ?? []
+        externalIsExtra = try values.decodeIfPresent([Bool].self, forKey: .externalIsExtra) ?? []
     }
 }
 

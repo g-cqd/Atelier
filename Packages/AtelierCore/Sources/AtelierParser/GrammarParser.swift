@@ -14,7 +14,7 @@ public final class GrammarParser: Sendable {
     /// Parse `source` and return the resulting ``SyntaxTree``.
     public func parse(
         _ source: String,
-        externalScanner: (any ExternalScanner)? = nil
+        externalScanner: (any GrammarExternalScanner)? = nil
     ) throws(ParseError) -> SyntaxTree {
         try parser.parse(source, externalScanner: externalScanner)
     }
