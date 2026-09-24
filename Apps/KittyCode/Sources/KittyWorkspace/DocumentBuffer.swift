@@ -9,7 +9,7 @@ public import KittySyntax
 public final class DocumentBuffer {
     public let document: TextDocument
     public let editHistory: BufferEditHistory
-    public var highlightedLines: [[StyledSpan]]
+    public var highlightedLines: LineHighlights
     public var highlightSession: LanguageHighlighter.Session?
     public var highlightGeneration: Int = 0
     public var gitLineDecorations: GitLineDecorations = .empty
@@ -168,7 +168,7 @@ public final class DocumentBuffer {
     /// object at a time, 50 ms of main-actor time for a million lines of highlights, so the buffer's owner hands this
     /// to a consumer off the main actor rather than dropping it there.
     public struct ReplacedContents: Sendable {
-        public var highlights: [[StyledSpan]]
+        public var highlights: LineHighlights
         public var textBuffer: TextBuffer
         public var fileLines: [String]?
         public var documentText: String?

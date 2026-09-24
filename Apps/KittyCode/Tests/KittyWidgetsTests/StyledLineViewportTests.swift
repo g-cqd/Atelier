@@ -129,7 +129,7 @@ struct StyledLineViewportTests {
         let lines = Array(repeating: line, count: 200)
         let spans = Array(repeating: [StyledSpan(text: line, style: .default)], count: 200)
         let editor = TextEditor(
-            lines: lines, lineSpans: spans, showLineNumbers: false, wrapLines: false
+            lines: lines, lineSpans: LineHighlights(spans), showLineNumbers: false, wrapLines: false
         )
         var buffer = ScreenBuffer(columns: 80, rows: 200)
         let rect = Rect(x: 0, y: 0, width: 80, height: 200)

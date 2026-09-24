@@ -76,7 +76,7 @@ struct KittyCodeSyntaxWiringTests {
         var lines = ["hello", "world", "tail"]
         lines.append(contentsOf: (3 ..< 200).map { "line \($0)" })
         state.fileContent = lines
-        state.highlightedLines = lines.map { [StyledSpan(text: "stale " + $0, style: .default)] }
+        state.highlightedLines = LineHighlights(lines.map { [StyledSpan(text: "stale " + $0, style: .default)] })
         state.highlightedLines[150] = [StyledSpan(text: "off-screen-sentinel", style: .default)]
         state.cursorRow = 1
         state.cursorCol = 0

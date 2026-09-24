@@ -358,7 +358,7 @@ public final class EditorState {
         }
     }
 
-    public var highlightedLines: [[StyledSpan]] {
+    public var highlightedLines: LineHighlights {
         get { workspace.highlightedLines }
         // Marks nothing: per-line `replaceSubrange` edits pass through here too, so wholesale assignments mark dirty
         // themselves.
@@ -598,12 +598,12 @@ public final class EditorState {
     /// Highlights the lines on screen from the rope, reading no other line, and hands the rest of the document to the
     /// background full pass. Until that pass lands, every other line holds no spans, which the editor draws as plain
     /// text, so the text itself never waits for highlighting.
-    /// - Complexity: O(bytes on screen) to highlight, plus an O(line count) array of empty placeholders.
+    /// - Complexity: O(bytes on screen); the lines off screen are not stored.
     public func refreshHighlights() {
         highlightGeneration &+= 1
         let lineCount = fileLineCount
         let viewport = highlightViewportRange(lineCount: lineCount)
-        var lines = Array(repeating: [StyledSpan](), count: lineCount)
+        var lines = LineHighlights(unhighlightedLineCount: lineCount)
         let viewportHighlights = highlightViewport(of: textBuffer, in: viewport)
         if viewportHighlights.count == viewport.count {
             lines.replaceSubrange(viewport, with: viewportHighlights)
@@ -1426,7 +1426,7 @@ public final class EditorState {
             return
         }
         if let highlightedLines = result.highlightedLines {
-            replaceHighlightedLines(with: highlightedLines)
+            replaceHighlightedLines(with: LineHighlights(highlightedLines))
         }
         cachedMaxLineWidth = result.maxLineWidth
         markContentAllDirty()
@@ -1435,7 +1435,7 @@ public final class EditorState {
 
     /// Installs `lines` and retires the previous highlights: freeing a large document's spans one heap object at a
     /// time held the main actor for 75 ms at a million lines.
-    private func replaceHighlightedLines(with lines: [[StyledSpan]]) {
+    private func replaceHighlightedLines(with lines: LineHighlights) {
         let previous = RetiredStorage(highlights: highlightedLines)
         highlightedLines = lines
         retire(consume previous)
@@ -1659,7 +1659,7 @@ extension EditorState {
     /// storage frees one heap object at a time: a million lines of spans held the main actor for 70-110 ms when a
     /// close or a reload let go of them there.
     struct RetiredStorage: Sendable {
-        var highlights: [[StyledSpan]] = []
+        var highlights = LineHighlights()
         var textBuffer: TextBuffer?
         var fileLines: [String]?
         var documentText: String?

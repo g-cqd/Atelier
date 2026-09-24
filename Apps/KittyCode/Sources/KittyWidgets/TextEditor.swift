@@ -66,7 +66,7 @@ public struct TextEditor: View, Sendable {
         }
     }
 
-    public var lineSpans: [[StyledSpan]]
+    public var lineSpans: LineHighlights
     public var scrollOffset: Int
     public var wrapRowOffset: Int
     public var horizontalScrollOffset: Int
@@ -123,7 +123,7 @@ public struct TextEditor: View, Sendable {
             .map(
                 String.init)
         self.source = ArrayDocumentSource(lines)
-        self.lineSpans = lines.map { _ in spans }
+        self.lineSpans = LineHighlights(lines.map { _ in spans })
         self.scrollOffset = scrollOffset
         self.wrapRowOffset = wrapRowOffset
         self.horizontalScrollOffset = horizontalScrollOffset
@@ -151,7 +151,7 @@ public struct TextEditor: View, Sendable {
 
     public init(
         lines: [String],
-        lineSpans: [[StyledSpan]],
+        lineSpans: LineHighlights,
         scrollOffset: Int = 0,
         wrapRowOffset: Int = 0,
         horizontalScrollOffset: Int = 0,
@@ -206,7 +206,7 @@ public struct TextEditor: View, Sendable {
 
     public init(
         buffer: TextBuffer,
-        lineSpans: [[StyledSpan]],
+        lineSpans: LineHighlights,
         scrollOffset: Int = 0,
         wrapRowOffset: Int = 0,
         horizontalScrollOffset: Int = 0,
