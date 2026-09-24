@@ -85,12 +85,12 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .frame(minHeight: 200, idealHeight: 280)
-                    DiffDetailView(model: model)
+                    DetailAreaHost(model: model)
                         .frame(minHeight: 240)
                         .layoutPriority(1)
                 }
             case .sidebar, .unifiedSidebar:
-                DiffDetailView(model: model)
+                DetailAreaHost(model: model)
                     .frame(minWidth: 500)
                     .layoutPriority(1)
         }
