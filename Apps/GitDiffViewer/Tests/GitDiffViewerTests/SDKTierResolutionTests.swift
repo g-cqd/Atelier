@@ -7,12 +7,11 @@ import Testing
 
 @MainActor
 struct SDKTierResolutionTests {
+    private let scratchDefaults = ScratchDefaults(tag: "sdkTier")
+
     @Test
     func `the tier finds the iOS SDK once, while it resolves`() async throws {
-        let name = "GitDiffViewerTests.sdkTier.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
-        defer { defaults.removePersistentDomain(forName: name) }
+        let defaults = scratchDefaults.defaults
         let policy = LanguageServerPolicy(
             trust: RepositoryTrust(defaults: defaults), defaults: defaults,
             locate: { _ in URL(filePath: "/usr/bin/false") })

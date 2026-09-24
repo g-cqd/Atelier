@@ -25,12 +25,7 @@ private final class ScratchDirectories {
 
 @MainActor
 struct RepositoryTrustTests {
-    private func makeDefaults() throws -> UserDefaults {
-        let name = "GitDiffViewerTests.trust.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
-        return defaults
-    }
+    private let scratchDefaults = ScratchDefaults(tag: "trust")
 
     /// Answers the request a window would show next.
     private func answerNext(_ trust: RepositoryTrust, trusts: Bool) throws {
@@ -41,7 +36,7 @@ struct RepositoryTrustTests {
     func `a repository nobody decided on is untrusted`() throws {
         let scratch = try ScratchDirectories()
         let root = try scratch.directory("repository")
-        let trust = RepositoryTrust(defaults: try makeDefaults())
+        let trust = RepositoryTrust(defaults: scratchDefaults.defaults)
 
         #expect(trust.decision(for: root) == nil)
         #expect(!trust.isTrusted(root))
@@ -54,7 +49,7 @@ struct RepositoryTrustTests {
         let real = try scratch.directory("real")
         let link = scratch.parent.appending(path: "link", directoryHint: .isDirectory)
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
-        let trust = RepositoryTrust(defaults: try makeDefaults())
+        let trust = RepositoryTrust(defaults: scratchDefaults.defaults)
 
         trust.requestTrust(for: link)
         #expect(trust.nextRequest?.root == SourceKitLSPRegistry.canonicalRoot(real))
@@ -69,7 +64,7 @@ struct RepositoryTrustTests {
     func `a hover asks about an unknown repository once, and never again once answered`() throws {
         let scratch = try ScratchDirectories()
         let root = try scratch.directory("repository")
-        let trust = RepositoryTrust(defaults: try makeDefaults())
+        let trust = RepositoryTrust(defaults: scratchDefaults.defaults)
 
         trust.requestDecision(for: root)
         trust.requestDecision(for: root)
@@ -89,7 +84,7 @@ struct RepositoryTrustTests {
         let scratch = try ScratchDirectories()
         let declined = try scratch.directory("declined")
         let trusted = try scratch.directory("trusted")
-        let trust = RepositoryTrust(defaults: try makeDefaults())
+        let trust = RepositoryTrust(defaults: scratchDefaults.defaults)
         trust.requestTrust(for: declined)
         try answerNext(trust, trusts: false)
         trust.requestTrust(for: trusted)
@@ -105,7 +100,7 @@ struct RepositoryTrustTests {
     func `a directory that does not exist is never asked about`() throws {
         let scratch = try ScratchDirectories()
         let missing = scratch.parent.appending(path: "missing", directoryHint: .isDirectory)
-        let trust = RepositoryTrust(defaults: try makeDefaults())
+        let trust = RepositoryTrust(defaults: scratchDefaults.defaults)
 
         trust.requestDecision(for: missing)
         trust.requestTrust(for: missing)
@@ -119,7 +114,7 @@ struct RepositoryTrustTests {
         let scratch = try ScratchDirectories()
         let first = try scratch.directory("first")
         let second = try scratch.directory("second")
-        let trust = RepositoryTrust(defaults: try makeDefaults())
+        let trust = RepositoryTrust(defaults: scratchDefaults.defaults)
         trust.requestDecision(for: first)
         trust.requestDecision(for: second)
 
@@ -139,7 +134,7 @@ struct RepositoryTrustTests {
         let scratch = try ScratchDirectories()
         let trusted = try scratch.directory("trusted")
         let declined = try scratch.directory("declined")
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let trust = RepositoryTrust(defaults: defaults)
         trust.requestTrust(for: trusted)
         try answerNext(trust, trusts: true)
@@ -156,7 +151,7 @@ struct RepositoryTrustTests {
     func `an unreadable stored decision reads as untrusted`() throws {
         let scratch = try ScratchDirectories()
         let root = try #require(SourceKitLSPRegistry.canonicalRoot(try scratch.directory("repository")))
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         defaults.set(
             [root.path(percentEncoded: false).trimmingSuffix("/"): "always"], forKey: RepositoryTrust.storageKey)
 
@@ -171,7 +166,7 @@ struct RepositoryTrustTests {
         let trusted = try scratch.directory("trusted")
         let declined = try scratch.directory("declined")
         let unknown = try scratch.directory("unknown")
-        let trust = RepositoryTrust(defaults: try makeDefaults())
+        let trust = RepositoryTrust(defaults: scratchDefaults.defaults)
         trust.requestTrust(for: trusted)
         try answerNext(trust, trusts: true)
         trust.requestTrust(for: declined)
@@ -187,7 +182,7 @@ struct RepositoryTrustTests {
     func `revoking a trusted repository declines it and reports the change`() throws {
         let scratch = try ScratchDirectories()
         let root = try scratch.directory("repository")
-        let trust = RepositoryTrust(defaults: try makeDefaults())
+        let trust = RepositoryTrust(defaults: scratchDefaults.defaults)
         trust.requestTrust(for: root)
         try answerNext(trust, trusts: true)
         var changes: [(URL, RepositoryTrust.Decision)] = []

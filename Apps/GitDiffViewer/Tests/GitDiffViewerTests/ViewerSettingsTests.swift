@@ -10,9 +10,11 @@ import Testing
 
 @MainActor
 struct ViewerSettingsTests {
+    private let scratchDefaults = ScratchDefaults(tag: "settings")
+
     @Test
     func `defaults are split layout, wrapped lines, word emphasis, minimap on and compaction off`() throws {
-        let sut = ViewerSettings(defaults: try makeDefaults())
+        let sut = ViewerSettings(defaults: scratchDefaults.defaults)
         #expect(sut.mode == .split)
         #expect(sut.wrapsLines)
         #expect(sut.syncsScrolling)
@@ -37,7 +39,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `every setting round trips through user defaults`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         sut.mode = .inline
         sut.wrapsLines = false
@@ -86,7 +88,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `toggling the diagnostics master switch fires the diagnostics change category`() throws {
-        let sut = ViewerSettings(defaults: try makeDefaults())
+        let sut = ViewerSettings(defaults: scratchDefaults.defaults)
         final class Owner {}
         let owner = Owner()
         var changes: [ViewerSettings.Change] = []
@@ -101,7 +103,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `a tool missing from the saved tool settings reads as enabled`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let saved: [String: ToolLocation] = ["swiftlint": ToolLocation(isEnabled: false)]
         defaults.set(try DefaultsJSON.encode(saved), forKey: "diagnosticToolLocations")
 
@@ -114,14 +116,14 @@ struct ViewerSettingsTests {
 
     @Test
     func `a stored compact folders flag migrates to the compact tree style`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         defaults.set(true, forKey: "compactsFolders")
         #expect(ViewerSettings(defaults: defaults).treeStyle == .compact)
     }
 
     @Test
     func `a stored compact folders flag survives adopting a project`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         defaults.set(true, forKey: "compactsFolders")
         let sut = ViewerSettings(defaults: defaults)
 
@@ -132,7 +134,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `analyzed sides defaults to the right side only and round trips through user defaults`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         #expect(sut.analyzedSides == .rightOnly)
 
@@ -143,7 +145,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `a stored newer-side value reads as the right side only`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         defaults.set("newer", forKey: "analyzedSides")
 
         #expect(ViewerSettings(defaults: defaults).analyzedSides == .rightOnly)
@@ -151,7 +153,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `a stored both-sides value reads as both sides`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         defaults.set("both", forKey: "analyzedSides")
 
         #expect(ViewerSettings(defaults: defaults).analyzedSides == .both)
@@ -159,7 +161,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `a project's stored newer-side override reads as the right side only`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
         defaults.set("both", forKey: "analyzedSides")
         defaults.set("newer", forKey: "project.\(project.key).analyzedSides")
@@ -172,7 +174,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `appearance scheme defaults to system and round trips through user defaults`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         #expect(sut.appearanceScheme == .system)
 
@@ -183,7 +185,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `badge scheme defaults to classic and round trips through user defaults`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         #expect(sut.badgeScheme == .classic)
 
@@ -194,7 +196,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `matches theme appearance defaults to off and round trips through user defaults`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         #expect(sut.matchesThemeAppearance == false)
 
@@ -205,7 +207,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `the settings pane defaults to general and round trips through user defaults`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
         #expect(sut.settingsPane == .general)
 
@@ -216,7 +218,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `restoring general defaults resets its settings and fires observers`() throws {
-        let sut = ViewerSettings(defaults: try makeDefaults())
+        let sut = ViewerSettings(defaults: scratchDefaults.defaults)
         sut.explorerPlacement = .sidebar
         sut.treeStyle = .flat
         sut.showsChangesOnly = true
@@ -246,7 +248,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `restoring diff defaults resets isolation, context, granularity and heuristics`() throws {
-        let sut = ViewerSettings(defaults: try makeDefaults())
+        let sut = ViewerSettings(defaults: scratchDefaults.defaults)
         sut.isolatesChanges = true
         sut.contextLines = 10
         sut.granularity = .syntax
@@ -264,7 +266,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `restoring appearance defaults resets theme, line height, mode and wrapping`() throws {
-        let sut = ViewerSettings(defaults: try makeDefaults())
+        let sut = ViewerSettings(defaults: scratchDefaults.defaults)
         sut.themePath = "/themes/a.xccolortheme"
         sut.lineHeightMultiple = 1.4
         sut.mode = .inline
@@ -286,7 +288,7 @@ struct ViewerSettingsTests {
 
     @Test
     func `restoring tools defaults resets diagnostics, hover, analyzed sides and tool locations`() throws {
-        let sut = ViewerSettings(defaults: try makeDefaults())
+        let sut = ViewerSettings(defaults: scratchDefaults.defaults)
         sut.diagnosticsEnabled = true
         sut.showsHoverDocumentation = false
         sut.analyzedSides = .both
@@ -302,12 +304,5 @@ struct ViewerSettingsTests {
         #expect(DiagnosticTool.allCases.allSatisfy { sut.toolLocations[$0]?.isEnabled == true })
         #expect(sut.lspServerLocations == ["sourcekit-lsp": ToolLocation()])
         #expect(sut.settingsDiffCount(.tools) == 0)
-    }
-
-    private func makeDefaults() throws -> UserDefaults {
-        let name = "GitDiffViewerTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
-        return defaults
     }
 }

@@ -10,10 +10,11 @@ import Testing
 @MainActor
 struct RecentComparisonsTests {
     private let repository = URL(filePath: "/repos/app", directoryHint: .isDirectory)
+    private let scratchDefaults = ScratchDefaults(tag: "recents")
 
     @Test
     func `entries are newest first, one per target, capped, and persisted`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = RecentComparisons(defaults: defaults)
 
         sut.record(.repository(repository, leftRef: "main", rightRef: nil))
@@ -37,7 +38,7 @@ struct RecentComparisonsTests {
 
     @Test
     func `a repository opened again with other refs replaces its entry at the top`() throws {
-        let sut = RecentComparisons(defaults: try makeDefaults())
+        let sut = RecentComparisons(defaults: scratchDefaults.defaults)
         sut.record(.repository(repository, leftRef: "main", rightRef: nil))
         sut.record(.patch(URL(filePath: "/tmp/a.patch")))
 
@@ -67,7 +68,7 @@ struct RecentComparisonsTests {
 
     @Test
     func `settings changes reach every observer still alive`() throws {
-        let settings = ViewerSettings(defaults: try makeDefaults())
+        let settings = ViewerSettings(defaults: scratchDefaults.defaults)
         final class Owner {}
         var owner: Owner? = Owner()
         let kept = Owner()
@@ -81,12 +82,5 @@ struct RecentComparisonsTests {
         owner = nil
         settings.showsMinimap = true
         #expect(received == [.appearance, .appearance, .appearance])
-    }
-
-    private func makeDefaults() throws -> UserDefaults {
-        let name = "GitDiffViewerTests.recents.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
-        return defaults
     }
 }

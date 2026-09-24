@@ -22,10 +22,11 @@ struct DefaultsJSONCompatibilityTests {
         .files(left: URL(filePath: "/a.swift"), right: URL(filePath: "/é/b.swift")),
         .patch(URL(filePath: "/tmp/a.patch"))
     ]
+    private let scratchDefaults = ScratchDefaults(tag: "defaultsJSON")
 
     @Test
     func `settings Foundation's encoder wrote load unchanged`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         defaults.set(try JSONEncoder().encode(heuristics), forKey: "diffHeuristics")
         defaults.set(try JSONEncoder().encode(toolLocations), forKey: "diagnosticToolLocations")
         defaults.set(try JSONEncoder().encode(lspServerLocations), forKey: "lspServerLocations")
@@ -40,7 +41,7 @@ struct DefaultsJSONCompatibilityTests {
 
     @Test
     func `settings written now load in Foundation's decoder`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)
 
         sut.diffHeuristics = heuristics
@@ -61,7 +62,7 @@ struct DefaultsJSONCompatibilityTests {
 
     @Test
     func `project overrides and the base values Foundation's encoder wrote load on adoption and on restore`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
         let overrideServers = ["sourcekit-lsp": ToolLocation(customPath: "/opt/lsp")]
         defaults.set(try JSONEncoder().encode(DiffHeuristics.none), forKey: "diffHeuristics")
@@ -82,7 +83,7 @@ struct DefaultsJSONCompatibilityTests {
 
     @Test
     func `recents Foundation's encoder wrote load unchanged`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         defaults.set(try JSONEncoder().encode(recents), forKey: "recentComparisons")
 
         #expect(RecentComparisons(defaults: defaults).entries == recents)
@@ -90,7 +91,7 @@ struct DefaultsJSONCompatibilityTests {
 
     @Test
     func `recents written now load in Foundation's decoder`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = RecentComparisons(defaults: defaults)
 
         for configuration in recents.reversed() { sut.record(configuration) }
@@ -102,17 +103,10 @@ struct DefaultsJSONCompatibilityTests {
 
     @Test
     func `a stored recent whose URL does not parse leaves the list empty`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         defaults.set(
             Data(#"[{"patch":{"_0":"file:///tmp/a.patch"}},{"patch":{"_0":""}}]"#.utf8), forKey: "recentComparisons")
 
         #expect(RecentComparisons(defaults: defaults).entries.isEmpty)
-    }
-
-    private func makeDefaults() throws -> UserDefaults {
-        let name = "GitDiffViewerTests.defaultsJSON.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
-        return defaults
     }
 }

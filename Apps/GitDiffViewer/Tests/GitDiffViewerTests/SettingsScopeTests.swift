@@ -10,17 +10,11 @@ import Testing
 struct SettingsScopeTests {
     private let app = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
     private let other = ProjectIdentity(root: URL(filePath: "/repos/other", directoryHint: .isDirectory))
-
-    private func makeDefaults() throws -> UserDefaults {
-        let name = "GitDiffViewerTests.scope.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
-        return defaults
-    }
+    private let scratchDefaults = ScratchDefaults(tag: "scope")
 
     @Test
     func `a project a window opened is listed as using the defaults`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let window = ViewerSettings(defaults: defaults)
         window.adoptProject(app)
 
@@ -31,7 +25,7 @@ struct SettingsScopeTests {
 
     @Test
     func `a project a window opens while Settings is open joins the list`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let sut = SettingsScope(appSettings: ViewerSettings(defaults: defaults))
         let window = ViewerSettings(defaults: defaults)
 
@@ -42,7 +36,7 @@ struct SettingsScopeTests {
 
     @Test
     func `editing a project changes that project's value and not the default`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let appSettings = ViewerSettings(defaults: defaults)
         let sut = SettingsScope(appSettings: appSettings)
 
@@ -55,7 +49,7 @@ struct SettingsScopeTests {
 
     @Test
     func `the defaults scope edits the app's own instance`() throws {
-        let appSettings = ViewerSettings(defaults: try makeDefaults())
+        let appSettings = ViewerSettings(defaults: scratchDefaults.defaults)
         let sut = SettingsScope(appSettings: appSettings)
         sut.select(.project(app))
 
@@ -66,7 +60,7 @@ struct SettingsScopeTests {
 
     @Test
     func `the list shows what a project overrides, with its value and its default`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let window = ViewerSettings(defaults: defaults)
         window.adoptProject(app)
         window.granularity = .syntax
@@ -83,7 +77,7 @@ struct SettingsScopeTests {
 
     @Test
     func `resetting one override keeps the project's others`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let window = ViewerSettings(defaults: defaults)
         window.adoptProject(app)
         window.granularity = .syntax
@@ -98,7 +92,7 @@ struct SettingsScopeTests {
 
     @Test
     func `resetting a project drops every override and keeps it listed`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let window = ViewerSettings(defaults: defaults)
         window.adoptProject(app)
         window.granularity = .syntax
@@ -113,7 +107,7 @@ struct SettingsScopeTests {
 
     @Test
     func `removing a project drops it from the list and sends the tabs back to the defaults`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let window = ViewerSettings(defaults: defaults)
         window.adoptProject(app)
         window.adoptProject(other)

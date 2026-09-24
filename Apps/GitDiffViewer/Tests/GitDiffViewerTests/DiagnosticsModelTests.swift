@@ -11,13 +11,7 @@ import Testing
 @MainActor
 struct DiagnosticsModelTests {
     private static let root = URL(filePath: "/repo")
-
-    private func makeDefaults() throws -> UserDefaults {
-        let name = "GitDiffViewerTests.diagnostics.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
-        return defaults
-    }
+    private let scratchDefaults = ScratchDefaults(tag: "diagnostics")
 
     private struct SUT {
         let model: DiagnosticsModel
@@ -29,7 +23,7 @@ struct DiagnosticsModelTests {
     private func makeSUT(runner: FakeDiagnosticsRunner? = nil, clock: TestClock? = nil) throws -> SUT {
         let runner = runner ?? FakeDiagnosticsRunner()
         let spy = TaskProviderSpy.tolerant()
-        let settings = ViewerSettings(defaults: try makeDefaults())
+        let settings = ViewerSettings(defaults: scratchDefaults.defaults)
         settings.diagnosticsEnabled = true
         let model =
             if let clock {
@@ -160,9 +154,7 @@ struct DiagnosticsModelTests {
 
     @Test
     func `a tool missing from the saved tool settings runs`() async throws {
-        let name = "GitDiffViewerTests.diagnostics.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
+        let defaults = scratchDefaults.defaults
         let saved: [String: ToolLocation] = ["swiftlint": ToolLocation(isEnabled: false)]
         defaults.set(try DefaultsJSON.encode(saved), forKey: "diagnosticToolLocations")
         let settings = ViewerSettings(defaults: defaults)
