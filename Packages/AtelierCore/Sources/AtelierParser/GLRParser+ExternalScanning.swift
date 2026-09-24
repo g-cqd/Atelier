@@ -55,7 +55,9 @@ extension GLRParser {
                     guard stack.zeroWidthCount <= max(parseTable.stateCount * 2, 32) else {
                         throw ParseError.parsingFailed("External scanner produced too many zero-width tokens")
                     }
-                    if token.isExtra {
+                    // An extra the stack can take as a symbol is one, as tree-sitter reads an extra as such only
+                    // where its state has no other action for it: Swift's block comment between class members.
+                    if token.isExtra, !(token.terminal.map { canShift($0, on: stack) } ?? false) {
                         stack.extras.append(token)
                         next.append(stack)
                         continue
