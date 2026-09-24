@@ -331,14 +331,21 @@ public final class EditorState {
 
     public let bufferManager: BufferManager
 
+    // `textBuffer`, `textCursor` and `highlightedLines` yield the workspace's own storage to a mutation. Through `get`
+    // and `set` alone, `&state.textBuffer` or `state.highlightedLines.replaceSubrange(…)` mutates a copy that shares
+    // the storage, so every edit copies a whole document's worth of lines. SE-0474's `yielding mutate` still needs an
+    // experimental feature in Swift 6.4, hence `_modify`.
+
     public var textBuffer: TextBuffer {
         get { workspace.textBuffer }
         set { workspace.textBuffer = newValue }
+        _modify { yield &workspace.textBuffer }
     }
 
     public var textCursor: TextCursor {
         get { workspace.textCursor }
         set { workspace.textCursor = newValue }
+        _modify { yield &workspace.textCursor }
     }
 
     public var currentLanguage: String? {
@@ -356,6 +363,7 @@ public final class EditorState {
         // Marks nothing: per-line `replaceSubrange` edits pass through here too, so wholesale assignments mark dirty
         // themselves.
         set { workspace.highlightedLines = newValue }
+        _modify { yield &workspace.highlightedLines }
     }
 
     public var highlightSession: LanguageHighlighter.Session? {
