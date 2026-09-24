@@ -3,8 +3,9 @@ import Testing
 
 @testable import AtelierLexers
 
-/// The same scanners over UTF-8 bytes and over UTF-16 units: token kinds and the characters they cover agree for
-/// every language, so the terminal's byte rope and TextKit's UTF-16 storage see one lexer.
+/// The UTF-8 entry and the UTF-16 entries, which scan the same bytes and convert the offsets back: token kinds and the
+/// characters they cover agree for every language, so the terminal's byte rope and TextKit's UTF-16 storage see one
+/// lexer. Whether the scanners match the ones before the move to UTF-8 is the corpus checksums' job.
 struct LexerUnitParityTests {
     private static let fixtures: [(Language, String)] = [
         (
