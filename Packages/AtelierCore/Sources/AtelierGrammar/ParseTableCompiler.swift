@@ -50,14 +50,14 @@ public enum ParseTableCompiler: Sendable {
     /// The version of what ``compile(_:limits:)`` produces, for caches of compiled tables and of failed compiles to
     /// key on: bumped whenever the outcome of compiling the same grammar changes, tables or error, which a change to
     /// the default limits can do too, so no cache hands out what an older compiler made.
-    public static let formatVersion = 8
+    public static let formatVersion = 9
 
     /// Compile a grammar definition into parse tables.
     public static func compile(
         _ grammar: GrammarDefinition,
         limits: GrammarCompilationLimits = .default
     ) throws(GrammarError) -> CompilationResult {
-        let lexical = LexicalGrammar(grammar)
+        let lexical = try LexicalGrammar(grammar)
         // Reading every token's pattern first fails a grammar with a pattern the lexer can't read before the costly
         // LR construction.
         let tokenAutomaton = try TokenNFA(tokens: lexical.tokens, separators: lexical.separators)

@@ -63,6 +63,15 @@ struct PatternParserTests {
         #expect(!set.contains(Self.value("1")))
     }
 
+    @Test
+    func `A nested class intersection excludes unwanted scalars`() throws {
+        let set = try Self.characters(#"[a-z0-9&&[^0-9]]"#)
+
+        #expect(set.contains(Self.value("a")))
+        #expect(!set.contains(Self.value("1")))
+        #expect(!set.contains(Self.value("#")))
+    }
+
     @Test(arguments: ["^a", #"a\b"#, "(?=a)", #"\p{Klingon}"#, "a)", "[a"])
     func `A construct a token cannot use is rejected`(pattern: String) {
         #expect(throws: GrammarError.self) { try PatternParser.parse(pattern) }
