@@ -13,8 +13,9 @@ NSGridView · diagnostics slot (reserved). A declaration with nothing else shows
 no title, no divider, no "No documentation" line.
 Sizing: fixed width 440, measure via NSTextLayoutManager.usageBoundsForTextContainer, clamp
 height 420 then inner-scroll body only. Anchor at HoverHit.anchorRect converted to screen,
-below the identifier, flip at screen edges; addChildWindow(.above). DocHoverController's
-debounce/generation/tracking untouched — only show/close swap. Staying open (HOVER-20): a
+below the identifier, flip at screen edges; addChildWindow(.above). DocHoverController keeps
+its debounce and single-flight lookups, and drops a pending lookup on a scroll, on entering the
+panel and on every close path. Staying open (HOVER-20): a
 corridor (HoverCorridor) spans the identifier's middle to the panel's near edge across the
 panel's width; leaving identifier, corridor and panel closes after closeGraceDelay (300 ms),
 which coming back cancels; Escape, a click off the panel and the pane's window resigning key
