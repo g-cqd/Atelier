@@ -1,3 +1,4 @@
+import AemiTesting
 import AtelierText
 import Foundation
 import KittyCodecs
@@ -18,7 +19,7 @@ private func makeContext(
     rows: Int = 24
 ) -> (state: EditorState, pipeline: RenderPipeline) {
     let config = KittyConfig()
-    let state = EditorState(rootPath: ".", config: config)
+    let state = EditorState(rootPath: ".", config: config, taskProvider: TaskProviderSpy())
     state.fileContent = fileContent
     state.mode = .editor
     let pipeline = RenderPipeline(
@@ -27,6 +28,12 @@ private func makeContext(
         rows: rows
     )
     return (state, pipeline)
+}
+
+@MainActor
+private func settleWorkspaceIntegrationSearch(_ state: EditorState) async throws {
+    let tasks = try #require(state.taskProvider as? TaskProviderSpy)
+    try await tasks.waitForAllTasks(timeout: .seconds(15))
 }
 
 @Suite("WorkspaceSearchIntegration")
@@ -69,7 +76,7 @@ struct WorkspaceSearchIntegrationTests {
     }
 
     @Test("Tab cycles focus between find and results")
-    @MainActor func tabCyclesFocus() {
+    @MainActor func tabCyclesFocus() async throws {
         let (state, pipeline) = makeContext()
         _ = dispatchCommand(.searchOpenPanel, state: state, pipeline: pipeline)
 
@@ -81,6 +88,7 @@ struct WorkspaceSearchIntegrationTests {
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settleWorkspaceIntegrationSearch(state)
         #expect(state.searchPanelFocus == .findField)
 
         // Tab → results
@@ -95,7 +103,7 @@ struct WorkspaceSearchIntegrationTests {
     }
 
     @Test("Tab cycles through find, replace, results when replace visible")
-    @MainActor func tabCyclesWithReplace() {
+    @MainActor func tabCyclesWithReplace() async throws {
         let (state, pipeline) = makeContext()
         _ = dispatchCommand(.searchOpenPanel, state: state, pipeline: pipeline)
 
@@ -111,6 +119,7 @@ struct WorkspaceSearchIntegrationTests {
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settleWorkspaceIntegrationSearch(state)
         #expect(state.searchPanelFocus == .findField)
 
         // Tab → replace
@@ -171,7 +180,7 @@ struct ReplaceIntegrationTests {
     }
 
     @Test("replace all in file updates buffer")
-    @MainActor func replaceAllInFile() {
+    @MainActor func replaceAllInFile() async throws {
         let (state, pipeline) = makeContext()
         _ = dispatchCommand(.searchOpenPanel, state: state, pipeline: pipeline)
 
@@ -183,6 +192,7 @@ struct ReplaceIntegrationTests {
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settleWorkspaceIntegrationSearch(state)
         #expect(state.inFileSearch?.matches.count == 2)
 
         // Set replace text
@@ -199,7 +209,7 @@ struct ReplaceIntegrationTests {
     }
 
     @Test("replace current match updates buffer and moves to next")
-    @MainActor func replaceCurrentMatch() {
+    @MainActor func replaceCurrentMatch() async throws {
         let (state, pipeline) = makeContext()
         _ = dispatchCommand(.searchOpenPanel, state: state, pipeline: pipeline)
 
@@ -211,6 +221,7 @@ struct ReplaceIntegrationTests {
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settleWorkspaceIntegrationSearch(state)
         // Set active match to first
         state.inFileSearch?.activeMatchIndex = 0
         state.inFileSearch?.replaceText = "hi"
@@ -226,7 +237,7 @@ struct ReplaceIntegrationTests {
     }
 
     @Test("undo after replace restores original content")
-    @MainActor func undoAfterReplace() {
+    @MainActor func undoAfterReplace() async throws {
         let (state, pipeline) = makeContext()
 
         // Open a file buffer so undo works
@@ -248,6 +259,7 @@ struct ReplaceIntegrationTests {
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settleWorkspaceIntegrationSearch(state)
         let originalContent = state.fileContent
 
         state.inFileSearch?.replaceText = "hi"

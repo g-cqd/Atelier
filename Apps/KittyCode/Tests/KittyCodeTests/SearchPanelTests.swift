@@ -1,3 +1,4 @@
+import AemiTesting
 import AtelierText
 import Foundation
 import KittyCodecs
@@ -18,7 +19,7 @@ private func makeSearchPanelContext(
     rows: Int = 24
 ) -> (state: EditorState, pipeline: RenderPipeline) {
     let config = KittyConfig()
-    let state = EditorState(rootPath: ".", config: config)
+    let state = EditorState(rootPath: ".", config: config, taskProvider: TaskProviderSpy())
     state.fileContent = fileContent
     state.mode = .editor
     let pipeline = RenderPipeline(
@@ -27,6 +28,12 @@ private func makeSearchPanelContext(
         rows: rows
     )
     return (state, pipeline)
+}
+
+@MainActor
+private func settlePanelSearch(_ state: EditorState) async throws {
+    let tasks = try #require(state.taskProvider as? TaskProviderSpy)
+    try await tasks.waitForAllTasks(timeout: .seconds(15))
 }
 
 @Suite("Search Panel")
@@ -44,7 +51,7 @@ struct SearchPanelTests {
     }
 
     @Test("typing in query field updates search and finds matches")
-    @MainActor func typingUpdatesQuery() {
+    @MainActor func typingUpdatesQuery() async throws {
         let (state, pipeline) = makeSearchPanelContext()
         _ = dispatchCommand(.searchOpenPanel, state: state, pipeline: pipeline)
 
@@ -55,12 +62,13 @@ struct SearchPanelTests {
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settlePanelSearch(state)
         #expect(state.inFileSearch?.query == "hello")
         #expect(state.inFileSearch?.matches.count == 2)
     }
 
     @Test("down arrow from query field moves to results list")
-    @MainActor func downArrowMovesToResults() {
+    @MainActor func downArrowMovesToResults() async throws {
         let (state, pipeline) = makeSearchPanelContext()
         _ = dispatchCommand(.searchOpenPanel, state: state, pipeline: pipeline)
 
@@ -71,6 +79,7 @@ struct SearchPanelTests {
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settlePanelSearch(state)
         #expect(state.searchPanelSelectedIndex == -1)
 
         let downKey = KeyEvent(
@@ -81,7 +90,7 @@ struct SearchPanelTests {
     }
 
     @Test("up arrow from top of results returns to query field")
-    @MainActor func upArrowReturnsToQueryField() {
+    @MainActor func upArrowReturnsToQueryField() async throws {
         let (state, pipeline) = makeSearchPanelContext()
         _ = dispatchCommand(.searchOpenPanel, state: state, pipeline: pipeline)
 
@@ -92,6 +101,7 @@ struct SearchPanelTests {
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settlePanelSearch(state)
         // Move to results
         let downKey = KeyEvent(
             keyCode: Key.down.rawValue, modifiers: [], eventType: .press, associatedText: "")
@@ -106,7 +116,7 @@ struct SearchPanelTests {
     }
 
     @Test("enter on result jumps editor to match and switches to editor mode")
-    @MainActor func enterOnResultJumpsToMatch() {
+    @MainActor func enterOnResultJumpsToMatch() async throws {
         let (state, pipeline) = makeSearchPanelContext()
         _ = dispatchCommand(.searchOpenPanel, state: state, pipeline: pipeline)
 
@@ -117,6 +127,7 @@ struct SearchPanelTests {
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settlePanelSearch(state)
         // Move to results
         let downKey = KeyEvent(
             keyCode: Key.down.rawValue, modifiers: [], eventType: .press, associatedText: "")
@@ -146,7 +157,7 @@ struct SearchPanelTests {
     }
 
     @Test("escape from results returns to query field")
-    @MainActor func escapeFromResultsReturnsToQuery() {
+    @MainActor func escapeFromResultsReturnsToQuery() async throws {
         let (state, pipeline) = makeSearchPanelContext()
         _ = dispatchCommand(.searchOpenPanel, state: state, pipeline: pipeline)
 
@@ -157,6 +168,7 @@ struct SearchPanelTests {
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settlePanelSearch(state)
         // Move to results
         let downKey = KeyEvent(
             keyCode: Key.down.rawValue, modifiers: [], eventType: .press, associatedText: "")
@@ -212,7 +224,7 @@ struct SearchPanelTests {
     }
 
     @Test("down arrow navigates through results")
-    @MainActor func downArrowNavigatesResults() {
+    @MainActor func downArrowNavigatesResults() async throws {
         let (state, pipeline) = makeSearchPanelContext()
         _ = dispatchCommand(.searchOpenPanel, state: state, pipeline: pipeline)
 
@@ -223,6 +235,7 @@ struct SearchPanelTests {
             _ = handleSearchPanelKey(key, state: state, pipeline: pipeline)
         }
 
+        try await settlePanelSearch(state)
         // Move to results
         let downKey = KeyEvent(
             keyCode: Key.down.rawValue, modifiers: [], eventType: .press, associatedText: "")

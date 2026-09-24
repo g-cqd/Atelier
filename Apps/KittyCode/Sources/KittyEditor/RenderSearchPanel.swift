@@ -88,17 +88,7 @@ public func renderSearchPanel(
         if state.searchTarget == .workspace {
             summary = state.workspaceSearchSummary
         } else {
-            let matchCount = state.inFileSearch?.matches.count ?? 0
-            let query = state.inFileSearch?.query ?? ""
-            if query.isEmpty {
-                summary = ""
-            } else if matchCount == 0 {
-                summary = "No results"
-            } else if matchCount == 1 {
-                summary = "1 match"
-            } else {
-                summary = "\(matchCount) matches"
-            }
+            summary = inFileSearchSummary(state.inFileSearch)
         }
         pipeline.buffer.write(
             summary, row: currentRow, col: rect.x + 1,
@@ -128,6 +118,17 @@ public func renderSearchPanel(
 }
 
 @MainActor
+func inFileSearchSummary(_ search: EditorState.InFileSearch?) -> String {
+    guard let search, !search.query.isEmpty else { return "" }
+    if search.isSearching { return "Searching…" }
+    if search.didHitLimit { return "\(search.matches.count)+ matches (limit)" }
+    if !search.isComplete { return "Search incomplete" }
+    if search.matches.isEmpty { return "No results" }
+    if search.matches.count == 1 { return "1 match" }
+    return "\(search.matches.count) matches"
+}
+
+@MainActor
 private func renderInFileResults(
     pipeline: RenderPipeline,
     state: EditorState,
@@ -140,7 +141,6 @@ private func renderInFileResults(
 
     let scrollOffset = state.searchPanelScrollOffset
     let matches = search.matches
-    let lines = state.fileContent
 
     for i in 0 ..< availRows {
         let matchIdx = scrollOffset + i
@@ -151,8 +151,8 @@ private func renderInFileResults(
 
         let lineNum = "\(match.row + 1):"
         let snippet: String
-        if match.row >= 0, match.row < lines.count {
-            let line = lines[match.row]
+        let line = match.row >= 0 && match.row < state.fileLineCount ? state.fileLine(at: match.row) : ""
+        if match.row >= 0, match.row < state.fileLineCount {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             let snippetWidth = max(0, rect.width - lineNum.count - 2)
             snippet = String(trimmed.prefix(snippetWidth))
@@ -186,8 +186,7 @@ private func renderInFileResults(
         pipeline.buffer.write(snippet, row: displayRow, col: snippetCol, style: rowStyle)
 
         // Highlight the matched text span within the snippet
-        if match.row >= 0, match.row < lines.count {
-            let line = lines[match.row]
+        if match.row >= 0, match.row < state.fileLineCount {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             let leadingWhitespace = line.count - trimmed.count
             let matchStartInSnippet = max(0, match.colStart - leadingWhitespace)

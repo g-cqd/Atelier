@@ -71,7 +71,7 @@ public func searchWorkspace(
 
                     counters.incrementFilesSearched()
 
-                    let matches = findMatches(in: lines, pattern: pattern)
+                    let matches = findMatches(in: lines, pattern: pattern, maxMatches: maxResults)
                     guard !matches.isEmpty else { continue }
 
                     let didHitCap = counters.addMatchesAndCheckCap(

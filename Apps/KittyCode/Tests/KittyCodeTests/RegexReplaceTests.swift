@@ -1,6 +1,8 @@
+import AtelierText
 import KittyRenderer
 import KittySearch
 import KittyTerminal
+import KittyWorkspace
 import Testing
 
 @testable import KittyEditor
@@ -18,6 +20,11 @@ struct RegexReplaceTests {
             query: pattern, pattern: nil, matches: [], activeMatchIndex: -1, isCaseSensitive: true, isRegex: true,
             isWholeWord: false)
         executeSearch(&search, lines: lines)
+        search.resultRequest = InFileSearchRequest(
+            query: SearchQuery(text: pattern, isCaseSensitive: true, isRegex: true),
+            bufferID: state.bufferManager.activeBuffer.map(ObjectIdentifier.init),
+            documentVersion: state.bufferManager.activeBuffer?.documentVersion ?? 0,
+            contentHash: state.textBuffer.contentHash)
         search.activeMatchIndex = 0
         search.replaceText = template
         search.showReplace = true

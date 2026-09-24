@@ -283,6 +283,10 @@ public final class EditorState {
         public var isWholeWord: Bool
         public var replaceText: String = ""
         public var showReplace: Bool = false
+        var isSearching = false
+        var isComplete = false
+        var didHitLimit = false
+        var resultRequest: InFileSearchRequest? = nil
 
         public var totalCount: Int { matches.count }
         public var activeMatch: SearchMatch? {
