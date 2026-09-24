@@ -11,6 +11,7 @@ public enum BundledScanners {
         "lua": LuaExternalScanner.self,
         "javascript": JavaScriptExternalScanner.self,
         "typescript": TypeScriptExternalScanner.self,
-        "python": PythonExternalScanner.self
+        "python": PythonExternalScanner.self,
+        "rust": RustExternalScanner.self
     ]
 }
