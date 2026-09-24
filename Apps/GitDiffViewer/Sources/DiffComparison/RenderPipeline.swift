@@ -15,22 +15,6 @@ import Observation
 @MainActor
 @Observable
 package final class RenderPipeline {
-    package enum Target: Equatable {
-        case file(FilePair)
-        case cards([FilePair])
-
-        package var pairs: [FilePair] {
-            switch self {
-                case .file(let pair): [pair]
-                case .cards(let pairs): pairs
-            }
-        }
-
-        package var isCards: Bool {
-            if case .cards = self { true } else { false }
-        }
-    }
-
     package enum Event {
         /// A render reached the model; `isFirst` for the file or the first card of a generation.
         case published(RenderedDiff.ID, isFirst: Bool)
