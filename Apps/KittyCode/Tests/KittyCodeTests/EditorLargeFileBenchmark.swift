@@ -178,6 +178,29 @@ struct EditorLargeFileBenchmark {
         print("BENCH close the last tab, main actor, 1M lines: \(Self.summary(samples))")
     }
 
+    /// The main actor's share of closing one of two million-line tabs: the restore brings back the other, which a
+    /// switch evicted, and highlights it again.
+    @Test func `closing a million-line tab while another stays open`() async throws {
+        let clock = ContinuousClock()
+        var samples: [Duration] = []
+        for _ in 0 ..< 11 {
+            let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
+            let state = try await makeOpenedState(tasks: tasks)
+            // A second tab over the same text, switched to as a user does, which evicts the first.
+            state.bufferManager.open(
+                filePath: "/bench/second.swift", fileName: "second.swift", content: Self.text, language: "swift")
+            state.bufferManager.switchTo(index: 0)
+            let spawned = tasks.spawnedTaskCount
+            state.switchToTab(1)
+            try await awaitFullPass(tasks, after: spawned)
+            state.saveStateToActiveBuffer()
+            samples.append(clock.measure { state.closeCurrentTab() })
+            try await tasks.waitForAllTasks()
+            state.shutdown()
+        }
+        print("BENCH close one of two tabs, main actor, 1M lines: \(Self.summary(samples))")
+    }
+
     /// The main actor's share of reloading a changed file once its read has finished: the reload's undo step, then
     /// installing the new text in place of the old text's highlights.
     @Test func `reloading a changed million-line file`() async throws {

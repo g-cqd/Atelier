@@ -1263,7 +1263,7 @@ public final class EditorState {
     @ObservationIgnored private var fullHighlightWorkTask: Task<Void, Never>?
     /// Advanced by every `refreshHighlights()`: a pass that read the document before it may style it with a theme, a
     /// language or a setting that no longer holds.
-    @ObservationIgnored private var highlightGeneration: UInt64 = 0
+    @ObservationIgnored private(set) var highlightGeneration: UInt64 = 0
     /// Hands storage the state no longer shows to a consumer `init` starts and `shutdown()` ends, which frees it off the
     /// main actor; a test substitutes it to see what a close or a reload lets go of.
     @ObservationIgnored var retire: @Sendable (consuming RetiredStorage) -> Void
