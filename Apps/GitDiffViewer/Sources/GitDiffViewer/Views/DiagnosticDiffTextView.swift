@@ -23,6 +23,9 @@ struct DiagnosticDiffTextView: View {
     /// Called once the pane shows a new render; without one, the pane reports its own text to the model, as each
     /// pane of a side-by-side file does.
     var onDisplayed: (() -> Void)?
+    /// The file shown, whose scroll position the pane keeps in the model's ``DiffViewerModel/scrollMemory`` while its
+    /// tab is open; nil keeps none.
+    var scrollMemoryPath: String?
 
     @State private var overlay = DiagnosticOverlay()
     @State private var version = 0
@@ -40,7 +43,8 @@ struct DiagnosticDiffTextView: View {
             hoverEnabled: model.settings.showsHoverDocumentation && model.hoverDocs != nil,
             hoverResolver: hoverResolver,
             diagnosticOverlay: model.settings.diagnosticsEnabled ? overlay : nil, diagnosticsVersion: version,
-            onDiagnosticClick: showDiagnosticPopover
+            onDiagnosticClick: showDiagnosticPopover,
+            scrollMemory: model.scrollMemory, scrollMemoryPath: scrollMemoryPath
         )
         .onAppear { recompute() }
         .onChange(of: rendered.id) { recompute() }
