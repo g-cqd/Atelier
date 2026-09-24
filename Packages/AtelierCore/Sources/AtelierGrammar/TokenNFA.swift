@@ -166,6 +166,26 @@ struct TokenNFA: Sendable {
         }
     }
 
+    /// The tokens whose first scalar may also be the first scalar of a separator, such as the text of a string, which
+    /// may start with a space: in a mode that holds them, such a token reads the separator before another token as its
+    /// own text, and so outruns that token.
+    /// - Complexity: O(n) in the automaton's states, per token.
+    func tokensStartingLikeSeparators() -> Set<Int> {
+        var separatorFirst = ScalarRanges.empty
+        var tokenFirst = [ScalarRanges](repeating: .empty, count: starts.count)
+        for (token, start) in starts.enumerated() {
+            for state in closure(of: [start]) {
+                guard case .advance(let characters, _, _, let isSeparator) = states[state] else { continue }
+                if isSeparator {
+                    separatorFirst = separatorFirst.union(characters)
+                } else {
+                    tokenFirst[token] = tokenFirst[token].union(characters)
+                }
+            }
+        }
+        return Set(tokenFirst.indices.filter { !tokenFirst[$0].intersection(separatorFirst).isEmpty })
+    }
+
     /// A loop that reads what `body` builds any number of times, then goes on to `next`: `loop` enters it and may
     /// leave at once, `body` enters it through one pass of the body.
     private mutating func loop(
