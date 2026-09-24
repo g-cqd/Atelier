@@ -100,6 +100,9 @@ package final class RenderPipeline {
     /// Granularity and heuristics of what is published; a render borrows published work only when they match.
     @ObservationIgnored private var publishedGranularity: IntralineGranularity?
     @ObservationIgnored private var publishedHeuristics: DiffHeuristics?
+    /// The card list a file took off screen, kept so the list a closed tab goes back to lends its cards again rather
+    /// than rendering them all anew (book PERF-10). A render of any list takes it, whether it lends anything or not.
+    @ObservationIgnored private var shelvedList: ShelvedList?
 
     private let preparer: DiffPreparer
     private let taskProvider: any TaskProvider
@@ -128,6 +131,7 @@ package final class RenderPipeline {
 
     package func clear() {
         task?.cancel()
+        shelvedList = nil
         generation += 1
         completedGeneration = generation
         isRendering = false
@@ -153,6 +157,13 @@ package final class RenderPipeline {
             sources: Sources(left: left, right: right), granularity: granularity, heuristics: heuristics)
         let loan = self.loan(for: target, inputs: inputs)
         let keeps = keepingPublished && (file != nil || !cards.isEmpty)
+        if target.isCards {
+            shelvedList = nil
+        } else if !keeps, let published = self.target, published.isCards, !prepared.isEmpty {
+            shelvedList = ShelvedList(
+                target: published, prepared: prepared, stamps: stamps, cards: cards.map(\.rendered),
+                granularity: publishedGranularity, heuristics: publishedHeuristics)
+        }
         // A lent file drawn another way, a card becoming the whole file say, saves only its diff: streaming then puts
         // the first file on screen sooner than one step would.
         let lendsFiles = loan.rendered.contains { $0.value.stamp == currentStamp(forIndex: $0.key, in: target) }
@@ -427,6 +438,17 @@ extension RenderPipeline {
         var sameFilePath = false
     }
 
+    /// A card list a file replaced: its target, its prepared diffs and rendered cards in target order, the stamps they
+    /// were rendered under, and the diff options they were prepared with.
+    private struct ShelvedList {
+        let target: Target
+        let prepared: [PreparedDiff]
+        let stamps: [Stamp]
+        let cards: [RenderedDiff]
+        let granularity: IntralineGranularity?
+        let heuristics: DiffHeuristics?
+    }
+
     /// One render: its target, what it compares, and what it borrowed from the published state when it started.
     private struct RenderJob {
         let target: Target
@@ -444,8 +466,29 @@ extension RenderPipeline {
         var loan = Loan()
         guard let published = self.target else { return loan }
         if case .file(let old) = published, case .file(let new) = target { loan.sameFilePath = old.path == new.path }
-        guard inputs.granularity == publishedGranularity, inputs.heuristics == publishedHeuristics else { return loan }
-        let oldPairs = published.pairs
+        if inputs.granularity == publishedGranularity, inputs.heuristics == publishedHeuristics {
+            lend(prepared, from: published, rendered: publishedFile(at:), stamps: stamps, to: target, into: &loan)
+        }
+        // A list goes back to the list a file replaced, when that list was prepared the same way. Lent last, so its
+        // cards take the place of the file drawn whole that the published state lends at the same index.
+        if target.isCards, let shelf = shelvedList, inputs.granularity == shelf.granularity,
+            inputs.heuristics == shelf.heuristics
+        {
+            let cards = shelf.cards
+            lend(
+                shelf.prepared, from: shelf.target, rendered: { cards.indices.contains($0) ? cards[$0] : nil },
+                stamps: shelf.stamps, to: target, into: &loan)
+        }
+        return loan
+    }
+
+    /// Adds to `loan` what `prepared`, the diffs of `source` in order, lends a render of `target`: every reusable
+    /// diff by identity, and each rendered file that keeps its place, with the stamp it was rendered under.
+    private func lend(
+        _ prepared: [PreparedDiff], from source: Target, rendered: (Int) -> RenderedDiff?, stamps: [Stamp],
+        to target: Target, into loan: inout Loan
+    ) {
+        let oldPairs = source.pairs
         let newPairs = target.pairs
         for index in prepared.indices where index < oldPairs.count {
             let identity = PairIdentity(oldPairs[index])
@@ -454,11 +497,10 @@ extension RenderPipeline {
             // A card's rows bake in its file index, which hover maps hits back by, so only a pair that kept its place
             // lends its rendered file.
             guard index < newPairs.count, PairIdentity(newPairs[index]) == identity,
-                let rendered = publishedFile(at: index), stamps.indices.contains(index)
+                let file = rendered(index), stamps.indices.contains(index)
             else { continue }
-            loan.rendered[index] = (rendered, stamps[index])
+            loan.rendered[index] = (file, stamps[index])
         }
-        return loan
     }
 
     /// The published file or card at `index`.

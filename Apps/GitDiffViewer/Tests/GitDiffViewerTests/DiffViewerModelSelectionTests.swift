@@ -221,6 +221,27 @@ struct DiffViewerModelSelectionTests {
     }
 
     @Test
+    func `closing the last tab shows the list it was opened from at once, with the same cards`() async throws {
+        let sut = harness.makeSUT()
+        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [
+            harness.entry("a.swift", "1"), harness.entry("b.swift", "2")
+        ]
+        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [
+            harness.entry("a.swift", "3"), harness.entry("b.swift", "4")
+        ]
+        try await harness.load(sut)
+        let list = sut.renderedFiles.map(\.rendered.id)
+        sut.select("b.swift")
+        try await harness.taskProvider.waitForAllTasks()
+
+        sut.closeTab(try #require(sut.tabs.active?.id))
+
+        #expect(sut.detailState == .cards)
+        #expect(sut.renderedFiles.map(\.rendered.id) == list)
+        #expect(!sut.isRendering)
+    }
+
+    @Test
     func `opening a file focuses its first change`() async throws {
         let sut = harness.makeSUT()
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]
