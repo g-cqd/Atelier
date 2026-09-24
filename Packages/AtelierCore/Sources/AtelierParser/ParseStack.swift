@@ -13,6 +13,10 @@ struct ParseStack: Sendable {
     private(set) var errorCount: Int
     /// The bytes those error nodes span: each is a token the stack could not take, so they never overlap.
     private(set) var errorByteCount = 0
+    /// What the error nodes cost, as tree-sitter weighs errors: 500 per recovery, a run of tokens the stack could not
+    /// take, and per token 100, plus 1 per byte and 30 per line it spans. A parse that skips a long stretch of the
+    /// input is worse than one that skips a few short tokens, however many.
+    private(set) var errorCost = 0
     /// The sum of the dynamic precedences of the productions reduced so far.
     private(set) var dynamicPrecedence = 0
     /// The input position, scanner state, and extras belonging to this GLR branch.
@@ -73,6 +77,9 @@ struct ParseStack: Sendable {
         if node.isError {
             errorCount += 1
             errorByteCount += node.byteRange.count
+            errorCost +=
+                (isRecovering ? 0 : 500) + 100 + node.byteRange.count
+                + 30 * (node.pointRange.upperBound.row - node.pointRange.lowerBound.row)
         }
     }
 
@@ -81,16 +88,18 @@ struct ParseStack: Sendable {
         dynamicPrecedence += value
     }
 
-    /// Whether this stack's parse is better than `other`'s: fewer errors, or as many and a higher dynamic precedence.
+    /// Whether this stack's parse is better than `other`'s: errors that cost less, or as much and a higher dynamic
+    /// precedence.
     func isPreferred(over other: ParseStack) -> Bool {
-        errorCount != other.errorCount
-            ? errorCount < other.errorCount : dynamicPrecedence > other.dynamicPrecedence
+        errorCost != other.errorCost
+            ? errorCost < other.errorCost : dynamicPrecedence > other.dynamicPrecedence
     }
 
-    /// Whether this stack's parse is better than `other`'s, as tree-sitter chooses between two parses: fewer errors,
-    /// then a higher dynamic precedence, then the nodes that come first by `ranks` (see ``SymbolRanks/compare(_:_:)``).
+    /// Whether this stack's parse is better than `other`'s, as tree-sitter chooses between two parses: errors that
+    /// cost less, then a higher dynamic precedence, then the nodes that come first by `ranks` (see
+    /// ``SymbolRanks/compare(_:_:)``).
     func isPreferred(over other: ParseStack, ranks: SymbolRanks) -> Bool {
-        guard errorCount == other.errorCount, dynamicPrecedence == other.dynamicPrecedence else {
+        guard errorCost == other.errorCost, dynamicPrecedence == other.dynamicPrecedence else {
             return isPreferred(over: other)
         }
         return ranks.compare(nodes, other.nodes) < 0
@@ -162,6 +171,38 @@ struct ParseStack: Sendable {
         }
         stacks.removeAll()
         first.releaseNodes()
+    }
+
+    /// `stacks` without the stacks another stack outdoes, in order, as tree-sitter drops a version once a better one
+    /// exists: a stack whose errors cost more than those of a stack as far into the input or further, or of a
+    /// `finished` one. That stack has read, for less, what this one has yet to recover from; kept, error-laden stacks
+    /// each read the rest of the input on their own.
+    /// - Complexity: O(s log s) for s stacks.
+    static func droppingOutdone(_ stacks: consuming [ParseStack], finished: [ParseStack]) -> [ParseStack] {
+        var stacks = consume stacks
+        guard stacks.count > 1 || !finished.isEmpty else { return stacks }
+        let order = stacks.indices.sorted { stacks[$0].cursor.offset > stacks[$1].cursor.offset }
+        var lowestCost = finished.map(\.errorCost).min() ?? Int.max
+        var outdone = [Bool](repeating: false, count: stacks.count)
+        var groupStart = 0
+        while groupStart < order.count {
+            let offset = stacks[order[groupStart]].cursor.offset
+            var groupEnd = groupStart
+            while groupEnd < order.count, stacks[order[groupEnd]].cursor.offset == offset { groupEnd += 1 }
+            let group = order[groupStart ..< groupEnd]
+            lowestCost = min(lowestCost, group.map { stacks[$0].errorCost }.min() ?? Int.max)
+            for index in group where stacks[index].errorCost > lowestCost { outdone[index] = true }
+            groupStart = groupEnd
+        }
+        guard outdone.contains(true) else { return stacks }
+        var kept: [ParseStack] = []
+        var dropped: [ParseStack] = []
+        for (index, stack) in stacks.enumerated() {
+            if outdone[index] { dropped.append(stack) } else { kept.append(stack) }
+        }
+        stacks = []
+        releaseAll(&dropped)
+        return kept
     }
 
     /// `stacks` with one stack per state history, in order: stacks with the same history parse the rest of the input
