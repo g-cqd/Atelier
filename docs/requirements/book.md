@@ -163,6 +163,10 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
 | D21 | 09-24 05:25 | Codex is out of credits until 09-30 20:43, with four jobs stopped mid-work. How should the remaining work continue? | "Claude agents (Recommended)": finish the interrupted jobs and the rest of the queue with Claude subagents, from the saved `wip/*` branches, reviewed and tested the same way before anything merges | PROC-11 |
 | D22 | 09-24 05:25 | Which git identity should Atelier's future commits use? | "Keep the global one": change nothing; history stays as it is | PROC-09 |
 | D23 | 09-24 13:06 | LANG-01: a language-detection toggle, a status-bar language menu, or both? | "lang-01, we can plan for all the things later": both are planned later | LANG-01 |
+| D24 | 09-24 | Was line wrapping on when rows misaligned or scrolling stopped short (DIFF-06, CARD-17)? | "no": the fix for unwrapped panes covers what the user saw; queue item 20 closes | DIFF-06, CARD-17 |
+| D25 | 09-24 | Should the card list itself stop bouncing at its ends, like its code panes? | "no": the list keeps its bounce | CARD-18 |
+| D26 | 09-24 | Keep Fable 5.1 for the security-auditor and orchestrator agents (2.5 times Opus 5.5's price)? | "keep" | PROC (agent roster) |
+| D27 | 09-24 | The order of the remaining work | "reassess and reorder, maybe use work to prioritize even": the backlog is loaded into the shared work queue and ordered by value per effort, correctness first | PROC-13 |
 
 ## Answered questions (09-23 09:37)
 
@@ -1500,7 +1504,7 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   1. A card or a single-file pane whose lines fit has no horizontal scroll range, freshly built and after a
      re-render.
   2. The single-file view and the cards' code panes stop at their edges, sideways and vertically, instead of
-     rubber-banding.
+     rubber-banding. The card list itself keeps its bounce (D25).
 - **Priority:** Must. **Related:** CARD-17, DIFF-06.
 
 ### DIFF: Diff interaction refinements (roadmap, 09-23)
@@ -1756,3 +1760,4 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R108 | 09-24 13:44 (mid-turn, to an agent) | "inspect why sometimes the horizontal scroll is possible when the file width actually matches or fits the containers" | CARD-18 |
 | R109 | 09-24 14:57 | "the oldest one is ours, the others are xcode ones, we should improve" (images 28 to 33) | HOVER-20 |
 | R110 | 09-24 | "let's just show the signature" when the only information about a variable is the variable itself | HOVER-20 (criterion 6), HOVER-03 (criterion 4 superseded) |
+| R111 | 09-24 | "1. no 2. no 3. keep 4. reassess and reorder, maybe use work to prioritize even" | D24 to D27 |
