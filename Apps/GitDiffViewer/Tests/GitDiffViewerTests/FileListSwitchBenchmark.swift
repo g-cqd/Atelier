@@ -22,6 +22,10 @@ import Testing
 /// screen: the file for an open; the first card, then the whole list, for a close. Alongside the wall time, the main
 /// thread's own CPU time over the same span tells a stall from a wait. The medians are held to the budgets below.
 ///
+/// It runs once with the explorers above the detail area, the default, and once with them in the sidebar. The detail
+/// area's height in the first depends on how the split view divides the window, so the number of cards on screen is
+/// printed with each result.
+///
 /// Run in release, alone on the machine: `GDV_BENCH=1 GDV_BENCH_REPO=path swift test -c release -Xswiftc
 /// -enable-testing --filter FileListSwitchBenchmark`. GDV_BENCH_LEFT and GDV_BENCH_RIGHT pick the refs, and
 /// GDV_BENCH_RUNS the switches timed per file.
@@ -36,18 +40,21 @@ struct FileListSwitchBenchmark {
 
     private let scratchDefaults = ScratchDefaults(tag: "switch-bench")
 
+    // Serialized: the placements would otherwise share the main thread and time each other.
     @Test(
-        .timeLimit(.minutes(10)),
+        .serialized, .timeLimit(.minutes(10)),
         .enabled(
             if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil
-                && ProcessInfo.processInfo.environment["GDV_BENCH_REPO"] != nil))
-    func `opening a file from the list and closing its tab`() async throws {
+                && ProcessInfo.processInfo.environment["GDV_BENCH_REPO"] != nil),
+        arguments: [ExplorerPlacement.top, .sidebar])
+    func `opening a file from the list and closing its tab`(placement: ExplorerPlacement) async throws {
         let environment = ProcessInfo.processInfo.environment
         let repo = URL(filePath: environment["GDV_BENCH_REPO"] ?? ".", directoryHint: .isDirectory)
         let leftRef = environment["GDV_BENCH_LEFT"] ?? "HEAD~1"
         let rightRef = environment["GDV_BENCH_RIGHT"] ?? "HEAD"
         let runs = environment["GDV_BENCH_RUNS"].flatMap(Int.init) ?? 9
-        let bench = try await SwitchBench(repo: repo, leftRef: leftRef, rightRef: rightRef, defaults: scratchDefaults)
+        let bench = try await SwitchBench(
+            repo: repo, leftRef: leftRef, rightRef: rightRef, placement: placement, defaults: scratchDefaults)
         defer { bench.close() }
 
         for path in bench.filesToOpen() {
@@ -62,7 +69,8 @@ struct FileListSwitchBenchmark {
                 close.append(closed)
             }
             print(
-                "BENCH switch \(path), \(bench.rows(of: path)) card rows, \(bench.cardCount) cards: "
+                "BENCH \(placement.rawValue) switch \(path), \(bench.rows(of: path)) card rows, "
+                    + "\(bench.cardCount) cards, \(close.cardsOnScreen.max() ?? 0) on screen: "
                     + "open \(Self.summary(open.shown)), main thread \(Self.summary(open.mainThread)); "
                     + "close to first card \(Self.summary(close.firstCard)), "
                     + "to whole list \(Self.summary(close.shown)), main thread \(Self.summary(close.mainThread)); "
@@ -98,6 +106,8 @@ struct SwitchTiming {
     var mainThread: Double
     /// Megabytes.
     var footprint: Double
+    /// Cards laid out in the window once the list showed; none for an open.
+    var cardsOnScreen = 0
 }
 
 /// Samples of switches in one direction.
@@ -106,8 +116,10 @@ struct SwitchSamples {
     var shown: [Double] = []
     var mainThread: [Double] = []
     var footprint: [Double] = []
+    var cardsOnScreen: [Int] = []
 
     mutating func append(_ timing: SwitchTiming) {
+        cardsOnScreen.append(timing.cardsOnScreen)
         firstCard.append(timing.firstCard)
         shown.append(timing.shown)
         mainThread.append(timing.mainThread)
@@ -124,11 +136,14 @@ final class SwitchBench {
     private let pool: BlockingOffloadPool
     private let clock = ContinuousClock()
 
-    init(repo: URL, leftRef: String, rightRef: String, defaults: ScratchDefaults) async throws {
+    init(
+        repo: URL, leftRef: String, rightRef: String, placement: ExplorerPlacement, defaults: ScratchDefaults
+    ) async throws {
         spy = TaskProviderSpy(label: "switch-bench", defaultTimeout: .seconds(120))
         pool = BlockingOffloadPool(width: 4)
         let loader = SourceLoader(runner: HardenedProcessRunner(pool: pool), pool: pool)
         let settings = ViewerSettings(defaults: defaults.defaults)
+        settings.explorerPlacement = placement
         model = DiffViewerModel(settings: settings, reader: loader, taskProvider: spy)
         // The style of the app's comparison windows: the content runs beneath the toolbar.
         window = NSWindow(
@@ -216,9 +231,11 @@ final class SwitchBench {
         pump()
         let shown = Self.milliseconds(clock.now - start)
         let mainThread = Self.mainThreadCPU() - cpu
+        let cards = cardsOnScreen()
         try await settle()
         return SwitchTiming(
-            firstCard: firstCard, shown: shown, mainThread: mainThread, footprint: Self.footprint())
+            firstCard: firstCard, shown: shown, mainThread: mainThread, footprint: Self.footprint(),
+            cardsOnScreen: cards)
     }
 
     /// One turn of the run loop, then a layout and display pass of the whole window, committed.
