@@ -137,7 +137,8 @@ package final class DiffViewerModel {
     package var rendered: RenderedDiff? { pipeline.file }
     /// One rendered diff per changed file when a folder or nothing is selected.
     package var renderedFiles: [RenderedFile] { pipeline.cards }
-    package var collapsedFiles: Set<String> { folding.collapsed }
+    /// The folded cards. A card that stopped folding, such as one a reload found renamed without changes, is not one.
+    package var collapsedFiles: Set<String> { folding.collapsed.filter(isFoldable) }
     package var isRendering: Bool { pipeline.isRendering }
     package var renderError: String? { pipeline.error }
     package var gapExpansions: [GapKey: GapExpansion] { pipeline.gapExpansions }
@@ -435,7 +436,19 @@ package final class DiffViewerModel {
 
     // MARK: Cards
 
+    /// Whether `path`'s card folds. A file renamed without changes has no content to fold: its card is its header
+    /// alone and never unfolds (DIFF-07).
+    package func isFoldable(_ path: String) -> Bool {
+        !comparison.isRenamedWithoutChanges(path)
+    }
+
+    /// The cards of the list that fold, in list order.
+    package var foldableFiles: [String] {
+        renderedFiles.map(\.path).filter(isFoldable)
+    }
+
     package func toggleCollapsed(_ path: String) {
+        guard isFoldable(path) else { return }
         folding.toggle(path)
     }
 
@@ -445,7 +458,7 @@ package final class DiffViewerModel {
     }
 
     package func setAllCollapsed(_ collapsed: Bool) {
-        folding.setAll(renderedFiles.map(\.path), collapsed: collapsed)
+        folding.setAll(foldableFiles, collapsed: collapsed)
     }
 
     // MARK: Rendering

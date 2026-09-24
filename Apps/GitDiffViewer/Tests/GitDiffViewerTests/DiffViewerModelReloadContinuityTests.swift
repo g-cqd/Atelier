@@ -39,6 +39,49 @@ struct DiffViewerModelReloadContinuityTests {
     }
 
     @Test
+    func `a card renamed without changes never folds, one at a time, all at once or through a reload`()
+        async throws
+    {
+        let sut = harness.makeSUT()
+        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [
+            harness.entry("old/name.swift", "1"), harness.entry("a.swift", "2")
+        ]
+        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [
+            harness.entry("new/name.swift", "1"), harness.entry("a.swift", "3")
+        ]
+        try await harness.load(sut)
+        #expect(!sut.isFoldable("old/name.swift"))
+        #expect(sut.isFoldable("a.swift"))
+        #expect(sut.foldableFiles == ["a.swift"])
+
+        sut.toggleCollapsed("old/name.swift")
+        #expect(sut.collapsedFiles.isEmpty)
+        sut.setAllCollapsed(true)
+        #expect(sut.collapsedFiles == ["a.swift"])
+        sut.setAllCollapsed(false)
+        #expect(sut.collapsedFiles.isEmpty)
+
+        sut.setAllCollapsed(true)
+        sut.sourcesChanged()
+        try await harness.taskProvider.waitForAllTasks()
+        #expect(!sut.isFoldable("old/name.swift"))
+        #expect(sut.collapsedFiles == ["a.swift"])
+    }
+
+    @Test
+    func `a card renamed with changes folds like any other`() async throws {
+        let sut = harness.makeSUT()
+        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]
+        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("b.swift", "2")]
+        harness.reader.gitRenames = ["a.swift": "b.swift"]
+        try await harness.load(sut)
+        #expect(sut.isFoldable("a.swift"))
+
+        sut.toggleCollapsed("a.swift")
+        #expect(sut.collapsedFiles == ["a.swift"])
+    }
+
+    @Test
     func `a reload keeps an unchanged card's identity and re-renders only the file whose blob changed`()
         async throws
     {
