@@ -202,4 +202,66 @@ struct EditorLargeFileBenchmark {
         }
         print("BENCH reload a changed file, main actor, 1M lines: \(Self.summary(samples))")
     }
+
+    /// A short Swift file opened through the open path once its read has finished, as a click in the tree does: the
+    /// open saves the active buffer's state first, then installs the file.
+    private func openSmallFile(in state: EditorState, tasks: TaskProviderSpy) async throws {
+        let small = try WorkspaceFileLoading.decode(Data("let small = 1\nprint(small)\n".utf8))
+        let spawned = tasks.spawnedTaskCount
+        state.saveStateToActiveBuffer()
+        state.finishOpeningFile(
+            requestID: state.nextOpenRequestID(), path: "/bench/small.swift", name: "small.swift",
+            loadedFile: small, language: "swift", modificationDate: nil)
+        try await awaitFullPass(tasks, after: spawned)
+    }
+
+    /// The main actor's share of switching from the million-line tab to a short one: the switch evicts the outgoing
+    /// buffer's caches, and the restore lets go of the workspace's copy of its highlights.
+    @Test func `switching away from a million-line tab`() async throws {
+        let clock = ContinuousClock()
+        var samples: [Duration] = []
+        for _ in 0 ..< 11 {
+            let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
+            let state = try await makeOpenedState(tasks: tasks)
+            try await openSmallFile(in: state, tasks: tasks)
+            // Back to the large tab, whose highlights and width the open left in its buffer.
+            state.switchToTab(0)
+            try await tasks.waitForAllTasks()
+            samples.append(clock.measure { state.switchToTab(1) })
+            try await tasks.waitForAllTasks()
+            state.shutdown()
+        }
+        print("BENCH switch away from a large tab, main actor, 1M lines: \(Self.summary(samples))")
+    }
+
+    /// The main actor's share of opening a short file in preview mode while the million-line file is the preview:
+    /// the new preview replaces the old one, whose buffer and highlights the state lets go of.
+    @Test func `replacing a million-line preview`() async throws {
+        let loadedFile = try WorkspaceFileLoading.decode(Data(Self.text.utf8))
+        let small = try WorkspaceFileLoading.decode(Data("let small = 1\nprint(small)\n".utf8))
+        let clock = ContinuousClock()
+        var samples: [Duration] = []
+        for _ in 0 ..< 11 {
+            let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
+            let state = EditorState(rootPath: ".", config: KittyConfig(), taskProvider: tasks)
+            state.config.tabRibbon.persistence = .preview
+            state.lastRenderRows = 60
+            state.finishOpeningFile(
+                requestID: state.nextOpenRequestID(), path: "/bench/large.swift", name: "large.swift",
+                loadedFile: loadedFile, language: "swift", modificationDate: nil)
+            try await tasks.waitForAllTasks()
+            // What the open does before its read.
+            state.saveStateToActiveBuffer()
+            let requestID = state.nextOpenRequestID()
+            samples.append(
+                clock.measure {
+                    state.finishOpeningFile(
+                        requestID: requestID, path: "/bench/small.swift", name: "small.swift", loadedFile: small,
+                        language: "swift", modificationDate: nil)
+                })
+            try await tasks.waitForAllTasks()
+            state.shutdown()
+        }
+        print("BENCH replace a large preview, main actor, 1M lines: \(Self.summary(samples))")
+    }
 }
