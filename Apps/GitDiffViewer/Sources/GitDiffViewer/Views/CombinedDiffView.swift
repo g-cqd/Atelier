@@ -85,11 +85,13 @@ private struct FileCardFrame: View {
 
     var body: some View {
         let settings = model.settings
-        let isCollapsed = model.collapsedFiles.contains(file.path)
+        let isFoldable = model.isFoldable(file.path)
+        // A card with nothing to fold is its header alone, as a folded card is, and never mounts a body.
+        let isCollapsed = !isFoldable || model.folding.collapsed.contains(file.path)
         FoldingCard(
             foldProgress: isCollapsed ? 1 : 0,
             card: StickyCard(
-                file: file, title: title, isCollapsed: isCollapsed,
+                file: file, title: title, isFoldable: isFoldable, isCollapsed: isCollapsed,
                 options: PaneOptions(
                     layout: settings.mode.cardLayout,
                     wrapMode: WrapMode(wrapsLines: settings.wrapsLines, column: settings.wrapColumn),
@@ -126,6 +128,8 @@ private struct StickyCard: NSViewRepresentable {
 
     let file: RenderedFile
     let title: CardTitle
+    /// False for a card that is its header alone: it shows no fold control and never unfolds.
+    let isFoldable: Bool
     let isCollapsed: Bool
     let options: PaneOptions
     let model: DiffViewerModel
@@ -215,7 +219,9 @@ private final class CardHosts {
     func update(to card: StickyCard) -> Bool {
         let previous = self.card
         self.card = card
-        if previous.title != card.title || previous.isCollapsed != card.isCollapsed {
+        if previous.title != card.title || previous.isCollapsed != card.isCollapsed
+            || previous.isFoldable != card.isFoldable
+        {
             header.rootView = Self.header(for: card)
         }
         refreshBody()
@@ -297,7 +303,8 @@ private final class CardHosts {
         let model = card.model
         let path = card.file.path
         return FileCardHeader(
-            title: card.title, isCollapsed: card.isCollapsed, toggle: { model.toggleCollapsed(path) },
+            title: card.title, isFoldable: card.isFoldable, isCollapsed: card.isCollapsed,
+            toggle: { model.toggleCollapsed(path) },
             open: { model.pin(path) })
     }
 }
@@ -337,21 +344,24 @@ private struct PaneContent {
 }
 
 /// A card's title bar: fold glyph, path and badges on an opaque tint of the change kind. A click folds the card
-/// and a double click opens the file on its own.
+/// and a double click opens the file on its own. A card that does not fold shows no glyph and ignores the click.
 private struct FileCardHeader: View {
     let title: CardTitle
+    let isFoldable: Bool
     let isCollapsed: Bool
     let toggle: () -> Void
     let open: () -> Void
 
     var body: some View {
         HStack {
-            // A symbol replacement rather than a rotated chevron, so the fold reads as one gesture.
-            Image(systemName: isCollapsed ? "rectangle.expand.vertical" : "rectangle.compress.vertical")
-                .contentTransition(.symbolEffect(.replace))
-                .animation(.easeOut(duration: 0.18), value: isCollapsed)
-                .foregroundStyle(.secondary)
-                .imageScale(.small)
+            if isFoldable {
+                // A symbol replacement rather than a rotated chevron, so the fold reads as one gesture.
+                Image(systemName: isCollapsed ? "rectangle.expand.vertical" : "rectangle.compress.vertical")
+                    .contentTransition(.symbolEffect(.replace))
+                    .animation(.easeOut(duration: 0.18), value: isCollapsed)
+                    .foregroundStyle(.secondary)
+                    .imageScale(.small)
+            }
             Image(systemName: "doc.text")
             pathText
                 .font(.system(.body, design: .monospaced))
@@ -373,9 +383,12 @@ private struct FileCardHeader: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .contentShape(Rectangle())
         // The single click must not wait for a double click: it folds at once, and the double click then opens.
-        .onTapGesture(perform: toggle)
+        .onTapGesture { if isFoldable { toggle() } }
         .simultaneousGesture(TapGesture(count: 2).onEnded(open))
-        .help("Click to fold, double-click to open \(title.label.text)")
+        .help(
+            isFoldable
+                ? "Click to fold, double-click to open \(title.label.text)"
+                : "Double-click to open \(title.label.text)")
     }
 
     /// The path, then for a renamed file an arrow and the old path, grayed as Xcode grays it.
