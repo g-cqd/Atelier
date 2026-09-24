@@ -216,7 +216,7 @@ let package = Package(
         .testTarget(
             name: "KittyWorkspaceTests",
             dependencies: [
-                "KittyWorkspace", .product(name: "AtelierText", package: "AtelierCore"),
+                "KittyWorkspace", "KittySyntax", "KittyStyle", .product(name: "AtelierText", package: "AtelierCore"),
                 .product(name: "AtelierFileTree", package: "AtelierCore"),
                 .product(name: "AemiIO", package: "aemi"),
                 .product(name: "AemiTesting", package: "aemi")

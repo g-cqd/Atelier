@@ -20,8 +20,12 @@ extension FileWatcher: FileWatching {}
 public protocol FileWatcherDelegate: AnyObject {
     func fileWatcherDidDetectDirectoryChange() async
     func fileWatcherDidDetectExternalModification(bufferName: String)
-    func fileWatcherDidReloadActiveBuffer(buffer: DocumentBuffer, content: String)
-    func fileWatcherDidReloadInactiveBuffer(buffer: DocumentBuffer, content: String)
+    /// `replaced` is what the buffer let go of, for the delegate to free off the main actor.
+    func fileWatcherDidReloadActiveBuffer(
+        buffer: DocumentBuffer, content: String, replaced: consuming DocumentBuffer.ReplacedContents)
+    /// `replaced` is what the buffer let go of, for the delegate to free off the main actor.
+    func fileWatcherDidReloadInactiveBuffer(
+        buffer: DocumentBuffer, content: String, replaced: consuming DocumentBuffer.ReplacedContents)
 }
 
 /// Keeps the open buffers in step with their files: the workspace's directory and every open file are watched, a
@@ -139,7 +143,7 @@ public final class FileWatcherIntegration {
             workspace.saveStateToActiveBuffer()
         }
 
-        buffer.replaceContents(with: loadedFile, modifiedAt: diskDate)
+        let replaced = buffer.replaceContents(with: loadedFile, modifiedAt: diskDate)
         buffer.didInvalidateHistoryOnLastRefresh = buffer.editHistory.reconcileWithRefresh(
             BufferEditSnapshot(
                 textBuffer: buffer.textBuffer,
@@ -147,10 +151,13 @@ public final class FileWatcherIntegration {
                 lineEnding: buffer.lineEnding
             )
         )
+        guard let delegate else { return }
         if isActive {
-            delegate?.fileWatcherDidReloadActiveBuffer(buffer: buffer, content: loadedFile.content)
+            delegate.fileWatcherDidReloadActiveBuffer(
+                buffer: buffer, content: loadedFile.content, replaced: consume replaced)
         } else {
-            delegate?.fileWatcherDidReloadInactiveBuffer(buffer: buffer, content: loadedFile.content)
+            delegate.fileWatcherDidReloadInactiveBuffer(
+                buffer: buffer, content: loadedFile.content, replaced: consume replaced)
         }
     }
 

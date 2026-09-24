@@ -1441,12 +1441,15 @@ public final class EditorState {
         retire(consume previous)
     }
 
-    /// The active document's highlights, rope and line and text caches, and `closedBuffer`, to hand to `retire` once
-    /// the state has replaced them, so that the last reference to each goes with the consumer.
-    func activeDocumentStorage(closing closedBuffer: DocumentBuffer? = nil) -> RetiredStorage {
+    /// The active document's highlights, rope and line and text caches, `closedBuffer` and what a reload's buffer let
+    /// go of, to hand to `retire` once the state has replaced them, so that the last reference to each goes with the
+    /// consumer.
+    func activeDocumentStorage(
+        closing closedBuffer: DocumentBuffer? = nil, replaced: consuming DocumentBuffer.ReplacedContents? = nil
+    ) -> RetiredStorage {
         RetiredStorage(
             highlights: highlightedLines, textBuffer: textBuffer, fileLines: cachedFileLines,
-            documentText: cachedDocumentText, buffer: closedBuffer)
+            documentText: cachedDocumentText, buffer: closedBuffer, replaced: replaced)
     }
 
     /// The preview buffer an open in preview mode replaces, and the active document's storage when it is that buffer.
@@ -1662,6 +1665,8 @@ extension EditorState {
         var documentText: String?
         /// A closed tab's buffer, with its undo history and its own copy of the highlights.
         var buffer: DocumentBuffer?
+        /// What a reload's buffer let go of: an inactive tab's highlights are held there alone.
+        var replaced: DocumentBuffer.ReplacedContents?
     }
 
     /// The state a full pass starts from; its result is installed only while the state is unchanged.
