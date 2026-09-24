@@ -10,6 +10,7 @@ public enum BundledScanners {
         "ruby": RubyExternalScanner.self,
         "lua": LuaExternalScanner.self,
         "javascript": JavaScriptExternalScanner.self,
-        "typescript": TypeScriptExternalScanner.self
+        "typescript": TypeScriptExternalScanner.self,
+        "python": PythonExternalScanner.self
     ]
 }
