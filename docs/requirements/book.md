@@ -56,6 +56,7 @@ fixes land. OQ3's first half was carried out under D6: at 14:40 the six clones o
 | QUAL | Code quality, review processes, safety |
 | DIFF | Diff interaction refinements and their Xcode reference |
 | REND | A text renderer of our own and its pluggable backends |
+| LANG | A file's language: detection and choice |
 
 ## Sources
 
@@ -642,6 +643,21 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
 - **Source:** the panel design (commit `27bc8c3`, "a footer naming which tier answered"; commit `b30579b`, "the
   prose winner names itself in the footer").
 - **Superseded by:** HOVER-13, 09-22 16:20.
+
+#### HOVER-19 · Only Swift is parsed as Swift, and no file crashes the parse
+- **Statement:** Hover reads Swift files only. Any other file gets no hover and is never handed to swift-syntax or
+  sourcekit-lsp, and no file, however deeply it nests, crashes the app.
+- **Source:** 09-24 12:27 (mid-turn), a pasted crash report: a stack overflow in swift-syntax's parser under the
+  doc-comment hover tier; 12:30 (mid-turn), "the swift parser and swift syntax should fail fast and only parse swift
+  files, [...] here it's really when i'm opening a python file".
+- **Acceptance criteria:**
+  1. Hovering in a file whose extension is not Swift's runs no tier: nothing is parsed, no language server is
+     asked, and no panel appears.
+  2. The doc-comment index parses Swift files only.
+  3. Every swift-syntax parse and tree walk runs on a stack that holds it, so a file whose brackets never close
+     cannot overflow a worker thread.
+  4. When HOVER-16 lands, each tier answers only for the languages it reads.
+- **Priority:** Must. **Related:** HOVER-01, HOVER-16, LANG-01.
 
 ### DUI: Diagnostics UI
 
@@ -1523,6 +1539,19 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   3. A parity harness checks that both backends produce the same geometry and content.
 - **Priority:** Should. **Related:** REND-02, MOD-02.
 
+### LANG: A file's language
+
+#### LANG-01 · Choosing a file's language
+- **Statement:** A file's language comes from its extension today. Two ways to go further were proposed: detecting
+  the language from the content, behind a toggle, or a language menu in the status bar for the file shown.
+- **Source:** 09-24 12:30 (mid-turn), "autodetection of the language could be a feature that is toggleable or we
+  could propose a selection of the language in a dropdown in the status bar".
+- **Acceptance criteria:** to settle with the user, who named both options; whichever lands:
+  1. Highlighting, hover and diagnostics all follow the language chosen, so no tier reads a file as another
+     language (HOVER-19).
+  2. With the feature off or no choice made, the extension decides, as it does now.
+- **Priority:** Could, a proposal to shape. **Related:** HOVER-19.
+
 ## Request index
 
 Times are CEST. "Mid-turn" marks a message the user sent while the assistant was working.
@@ -1632,3 +1661,5 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R101 | 09-23 12:37 (decision D8) | "End it now (Recommended)" | PROC-10 |
 | R102 | 09-23 13:06 | "can you make sure we use aemijson whenever we do json interaction" | JSON-04 |
 | R103 | 09-23 13:29 | "please perform a regathering of all prompts and requirements" | QUAL-10 |
+| R104 | 09-24 12:27 (mid-turn) | a pasted crash report: a stack overflow in swift-syntax's parser under the doc-comment hover | HOVER-19 |
+| R105 | 09-24 12:30 (mid-turn) | "the swift parser and swift syntax should fail fast and only parse swift files" | HOVER-19, LANG-01 |
