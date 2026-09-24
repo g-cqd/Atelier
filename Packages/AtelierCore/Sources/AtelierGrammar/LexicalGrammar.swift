@@ -16,13 +16,21 @@ struct LexicalGrammar: Sendable {
     private var tokenIndices: [String: Int] = [:]
     private var tokensPerRule: [String: Int] = [:]
 
-    init(_ grammar: GrammarDefinition) {
+    init(_ grammar: GrammarDefinition) throws(GrammarError) {
+        let inlineNames = Set(grammar.inline)
+        let inlineRules = Dictionary(
+            uniqueKeysWithValues: grammar.rules.compactMap { entry -> (String, Rule)? in
+                inlineNames.contains(entry.name) ? entry : nil
+            })
         var rules: [(name: String, rule: Rule)] = []
-        for (name, rule) in grammar.rules {
-            rules.append((name, extractingTokens(from: rule, in: name)))
+        for (name, rule) in grammar.rules where !inlineNames.contains(name) {
+            let expanded =
+                inlineRules.isEmpty
+                ? rule : try Self.expandingInline(rule, definitions: inlineRules, visiting: [], depth: 0)
+            rules.append((name, extractingTokens(from: expanded, in: name)))
         }
 
-        let ruleNames = Set(grammar.rules.map(\.name))
+        let ruleNames = Set(rules.map(\.name))
         for (offset, rule) in rules.enumerated() {
             if offset > 0, case .symbol(let symbol) = rule.rule, !ruleNames.contains(symbol),
                 let token = tokenIndices[symbol], usageCounts[token] == 1
@@ -36,6 +44,74 @@ struct LexicalGrammar: Sendable {
 
         for extra in grammar.extras {
             markExtra(extra)
+        }
+    }
+
+    /// Expands each inline symbol at its use site; the grammar's finite inline set bounds the recursive tree walk.
+    private static func expandingInline(
+        _ rule: Rule, definitions: [String: Rule], visiting: Set<String>, depth: Int
+    ) throws(GrammarError) -> Rule {
+        guard depth < 64 else { throw .invalidRuleType("Inline rule nesting exceeds 64 levels") }
+        switch rule {
+            case .symbol(let name):
+                guard let definition = definitions[name] else { return rule }
+                guard !visiting.contains(name), visiting.count < 64 else {
+                    throw .invalidRuleType("Inline rule cycle at `\(name)`")
+                }
+                return try expandingInline(
+                    definition, definitions: definitions, visiting: visiting.union([name]), depth: depth + 1)
+            case .seq(let members):
+                var expanded: [Rule] = []
+                expanded.reserveCapacity(members.count)
+                for member in members {
+                    expanded.append(
+                        try expandingInline(member, definitions: definitions, visiting: visiting, depth: depth + 1))
+                }
+                return .seq(expanded)
+            case .choice(let members):
+                var expanded: [Rule] = []
+                expanded.reserveCapacity(members.count)
+                for member in members {
+                    expanded.append(
+                        try expandingInline(member, definitions: definitions, visiting: visiting, depth: depth + 1))
+                }
+                return .choice(expanded)
+            case .repeat(let content):
+                return .repeat(
+                    try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+            case .repeat1(let content):
+                return .repeat1(
+                    try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+            case .optional(let content):
+                return .optional(
+                    try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+            case .prec(let value, let content):
+                return .prec(
+                    value, try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+            case .precLeft(let value, let content):
+                return .precLeft(
+                    value, try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+            case .precRight(let value, let content):
+                return .precRight(
+                    value, try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+            case .precDynamic(let value, let content):
+                return .precDynamic(
+                    value, try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+            case .token(let content):
+                return .token(
+                    try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+            case .immediateToken(let content):
+                return .immediateToken(
+                    try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+            case .field(let name, let content):
+                return .field(
+                    name, try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1))
+            case .alias(let content, let name, let isNamed):
+                return .alias(
+                    try expandingInline(content, definitions: definitions, visiting: visiting, depth: depth + 1), name,
+                    isNamed)
+            case .string, .pattern, .blank:
+                return rule
         }
     }
 

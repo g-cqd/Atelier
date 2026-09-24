@@ -40,6 +40,27 @@ struct ScalarRanges: Sendable, Hashable {
         ScalarRanges(ranges + other.ranges)
     }
 
+    /// Values shared by both sets, found in one pass over their sorted ranges.
+    /// - Complexity: O(a + b) for the two range counts.
+    func intersection(_ other: ScalarRanges) -> ScalarRanges {
+        var result: [ClosedRange<UInt32>] = []
+        var left = 0
+        var right = 0
+        while left < ranges.count, right < other.ranges.count {
+            let a = ranges[left]
+            let b = other.ranges[right]
+            let lower = max(a.lowerBound, b.lowerBound)
+            let upper = min(a.upperBound, b.upperBound)
+            if lower <= upper { result.append(lower ... upper) }
+            if a.upperBound < b.upperBound {
+                left += 1
+            } else {
+                right += 1
+            }
+        }
+        return ScalarRanges(normalized: result)
+    }
+
     /// Every scalar value not in the set.
     func inverted() -> ScalarRanges {
         var result: [ClosedRange<UInt32>] = []

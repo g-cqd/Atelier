@@ -24,6 +24,7 @@ struct PatternParser {
     private let pattern: String
     private let scalars: [Unicode.Scalar]
     private var index = 0
+    private var classDepth = 0
 
     private init(_ pattern: String) {
         self.pattern = pattern
@@ -176,6 +177,9 @@ struct PatternParser {
     /// The set of a `[…]` class, its `[` already read. A `]` first in the class is a literal, as in Rust's syntax,
     /// and so is a `-` that cannot form a range.
     private mutating func parseClass() throws(GrammarError) -> ScalarRanges {
+        guard classDepth < 64 else { throw failure("class nesting exceeds 64 levels") }
+        classDepth += 1
+        defer { classDepth -= 1 }
         var negated = false
         if peek() == "^" {
             index += 1
@@ -188,6 +192,15 @@ struct PatternParser {
             if scalar == "]", !isFirst {
                 index += 1
                 break
+            }
+            if scalar == "&", peek(offset: 1) == "&" {
+                index += 2
+                guard peek() == "[" else { throw failure("class intersection requires a nested class") }
+                index += 1
+                let shared = try ScalarRanges(members).intersection(parseClass())
+                members = shared.ranges
+                isFirst = false
+                continue
             }
             isFirst = false
             let item = try parseClassItem()
