@@ -78,8 +78,13 @@ package final class HoverDocPanel {
     private let headDivider = HoverDocPanel.makeDivider()
     /// The discussion's blocks, top to bottom, in the body's scrolling document view.
     let bodyStack = HoverDocPanel.makeBlockStack()
-    private let bodyDocument = HoverFlippedView()
-    private let bodyScrollView = NSScrollView()
+    /// The discussion's blocks not built yet: a long discussion builds what the panel shows, and the rest as the body
+    /// scrolls towards it.
+    var pendingDiscussion: PendingDiscussion?
+    let bodyDocument = HoverFlippedView()
+    let bodyScrollView = NSScrollView()
+    /// Observes the body's scrolling, to build the blocks it scrolls towards.
+    private var bodyScrollObserver: (any NSObjectProtocol)?
     private let parametersGrid = NSGridView(numberOfColumns: 2, rows: 0)
     private let parametersHeader = HoverDocPanel.makeSectionLabel("Parameters")
     private let returnsHeader = HoverDocPanel.makeSectionLabel("Returns")
@@ -118,6 +123,7 @@ package final class HoverDocPanel {
 
     isolated deinit {
         Self.liveCount -= 1
+        if let bodyScrollObserver { NotificationCenter.default.removeObserver(bodyScrollObserver) }
     }
 
     /// How many panels are alive; for tests that check the panes build theirs only when hovered and release them.
@@ -246,17 +252,7 @@ package final class HoverDocPanel {
             right: HoverPanelMetrics.edgeInset)
         contentStack.translatesAutoresizingMaskIntoConstraints = false
 
-        bodyDocument.addSubview(bodyStack)
-        NSLayoutConstraint.activate([
-            bodyStack.topAnchor.constraint(equalTo: bodyDocument.topAnchor),
-            bodyStack.leadingAnchor.constraint(equalTo: bodyDocument.leadingAnchor),
-            bodyStack.widthAnchor.constraint(equalToConstant: HoverPanelSizing.width - 2 * HoverPanelMetrics.edgeInset)
-        ])
-        bodyScrollView.documentView = bodyDocument
-        bodyScrollView.drawsBackground = false
-        bodyScrollView.hasVerticalScroller = false
-        bodyScrollView.borderType = .noBorder
-        bodyScrollView.translatesAutoresizingMaskIntoConstraints = false
+        configureBody()
 
         parametersGrid.rowSpacing = 4
         parametersGrid.columnSpacing = 8
@@ -308,6 +304,27 @@ package final class HoverDocPanel {
         effectView.addTrackingArea(area)
         trackingArea = area
         return panel
+    }
+
+    /// The discussion's scrolling body: the block stack in a flipped document, which builds the blocks it scrolls to.
+    private func configureBody() {
+        bodyDocument.addSubview(bodyStack)
+        NSLayoutConstraint.activate([
+            bodyStack.topAnchor.constraint(equalTo: bodyDocument.topAnchor),
+            bodyStack.leadingAnchor.constraint(equalTo: bodyDocument.leadingAnchor),
+            bodyStack.widthAnchor.constraint(equalToConstant: HoverPanelSizing.width - 2 * HoverPanelMetrics.edgeInset)
+        ])
+        bodyScrollView.documentView = bodyDocument
+        bodyScrollView.contentView.postsBoundsChangedNotifications = true
+        bodyScrollObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification, object: bodyScrollView.contentView, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.bodyDidScroll() }
+        }
+        bodyScrollView.drawsBackground = false
+        bodyScrollView.hasVerticalScroller = false
+        bodyScrollView.borderType = .noBorder
+        bodyScrollView.translatesAutoresizingMaskIntoConstraints = false
     }
 
     // MARK: Rendering

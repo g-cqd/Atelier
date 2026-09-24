@@ -24,9 +24,26 @@ enum HoverBlockMetrics {
 
 // MARK: - The discussion's blocks
 
+/// The last block a stack holds, which sets the spacing above the next.
+typealias HoverBuiltBlock = (view: NSView, isHeading: Bool)
+
+/// A discussion's blocks still to build, with what building them takes.
+struct PendingDiscussion {
+    var blocks: ArraySlice<HoverDocument.Block>
+    let width: CGFloat
+    let chipBackground: NSColor?
+    var last: HoverBuiltBlock?
+}
+
 extension HoverDocPanel {
-    /// Rebuilds ``bodyStack`` from `blocks`, under an Overview heading, each block its own view `width` wide.
+    /// Rebuilds ``bodyStack`` from `blocks`, under an Overview heading, each block its own view `width` wide. Only the
+    /// blocks the panel can show at once are built: every block is a view measured and laid out, and a discussion of
+    /// a few hundred of them took seconds (`HoverBuildBenchmark`). The rest are built as the body scrolls towards
+    /// them, in ``bodyDidScroll()``.
     func renderDiscussion(_ blocks: [HoverDocument.Block], chipBackground: NSColor?, width: CGFloat) {
+        // Dropped first, so the scroll back to the top builds nothing of the discussion shown before.
+        pendingDiscussion = nil
+        bodyScrollView.contentView.scroll(to: .zero)
         bodyStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         guard !blocks.isEmpty else { return }
         let overview = NSAttributedString(
@@ -34,28 +51,64 @@ extension HoverDocPanel {
             attributes: [
                 .font: Self.headingFont(level: 2), .foregroundColor: NSColor.labelColor
             ])
-        let all: [HoverDocument.Block] = [.heading(level: 2, text: overview)] + blocks
-        fill(bodyStack, with: all, width: width, chipBackground: chipBackground)
+        pendingDiscussion = PendingDiscussion(
+            blocks: ArraySlice([.heading(level: 2, text: overview)] + blocks), width: width,
+            chipBackground: chipBackground)
+        buildPendingBlocks()
     }
 
-    /// Adds a view per block to `stack`, spaced wider above a heading and tighter below it.
+    /// Builds the next blocks once the body's visible end comes within a panel's height of the built ones' end, and
+    /// grows the scrolling document to hold them.
+    func bodyDidScroll() {
+        guard pendingDiscussion != nil,
+            bodyScrollView.contentView.bounds.maxY >= bodyDocument.frame.height - HoverPanelSizing.maxHeight
+        else { return }
+        buildPendingBlocks()
+        bodyStack.layoutSubtreeIfNeeded()
+        bodyDocument.setFrameSize(NSSize(width: bodyDocument.frame.width, height: bodyStack.fittingSize.height))
+        bodyScrollView.reflectScrolledClipView(bodyScrollView.contentView)
+    }
+
+    /// Builds pending blocks until they add up to the panel's greatest height, which leaves the body scrolling while
+    /// any remain, or until none is left.
+    private func buildPendingBlocks() {
+        guard var pending = pendingDiscussion else { return }
+        let (rest, last) = fill(
+            bodyStack, with: pending.blocks, width: pending.width, chipBackground: pending.chipBackground,
+            after: pending.last, filling: HoverPanelSizing.maxHeight)
+        pending.blocks = rest
+        pending.last = last
+        pendingDiscussion = rest.isEmpty ? nil : pending
+    }
+
+    /// Adds a view per block to `stack`, after `last`, the block already at its end, spaced wider above a heading and
+    /// tighter below it; stops once the views added are `height` tall. Returns the blocks left and the last one added.
+    @discardableResult
     private func fill(
-        _ stack: NSStackView, with blocks: [HoverDocument.Block], width: CGFloat, chipBackground: NSColor?
-    ) {
-        var previous: (view: NSView, isHeading: Bool)?
-        for block in blocks {
+        _ stack: NSStackView, with blocks: ArraySlice<HoverDocument.Block>, width: CGFloat, chipBackground: NSColor?,
+        after last: HoverBuiltBlock? = nil, filling height: CGFloat = .infinity
+    ) -> (rest: ArraySlice<HoverDocument.Block>, last: HoverBuiltBlock?) {
+        var previous = last
+        var rest = blocks
+        var filled: CGFloat = 0
+        while let block = rest.first, filled < height {
+            rest = rest.dropFirst()
             let view = blockView(block, width: width, chipBackground: chipBackground)
             let isHeading = if case .heading = block { true } else { false }
             stack.addArrangedSubview(view)
+            var spacing: CGFloat = 0
             if let previous {
-                let spacing =
+                spacing =
                     previous.isHeading
                     ? HoverBlockMetrics.afterHeading
                     : isHeading ? HoverBlockMetrics.beforeHeading : HoverBlockMetrics.blockSpacing
                 stack.setCustomSpacing(spacing, after: previous.view)
             }
+            // Measured only when there is a height to fill: an item's or a quote's blocks are built whole.
+            if height.isFinite { filled += spacing + view.fittingSize.height }
             previous = (view, isHeading)
         }
+        return (rest, previous)
     }
 
     private func blockView(_ block: HoverDocument.Block, width: CGFloat, chipBackground: NSColor?) -> NSView {
@@ -113,7 +166,7 @@ extension HoverDocPanel {
             marker.translatesAutoresizingMaskIntoConstraints = false
             marker.widthAnchor.constraint(equalToConstant: HoverBlockMetrics.markerWidth).isActive = true
             let content = Self.makeBlockStack()
-            fill(content, with: item, width: contentWidth, chipBackground: chipBackground)
+            fill(content, with: item[...], width: contentWidth, chipBackground: chipBackground)
             content.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
             let row = Self.makeRow([marker, content])
             row.widthAnchor.constraint(equalToConstant: width).isActive = true
@@ -127,7 +180,7 @@ extension HoverDocPanel {
     private func quoteBlock(_ blocks: [HoverDocument.Block], width: CGFloat, chipBackground: NSColor?) -> NSView {
         let contentWidth = width - HoverBlockMetrics.quoteBarWidth - HoverBlockMetrics.quoteGap
         let content = Self.makeBlockStack()
-        fill(content, with: blocks, width: contentWidth, chipBackground: chipBackground)
+        fill(content, with: blocks[...], width: contentWidth, chipBackground: chipBackground)
         content.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
         let bar = NSBox()
         bar.boxType = .custom
