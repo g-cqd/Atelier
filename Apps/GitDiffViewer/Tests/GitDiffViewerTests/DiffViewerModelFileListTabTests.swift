@@ -8,7 +8,8 @@ import Testing
 @testable import DiffGit
 @testable import DiffRendering
 
-/// The file list as a fixed first tab while files or folders are open in tabs (book TAB-10): showing it closes no tab.
+/// The file list as a fixed first tab while files or folders are open in tabs (book TAB-10): showing it closes no tab,
+/// and a tab shown again comes back as it was.
 @MainActor
 struct DiffViewerModelFileListTabTests {
     private let harness = ModelTestHarness()
@@ -54,6 +55,49 @@ struct DiffViewerModelFileListTabTests {
         #expect(sut.selectedPath == nil)
         #expect(sut.detailState == .cards)
         #expect(sut.combinedFiles == ["a.swift", "b.swift", "src/c.swift"])
+    }
+
+    @Test
+    func `a file tab shown again after the list comes back where its panes were, not at its first change`()
+        async throws
+    {
+        let sut = try await makeLoadedSUT()
+        sut.pin("a.swift")
+        try await harness.taskProvider.waitForAllTasks()
+        let tab = try #require(sut.tabs.active)
+        let position = PaneScrollPosition(row: 1, offset: 4, x: 0)
+        sut.showFileList()
+        // The panes leave the screen with the list and record where they were, as the pane view does.
+        sut.scrollMemory.record(position, for: .init(path: "a.swift", pane: .old))
+        sut.scrollMemory.record(position, for: .init(path: "a.swift", pane: .new))
+        try await harness.taskProvider.waitForAllTasks()
+
+        sut.activateTab(tab.id)
+        try await harness.taskProvider.waitForAllTasks()
+
+        #expect(sut.selectedPath == "a.swift")
+        if case .file = sut.detailState {} else { Issue.record("expected the file, got \(sut.detailState)") }
+        #expect(sut.scrollRequest == nil)
+        #expect(sut.scrollMemory.position(for: .init(path: "a.swift", pane: .new)) == position)
+    }
+
+    @Test
+    func `a file tab's position is forgotten once its tab closes, so a new tab starts at the first change`()
+        async throws
+    {
+        let sut = try await makeLoadedSUT()
+        sut.pin("a.swift")
+        sut.pin("b.swift")
+        try await harness.taskProvider.waitForAllTasks()
+        sut.scrollMemory.record(PaneScrollPosition(row: 1, offset: 0, x: 0), for: .init(path: "a.swift", pane: .new))
+
+        sut.closeTab(try #require(sut.tabs.tabs.first?.id))
+        sut.pin("a.swift")
+        try await harness.taskProvider.waitForAllTasks()
+
+        #expect(sut.scrollMemory.position(for: .init(path: "a.swift", pane: .new)) == nil)
+        #expect(sut.currentChange == 1)
+        #expect(sut.scrollRequest != nil)
     }
 
     @Test

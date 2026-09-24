@@ -42,6 +42,9 @@ package final class DiffViewerModel {
     /// The palette for the selected Xcode theme, or the system one when none is selected or it cannot be read.
     /// Read once per theme change: it comes from a property list on disk.
     package private(set) var palette: DiffPalette
+    /// Where each open file tab's panes were scrolled, which the panes record as they leave the screen and read back
+    /// when their file shows again.
+    package let scrollMemory = PaneScrollMemory()
     private var timer: OperationTimer
     private var navigator = ChangeNavigator()
 
@@ -289,6 +292,7 @@ package final class DiffViewerModel {
         updateDiagnostics()
         updateFreshness()
         tabs.keepOnly { comparison.contains($0) }
+        retainScrollPositions()
         if let selectedPath, !comparison.contains(selectedPath) {
             applySelection(tabs.activePath, keepingPublished: true)
         } else if selectedPath == nil, tabs.tabs.isEmpty, let singleFiles = comparison.singleFiles {
@@ -395,6 +399,7 @@ package final class DiffViewerModel {
         timer.begin()
         let leftPath = path.map { side == .left ? $0 : comparison.counterpartPath(of: $0, in: .right) }
         if let leftPath { tabs.open(leftPath) } else { tabs.closeAll() }
+        retainScrollPositions()
         applySelection(leftPath, keepingPublished: false)
     }
 
@@ -403,10 +408,12 @@ package final class DiffViewerModel {
         timer.begin()
         let leftPath = side == .left ? path : comparison.counterpartPath(of: path, in: .right)
         tabs.pin(leftPath)
+        retainScrollPositions()
         applySelection(leftPath, keepingPublished: false)
     }
 
-    /// Shows every changed file in the file list's fixed tab; every tab stays open (book TAB-10).
+    /// Shows every changed file in the file list's fixed tab; every tab stays open, and shows as it was when it is
+    /// shown again (book TAB-10).
     package func showFileList() {
         tabs.activateFileList()
         guard selectedPath != nil else { return }
@@ -430,6 +437,7 @@ package final class DiffViewerModel {
 
     package func closeTab(_ id: DiffTab.ID) {
         tabs.close(id)
+        retainScrollPositions()
         guard tabs.activePath != selectedPath else { return }
         timer.begin()
         applySelection(tabs.activePath, keepingPublished: false)
@@ -439,6 +447,8 @@ package final class DiffViewerModel {
     /// one a re-comparison makes, because the selected path went away, keeps what is published until it lands.
     private func applySelection(_ leftPath: String?, keepingPublished: Bool) {
         selectedPath = leftPath
+        // A request made for what showed before means nothing to what shows next, and a pane made anew would act on it.
+        scrollRequest = nil
         navigator.reset()
         folding.reset()
         render(keepingPublished: keepingPublished)
@@ -569,7 +579,9 @@ package final class DiffViewerModel {
                 }
                 if isShowingCombinedFiles {
                     folding.applyDefaults(to: renderedFiles.map(\.path), status: status(ofPath:))
-                } else if isFirst, let rendered, rendered.changeCount > 0, !rendered.keepsScrollPosition {
+                } else if isFirst, let rendered, rendered.changeCount > 0, !rendered.keepsScrollPosition,
+                    !returnsToRememberedPosition
+                {
                     navigator.focusFirst()
                     requestScrollToCurrentChange()
                 }
