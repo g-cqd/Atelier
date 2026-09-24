@@ -3,19 +3,21 @@ public import AtelierParser
 /// Walks a syntax tree and matches query patterns, returning captures.
 ///
 /// Every `execute` returns matches in pre-order: a node's matches come before its descendants', siblings left to right,
-/// and a node's patterns in query order. The walk keeps its path on the heap, so any depth of tree is safe; only a
+/// and a node's patterns in query order. At each node it tries only the patterns whose root can match the node's type
+/// (``Query/candidatePatterns(forType:)``). The walk keeps its path on the heap, so any depth of tree is safe; only a
 /// pattern's own nesting, which ``QueryParser`` bounds, reaches the call stack.
 public enum QueryMatcher: Sendable {
     /// Execute a query against a syntax tree and return all matches.
     ///
-    /// - Complexity: O(n × p) pattern attempts for n nodes and p patterns, and O(depth) memory besides the matches.
+    /// - Complexity: O(n × c) pattern attempts for n nodes and c patterns that can match a node's type, and O(depth)
+    ///   memory besides the matches.
     public static func execute(query: Query, tree: SyntaxTree) -> [QueryMatch] {
         collectMatches(of: query, in: tree, byteRange: nil, pointRange: nil)
     }
 
     /// Execute a query within a byte range; a node that does not overlap it is skipped with its descendants.
     ///
-    /// - Complexity: O(n × p) pattern attempts for the n nodes visited and p patterns.
+    /// - Complexity: O(n × c) pattern attempts for the n nodes visited and c patterns that can match a node's type.
     public static func execute(query: Query, tree: SyntaxTree, byteRange range: Range<Int>)
         -> [QueryMatch]
     {
@@ -25,11 +27,17 @@ public enum QueryMatcher: Sendable {
     /// Execute a query within a point range (row/column); a node that does not overlap it is skipped with its
     /// descendants.
     ///
-    /// - Complexity: O(n × p) pattern attempts for the n nodes visited and p patterns.
+    /// - Complexity: O(n × c) pattern attempts for the n nodes visited and c patterns that can match a node's type.
     public static func execute(query: Query, tree: SyntaxTree, pointRange range: Range<Point>)
         -> [QueryMatch]
     {
         collectMatches(of: query, in: tree, byteRange: nil, pointRange: range)
+    }
+
+    /// Every pattern tried at every node, whatever its type: what `execute(query:tree:)` returned before the patterns
+    /// were indexed by type, kept as the reference its tests compare with.
+    static func executeTryingEveryPattern(query: Query, tree: SyntaxTree) -> [QueryMatch] {
+        collectMatches(of: query, in: tree, byteRange: nil, pointRange: nil, indexed: false)
     }
 
     // MARK: - Private
@@ -38,9 +46,11 @@ public enum QueryMatcher: Sendable {
         of query: Query,
         in tree: SyntaxTree,
         byteRange: Range<Int>?,
-        pointRange: Range<Point>?
+        pointRange: Range<Point>?,
+        indexed: Bool = true
     ) -> [QueryMatch] {
         let source = tree.source
+        let everyPattern = Array(query.patterns.indices)
         var matches: [QueryMatch] = []
         // One entry per level of the current path: that level's siblings and the next one to visit.
         var levels: [(siblings: [SyntaxNode], next: Int)] = [([tree.root], 0)]
@@ -54,9 +64,9 @@ public enum QueryMatcher: Sendable {
             let node = levels[top].siblings[index]
             if let byteRange, !node.byteRange.overlaps(byteRange) { continue }
             if let pointRange, !node.pointRange.overlaps(pointRange) { continue }
-            for (patternIndex, pattern) in query.patterns.enumerated() {
+            for patternIndex in indexed ? query.candidatePatterns(forType: node.type) : everyPattern {
                 var captures: [QueryMatch.Capture] = []
-                if matchPattern(pattern, against: node, source: source, captures: &captures) {
+                if matchPattern(query.patterns[patternIndex], against: node, source: source, captures: &captures) {
                     matches.append(QueryMatch(patternIndex: patternIndex, captures: captures))
                 }
             }
