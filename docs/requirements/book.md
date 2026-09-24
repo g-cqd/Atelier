@@ -162,6 +162,7 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
 | D20 | 09-23 14:53 | Should deadwood keep refusing to follow links out of the repository? | "Keep containment (Recommended)": never follow links out of the repository, and make baselines stable under that rule | DIAG-01 |
 | D21 | 09-24 05:25 | Codex is out of credits until 09-30 20:43, with four jobs stopped mid-work. How should the remaining work continue? | "Claude agents (Recommended)": finish the interrupted jobs and the rest of the queue with Claude subagents, from the saved `wip/*` branches, reviewed and tested the same way before anything merges | PROC-11 |
 | D22 | 09-24 05:25 | Which git identity should Atelier's future commits use? | "Keep the global one": change nothing; history stays as it is | PROC-09 |
+| D23 | 09-24 13:06 | LANG-01: a language-detection toggle, a status-bar language menu, or both? | "lang-01, we can plan for all the things later": both are planned later | LANG-01 |
 
 ## Answered questions (09-23 09:37)
 
@@ -1015,6 +1016,19 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
      dependency is added.
 - **Priority:** Should. **Related:** TAB-03.
 
+#### TAB-10 · The file list as a fixed tab
+- **Statement:** While files or folders are open in tabs, the file list is one more tab, fixed first, so going back
+  to it closes nothing.
+- **Source:** 09-24 13:14 (mid-turn), "it would also be interesting to be able to go back to file list viewing from a button
+  somewhere and without closing all tabs, it would just appear as another fixed tab when viewing single files or
+  folders".
+- **Acceptance criteria:**
+  1. With single files or folders open in tabs, a fixed first tab shows the file list, and selecting it shows the
+     list without closing any tab.
+  2. The other tabs stay open and keep their state, scroll position included.
+  3. The fixed tab cannot be closed or moved.
+- **Priority:** Should. **Related:** TAB-01, PERF-10.
+
 ### GIT: Git features, freshness and reload continuity
 
 #### GIT-01 · Watch the repository and refresh automatically
@@ -1199,6 +1213,17 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   4. Color arrives as attribute-only updates that cause no relayout.
   5. Each budget is set from a measurement, and a benchmark guards it.
 - **Priority:** Must. **Related:** PERF-01, PERF-08, QUAL-08.
+
+#### PERF-10 · Switching between the file list and a single file is quick
+- **Statement:** Opening a file from the file list, and returning to the list by closing the file tabs, happen
+  without a visible stall.
+- **Source:** 09-24 13:14 (mid-turn), "closing all inner tabs and going back to file list is very slow, and going from file list
+  to single file viewing is very slow".
+- **Acceptance criteria:**
+  1. Opening a file from the list shows it within a budget set from a measurement of the current cost.
+  2. Closing the last file tab shows the list within its own measured budget.
+  3. A benchmark guards each.
+- **Priority:** Should. **Related:** PERF-09, TAB-10.
 
 ### JSON: AemiJSON
 
@@ -1429,6 +1454,19 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   3. A regression test reproduces the conditions of the crash.
 - **Priority:** Must. **Related:** CARD-14.
 
+#### CARD-17 · Scrolling always reaches the end of a file
+- **Statement:** Scrolling reaches every file's last line and never stops responding, even while the file updates.
+- **Source:** 09-24 13:14 (mid-turn), "sometimes scrolling through files, maybe being updated at the same time does not allow to
+  scroll to the end of files, scrollable content does block sometimes (work and test work for example had the
+  issue)", meaning `work.py` and `test_work.py` in a comparison of the skills repository.
+- **Acceptance criteria:**
+  1. Scrolling reaches the last line of every file, in the card list and in the single-file view.
+  2. A file whose content changes while shown (a reload, a card still streaming in) keeps a scroll range that covers
+     all of its content.
+  3. Scrolling never stops responding to input.
+  4. A regression test reproduces the conditions that cut the range short.
+- **Priority:** Must. **Related:** CARD-12, CARD-14, PERF-05.
+
 ### DIFF: Diff interaction refinements (roadmap, 09-23)
 
 #### DIFF-01 · Resizable split and stacked panes
@@ -1495,6 +1533,18 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   3. The rename screenshots settle CARD-09's renamed badge.
 - **Priority:** Should. **Related:** DIFF-02, DIFF-03, DIFF-04, CARD-09.
 
+#### DIFF-06 · Revealed lines and their handles stay aligned
+- **Statement:** Revealing lines with a gap handle never leaves stray drawing, and the gutter, the text rows and the
+  handles' separator stay level.
+- **Source:** 09-24 13:14 (mid-turn), "sometimes disclosing lines using the gutter handles creates rendering artifacts and line
+  misalignment, as well as handlers line separator misalignement".
+- **Acceptance criteria:**
+  1. After a handle reveals lines, each line number sits on its text row, and nothing drawn before the reveal is left
+     behind.
+  2. The separator between two handles runs level with the gap row it belongs to.
+  3. Both hold in every layout, in the card list and the single-file view, including while the file updates.
+- **Priority:** Must. **Related:** DIFF-02, CARD-14.
+
 ### REND: A text renderer of our own
 
 #### REND-01 · A measured design for a custom text renderer
@@ -1550,7 +1600,9 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   1. Highlighting, hover and diagnostics all follow the language chosen, so no tier reads a file as another
      language (HOVER-19).
   2. With the feature off or no choice made, the extension decides, as it does now.
-- **Priority:** Could, a proposal to shape. **Related:** HOVER-19.
+- **Decision:** 09-24 13:06, "lang-01, we can plan for all the things later": both options are planned later, not
+  now (D23).
+- **Priority:** Could, planned later. **Related:** HOVER-19.
 
 ## Request index
 
@@ -1663,3 +1715,5 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R103 | 09-23 13:29 | "please perform a regathering of all prompts and requirements" | QUAL-10 |
 | R104 | 09-24 12:27 (mid-turn) | a pasted crash report: a stack overflow in swift-syntax's parser under the doc-comment hover | HOVER-19 |
 | R105 | 09-24 12:30 (mid-turn) | "the swift parser and swift syntax should fail fast and only parse swift files" | HOVER-19, LANG-01 |
+| R106 | 09-24 13:06 | "if it does not override the private skills go ahead for the install, don't push to the public one but create a mirror on my g-cqd please" | PROC-12 (skills repository), D23 |
+| R107 | 09-24 13:14 (mid-turn) | "sometimes disclosing lines using the gutter handles creates rendering artifacts and line misalignment" | DIFF-06, CARD-17, PERF-10, TAB-10 |
