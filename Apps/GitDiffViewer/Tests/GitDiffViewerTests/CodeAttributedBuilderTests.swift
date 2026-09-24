@@ -38,12 +38,17 @@ import Testing
         #expect(color(in: attributed, at: 0) == palette.textColor)
     }
 
-    @Test func anUnrecognizedLanguageTagFallsBackToSwift() {
+    /// A fence that names a language the lexers do not know is not Swift, so it is not colored as Swift.
+    @Test func anUnrecognizedLanguageTagLexesAsPlainText() {
         let code = "let value = 1"
         let attributed = CodeAttributedBuilder.attributedString(
             for: code, languageTag: "not-a-real-language", palette: palette)
-        let keywordOffset = code.utf16Distance(of: "let")
-        #expect(color(in: attributed, at: keywordOffset) == palette.color(for: .keyword))
+        var colors: Set<NSColor> = []
+        attributed.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: attributed.length)) {
+            value, _, _ in
+            if let color = value as? NSColor { colors.insert(color) }
+        }
+        #expect(colors == [palette.textColor])
     }
 
     @Test func aMissingLanguageTagAlsoFallsBackToSwift() {
