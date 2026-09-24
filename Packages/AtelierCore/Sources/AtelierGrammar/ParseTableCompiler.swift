@@ -3,12 +3,12 @@ public struct GrammarCompilationLimits: Sendable, Equatable {
     public var maxExpandedAlternativesPerRule: Int
     public var maxFlattenedProductions: Int
     public var maxProductionSymbols: Int
-    /// The most LR(1) items a state may hold. JSON's largest state holds under 500 and CSS's under 2,000; C's, Java's
-    /// and Go's pass 2,000 at once and would take 30 to 70 s to reach the state limit, and Swift's, which parses
-    /// Swift code only into errors, pass 2,200.
+    /// The most distinct production positions a state may hold, before lookahead sets are attached.
     public var maxItemsPerState: Int
     public var maxStates: Int
     public var maxTransitions: Int
+    /// The total number of LR(1) item and lookahead pairs after core merging.
+    public var maxLookaheadItems: Int
 
     public init(
         maxExpandedAlternativesPerRule: Int = 4_096,
@@ -16,7 +16,8 @@ public struct GrammarCompilationLimits: Sendable, Equatable {
         maxProductionSymbols: Int = 200_000,
         maxItemsPerState: Int = 2_000,
         maxStates: Int = 4_000,
-        maxTransitions: Int = 200_000
+        maxTransitions: Int = 200_000,
+        maxLookaheadItems: Int = 10_000_000
     ) {
         self.maxExpandedAlternativesPerRule = maxExpandedAlternativesPerRule
         self.maxFlattenedProductions = maxFlattenedProductions
@@ -24,6 +25,7 @@ public struct GrammarCompilationLimits: Sendable, Equatable {
         self.maxItemsPerState = maxItemsPerState
         self.maxStates = maxStates
         self.maxTransitions = maxTransitions
+        self.maxLookaheadItems = maxLookaheadItems
     }
 
     public static let `default` = GrammarCompilationLimits()
@@ -31,13 +33,13 @@ public struct GrammarCompilationLimits: Sendable, Equatable {
 
 /// Compiles a GrammarDefinition into an LR parse table.
 ///
-/// A canonical LR(1) compiler that:
+/// A core-merged LR(1) compiler that:
 /// 1. Splits the grammar into tokens and syntactic rules, as tree-sitter does
 /// 2. Flattens the syntactic rules into productions, keeping the precedence and associativity of each step
 /// 3. Computes FIRST sets
-/// 4. Builds LR(1) item sets (states)
+/// 4. Builds LR(0) cores, propagates lookaheads, and separates merges that create reduction conflicts
 /// 5. Fills action/goto tables, resolving shift/reduce conflicts by precedence and associativity as tree-sitter does
-/// 6. Keeps the conflicts precedence can't resolve, for the GLR parser to fork on
+/// 6. Keeps declared and unresolved conflicts for the GLR parser to fork on
 /// 7. Builds the lexer's automaton, with a lex mode for the tokens valid in each state
 public enum ParseTableCompiler: Sendable {
     /// Compiled result containing parse table, lex table, and production rules.
@@ -50,7 +52,7 @@ public enum ParseTableCompiler: Sendable {
     /// The version of what ``compile(_:limits:)`` produces, for caches of compiled tables and of failed compiles to
     /// key on: bumped whenever the outcome of compiling the same grammar changes, tables or error, which a change to
     /// the default limits can do too, so no cache hands out what an older compiler made.
-    public static let formatVersion = 11
+    public static let formatVersion = 12
 
     /// Compile a grammar definition into parse tables.
     public static func compile(
@@ -65,7 +67,6 @@ public enum ParseTableCompiler: Sendable {
         let nonTerminals = collectNonTerminals(flattened)
         let terminals = collectTerminals(flattened, nonTerminals: Set(nonTerminals))
         let grammarProductions = flattened.map { (name: $0.name, symbols: $0.symbols) }
-        let allSymbols = terminals + nonTerminals
 
         let firstSets = computeFirstSets(
             productions: grammarProductions,
@@ -76,16 +77,17 @@ public enum ParseTableCompiler: Sendable {
         let rulesByNT = buildRuleIndex(grammarProductions, nonTerminals: Set(nonTerminals))
 
         // Build item sets
-        let (itemSets, transitions) = try buildItemSets(
+        let (itemSets, transitions) = try CoreItemSetBuilder.build(
             productions: grammarProductions,
             firstSets: firstSets,
             rulesByNonTerminal: rulesByNT,
-            allSymbols: allSymbols,
             limits: limits
         )
 
-        let table = ParseActionResolver(productions: flattened, firstSets: firstSets)
-            .parseTable(itemSets: itemSets, transitions: transitions, terminals: terminals, nonTerminals: nonTerminals)
+        let table = ParseActionResolver(
+            productions: flattened, firstSets: firstSets, conflicts: grammar.conflicts.map(Set.init)
+        )
+        .parseTable(itemSets: itemSets, transitions: transitions, terminals: terminals, nonTerminals: nonTerminals)
 
         let productions = flattened.map { production in
             ProductionRule(
@@ -218,68 +220,5 @@ public enum ParseTableCompiler: Sendable {
             index[prod.name, default: []].append(i)
         }
         return index
-    }
-
-    private static func buildItemSets(
-        productions: [(name: String, symbols: [String])],
-        firstSets: [String: Set<String>],
-        rulesByNonTerminal: [String: [Int]],
-        allSymbols: [String],
-        limits: GrammarCompilationLimits
-    ) throws(GrammarError) -> ([ItemSet], [Int: [(symbol: String, target: Int)]]) {
-        // Initial item: S' → . startSymbol, $end
-        let startItem = LRItem(ruleIndex: 0, dotPosition: 0, lookahead: "$end")
-        let startSet = try ItemSet(items: [startItem])
-            .closure(
-                productions: productions,
-                firstSets: firstSets,
-                rulesByNonTerminal: rulesByNonTerminal,
-                limits: limits
-            )
-
-        var itemSets = [startSet]
-        var setIndex: [ItemSet: Int] = [startSet: 0]
-        var transitions: [Int: [(symbol: String, target: Int)]] = [:]
-        var worklist = [0]
-        var transitionCount = 0
-
-        while let stateIdx = worklist.popLast() {
-            let state = itemSets[stateIdx]
-
-            for symbol in allSymbols {
-                let gotoSet = try state.goto(
-                    symbol: symbol,
-                    productions: productions,
-                    firstSets: firstSets,
-                    rulesByNonTerminal: rulesByNonTerminal,
-                    limits: limits
-                )
-                guard !gotoSet.items.isEmpty else { continue }
-
-                let targetIdx: Int
-                if let existing = setIndex[gotoSet] {
-                    targetIdx = existing
-                } else {
-                    targetIdx = itemSets.count
-                    guard targetIdx < limits.maxStates else {
-                        throw .resourceLimitExceeded(
-                            "Parser state construction exceeded limit (\(targetIdx + 1) states, limit \(limits.maxStates))"
-                        )
-                    }
-                    itemSets.append(gotoSet)
-                    setIndex[gotoSet] = targetIdx
-                    worklist.append(targetIdx)
-                }
-                transitions[stateIdx, default: []].append((symbol: symbol, target: targetIdx))
-                transitionCount += 1
-                guard transitionCount <= limits.maxTransitions else {
-                    throw .resourceLimitExceeded(
-                        "Parser transitions exceeded limit (\(transitionCount) transitions, limit \(limits.maxTransitions))"
-                    )
-                }
-            }
-        }
-
-        return (itemSets, transitions)
     }
 }

@@ -1,4 +1,4 @@
-/// Fills a parse table's actions from its LR(1) states, choosing between a shift and the reductions that compete
+/// Fills a parse table's actions from its core-merged LR states, choosing between a shift and the reductions that compete
 /// with it the way tree-sitter does.
 ///
 /// Among the reductions for a lookahead, only those of the highest precedence stay. Against them, a shift's
@@ -8,6 +8,7 @@
 struct ParseActionResolver {
     let productions: [FlatProduction]
     let firstSets: [String: Set<String>]
+    let conflicts: [Set<String>]
 
     /// The table of `itemSets` and their `transitions`, over `terminals` then `nonTerminals`.
     func parseTable(
@@ -66,6 +67,19 @@ struct ParseActionResolver {
         // The augmented rule's end is the accept.
         guard !completedRules.contains(0) else { return .accept }
 
+        if preservesDeclaredConflict(
+            on: lookahead, shift: shift, completedRules: completedRules, in: itemSet)
+        {
+            var actions = completedRules.sorted()
+                .map { rule in
+                    Action.reduce(
+                        ruleIndex: rule, count: productions[rule].steps.count,
+                        nonTerminal: productions[rule].name)
+                }
+            if let shift { actions.append(.shift(shift)) }
+            return .conflict(actions)
+        }
+
         var reductions: [Int] = []
         var reductionPrecedence = Int.min
         for rule in completedRules.sorted() {
@@ -95,6 +109,24 @@ struct ParseActionResolver {
             case .neither:
                 return .conflict(reduceActions + [.shift(shift)])
         }
+    }
+
+    /// A declared ambiguity keeps every competing action, even if precedence would select one.
+    private func preservesDeclaredConflict(
+        on lookahead: String, shift: Int?, completedRules: [Int], in itemSet: ItemSet
+    ) -> Bool {
+        guard !conflicts.isEmpty, completedRules.count + (shift == nil ? 0 : 1) > 1 else { return false }
+        var participants = Set(completedRules.map { productions[$0].name })
+        if shift != nil {
+            for item in itemSet.items {
+                let steps = productions[item.ruleIndex].steps
+                guard item.dotPosition < steps.count,
+                    steps[item.dotPosition].symbol == lookahead
+                else { continue }
+                participants.insert(productions[item.ruleIndex].name)
+            }
+        }
+        return conflicts.contains { !$0.isEmpty && $0 == participants }
     }
 
     private enum Winner {
