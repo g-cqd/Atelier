@@ -130,7 +130,8 @@ struct DocHoverControllerTests {
         controller: DocHoverController, spy: ResolverSpy, taskProvider: TaskProviderSpy
     ) {
         let taskProvider = TaskProviderSpy.tolerant()
-        let controller = DocHoverController(taskProvider: taskProvider, debounce: debounce)
+        let controller = DocHoverController(
+            taskProvider: taskProvider, debounce: debounce, panel: HoverDocPanel(ordersWindowIn: false))
         let spy = ResolverSpy(holdsLookups: holdingLookups)
         controller.resolve = { hit in await spy.resolve(hit) }
         return (controller, spy, taskProvider)

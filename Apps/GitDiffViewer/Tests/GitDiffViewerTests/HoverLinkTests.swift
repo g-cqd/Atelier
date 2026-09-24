@@ -81,7 +81,7 @@ struct HoverLinkTests {
 
     /// A panel showing ``everySlot`` whose opener records what it is asked to open.
     private func shownPanel(recordingInto opened: OpenedLinks) -> HoverDocPanel {
-        let panel = HoverDocPanel(openLink: { opened.record($0) })
+        let panel = HoverDocPanel(openLink: { opened.record($0) }, ordersWindowIn: false)
         panel.show(
             document: Self.everySlot, anchorRect: NSRect(x: 0, y: 100, width: 40, height: 16), in: makeHostTextView())
         return panel
