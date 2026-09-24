@@ -48,7 +48,7 @@ struct SGREncoderTests {
     }
 
     @Test
-    func `Indexed color < 8`() {
+    func `Indexed color below 8`() {
         let style = Style(fg: .indexed(1))
         let bytes = SGREncoder.encode(style)
         // Should use 31 (red)
@@ -57,7 +57,7 @@ struct SGREncoderTests {
     }
 
     @Test
-    func `Indexed color >= 16`() {
+    func `Indexed color 16 and above`() {
         let style = Style(fg: .indexed(200))
         let bytes = SGREncoder.encode(style)
         let expected: [UInt8] = [0x1b, 0x5b] + "38;5;200".utf8 + [0x6d]
