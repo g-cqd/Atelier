@@ -27,7 +27,7 @@ extension SyntaxTree {
     /// adjusted. The source text is left as it was.
     public func applying(edit: TextEdit) -> SyntaxTree {
         let newRoot = applyEdit(to: root, edit: edit)
-        return SyntaxTree(root: newRoot, source: source)
+        return SyntaxTree(root: newRoot, source: source, errorByteCount: errorByteCount)
     }
 
     private func applyEdit(to node: SyntaxNode, edit: TextEdit) -> SyntaxNode {

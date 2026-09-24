@@ -99,8 +99,10 @@ extension GLRParser {
         }
         let extras = best.extras
         let end = best.cursor.point
+        let errorByteCount = best.errorByteCount
         let root = try buildRootNode(from: consume best, byteCount: utf8.count, endPoint: end)
-        return SyntaxTree(root: attachingExtras(extras, to: consume root), source: source)
+        return SyntaxTree(
+            root: attachingExtras(extras, to: consume root), source: source, errorByteCount: errorByteCount)
     }
 
     /// Reads an external token first when one is valid, then the current state's internal lexical mode.

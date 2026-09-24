@@ -21,6 +21,34 @@ struct SyntaxTreeTests {
     }
 
     @Test
+    func `A tree built by hand counts each byte under its outermost error nodes once`() {
+        let inner = SyntaxNode(type: "ERROR", byteRange: 3 ..< 5, isError: true)
+        let outer = SyntaxNode(type: "ERROR", children: [inner], byteRange: 2 ..< 6, isError: true)
+        let overlapping = SyntaxNode(type: "ERROR", byteRange: 5 ..< 9, isError: true)
+        let clean = SyntaxNode(type: "word", byteRange: 10 ..< 14)
+        let root = SyntaxNode(type: "root", children: [outer, overlapping, clean], byteRange: 0 ..< 20)
+
+        let tree = SyntaxTree(root: root, source: String(repeating: "x", count: 20))
+
+        #expect(tree.errorByteCount == 7)
+    }
+
+    @Test
+    func `A parse counts the bytes of the tokens it could not take`() throws {
+        let grammar = GrammarDefinition(
+            name: "words",
+            rules: [("source", .repeat1(.symbol("word"))), ("word", .pattern("[a-z]+"))],
+            extras: [.pattern(#"\s"#)])
+        let compiled = try ParseTableCompiler.compile(grammar)
+        let parser = GLRParser(
+            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+
+        let tree = try parser.parse("ab 12")
+
+        #expect(tree.errorByteCount == 2)
+    }
+
+    @Test
     func `Node at byte offset`() {
         let child1 = SyntaxNode(type: "a", byteRange: 0 ..< 3)
         let child2 = SyntaxNode(type: "b", byteRange: 3 ..< 6)
