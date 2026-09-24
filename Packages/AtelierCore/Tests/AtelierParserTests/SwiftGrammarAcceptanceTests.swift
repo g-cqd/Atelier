@@ -8,6 +8,24 @@ import Testing
 /// Opt-in parse measurements against the pinned Swift 0.7.3 grammar.
 @Suite
 struct SwiftGrammarAcceptanceTests {
+    /// Tree-sitter reads `@Test` as the class's modifier. Offered `_implicit_semi` after `Test`, which only another
+    /// context of the merged state could take, the scanner ended the attribute there and the parse left five ERROR
+    /// nodes.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["ATELIER_SWIFT_GRAMMAR"] != nil))
+    func `the pinned annotation corpus case reads its attribute as the class's modifier`() throws {
+        let path = try #require(ProcessInfo.processInfo.environment["ATELIER_SWIFT_GRAMMAR"])
+        let grammar = try GrammarLoader.load(from: path)
+        let compiled = try ParseTableCompiler.compile(grammar)
+        let parser = GrammarParser(
+            parseTable: compiled.parseTable, lexTable: compiled.lexTable,
+            productions: compiled.productions)
+
+        let tree = try parser.parse("@Test\nclass Empty { }\n", externalScanner: SwiftExternalScanner())
+
+        #expect(!tree.root.containsError)
+        #expect(Self.nodes("class_declaration", in: tree.root).map(\.byteRange) == [0 ..< 21])
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["ATELIER_SWIFT_GRAMMAR"] != nil))
     func `parses repository Swift files with the bundled external scanner`() throws {
         let path = try #require(ProcessInfo.processInfo.environment["ATELIER_SWIFT_GRAMMAR"])
@@ -106,5 +124,16 @@ struct SwiftGrammarAcceptanceTests {
             end = max(end, range.upperBound)
         }
         return (nodes, errors, covered)
+    }
+
+    /// The nodes of type `type` in the tree of `root`, in source order.
+    private static func nodes(_ type: String, in root: SyntaxNode) -> [SyntaxNode] {
+        var found: [SyntaxNode] = []
+        var pending = [root]
+        while let node = pending.popLast() {
+            if node.type == type { found.append(node) }
+            pending.append(contentsOf: node.children.reversed())
+        }
+        return found
     }
 }
