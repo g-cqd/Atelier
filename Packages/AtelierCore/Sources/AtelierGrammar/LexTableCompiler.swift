@@ -200,7 +200,8 @@ public enum LexTableCompiler: Sendable {
 extension LexTableCompiler {
     /// The table of a lexer for `tokens` that reads each token in a lex mode: one for each distinct set in
     /// `validTokens`, the valid tokens of each parse state, and an error mode for every token that may follow a
-    /// separator. A token that is not immediate may follow any of `separators`, which the lexer leaves out of it.
+    /// separator but does not start as one does. A token that is not immediate may follow any of `separators`, which
+    /// the lexer leaves out of it.
     /// - Throws: `GrammarError.invalidRuleType` for a token rule the automaton can't read;
     ///   `.resourceLimitExceeded` when an automaton passes its limit.
     static func compile(
@@ -243,7 +244,12 @@ extension LexTableCompiler {
         for valid in validTokens {
             stateModes.append(try mode(for: valid))
         }
-        let errorMode = try mode(for: tokens.indices.filter { !tokens[$0].isImmediate })
+        // The error mode, as tree-sitter's, leaves out the tokens that conflict with the others it holds, of which those
+        // that can read a separator as their own text are the ones that matter: read on an error, a string's text runs
+        // over everything up to the next quote.
+        let startingLikeSeparators = nfa.tokensStartingLikeSeparators()
+        let errorMode = try mode(
+            for: tokens.indices.filter { !tokens[$0].isImmediate && !startingLikeSeparators.contains($0) })
         return LexTable(
             tokens: tokens.map { LexToken(name: $0.name, isNamed: $0.isNamed, isExtra: $0.isExtra) },
             automaton: builder.states,

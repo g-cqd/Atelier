@@ -192,7 +192,8 @@ public struct LexTable: Sendable, Equatable, Codable {
     public var modeStarts: [Int]
     /// The lex mode of each parse state.
     public var stateModes: [Int]
-    /// The mode to read a token in when no stack's mode reads one: every token that may follow a separator.
+    /// The mode to read a token in when no stack's mode reads one: every token that may follow a separator, but those
+    /// that may start as a separator does.
     public var errorMode: Int?
     /// The lexical token designated by the grammar's `word` field, if any.
     public var wordToken: Int?
