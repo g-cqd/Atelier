@@ -18,6 +18,7 @@ public enum BundledScanners {
         "toml": TOMLExternalScanner.self,
         "html": HTMLExternalScanner.self,
         "bash": BashExternalScanner.self,
-        "yaml": YAMLExternalScanner.self
+        "yaml": YAMLExternalScanner.self,
+        "markdown": MarkdownExternalScanner.self
     ]
 }
