@@ -86,7 +86,8 @@ let package = Package(
             dependencies: [
                 "KittyFileTree", .product(name: "AtelierProcess", package: "AtelierCore"),
                 .product(name: "AtelierGit", package: "AtelierCore"),
-                .product(name: "AtelierDiff", package: "AtelierCore")
+                .product(name: "AtelierDiff", package: "AtelierCore"),
+                .product(name: "AtelierText", package: "AtelierCore")
             ],
             swiftSettings: strict),
 
@@ -202,7 +203,9 @@ let package = Package(
         .testTarget(
             name: "KittyCodeTests",
             dependencies: [
-                "KittyEditor", "KittyFileTree", "KittyWorkspace", .product(name: "AemiTesting", package: "aemi")
+                "KittyEditor", "KittyFileTree", "KittyWorkspace",
+                .product(name: "AtelierText", package: "AtelierCore"),
+                .product(name: "AemiTesting", package: "aemi")
             ],
             swiftSettings: strict),
         .testTarget(
@@ -211,7 +214,9 @@ let package = Package(
         .testTarget(
             name: "KittyWorkspaceTests",
             dependencies: [
-                "KittyWorkspace", .product(name: "AemiIO", package: "aemi"),
+                "KittyWorkspace", .product(name: "AtelierText", package: "AtelierCore"),
+                .product(name: "AtelierFileTree", package: "AtelierCore"),
+                .product(name: "AemiIO", package: "aemi"),
                 .product(name: "AemiTesting", package: "aemi")
             ],
             swiftSettings: strict),
@@ -220,6 +225,8 @@ let package = Package(
             dependencies: [
                 "KittyGit", .product(name: "AtelierProcess", package: "AtelierCore"),
                 .product(name: "AtelierTestSupport", package: "AtelierCore"),
+                .product(name: "AtelierFileTree", package: "AtelierCore"),
+                .product(name: "AtelierText", package: "AtelierCore"),
                 .product(name: "AemiRuntime", package: "aemi")
             ],
             swiftSettings: strict)
