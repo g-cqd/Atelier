@@ -85,6 +85,32 @@ struct HoverDocPanelTests {
         try assertNoWastedSpace(document)
     }
 
+    /// A parameter's description wraps at the width its column really has, whatever the names' column takes: wrapped
+    /// narrower than it is laid out, its last lines fall below its frame, cut off.
+    @Test(arguments: ["id", "aConsiderablyLongerParameterName"])
+    func `a parameter's description shows every line it wraps to, however wide the names are`(name: String) throws {
+        let text = String(repeating: "The description wraps over several lines in the panel. ", count: 4)
+        let document = HoverDocument(
+            summary: prose("Configures a capture session."),
+            parameters: [HoverDocument.Field(name: name, text: prose(text))])
+        let panel = HoverDocPanel(ordersWindowIn: false)
+        panel.prepareOffscreenForTests(document: document, appearance: try #require(NSAppearance(named: .aqua)))
+        let root = try #require(panel.contentViewForTests)
+        root.layoutSubtreeIfNeeded()
+        var pending = [root]
+        var description: NSTextField?
+        while let view = pending.popLast(), description == nil {
+            pending.append(contentsOf: view.subviews)
+            if let field = view as? NSTextField, field.stringValue == text { description = field }
+        }
+        let field = try #require(description)
+        let cell = try #require(field.cell)
+
+        let needed = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: field.frame.width, height: 10_000)).height
+
+        #expect(field.frame.height >= needed - 0.5, "\(field.frame) needs \(needed)")
+    }
+
     /// A provenance adds nothing to the panel's height: the panel draws no footer.
     @Test func provenanceStillHasNoFooterFootprint() throws {
         let withProvenance = HoverDocument(

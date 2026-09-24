@@ -387,17 +387,22 @@ extension HoverDocPanel {
             parametersGrid.removeRow(at: parametersGrid.numberOfRows - 1)
             views.forEach { $0.removeFromSuperview() }
         }
-        var nameColumnWidth: CGFloat = 0
-        for parameter in parameters {
-            let nameLabel = NSTextField(labelWithString: parameter.name)
-            nameLabel.font = .monospacedSystemFont(ofSize: 11, weight: .semibold)
-            nameLabel.textColor = .labelColor
+        let nameLabels = parameters.map { parameter in
+            let label = NSTextField(labelWithString: parameter.name)
+            label.font = .monospacedSystemFont(ofSize: 11, weight: .semibold)
+            label.textColor = .labelColor
+            return label
+        }
+        let nameColumnWidth = nameLabels.map { ceil($0.intrinsicContentSize.width) }.max() ?? 0
+        // The descriptions wrap at the width their column has once the names take theirs, so their height counts
+        // every line they are laid out on.
+        let textColumnWidth =
+            HoverPanelSizing.width - 2 * HoverPanelMetrics.edgeInset - nameColumnWidth - parametersGrid.columnSpacing
+        for (parameter, nameLabel) in zip(parameters, nameLabels) {
             let textLabel = NSTextField(labelWithAttributedString: parameter.text)
             textLabel.lineBreakMode = .byWordWrapping
-            textLabel.preferredMaxLayoutWidth =
-                HoverPanelSizing.width - 2 * HoverPanelMetrics.edgeInset - 90
+            textLabel.preferredMaxLayoutWidth = max(textColumnWidth, 1)
             parametersGrid.addRow(with: [nameLabel, textLabel])
-            nameColumnWidth = max(nameColumnWidth, ceil(nameLabel.intrinsicContentSize.width))
         }
         // The names' column is as wide as the widest name, and the text's takes the rest of the grid's width: sized
         // to their content alone, the two columns would share that rest in no set way.
