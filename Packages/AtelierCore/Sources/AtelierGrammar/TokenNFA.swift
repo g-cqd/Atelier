@@ -138,7 +138,7 @@ struct TokenNFA: Sendable, Equatable, Codable {
                 return next
             case .prec(let value, let content), .precLeft(let value, let content), .precRight(let value, let content):
                 var inner = context
-                inner.precedence = value
+                inner.precedence = value.lexicalValue
                 return try expand(content, next: next, in: inner)
             case .precDynamic(_, let content), .token(let content), .immediateToken(let content),
                 .field(_, let content), .alias(let content, _, _):

@@ -63,6 +63,24 @@ public enum PrecedenceEntry: Sendable, Equatable {
     case literal(String)
 }
 
+// MARK: - Precedence
+
+/// A rule's precedence: a number, or a name the grammar's `precedences` lists order against other names and symbols.
+public enum Precedence: Sendable, Hashable, ExpressibleByIntegerLiteral {
+    case integer(Int)
+    case name(String)
+
+    public init(integerLiteral value: Int) {
+        self = .integer(value)
+    }
+
+    /// The number a lexical rule completes with: a named precedence orders syntactic rules only, and counts as 0.
+    var lexicalValue: Int {
+        if case .integer(let value) = self { return value }
+        return 0
+    }
+}
+
 // MARK: - Rule
 
 public indirect enum Rule: Sendable, Equatable {
@@ -74,9 +92,9 @@ public indirect enum Rule: Sendable, Equatable {
     case `repeat`(Rule)
     case repeat1(Rule)
     case optional(Rule)
-    case prec(Int, Rule)
-    case precLeft(Int, Rule)
-    case precRight(Int, Rule)
+    case prec(Precedence, Rule)
+    case precLeft(Precedence, Rule)
+    case precRight(Precedence, Rule)
     case precDynamic(Int, Rule)
     case token(Rule)
     case immediateToken(Rule)
