@@ -128,3 +128,7 @@ they show, are in `xcode-reference.md`.
    to its first change three rows below the top of the visible area, clear of the toolbar and the tab bar (today it
    lands offset). A setting, on by default, turns the scroll off so files open at their top; a tab that comes back to
    where it was left keeps that position either way.
+6. **Scroll range and scrolling settings (user-requested 09-24, book CARD-19 and SET-09).** A pane's scroll range
+   ends with its last line at the bottom (today TextKit's estimates and the scroll-past-end space leave a lot of empty
+   room below the file). A scrolling settings group holds "Bounce at the edges" (off, as now), "Scroll past the last
+   line" (off) and "Scroll to the first change when a file opens" (on).
