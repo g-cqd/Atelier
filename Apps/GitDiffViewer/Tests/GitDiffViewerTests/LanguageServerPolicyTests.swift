@@ -44,12 +44,7 @@ private final class ScratchRepositories {
 
 @MainActor
 struct LanguageServerPolicyTests {
-    private func makeDefaults() throws -> UserDefaults {
-        let name = "GitDiffViewerTests.lspPolicy.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
-        return defaults
-    }
+    private let scratchDefaults = ScratchDefaults(tag: "lspPolicy")
 
     /// Writes `location` as the project at `root` would through its window's settings, the way Settings writes it.
     private func setProjectLocation(_ location: ToolLocation, root: URL, defaults: UserDefaults) {
@@ -79,7 +74,7 @@ struct LanguageServerPolicyTests {
         let repositories = try ScratchRepositories()
         let disabled = try repositories.repository("disabled")
         let other = try repositories.repository("other")
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         setProjectLocation(ToolLocation(isEnabled: false), root: disabled, defaults: defaults)
         let spy = LocateSpy()
         let policy = try makePolicy(defaults: defaults, locate: spy.locate, trusting: [disabled, other])
@@ -96,7 +91,7 @@ struct LanguageServerPolicyTests {
     func `a project's override wins over the app-wide value, custom path included`() async throws {
         let repositories = try ScratchRepositories()
         let root = try repositories.repository("project")
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         setAppWideLocation(ToolLocation(isEnabled: false), defaults: defaults)
         let pinned = ToolLocation(isEnabled: true, customPath: "/opt/sourcekit-lsp")
         setProjectLocation(pinned, root: root, defaults: defaults)
@@ -112,7 +107,7 @@ struct LanguageServerPolicyTests {
         let root = try repositories.repository("project")
         let folder = root.appending(path: "Sources/Feature", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         setProjectLocation(ToolLocation(isEnabled: false), root: root, defaults: defaults)
         let policy = try makePolicy(defaults: defaults, locate: LocateSpy().locate, trusting: [root, folder])
 
@@ -125,7 +120,7 @@ struct LanguageServerPolicyTests {
         let repositories = try ScratchRepositories()
         let root = try repositories.repository("project")
         let outside = try #require(SourceKitLSPRegistry.canonicalRoot(repositories.parent))
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let appWide = ToolLocation(isEnabled: true, customPath: "/opt/sourcekit-lsp")
         setAppWideLocation(appWide, defaults: defaults)
         let policy = try makePolicy(defaults: defaults, locate: LocateSpy().locate, trusting: [])
@@ -138,7 +133,7 @@ struct LanguageServerPolicyTests {
     func `the SDK tier honours only the app-wide value`() async throws {
         let repositories = try ScratchRepositories()
         let root = try repositories.repository("project")
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         setProjectLocation(ToolLocation(isEnabled: false), root: root, defaults: defaults)
         let spy = LocateSpy()
         let policy = try makePolicy(defaults: defaults, locate: spy.locate, trusting: [])

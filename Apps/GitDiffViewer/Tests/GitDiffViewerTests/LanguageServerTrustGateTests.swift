@@ -30,13 +30,13 @@ private struct TrustGate {
     let registry: SourceKitLSPRegistry
     let factory = FactorySpy()
     let tasks = TaskProviderSpy.tolerant()
+    /// The suite the trust decisions and the settings persist to, removed with the gate.
+    private let scratchDefaults = ScratchDefaults(tag: "trustGate")
 
     /// - Parameter appWideLocation: sourcekit-lsp's app-wide setting, written as Settings writes it.
-    /// - Throws: When the scratch defaults suite or the root cannot be created.
+    /// - Throws: When the root cannot be created.
     init(appWideLocation: ToolLocation? = nil) throws {
-        let name = "GitDiffViewerTests.trustGate.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
+        let defaults = scratchDefaults.defaults
         if let appWideLocation {
             ViewerSettings(defaults: defaults).lspServerLocations = [LanguageServerPolicy.serverID: appWideLocation]
         }

@@ -12,6 +12,10 @@ import Testing
 /// (TOOL-01 criterion 3).
 @MainActor
 struct ToolStatusBoardTests {
+    private let scratchDefaults = ScratchDefaults(tag: "board")
+    /// A second window's suite, so the tool the superseded refresh's window pins stays out of the newer one's.
+    private let otherScratchDefaults = ScratchDefaults(tag: "board")
+
     @Test
     func `Refresh finds a tool the login shell's PATH gained since the last probe`() async throws {
         let temp = FileManager.default.temporaryDirectory.appending(
@@ -35,7 +39,7 @@ struct ToolStatusBoardTests {
         let discovery = ToolDiscovery(
             runner: runner, bundledDirectory: nil, homeDirectory: temp.appending(path: "home"),
             environment: ["SHELL": "/bin/zsh"], wellKnownDirectories: [])
-        let settings = ViewerSettings(defaults: try Self.makeDefaults())
+        let settings = ViewerSettings(defaults: scratchDefaults.defaults)
         let sut = ToolStatusBoard(discovery: discovery)
         await sut.refreshAll(for: settings, rediscovering: false)
         #expect(sut.statuses[DiagnosticTool.swiftlint.rawValue]?.isAvailable == false)
@@ -74,9 +78,9 @@ struct ToolStatusBoardTests {
         let discovery = ToolDiscovery(
             runner: runner, bundledDirectory: nil, homeDirectory: temp.appending(path: "home"),
             environment: ["SHELL": "/bin/zsh"], wellKnownDirectories: [])
-        let older = ViewerSettings(defaults: try Self.makeDefaults())
+        let older = ViewerSettings(defaults: scratchDefaults.defaults)
         older.toolLocations[.swiftformat] = ToolLocation(customPath: pinned.path)
-        let newer = ViewerSettings(defaults: try Self.makeDefaults())
+        let newer = ViewerSettings(defaults: otherScratchDefaults.defaults)
         let sut = ToolStatusBoard(discovery: discovery)
         let olderRefresh = Task { await sut.refreshAll(for: older, rediscovering: false) }
         try await firstProbe.expectOpen()
@@ -87,12 +91,5 @@ struct ToolStatusBoardTests {
 
         #expect(sut.statuses[DiagnosticTool.swiftformat.rawValue]?.isAvailable == false)
         #expect(!sut.isRefreshing)
-    }
-
-    private static func makeDefaults() throws -> UserDefaults {
-        let name = "GitDiffViewerTests.board.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
-        return defaults
     }
 }

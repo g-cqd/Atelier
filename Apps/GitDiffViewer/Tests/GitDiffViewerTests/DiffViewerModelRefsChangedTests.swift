@@ -12,6 +12,7 @@ import Testing
 @MainActor
 struct DiffViewerModelRefsChangedTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
+    private let scratchDefaults = ScratchDefaults(tag: "refsChanged")
 
     private nonisolated static func treeOutput(path: String) -> ProcessOutput {
         .success("100644 blob deadbeef 3\t\(path)")
@@ -40,23 +41,18 @@ struct DiffViewerModelRefsChangedTests {
         }
     }
 
-    private func makeSUT(runner: any ProcessRunner, taskProvider: TaskProviderSpy) -> (DiffViewerModel, () -> Void) {
-        let suite = "GitDiffViewerTests.refsChanged.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite) ?? .standard
-        defaults.removePersistentDomain(forName: suite)
-        let model = DiffViewerModel(
-            settings: ViewerSettings(defaults: defaults),
+    private func makeSUT(runner: any ProcessRunner, taskProvider: TaskProviderSpy) -> DiffViewerModel {
+        DiffViewerModel(
+            settings: ViewerSettings(defaults: scratchDefaults.defaults),
             reader: SourceLoader(runner: runner, pool: LoaderTestPool.shared),
             taskProvider: taskProvider)
-        return (model, { defaults.removePersistentDomain(forName: suite) })
     }
 
     @Test
     func `a refs change recomposes a HEAD-versus-working-tree comparison, picking up the new commit`() async throws {
         let taskProvider = TaskProviderSpy.tolerant()
         let headTree = HeadTree()
-        let (sut, cleanup) = makeSUT(runner: makeRunner(headTree: headTree), taskProvider: taskProvider)
-        defer { cleanup() }
+        let sut = makeSUT(runner: makeRunner(headTree: headTree), taskProvider: taskProvider)
         sut.attachFreshness()
 
         let repository = RepositoryInfo(root: Self.root, branches: ["main"], tags: [], commits: [])
@@ -77,8 +73,7 @@ struct DiffViewerModelRefsChangedTests {
     func `a refs change with both sides on the working tree only refreshes repository info`() async throws {
         let taskProvider = TaskProviderSpy.tolerant()
         let headTree = HeadTree()
-        let (sut, cleanup) = makeSUT(runner: makeRunner(headTree: headTree), taskProvider: taskProvider)
-        defer { cleanup() }
+        let sut = makeSUT(runner: makeRunner(headTree: headTree), taskProvider: taskProvider)
         sut.attachFreshness()
 
         let repository = RepositoryInfo(root: Self.root, branches: ["main"], tags: [], commits: [])

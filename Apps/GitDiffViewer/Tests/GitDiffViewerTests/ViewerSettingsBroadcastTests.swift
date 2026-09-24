@@ -12,9 +12,11 @@ import Testing
 /// reaches every other instance's unoverridden keys without a reopen.
 @MainActor
 struct ViewerSettingsBroadcastTests {
+    private let scratchDefaults = ScratchDefaults(tag: "broadcast")
+
     @Test
     func `a base edit on one instance reflects on another sharing the same defaults`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let a = ViewerSettings(defaults: defaults)
         let b = ViewerSettings(defaults: defaults)
 
@@ -25,7 +27,7 @@ struct ViewerSettingsBroadcastTests {
 
     @Test
     func `a base edit does not override a key the receiving instance's own project already overrides`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let a = ViewerSettings(defaults: defaults)
         let b = ViewerSettings(defaults: defaults)
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
@@ -40,7 +42,7 @@ struct ViewerSettingsBroadcastTests {
 
     @Test
     func `a broadcast is applied without re-broadcasting, so it never reaches a third instance twice`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let a = ViewerSettings(defaults: defaults)
         let b = ViewerSettings(defaults: defaults)
         let c = ViewerSettings(defaults: defaults)
@@ -60,7 +62,7 @@ struct ViewerSettingsBroadcastTests {
 
     @Test
     func `a theme change on one instance fires the palette category on another, not a re-comparison category`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let a = ViewerSettings(defaults: defaults)
         let b = ViewerSettings(defaults: defaults)
 
@@ -77,7 +79,7 @@ struct ViewerSettingsBroadcastTests {
 
     @Test
     func `a badge scheme edit on one instance reaches another window's settings`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let a = ViewerSettings(defaults: defaults)
         let b = ViewerSettings(defaults: defaults)
 
@@ -88,7 +90,7 @@ struct ViewerSettingsBroadcastTests {
 
     @Test
     func `following the theme's appearance on one instance reaches another window's settings`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let a = ViewerSettings(defaults: defaults)
         let b = ViewerSettings(defaults: defaults)
 
@@ -99,7 +101,7 @@ struct ViewerSettingsBroadcastTests {
 
     @Test
     func `a base edit broadcast to a window on a project writes no override and registers no project`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let settingsWindow = ViewerSettings(defaults: defaults)
         let window = ViewerSettings(defaults: defaults)
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
@@ -114,7 +116,7 @@ struct ViewerSettingsBroadcastTests {
 
     @Test
     func `base edits keep reaching a window whose project overrides nothing`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let settingsWindow = ViewerSettings(defaults: defaults)
         let window = ViewerSettings(defaults: defaults)
         window.adoptProject(ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory)))
@@ -127,7 +129,7 @@ struct ViewerSettingsBroadcastTests {
 
     @Test
     func `overridden in N projects counts only the projects the user edited`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let settingsWindow = ViewerSettings(defaults: defaults)
         let edited = ProjectIdentity(root: URL(filePath: "/repos/edited", directoryHint: .isDirectory))
         let untouched = ProjectIdentity(root: URL(filePath: "/repos/untouched", directoryHint: .isDirectory))
@@ -148,7 +150,7 @@ struct ViewerSettingsBroadcastTests {
 
     @Test
     func `a project's own value edited on one instance reaches another window on that project`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
         let settingsWindow = ViewerSettings(defaults: defaults)
         settingsWindow.adoptProject(project)
@@ -162,7 +164,7 @@ struct ViewerSettingsBroadcastTests {
 
     @Test
     func `clearing a project's override falls a window on that project back to the default`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
         let window = ViewerSettings(defaults: defaults)
         window.adoptProject(project)
@@ -176,7 +178,7 @@ struct ViewerSettingsBroadcastTests {
 
     @Test
     func `hiding the sidebar in one window leaves another window's sidebar alone`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let window = ViewerSettings(defaults: defaults)
         let other = ViewerSettings(defaults: defaults)
 
@@ -187,7 +189,7 @@ struct ViewerSettingsBroadcastTests {
 
     @Test
     func `a new window opens with the sidebar as the last window left it`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         ViewerSettings(defaults: defaults).sidebarVisibility = .detailOnly
 
         #expect(ViewerSettings(defaults: defaults).sidebarVisibility == .detailOnly)
@@ -195,7 +197,7 @@ struct ViewerSettingsBroadcastTests {
 
     @Test
     func `a project-scoped write on one instance does not broadcast to another instance's base value`() throws {
-        let defaults = try makeDefaults()
+        let defaults = scratchDefaults.defaults
         let a = ViewerSettings(defaults: defaults)
         let b = ViewerSettings(defaults: defaults)
         let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
@@ -205,12 +207,5 @@ struct ViewerSettingsBroadcastTests {
 
         #expect(a.contextLines == 9)
         #expect(b.contextLines == 3)  // b never adopted the project and never saw a base broadcast
-    }
-
-    private func makeDefaults() throws -> UserDefaults {
-        let name = "GitDiffViewerTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
-        return defaults
     }
 }

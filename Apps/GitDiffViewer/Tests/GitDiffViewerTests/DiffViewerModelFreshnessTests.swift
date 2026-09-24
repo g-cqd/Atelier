@@ -21,7 +21,7 @@ struct DiffViewerModelFreshnessTests {
     private let clock = TestClock()
     private let reader = ScriptedGitReader()
     private let watchers = WatcherFactory()
-    private let defaultsCleanup = DefaultsCleanup()
+    private let scratchDefaults = ScratchDefaults(tag: "freshness")
 
     private static func entry(_ path: String, _ blob: String) -> SourceEntry {
         SourceEntry(relativePath: path, blobID: blob, size: 1)
@@ -32,11 +32,8 @@ struct DiffViewerModelFreshnessTests {
     }
 
     private func makeSUT() -> DiffViewerModel {
-        let suite = "GitDiffViewerTests.freshness.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite) ?? .standard
-        defaults.removePersistentDomain(forName: suite)
-        defaultsCleanup.register(suite)
-        return DiffViewerModel(settings: ViewerSettings(defaults: defaults), reader: reader, taskProvider: taskProvider)
+        DiffViewerModel(
+            settings: ViewerSettings(defaults: scratchDefaults.defaults), reader: reader, taskProvider: taskProvider)
     }
 
     /// `HEAD` at commit `c1` against its working tree, both listing `tree`, with the watcher attached.

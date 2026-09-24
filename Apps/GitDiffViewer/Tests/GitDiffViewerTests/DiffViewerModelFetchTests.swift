@@ -12,6 +12,7 @@ import Testing
 @MainActor
 struct DiffViewerModelFetchTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
+    private let scratchDefaults = ScratchDefaults(tag: "fetch")
 
     private nonisolated static func treeOutput(path: String) -> ProcessOutput {
         .success("100644 blob deadbeef 3\t\(path)")
@@ -45,23 +46,18 @@ struct DiffViewerModelFetchTests {
         }
     }
 
-    private func makeSUT(runner: any ProcessRunner, taskProvider: TaskProviderSpy) -> (DiffViewerModel, () -> Void) {
-        let suite = "GitDiffViewerTests.fetch.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite) ?? .standard
-        defaults.removePersistentDomain(forName: suite)
-        let model = DiffViewerModel(
-            settings: ViewerSettings(defaults: defaults),
+    private func makeSUT(runner: any ProcessRunner, taskProvider: TaskProviderSpy) -> DiffViewerModel {
+        DiffViewerModel(
+            settings: ViewerSettings(defaults: scratchDefaults.defaults),
             reader: SourceLoader(runner: runner, pool: LoaderTestPool.shared),
             taskProvider: taskProvider)
-        return (model, { defaults.removePersistentDomain(forName: suite) })
     }
 
     @Test
     func `a fetch on a side parked on a remote-tracking ref reloads the comparison`() async throws {
         let taskProvider = TaskProviderSpy.tolerant()
         let tree = RemoteTree()
-        let (sut, cleanup) = makeSUT(runner: makeRunner(tree: tree), taskProvider: taskProvider)
-        defer { cleanup() }
+        let sut = makeSUT(runner: makeRunner(tree: tree), taskProvider: taskProvider)
         sut.attachFreshness()
 
         let repository = RepositoryInfo(root: Self.root, branches: ["main", "origin/develop"], tags: [], commits: [])
@@ -84,8 +80,7 @@ struct DiffViewerModelFetchTests {
         let taskProvider = TaskProviderSpy.tolerant()
         let tree = RemoteTree()
         let runner = makeRunner(tree: tree)
-        let (sut, cleanup) = makeSUT(runner: runner, taskProvider: taskProvider)
-        defer { cleanup() }
+        let sut = makeSUT(runner: runner, taskProvider: taskProvider)
         let clock = TestClock()
         let watchers = WatcherFactory()
         sut.attachFreshness(clock: clock, makeWatcher: watchers.makeWatcher)
@@ -121,8 +116,7 @@ struct DiffViewerModelFetchTests {
     func `a fetch on a side parked on a local branch does not reload the comparison`() async throws {
         let taskProvider = TaskProviderSpy.tolerant()
         let tree = RemoteTree()
-        let (sut, cleanup) = makeSUT(runner: makeRunner(tree: tree), taskProvider: taskProvider)
-        defer { cleanup() }
+        let sut = makeSUT(runner: makeRunner(tree: tree), taskProvider: taskProvider)
         sut.attachFreshness()
 
         let repository = RepositoryInfo(root: Self.root, branches: ["main", "origin/develop"], tags: [], commits: [])

@@ -21,16 +21,13 @@ struct ModelTestHarness {
     static let leftURL = URL(filePath: "/left", directoryHint: .isDirectory)
     static let rightURL = URL(filePath: "/right", directoryHint: .isDirectory)
 
-    /// Removes the suites `makeSUT` created once the harness, and with it the test, is gone.
-    private let defaultsCleanup = DefaultsCleanup()
+    /// The suite the models `makeSUT` builds keep their settings in, removed once the harness, and with it the test,
+    /// is gone.
+    let scratchDefaults = ScratchDefaults(tag: "model")
 
     func makeSUT() -> DiffViewerModel {
-        let suite = "GitDiffViewerTests.model.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite) ?? .standard
-        defaults.removePersistentDomain(forName: suite)
-        defaultsCleanup.register(suite)
-        return DiffViewerModel(
-            settings: ViewerSettings(defaults: defaults), reader: reader, taskProvider: taskProvider,
+        DiffViewerModel(
+            settings: ViewerSettings(defaults: scratchDefaults.defaults), reader: reader, taskProvider: taskProvider,
             uptime: uptime.provider, clock: clock)
     }
 
@@ -68,21 +65,6 @@ struct ModelTestHarness {
         let gate = AsyncProbe<Void>()
         reader.gate[url.path(percentEncoded: false)] = gate
         return gate
-    }
-}
-
-/// Forgets the persistent domains a test's models wrote, so no preference file outlives the run.
-final class DefaultsCleanup: Sendable {
-    private let suites = Mutex<[String]>([])
-
-    func register(_ suite: String) {
-        suites.withLock { $0.append(suite) }
-    }
-
-    deinit {
-        for suite in suites.withLock({ $0 }) {
-            UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
-        }
     }
 }
 
