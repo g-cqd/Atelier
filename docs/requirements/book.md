@@ -1631,6 +1631,8 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
      no gap.
   2. A file with a change keeps its isolated hunks and gaps.
   3. The card list is not affected: a card for such a file shows its header alone (D28).
+  4. In the card list, that card has no content section at all: no seam, no empty pane, no fold control. It stays
+     collapsed and cannot be expanded (R118).
 - **Priority:** Must. **Related:** DIFF-02, CARD-09.
 
 #### DIFF-08 · A file opens on its first change, placed right, and the scroll can be turned off
@@ -1645,7 +1647,8 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   2. A setting, on by default, chooses whether opening a file scrolls to its first change; off, a file opens at its
      top. It sits with the diff settings and in the view options.
   3. A file tab that comes back to where it was left (TAB-10) keeps that position whatever the setting.
-- **Priority:** Must (criterion 1, a reported bug); Should (criteria 2 and 3). **Related:** TAB-10, PERF-10, CARD-17.
+  4. A file that fits in the pane whole opens at its top, fully shown, with no scroll to its first change (R118).
+- **Priority:** Must (criteria 1 and 4); Should (criteria 2 and 3). **Related:** TAB-10, PERF-10, CARD-17, SET-09.
 
 ### REND: A text renderer of our own
 
@@ -1829,3 +1832,4 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R115 | 09-24 | "sometimes, double clicking a file or selecting it in the file list opens it in a completely unscrollable state, it can be for a small or big file, i'm completely unable to scroll" | CARD-17 (criterion 5) |
 | R116 | 09-24 | "the auto scrolling to the first change in the file is not working correctly, it's offset, and this should be a toggleable behaviour, add that to the roadmap" | DIFF-08 |
 | R117 | 09-24 | "there's a bug with the overscroll that creates a lot of empty space below the file that allows for more scrolling than necessary, the bouncing of scroll (and the fact we disabled it) should be a setting" | CARD-19, SET-09 |
+| R118 | 09-24 | "when a file fits in the view, we should not scroll to the first change, we should just display the file fully, and in the card list, a renamed file without change should not change a file content section (be collapsed and not expandable)" | DIFF-08 (criterion 4), DIFF-07 (criterion 4) |
