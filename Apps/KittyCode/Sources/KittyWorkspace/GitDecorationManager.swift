@@ -62,6 +62,7 @@ public final class GitDecorationManager {
         self.debouncedConsumer = taskProvider.task(role: .observation) { [weak self, stream, clock] in
             for await _ in stream {
                 try? await clock.sleep(for: .milliseconds(debounceMs))
+                guard !Task.isCancelled else { return }
                 guard let self else { return }
                 await self.performRefresh()
             }
@@ -114,8 +115,19 @@ public final class GitDecorationManager {
             return
         }
 
-        let lines = textBuffer.lines
-        let decorations = await provider.lineDecorations(for: path, lines: lines)
+        let rope = textBuffer.ropeSnapshot
+        let decorationTask = taskProvider.detachedTask(role: .work) {
+            if let ropeProvider = provider as? any RopeGitLineDecorationProvider {
+                return await ropeProvider.lineDecorations(for: path, rope: rope)
+            }
+            return await provider.lineDecorations(for: path, lines: rope.allLines)
+        }
+        let decorations = await withTaskCancellationHandler {
+            await decorationTask.value
+        } onCancel: {
+            decorationTask.cancel()
+        }
+        guard !Task.isCancelled else { return }
         apply(decorations, for: path, version: version)
     }
 
@@ -166,11 +178,5 @@ public final class GitDecorationManager {
 
         buffer.gitLineDecorations = .empty
         invalidateRender()
-    }
-
-    nonisolated private static func approximateDocumentByteCount(lines: [String]) -> Int {
-        lines.reduce(into: max(0, lines.count - 1)) { count, line in
-            count += line.utf8.count
-        }
     }
 }

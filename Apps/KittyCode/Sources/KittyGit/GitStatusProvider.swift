@@ -1,6 +1,7 @@
 import AtelierDiff
 public import AtelierGit
 public import AtelierProcess
+public import AtelierText
 import Foundation
 public import KittyFileTree
 import Synchronization
@@ -8,7 +9,7 @@ import os
 
 /// The working tree's git statuses and per-line change markers for open buffers, read through the core git
 /// client under strict isolation, cached until the next refresh.
-public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvider, Sendable {
+public final class GitStatusProvider: FileStatusProvider, RopeGitLineDecorationProvider, Sendable {
     private enum BaseContent: Sendable {
         case missing
         case text(String, lines: [Substring])
@@ -27,6 +28,8 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         var baseContents: [String: BaseContent] = [:]
         /// The base reads in flight under `appliedGeneration`, which concurrent requests for a path join.
         var baseReads: [String: Task<BaseContent, Never>] = [:]
+        var normalizedPaths: [String: String] = [:]
+        var pathNormalizationCount = 0
         /// The last refresh started, and the newest whose result is applied: refreshes run concurrently, so an
         /// older one can finish after a newer one.
         var startedGeneration: UInt64 = 0
@@ -55,9 +58,11 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
     }
 
     public func status(for path: String) -> FileStatus? {
-        let normalizedPath = Self.normalizePath(path)
-        return lock.withLock { $0.statuses[normalizedPath] }
+        let normalized = normalizedPath(path)
+        return lock.withLock { $0.statuses[normalized] }
     }
+
+    var _testPathNormalizationCount: Int { lock.withLock { $0.pathNormalizationCount } }
 
     public var branchName: String? {
         lock.withLock { $0.branch }
@@ -86,14 +91,20 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         }
         let root = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
         var statuses: [String: FileStatus] = [:]
+        var normalizedPaths: [String: String] = [:]
         for (relative, status) in snapshot.statusesByPath(includingDirectories: true) {
-            statuses[Self.normalizePath(root + relative)] = status
+            let path = root + relative
+            let normalized = Self.normalizePath(path)
+            normalizedPaths[path] = normalized
+            statuses[normalized] = status
         }
         lock.withLock { state in
             guard generation > state.appliedGeneration else { return }
             state.appliedGeneration = generation
             state.branch = snapshot.branch?.head
             state.statuses = statuses
+            state.normalizedPaths = normalizedPaths
+            state.pathNormalizationCount += normalizedPaths.count
             state.summary = snapshot.summary
             // HEAD may have moved: bases cached or still being read under the previous status are dropped.
             state.baseContents.removeAll(keepingCapacity: true)
@@ -102,8 +113,8 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
     }
 
     public func lineDecorations(for path: String, lines: [String]) async -> GitLineDecorations {
-        let normalizedPath = Self.normalizePath(path)
-        let status = status(for: normalizedPath)
+        let normalizedPath = normalizedPath(path)
+        let status = lock.withLock { $0.statuses[normalizedPath] }
         if lines.isEmpty { return .empty }
         if status == .untracked { return Self.addedLineDecorations(for: lines, color: .untracked) }
         guard let relativePath = relativePath(for: normalizedPath) else { return .empty }
@@ -118,6 +129,21 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         }
     }
 
+    public func lineDecorations(for path: String, rope: Rope) async -> GitLineDecorations {
+        let normalizedPath = normalizedPath(path)
+        let status = lock.withLock { $0.statuses[normalizedPath] }
+        if status == .untracked { return Self.addedLineDecorations(for: rope, color: .untracked) }
+        guard let relativePath = relativePath(for: normalizedPath) else { return .empty }
+
+        switch await readBaseContent(for: normalizedPath, relativePath: relativePath) {
+            case .missing:
+                guard status == .added else { return .empty }
+                return Self.addedLineDecorations(for: rope, color: .added)
+            case .text(_, let baseLines):
+                return Self.lineDecorations(baseLines: baseLines, currentRope: rope, addedColor: .added)
+        }
+    }
+
     /// The gutter marks of `current` against `base` and, for each modified line, the words that changed, both
     /// from the shared diff engine.
     static func lineDecorations(base: [String], current: [String], addedColor: FileStatusColor) -> GitLineDecorations {
@@ -128,15 +154,34 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
     static func lineDecorations(baseLines old: [Substring], currentLines new: [Substring], addedColor: FileStatusColor)
         -> GitLineDecorations
     {
-        let edits = LineDiff.diffLines(old: SubstringLines(old), new: SubstringLines(new))
-        let markers = LineChangeMarkers(edits: edits, newLineCount: new.count)
+        lineDecorations(baseLines: old, current: SubstringLines(new), lineAt: { new[$0] }, addedColor: addedColor)
+    }
+
+    static func lineDecorations(baseLines old: [Substring], currentRope new: Rope, addedColor: FileStatusColor)
+        -> GitLineDecorations
+    {
+        guard let source = RopeLineSource(rope: new) else { return .empty }
+        return lineDecorations(
+            baseLines: old, current: source, lineAt: { source.line(at: $0) }, addedColor: addedColor)
+    }
+
+    private static func lineDecorations(
+        baseLines old: [Substring], current: some DiffSource, lineAt: (Int) -> Substring,
+        addedColor: FileStatusColor
+    ) -> GitLineDecorations {
+        guard !Task.isCancelled else { return .empty }
+        let edits = LineDiff.diffLines(old: SubstringLines(old), new: current)
+        guard !Task.isCancelled else { return .empty }
+        let markers = LineChangeMarkers(edits: edits, newLineCount: current.lineCount)
         guard !markers.isEmpty else { return .empty }
         var emphasis: [Int: [ClosedRange<Int>]] = [:]
         for pair in LineChangeMarkers.modifiedPairs(edits: edits) {
-            guard let ranges = IntralineDiff.emphasis(old: old[pair.old], new: new[pair.new], granularity: .word)?.new,
+            guard !Task.isCancelled else { return .empty }
+            let newLine = lineAt(pair.new)
+            guard let ranges = IntralineDiff.emphasis(old: old[pair.old], new: newLine, granularity: .word)?.new,
                 !ranges.isEmpty
             else { continue }
-            emphasis[pair.new] = Self.characterRanges(ranges, in: new[pair.new])
+            emphasis[pair.new] = Self.characterRanges(ranges, in: newLine)
         }
         return GitLineDecorations(
             markers: markers.byLine.mapValues { change in
@@ -227,6 +272,18 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
         URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL.path
     }
 
+    private func normalizedPath(_ path: String) -> String {
+        if let cached = lock.withLock({ $0.normalizedPaths[path] }) { return cached }
+        let normalized = Self.normalizePath(path)
+        return lock.withLock { state in
+            if let cached = state.normalizedPaths[path] { return cached }
+            if state.normalizedPaths.count >= 16_384 { state.normalizedPaths.removeAll(keepingCapacity: true) }
+            state.normalizedPaths[path] = normalized
+            state.pathNormalizationCount += 1
+            return normalized
+        }
+    }
+
     /// The lines of `content`, each ended by LF, CRLF or a lone CR, as a buffer holds its file's text: a final line
     /// break leaves an empty last line. Swift folds CRLF into one `Character`, so the split runs on UTF-8 bytes.
     /// - Complexity: O(n) in the UTF-8 length of `content`.
@@ -255,5 +312,15 @@ public final class GitStatusProvider: FileStatusProvider, GitLineDecorationProvi
     static func addedLineDecorations(for lines: [String], color: FileStatusColor) -> GitLineDecorations {
         guard !lines.isEmpty else { return .empty }
         return GitLineDecorations(markers: Dictionary(uniqueKeysWithValues: lines.indices.map { ($0, color) }))
+    }
+
+    static func addedLineDecorations(for rope: Rope, color: FileStatusColor) -> GitLineDecorations {
+        var markers: [Int: FileStatusColor] = [:]
+        markers.reserveCapacity(rope.lineCount)
+        for line in 0 ..< rope.lineCount {
+            if line.isMultiple(of: RopeLineSource.chunkSize), Task.isCancelled { return .empty }
+            markers[line] = color
+        }
+        return GitLineDecorations(markers: markers)
     }
 }
