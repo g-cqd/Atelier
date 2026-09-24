@@ -106,15 +106,7 @@ package final class HoverDocPanel {
     /// appearance it matches.
     package func show(document: HoverDocument, anchorRect: NSRect, in textView: NSTextView) {
         guard let hostWindow = textView.window, let screen = hostWindow.screen else { return }
-        let panel = panel ?? makePanel()
-        self.panel = panel
-        panel.appearance = textView.effectiveAppearance
-        let contentHeight = render(document)
-
-        let (height, scrolls) = HoverPanelSizing.clampedHeight(forContentHeight: contentHeight)
-        bodyScrollView.hasVerticalScroller = scrolls
-        let size = NSSize(width: HoverPanelSizing.width, height: height)
-        panel.setContentSize(size)
+        let (panel, size) = prepare(document: document, appearance: textView.effectiveAppearance)
 
         setOrigin(forAnchorRect: anchorRect, panelSize: size, in: textView, hostWindow: hostWindow, screen: screen)
 
@@ -124,6 +116,23 @@ package final class HoverDocPanel {
             isVisible = true
         }
         attachedWindow = hostWindow
+    }
+
+    /// Builds and sizes the same panel as ``show(document:anchorRect:in:)`` without ordering a window on screen.
+    package func prepareOffscreenForTests(document: HoverDocument, appearance: NSAppearance) {
+        _ = prepare(document: document, appearance: appearance)
+    }
+
+    private func prepare(document: HoverDocument, appearance: NSAppearance) -> (NSPanel, NSSize) {
+        let panel = panel ?? makePanel()
+        self.panel = panel
+        panel.appearance = appearance
+        let contentHeight = render(document)
+        let (height, scrolls) = HoverPanelSizing.clampedHeight(forContentHeight: contentHeight)
+        bodyScrollView.hasVerticalScroller = scrolls
+        let size = NSSize(width: HoverPanelSizing.width, height: height)
+        panel.setContentSize(size)
+        return (panel, size)
     }
 
     /// Moves a visible panel to `anchorRect`, in `textView`'s coordinates, without re-rendering or resizing it; a
@@ -304,6 +313,8 @@ package final class HoverDocPanel {
         bodyScrollView.isHidden = body.length == 0
 
         let bodyFullHeight = bodyScrollView.isHidden ? 0 : Self.measuredHeight(of: body, width: innerWidth)
+        // The scroll view keeps its zero-size document view unless we give the text its measured bounds.
+        bodyTextView.setFrameSize(NSSize(width: innerWidth, height: bodyFullHeight))
         bodyHeight?.constant = 0
         contentStack.layoutSubtreeIfNeeded()
         let chromeHeight = contentStack.fittingSize.height
@@ -333,7 +344,7 @@ extension HoverDocPanel {
         for parameter in parameters {
             let nameLabel = NSTextField(labelWithString: parameter.name)
             nameLabel.font = .monospacedSystemFont(ofSize: 11, weight: .semibold)
-            nameLabel.textColor = .secondaryLabelColor
+            nameLabel.textColor = .labelColor
             let textLabel = NSTextField(labelWithAttributedString: parameter.text)
             textLabel.lineBreakMode = .byWordWrapping
             textLabel.preferredMaxLayoutWidth =
@@ -466,7 +477,7 @@ extension HoverDocPanel {
     fileprivate static func makeSectionLabel(_ title: String) -> NSTextField {
         let label = NSTextField(labelWithString: title.uppercased())
         label.font = .systemFont(ofSize: 10, weight: .semibold)
-        label.textColor = .tertiaryLabelColor
+        label.textColor = .labelColor
         return label
     }
 }
