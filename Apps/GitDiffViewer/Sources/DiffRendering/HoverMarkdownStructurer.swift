@@ -2,7 +2,7 @@ import Foundation
 
 /// Parses the hover markdown sourcekit-lsp and the doc-comment index produce into plain-text pieces: a leading
 /// fenced declaration, a summary paragraph and discussion, a `- Parameters:` list or `- Parameter name:` items, and a
-/// `- Returns:` item. Blocks
+/// `- Returns:` item, each callout matched whatever its case. Blocks
 /// separated by a `---` line are overload candidates; the first is the primary document.
 package enum HoverMarkdownStructurer {
     package struct Field: Sendable, Equatable {
@@ -243,7 +243,7 @@ package enum HoverMarkdownStructurer {
                 index += 1
                 continue
             }
-            if trimmed == "- Parameters:" {
+            if callout("Parameters:", opening: trimmed)?.isEmpty == true {
                 index += 1
                 while index < lines.count, isIndented(lines[index]) {
                     let item = lines[index].trimmingCharacters(in: .whitespaces)
@@ -272,8 +272,8 @@ package enum HoverMarkdownStructurer {
                 parameters.append(Field(name: name, text: fieldText))
                 continue
             }
-            if trimmed.hasPrefix("- Returns:") {
-                var text = String(trimmed.dropFirst("- Returns:".count)).trimmingCharacters(in: .whitespaces)
+            if let rest = callout("Returns:", opening: trimmed) {
+                var text = rest.trimmingCharacters(in: .whitespaces)
                 index += 1
                 while index < lines.count, isContinuation(lines[index]) {
                     text += " " + lines[index].trimmingCharacters(in: .whitespaces)
@@ -291,12 +291,24 @@ package enum HoverMarkdownStructurer {
     /// The name and text of a `- Parameter name: text` item, the form that documents one parameter on its own; nil
     /// for any other line, and for an item whose name is empty or holds a space.
     private static func singularParameter(_ trimmed: String) -> (name: String, text: String)? {
-        let marker = "- Parameter "
-        guard trimmed.hasPrefix(marker), let colon = trimmed.firstIndex(of: ":") else { return nil }
-        let name = trimmed[trimmed.index(trimmed.startIndex, offsetBy: marker.count) ..< colon]
+        guard let rest = callout("Parameter ", opening: trimmed), let colon = rest.firstIndex(of: ":") else {
+            return nil
+        }
+        let name = rest[rest.startIndex ..< colon]
         guard !name.isEmpty, !name.contains(where: \.isWhitespace) else { return nil }
-        let text = trimmed[trimmed.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+        let text = rest[rest.index(after: colon)...].trimmingCharacters(in: .whitespaces)
         return (String(name), text)
+    }
+
+    /// What follows `- ` and `keyword` at the start of `trimmed`, the keyword matched whatever its case, as Swift's
+    /// markup reads its callouts; nil when the line opens with anything else.
+    private static func callout(_ keyword: String, opening trimmed: String) -> Substring? {
+        guard trimmed.hasPrefix("- ") else { return nil }
+        let afterBullet = trimmed.dropFirst(2)
+        guard afterBullet.count >= keyword.count,
+            afterBullet.prefix(keyword.count).caseInsensitiveCompare(keyword) == .orderedSame
+        else { return nil }
+        return afterBullet.dropFirst(keyword.count)
     }
 
     private static func isIndented(_ line: String) -> Bool {
