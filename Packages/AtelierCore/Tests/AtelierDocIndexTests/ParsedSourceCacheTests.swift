@@ -40,6 +40,17 @@ struct ParsedSourceCacheTests {
     }
 
     @Test
+    func `a document that is not Swift is never parsed`() async throws {
+        let provider = try await makeProvider()
+        let query = HoverQuery(documentURI: "file:///script.py", content: "a = load()\n", line: 0, utf16Column: 5)
+
+        let content = try await provider.hover(query)
+
+        #expect(content == nil)
+        #expect(parses.value == 0)
+    }
+
+    @Test
     func `two hovers in the same document parse it once`() async throws {
         let provider = try await makeProvider()
 
