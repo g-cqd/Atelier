@@ -92,9 +92,18 @@ package final class HoverDocPanel {
     private var bodyHeight: NSLayoutConstraint?
     private var returnsHeight: NSLayoutConstraint?
 
-    /// - Parameter openLink: Opens a clicked link that ``HoverDocument/openableURL(forLink:)`` allows; a refused
-    ///   link reaches nothing, not even `NSTextView`'s own fallback.
-    package init(openLink: @escaping @MainActor (URL) -> Void = HoverDocPanel.openInDefaultApp) {
+    /// Whether ``show(document:anchorRect:in:)`` orders the panel's window in; a panel that does not is shown in
+    /// every other respect, sized and placed, for tests that must put no window on screen.
+    private let ordersWindowIn: Bool
+
+    /// - Parameters:
+    ///   - openLink: Opens a clicked link that ``HoverDocument/openableURL(forLink:)`` allows; a refused link reaches
+    ///     nothing, not even `NSTextView`'s own fallback.
+    ///   - ordersWindowIn: Whether showing orders the panel's window in; false only in tests.
+    package init(
+        openLink: @escaping @MainActor (URL) -> Void = HoverDocPanel.openInDefaultApp, ordersWindowIn: Bool = true
+    ) {
+        self.ordersWindowIn = ordersWindowIn
         let linkDelegate = HoverLinkDelegate(open: openLink)
         self.linkDelegate = linkDelegate
         summaryView = HoverDocPanel.makeProseTextView(linkDelegate: linkDelegate)
@@ -120,8 +129,10 @@ package final class HoverDocPanel {
         setOrigin(forAnchorRect: anchorRect, panelSize: size, in: textView, hostWindow: hostWindow, screen: screen)
 
         if !isVisible {
-            hostWindow.addChildWindow(panel, ordered: .above)
-            panel.orderFront(nil)
+            if ordersWindowIn {
+                hostWindow.addChildWindow(panel, ordered: .above)
+                panel.orderFront(nil)
+            }
             isVisible = true
         }
         attachedWindow = hostWindow
@@ -181,8 +192,10 @@ package final class HoverDocPanel {
     /// Hides the panel and detaches it from its host window; a no-op when it is not showing.
     package func close() {
         guard let panel, isVisible else { return }
-        attachedWindow?.removeChildWindow(panel)
-        panel.orderOut(nil)
+        if ordersWindowIn {
+            attachedWindow?.removeChildWindow(panel)
+            panel.orderOut(nil)
+        }
         isVisible = false
         pointerIsInside = false
         attachedWindow = nil
@@ -500,8 +513,14 @@ extension HoverDocPanel {
 
 extension HoverDocPanel {
     /// `NSTrackingArea` calls its owner by selector, so the Objective-C names are pinned.
-    @objc(mouseEntered:) fileprivate func mouseEntered(with event: NSEvent) { pointerIsInside = true }
-    @objc(mouseExited:) fileprivate func mouseExited(with event: NSEvent) { pointerIsInside = false }
+    @objc(mouseEntered:) fileprivate func mouseEntered(with event: NSEvent) { pointerEntered() }
+    @objc(mouseExited:) fileprivate func mouseExited(with event: NSEvent) { pointerExited() }
+
+    /// The pointer came over the panel: the testable core of its tracking area's `mouseEntered`.
+    package func pointerEntered() { pointerIsInside = true }
+
+    /// The pointer left the panel: the testable core of its tracking area's `mouseExited`.
+    package func pointerExited() { pointerIsInside = false }
 
     /// A hairline separator sized to the panel's inner width, set ahead of the first candidate.
     fileprivate static func makeCandidatesSeparator() -> NSBox {
