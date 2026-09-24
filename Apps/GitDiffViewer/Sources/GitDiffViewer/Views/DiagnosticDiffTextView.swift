@@ -20,6 +20,8 @@ struct DiagnosticDiffTextView: View {
     var scrollRequest: ScrollRequest?
     var splitController: SplitPaneController?
     var onGapDrag: ((GapDragEvent) -> Void)?
+    /// Called once the pane shows a new render; without one, the pane reports its own text to the model, as each
+    /// pane of a side-by-side file does.
     var onDisplayed: (() -> Void)?
 
     @State private var overlay = DiagnosticOverlay()
@@ -34,7 +36,7 @@ struct DiagnosticDiffTextView: View {
             rendered: rendered, gutter: gutter, keepsScrollPosition: keepsScrollPosition, wrapsLines: wrapsLines,
             wrapColumn: wrapColumn, showsMinimap: showsMinimap, syncsScrolling: syncsScrolling,
             scrollRequest: scrollRequest, splitController: splitController, onGapDrag: onGapDrag,
-            onDisplayed: onDisplayed,
+            onDisplayed: onDisplayed ?? { [model, id = rendered.id] in model.noteDisplayed(text: id) },
             hoverEnabled: model.settings.showsHoverDocumentation && model.hoverDocs != nil,
             hoverResolver: hoverResolver,
             diagnosticOverlay: model.settings.diagnosticsEnabled ? overlay : nil, diagnosticsVersion: version,
