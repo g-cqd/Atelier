@@ -312,6 +312,24 @@ import Testing
         #expect(document.returns == nil)
     }
 
+    /// A heading over nothing but fields would stand over nothing once they move to their own sections; a heading
+    /// with prose of its own, or one its author left empty, stays.
+    @Test(arguments: [
+        ("## Errors\n\n- Parameter url: Where.\n- Returns: It.", "Reads it."),
+        ("Errors\n======\n\n- Returns: It.", "Reads it."),
+        ("## Errors\n\n### Detail\n\n- Returns: It.\n\n## After\n\nMore.", "Reads it.\n\n## After\n\nMore."),
+        ("## Errors\n\n- Returns: It.\n\nThrows on a bad line.", "Reads it.\n\n## Errors\n\nThrows on a bad line."),
+        ("## Empty\n\n## Next\n\nText.", "Reads it.\n\n## Empty\n\n## Next\n\nText."),
+        ("```\n## Errors\n```\n\n- Returns: It.", "Reads it.\n\n```\n## Errors\n```")
+    ])
+    func `a heading with nothing but fields under it is dropped`(tail: String, discussion: String) {
+        let markdown = "```swift\nfunc load() throws\n```\n\nLoads it.\n\nReads it.\n\n" + tail
+        let document = HoverMarkdownStructurer.structure(markdown)
+        // Where a field stood, a run of blank lines may be left, which markdown reads as one.
+        let shown = document.discussion?.replacing(/\n{3,}/, with: "\n\n")
+        #expect(shown?.trimmingCharacters(in: .whitespacesAndNewlines) == discussion)
+    }
+
     @Test
     func `a singular Parameter line inside a code block stays in the code`() {
         let markdown = "```swift\nfunc f()\n```\n\nParses.\n\n```swift\n- Parameter x: not a field\n```"
