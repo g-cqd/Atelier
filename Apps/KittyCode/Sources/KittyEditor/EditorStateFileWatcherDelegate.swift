@@ -1,3 +1,5 @@
+import AemiCore
+import Foundation
 import KittyApp
 public import KittyWorkspace
 
@@ -34,5 +36,39 @@ extension EditorState: FileWatcherDelegate {
 
     public func fileWatcherDidReloadInactiveBuffer(buffer: DocumentBuffer, content: String) {
         schedulePostLoadProcessing(for: buffer, content: content)
+    }
+}
+
+extension EditorState {
+    /// Replaces the active buffer's text with its file's, discarding unsaved edits: `:e!` and the reload command. The
+    /// reload is one undo step, so undo brings the edits back, unsaved against the file.
+    public func reloadActiveBufferFromDisk() {
+        guard let buffer = bufferManager.activeBuffer, !buffer.filePath.isEmpty else {
+            statusMessage = "No file to reload"
+            return
+        }
+        guard !buffer.isSavingInBackground else {
+            statusMessage = "\(buffer.fileName) is being autosaved: reload again in a moment"
+            return
+        }
+        taskProvider.task(role: .work) { [weak self, weak buffer, offloadFileRead] in
+            guard let self, let buffer else { return }
+            do {
+                // While the buffer is active its live text and cursor sit in the workspace: the undo step starts there.
+                let reloaded = try await buffer.reloadFromDisk(offloadFileRead: offloadFileRead) {
+                    if self.bufferManager.activeBuffer === buffer { self.saveStateToActiveBuffer() }
+                }
+                if let reloaded, self.bufferManager.activeBuffer === buffer {
+                    self.fileWatcherDidReloadActiveBuffer(buffer: buffer, content: reloaded.content)
+                } else if let reloaded {
+                    self.fileWatcherDidReloadInactiveBuffer(buffer: buffer, content: reloaded.content)
+                } else {
+                    self.statusMessage = "\(buffer.fileName) changed while reloading: reload again to discard it"
+                }
+            } catch {
+                self.statusMessage = "Cannot reload \(buffer.fileName): \(error.localizedDescription)"
+            }
+            self.renderRefreshSource?.invalidate()
+        }
     }
 }
