@@ -167,6 +167,7 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
 | D25 | 09-24 | Should the card list itself stop bouncing at its ends, like its code panes? | "no": the list keeps its bounce | CARD-18 |
 | D26 | 09-24 | Keep Fable 5.1 for the security-auditor and orchestrator agents (2.5 times Opus 5.5's price)? | "keep" | PROC (agent roster) |
 | D27 | 09-24 | The order of the remaining work | "reassess and reorder, maybe use work to prioritize even": the backlog is loaded into the shared work queue and ordered by value per effort, correctness first | PROC-13 |
+| D28 | 09-24 | A card for a file without a changed line (DIFF-07): a "Renamed without changes" note, the whole content, or the header alone? | "header only in the file list": the card keeps its header alone; only the single-file view shows such a file whole | DIFF-07 |
 
 ## Answered questions (09-23 09:37)
 
@@ -1590,6 +1591,19 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   3. Both hold in every layout, in the card list and the single-file view, including while the file updates.
 - **Priority:** Must. **Related:** DIFF-02, CARD-14.
 
+#### DIFF-07 · A file without a change still shows its content
+- **Statement:** While changes are isolated, a file shown on its own that has no changed line, such as a file renamed
+  without changes, shows all of its lines instead of an empty pane.
+- **Source:** 09-24, "when changes are isolated, some "renamed" files show empty content in single file viewing",
+  then (mid-turn) "it might be due to no change happening within the file / then maybe that's normal but imo we should
+  still show the content".
+- **Acceptance criteria:**
+  1. With changes isolated, the single-file view of a file whose two sides have no changed line shows every line, with
+     no gap.
+  2. A file with a change keeps its isolated hunks and gaps.
+  3. The card list is not affected: a card for such a file shows its header alone (D28).
+- **Priority:** Must. **Related:** DIFF-02, CARD-09.
+
 ### REND: A text renderer of our own
 
 #### REND-01 · A measured design for a custom text renderer
@@ -1767,3 +1781,5 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R110 | 09-24 | "let's just show the signature" when the only information about a variable is the variable itself | HOVER-20 (criterion 6), HOVER-03 (criterion 4 superseded) |
 | R111 | 09-24 | "1. no 2. no 3. keep 4. reassess and reorder, maybe use work to prioritize even" | D24 to D27 |
 | R112 | 09-24 | "i'd like the popover of the documentation to be able to stay visible when mousing hover it" | HOVER-20 (criterion 7) |
+| R113 | 09-24 | "when changes are isolated, some "renamed" files show empty content in single file viewing"; "imo we should still show the content" | DIFF-07 |
+| R114 | 09-24 | "header only in the file list" | D28, DIFF-07 |
