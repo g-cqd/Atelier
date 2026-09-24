@@ -237,18 +237,31 @@ private struct LayerPixels {
     let bytes: [UInt8]
 
     /// How many pixels inside `rect`, in window coordinates, differ from `other`'s by more than rounding does.
+    ///
+    /// A row whose bytes match in both holds no such pixel, so only the rows that differ are read pixel by pixel. This
+    /// is a main-actor suite: reading every pixel of the window, as most counts here do, held the main actor for
+    /// seconds, and every main-actor test in the run waited behind it.
     func differing(from other: LayerPixels, in rect: NSRect) -> Int {
         let rows = Self.clamped(rect.minY, rect.maxY, to: height)
         let columns = Self.clamped(rect.minX, rect.maxX, to: width)
-        var count = 0
-        for y in rows {
-            for x in columns {
-                let index = (y * width + x) * 4
-                let channels = (0 ..< 3).map { abs(Int(bytes[index + $0]) - Int(other.bytes[index + $0])) }
-                if channels.contains(where: { $0 > 8 }) { count += 1 }
+        let rowBytes = columns.count * 4
+        return bytes.withUnsafeBytes { mine in
+            other.bytes.withUnsafeBytes { theirs in
+                guard rowBytes > 0, let mineStart = mine.baseAddress, let theirsStart = theirs.baseAddress else {
+                    return 0
+                }
+                var count = 0
+                for y in rows {
+                    let start = (y * width + columns.lowerBound) * 4
+                    guard memcmp(mineStart + start, theirsStart + start, rowBytes) != 0 else { continue }
+                    for index in stride(from: start, to: start + rowBytes, by: 4)
+                    where (0 ..< 3).contains(where: { abs(Int(mine[index + $0]) - Int(theirs[index + $0])) > 8 }) {
+                        count += 1
+                    }
+                }
+                return count
             }
         }
-        return count
     }
 
     /// The whole pixels from `lower` to `upper` that lie within `0 ..< limit`; empty for a span outside it.
