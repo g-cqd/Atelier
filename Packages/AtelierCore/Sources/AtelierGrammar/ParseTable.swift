@@ -16,6 +16,14 @@ public struct ParseTable: Sendable, Equatable, Codable {
     public var validExternals: [[Bool]]
     /// External symbols that the grammar treats as extras in every state.
     public var externalIsExtra: [Bool]
+    /// The shifts precedence resolved against in favour of a reduction, by state then terminal: their target states.
+    ///
+    /// The compiler merges LR(1) states that share a core, so a state may reduce on a lookahead that only another
+    /// context it stands for can follow the reduction with; a shift that precedence set against that reduction is then
+    /// lost to a context that needed it, where tree-sitter's state, holding one context, has no conflict at all. Such a
+    /// reduction cannot end in a shift of the lookahead, so a parser whose stack cannot shift it after the reduction
+    /// takes the shift instead.
+    public var lostShifts: [Int: [Int: Int]]
 
     public init(
         stateCount: Int,
@@ -27,7 +35,8 @@ public struct ParseTable: Sendable, Equatable, Codable {
         externalNames: [String] = [],
         externalSymbols: [String] = [],
         validExternals: [[Bool]] = [],
-        externalIsExtra: [Bool] = []
+        externalIsExtra: [Bool] = [],
+        lostShifts: [Int: [Int: Int]] = [:]
     ) {
         self.stateCount = stateCount
         self.symbols = symbols
@@ -39,11 +48,12 @@ public struct ParseTable: Sendable, Equatable, Codable {
         self.externalSymbols = externalSymbols
         self.validExternals = validExternals
         self.externalIsExtra = externalIsExtra
+        self.lostShifts = lostShifts
     }
 
     private enum CodingKeys: String, CodingKey {
         case stateCount, symbols, terminals, nonTerminals, actions, gotos, externalNames, externalSymbols
-        case validExternals, externalIsExtra
+        case validExternals, externalIsExtra, lostShifts
     }
 
     public init(from decoder: any Decoder) throws {
@@ -58,6 +68,7 @@ public struct ParseTable: Sendable, Equatable, Codable {
         externalSymbols = try values.decodeIfPresent([String].self, forKey: .externalSymbols) ?? externalNames
         validExternals = try values.decodeIfPresent([[Bool]].self, forKey: .validExternals) ?? []
         externalIsExtra = try values.decodeIfPresent([Bool].self, forKey: .externalIsExtra) ?? []
+        lostShifts = try values.decodeIfPresent([Int: [Int: Int]].self, forKey: .lostShifts) ?? [:]
     }
 }
 
