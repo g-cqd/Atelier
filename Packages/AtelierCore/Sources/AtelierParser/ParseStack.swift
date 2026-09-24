@@ -11,6 +11,8 @@ struct ParseStack: Sendable {
     private(set) var heights: [Int]
     /// The error nodes pushed so far, including those a reduction has since wrapped.
     private(set) var errorCount: Int
+    /// The bytes those error nodes span: each is a token the stack could not take, so they never overlap.
+    private(set) var errorByteCount = 0
     /// The sum of the dynamic precedences of the productions reduced so far.
     private(set) var dynamicPrecedence = 0
     /// The input position, scanner state, and extras belonging to this GLR branch.
@@ -49,7 +51,10 @@ struct ParseStack: Sendable {
         nodes.append(node)
         heights.append(height)
         states.append(state)
-        if node.isError { errorCount += 1 }
+        if node.isError {
+            errorCount += 1
+            errorByteCount += node.byteRange.count
+        }
     }
 
     /// Counts the dynamic precedence of a production just reduced.

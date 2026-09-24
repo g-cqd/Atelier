@@ -136,7 +136,7 @@ public final class GLRParser: Sendable {
         guard tokenIndex > 0 else {
             // No token but extras, if any: an empty root keeps them, as a parsed one does.
             let root = SyntaxNode(type: productions.first?.name ?? "source", byteRange: 0 ..< 0)
-            return SyntaxTree(root: attachingExtras(extras, to: root), source: source)
+            return SyntaxTree(root: attachingExtras(extras, to: root), source: source, errorByteCount: 0)
         }
         if let endIdx = terminalIndex["$end"] {
             var exceededDepth = false
@@ -150,8 +150,10 @@ public final class GLRParser: Sendable {
         guard let best = ParseStack.takingBest(from: &stacks) else {
             throw .parsingFailed("No valid parse at the end of input")
         }
+        let errorByteCount = best.errorByteCount
         let root = try buildRootNode(from: consume best, byteCount: source.utf8.count, endPoint: tokens.end)
-        return SyntaxTree(root: attachingExtras(extras, to: consume root), source: source)
+        return SyntaxTree(
+            root: attachingExtras(extras, to: consume root), source: source, errorByteCount: errorByteCount)
     }
 
     // MARK: - Private

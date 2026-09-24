@@ -11,13 +11,48 @@ public final class SyntaxTree: Sendable {
     /// of a copy of a deep node frees that node recursively, so keep the tree alive longer than such copies.
     public var root: SyntaxNode { storedRoot.withLock { $0 } }
     public let source: String
+    /// How many bytes of `source` lie under error nodes, each byte counted once: how much of the source the parse
+    /// could not make sense of.
+    public let errorByteCount: Int
     /// Behind a lock only so `deinit` can take the nodes apart while the class stays checked `Sendable`; nothing else
     /// writes it, so the lock is never contended.
     private let storedRoot: Mutex<SyntaxNode>
 
-    public init(root: SyntaxNode, source: String) {
+    /// A tree over `root`, which may be built by hand; its ``errorByteCount`` comes from a walk of `root`.
+    /// - Complexity: O(n + e log e) for n nodes, e of them outermost error nodes.
+    public convenience init(root: SyntaxNode, source: String) {
+        self.init(
+            root: root, source: source,
+            errorByteCount: Self.errorByteCount(of: root, sourceCount: source.utf8.count))
+    }
+
+    /// A tree whose error bytes are already known, as a parse knows them: it counts each error token it pushes.
+    init(root: SyntaxNode, source: String, errorByteCount: Int) {
         self.storedRoot = Mutex(root)
         self.source = source
+        self.errorByteCount = errorByteCount
+    }
+
+    /// The bytes under the outermost error nodes of `root`, clamped to the source, each counted once.
+    private static func errorByteCount(of root: SyntaxNode, sourceCount: Int) -> Int {
+        var ranges: [Range<Int>] = []
+        var pending = [root]
+        while let node = pending.popLast() {
+            guard node.isError else {
+                pending.append(contentsOf: node.children)
+                continue
+            }
+            let range = node.byteRange.clamped(to: 0 ..< sourceCount)
+            if !range.isEmpty { ranges.append(range) }
+        }
+        ranges.sort { $0.lowerBound < $1.lowerBound }
+        var count = 0
+        var coveredEnd = 0
+        for range in ranges where range.upperBound > coveredEnd {
+            count += range.upperBound - max(range.lowerBound, coveredEnd)
+            coveredEnd = range.upperBound
+        }
+        return count
     }
 
     deinit {
