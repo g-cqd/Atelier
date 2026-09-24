@@ -159,24 +159,6 @@ package enum DiffRenderer {
 
     // MARK: Attributed text
 
-    /// The lexical tokens of `text`, one array per line of `lines`, in UTF-8 offsets from the line's start; the render
-    /// converts them to UTF-16 when it styles a row. A plain-text file is not scanned.
-    /// - Complexity: O(bytes of `text` + lines + tokens)
-    package static func tokensByLine(text: String, lines: [Substring], language: Language) -> [[HighlightToken]] {
-        guard language != .plain else { return [[HighlightToken]](repeating: [], count: lines.count) }
-        var lineStarts: [Int] = []
-        lineStarts.reserveCapacity(lines.count)
-        var offset = 0
-        for line in lines {
-            lineStarts.append(offset)
-            offset += line.utf8.count + 1
-        }
-        let tokens = LexicalHighlightEngine().highlight(utf8: text.utf8Span.span, language: language)
-        // The last line ends where its text does: a token running to the end of a text that closes with a newline
-        // (an unterminated string, say) must not spill past the line's own length.
-        return HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: max(0, offset - 1))
-    }
-
     private static func render(rows: [RenderRow], side: RenderedSide, options: Options) -> RenderedText {
         var text = ""
         var metas: [RowMeta] = []
@@ -343,6 +325,48 @@ package enum DiffRenderer {
 }
 
 extension DiffRenderer {
+    /// The lexical tokens of `text`, one array per line of `lines`, in UTF-8 offsets from the line's start; the render
+    /// converts them to UTF-16 when it styles a row. A plain-text file is not scanned.
+    /// - Parameters:
+    ///   - text: One side of the diff.
+    ///   - lines: `text`'s lines in order, as `DiffModel.lines(of:)` cuts them, which drops a CRLF line's `\r`.
+    ///   - language: The language whose lexer scans `text`.
+    /// - Returns: One token array per line, each range relative to the line's start and within its length.
+    /// - Complexity: O(bytes of `text` + lines + tokens)
+    package static func tokensByLine(text: String, lines: [Substring], language: Language) -> [[HighlightToken]] {
+        guard language != .plain else { return [[HighlightToken]](repeating: [], count: lines.count) }
+        // Each line starts where it sits in the text. A CRLF line's `\r` is in the text but not in the line, so the walk
+        // steps over it; a sum of the lines' lengths alone would put every later line one byte early.
+        let bytes = text.utf8Span.span
+        var lineStarts: [Int] = []
+        lineStarts.reserveCapacity(lines.count)
+        var start = 0
+        for line in lines {
+            lineStarts.append(start)
+            start += line.utf8.count
+            if start < bytes.count, bytes[start] == UInt8(ascii: "\r") { start += 1 }
+            start += 1
+        }
+        let tokens = LexicalHighlightEngine().highlight(utf8: bytes, language: language)
+        var byLine = HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: bytes.count)
+        // A line ends where its own text does: a token that runs into the `\r` or the newline after it, such as a
+        // comment or an unterminated string, stops at the line's last character.
+        for (index, line) in lines.enumerated() {
+            let length = line.utf8.count
+            while let last = byLine[index].last, last.byteRange.upperBound > length {
+                byLine[index].removeLast()
+                guard last.byteRange.lowerBound < length else { continue }
+                byLine[index]
+                    .append(
+                        HighlightToken(
+                            byteRange: last.byteRange.lowerBound ..< length, role: last.role, modifiers: last.modifiers,
+                            layer: last.layer, priority: last.priority))
+                break
+            }
+        }
+        return byLine
+    }
+
     /// Appends `tokens`, in UTF-8 offsets from the start of `line`, to `ranges` as UTF-16 ranges of the assembled text,
     /// in which the line starts at `offset`. These are the source line's UTF-16 offsets, which the shown row keeps: a
     /// bidi placeholder takes the one unit of the control it stands for.
