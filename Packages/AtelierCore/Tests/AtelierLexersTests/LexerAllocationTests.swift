@@ -8,7 +8,7 @@ extension LexerCorpusTests {
     /// A scan allocates its token array and little else, whatever the size of the source: no string, set or array per
     /// token or per keyword candidate.
     struct Allocations {
-        @Test(.enabled(if: allocationCountingAvailable), arguments: [Language.swift, .json, .yaml, .toml])
+        @Test(.enabled(if: allocationCountingAvailable), arguments: [Language.swift, .json, .yaml, .toml, .html, .css])
         func `a scan makes a handful of allocations`(language: Language) throws {
             let bytes = Array(LexerCorpus.text(language, fragments: 400).utf8)
             let engine = LexicalHighlightEngine()

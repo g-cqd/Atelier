@@ -30,8 +30,8 @@ protocol ScannerToken {
 
 extension Token: ScannerToken {}
 
-/// Hand-written scanners over borrowed UTF-8 bytes; the HTML and CSS scanners still copy them into an array. The UTF-16
-/// entry points convert the byte offsets once, for callers that index a `String` or a TextKit store.
+/// Hand-written scanners over borrowed UTF-8 bytes. Each scan allocates its token array and nothing per token; the
+/// UTF-16 entry points convert the byte offsets once, for callers that index a `String` or a TextKit store.
 public enum SyntaxHighlighter {
     /// Tokens over `text`, with ranges in UTF-16 offsets.
     /// - Complexity: O(UTF-8 length of `text` + tokens)
@@ -104,26 +104,16 @@ public enum SyntaxHighlighter {
         switch language {
             case .swift, .objectiveC, .kotlin, .java, .javascript, .typescript, .c, .cpp, .python, .shell, .fish,
                 .rust, .go, .ruby, .lua:
-                return CodeScanner(language: language).scan(bytes, as: Output.self)
+                CodeScanner(language: language).scan(bytes, as: Output.self)
             case .html:
-                var scanner = HTMLScanner(units: owned(bytes))
-                return scanner.scan().map { Output(kind: $0.kind, range: $0.range) }
+                HTMLScanner().scan(bytes, as: Output.self)
             case .css:
-                var scanner = CSSScanner(units: owned(bytes))
-                return scanner.scan().map { Output(kind: $0.kind, range: $0.range) }
+                CSSScanner().scan(bytes, as: Output.self)
             case .json, .yaml, .toml:
-                return DataScanner(format: language).scan(bytes, as: Output.self)
+                DataScanner(format: language).scan(bytes, as: Output.self)
             case .plain:
-                return []
+                []
         }
-    }
-
-    /// An owned copy of `bytes`, for the scanners that still run over an array.
-    private static func owned(_ bytes: Span<UInt8>) -> [UInt8] {
-        var copy: [UInt8] = []
-        copy.reserveCapacity(bytes.count)
-        for index in bytes.indices { copy.append(bytes[index]) }
-        return copy
     }
 
     /// Moves `tokens`, ascending and disjoint in byte offsets over `bytes`, to UTF-16 offsets, in one pass over the
