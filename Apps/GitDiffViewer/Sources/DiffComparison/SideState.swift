@@ -207,16 +207,26 @@ package final class SideState {
         _ source: ComparisonSource, repository: RepositoryInfo?, entries: [SourceEntry], ignored: [SourceEntry]? = nil,
         badgeStates: BadgeChangeStates? = nil, resolvedCommit: String? = nil
     ) {
+        let listing = Listing(entries: entries, commit: resolvedCommit)
+        load(source, repository: repository, listing: listing, ignored: ignored, badgeStates: badgeStates)
+    }
+
+    /// Adopts an already indexed listing, so a repository prologue installs both sides without rebuilding their
+    /// dictionaries and trees on the main actor.
+    package func load(
+        _ source: ComparisonSource, repository: RepositoryInfo?, listing: Listing, ignored: [SourceEntry]? = nil,
+        badgeStates: BadgeChangeStates? = nil
+    ) {
         loadTask?.cancel()
         self.source = source
         setRepository(repository)
         isLoading = false
         errorMessage = nil
-        self.resolvedCommit = resolvedCommit
+        resolvedCommit = listing.commit
         publish(badgeStates, generation: beginBadgeStatesRead())
         forgetIgnoredEntries()
         ignoredEntries = ignored
-        apply(entries, notifying: false)
+        apply(listing, notifying: false)
         runQueuedOutsideWriteReload()
     }
 
@@ -309,7 +319,7 @@ package final class SideState {
                 resolvedCommit = listing.commit
                 publish(states, generation: generation)
                 if !keepingIgnoredEntries { forgetIgnoredEntries() }
-                apply(listing.entries, notifying: true)
+                apply(listing, notifying: true)
             } catch is CancellationError {
                 return
             } catch {
@@ -317,7 +327,7 @@ package final class SideState {
                 isLoading = false
                 resolvedCommit = nil
                 forgetIgnoredEntries()
-                apply([], notifying: true)
+                apply(Listing(entries: [], commit: nil), notifying: true)
             }
             runQueuedOutsideWriteReload()
         }
@@ -400,10 +410,10 @@ package final class SideState {
         ignoredEntriesFailure = nil
     }
 
-    private func apply(_ entries: [SourceEntry], notifying: Bool) {
-        self.entries = entries
-        entriesByPath = Dictionary(entries.map { ($0.relativePath, $0) }, uniquingKeysWith: { first, _ in first })
-        tree = PathNode.tree(from: entries.map(\.relativePath))
+    private func apply(_ listing: Listing, notifying: Bool) {
+        entries = listing.entries
+        entriesByPath = listing.entriesByPath
+        tree = listing.tree
         if notifying { onEntriesChanged?() }
     }
 }
@@ -508,11 +518,35 @@ extension SideState {
         /// The commit a ref named just before its tree was listed; nil for any other source, and when git could not
         /// resolve the ref, which the listing then reports.
         package let commit: String?
+        /// Each path's entry: the first one listed when a path repeats.
+        package let entriesByPath: [String: SourceEntry]
+        /// The listed paths as the explorer's tree.
+        package let tree: [PathNode]
+
+        /// Indexes `entries` where it is called, off the main actor for a listing read in the background;
+        /// `threadProbe` runs first, for a test to see which thread that is.
+        nonisolated init(entries: [SourceEntry], commit: String?, threadProbe: (@Sendable () -> Void)? = nil) {
+            threadProbe?()
+            self.entries = entries
+            self.commit = commit
+            var byPath: [String: SourceEntry] = [:]
+            byPath.reserveCapacity(entries.count)
+            var paths: [String] = []
+            paths.reserveCapacity(entries.count)
+            for entry in entries {
+                if byPath[entry.relativePath] == nil { byPath[entry.relativePath] = entry }
+                paths.append(entry.relativePath)
+            }
+            entriesByPath = byPath
+            tree = PathNode.tree(from: paths)
+        }
     }
 
     /// Lists `source`, resolving a ref first: a ref that moves in between then reads as moved at the next check
     /// (``reloadIfRefMoved()``), never as current.
-    nonisolated static func listing(of source: ComparisonSource, reader: any SourceReading) async throws -> Listing {
+    nonisolated static func listing(
+        of source: ComparisonSource, reader: any SourceReading, threadProbe: (@Sendable () -> Void)? = nil
+    ) async throws -> Listing {
         var commit: String?
         if case .gitRef(let repository, let ref) = source {
             do {
@@ -523,6 +557,8 @@ extension SideState {
                 PhaseTrace.log("git rev-parse failed for \(source.displayName): \(error.localizedDescription)")
             }
         }
-        return Listing(entries: try await reader.entries(of: source), commit: commit)
+        let entries = try await reader.entries(of: source)
+        try Task.checkCancellation()
+        return Listing(entries: entries, commit: commit, threadProbe: threadProbe)
     }
 }

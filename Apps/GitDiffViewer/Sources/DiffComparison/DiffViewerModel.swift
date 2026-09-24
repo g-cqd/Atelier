@@ -227,14 +227,13 @@ package final class DiffViewerModel {
             failedLoads = []
             if let listing = loaded.leftListing {
                 left.load(
-                    loaded.left, repository: loaded.info, entries: listing.entries, resolvedCommit: listing.commit)
+                    loaded.left, repository: loaded.info, listing: listing)
             } else {
                 left.load(loaded.left, repository: loaded.info)
             }
             if let listing = loaded.rightListing {
                 right.load(
-                    loaded.right, repository: loaded.info, entries: listing.entries,
-                    badgeStates: loaded.rightBadgeStates, resolvedCommit: listing.commit)
+                    loaded.right, repository: loaded.info, listing: listing, badgeStates: loaded.rightBadgeStates)
             } else {
                 right.load(loaded.right, repository: loaded.info)
             }
