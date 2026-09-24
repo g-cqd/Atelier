@@ -49,8 +49,9 @@ struct FlatProduction: Sendable, Equatable {
 /// keeping on each step the precedence, associativity, alias and field in scope: the first two to resolve conflicts
 /// as tree-sitter does, the others to name the step's node.
 ///
-/// A repetition becomes a left-recursive helper rule, `_repeat_n → ε | _repeat_n x` or `_repeat1_n → x |
-/// _repeat1_n x`, whose steps start with no metadata, as the helper rules tree-sitter builds do.
+/// A repetition becomes a left-recursive helper rule, `_repeat1_n → x | _repeat1_n x`, whose steps start with no
+/// metadata, as the helper rules tree-sitter builds do, and a repetition that may be empty the choice of that helper or
+/// nothing, as tree-sitter reads `repeat(x)`.
 struct ProductionFlattener {
     /// The metadata in scope at a point of a rule.
     private struct Scope {
@@ -144,11 +145,13 @@ struct ProductionFlattener {
                 try ensureAlternativeCount(alternativeCount, construct: "Optional", ruleName: ruleName)
                 return [FlatSequence.empty] + expanded
             case .repeat(let content):
-                return [FlatSequence(steps: [scope.step(try repetition(of: content, ruleName: ruleName, empty: true))])]
-            case .repeat1(let content):
+                // As tree-sitter reads it: once or more, or not at all. A helper deriving the empty string would have
+                // the parser reduce it before the first item, a reduction no precedence of the rule around it orders.
                 return [
-                    FlatSequence(steps: [scope.step(try repetition(of: content, ruleName: ruleName, empty: false))])
+                    FlatSequence(steps: [scope.step(try repetition(of: content, ruleName: ruleName))]), .empty
                 ]
+            case .repeat1(let content):
+                return [FlatSequence(steps: [scope.step(try repetition(of: content, ruleName: ruleName))])]
             case .prec(let value, let content):
                 var inner = scope
                 inner.precedence = value
@@ -240,20 +243,16 @@ struct ProductionFlattener {
         return alternatives
     }
 
-    /// The name of a new helper rule matching `content` repeated, zero times or more when `empty` allows it, once or
-    /// more otherwise. Its steps start with no metadata: what surrounds the repetition applies to the helper's step.
-    private mutating func repetition(of content: Rule, ruleName: String, empty: Bool) throws(GrammarError) -> String {
+    /// The name of a new helper rule matching `content` repeated once or more. Its steps start with no metadata: what
+    /// surrounds the repetition applies to the helper's step.
+    private mutating func repetition(of content: Rule, ruleName: String) throws(GrammarError) -> String {
         counter += 1
-        let helper = "\(empty ? "_repeat" : "_repeat1")_\(counter)"
+        let helper = "_repeat1_\(counter)"
         let inner = try expand(content, ruleName: ruleName, scope: Scope(), atEnd: true)
-        if empty {
-            try appendAuxiliary(FlatProduction(name: helper, steps: []))
-        } else {
-            for alternative in inner {
-                try appendAuxiliary(
-                    FlatProduction(
-                        name: helper, steps: alternative.steps, dynamicPrecedence: alternative.dynamicPrecedence))
-            }
+        for alternative in inner {
+            try appendAuxiliary(
+                FlatProduction(
+                    name: helper, steps: alternative.steps, dynamicPrecedence: alternative.dynamicPrecedence))
         }
         // An empty alternative would make `helper → helper`, a cycle that matches nothing new.
         for alternative in inner where !alternative.steps.isEmpty {
