@@ -14,5 +14,11 @@ extension RenderPipeline {
         package var isCards: Bool {
             if case .cards = self { true } else { false }
         }
+
+        /// Whether both are card lists of the same files, in the same order, whatever their content.
+        func showsSameFiles(as other: Target) -> Bool {
+            guard case .cards(let pairs) = self, case .cards(let others) = other else { return false }
+            return pairs.map(\.path) == others.map(\.path)
+        }
     }
 }

@@ -84,9 +84,13 @@ package final class RenderPipeline {
     /// Granularity and heuristics of what is published; a render borrows published work only when they match.
     @ObservationIgnored private var publishedGranularity: IntralineGranularity?
     @ObservationIgnored private var publishedHeuristics: DiffHeuristics?
-    /// The card list a file took off screen, kept so the list a closed tab goes back to lends its cards again rather
-    /// than rendering them all anew (book PERF-10). A render of any list takes it, whether it lends anything or not.
-    @ObservationIgnored private var shelvedList: ShelvedList?
+    /// The card lists taken off screen, the latest last, kept so going back to one lends its cards again rather than
+    /// rendering them all anew (book PERF-10): the whole list after a file or a folder's list showed in its place, from
+    /// a closed tab or from the file list's fixed tab (book TAB-10). A render of a list takes the one with its files.
+    @ObservationIgnored private var shelvedLists: [ShelvedList] = []
+
+    /// How many card lists stay shelved: the whole list and a few folders' lists. The oldest goes first.
+    package static let shelfCapacity = 3
 
     private let preparer: DiffPreparer
     private let taskProvider: any TaskProvider
@@ -115,7 +119,7 @@ package final class RenderPipeline {
 
     package func clear() {
         task?.cancel()
-        shelvedList = nil
+        shelvedLists = []
         generation += 1
         completedGeneration = generation
         isRendering = false
@@ -141,12 +145,11 @@ package final class RenderPipeline {
             sources: Sources(left: left, right: right), granularity: granularity, heuristics: heuristics)
         let loan = self.loan(for: target, inputs: inputs)
         let keeps = keepingPublished && (file != nil || !cards.isEmpty)
-        if target.isCards {
-            shelvedList = nil
-        } else if !keeps, let published = self.target, published.isCards, !prepared.isEmpty {
-            shelvedList = ShelvedList(
-                target: published, prepared: prepared, stamps: stamps, cards: cards.map(\.rendered),
-                granularity: publishedGranularity, heuristics: publishedHeuristics)
+        if target.isCards { shelvedLists.removeAll { $0.target.showsSameFiles(as: target) } }
+        if !keeps, let published = self.target, published.isCards, !published.showsSameFiles(as: target),
+            !prepared.isEmpty
+        {
+            shelve(published)
         }
         // A lent file drawn another way, a card becoming the whole file say, saves only its diff: streaming then puts
         // the first file on screen sooner than one step would.
@@ -193,6 +196,16 @@ package final class RenderPipeline {
 
     package func expansion(of key: GapKey) -> GapExpansion {
         gapExpansions[key] ?? GapExpansion()
+    }
+
+    /// Shelves what is published, the card list `published`, as the latest list, dropping the oldest past capacity.
+    private func shelve(_ published: Target) {
+        shelvedLists.removeAll { $0.target.showsSameFiles(as: published) }
+        shelvedLists.append(
+            ShelvedList(
+                target: published, prepared: prepared, stamps: stamps, cards: cards.map(\.rendered),
+                granularity: publishedGranularity, heuristics: publishedHeuristics))
+        if shelvedLists.count > Self.shelfCapacity { shelvedLists.removeFirst(shelvedLists.count - Self.shelfCapacity) }
     }
 
     // MARK: Publishing
@@ -422,7 +435,7 @@ extension RenderPipeline {
         var sameFilePath = false
     }
 
-    /// A card list a file replaced: its target, its prepared diffs and rendered cards in target order, the stamps they
+    /// A card list taken off screen: its target, its prepared diffs and rendered cards in target order, the stamps they
     /// were rendered under, and the diff options they were prepared with.
     private struct ShelvedList {
         let target: Target
@@ -453,10 +466,12 @@ extension RenderPipeline {
         if inputs.granularity == publishedGranularity, inputs.heuristics == publishedHeuristics {
             lend(prepared, from: published, rendered: publishedFile(at:), stamps: stamps, to: target, into: &loan)
         }
-        // A list goes back to the list a file replaced, when that list was prepared the same way. Lent last, so its
-        // cards take the place of the file drawn whole that the published state lends at the same index.
-        if target.isCards, let shelf = shelvedList, inputs.granularity == shelf.granularity,
-            inputs.heuristics == shelf.heuristics
+        // A list goes back to the shelved list with the same files, else to the latest shelved, a list that has
+        // gained or lost a file since, when that list was prepared the same way. Lent last, so its cards take the place
+        // of the file drawn whole that the published state lends at the same index.
+        if target.isCards,
+            let shelf = shelvedLists.last(where: { $0.target.showsSameFiles(as: target) }) ?? shelvedLists.last,
+            inputs.granularity == shelf.granularity, inputs.heuristics == shelf.heuristics
         {
             let cards = shelf.cards
             lend(
