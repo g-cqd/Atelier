@@ -55,7 +55,9 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         scrollView.hasHorizontalScroller = true
         scrollView.hasVerticalScroller = false
         scrollView.autohidesScrollers = true
+        // The pane stops at its edges instead of rubber-banding past them, sideways as down and up.
         scrollView.verticalScrollElasticity = .none
+        scrollView.horizontalScrollElasticity = .none
         scrollView.usesPredominantAxisScrolling = true
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
@@ -146,9 +148,6 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         }
         textView.autoresizingMask = fits ? [.width] : []
         textView.setFrameSize(frameSize)
-        // Sideways scrolling only for lines wider than the pane; a card whose lines fit must not catch the sideways
-        // swipes meant for the list around it, nor rubber-band on them.
-        scrollView?.horizontalScrollElasticity = fits ? .none : .automatic
         textView.needsDisplay = true
         pane.needsLayout = true
     }
