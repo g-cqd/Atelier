@@ -275,6 +275,43 @@ import Testing
         #expect(document.discussion == nil)
     }
 
+    /// Swift's markup reads its callouts whatever their case: `- parameter`, `- Parameters:` and `- returns:` alike.
+    @Test(arguments: [("Parameters", "Parameter", "Returns"), ("parameters", "parameter", "returns")])
+    func `Parameter and Returns callouts are fields whatever their case`(callouts: (String, String, String)) {
+        let (list, single, returns) = callouts
+        let markdown = """
+            ```swift
+            func move(_ point: Point, by offset: Double, animated: Bool) -> Point
+            ```
+
+            Moves a point.
+
+            - \(list):
+              - point: The point to move.
+              - offset: How far to move it.
+            - \(single) animated: Whether the move animates.
+            - \(returns): The moved point.
+            """
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(
+            document.parameters == [
+                .init(name: "point", text: "The point to move."), .init(name: "offset", text: "How far to move it."),
+                .init(name: "animated", text: "Whether the move animates.")
+            ])
+        #expect(document.returns == "The moved point.")
+        #expect(document.discussion == nil)
+    }
+
+    /// The structurer has no field for what a symbol throws: a Throws callout stays in the prose, lowercase or not.
+    @Test(arguments: ["Throws", "throws"])
+    func `a Throws callout stays in the prose whatever its case`(callout: String) {
+        let markdown = "```swift\nfunc load() throws\n```\n\nLoads it.\n\n- \(callout): When the file is missing."
+        let document = HoverMarkdownStructurer.structure(markdown)
+        #expect(document.discussion == "- \(callout): When the file is missing.")
+        #expect(document.parameters.isEmpty)
+        #expect(document.returns == nil)
+    }
+
     @Test
     func `a singular Parameter line inside a code block stays in the code`() {
         let markdown = "```swift\nfunc f()\n```\n\nParses.\n\n```swift\n- Parameter x: not a field\n```"
