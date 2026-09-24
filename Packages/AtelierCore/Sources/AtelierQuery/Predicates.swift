@@ -1,4 +1,4 @@
-public import AtelierParser
+import AtelierParser
 import Foundation
 import Synchronization
 
@@ -9,7 +9,7 @@ public enum Predicates: Sendable {
 
     public static func evaluate(
         _ predicate: Predicate,
-        captures: [(node: SyntaxNode, name: String)],
+        captures: [QueryMatch.Capture],
         source: String
     ) -> Bool {
         switch predicate {
@@ -64,7 +64,7 @@ public enum Predicates: Sendable {
 
     private static func captureText(
         _ captureName: String,
-        captures: [(node: SyntaxNode, name: String)],
+        captures: [QueryMatch.Capture],
         source: String
     ) -> String? {
         let name = captureName.hasPrefix("@") ? String(captureName.dropFirst()) : captureName
@@ -82,7 +82,7 @@ public enum Predicates: Sendable {
         _ captureName: String,
         property: String,
         expected: Bool,
-        captures: [(node: SyntaxNode, name: String)]
+        captures: [QueryMatch.Capture]
     ) -> Bool {
         let name = captureName.hasPrefix("@") ? String(captureName.dropFirst()) : captureName
         guard let capture = captures.first(where: { $0.name == name }) else { return !expected }
