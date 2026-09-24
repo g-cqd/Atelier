@@ -51,12 +51,13 @@ import Testing
         let declaration = NSAttributedString(string: "func run()")
         let summary = NSAttributedString(string: "Runs.")
         let discussion = NSAttributedString(string: "At once.")
+        let blocks: [HoverDocument.Block] = [.paragraph(discussion)]
         let returns = NSAttributedString(string: "Nothing.")
         let parameter = HoverDocument.Field(name: "speed", text: NSAttributedString(string: "How fast."))
         let candidate = HoverDocument.Candidate(
             declaration: NSAttributedString(string: "func run(fast: Bool)"), summary: nil)
         let document = HoverDocument(
-            declaration: declaration, summary: summary, discussion: discussion, parameters: [parameter],
+            title: "run()", declaration: declaration, summary: summary, discussion: blocks, parameters: [parameter],
             returns: returns, provenance: .docIndex, extraCandidates: [candidate],
             diagnostics: [HoverDocument.DiagnosticEntry(severity: .note, message: "first", tool: "swiftlint")],
             chipBackground: .textBackgroundColor)
@@ -67,7 +68,11 @@ import Testing
 
         #expect(joined.declaration === declaration)
         #expect(joined.summary === summary)
-        #expect(joined.discussion === discussion)
+        #expect(joined.title == "run()")
+        let joinedParagraph: NSAttributedString? =
+            if case .paragraph(let text)? = joined.discussion.first { text } else { nil }
+        #expect(joined.discussion.count == 1)
+        #expect(joinedParagraph === discussion)
         #expect(joined.returns === returns)
         #expect(joined.parameters.map(\.name) == ["speed"])
         #expect(joined.parameters.first?.text === parameter.text)
