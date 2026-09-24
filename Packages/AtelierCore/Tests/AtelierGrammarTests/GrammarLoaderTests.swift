@@ -158,7 +158,7 @@ struct GrammarLoaderTests {
     }
 
     @Test(arguments: ["PREC", "PREC_LEFT", "PREC_RIGHT"])
-    func `named precedence loads with its ordering deferred to the compiler`(kind: String) throws {
+    func `a named precedence loads as its name`(kind: String) throws {
         let json = """
             {"name":"precedence","rules":{"source":{"type":"\(kind)","value":"assign",\
             "content":{"type":"STRING","value":"value"}}}}
@@ -167,9 +167,9 @@ struct GrammarLoaderTests {
         let grammar = try GrammarLoader.parse(Data(json.utf8))
         let expected: Rule
         switch kind {
-            case "PREC": expected = .prec(0, .string("value"))
-            case "PREC_LEFT": expected = .precLeft(0, .string("value"))
-            default: expected = .precRight(0, .string("value"))
+            case "PREC": expected = .prec(.name("assign"), .string("value"))
+            case "PREC_LEFT": expected = .precLeft(.name("assign"), .string("value"))
+            default: expected = .precRight(.name("assign"), .string("value"))
         }
         #expect(grammar.rules.first?.rule == expected)
     }

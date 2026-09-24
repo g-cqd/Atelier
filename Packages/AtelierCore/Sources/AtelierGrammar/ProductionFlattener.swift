@@ -11,7 +11,7 @@ struct FlatStep: Sendable, Equatable {
     var symbol: String
     /// The precedence of the innermost `prec` around both this step and the next, or around this step when it ends
     /// the production: the precedence an LR item with its dot right after this step has. 0 without one.
-    var precedence = 0
+    var precedence: Precedence = 0
     /// The associativity that goes with `precedence`.
     var associativity: Associativity?
     var alias: SymbolAlias?
@@ -54,7 +54,7 @@ struct FlatProduction: Sendable, Equatable {
 struct ProductionFlattener {
     /// The metadata in scope at a point of a rule.
     private struct Scope {
-        var precedence = 0
+        var precedence: Precedence = 0
         var associativity: Associativity?
         var alias: SymbolAlias?
         var field: String?

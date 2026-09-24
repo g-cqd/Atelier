@@ -79,8 +79,12 @@ struct ExternalGrammarCompilerTests {
         #expect(result.lexTable.modeValidTokens.count == result.lexTable.modeStarts.count)
     }
 
-    @Test
-    func `declared conflicts preserve competing reductions across precedence`() throws {
+    /// Tree-sitter resolves precedence first and consults `conflicts` only for the actions precedence leaves, so a
+    /// declaration, whichever rules it names, keeps no reduction precedence rules out.
+    @Test(arguments: [[["A", "B"]], [["A"]], []])
+    func `precedence resolves competing reductions whatever conflicts the grammar declares`(conflicts: [[String]])
+        throws
+    {
         let grammar = GrammarDefinition(
             name: "declared_conflict",
             rules: [
@@ -88,41 +92,22 @@ struct ExternalGrammarCompilerTests {
                 ("A", .prec(1, .seq([.string("x")]))),
                 ("B", .prec(2, .seq([.string("x")])))
             ],
-            extras: [], conflicts: [["A", "B"]])
+            extras: [], conflicts: conflicts)
 
         let compiled = try ParseTableCompiler.compile(grammar)
-        let preservesBoth = compiled.parseTable.actions.flatMap { $0 }
-            .contains { action in
-                guard case .conflict(let actions) = action else { return false }
-                return actions.filter { if case .reduce = $0 { true } else { false } }.count == 2
+        let reductions = compiled.parseTable.actions.flatMap { $0 }
+            .compactMap { action -> String? in
+                if case .reduce(_, _, let nonTerminal) = action { return nonTerminal }
+                return nil
             }
 
-        #expect(preservesBoth)
-    }
-
-    @Test(arguments: [["A"], []])
-    func `a declared conflict names every competing rule`(declaration: [String]) throws {
-        let grammar = GrammarDefinition(
-            name: "partial_conflict",
-            rules: [
-                ("source", .choice([.symbol("A"), .symbol("B")])),
-                ("A", .prec(1, .seq([.string("x")]))),
-                ("B", .prec(2, .seq([.string("x")])))
-            ],
-            extras: [], conflicts: [declaration])
-
-        let compiled = try ParseTableCompiler.compile(grammar)
-        let hasConflict = compiled.parseTable.actions.flatMap { $0 }
-            .contains { action in
-                if case .conflict = action { return true }
-                return false
-            }
-
-        #expect(!hasConflict)
+        #expect(!compiled.parseTable.actions.flatMap { $0 }.contains { if case .conflict = $0 { true } else { false } })
+        #expect(reductions.contains("B"))
+        #expect(!reductions.contains("A"))
     }
 
     @Test
-    func `declared conflicts preserve a shift and a reduction`() throws {
+    func `precedence resolves a shift against a reduction before a declared conflict`() throws {
         let grammar = GrammarDefinition(
             name: "shift_reduce_conflict",
             rules: [
@@ -133,14 +118,10 @@ struct ExternalGrammarCompilerTests {
             extras: [], conflicts: [["A", "B"]])
 
         let compiled = try ParseTableCompiler.compile(grammar)
-        let preservesBoth = compiled.parseTable.actions.flatMap { $0 }
-            .contains { action in
-                guard case .conflict(let actions) = action else { return false }
-                return actions.contains { if case .reduce = $0 { true } else { false } }
-                    && actions.contains { if case .shift = $0 { true } else { false } }
-            }
+        let hasConflict = compiled.parseTable.actions.flatMap { $0 }
+            .contains { if case .conflict = $0 { true } else { false } }
 
-        #expect(preservesBoth)
+        #expect(!hasConflict)
     }
 
     @Test
