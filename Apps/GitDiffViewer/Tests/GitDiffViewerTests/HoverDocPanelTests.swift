@@ -69,7 +69,7 @@ struct HoverDocPanelTests {
         let document = HoverDocument(
             declaration: codeAttributed("func configure(session: CaptureSession, retries: Int) -> Bool"),
             summary: prose("Configures a capture session."),
-            discussion: prose("Retries the configuration up to `retries` times before giving up."),
+            discussion: [.paragraph(prose("Retries the configuration up to `retries` times before giving up."))],
             parameters: [
                 HoverDocument.Field(name: "session", text: prose("The session to configure.")),
                 HoverDocument.Field(name: "retries", text: prose("How many times to retry."))

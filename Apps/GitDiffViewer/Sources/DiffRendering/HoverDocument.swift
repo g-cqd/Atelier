@@ -71,9 +71,13 @@ package struct HoverDocument: @unchecked Sendable {
         }
     }
 
+    /// The symbol's name, as Quick Help titles it, read from the declaration; nil when it names none.
+    package let title: String?
     package let declaration: NSAttributedString?
+    /// The abstract: the documentation's opening paragraph.
     package let summary: NSAttributedString?
-    package let discussion: NSAttributedString?
+    /// Everything after the abstract, block by block.
+    package let discussion: [Block]
     package let parameters: [Field]
     package let returns: NSAttributedString?
     package let provenance: Provenance
@@ -86,11 +90,12 @@ package struct HoverDocument: @unchecked Sendable {
     package let chipBackground: NSColor?
 
     package init(
-        declaration: NSAttributedString? = nil, summary: NSAttributedString? = nil,
-        discussion: NSAttributedString? = nil, parameters: [Field] = [], returns: NSAttributedString? = nil,
+        title: String? = nil, declaration: NSAttributedString? = nil, summary: NSAttributedString? = nil,
+        discussion: [Block] = [], parameters: [Field] = [], returns: NSAttributedString? = nil,
         provenance: Provenance = .unknown, extraCandidates: [Candidate] = [], diagnostics: [DiagnosticEntry] = [],
         chipBackground: NSColor? = nil
     ) {
+        self.title = title
         self.declaration = declaration
         self.summary = summary
         self.discussion = discussion
@@ -106,7 +111,7 @@ package struct HoverDocument: @unchecked Sendable {
     /// included, so a row with findings shows its declaration on the same chip as any other row.
     package func adding(diagnostics: [DiagnosticEntry]) -> HoverDocument {
         HoverDocument(
-            declaration: declaration, summary: summary, discussion: discussion, parameters: parameters,
+            title: title, declaration: declaration, summary: summary, discussion: discussion, parameters: parameters,
             returns: returns, provenance: provenance, extraCandidates: extraCandidates,
             diagnostics: self.diagnostics + diagnostics, chipBackground: chipBackground)
     }
@@ -122,9 +127,10 @@ package struct HoverDocument: @unchecked Sendable {
             text.map { Self.renderProse($0) }
         }
         return HoverDocument(
+            title: parsed.declaration.flatMap(HoverDeclarationName.name(fromDeclaration:)),
             declaration: code(parsed.declaration),
             summary: prose(parsed.summary),
-            discussion: prose(parsed.discussion),
+            discussion: parsed.discussion.map { Self.blocks(fromMarkdown: $0, palette: palette) } ?? [],
             parameters: parsed.parameters.map { field in
                 Field(name: field.name, text: prose(field.text) ?? NSAttributedString())
             },
@@ -157,9 +163,15 @@ package struct HoverDocument: @unchecked Sendable {
         let options = AttributedString.MarkdownParsingOptions(
             allowsExtendedAttributes: false, interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible)
         let parsed = (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
-        let result = NSMutableAttributedString(parsed)
+        return styledInline(parsed, size: HoverTypography.bodySize, weight: .regular)
+    }
+
+    /// `text`'s inline runs with explicit fonts at `size` and `weight`, `labelColor` where no color is set, and only
+    /// openable links, as ``renderProse(_:)`` describes.
+    static func styledInline(_ text: AttributedString, size: CGFloat, weight: NSFont.Weight) -> NSAttributedString {
+        let result = NSMutableAttributedString(text)
         let whole = NSRange(location: 0, length: result.length)
-        Self.materializeFonts(in: result, range: whole)
+        Self.materializeFonts(in: result, range: whole, base: .systemFont(ofSize: size, weight: weight))
         result.enumerateAttribute(.foregroundColor, in: whole) { value, range, _ in
             guard value == nil else { return }
             result.addAttribute(.foregroundColor, value: NSColor.labelColor, range: range)
@@ -190,9 +202,8 @@ package struct HoverDocument: @unchecked Sendable {
     /// italic and code only as intent, and a fontless run draws in `NSTextView`'s default Helvetica 12. Set on the
     /// `NSAttributedString`, whose attribute values need not be `Sendable` the way `AttributedString`'s typed font
     /// attribute requires.
-    private static func materializeFonts(in text: NSMutableAttributedString, range: NSRange) {
-        let base = NSFont.systemFont(ofSize: 12)
-        let code = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+    private static func materializeFonts(in text: NSMutableAttributedString, range: NSRange, base: NSFont) {
+        let code = NSFont.monospacedSystemFont(ofSize: base.pointSize - 1, weight: .regular)
         text.enumerateAttribute(.inlinePresentationIntent, in: range) { value, runRange, _ in
             let intent = (value as? NSNumber).map { InlinePresentationIntent(rawValue: $0.uintValue) } ?? []
             guard !intent.contains(.code) else {
@@ -203,7 +214,8 @@ package struct HoverDocument: @unchecked Sendable {
             if intent.contains(.stronglyEmphasized) { traits.insert(.bold) }
             if intent.contains(.emphasized) { traits.insert(.italic) }
             let font =
-                traits.isEmpty ? base : NSFont(descriptor: base.fontDescriptor.withSymbolicTraits(traits), size: 12)
+                traits.isEmpty
+                ? base : NSFont(descriptor: base.fontDescriptor.withSymbolicTraits(traits), size: base.pointSize)
             text.addAttribute(.font, value: font ?? base, range: runRange)
         }
     }
