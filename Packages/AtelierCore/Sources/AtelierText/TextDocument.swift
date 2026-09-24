@@ -33,7 +33,9 @@ public final class TextDocument {
         }
     }
 
-    public var textBuffer: TextBuffer
+    public var textBuffer: TextBuffer {
+        didSet { invalidateTextSnapshotCache() }
+    }
     public var textCursor: TextCursor
 
     public var cachedFileLines: [String]?
@@ -63,8 +65,7 @@ public final class TextDocument {
         language: String?,
         lineEnding: LineEnding = .lineFeed
     ) {
-        let lines = TextBuffer.splitLines(from: content)
-        self.textBuffer = TextBuffer(lines: lines)
+        self.textBuffer = TextBuffer(content)
         self.textCursor = TextCursor()
         self.filePath = filePath
         self.fileName = fileName
@@ -120,13 +121,10 @@ public final class TextDocument {
     }
 
     public func replaceDocumentText(with content: String) {
-        let lines = TextBuffer.splitLines(from: content)
-        textBuffer = TextBuffer(lines: lines)
-        cachedFileLines = lines
+        textBuffer = TextBuffer(content)
         cachedDocumentText = content
-        cachedMaxLineWidth = Self.computeMaxLineWidth(for: lines)
-        cachedSerializedByteCount = Self.computeSerializedByteCount(
-            for: lines, lineEnding: lineEnding)
+        cachedMaxLineWidth = nil
+        cachedSerializedByteCount = Self.computeSerializedByteCount(in: textBuffer, lineEnding: lineEnding)
     }
 
     public func invalidateTextSnapshotCache() {
@@ -159,7 +157,7 @@ public final class TextDocument {
     nonisolated public static func computeMaxLineWidth(in buffer: TextBuffer, tabSize: Int = 4)
         -> Int
     {
-        computeMaxLineWidth(for: buffer.lines, tabSize: tabSize)
+        buffer.maxLineWidth(in: 0 ..< buffer.lineCount, tabSize: tabSize)
     }
 
     nonisolated public static func computeSerializedByteCount<C: Collection>(

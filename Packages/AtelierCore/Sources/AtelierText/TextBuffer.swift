@@ -3,8 +3,7 @@ import Foundation
 /// Line-indexed text buffer used by the editor.
 ///
 /// Internally backed by a UTF-8 byte ``Rope`` so insertions and deletions —
-/// whether single-character or multi-line bulk replacements — cost O(log n)
-/// regardless of where they occur in the document. Line metadata is cached in
+/// cost O(log n) in the number of leaves plus the bytes changed. Line metadata is cached in
 /// the rope's tree, so line lookups are also O(log n).
 ///
 /// The API is line-oriented, indexed by `(row, col)`.
@@ -15,8 +14,8 @@ public struct TextBuffer: Sendable {
 
     /// Materializes every line as a `[String]` in a single rope walk.
     ///
-    /// The result is memoized inside the rope's storage and stays valid until
-    /// the next mutation. Subsequent reads are O(1).
+    /// The cold read costs O(document bytes); the result stays memoized inside
+    /// the rope's storage until the next mutation. Subsequent reads are O(1).
     public var lines: [String] {
         get { rope.allLines }
         set {
@@ -90,6 +89,9 @@ public struct TextBuffer: Sendable {
         rope.byteCount
     }
 
+    /// A persistent snapshot that can be read off the main actor without materializing every line.
+    public var ropeSnapshot: Rope { rope }
+
     /// Test-only probe — see ``Rope/_testSnapshotCachesAreEmpty``.
     var _testSnapshotCachesAreEmpty: Bool {
         rope._testSnapshotCachesAreEmpty
@@ -112,9 +114,10 @@ extension TextBuffer: DocumentSource {
     public func maxLineWidth(in range: Range<Int>, tabSize: Int) -> Int {
         let clamped = range.clamped(to: 0 ..< lineCount)
         var maxWidth = 0
-        for lineIndex in clamped {
-            maxWidth = max(
-                maxWidth, TextDisplayMetrics.displayWidth(of: line(at: lineIndex), tabSize: tabSize))
+        for start in stride(from: clamped.lowerBound, to: clamped.upperBound, by: 4_096) {
+            for line in rope.lines(in: start ..< min(start + 4_096, clamped.upperBound)) {
+                maxWidth = max(maxWidth, TextDisplayMetrics.displayWidth(of: line, tabSize: tabSize))
+            }
         }
         return maxWidth
     }
