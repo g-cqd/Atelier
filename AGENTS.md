@@ -47,3 +47,14 @@ language mode with warnings as errors and the `ExistentialAny`, `InferIsolatedCo
 `InternalImportsByDefault` and `MemberImportVisibility` features on.
 
 Use `xcrun swift` when the `swift` on PATH is a swiftly shim without a selected toolchain.
+
+## Work order and waiting
+
+- The work runs first in, first out, validity first (book PROC-13). A regression that breaks validity is fixed
+  before its work lands. One that costs only performance joins the work queue, section 9 of
+  `docs/reviews/2026-09-23-fix-plan.md`, with its measurement and origin, and the work lands.
+- `planner`'s `scripts/order_tasks.py` orders a task list by that rule, and plans several agents' work so that no two
+  run on overlapping files at once.
+- Never wait on a build, a test run or an agent with a fixed sleep. Start long commands in the background and let
+  the harness report their end, or use `engineering-practices`' `scripts/wait-for.sh`, which returns the moment the
+  work ends. The suites here take minutes; a fixed sleep either wastes them or checks too early.
