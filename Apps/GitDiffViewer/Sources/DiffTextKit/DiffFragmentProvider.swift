@@ -11,8 +11,9 @@ import SwiftUI
 package final class DiffFragmentProvider: NSObject, @preconcurrency NSTextLayoutManagerDelegate {
     package let metrics: ViewportMetrics
     package var rendered: RenderedText?
-    /// Diagnostics for the pane's rows; read again for every fragment TextKit lays out, so it can be swapped at any
-    /// time without rebuilding the fragment provider.
+    /// Diagnostics for the pane's rows, which each fragment made here keeps and reads as it draws. TextKit keeps its
+    /// fragments when this changes, even through a layout invalidation, so a pane sets it once and changes the
+    /// overlay's content instead (``DiffTextViewCoordinator/diagnostics``).
     package var overlay: DiagnosticOverlay?
 
     package init(rendered: RenderedText? = nil, metrics: ViewportMetrics = ViewportMetrics()) {

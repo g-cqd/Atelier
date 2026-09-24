@@ -93,10 +93,9 @@ package struct DiffTextView: NSViewRepresentable {
         gutterView.source = textView
         gutterView.style = gutter
         gutterView.onGapDrag = onGapDrag
-        gutterView.overlay = diagnosticOverlay
+        gutterView.overlay = context.coordinator.diagnostics
         gutterView.onDiagnosticClick = onDiagnosticClick
-        context.coordinator.fragmentProvider.overlay = diagnosticOverlay
-        context.coordinator.diagnosticsVersion = diagnosticsVersion
+        context.coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
         let minimapView = MinimapView()
         minimapView.scrollView = scrollView
         minimapView.isHidden = !showsMinimap
@@ -164,20 +163,7 @@ package struct DiffTextView: NSViewRepresentable {
         splitController?.syncsScrolling = syncsScrolling
         coordinator.hoverController.isEnabled = hoverEnabled
         coordinator.hoverController.resolve = hoverResolver
-        if coordinator.fragmentProvider.overlay !== diagnosticOverlay
-            || coordinator.diagnosticsVersion != diagnosticsVersion
-        {
-            coordinator.fragmentProvider.overlay = diagnosticOverlay
-            coordinator.gutterView?.overlay = diagnosticOverlay
-            coordinator.diagnosticsVersion = diagnosticsVersion
-            // Laid-out fragments cache what they drew, so a diagnostics change must invalidate them.
-            if let textView = coordinator.textView, let layoutManager = textView.textLayoutManager {
-                layoutManager.invalidateLayout(for: layoutManager.documentRange)
-                textView.needsLayout = true
-            }
-            coordinator.textView?.needsDisplay = true
-            coordinator.gutterView?.needsDisplay = true
-        }
+        coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
         if coordinator.rendered?.id != rendered.id {
             coordinator.apply(rendered, keepingScroll: keepsScrollPosition)
             onDisplayed?()
@@ -211,11 +197,77 @@ package final class DiffTextViewCoordinator: NSObject {
     package var wrapColumn = 0
     package private(set) var rendered: RenderedText?
     package var handledScrollRequest: UUID?
-    /// The last `diagnosticsVersion` applied, so `updateNSView` can tell an in-place overlay mutation from a
+    /// The diagnostics this pane draws: one overlay for the pane's lifetime, which every fragment and the gutter
+    /// hold, and into which ``updateDiagnostics(_:version:)`` copies the caller's rows. A fragment keeps the overlay
+    /// it was laid out with, so an overlay passed in place of another would reach new fragments only.
+    package let diagnostics = DiagnosticOverlay()
+    /// The caller's overlay and version last applied, so `updateNSView` can tell an in-place overlay mutation from a
     /// no-op re-render.
-    package var diagnosticsVersion = -1
+    private var diagnosticsSource: DiagnosticOverlay?
+    private var diagnosticsVersion = -1
     /// ``RenderedText/measuredUnwrappedWidth()`` of the text on show, measured once per render.
     private var unwrappedWidth: (id: UUID, width: CGFloat)?
+
+    package override init() {
+        super.init()
+        fragmentProvider.overlay = diagnostics
+    }
+
+    /// Shows `overlay`'s rows, `nil` showing none, and redraws the rows whose diagnostics changed; nothing is laid out
+    /// again. A no-op unless the overlay or its version changed since the last call.
+    /// - Complexity: O(rows with diagnostics), plus ``redraw(rows:)``.
+    package func updateDiagnostics(_ overlay: DiagnosticOverlay?, version: Int) {
+        guard overlay !== diagnosticsSource || version != diagnosticsVersion else { return }
+        diagnosticsSource = overlay
+        diagnosticsVersion = version
+        let rows = overlay?.snapshot() ?? [:]
+        let shown = diagnostics.snapshot()
+        var changed: [Int] = []
+        for (row, rowDiagnostics) in rows where shown[row] != rowDiagnostics { changed.append(row) }
+        for row in shown.keys where rows[row] == nil { changed.append(row) }
+        guard !changed.isEmpty else { return }
+        diagnostics.replace(rows)
+        gutterView?.needsDisplay = true
+        redraw(rows: changed)
+    }
+
+    /// Marks for display, across their width, the parts of the text view's views that lie over `rows`.
+    ///
+    /// TextKit 2 draws each laid-out fragment into a view of its own and keeps that drawing: neither the text view's
+    /// `needsDisplay` nor invalidating the layout redraws a fragment whose layout is unchanged
+    /// (`DiagnosticRedrawPixelsTests`). Only the viewport's fragments have views; a row outside it is drawn afresh
+    /// when it scrolls in.
+    /// - Complexity: O(rows + views × rows in the viewport).
+    private func redraw(rows: [Int]) {
+        guard let textView, let rendered, let layoutManager = textView.textLayoutManager,
+            let contentManager = layoutManager.textContentManager,
+            let viewport = layoutManager.textViewportLayoutController.viewportRange
+        else { return }
+        let start = layoutManager.documentRange.location
+        let laidOut =
+            rendered.rowIndex(containing: contentManager.offset(from: start, to: viewport.location))
+            ... rendered.rowIndex(containing: contentManager.offset(from: start, to: viewport.endLocation))
+        // Each row's lines, top to bottom, in the text view's coordinates.
+        var bands: [ClosedRange<CGFloat>] = []
+        for row in rows where laidOut.contains(row) && rendered.lineStarts.indices.contains(row) {
+            guard let location = contentManager.location(start, offsetBy: rendered.lineStarts[row]),
+                let fragment = layoutManager.textLayoutFragment(for: location)
+            else { continue }
+            let top = fragment.layoutFragmentFrame.minY + textView.textContainerOrigin.y
+            bands.append(top ... top + fragment.layoutFragmentFrame.height)
+        }
+        guard !bands.isEmpty else { return }
+        var views: [NSView] = [textView]
+        while let view = views.popLast() {
+            views.append(contentsOf: view.subviews)
+            let frame = textView.convert(view.bounds, from: view)
+            for band in bands where band.lowerBound < frame.maxY && frame.minY < band.upperBound {
+                let height = band.upperBound - band.lowerBound
+                let dirty = NSRect(x: frame.minX, y: band.lowerBound, width: frame.width, height: height)
+                view.setNeedsDisplay(view.convert(dirty, from: textView).intersection(view.bounds))
+            }
+        }
+    }
 
     package func apply(_ rendered: RenderedText, keepingScroll: Bool = false) {
         let paletteChanged = self.rendered?.palette.font != rendered.palette.font
