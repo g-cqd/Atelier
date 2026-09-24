@@ -108,31 +108,6 @@ struct BidiControlTests {
     }
 
     @Test
-    func `the placeholders stand for Unicode's bidi controls and nothing else`() {
-        let scalars = (UInt32(0) ... 0x10FFFF).compactMap(Unicode.Scalar.init)
-
-        let mismatched = scalars.filter { (BidiControls.placeholder(for: $0) != nil) != $0.properties.isBidiControl }
-
-        #expect(mismatched.isEmpty)
-    }
-
-    @Test
-    func `a character that shares a control's lead byte is revealed exactly when it is a control`() {
-        // The UTF-8 of every control starts with the byte E2 or D8, which lead U+2000 to U+2FFF and U+0600 to U+063F:
-        // each of those is looked for in the middle of a row and at its end.
-        var placeholders = BidiControls.Placeholders()
-        let led: [ClosedRange<UInt32>] = [0x0600 ... 0x063F, 0x2000 ... 0x2FFF]
-        let scalars = led.joined().compactMap(Unicode.Scalar.init)
-
-        let mismatched = scalars.filter { scalar in
-            let rows = ["a\(String(scalar))b"[...], "a\(String(scalar))"[...]]
-            return rows.contains { (placeholders.reveal($0, at: 0) != $0) != scalar.properties.isBidiControl }
-        }
-
-        #expect(mismatched.isEmpty)
-    }
-
-    @Test
     func `a row not stored as UTF-8 reveals its controls too`() throws {
         let bridged = NSString(string: Self.overridden) as String
         try #require(bridged.utf8.withContiguousStorageIfAvailable { _ in true } == nil)
@@ -290,5 +265,35 @@ struct BidiControlTests {
         let width = columnWidth(of: new)
         #expect(abs(end - start - width) < 0.01)
         #expect(abs(start - line.locationForCharacter(at: 0).x - 4 * width) < 0.01)
+    }
+}
+
+/// Which scalars the placeholders reveal, swept over all of Unicode or a block of it. The sweeps are pure and take about
+/// a second in a debug build, so this suite is not a main-actor one: a main-actor test holds every other one in the run
+/// until it returns, while these run beside them.
+struct BidiControlScalarTests {
+    @Test
+    func `the placeholders stand for Unicode's bidi controls and nothing else`() {
+        let scalars = (UInt32(0) ... 0x10FFFF).compactMap(Unicode.Scalar.init)
+
+        let mismatched = scalars.filter { (BidiControls.placeholder(for: $0) != nil) != $0.properties.isBidiControl }
+
+        #expect(mismatched.isEmpty)
+    }
+
+    @Test
+    func `a character that shares a control's lead byte is revealed exactly when it is a control`() {
+        // The UTF-8 of every control starts with the byte E2 or D8, which lead U+2000 to U+2FFF and U+0600 to U+063F:
+        // each of those is looked for in the middle of a row and at its end.
+        var placeholders = BidiControls.Placeholders()
+        let led: [ClosedRange<UInt32>] = [0x0600 ... 0x063F, 0x2000 ... 0x2FFF]
+        let scalars = led.joined().compactMap(Unicode.Scalar.init)
+
+        let mismatched = scalars.filter { scalar in
+            let rows = ["a\(String(scalar))b"[...], "a\(String(scalar))"[...]]
+            return rows.contains { (placeholders.reveal($0, at: 0) != $0) != scalar.properties.isBidiControl }
+        }
+
+        #expect(mismatched.isEmpty)
     }
 }
