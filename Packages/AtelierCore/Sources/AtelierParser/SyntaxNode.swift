@@ -65,10 +65,42 @@ public struct SyntaxNode: Sendable, Equatable {
         self.subtrees = children.isEmpty && fields.isEmpty ? nil : Subtrees(children: children, fields: fields)
     }
 
+    /// Whether the two nodes have the same attributes, children and fields, compared in a loop: compared recursively,
+    /// two chains overflow a 512 KiB thread stack a few thousand levels down.
+    /// - Complexity: O(n) in the nodes the two do not share. A pair of subtrees reached twice, as a field reaches its
+    ///   child's, is compared once: comparing fields and children alike doubles the work at each level a field names.
     public static func == (lhs: SyntaxNode, rhs: SyntaxNode) -> Bool {
-        lhs.type == rhs.type && lhs.byteRange == rhs.byteRange && lhs.pointRange == rhs.pointRange
-            && lhs.isError == rhs.isError && lhs.isExtra == rhs.isExtra && lhs.isNamed == rhs.isNamed
-            && (lhs.subtrees === rhs.subtrees || (lhs.children == rhs.children && lhs.fields == rhs.fields))
+        guard lhs.hasSameAttributes(as: rhs) else { return false }
+        // The pairs of subtrees still to compare, below two nodes with the same attributes.
+        var pending: [(Subtrees?, Subtrees?)] = []
+        if lhs.subtrees !== rhs.subtrees { pending.append((lhs.subtrees, rhs.subtrees)) }
+        var compared: Set<SubtreesPair> = []
+        /// Whether the two lists have the same count and their nodes the same attributes, pair by pair; queues the
+        /// pairs' subtrees.
+        func queue(_ leftNodes: [SyntaxNode], _ rightNodes: [SyntaxNode]) -> Bool {
+            guard leftNodes.count == rightNodes.count else { return false }
+            for (leftNode, rightNode) in zip(leftNodes, rightNodes) {
+                guard leftNode.hasSameAttributes(as: rightNode) else { return false }
+                if leftNode.subtrees !== rightNode.subtrees { pending.append((leftNode.subtrees, rightNode.subtrees)) }
+            }
+            return true
+        }
+        while let (left, right) = pending.popLast() {
+            let (leftFields, rightFields) = (left?.fields ?? [:], right?.fields ?? [:])
+            guard leftFields.count == rightFields.count else { return false }
+            if let left, let right, !compared.insert(SubtreesPair(left: left, right: right)).inserted { continue }
+            guard queue(left?.children ?? [], right?.children ?? []) else { return false }
+            for (name, leftNodes) in leftFields {
+                guard let rightNodes = rightFields[name], queue(leftNodes, rightNodes) else { return false }
+            }
+        }
+        return true
+    }
+
+    /// Whether the two nodes are alike but for their children and fields.
+    private func hasSameAttributes(as other: SyntaxNode) -> Bool {
+        type == other.type && byteRange == other.byteRange && pointRange == other.pointRange
+            && isError == other.isError && isExtra == other.isExtra && isNamed == other.isNamed
     }
 
     /// This node's subtrees, copied first if another node shares them, so a change reaches this node alone.
@@ -165,6 +197,17 @@ private final class Subtrees: @unchecked Sendable {
             lists.append(contentsOf: fields.values)
             fields = [:]
         }
+    }
+}
+
+/// Two subtrees ``SyntaxNode/==`` has compared, or is comparing, by identity.
+private struct SubtreesPair: Hashable {
+    let left: ObjectIdentifier
+    let right: ObjectIdentifier
+
+    init(left: Subtrees, right: Subtrees) {
+        self.left = ObjectIdentifier(left)
+        self.right = ObjectIdentifier(right)
     }
 }
 

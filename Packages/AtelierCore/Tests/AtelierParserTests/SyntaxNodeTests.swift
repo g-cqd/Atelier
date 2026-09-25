@@ -64,9 +64,60 @@ struct SyntaxNodeTests {
         #expect(rootFields == 1)
     }
 
-    /// A `depth`-level chain from a leaf up, each level made by `wrap` from the one below.
-    private static func makeChain(depth: Int, wrap: (SyntaxNode) -> SyntaxNode) -> SyntaxNode {
-        var node = SyntaxNode(type: "leaf")
+    @Test(arguments: [false, true])
+    func `Two chains too deep to compare recursively compare on a pool-sized stack`(linkedByFields: Bool) async {
+        // Compared recursively, two chains overflow a 512 KiB stack a few thousand levels down. Built apart, the two
+        // share no storage, so the comparison walks every level.
+        let (same, different) = await onThread {
+            let wrap: (SyntaxNode) -> SyntaxNode = { inner in
+                linkedByFields
+                    ? SyntaxNode(type: "branch", fields: ["inner": [inner]])
+                    : SyntaxNode(type: "branch", children: [inner])
+            }
+            let chain = Self.makeChain(depth: 100_000, wrap: wrap)
+            let twin = Self.makeChain(depth: 100_000, wrap: wrap)
+            let other = Self.makeChain(depth: 100_000, leafType: "other", wrap: wrap)
+            return (chain == twin, chain == other)
+        }
+        #expect(same)
+        #expect(!different)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func `Two trees whose fields repeat their children compare each subtree once`() {
+        // The parser stores a field as a copy of a child; comparing fields and children alike would compare the
+        // leaves of these chains 2^63 times.
+        let wrap: (SyntaxNode) -> SyntaxNode = { SyntaxNode(type: "branch", children: [$0], fields: ["inner": [$0]]) }
+        let chain = Self.makeChain(depth: 64, wrap: wrap)
+        let twin = Self.makeChain(depth: 64, wrap: wrap)
+        let other = Self.makeChain(depth: 64, leafType: "other", wrap: wrap)
+
+        #expect(chain == twin)
+        #expect(chain != other)
+    }
+
+    @Test
+    func `Nodes differ by any child, field name or field node`() {
+        let (a, b) = (SyntaxNode(type: "a"), SyntaxNode(type: "b"))
+        let node = SyntaxNode(type: "pair", children: [a, b], fields: ["key": [a]])
+
+        #expect(node == SyntaxNode(type: "pair", children: [a, b], fields: ["key": [a]]))
+        #expect(node != SyntaxNode(type: "pair", children: [a], fields: ["key": [a]]))
+        #expect(node != SyntaxNode(type: "pair", children: [b, a], fields: ["key": [a]]))
+        #expect(node != SyntaxNode(type: "pair", children: [a, b], fields: ["value": [a]]))
+        #expect(node != SyntaxNode(type: "pair", children: [a, b], fields: ["key": [b]]))
+        #expect(node != SyntaxNode(type: "pair", children: [a, b], fields: ["key": [a, a]]))
+        #expect(node != SyntaxNode(type: "pair", children: [a, b]))
+        var emptied = SyntaxNode(type: "leaf", children: [a])
+        emptied.children = []
+        #expect(emptied == SyntaxNode(type: "leaf"))
+    }
+
+    /// A `depth`-level chain from a leaf of type `leafType` up, each level made by `wrap` from the one below.
+    private static func makeChain(
+        depth: Int, leafType: String = "leaf", wrap: (SyntaxNode) -> SyntaxNode
+    ) -> SyntaxNode {
+        var node = SyntaxNode(type: leafType)
         for _ in 1 ..< depth { node = wrap(node) }
         return node
     }
