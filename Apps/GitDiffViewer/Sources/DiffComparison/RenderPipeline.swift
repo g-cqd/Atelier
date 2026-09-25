@@ -18,6 +18,9 @@ package final class RenderPipeline {
     package enum Event {
         /// A render reached the model; `isFirst` for the file or the first card of a generation.
         case published(RenderedDiff.ID, isFirst: Bool)
+        /// A stage after the text landed on a published file a pane shows (PERF-09), always after the file's
+        /// `.published`; it may come after `.finished`, which says the render published everything.
+        case decorated(RenderedDiff.ID, DecorationLayer)
         case finished
         case failed(String)
     }
@@ -101,18 +104,19 @@ package final class RenderPipeline {
     let preparer: DiffPreparer
     let taskProvider: any TaskProvider
     let renderer: PaneRenderer
-    /// swift-syntax's colour for the displayed Swift sides (PERF-11); see `RenderPipeline+Refinement.swift`.
-    let refinement: SwiftColorRefinement
+    /// The stages after the text: each displayed file's colour, emphasis and moved lines (PERF-09); see
+    /// `RenderPipeline+Decoration.swift`.
+    let decorator: DiffDecorator
 
     package init(
         preparer: DiffPreparer, taskProvider: any TaskProvider, options: DiffRenderer.Options,
-        renderer: PaneRenderer = .live, refinement: SwiftColorRefinement = SwiftColorRefinement()
+        renderer: PaneRenderer = .live, decorator: DiffDecorator = DiffDecorator()
     ) {
         self.preparer = preparer
         self.taskProvider = taskProvider
         self.options = options
         self.renderer = renderer
-        self.refinement = refinement
+        self.decorator = decorator
     }
 
     /// Options for the next renders. A change to how diffs render leaves what is published stale until `relayout`
@@ -128,6 +132,7 @@ package final class RenderPipeline {
 
     package func clear() {
         task?.cancel()
+        decorator.cancel(keepingColors: [], marks: [])
         shelvedLists = []
         generation += 1
         completedGeneration = generation

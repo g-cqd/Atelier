@@ -16,20 +16,22 @@ struct CRLFTokenTests {
         let last = 3 // no newline at the end
         """
 
-    private static func tokens(_ text: String) -> LineTokens {
-        DiffRenderer.tokensByLine(text: text, lines: DiffModel.lines(of: text), language: .swift)
+    /// Each line's tokens from the lexer tier, run as the pipeline runs it.
+    private static func tokens(_ text: String) async -> [[LineToken]] {
+        let layered = await DecorationFixtures.lexed(text, language: .swift)
+        return (0 ..< layered.lineCount).map { layered.merged(line: $0) ?? [] }
     }
 
     @Test
-    func `a CRLF file colours the same columns as its LF twin`() {
+    func `a CRLF file colours the same columns as its LF twin`() async {
         let crlf = Self.lf.replacingOccurrences(of: "\n", with: "\r\n")
-        #expect(Self.tokens(crlf) == Self.tokens(Self.lf))
+        #expect(await Self.tokens(crlf) == Self.tokens(Self.lf))
     }
 
     @Test
-    func `a CRLF file that ends with a newline colours like its LF twin`() {
+    func `a CRLF file that ends with a newline colours like its LF twin`() async {
         let lf = Self.lf + "\n"
         let crlf = lf.replacingOccurrences(of: "\n", with: "\r\n")
-        #expect(Self.tokens(crlf) == Self.tokens(lf))
+        #expect(await Self.tokens(crlf) == Self.tokens(lf))
     }
 }

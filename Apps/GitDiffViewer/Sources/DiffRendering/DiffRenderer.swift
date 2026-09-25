@@ -1,7 +1,7 @@
 import AppKit
 package import DiffCore
 import DiffGit
-package import Foundation
+import Foundation
 
 package enum DiffRenderer {
     package struct Options: Sendable {
@@ -164,7 +164,7 @@ package enum DiffRenderer {
         var gaps: [RenderedGap] = []
         var changes: [RenderedChange] = []
         var lineStarts: [Int] = []
-        var spans = RenderSpans()
+        var placeholders = BidiControls.Placeholders()
         metas.reserveCapacity(rows.count)
         lineStarts.reserveCapacity(rows.count)
 
@@ -179,50 +179,34 @@ package enum DiffRenderer {
                     continue
                 case .folded(let diffRow, let fileIndex, let file):
                     // The line as the new file reads: no tint and no emphasis, numbered on the new side alone.
-                    let shown = shownLine(of: diffRow, in: file, side: side)
-                    if let shown {
-                        text.append(contentsOf: spans.placeholders.reveal(shown.line, at: offset))
-                        length = shown.line.utf16.count
-                        for unit in shown.line.utf16 where unit == 9 { tabs += 1 }
-                        for token in shown.tokens {
-                            let range = token.range
-                            spans.tokens.append(
-                                (NSRange(location: offset + range.lowerBound, length: range.count), token.role))
-                        }
+                    if let line = shownLine(of: diffRow, in: file, side: side) {
+                        text.append(contentsOf: placeholders.reveal(line, at: offset))
+                        length = line.utf16.count
+                        for unit in line.utf16 where unit == 9 { tabs += 1 }
                     }
                     metas.append(
                         RowMeta(
                             kind: .context, oldNumber: nil, newNumber: diffRow.new.map { $0.index + 1 },
                             fileIndex: fileIndex))
                 case .diff(let diffRow, let fileIndex, let file):
-                    let shown = shownLine(of: diffRow, in: file, side: side)
-                    let kind = displayedKind(of: diffRow, side: side, hasLine: shown != nil)
-                    if let shown {
-                        text.append(contentsOf: spans.placeholders.reveal(shown.line, at: offset))
-                        length = shown.line.utf16.count
-                        for unit in shown.line.utf16 where unit == 9 { tabs += 1 }
-                        for token in shown.tokens {
-                            let range = token.range
-                            spans.tokens.append(
-                                (NSRange(location: offset + range.lowerBound, length: range.count), token.role))
-                        }
-                        for range in shown.ref.emphasis {
-                            spans.emphasis.append(
-                                (NSRange(location: offset + range.lowerBound, length: range.count), kind))
-                        }
+                    let line = shownLine(of: diffRow, in: file, side: side)
+                    if let line {
+                        text.append(contentsOf: placeholders.reveal(line, at: offset))
+                        length = line.utf16.count
+                        for unit in line.utf16 where unit == 9 { tabs += 1 }
                     }
                     metas.append(
                         RowMeta(
-                            kind: kind, oldNumber: diffRow.old.map { $0.index + 1 },
-                            newNumber: diffRow.new.map { $0.index + 1 }, fileIndex: fileIndex, isMoved: diffRow.isMoved)
-                    )
+                            kind: displayedKind(of: diffRow, side: side, hasLine: line != nil),
+                            oldNumber: diffRow.old.map { $0.index + 1 }, newNumber: diffRow.new.map { $0.index + 1 },
+                            fileIndex: fileIndex))
                 case .gap(let marker):
                     // The rows it hides take none of their own: the gap lies on the boundary between the rows
                     // around them (book DIFF-02).
                     gaps.append(RenderedGap(boundary: metas.count, marker: marker))
                     continue
                 case .header(let title, let fileIndex):
-                    text.append(contentsOf: spans.placeholders.reveal(Substring(title), at: offset))
+                    text.append(contentsOf: placeholders.reveal(Substring(title), at: offset))
                     length = title.utf16.count
                     for unit in title.utf16 where unit == 9 { tabs += 1 }
                     metas.append(RowMeta(kind: .header, oldNumber: nil, newNumber: nil, fileIndex: fileIndex))
@@ -238,7 +222,8 @@ package enum DiffRenderer {
             text.removeLast()
         }
 
-        let styled = attributed(text, spans: spans, metas: metas, lineStarts: lineStarts, side: side, options: options)
+        let styled = attributed(
+            text, placeholders: placeholders, metas: metas, lineStarts: lineStarts, options: options)
         addBands(of: gaps, lineStarts: lineStarts, lineHeight: styled.lineHeight, to: styled.attributed)
         return RenderedText(
             side: side, palette: options.palette, attributed: styled.attributed, rows: metas, gaps: gaps,
@@ -247,18 +232,11 @@ package enum DiffRenderer {
         )
     }
 
-    /// The coloured stretches of an assembled text, in UTF-16 ranges over the whole text.
-    private struct RenderSpans {
-        var tokens: [(NSRange, HighlightRole)] = []
-        var emphasis: [(NSRange, RowKind)] = []
-        /// The bidi controls the rows show as placeholders, which keep the source's offsets.
-        var placeholders = BidiControls.Placeholders()
-    }
-
-    /// Applies the palette to the assembled text: font, paragraph style, token colours, emphasis, bidi control
-    /// placeholders and bold headers.
+    /// Applies the palette to the assembled text: font, the text colour, paragraph style, the placeholders of the bidi
+    /// controls the rows show, which keep the source's offsets, and bold headers. The text is plain (PERF-09 stage 0):
+    /// syntax colour and emphasis are drawn over it once they land, and change no layout (`DiffDecorations`).
     private static func attributed(
-        _ text: String, spans: RenderSpans, metas: [RowMeta], lineStarts: [Int], side: RenderedSide, options: Options
+        _ text: String, placeholders: BidiControls.Placeholders, metas: [RowMeta], lineStarts: [Int], options: Options
     ) -> (attributed: NSMutableAttributedString, baselineOffset: CGFloat, lineHeight: CGFloat) {
         let palette = options.palette
         let spaceWidth = (" " as NSString).size(withAttributes: [.font: palette.font]).width
@@ -279,13 +257,7 @@ package enum DiffRenderer {
             attributes: [.font: palette.font, .foregroundColor: palette.textColor, .paragraphStyle: paragraphStyle]
         )
         attributed.beginEditing()
-        for (range, kind) in spans.tokens {
-            attributed.addAttribute(.foregroundColor, value: palette.color(for: kind), range: range)
-        }
-        for (range, kind) in spans.emphasis {
-            attributed.addAttribute(.diffEmphasis, value: palette.emphasis(for: kind, side: side), range: range)
-        }
-        spans.placeholders.apply(to: attributed, palette: palette)
+        placeholders.apply(to: attributed, palette: palette)
         let boldFont =
             NSFont(descriptor: palette.font.fontDescriptor.withSymbolicTraits(.bold), size: palette.font.pointSize)
             ?? palette.font
@@ -318,24 +290,14 @@ package enum DiffRenderer {
         }
     }
 
-    private struct ShownLine {
-        let ref: DiffLineRef
-        let line: Substring
-        /// In UTF-16 offsets from the line's start.
-        let tokens: ArraySlice<LineToken>
-    }
-
-    private static func shownLine(of row: DiffRow, in file: PreparedDiff, side: RenderedSide) -> ShownLine? {
-        func old(_ ref: DiffLineRef) -> ShownLine {
-            ShownLine(ref: ref, line: file.model.oldLines[ref.index], tokens: file.oldTokens[ref.index])
-        }
-        func new(_ ref: DiffLineRef) -> ShownLine {
-            ShownLine(ref: ref, line: file.model.newLines[ref.index], tokens: file.newTokens[ref.index])
-        }
+    /// The source line `row` shows on `side`: a unified row its new line, or its old one when it has no new line.
+    private static func shownLine(of row: DiffRow, in file: PreparedDiff, side: RenderedSide) -> Substring? {
+        let old = row.old.map { file.model.oldLines[$0.index] }
+        let new = row.new.map { file.model.newLines[$0.index] }
         switch side {
-            case .unified: return row.new.map(new) ?? row.old.map(old)
-            case .old: return row.old.map(old)
-            case .new: return row.new.map(new)
+            case .unified: return new ?? old
+            case .old: return old
+            case .new: return new
         }
     }
 
@@ -379,41 +341,6 @@ extension DiffRenderer {
 }
 
 extension DiffRenderer {
-    /// The lexical tokens of `text`, per line of `lines`, in UTF-16 offsets from the line's start: the units a row is
-    /// styled in, converted here once, so a render only adds the row's offset. A plain-text file is not scanned.
-    /// - Parameters:
-    ///   - text: One side of the diff.
-    ///   - lines: `text`'s lines in order, as `DiffModel.lines(of:)` cuts them, which drops a CRLF line's `\r`.
-    ///   - language: The language whose lexer scans `text`.
-    /// - Returns: One entry per line, each range relative to the line's start and within its length, all in one flat
-    ///   buffer. The ranges are the source line's UTF-16 offsets, which the shown row keeps: a bidi placeholder takes
-    ///   the one unit of the control it stands for.
-    /// - Complexity: O(bytes of `text` + lines + tokens), in a handful of allocations.
-    package static func tokensByLine(text: String, lines: [Substring], language: Language) -> LineTokens {
-        guard language != .plain else { return LineTokens(emptyLines: lines.count) }
-        let utf8 = text.utf8Span
-        let tokens = LexicalHighlightEngine().highlight(utf8: utf8.span, language: language)
-        return tokensByLine(tokens, text: text, lines: lines)
-    }
-
-    /// `tokens`, found over the whole of `text`, cut into `lines` in UTF-16 offsets from each line's start, as
-    /// ``tokensByLine(text:lines:language:)`` cuts the lexer's: the units a row is styled in.
-    /// - Parameters:
-    ///   - tokens: Tokens over the whole of `text` in UTF-8 byte offsets, ascending and disjoint.
-    ///   - text: One side of the diff.
-    ///   - lines: `text`'s lines in order, as `DiffModel.lines(of:)` cuts them, which drops a CRLF line's `\r`.
-    /// - Returns: One entry per line, as ``tokensByLine(text:lines:language:)`` returns them.
-    /// - Complexity: O(bytes of `text` + lines + tokens), in a handful of allocations.
-    package static func tokensByLine(_ tokens: [HighlightToken], text: String, lines: [Substring]) -> LineTokens {
-        let utf8 = text.utf8Span
-        let bytes = utf8.span
-        let lineRanges = lineRanges(of: text, lines: lines)
-        var byLine = LineTokens(tokens, lineRanges: lineRanges)
-        // An ASCII text's byte offsets are already its UTF-16 ones.
-        if !utf8.isKnownASCII { byLine.moveToUTF16(over: bytes, lineRanges: lineRanges) }
-        return byLine
-    }
-
     /// Where each of `lines` lies in `text`, in UTF-8 bytes, without its line break.
     ///
     /// Each line starts where it sits in the text. A CRLF line's `\r` is in the text but not in the line, so the walk
@@ -440,10 +367,4 @@ extension DiffRenderer {
         }
         return lineRanges
     }
-}
-
-extension NSAttributedString.Key {
-    /// The colour behind an intraline change. Not `backgroundColor`: TextKit draws that around the glyphs alone,
-    /// which leaves the extra space of a larger line height uncovered, so the layout fragment draws this itself.
-    package static let diffEmphasis = NSAttributedString.Key("GitDiffViewer.diffEmphasis")
 }

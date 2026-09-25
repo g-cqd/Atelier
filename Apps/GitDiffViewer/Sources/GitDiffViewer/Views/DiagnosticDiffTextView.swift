@@ -47,7 +47,7 @@ struct DiagnosticDiffTextView: View {
             scrollsPastEnd: model.settings.scrollsPastEnd, bouncesAtEdges: model.settings.bouncesAtEdges,
             underBars: underBars
         )
-        .refined(with: model.refinedSides(for: rendered))
+        .decorated(with: model.decorations(for: rendered), viewport: model.decorationViewport)
         .followingDiagnostics(of: rendered, in: model, into: diagnostics)
     }
 }

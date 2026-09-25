@@ -5,9 +5,9 @@ import Testing
 
 @testable import DiffRendering
 
-/// Opt-in timing of the lexical tier over one pair of 50,000-line Swift sides, in a release build: the lexing a
-/// file's preparation runs (`tokensByLine` on both sides), the same for a plain-text file, and the render that
-/// places the tokens (both split sides, every row). The scan alone is timed through the engine's two entry points,
+/// Opt-in timing of the lexical tier over one pair of 50,000-line Swift sides, in a release build: the whole-text lexing
+/// and cutting into lines a file's preparation ran until the text came first (PERF-09), the same for a plain-text file,
+/// and the render of the plain text (both split sides, every row). The scan alone is timed through the engine's two entry points,
 /// the UTF-16 one the renderer called until the lexer moved to UTF-8, and the UTF-8 one it calls since.
 ///
 /// A second test times the re-renders of a prepared pair that the window runs without lexing again: a layout toggle
@@ -39,8 +39,12 @@ struct DiffLexingBenchmark {
             // Each result is released before the next timed call, so no call pays for freeing another's.
             var lexed: [LineTokens] = []
             let lexing = Self.milliseconds {
-                lexed.append(DiffRenderer.tokensByLine(text: old, lines: oldLines, language: .swift))
-                lexed.append(DiffRenderer.tokensByLine(text: new, lines: newLines, language: .swift))
+                lexed.append(
+                    DecorationFixtures.byLine(
+                        engine.highlight(utf8: oldBytes, language: .swift), text: old, lines: oldLines))
+                lexed.append(
+                    DecorationFixtures.byLine(
+                        engine.highlight(utf8: newBytes, language: .swift), text: new, lines: newLines))
             }
             var scanned: [[HighlightToken]] = []
             let utf16Scan = Self.milliseconds {
@@ -57,8 +61,8 @@ struct DiffLexingBenchmark {
             #expect(utf8Counts == utf16Counts)
             var skipped: [LineTokens] = []
             let plain = Self.milliseconds {
-                skipped.append(DiffRenderer.tokensByLine(text: old, lines: oldLines, language: .plain))
-                skipped.append(DiffRenderer.tokensByLine(text: new, lines: newLines, language: .plain))
+                skipped.append(LineTokens(emptyLines: oldLines.count))
+                skipped.append(LineTokens(emptyLines: newLines.count))
             }
             var rendered: RenderedDiff?
             let placement = Self.milliseconds {
