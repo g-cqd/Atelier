@@ -290,10 +290,10 @@ struct DiffRendererTests {
     }
 
     @Test
-    func `an unterminated string that runs to the closing newline is clipped to its lines`() {
+    func `an unterminated string that runs to the closing newline is clipped to its lines`() async {
         let text = "let s = \"\"\"\n}\n"
-        let lines: [Substring] = ["let s = \"\"\"", "}"]
-        let byLine = DiffRenderer.tokensByLine(text: text, lines: lines, language: .swift)
+        let layered = await DecorationFixtures.lexed(text, language: .swift)
+        let byLine = (0 ..< layered.lineCount).map { layered.merged(line: $0) ?? [] }
         #expect(byLine.count == 2)
         #expect(byLine[1].map(\.range) == [0 ..< 1])
         #expect(byLine[1].map(\.role) == [.string])

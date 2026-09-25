@@ -97,8 +97,6 @@ package struct RowMeta: Sendable {
     package let oldNumber: Int?
     package let newNumber: Int?
     package var fileIndex = 0
-    /// The line only moved; drawn in a calmer colour than a real change.
-    package var isMoved = false
 }
 
 /// How much of a file is rendered.
@@ -109,19 +107,25 @@ package enum RenderLayout: Sendable, Equatable {
     case changes(context: Int, expansions: [GapKey: GapExpansion], wholeWhenUnchanged: Bool = false)
 }
 
-/// A file's diff and tokens, computed once per selection so re-layouts (gap drags, layout toggles) stay cheap.
+/// A file's diff as the first stage leaves it (PERF-09 stage 0): the rows of its two sides and each change's pairs,
+/// which is all a text needs to be drawn, computed once per selection so re-layouts (gap drags, layout toggles) stay
+/// cheap. Its decorations, the colour of each side and each pair's emphasis and the moved lines, come after the text,
+/// from what this keeps (`DiffDecorations`).
 package final class PreparedDiff: Sendable {
     /// Tells this preparation apart from every other, for what is kept per preparation of a side without a blob id.
     package let id = UUID()
     package let title: String
+    /// The diff's first phase: its structure, rows and pairs, with neither emphasis nor moved lines.
     package let model: DiffModel
-    /// Each side's lexical tokens per line, in UTF-16 offsets from the line's start, ready to place on a row.
-    package let oldTokens: LineTokens
-    package let newTokens: LineTokens
-    /// The two sides' texts and their language, which the tiers after the lexer read (PERF-11).
+    /// The two sides' texts and their language, which the decorating stages read.
     package let oldText: String
     package let newText: String
     package let language: Language
+    /// How finely a pair's lines are compared, and the diff's stages, for the emphasis that comes after the text.
+    package let granularity: IntralineGranularity
+    package let pipeline: DiffPipeline
+    /// The syntax granularity's token boundaries, read from the syntax facts store when a side has a revision.
+    private let tokenRanges: SwiftSyntaxTokenRanges
 
     /// - Parameters:
     ///   - input: The two sides, their language and their revisions.
@@ -137,11 +141,15 @@ package final class PreparedDiff: Sendable {
         oldText = input.oldText
         newText = input.newText
         language = input.language
-        model = DiffModel(
-            oldText: input.oldText, newText: input.newText, granularity: granularity, language: input.language,
-            pipeline: DiffPipeline(heuristics: heuristics), tokenRanges: Self.tokenRanges(for: input, store: store))
-        oldTokens = DiffRenderer.tokensByLine(text: input.oldText, lines: model.oldLines, language: input.language)
-        newTokens = DiffRenderer.tokensByLine(text: input.newText, lines: model.newLines, language: input.language)
+        self.granularity = granularity
+        pipeline = DiffPipeline(heuristics: heuristics)
+        model = DiffModel(structureOf: input.oldText, newText: input.newText, pipeline: pipeline)
+        tokenRanges = Self.tokenRanges(for: input, store: store)
+    }
+
+    /// Where the syntax granularity reads each side's token boundaries.
+    package var tokenSource: SyntaxTokenSource {
+        SyntaxTokenSource(provider: tokenRanges, language: language, oldText: oldText, newText: newText)
     }
 
     /// The syntax granularity's provider: one that reads each side's facts from `store` when the side has a revision.

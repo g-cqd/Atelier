@@ -2,21 +2,49 @@ package import AppKit
 import DiffCore
 package import DiffRendering
 import Foundation
+import Synchronization
 
-/// A pane's refined colours (PERF-11 step 1): the tokens a tier after the lexer found for the sides the pane shows,
-/// drawn over the colours the text was rendered with as TextKit 2 rendering attributes, which change no layout.
+/// What a pane's fragments read as they draw: the text the pane shows and its decorations, handed over under a lock,
+/// since TextKit may draw a fragment on a thread of its own.
+package final class DecorationSnapshot: Sendable {
+    private struct State {
+        var rendered: RenderedText?
+        var decorations: DiffDecorations?
+    }
+
+    private let state = Mutex(State())
+
+    package init() {}
+
+    func set(rendered: RenderedText?, decorations: DiffDecorations?) {
+        state.withLock { $0 = State(rendered: rendered, decorations: decorations) }
+    }
+
+    /// The decorations of `rendered`; nil while the pane shows another text, or none has landed.
+    package func decorations(for rendered: RenderedText) -> DiffDecorations? {
+        state.withLock { $0.rendered === rendered ? $0.decorations : nil }
+    }
+}
+
+/// A pane's decorations (PERF-09 stages 1 and 2, PERF-11): what the stages after the text found for the sides the pane
+/// shows, drawn over its plain text without laying anything out again.
 ///
-/// The text keeps the lexer's colours in its storage, so the first paint is the one the pane always made. Once the
-/// refined tokens land, ``validate(_:in:)`` colours each row laid out in the viewport from the tokens of the source line
-/// the row shows, where they differ from the storage's, and the fragments' views are redrawn. TextKit drops rendering
-/// attributes when it lays a fragment out again, and calls the validator for it, so they are rebuilt from here every
-/// time and never lost. Each pane, the scrolling one and a card's, installs one on its own layout manager.
+/// - Colour goes through TextKit 2's rendering attributes: ``validate(_:in:)`` colours each row laid out in the viewport
+///   from the tokens of the source line the row shows, where they differ from the storage's plain colour. TextKit drops
+///   rendering attributes when it lays a fragment out again, and calls the validator for it, so they are rebuilt from
+///   here every time and never lost.
+/// - Emphasis and the moved rows' background are read by each row's fragment as it draws, from ``snapshot``: when they
+///   land, the fragments are only redrawn.
+///
+/// Each pane, the scrolling one and a card's, keeps one and installs it on its own layout manager.
 @MainActor
-package final class RefinedColors {
+package final class DecorationStore {
+    /// What the pane's fragments draw the decorations from.
+    package let snapshot = DecorationSnapshot()
     /// The text the pane shows, whose rows map to source lines.
     package private(set) var rendered: RenderedText?
-    /// What the pane colours ``rendered``'s rows with; nil leaves the storage's colours.
-    package private(set) var sides: RefinedSides?
+    /// What the pane decorates ``rendered``'s rows with; nil leaves them plain.
+    package private(set) var decorations: DiffDecorations?
     private weak var layoutManager: NSTextLayoutManager?
     /// Whether the layout manager keeps the rows it laid out when they leave the viewport, as a card's does.
     private var retainsLayout = false
@@ -37,22 +65,38 @@ package final class RefinedColors {
         }
     }
 
-    /// Shows `sides` over `rendered`: a no-op unless either changed. Clears the colours the pane drew before, colours
-    /// the fragments laid out in the viewport again, or every fragment laid out when the layout manager keeps them, and
-    /// redraws them; nothing is laid out again.
+    /// Shows `decorations` over `rendered`: a no-op unless the text or a decoration changed. New colours clear those the
+    /// pane drew before and colour the fragments laid out in the viewport again, or every fragment laid out when the
+    /// layout manager keeps them; new emphasis or moved lines only redraw them. Nothing is laid out again.
     /// - Complexity: O(rows coloured + their tokens)
     /// - Parameters:
     ///   - rendered: The text the pane shows.
-    ///   - sides: What to colour its rows with; nil gives back the lexer's colours.
+    ///   - decorations: What to decorate its rows with; nil leaves them plain.
     ///   - view: The text view that shows the pane, whose fragment views are redrawn.
-    package func update(rendered: RenderedText?, sides: RefinedSides?, view: NSView?) {
-        guard rendered !== self.rendered || sides?.id != self.sides?.id else { return }
-        let hadColors = self.rendered != nil && self.sides != nil
+    package func update(rendered: RenderedText?, decorations: DiffDecorations?, view: NSView?) {
+        let isNewText = rendered !== self.rendered
+        let colorsChanged = isNewText || decorations?.colorVersion != self.decorations?.colorVersion
+        let marksChanged = isNewText || decorations?.markVersion != self.decorations?.markVersion
+        guard colorsChanged || marksChanged else { return }
+        let hadColors = self.rendered != nil && self.decorations != nil
         self.rendered = rendered
-        self.sides = sides
-        guard let layoutManager, hadColors || sides != nil else { return }
+        self.decorations = decorations
+        snapshot.set(rendered: rendered, decorations: decorations)
+        if colorsChanged { recolor(clearing: hadColors) }
+        // TextKit draws each fragment in a view of its own, below the text view, and keeps what it drew.
+        var views = view.map { [$0] } ?? []
+        while let next = views.popLast() {
+            next.needsDisplay = true
+            views.append(contentsOf: next.subviews)
+        }
+    }
+
+    /// Colours again the fragments laid out in the viewport, or every one laid out when the layout manager keeps them,
+    /// having cleared the colours drawn before when `clearing`.
+    private func recolor(clearing: Bool) {
+        guard let layoutManager, clearing || decorations != nil else { return }
         let range = layoutManager.documentRange
-        if hadColors { layoutManager.removeRenderingAttribute(.foregroundColor, for: range) }
+        if clearing { layoutManager.removeRenderingAttribute(.foregroundColor, for: range) }
         layoutManager.invalidateRenderingAttributes(for: range)
         if retainsLayout {
             _ = layoutManager.enumerateTextLayoutFragments(from: range.location) { fragment in
@@ -68,19 +112,13 @@ package final class RefinedColors {
                 return true
             }
         }
-        // TextKit draws each fragment in a view of its own, below the text view, and keeps what it drew.
-        var views = view.map { [$0] } ?? []
-        while let next = views.popLast() {
-            next.needsDisplay = true
-            views.append(contentsOf: next.subviews)
-        }
     }
 
-    /// Fills the rendering attributes of `fragment`'s rows from ``sides``; does nothing while there are none, or for a
-    /// row whose side is not refined.
+    /// Fills the rendering attributes of `fragment`'s rows from ``decorations``; does nothing while there are none, or
+    /// for a row whose side has no colour yet.
     /// - Complexity: O(rows in the fragment + their tokens)
     package func validate(_ fragment: NSTextLayoutFragment, in layoutManager: NSTextLayoutManager) {
-        guard let rendered, let sides, !rendered.rows.isEmpty,
+        guard let rendered, let decorations, !rendered.rows.isEmpty,
             let contentManager = layoutManager.textContentManager
         else { return }
         let range = fragment.rangeInElement
@@ -94,7 +132,7 @@ package final class RefinedColors {
         while row < rendered.rows.count, rendered.lineStarts[row] < max(end, anchor.offset + 1) {
             let lineStart = rendered.lineStarts[row]
             let lineEnd = min(row + 1 < rendered.lineStarts.count ? rendered.lineStarts[row + 1] - 1 : length, length)
-            if let tokens = sides.tokens(of: rendered.rows[row], on: rendered.side), lineEnd > lineStart {
+            if let tokens = decorations.tokens(of: rendered.rows[row], on: rendered.side), lineEnd > lineStart {
                 paint(tokens, from: lineStart, to: lineEnd, storage: storage, in: layoutManager, anchor: anchor)
             }
             row += 1
@@ -162,19 +200,25 @@ package final class RefinedColors {
 }
 
 extension DiffTextView {
-    /// This pane with `sides` drawn over its lexer colours once they land; nil keeps the lexer's.
-    package func refined(with sides: RefinedSides?) -> DiffTextView {
+    /// This pane with `decorations` drawn over its plain text as they land, and its visible rows reported to
+    /// `viewport`; nil leaves it plain.
+    package func decorated(with decorations: DiffDecorations?, viewport: DecorationViewport? = nil) -> DiffTextView {
         var pane = self
-        pane.refinedSides = sides
+        pane.decorations = decorations
+        pane.viewport = viewport
         return pane
     }
 }
 
 extension EmbeddedDiffTextView {
-    /// This card pane with `sides` drawn over its lexer colours once they land; nil keeps the lexer's.
-    package func refined(with sides: RefinedSides?) -> EmbeddedDiffTextView {
+    /// This card pane with `decorations` drawn over its plain text as they land, and its visible rows reported to
+    /// `viewport`; nil leaves it plain.
+    package func decorated(with decorations: DiffDecorations?, viewport: DecorationViewport? = nil)
+        -> EmbeddedDiffTextView
+    {
         var pane = self
-        pane.refinedSides = sides
+        pane.decorations = decorations
+        pane.viewport = viewport
         return pane
     }
 }

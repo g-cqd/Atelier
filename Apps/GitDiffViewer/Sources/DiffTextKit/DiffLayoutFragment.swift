@@ -1,7 +1,7 @@
 package import AppKit
 import AtelierDiagnostics
 import DiffCore
-import DiffRendering
+package import DiffRendering
 import Foundation
 import SwiftUI
 import Synchronization
@@ -19,8 +19,15 @@ package final class ViewportMetrics: Sendable {
 
 /// Draws a full-width background behind its line before the glyphs, which is how the diff colors whole rows
 /// without stretching background attributes to the container edge.
+///
+/// The row's decorations are read as the fragment draws (PERF-09 stage 2): its emphasis, and whether it only moved,
+/// which calms its background. So they land with a redraw, and no row is laid out again for them.
 package final class DiffLayoutFragment: NSTextLayoutFragment {
-    package var backgroundColor: NSColor?
+    /// The text the fragment's row belongs to, and the row; nil for a fragment outside any row.
+    package var rendered: RenderedText?
+    package var row: RowMeta?
+    /// Where the pane keeps the decorations of the text it shows.
+    package var decorations: DecorationSnapshot?
     package var metrics: ViewportMetrics?
     /// How far to raise the glyphs inside their line, to centre them when the line is taller than they need.
     package var baselineOffset: CGFloat = 0
@@ -32,6 +39,18 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
     /// The colour of the separator across that band's middle, when the band lies between two changes; the gutter
     /// draws the separator's start, and the fragment the rest, across the whole text (book DIFF-02).
     package var separatorColor: NSColor?
+
+    /// The row's background: its kind's colour, the calmer one once the row is known to have only moved.
+    package var backgroundColor: NSColor? {
+        guard let rendered, let row else { return nil }
+        let isMoved = currentDecorations?.isMoved(row) ?? false
+        return rendered.palette.rowBackground(for: row.kind, side: rendered.side, isMoved: isMoved)
+    }
+
+    /// The decorations of the fragment's own text; nil once the pane shows another.
+    private var currentDecorations: DiffDecorations? {
+        rendered.flatMap { decorations?.decorations(for: $0) }
+    }
 
     package override var renderingSurfaceBounds: CGRect {
         var bounds = super.renderingSurfaceBounds.union(backgroundRect(origin: .zero))
@@ -62,16 +81,24 @@ package final class DiffLayoutFragment: NSTextLayoutFragment {
         context.restoreGState()
     }
 
-    /// The intraline changes, each filled over the whole height of its line, so they match the row whatever the
-    /// line height; a background attribute would stop at the glyphs.
+    /// The row's intraline changes, each filled over the whole height of its line, so they match the row whatever the
+    /// line height; a background attribute would stop at the glyphs. The ranges are the row's, from its start, which is
+    /// the paragraph's: each line of a wrapped row draws the part it holds.
     private func drawEmphasis(at point: CGPoint, in context: CGContext) {
+        guard let rendered, let row, let decorations = currentDecorations else { return }
+        let ranges = decorations.emphasis(of: row, on: rendered.side)
+        guard !ranges.isEmpty else { return }
+        let color = rendered.palette.emphasis(for: row.kind, side: rendered.side)
         for line in textLineFragments {
             let bounds = line.typographicBounds
-            line.attributedString.enumerateAttribute(.diffEmphasis, in: line.characterRange) { value, range, _ in
-                guard let color = value as? NSColor, range.length > 0 else { return }
-                let start = line.locationForCharacter(at: range.location).x
-                let end = line.locationForCharacter(at: range.location + range.length).x
-                guard end > start else { return }
+            let lineRange = line.characterRange
+            for range in ranges {
+                let lower = max(range.lowerBound, lineRange.location)
+                let upper = min(range.upperBound, lineRange.location + lineRange.length)
+                guard upper > lower else { continue }
+                let start = line.locationForCharacter(at: lower).x
+                let end = line.locationForCharacter(at: upper).x
+                guard end > start else { continue }
                 context.saveGState()
                 context.setFillColor(color.cgColor)
                 context.fill(

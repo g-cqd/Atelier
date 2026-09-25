@@ -101,17 +101,18 @@ struct SwiftColorRefinementBenchmark {
         // The last screen, 800 points of rows: the farthest from the document's start, where locations cost most.
         let rowHeight = try #require(fragments.first).layoutFragmentFrame.height
         let screen = Array(fragments.suffix(Int((800 / rowHeight).rounded(.up))))
-        let colors = RefinedColors()
+        let colors = DecorationStore()
         colors.install(on: layoutManager)
+        let decorations = DecorationFixtures.colors(old: refined, new: refined)
         var application: [Double] = []
         var applicationCPU: [Double] = []
         var landingCPU: [Double] = []
         for iteration in 0 ..< Self.iterations {
-            // Each landing starts from the lexer's colours, as a new text's does.
-            colors.update(rendered: rendered, sides: nil, view: textView)
+            // Each landing starts from the plain text, as a new text's does: every token paints (PERF-09).
+            colors.update(rendered: rendered, decorations: nil, view: textView)
             let cpu = Self.cpuMilliseconds(CLOCK_THREAD_CPUTIME_ID)
             let start = ContinuousClock.now
-            colors.update(rendered: rendered, sides: RefinedSides(old: refined, new: refined), view: textView)
+            colors.update(rendered: rendered, decorations: decorations, view: textView)
             let landed = Self.cpuMilliseconds(CLOCK_THREAD_CPUTIME_ID)
             for fragment in screen { colors.validate(fragment, in: layoutManager) }
             guard iteration >= Self.warmUps else { continue }

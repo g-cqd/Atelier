@@ -50,8 +50,10 @@ package struct DiffTextView: NSViewRepresentable {
     /// takes it as safe area of its own, so its text starts below the bar, scrolls beneath it, and the system's scroll
     /// edge effect covers it as it covers the toolbar (book TAB-09).
     package var underBars: CGFloat = 0
-    /// Colours a tier after the lexer found for the text's sides, drawn over the lexer's (``refined(with:)``).
-    package var refinedSides: RefinedSides?
+    /// What the stages after the text found for its sides, drawn over it as they land (``decorated(with:viewport:)``).
+    package var decorations: DiffDecorations?
+    /// Where the pane reports the rows it shows, so they are decorated first.
+    package var viewport: DecorationViewport?
 
     package init(
         rendered: RenderedText, gutter: GutterStyle, keepsScrollPosition: Bool = false, wrapsLines: Bool = true,
@@ -161,9 +163,10 @@ package struct DiffTextView: NSViewRepresentable {
         context.coordinator.scrollMemory = scrollMemory
         context.coordinator.show(rendered, keepingScroll: false, key: memoryKey)
         if let layoutManager = textView.textLayoutManager {
-            context.coordinator.refinedColors.install(on: layoutManager)
+            context.coordinator.decorationStore.install(on: layoutManager)
         }
-        context.coordinator.refinedColors.update(rendered: rendered, sides: refinedSides, view: textView)
+        context.coordinator.decorationStore.update(rendered: rendered, decorations: decorations, view: textView)
+        context.coordinator.report(to: viewport)
         // A new pane shows its first render here, and `updateNSView` only reports the renders that replace it.
         onDisplayed?()
         context.coordinator.hoverController.attach(to: textView) { [weak coordinator = context.coordinator] in
@@ -236,7 +239,8 @@ package struct DiffTextView: NSViewRepresentable {
             coordinator.show(rendered, keepingScroll: keepsScrollPosition, key: memoryKey)
             onDisplayed?()
         }
-        coordinator.refinedColors.update(rendered: rendered, sides: refinedSides, view: coordinator.textView)
+        coordinator.decorationStore.update(rendered: rendered, decorations: decorations, view: coordinator.textView)
+        coordinator.report(to: viewport)
         if let scrollRequest, coordinator.handledScrollRequest != scrollRequest.id {
             coordinator.handledScrollRequest = scrollRequest.id
             coordinator.scroll(toRow: scrollRequest.row, in: scrollView)
@@ -247,6 +251,7 @@ package struct DiffTextView: NSViewRepresentable {
         coordinator.rememberPosition()
         if let textView = coordinator.textView { coordinator.splitController?.unregister(textView: textView) }
         coordinator.hoverController.detach()
+        coordinator.report(to: nil)
         coordinator.usageObservation = nil
         NotificationCenter.default.removeObserver(coordinator)
     }
@@ -282,8 +287,10 @@ package struct DiffTextView: NSViewRepresentable {
 package final class DiffTextViewCoordinator: NSObject {
     package let fragmentProvider = DiffFragmentProvider()
     package let hoverController = DocHoverController()
-    /// The colours drawn over the lexer's once a later tier lands (PERF-11).
-    package let refinedColors = RefinedColors()
+    /// The decorations drawn over the plain text as the stages after it land (PERF-09).
+    package let decorationStore = DecorationStore()
+    /// Where the pane reports its visible rows, and the text it reported them for.
+    private var reported: (viewport: DecorationViewport, textID: UUID)?
     package var metrics: ViewportMetrics { fragmentProvider.metrics }
     package weak var textView: NSTextView?
     package weak var gutterView: DiffGutterView?
@@ -318,6 +325,22 @@ package final class DiffTextViewCoordinator: NSObject {
     package override init() {
         super.init()
         fragmentProvider.overlay = diagnostics
+        fragmentProvider.decorations = decorationStore.snapshot
+    }
+
+    /// Reports the rows the pane shows to `viewport`, read when asked, for the text on show; nil stops reporting.
+    package func report(to viewport: DecorationViewport?) {
+        let textID = rendered?.id
+        guard reported?.viewport !== viewport || reported?.textID != textID else { return }
+        if let reported { reported.viewport.unregister(reported.textID) }
+        reported = nil
+        guard let viewport, let textID else { return }
+        viewport.register(textID) { [weak self] in
+            guard let self, self.textView?.window != nil else { return nil }
+            let rows = self.visibleRows()
+            return rows.isEmpty ? nil : rows
+        }
+        reported = (viewport, textID)
     }
 
     /// Shows `overlay`'s rows, `nil` showing none, and redraws the rows whose diagnostics changed; nothing is laid out

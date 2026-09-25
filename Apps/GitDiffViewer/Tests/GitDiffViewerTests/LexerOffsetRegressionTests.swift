@@ -5,7 +5,8 @@ import Testing
 @testable import DiffRendering
 
 /// Token colours land on the UTF-16 ranges the UTF-16 scanner gave them before the lexer moved to UTF-8, whatever
-/// the characters before them: accents, surrogate pairs, CJK, combining marks, tabs and bidi placeholders.
+/// the characters before them: accents, surrogate pairs, CJK, combining marks, tabs and bidi placeholders. The colours
+/// are the lexer tier's, run as the pipeline runs it and drawn over the plain text as a pane draws them (PERF-09).
 struct LexerOffsetRegressionTests {
     private static let old = """
         let café = "é" // ✓ done
@@ -36,10 +37,10 @@ struct LexerOffsetRegressionTests {
     ]
 
     @Test
-    func `token colours keep the utf16 ranges of the utf16 scanner on non ASCII lines`() throws {
+    func `token colours keep the utf16 ranges of the utf16 scanner on non ASCII lines`() async throws {
         let rendered = DiffRenderer.render(oldText: Self.old, newText: Self.new, language: .swift)
-        let unified = try #require(rendered.unified)
-        #expect(Self.colourRuns(of: unified.attributed) == Self.pinnedRuns)
+        let panes = await DecorationFixtures.lexedPanes(rendered, old: Self.old, new: Self.new, language: .swift)
+        #expect(Self.colourRuns(of: try #require(panes[.unified])) == Self.pinnedRuns)
     }
 
     /// CRLF endings, astral characters (four UTF-8 bytes, two UTF-16 units) and tokens that span lines: a block
@@ -86,19 +87,22 @@ struct LexerOffsetRegressionTests {
     ]
 
     @Test
-    func `token colours keep their utf16 ranges on CRLF lines, astral characters and tokens that span lines`() throws {
+    func `token colours keep their utf16 ranges on CRLF lines, astral characters and tokens that span lines`()
+        async throws
+    {
         let rendered = DiffRenderer.render(oldText: Self.spanningOld, newText: Self.spanningNew, language: .swift)
-        let panes: [(RenderedSide, RenderedText?)] = [
-            (.unified, rendered.unified), (.old, rendered.old), (.new, rendered.new)
-        ]
-        for (side, pane) in panes {
-            let text = try #require(pane)
-            #expect(Self.colourRuns(of: text.attributed) == Self.spanningPinnedRuns[side], "\(side)")
+        let panes = await DecorationFixtures.lexedPanes(
+            rendered, old: Self.spanningOld, new: Self.spanningNew, language: .swift)
+        for side in [RenderedSide.unified, .old, .new] {
+            let text = try #require(panes[side])
+            #expect(Self.colourRuns(of: text) == Self.spanningPinnedRuns[side], "\(side)")
         }
     }
 
     @Test
-    func `each line's tokens take its utf16 offsets on generated texts with CRLF lines and tokens that span lines`() {
+    func `each line's tokens take its utf16 offsets on generated texts with CRLF lines and tokens that span lines`()
+        async
+    {
         let pieces = [
             "let ", "x", " = ", "é", "✓", "変", "🙂", "𝔘", "\t", " // c🙂", "/* a", " 𝔘 */", "\"s🙂\"", "\"\"\"",
             "\"open 🙂", "0x1F", "\r\n", "\n"
@@ -107,7 +111,7 @@ struct LexerOffsetRegressionTests {
         for _ in 0 ..< 300 {
             let text = (0 ..< 40).map { _ in pieces[Int(random.next() % UInt64(pieces.count))] }.joined()
             let lines = DiffModel.lines(of: text)
-            let byLine = DiffRenderer.tokensByLine(text: text, lines: lines, language: .swift)
+            let byLine = await DecorationFixtures.lexed(text, language: .swift)
             // Each line's bytes where the string's own indices place them, the whole text's byte tokens cut there, and
             // each bound moved to the UTF-16 length of the line's text before it.
             let byteRanges = lines.map { line in
@@ -116,7 +120,7 @@ struct LexerOffsetRegressionTests {
             }
             let byteLines = LineTokens(
                 LexicalHighlightEngine().highlight(utf8: Array(text.utf8), language: .swift), lineRanges: byteRanges)
-            #expect(byLine.count == lines.count)
+            #expect(byLine.lineCount == lines.count)
             for (index, line) in lines.enumerated() {
                 let bytes = Array(line.utf8)
                 let expected = byteLines[index]
@@ -127,7 +131,7 @@ struct LexerOffsetRegressionTests {
                             ..< Self.utf16Count(bytes[..<range.upperBound])
                         return LineToken(range: units, role: token.role, modifiers: token.modifiers)
                     }
-                #expect(Array(byLine[index]) == expected, "line \(index) of \(text.debugDescription)")
+                #expect(byLine.merged(line: index) ?? [] == expected, "line \(index) of \(text.debugDescription)")
             }
         }
     }
@@ -137,12 +141,11 @@ struct LexerOffsetRegressionTests {
     }
 
     @Test
-    func `plain files produce no lexical tokens`() {
+    func `plain files produce no lexical tokens`() async {
         let text = "é\n🙂\n"
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-        let tokens = DiffRenderer.tokensByLine(text: text, lines: lines, language: .plain)
-        #expect(tokens.count == lines.count)
-        #expect(tokens.joined().isEmpty)
+        let layered = await DecorationFixtures.lexed(text, language: .plain)
+        #expect(layered.lineCount == DiffModel.lines(of: text).count)
+        #expect(layered.isEmpty)
     }
 
     /// Each foreground colour run of `text` as `location+length:name`: `text` for the palette's text colour, else the

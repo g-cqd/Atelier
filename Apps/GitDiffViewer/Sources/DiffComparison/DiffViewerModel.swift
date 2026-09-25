@@ -108,7 +108,8 @@ package final class DiffViewerModel {
         history: CommitHistory? = nil,
         taskProvider: any TaskProvider = .default,
         uptime: @escaping MonotonicNanosecondsProvider = LiveClock.monotonicNanoseconds,
-        clock: any Clock<Duration> = ContinuousClock()
+        clock: any Clock<Duration> = ContinuousClock(),
+        decorationClock: any Clock<Duration> = ContinuousClock()
     ) {
         self.settings = settings
         self.reader = reader
@@ -121,8 +122,9 @@ package final class DiffViewerModel {
         self.preparer = preparer
         let pipeline = RenderPipeline(
             preparer: preparer, taskProvider: taskProvider, options: Self.options(settings, palette: palette),
-            refinement: SwiftColorRefinement(
-                tiers: RefinedSides.tiers(store: syntaxFacts) + [semanticColor.tier(store: syntaxFacts)], clock: clock))
+            decorator: DiffDecorator(
+                tiers: DiffDecorations.tiers(store: syntaxFacts) + [semanticColor.tier(store: syntaxFacts)],
+                clock: decorationClock))
         self.pipeline = pipeline
         gapDrags = GapDragController(
             taskProvider: taskProvider, clock: clock, expansion: { pipeline.expansion(of: $0) },
@@ -189,11 +191,12 @@ package final class DiffViewerModel {
     package var collapsedFiles: Set<String> { folding.collapsed.filter(isFoldable) }
     package var isRendering: Bool { pipeline.isRendering }
     package var renderError: String? { pipeline.error }
-    /// What swift-syntax refined of `text`'s colour, for the pane that shows it; nil until it lands, and for a text
-    /// that is not Swift.
-    package func refinedSides(for text: RenderedText?) -> RefinedSides? {
-        text.flatMap { pipeline.refinedSides(forText: $0.id) }
+    /// What the stages after the text found for `text`, for the pane that shows it; nil until something lands.
+    package func decorations(for text: RenderedText?) -> DiffDecorations? {
+        text.flatMap { pipeline.decorations(forText: $0.id) }
     }
+    /// Where panes report the rows they show, so those are decorated first.
+    package var decorationViewport: DecorationViewport { pipeline.decorationViewport }
     package var gapExpansions: [GapKey: GapExpansion] { pipeline.gapExpansions }
     /// Files composing the current card list, in render order.
     package var combinedFiles: [String] {
@@ -599,6 +602,8 @@ package final class DiffViewerModel {
                 // A Findings row opened this file: its line wins over the first change.
                 if let row = takeFindingReveal() { scrollRequest = ScrollRequest(row: row) }
                 updateHoverDocs()
+            case .decorated:
+                break
             case .finished:
                 folding.listCompleted()
                 timer.finish()
@@ -651,7 +656,7 @@ package final class DiffViewerModel {
     /// waits for the next turn of the run loop.
     package func noteDisplayed(_ id: RenderedDiff.ID) {
         taskProvider.task {
-            pipeline.refineDisplayed(id)
+            pipeline.decorateDisplayed(id)
             guard let elapsed = timer.displayed(id) else { return }
             PhaseTrace.log("displayed")
             timer.record(firstDisplay: elapsed)

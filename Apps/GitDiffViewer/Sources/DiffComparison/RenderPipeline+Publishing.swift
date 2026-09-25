@@ -27,6 +27,7 @@ extension RenderPipeline {
         stamps = []
         publishedSources = nil
         contentVersion += 1
+        refreshDecorations()
     }
 
     /// Publishes files that landed behind those already published, in target order.
@@ -46,6 +47,7 @@ extension RenderPipeline {
                 PhaseTrace.log("publish \(files.count) cards\(isFirst ? "" : " more")")
                 cards += zip(diffs, files).map { RenderedFile(path: $0.title, rendered: $1.file) }
         }
+        refreshDecorations()
         onEvent?(.published(first.file.id, isFirst: isFirst))
     }
 
@@ -73,6 +75,7 @@ extension RenderPipeline {
                 cards = zip(diffs, files).map { RenderedFile(path: $0.title, rendered: $1.file) }
                 file = nil
         }
+        refreshDecorations()
         onEvent?(.published(first.file.id, isFirst: true))
     }
 
@@ -141,6 +144,7 @@ extension RenderPipeline {
             }
         }
         if target.isCards { cards = updated }
+        refreshDecorations()
     }
 
     func finish(_ generation: Int) {
