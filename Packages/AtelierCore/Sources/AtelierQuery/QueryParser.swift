@@ -282,11 +282,13 @@ public enum QueryParser: Sendable {
     /// The capture at the scanner, unnumbered: ``Query`` numbers the captures of the patterns it holds.
     private static func parseCapture(_ scanner: inout QueryScanner) throws(QueryError) -> QueryPattern.Capture? {
         guard scanner.peek() == "@" else { return nil }
+        let captureStart = scanner.position
         scanner.advance()
         let name = scanner.readCaptureName()
         guard !name.isEmpty else {
-            throw .invalidCapture("Empty capture name")
+            throw captureStart.invalidCapture("Empty capture name")
         }
+        scanner.definedCaptures.insert(name)
         return QueryPattern.Capture(name)
     }
 
@@ -367,6 +369,11 @@ extension QueryParser {
                 scanner.advance()
                 let name = scanner.readCaptureName()
                 guard !name.isEmpty else { throw captureStart.syntaxError("Expected a capture name after @") }
+                // A capture the text has not defined yet is an error, as in ts_query__parse_predicate
+                // (TSQueryErrorCapture, lib/src/query.c): it may come from an earlier pattern, never a later place.
+                guard scanner.definedCaptures.contains(name) else {
+                    throw captureStart.invalidCapture("Unknown capture @\(name)")
+                }
                 args.append(.capture(name))
             } else if ch == "\"" {
                 args.append(.string(try scanner.readString()))
