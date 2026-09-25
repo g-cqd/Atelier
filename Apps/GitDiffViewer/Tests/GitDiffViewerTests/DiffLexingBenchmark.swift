@@ -10,6 +10,10 @@ import Testing
 /// places the tokens (both split sides, every row). The scan alone is timed through the engine's two entry points,
 /// the UTF-16 one the renderer called until the lexer moved to UTF-8, and the UTF-8 one it calls since.
 ///
+/// A second test times the re-renders of a prepared pair that the window runs without lexing again: a layout toggle
+/// (the inline pane, then both split sides, every row) and a gap drag (the split sides of a changes-only layout, once
+/// per step as one gap opens).
+///
 /// `GDV_BENCH=1 swift test -c release --filter DiffLexingBenchmark`. `GDV_BENCH_OLD` and `GDV_BENCH_NEW` name the
 /// two sides' files; without them a generated pair stands in. The checksum covers every coloured run of both
 /// rendered sides, so two builds that print the same checksum place the same colours on the same UTF-16 ranges.
@@ -86,9 +90,64 @@ struct DiffLexingBenchmark {
         }
     }
 
-    /// The two sides from `GDV_BENCH_OLD` and `GDV_BENCH_NEW`, or 50,000 generated lines whose new side rewrites every
-    /// seventh one.
-    private static func pair() throws -> (old: String, new: String) {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil))
+    func `re-renders a prepared fifty thousand line pair as a layout toggle and a gap drag do`() throws {
+        // One rewritten line in 97 leaves hunks of seven rows around gaps of ninety, so a drag has a gap to open.
+        let (old, new) = try Self.pair(rewritingOneLineIn: 97)
+        let prepared = PreparedDiff(
+            FileDiffInput(title: "pair.swift", oldText: old, newText: new, language: .swift), granularity: .word)
+        let inline = DiffRenderer.Options(granularity: .word, sides: [.unified])
+        let split = DiffRenderer.Options(granularity: .word, sides: [.old, .new])
+        let dragged = GapKey(fileIndex: 0, gapIndex: prepared.model.unifiedChangeStarts.count / 2)
+        let steps = (0 ... Self.dragSteps).map { GapExpansion(below: $0 * 90 / Self.dragSteps) }
+        var samples: [String: [Double]] = [:]
+        var checksum: UInt64 = 0
+        var dragRows = 0
+        for iteration in 0 ..< Self.iterations {
+            var toggled: [RenderedDiff] = []
+            let toggle = Self.milliseconds {
+                for options in [inline, split] {
+                    toggled.append(
+                        DiffRenderer.render(prepared: [prepared], options: options, layout: .full, withHeaders: false))
+                }
+            }
+            var drag: [RenderedDiff] = []
+            let dragging = Self.milliseconds {
+                for expansion in steps {
+                    drag.append(
+                        DiffRenderer.render(
+                            prepared: [prepared], options: split,
+                            layout: .changes(context: 3, expansions: [dragged: expansion]), withHeaders: false))
+                }
+            }
+            if iteration == 0 {
+                let texts =
+                    toggled.flatMap { [$0.unified, $0.old, $0.new].compactMap { $0?.attributed } }
+                    + drag.flatMap { [$0.old, $0.new].compactMap { $0?.attributed } }
+                try #require(texts.count == 3 + 2 * steps.count)
+                checksum = Self.checksum(of: texts)
+                dragRows = drag.map { $0.new?.rows.count ?? 0 }.reduce(0, +)
+            }
+            guard iteration >= Self.warmUps else { continue }
+            samples["toggle", default: []].append(toggle)
+            samples["gap-drag", default: []].append(dragging)
+        }
+        print(
+            "BENCH gdv-rerender unified-rows \(prepared.model.unifiedRows.count) drag-steps \(steps.count) "
+                + "drag-rows \(dragRows) checksum \(checksum)")
+        for name in ["toggle", "gap-drag"] {
+            let sorted = samples[name, default: []].sorted()
+            let rounded = sorted.map { ($0 * 1_000).rounded() / 1_000 }
+            print("BENCH gdv-rerender \(name) median \(sorted[sorted.count / 2]) ms samples \(rounded)")
+        }
+    }
+
+    /// The renders one gap drag runs, one per step of the gap opening.
+    private static let dragSteps = 12
+
+    /// The two sides from `GDV_BENCH_OLD` and `GDV_BENCH_NEW`, or 50,000 generated lines whose new side rewrites one
+    /// line in `stride`, every seventh by default.
+    private static func pair(rewritingOneLineIn stride: Int = 7) throws -> (old: String, new: String) {
         let environment = ProcessInfo.processInfo.environment
         if let oldPath = environment["GDV_BENCH_OLD"], let newPath = environment["GDV_BENCH_NEW"] {
             let old = try Data(contentsOf: URL(fileURLWithPath: oldPath))
@@ -110,7 +169,7 @@ struct DiffLexingBenchmark {
         for index in 0 ..< 50_000 {
             let line = templates[index % templates.count].replacingOccurrences(of: "#", with: String(index))
             old += line + "\n"
-            new += (index % 7 == 3 ? line.replacingOccurrences(of: "value", with: "result") : line) + "\n"
+            new += (index % stride == 3 ? line.replacingOccurrences(of: "value", with: "result") : line) + "\n"
         }
         return (old, new)
     }
