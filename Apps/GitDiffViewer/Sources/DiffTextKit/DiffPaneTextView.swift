@@ -17,6 +17,22 @@ package final class DiffPaneTextView: NSTextView {
         onLayout?()
     }
 
+    /// The items a context menu over a point, in this view's coordinates, starts with, set apart from the text view's
+    /// own; none while nil or empty. ``DocHoverController`` sets it while attached (book HOVER-14).
+    package var contextMenuItems: (@MainActor (NSPoint) -> [NSMenuItem])?
+
+    package override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event)
+        guard let items = contextMenuItems?(convert(event.locationInWindow, from: nil)), !items.isEmpty else {
+            return menu
+        }
+        // A copy: the text view's menu can be one it shares.
+        let result = (menu?.copy() as? NSMenu) ?? NSMenu()
+        if result.numberOfItems > 0 { result.insertItem(.separator(), at: 0) }
+        for item in items.reversed() { result.insertItem(item, at: 0) }
+        return result
+    }
+
     package override func writeSelection(to pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
         guard type == .string || type == Self.legacyString, let storage = textStorage else {
             return super.writeSelection(to: pboard, type: type)
