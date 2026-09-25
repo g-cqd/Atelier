@@ -279,7 +279,10 @@ let package = Package(
         ),
         .testTarget(
             name: "AtelierDocIndexTests",
-            dependencies: ["AtelierDocIndex", "AtelierSyntaxModel", .product(name: "AemiTestKit", package: "aemi")],
+            dependencies: [
+                "AtelierDocIndex", "AtelierSwiftSyntax", "AtelierSyntaxModel",
+                .product(name: "AemiTestKit", package: "aemi")
+            ],
             swiftSettings: strict)
     ]
 )
