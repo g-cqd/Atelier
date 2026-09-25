@@ -114,8 +114,8 @@ struct GLRParserDepthTests {
         }
     }
 
-    /// The root's type, read while the tree is alive: a copy of a deep node that outlives its tree is freed
-    /// recursively.
+    /// The root's type. In a release build the tree dies at its last use, before the copy of the root read from it:
+    /// the copy is then the last holder of the 5,000-level chain, and frees it.
     private static func rootType(_ parser: GLRParser, _ source: String) -> String? {
         guard let tree = try? parser.parse(source) else { return nil }
         return tree.root.type

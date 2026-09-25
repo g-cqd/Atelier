@@ -81,6 +81,21 @@ struct SyntaxTreeTests {
     }
 
     @Test
+    func `A copy of a deep root that outlives its tree frees on a pool-sized stack`() async {
+        // A release build ends a tree's lifetime at its last use, so a copy read from `root` can outlive it: the
+        // copy is then the last holder of the whole chain.
+        let rootChildren = await onThread {
+            var root: SyntaxNode?
+            do {
+                let tree = Self.makeChain(depth: 100_000)
+                root = tree.root
+            }
+            return root?.children.count
+        }
+        #expect(rootChildren == 1)
+    }
+
+    @Test
     func `Releasing a tree leaves a subtree held elsewhere whole`() {
         var subtree: SyntaxNode?
         do {
