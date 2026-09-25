@@ -14,19 +14,16 @@ import Testing
 /// A file opened from the list, by a click into the temporary tab or by a double click into a pinned one, in the
 /// window's whole content, with the explorers above the detail area or in the sidebar, inline or side by side: a file
 /// that fits its pane shows whole from its top, and a longer one opens with its first change three lines below the
-/// pane's top (book DIFF-08), or at its top when that scroll is turned off. Either way each pane's text view covers
-/// its text: a pane sized while TextKit had laid nothing out ended above its text and did not scroll
-/// (`FilePaneScrollRangeTests`). The scrolling settings reach the panes on screen at once (book SET-09).
+/// pane's top (book DIFF-08). Either way each pane's text view covers its text: a pane sized while TextKit had laid
+/// nothing out ended above its text and did not scroll (`FilePaneScrollRangeTests`).
 @MainActor
 struct FileTabScrollRangeTests {
     private let harness = ModelTestHarness()
 
     /// One window, as the app keeps one while its explorers move and its layout changes, which a window each would
     /// cost four times over.
-    @Test(arguments: [true, false])
-    func `a file opened from the list shows whole when it fits, else from its first change if that scroll is on`(
-        scrollsToFirstChange: Bool
-    ) async throws {
+    @Test
+    func `a file opened from the list shows whole when it fits, else from its first change`() async throws {
         let short = (1 ... 10).map { "let value\($0) = \($0)" }
         let long = (1 ... 200).map { "let value\($0) = \($0)" }
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [
@@ -40,7 +37,6 @@ struct FileTabScrollRangeTests {
         harness.reader.blobContents["3"] = Self.text(long)
         harness.reader.blobContents["4"] = Self.text(long, changing: 120)
         let model = harness.makeSUT()
-        model.settings.scrollsToFirstChange = scrollsToFirstChange
         model.settings.explorerPlacement = .sidebar
         model.settings.mode = .inline
         let window = Self.window(showing: model)
@@ -57,9 +53,8 @@ struct FileTabScrollRangeTests {
         model.settings.mode = .split
         model.pin("long.swift")
         try await settle(window)
-        try Self.expectOpened(
-            of: model, in: content, scrollsToFirstChange: scrollsToFirstChange,
-            "explorers in the sidebar, side by side, opened by a double click")
+        try Self.expectFirstChange(
+            of: model, in: content, "explorers in the sidebar, side by side, opened by a double click")
 
         model.settings.explorerPlacement = .top
         model.closeTab(try #require(model.tabs.active).id)
@@ -73,25 +68,19 @@ struct FileTabScrollRangeTests {
         model.settings.mode = .inline
         model.select("long.swift")
         try await settle(window)
-        try Self.expectOpened(
-            of: model, in: content, scrollsToFirstChange: scrollsToFirstChange,
-            "explorers above, inline, opened by a click")
+        try Self.expectFirstChange(of: model, in: content, "explorers above, inline, opened by a click")
     }
 
-    /// A tab shown again after the file list comes back where its panes were, not to its first change nor to its top,
-    /// whether files open on their first change or not (book TAB-10, DIFF-08): side by side with the explorers in the
-    /// sidebar, then inline with them above.
-    @Test(arguments: [true, false])
-    func `a file tab shown again comes back where it was scrolled, whether files open on their first change or not`(
-        scrollsToFirstChange: Bool
-    ) async throws {
+    /// A tab shown again after the file list comes back where its panes were, not to its first change (book TAB-10,
+    /// DIFF-08): side by side with the explorers in the sidebar, then inline with them above.
+    @Test
+    func `a file tab shown again comes back where it was scrolled, not to its first change`() async throws {
         let long = (1 ... 200).map { "let value\($0) = \($0)" }
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("long.swift", "3")]
         harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("long.swift", "4")]
         harness.reader.blobContents["3"] = Self.text(long)
         harness.reader.blobContents["4"] = Self.text(long, changing: 120)
         let model = harness.makeSUT()
-        model.settings.scrollsToFirstChange = scrollsToFirstChange
         model.settings.explorerPlacement = .sidebar
         model.settings.mode = .split
         let window = Self.window(showing: model)
@@ -106,7 +95,7 @@ struct FileTabScrollRangeTests {
             model.settings.mode = mode
             model.pin("long.swift")
             try await settle(window)
-            try Self.expectOpened(of: model, in: content, scrollsToFirstChange: scrollsToFirstChange, comment)
+            try Self.expectFirstChange(of: model, in: content, comment)
             for pane in try Self.panes(in: content) { Self.scroll(pane, to: 555) }
             try await settle(window)
             let before = try Self.panes(in: content).map { try Self.topRow(of: $0) }
@@ -125,86 +114,13 @@ struct FileTabScrollRangeTests {
         }
     }
 
-    /// Bouncing at the edges and scrolling past the last line, each turned on then off again in the window's
-    /// settings, reach the file panes on screen (book SET-09).
-    @Test
-    func `the scrolling settings reach the open file panes at once`() async throws {
-        let long = (1 ... 200).map { "let value\($0) = \($0)" }
-        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("long.swift", "3")]
-        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("long.swift", "4")]
-        harness.reader.blobContents["3"] = Self.text(long)
-        harness.reader.blobContents["4"] = Self.text(long, changing: 120)
-        let model = harness.makeSUT()
-        let window = Self.window(showing: model)
-        defer { window.close() }
-        let content = try #require(window.contentView)
-        try await harness.load(model)
-        model.pin("long.swift")
-        try await settle(window)
-
-        for bounces in [true, false] {
-            model.settings.bouncesAtEdges = bounces
-            try await settle(window)
-            let elasticity: NSScrollView.Elasticity = bounces ? .automatic : .none
-            for pane in try Self.panes(in: content) {
-                let scrollView = try #require(pane.clip.enclosingScrollView)
-                #expect(scrollView.verticalScrollElasticity == elasticity, "bouncing \(bounces)")
-                #expect(scrollView.horizontalScrollElasticity == elasticity, "bouncing \(bounces)")
-            }
-        }
-        for pastEnd in [true, false] {
-            model.settings.scrollsPastEnd = pastEnd
-            try await settle(window)
-            for pane in try Self.panes(in: content) {
-                // Its lines are short and never wrap: its rows at one line each are its text's height.
-                let end =
-                    pastEnd
-                    ? pane.rowsHeight - pane.below - pane.lineHeight + pane.clip.bounds.height : pane.rowsHeight
-                #expect(abs(pane.textView.frame.height - end) < 1, "scrolling past the end \(pastEnd)")
-            }
-        }
-    }
-
-    /// Bouncing reaches the panes of the cards on screen, which rubber-band sideways, and leaves the card list's own
-    /// bounce as it is, on or off (book SET-09, D25).
-    @Test
-    func `bouncing reaches the cards' panes and leaves the card list's own bounce as it is`() async throws {
-        let short = (1 ... 10).map { "let value\($0) = \($0)" }
-        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("short.swift", "1")]
-        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("short.swift", "2")]
-        harness.reader.blobContents["1"] = Self.text(short)
-        harness.reader.blobContents["2"] = Self.text(short, changing: 5)
-        let model = harness.makeSUT()
-        let window = Self.window(showing: model)
-        defer { window.close() }
-        let content = try #require(window.contentView)
-        try await harness.load(model)
-        try await settle(window)
-        #expect(model.detailState == .cards)
-        let list = try #require(subviews(of: StickyCardView.self, in: content).first?.enclosingScrollView)
-        let listElasticity = (list.verticalScrollElasticity, list.horizontalScrollElasticity)
-
-        for bounces in [true, false] {
-            model.settings.bouncesAtEdges = bounces
-            try await settle(window)
-            #expect(list.verticalScrollElasticity == listElasticity.0, "bouncing \(bounces)")
-            #expect(list.horizontalScrollElasticity == listElasticity.1, "bouncing \(bounces)")
-            let panes = subviews(of: DiffPaneTextView.self, in: content).compactMap(\.enclosingScrollView)
-            try #require(!panes.isEmpty)
-            for pane in panes {
-                #expect(pane.horizontalScrollElasticity == (bounces ? .automatic : .none), "bouncing \(bounces)")
-                #expect(pane.verticalScrollElasticity == .none, "bouncing \(bounces)")
-            }
-        }
-    }
-
-    private static func scroll(_ pane: ShownPane, to y: CGFloat) {
+    static func scroll(_ pane: ShownPane, to y: CGFloat) {
         pane.clip.scroll(to: NSPoint(x: 0, y: y))
         pane.clip.enclosingScrollView?.reflectScrolledClipView(pane.clip)
     }
 
     /// The row at the top of `pane`, and how far into its line the pane is scrolled.
-    private static func topRow(of pane: ShownPane) throws -> (row: Int, offset: CGFloat) {
+    static func topRow(of pane: ShownPane) throws -> (row: Int, offset: CGFloat) {
         let layoutManager = try #require(pane.textView.textLayoutManager)
         let content = try #require(layoutManager.textContentManager)
         let origin = pane.textView.textContainerOrigin.y
@@ -216,7 +132,7 @@ struct FileTabScrollRangeTests {
         return (row, pane.clip.bounds.minY - origin - fragment.layoutFragmentFrame.minY)
     }
 
-    private static func text(_ lines: [String], changing changed: Int? = nil) -> String {
+    static func text(_ lines: [String], changing changed: Int? = nil) -> String {
         var lines = lines
         if let changed { lines[changed] = "let changed = true" }
         return lines.joined(separator: "\n") + "\n"
@@ -232,21 +148,8 @@ struct FileTabScrollRangeTests {
         }
     }
 
-    /// Each file pane shows the row the model asked for three lines below its top when files open on their first
-    /// change; otherwise the model asks for none and each pane shows its text from its top.
-    private static func expectOpened(
-        of model: DiffViewerModel, in content: NSView, scrollsToFirstChange: Bool, _ comment: Comment
-    ) throws {
-        guard !scrollsToFirstChange else { return try expectFirstChange(of: model, in: content, comment) }
-        #expect(model.scrollRequest == nil, comment)
-        for pane in try panes(in: content) {
-            #expect(pane.clip.bounds.minY == 0, comment)
-            #expect(pane.textView.frame.height >= pane.rowsHeight, comment)
-        }
-    }
-
     /// Each file pane shows its text whole, from its top, its text view filling the pane.
-    private static func expectWhole(in content: NSView, _ comment: Comment) throws {
+    static func expectWhole(in content: NSView, _ comment: Comment) throws {
         for pane in try panes(in: content) {
             #expect(pane.clip.bounds.minY == 0, comment)
             #expect(pane.textView.frame.height >= pane.clip.bounds.height, comment)
@@ -256,7 +159,7 @@ struct FileTabScrollRangeTests {
     }
 
     /// The file panes: the text views that scroll, which a card's do not.
-    private static func panes(in content: NSView) throws -> [ShownPane] {
+    static func panes(in content: NSView) throws -> [ShownPane] {
         let textViews = subviews(of: DiffPaneTextView.self, in: content).filter { $0.enclosingScrollView != nil }
         try #require(!textViews.isEmpty)
         return try textViews.map { textView in
