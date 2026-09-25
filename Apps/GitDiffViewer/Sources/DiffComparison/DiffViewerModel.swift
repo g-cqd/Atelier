@@ -286,7 +286,8 @@ package final class DiffViewerModel {
             leftIgnored: left.ignoredEntries ?? [], rightIgnored: right.ignoredEntries ?? []
         )
         updateUnifiedBadgeStates()
-        // No `folding.reset()`: folds are keyed by path, so they survive a reload or re-comparison.
+        // No `folding.reset()`: folds are keyed by path, so they survive a reload or re-comparison; `render()` drops
+        // those of files the list no longer holds.
         detectRenames()
         rebuildTrees()
         updateDiagnostics()
@@ -530,6 +531,8 @@ package final class DiffViewerModel {
         let target: RenderPipeline.Target
         if isShowingCombinedFiles {
             let paths = comparison.changedPaths(under: selectedPath, limit: Self.combinedFileLimit)
+            // A fold of a file the list no longer holds would skew the fold count the toolbar reads.
+            folding.keepOnly(Set(paths))
             guard !paths.isEmpty else {
                 showsPreviousSelection = false
                 pipeline.clear()
