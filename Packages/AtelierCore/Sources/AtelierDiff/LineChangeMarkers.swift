@@ -1,3 +1,5 @@
+public import AtelierText
+
 /// What a line of the new side did relative to the old side: the marks an editor gutter shows next to a buffer.
 public enum LineChange: Sendable, Hashable {
     case added

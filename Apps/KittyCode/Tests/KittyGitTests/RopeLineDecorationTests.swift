@@ -89,7 +89,7 @@ private struct LegacyRopeLineSource: DiffSource {
     let rope: Rope
     var lineCount: Int { rope.lineCount }
 
-    func withLineBytes<R>(at index: Int, _ body: (Span<UInt8>) throws -> R) rethrows -> R {
+    func withLineBytes<R, E: Error>(at index: Int, _ body: (Span<UInt8>) throws(E) -> R) throws(E) -> R {
         let line = rope.line(at: index)
         return try body(line.utf8Span.span)
     }
