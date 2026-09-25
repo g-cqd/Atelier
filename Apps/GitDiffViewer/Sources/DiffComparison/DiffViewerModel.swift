@@ -38,6 +38,8 @@ package final class DiffViewerModel {
     /// sides' ``SideState/badgeStates`` merged, a right-side file under its left-side counterpart.
     package internal(set) var unifiedBadgeStates = BadgeChangeStates.uniform(.staged)
     package internal(set) var folding = CardFolding()
+    /// The merged sidebar's grouping by commit, when the setting asks for it (GIT-06).
+    package internal(set) var commitGroups = CommitGroupsState.off
     package internal(set) var scrollRequest: ScrollRequest?
     /// The palette for the selected Xcode theme, or the system one when none is selected or it cannot be read.
     /// Read once per theme change: it comes from a property list on disk.
@@ -62,6 +64,15 @@ package final class DiffViewerModel {
     /// Bumped by every ``rebuildTrees()``; a build that lands after a newer one started is dropped.
     @ObservationIgnored private var treesGeneration = 0
     @ObservationIgnored var diagnosticsTask: Task<Void, Never>?
+    /// Reads the history the grouping by commit lists; nil leaves the grouping unavailable.
+    let history: CommitHistory?
+    @ObservationIgnored var commitGroupsTask: Task<Void, Never>?
+    /// Bumped by every start or cancellation of a grouping load; a load that finds it moved on drops its result.
+    @ObservationIgnored var commitGroupsGeneration = 0
+    /// What the last grouping load was asked, so a setting change that asks the same runs nothing.
+    @ObservationIgnored var commitGroupsRequest: CommitGroupingEligibility?
+    /// The commits the last grouping load listed, reused by the next load of the same range.
+    @ObservationIgnored var commitListing: CommitListing?
     @ObservationIgnored var diagnosticsGeneration = 0
     /// ``diagnosticFilePathMaps`` of the pipeline's target at a ``RenderPipeline/targetVersion``, which a pane per card
     /// reads on every findings change.
@@ -85,12 +96,14 @@ package final class DiffViewerModel {
     package init(
         settings: ViewerSettings = ViewerSettings(),
         reader: any SourceReading,
+        history: CommitHistory? = nil,
         taskProvider: any TaskProvider = .default,
         uptime: @escaping MonotonicNanosecondsProvider = LiveClock.monotonicNanoseconds,
         clock: any Clock<Duration> = ContinuousClock()
     ) {
         self.settings = settings
         self.reader = reader
+        self.history = history
         self.taskProvider = taskProvider
         timer = OperationTimer(uptime: { .nanoseconds(uptime()) })
         let palette = Self.palette(for: settings.themePath)
@@ -131,7 +144,16 @@ package final class DiffViewerModel {
     /// The groups of each explorer: the compared files, and the ignored ones when the setting shows them.
     package var leftSections: [ExplorerSection] { sections(changes: trees.left, ignored: trees.leftIgnored) }
     package var rightSections: [ExplorerSection] { sections(changes: trees.right, ignored: trees.rightIgnored) }
-    package var unifiedSections: [ExplorerSection] { sections(changes: trees.unified, ignored: trees.unifiedIgnored) }
+    /// The merged explorer's groups: a section per commit when the grouping by commit has landed, else the plain list.
+    package var unifiedSections: [ExplorerSection] {
+        guard commitGroups.grouping != nil else {
+            return sections(changes: trees.unified, ignored: trees.unifiedIgnored)
+        }
+        guard settings.showsIgnoredFiles else { return commitGroups.sections }
+        return commitGroups.sections + [
+            ExplorerSection(kind: .ignored, title: "Ignored Files", nodes: trees.unifiedIgnored)
+        ]
+    }
 
     private func sections(changes: [PathNode], ignored: [PathNode]) -> [ExplorerSection] {
         let compared = ExplorerSection(
@@ -296,6 +318,7 @@ package final class DiffViewerModel {
         // those of files the list no longer holds.
         detectRenames()
         rebuildTrees()
+        refreshCommitGroups(force: true)
         updateDiagnostics()
         updateFreshness()
         tabs.keepOnly { comparison.contains($0) }
@@ -334,6 +357,7 @@ package final class DiffViewerModel {
             comparison.merge(gitRenames: detected)
             updateUnifiedBadgeStates()
             rebuildTrees()
+            refreshCommitGroups(force: true)
             render()
         }
     }
@@ -561,13 +585,16 @@ package final class DiffViewerModel {
 
     private func settingsChanged(_ change: ViewerSettings.Change) {
         switch change {
-            case .trees: rebuildTrees()
+            case .trees:
+                rebuildTrees()
+                refreshCommitGroups(force: false)
             case .diff: renderSelection()
             case .layout: relayout()
             case .palette:
                 palette = Self.palette(for: settings.themePath)
                 relayout()
-            case .appearance: break
+            // The explorers' placement is an appearance setting, and grouping applies to the merged sidebar only.
+            case .appearance: refreshCommitGroups(force: false)
             // DiagnosticsModel observes ViewerSettings on its own; nothing for this model to do here.
             case .diagnostics: break
             case .freshness: freshness?.setEnabled(settings.autoRefresh)
