@@ -49,7 +49,7 @@ struct PaneStorageReplacementBenchmark {
 
 /// A scrolling pane that never wraps, set up by ``DiffTextViewCoordinator`` in a window that is never ordered in.
 @MainActor
-private final class NewDocumentPane {
+final class NewDocumentPane {
     private let window: NSWindow
     private let textView: NSTextView
     private let coordinator = DiffTextViewCoordinator()
