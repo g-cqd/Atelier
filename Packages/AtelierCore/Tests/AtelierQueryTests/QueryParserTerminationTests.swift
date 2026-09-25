@@ -107,7 +107,7 @@ private enum BundledHighlightQueries {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appending(path: "Apps/KittyCode/Sources/KittySyntax/Grammars")
+            .appending(path: "Packages/AtelierCore/Sources/AtelierGrammarCorpus/Grammars")
         let languages = try FileManager.default.contentsOfDirectory(atPath: grammars.path()).sorted()
         return try languages.compactMap { language in
             let file = grammars.appending(path: language).appending(path: "highlights.scm")

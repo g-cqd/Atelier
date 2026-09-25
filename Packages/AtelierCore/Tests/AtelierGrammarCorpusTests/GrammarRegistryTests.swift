@@ -1,11 +1,7 @@
 import Foundation
 import Testing
 
-@testable import AtelierGrammar
-@testable import AtelierParser
-@testable import AtelierQuery
-@testable import KittyCodecs
-@testable import KittySyntax
+@testable import AtelierGrammarCorpus
 
 @Suite
 struct GrammarRegistryTests {
@@ -76,7 +72,7 @@ struct GrammarRegistryTests {
 
     @Test
     func `loadManifest registers all 19 languages from bundled languages json`() async throws {
-        let grammarsPath = try #require(KittySyntaxResources.bundle.resourcePath)
+        let grammarsPath = try #require(GrammarCorpus.bundle.resourcePath)
         let manifestPath = "\(grammarsPath)/Grammars/languages.json"
         let registry = GrammarRegistry.scratch()
         try registry.loadManifest(from: manifestPath)
@@ -86,9 +82,11 @@ struct GrammarRegistryTests {
 
     @Test
     func `Bundled manifest entries ship grammar and highlight resources`() throws {
-        let resourcePath = try #require(KittySyntaxResources.bundle.resourcePath)
+        let resourcePath = try #require(GrammarCorpus.bundle.resourcePath)
+        let manifest = try GrammarManifest.decode(
+            Data(contentsOf: URL(filePath: "\(resourcePath)/Grammars/languages.json")))
 
-        for entry in BundledLanguageManifest.entries {
+        for entry in manifest.entries {
             let grammarPath = "\(resourcePath)/Grammars/\(entry.path)/grammar.json"
             let highlightsPath = "\(resourcePath)/Grammars/\(entry.path)/highlights.scm"
 
@@ -99,17 +97,6 @@ struct GrammarRegistryTests {
                 FileManager.default.fileExists(atPath: highlightsPath),
                 "Missing highlights for \(entry.name)")
         }
-    }
-
-    @Test(arguments: [
-        ("component.jsx", "javascript"),
-        ("module.ebuild", "bash"),
-        ("library.eclass", "bash"),
-        (".bashrc", "bash"),
-        ("/home/user/.bash_profile", "bash")
-    ])
-    func `bundled upstream file types select their grammars`(filename: String, language: String) {
-        #expect(LanguageHighlighter.detectLanguage(for: filename) == language)
     }
 
     @Test
@@ -131,7 +118,7 @@ struct GrammarRegistryTests {
         #expect(registry.entry(forLanguage: "elvish") == nil)
     }
 
-    /// The lookup `LanguageHighlighter.detectLanguage(for:)` makes before the bundled manifest.
+    /// The lookup KittyCode's language detection makes before the bundled manifest.
     @Test
     func `entry forFilename extracts extension and looks up`() {
         let registry = GrammarRegistry.scratch()

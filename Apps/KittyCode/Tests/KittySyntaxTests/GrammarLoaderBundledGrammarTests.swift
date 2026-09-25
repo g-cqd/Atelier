@@ -1,3 +1,4 @@
+import AtelierGrammarCorpus
 import AtelierScanners
 import Foundation
 import Testing

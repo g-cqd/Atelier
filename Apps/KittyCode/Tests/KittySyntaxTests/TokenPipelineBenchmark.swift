@@ -1,4 +1,5 @@
 import AtelierGrammar
+import AtelierGrammarCorpus
 import AtelierLexers
 import AtelierParser
 import AtelierQuery

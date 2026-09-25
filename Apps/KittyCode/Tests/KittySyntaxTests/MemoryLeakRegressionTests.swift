@@ -1,5 +1,6 @@
 import AemiTestKit
 import AtelierGrammar
+import AtelierGrammarCorpus
 import AtelierQuery
 import Foundation
 import KittyCodecs

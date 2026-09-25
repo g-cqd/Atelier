@@ -4,7 +4,7 @@ import Synchronization
 import Testing
 
 @testable import AtelierGrammar
-@testable import KittySyntax
+@testable import AtelierGrammarCorpus
 
 /// How the registry keeps compiled tables and failed compiles, keyed by the grammar file's contents, across calls and
 /// across registries that share a cache directory, as successive launches do.
