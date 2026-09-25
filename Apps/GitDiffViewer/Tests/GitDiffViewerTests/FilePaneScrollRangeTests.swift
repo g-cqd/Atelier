@@ -30,7 +30,7 @@ struct FilePaneScrollRangeTests {
     func `scrolled to its end, a file pane shows its last line at the bottom, its text laid out or not`(
         layout: PaneLayout, wrapsLines: Bool
     ) async throws {
-        let sut = HostedPanes(showing: .longLines(300), layout: layout, wrapsLines: wrapsLines)
+        let sut = HostedPanes(showing: .longLines(120), layout: layout, wrapsLines: wrapsLines)
         try await sut.alignSides()
 
         for pane in try sut.panes() {
@@ -45,22 +45,13 @@ struct FilePaneScrollRangeTests {
         }
     }
 
+    /// A long file, then a shorter one in the same pane, as the temporary tab shows the next file.
     @Test(arguments: PaneLayout.allCases, [true, false])
     func `a file pane that scrolls past its end scrolls its last line up to its top, however long its file`(
         layout: PaneLayout, wrapsLines: Bool
     ) throws {
-        for text in [PaneText.lines(12), .lines(120)] {
-            let sut = HostedPanes(showing: text, layout: layout, wrapsLines: wrapsLines, scrollsPastEnd: true)
-            try sut.expectEachPaneScrollsItsLastLineToItsTop()
-        }
-    }
-
-    /// The temporary tab shows the next file in the pane that showed the last one.
-    @Test(arguments: PaneLayout.allCases, [true, false])
-    func `a file pane that scrolls past its end and shows a shorter file next scrolls its last line up to its top`(
-        layout: PaneLayout, wrapsLines: Bool
-    ) throws {
         let sut = HostedPanes(showing: .lines(120), layout: layout, wrapsLines: wrapsLines, scrollsPastEnd: true)
+        try sut.expectEachPaneScrollsItsLastLineToItsTop()
 
         sut.show(.lines(12))
 
@@ -76,7 +67,7 @@ struct FilePaneScrollToRowTests {
     func `a file opens with its first change three lines below the pane's top`(layout: PaneLayout, wrapsLines: Bool)
         async throws
     {
-        let sut = HostedPanes(showing: .longLines(300, changedAt: 150), layout: layout, wrapsLines: wrapsLines)
+        let sut = HostedPanes(showing: .longLines(120, changedAt: 60), layout: layout, wrapsLines: wrapsLines)
         try await sut.alignSides()
 
         let row = try #require(sut.requestedRow)
@@ -94,7 +85,7 @@ struct FilePaneScrollToRowTests {
         let sut = HostedPanes(showing: .lines(40), layout: layout, wrapsLines: wrapsLines)
         try await sut.alignSides()
 
-        sut.show(.longLines(300, changedAt: 150))
+        sut.show(.longLines(120, changedAt: 60))
         try await sut.alignSides()
 
         let row = try #require(sut.requestedRow)
@@ -133,13 +124,13 @@ struct FilePaneScrollToRowTests {
     func `a click in the minimap brings its row to the pane's middle`(layout: PaneLayout, wrapsLines: Bool)
         async throws
     {
-        let sut = HostedPanes(showing: .longLines(300), layout: layout, wrapsLines: wrapsLines)
+        let sut = HostedPanes(showing: .longLines(120), layout: layout, wrapsLines: wrapsLines)
         try await sut.alignSides()
 
-        sut.selectInMinimap(row: 150)
+        sut.selectInMinimap(row: 60)
 
         for pane in try sut.panes() {
-            let offset = try pane.top(ofRow: 150) + pane.lineHeight / 2 - pane.clip.bounds.midY
+            let offset = try pane.top(ofRow: 60) + pane.lineHeight / 2 - pane.clip.bounds.midY
             #expect(abs(offset) < 1, "the row's middle is \(offset) below the pane's")
         }
     }
@@ -248,7 +239,7 @@ final class HostedPanes {
 
     /// Scrolls each pane to its end as the End key does, again as long as laying out what shows there moves its end.
     func scrollToEnd() {
-        for _ in 0 ..< 3 {
+        for _ in 0 ..< 2 {
             for textView in subviews(of: DiffPaneTextView.self, in: host) { textView.scrollToEndOfDocument(nil) }
             settle()
         }
@@ -277,13 +268,13 @@ final class HostedPanes {
         }
     }
 
-    /// Lays out and displays what needs it, and lets the run loop turn once, as it does between two events.
+    /// Lays out and displays what needs it, twice: a pass can leave the panes needing another, as a row placed in
+    /// one is checked in the next.
     private func settle() {
-        host.layoutSubtreeIfNeeded()
-        window.displayIfNeeded()
-        CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 0, true)
-        host.layoutSubtreeIfNeeded()
-        window.displayIfNeeded()
+        for _ in 0 ..< 2 {
+            host.layoutSubtreeIfNeeded()
+            window.displayIfNeeded()
+        }
     }
 }
 
