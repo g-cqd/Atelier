@@ -62,6 +62,8 @@ package final class DiffGutterView: NSView {
     package var onChangeToggle: ((ChangeKey) -> Void)?
     /// The change whose marker is under the pointer, drawn highlighted.
     var hoveredChange: ChangeKey?
+    /// The clip view of the list around an embedded gutter, which it follows: see ``followListScrolling()``.
+    private weak var listClipView: NSClipView?
     /// Called when a decorated line number is clicked, with its row, its findings, its frame in this view's
     /// coordinates, and this view, so a popover can anchor on the line.
     package var onDiagnosticClick:
@@ -152,6 +154,11 @@ package final class DiffGutterView: NSView {
         updateHover(at: nil)
         needsDisplay = true
         window?.invalidateCursorRects(for: self)
+    }
+
+    package override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        followListScrolling()
     }
 
     package override func updateTrackingAreas() {
@@ -397,6 +404,32 @@ package final class DiffGutterView: NSView {
             case .warning: .systemYellow
             case .note: .systemGray
         }
+    }
+}
+
+// MARK: Following the list
+
+extension DiffGutterView {
+    /// The list around an embedded gutter scrolled, which moved its rows under a still pointer: the next move finds
+    /// the handle or the marker under it again.
+    @objc private func listDidScroll(_ notification: Notification) {
+        updateHover(at: nil)
+    }
+
+    /// An embedded gutter, a card's, has no clip view of its own and scrolls with the list around it: it follows that
+    /// list's clip view while in a window, as a pane's gutter follows its own.
+    private func followListScrolling() {
+        let list = clipView == nil && window != nil ? enclosingScrollView?.contentView : nil
+        guard list !== listClipView else { return }
+        if let listClipView {
+            NotificationCenter.default.removeObserver(
+                self, name: NSView.boundsDidChangeNotification, object: listClipView)
+        }
+        listClipView = list
+        guard let list else { return }
+        list.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(listDidScroll(_:)), name: NSView.boundsDidChangeNotification, object: list)
     }
 }
 

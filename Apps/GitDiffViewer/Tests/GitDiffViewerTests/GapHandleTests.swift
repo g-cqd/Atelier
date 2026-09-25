@@ -398,6 +398,22 @@ struct DiffGutterGapHandleTests {
         #expect(halves.map { fixture.pixels(in: $0.rect) } == before)
     }
 
+    /// A card's gutter scrolls with the list around it, under a pointer that does not move.
+    @Test
+    func `scrolling the list around the gutter clears a half's highlight and its tooltip`() throws {
+        let fixture = try GutterFixture(visibleHeight: 120)
+        let gap = try #require(fixture.middleGap())
+        let upper = try #require(fixture.halves(of: gap).first)
+        let before = fixture.pixels(in: upper.rect)
+        fixture.mouse(.mouseMoved, at: NSPoint(x: upper.rect.midX, y: upper.rect.midY))
+        try #require(fixture.pixels(in: upper.rect) != before)
+
+        fixture.scrollView.contentView.scroll(to: NSPoint(x: 0, y: 20))
+
+        #expect(fixture.pixels(in: upper.rect) == before)
+        #expect(fixture.gutter.toolTip == nil)
+    }
+
     @Test
     func `letting go of a half away from any half leaves neither highlighted`() throws {
         let fixture = try GutterFixture()
