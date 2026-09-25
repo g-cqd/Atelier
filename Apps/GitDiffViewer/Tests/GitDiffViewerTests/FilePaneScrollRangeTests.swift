@@ -1,6 +1,7 @@
 import AemiTesting
 import AppKit
 import DiffCore
+import Observation
 import SwiftUI
 import Testing
 
@@ -231,14 +232,20 @@ final class HostedPanes {
     private let controller: SplitPaneController
     private let clock = TestClock()
     private let taskProvider = TaskProviderSpy.tolerant()
+    /// The old pane's share of the length, as the window stores it (book DIFF-01).
+    private let ratio: Binding<Double>
     /// The row the model asked the panes to show, if any.
     private(set) var requestedRow: Int?
 
+    /// `ratio` is where the window keeps its pane ratio; nil keeps one of the panes' own, starting even.
     init(
         showing text: PaneText, layout: PaneLayout, wrapsLines: Bool, scrollsPastEnd: Bool = false,
-        size: NSSize = NSSize(width: 600, height: HostedPanes.paneHeight), underBars: CGFloat = 0
+        size: NSSize = NSSize(width: 600, height: HostedPanes.paneHeight), underBars: CGFloat = 0,
+        ratio: Binding<Double>? = nil
     ) {
         self.underBars = underBars
+        let ratio = ratio ?? PaneRatioStore().binding
+        self.ratio = ratio
         let controller = SplitPaneController(clock: clock, taskProvider: taskProvider)
         // As the split view sets it when it appears.
         controller.wrapsLines = wrapsLines
@@ -250,7 +257,8 @@ final class HostedPanes {
         host = NSHostingView(
             rootView: Panes(
                 text: text, request: requestedRow.map(ScrollRequest.init(row:)), layout: layout,
-                wrapsLines: wrapsLines, scrollsPastEnd: scrollsPastEnd, controller: controller, underBars: underBars))
+                wrapsLines: wrapsLines, scrollsPastEnd: scrollsPastEnd, controller: controller, underBars: underBars,
+                ratio: ratio))
         window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
             backing: .buffered, defer: false)
@@ -269,13 +277,59 @@ final class HostedPanes {
         requestedRow = Self.firstChange(of: text, in: layout)
         host.rootView = Panes(
             text: text, request: requestedRow.map(ScrollRequest.init(row:)), layout: layout,
-            wrapsLines: wrapsLines, scrollsPastEnd: scrollsPastEnd, controller: controller, underBars: underBars)
+            wrapsLines: wrapsLines, scrollsPastEnd: scrollsPastEnd, controller: controller, underBars: underBars,
+            ratio: ratio)
         settle()
     }
 
     /// Each pane's gutter, text view and minimap, the old side's first.
     func paneViews() -> [DiffPaneView] {
         subviews(of: DiffPaneView.self, in: host)
+    }
+
+    /// The divider between the two panes; nil inline.
+    var divider: PaneDividerView? {
+        subviews(of: PaneDividerView.self, in: host).first
+    }
+
+    /// Drags the divider `distance` points towards the new pane, in steps, and releases it.
+    func dragDivider(by distance: CGFloat) throws {
+        let divider = try #require(divider)
+        let start = divider.convert(NSPoint(x: divider.bounds.midX, y: divider.bounds.midY), to: nil)
+        let offset = { (moved: CGFloat) in
+            divider.axis == .horizontal
+                ? NSPoint(x: start.x + moved, y: start.y) : NSPoint(x: start.x, y: start.y - moved)
+        }
+        divider.mouseDown(with: try mouseEvent(.leftMouseDown, at: start))
+        for step in 1 ... 4 {
+            divider.mouseDragged(with: try mouseEvent(.leftMouseDragged, at: offset(distance * CGFloat(step) / 4)))
+            settle()
+        }
+        divider.mouseUp(with: try mouseEvent(.leftMouseUp, at: offset(distance)))
+        settle()
+    }
+
+    /// Double-clicks the divider.
+    func doubleClickDivider() throws {
+        let divider = try #require(divider)
+        let point = divider.convert(NSPoint(x: divider.bounds.midX, y: divider.bounds.midY), to: nil)
+        for clickCount in 1 ... 2 {
+            divider.mouseDown(with: try mouseEvent(.leftMouseDown, at: point, clickCount: clickCount))
+            divider.mouseUp(with: try mouseEvent(.leftMouseUp, at: point, clickCount: clickCount))
+        }
+        settle()
+    }
+
+    /// What the window's content view hits at `point`, in the window's coordinates.
+    func hit(at point: NSPoint) -> NSView? {
+        host.hitTest(host.superview?.convert(point, from: nil) ?? point)
+    }
+
+    private func mouseEvent(_ type: NSEvent.EventType, at point: NSPoint, clickCount: Int = 1) throws -> NSEvent {
+        try #require(
+            NSEvent.mouseEvent(
+                with: type, location: point, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+                context: nil, eventNumber: 0, clickCount: clickCount, pressure: 1))
     }
 
     /// Lays out and displays what needs it, as the run loop does between two events.
@@ -421,6 +475,8 @@ struct Panes: View {
     /// The tab bar's height over the panes: both run beneath it side by side, the old one alone stacked, as the
     /// detail area lays them out.
     var underBars: CGFloat = 0
+    /// The old pane's share of the length.
+    var ratio: Binding<Double> = .constant(PaneSplit.evenRatio)
 
     var body: some View {
         switch layout {
@@ -430,12 +486,13 @@ struct Panes: View {
                 }
             case .sideBySide, .stacked:
                 if let old = text.rendered.old, let new = text.rendered.new {
-                    let stack =
-                        layout == .stacked
-                        ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
-                    stack {
+                    let isStacked = layout == .stacked
+                    ResizablePanes(
+                        axis: isStacked ? .vertical : .horizontal, ratio: ratio, covered: isStacked ? underBars : 0
+                    ) {
                         pane(old, gutter: .old, controller: controller, underBars: underBars)
-                        pane(new, gutter: .new, controller: controller, underBars: layout == .stacked ? 0 : underBars)
+                    } trailing: {
+                        pane(new, gutter: .new, controller: controller, underBars: isStacked ? 0 : underBars)
                     }
                 }
         }
@@ -447,6 +504,17 @@ struct Panes: View {
         DiffTextView(
             rendered: rendered, gutter: gutter, wrapsLines: wrapsLines, scrollRequest: request,
             splitController: controller, scrollsPastEnd: scrollsPastEnd, underBars: underBars)
+    }
+}
+
+/// A pane ratio kept outside the panes, as a window keeps its own, whose changes the panes observe.
+@MainActor
+@Observable
+final class PaneRatioStore {
+    var ratio = PaneSplit.evenRatio
+
+    var binding: Binding<Double> {
+        Binding(get: { self.ratio }, set: { self.ratio = $0 })
     }
 }
 
