@@ -11,6 +11,7 @@ import Testing
 /// How ``DiffViewerModel`` feeds ``DiffTextKit/DiagnosticOverlay``'s mapper and a card's badge: the fileIndex→path
 /// map behind the current render target, and a file's own severity counts.
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelDiagnosticsTests {
     private let harness = ModelTestHarness()
 

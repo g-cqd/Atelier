@@ -12,6 +12,7 @@ import Testing
 
 /// Loading, statuses, folding, timing and the card list of the window model.
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelTests {
     private let harness = ModelTestHarness()
 

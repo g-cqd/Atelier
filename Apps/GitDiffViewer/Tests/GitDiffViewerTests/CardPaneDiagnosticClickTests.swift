@@ -11,6 +11,7 @@ import Testing
 /// A click on a card pane's decorated line number opens that row's findings, as it does in the single-file view (book
 /// DUI-03).
 @MainActor
+@Suite(.mainActorLane)
 struct CardPaneDiagnosticClickTests {
     private static let row = 2
 

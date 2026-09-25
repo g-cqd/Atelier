@@ -11,6 +11,7 @@ import Testing
 /// A gap step renders its own card and nothing else; a relayout renders off the main actor and lands only where
 /// nothing newer replaced what it rendered (GDV B7).
 @MainActor
+@Suite(.mainActorLane)
 struct RenderPipelineRelayoutTests {
     private let harness = PipelineHarness()
 

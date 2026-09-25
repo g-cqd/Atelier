@@ -19,6 +19,7 @@ import Testing
 /// Run in release, alone on the machine: `GDV_BENCH=1 swift test -c release -Xswiftc -enable-testing --filter
 /// CommitGroupingBenchmark`.
 @MainActor
+@Suite(.mainActorLane)
 struct CommitGroupingBenchmark {
     private static let fileCount = 10_000
     private static let commitCount = 1_000

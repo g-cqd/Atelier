@@ -9,6 +9,7 @@ import Testing
 /// A doc comment comes from the repository under review, so its links are attacker input: prose rendering keeps only
 /// `https` links, and every text view the hover panel builds opens nothing else, whatever the document carries.
 @MainActor
+@Suite(.mainActorLane)
 struct HoverLinkTests {
     /// A link value `NSTextView` can hand its delegate, other than an `https` URL.
     enum RefusedLink: CaseIterable, Sendable, CustomTestStringConvertible {

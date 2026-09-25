@@ -8,6 +8,7 @@ import Testing
 /// The hover panel's material (book HOVER-08): Liquid Glass unless the user picks the popover material, stored,
 /// reaching every window at once, and overridable per project as the other hover setting is.
 @MainActor
+@Suite(.mainActorLane)
 struct HoverPanelMaterialSettingTests {
     private let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
     private let scratchDefaults = ScratchDefaults(tag: "hoverMaterial")

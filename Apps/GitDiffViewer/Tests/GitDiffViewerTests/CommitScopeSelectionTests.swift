@@ -12,6 +12,7 @@ import Testing
 /// What a selection under the grouping by commit shows (GIT-06 criterion 5, D39): each commit's own change, from its
 /// first parent to it, and Uncommitted Changes from `HEAD` to the working tree, read from a real repository.
 @MainActor
+@Suite(.mainActorLane)
 struct CommitScopeSelectionTests {
     private let harness = ModelTestHarness()
 

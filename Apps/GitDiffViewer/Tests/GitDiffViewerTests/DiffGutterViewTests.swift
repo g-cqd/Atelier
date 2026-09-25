@@ -6,6 +6,7 @@ import Testing
 @testable import DiffTextKit
 
 @MainActor
+@Suite(.mainActorLane)
 struct DiffGutterViewTests {
     private func text(lines: Int) -> String {
         (1 ... lines).map { "let value\($0) = \($0)\n" }.joined()

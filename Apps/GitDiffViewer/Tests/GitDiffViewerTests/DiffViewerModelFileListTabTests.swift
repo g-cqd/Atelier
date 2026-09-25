@@ -11,6 +11,7 @@ import Testing
 /// The file list as a fixed first tab while files or folders are open in tabs (book TAB-10): showing it closes no tab,
 /// and a tab shown again comes back as it was.
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelFileListTabTests {
     private let harness = ModelTestHarness()
 

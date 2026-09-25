@@ -13,6 +13,7 @@ import Testing
 
 /// Selection, tabs, settings changes, re-layout and the races between loads and renders.
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelSelectionTests {
     private let harness = ModelTestHarness()
 

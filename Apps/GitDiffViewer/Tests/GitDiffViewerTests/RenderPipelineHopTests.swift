@@ -85,6 +85,7 @@ final class PipelineEventLog {
 /// A render that keeps what is published leaves it on screen, and interactive, until its replacement lands whole
 /// (GDV B3, S1; review 6.2).
 @MainActor
+@Suite(.mainActorLane)
 struct RenderPipelineHopTests {
     private let harness = PipelineHarness()
 

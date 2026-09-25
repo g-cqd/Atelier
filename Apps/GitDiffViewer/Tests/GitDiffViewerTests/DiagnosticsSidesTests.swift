@@ -11,6 +11,7 @@ import Testing
 /// Which sides the analyzers run on (DIAG-08, decision D12): the plan the analyzed-sides setting, the changeset and
 /// the user's trust make, each side's findings kept on its own side, and a ref side exported before it runs.
 @MainActor
+@Suite(.mainActorLane)
 struct DiagnosticsSidesTests {
     private static let leftRoot = URL(filePath: "/left", directoryHint: .isDirectory)
     private static let rightRoot = URL(filePath: "/right", directoryHint: .isDirectory)

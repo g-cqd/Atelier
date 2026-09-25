@@ -11,6 +11,7 @@ import Testing
 /// The compact inline view through the window model (book DIFF-04): a marker's click and the keyboard commands
 /// disclose and fold changes, rendering only the card they belong to, and the setting is off until turned on.
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelCompactInlineTests {
     private let harness = ModelTestHarness()
 

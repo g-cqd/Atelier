@@ -12,6 +12,7 @@ import Testing
 /// A reload of both sides keeps the comparison on screen while they land one after the other: the first side to land
 /// always finds the other still loading, and must not collapse what is published (book GIT-03, GIT-04).
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelTwoSidedReloadTests {
     private let harness = ModelTestHarness()
 

@@ -9,6 +9,7 @@ import Testing
 /// The panel's window is sized to exactly its laid-out content, with no wasted space, across fixtures of
 /// increasing shape.
 @MainActor
+@Suite(.mainActorLane)
 struct HoverDocPanelTests {
     @MainActor
     private final class WindowRetainer {

@@ -9,6 +9,7 @@ import Testing
 /// A new render replaces a scrolling pane's whole text: the storage is emptied first, in the same editing transaction,
 /// which spares TextKit a replace that is quadratic in a large text.
 @MainActor
+@Suite(.mainActorLane)
 struct PaneStorageReplacementTests {
     @Test
     func `a new render into a pane holding a large text leaves exactly the new text`() throws {

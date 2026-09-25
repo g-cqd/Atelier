@@ -10,6 +10,7 @@ import Testing
 /// A window's gap drags: pointer events become expansions, and a handle held in an edge zone keeps revealing at the
 /// drag's bounded rate on the injected clock (book DIFF-02).
 @MainActor
+@Suite(.mainActorLane)
 struct GapDragControllerTests {
     private let clock = TestClock()
     private let taskProvider = TaskProviderSpy.tolerant()

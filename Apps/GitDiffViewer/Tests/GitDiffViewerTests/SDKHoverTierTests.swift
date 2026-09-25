@@ -35,6 +35,7 @@ private final class ResolutionSpy: Sendable {
 }
 
 @MainActor
+@Suite(.mainActorLane)
 struct SDKHoverTierTests {
     /// Calls a fresh tier twice, the second call once `awaitingEntry` has seen the first one's resolution start, and
     /// returns both calls' providers.

@@ -9,6 +9,7 @@ import Testing
 /// A pane whose lines fit has nothing to scroll sideways, freshly built and after a re-render: its text is no wider
 /// than what shows of it, and shows from its leading edge.
 @MainActor
+@Suite(.mainActorLane)
 struct PaneSidewaysRangeTests {
     private static let text = (1 ... 30).map { "let value\($0) = \($0)" }.joined(separator: "\n") + "\n"
 

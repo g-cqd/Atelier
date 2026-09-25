@@ -10,6 +10,7 @@ import Testing
 /// The refs-changed wiring: a commit moves the branch's ref but not the symbolic `.git/HEAD`, so a side parked on a
 /// named ref must reload on a refs change, not just refresh its menu.
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelRefsChangedTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
     private let scratchDefaults = ScratchDefaults(tag: "refsChanged")

@@ -9,6 +9,7 @@ import Testing
 /// A split card's height: its panes are as tall as their aligned rows, the same on every measure, and a body holding
 /// real panes measures that height whatever height it is offered.
 @MainActor
+@Suite(.mainActorLane)
 struct SplitCardHeightTests {
     private static let wide = String(repeating: "left ", count: 25)
     private static let other = String(repeating: "right ", count: 25)

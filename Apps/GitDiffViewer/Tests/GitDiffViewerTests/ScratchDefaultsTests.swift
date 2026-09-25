@@ -10,6 +10,7 @@ import Testing
 /// that never went there: these check where a scratch suite's plist goes, and that nothing of it is left once the
 /// suite, or the harness that holds it for its models, is released.
 @MainActor
+@Suite(.mainActorLane)
 struct ScratchDefaultsTests {
     private nonisolated static let preferences = URL.libraryDirectory.appending(
         path: "Preferences", directoryHint: .isDirectory)

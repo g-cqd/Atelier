@@ -33,6 +33,7 @@ import Testing
 /// -enable-testing --filter FileListSwitchBenchmark`. GDV_BENCH_LEFT and GDV_BENCH_RIGHT pick the refs, and
 /// GDV_BENCH_RUNS the switches timed per file.
 @MainActor
+@Suite(.mainActorLane)
 struct FileListSwitchBenchmark {
     /// Median milliseconds from the click on a file of the list to the end of the display pass that shows it. Measured
     /// on the Atelier repository, 200 cards: 99 to 202 ms before PERF-10 and 60 to 77 ms after with nothing else

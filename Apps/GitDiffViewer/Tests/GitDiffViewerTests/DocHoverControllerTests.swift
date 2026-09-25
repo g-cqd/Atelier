@@ -65,6 +65,7 @@ private final class WindowRetainer {
 }
 
 @MainActor
+@Suite(.mainActorLane)
 struct DocHoverControllerTests {
     private let text = "let alphaBeta = 1\nlet gammaDelta = 2\n"
     /// Keeps the test windows alive; nothing else holds them once a helper returns.

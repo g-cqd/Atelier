@@ -8,6 +8,7 @@ import Testing
 /// Per-path badge states through the model: every explorer's lookup, a rename followed to its left-side path, and an
 /// index change that re-reads git's status without reloading the files.
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelBadgeStatesTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
     private nonisolated static let info = RepositoryInfo(root: root, branches: ["main"], tags: [], commits: [])

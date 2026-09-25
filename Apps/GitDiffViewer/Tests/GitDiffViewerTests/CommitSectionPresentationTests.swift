@@ -37,7 +37,7 @@ struct CommitSectionPresentationTests {
         #expect(folded == Set(commits.map(\.id) + ["earlier"]))
     }
 
-    @Test
+    @Test(.mainActorLane)
     @MainActor
     func `a fold the user made outranks the default, both ways, and outlives a rebuild`() {
         let state = ExplorerUIState()

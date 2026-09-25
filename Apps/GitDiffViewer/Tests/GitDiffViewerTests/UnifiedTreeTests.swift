@@ -10,6 +10,7 @@ import Testing
 @testable import DiffTextKit
 
 @MainActor
+@Suite(.mainActorLane)
 struct UnifiedTreeTests {
     private let taskProvider = TaskProviderSpy.tolerant()
     private let reader = FakeSourceReader()

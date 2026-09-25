@@ -28,6 +28,7 @@ final class PublishLog {
 /// Swap, another ref and another folder keep the previous cards on screen, marked as updating, until the new
 /// comparison replaces them in one step; a load that fails keeps them marked with the failure (book D13, GIT-03).
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelUpdatingMarkerTests {
     private let harness = ModelTestHarness()
     private static let root = ModelTestHarness.rightURL

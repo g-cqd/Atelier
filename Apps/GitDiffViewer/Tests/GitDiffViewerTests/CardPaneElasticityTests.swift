@@ -9,6 +9,7 @@ import Testing
 /// A card pane stops at its edges, as it does by default: it never rubber-bands past them, sideways or down and up,
 /// unless bouncing at the edges is turned on (book SET-09).
 @MainActor
+@Suite(.mainActorLane)
 struct CardPaneElasticityTests {
     @Test(arguments: [false, true])
     func `a card pane never rubber-bands, whether its lines fit or run past it`(overflowing: Bool) throws {

@@ -6,6 +6,7 @@ import Testing
 @testable import DiffTextKit
 
 @MainActor
+@Suite(.mainActorLane)
 struct DiagnosticRowMapperTests {
     private func finding(
         line: Int, column: Int? = nil, endLine: Int? = nil, endColumn: Int? = nil,

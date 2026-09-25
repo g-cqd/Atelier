@@ -43,6 +43,7 @@ private final class ScratchRepositories {
 }
 
 @MainActor
+@Suite(.mainActorLane)
 struct LanguageServerPolicyTests {
     private let scratchDefaults = ScratchDefaults(tag: "lspPolicy")
 

@@ -75,7 +75,7 @@ private final class ParseCounter: Sendable {
 }
 
 @MainActor
-@Suite struct HoverDocumentationModelTests {
+@Suite(.mainActorLane) struct HoverDocumentationModelTests {
     private let swiftDocComment = """
         /// Adds two numbers.
         func add(_ a: Int, _ b: Int) -> Int { a + b }

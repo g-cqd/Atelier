@@ -10,6 +10,7 @@ import Testing
 /// The fetch wiring: a fetch re-runs the comparison when a side is parked on a remote-tracking ref, and not for a
 /// local branch; driven through a real ``SideState/fetch()`` over a fake runner.
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelFetchTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
     private let scratchDefaults = ScratchDefaults(tag: "fetch")

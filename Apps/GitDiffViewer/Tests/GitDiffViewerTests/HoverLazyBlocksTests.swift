@@ -8,6 +8,7 @@ import Testing
 /// A long discussion builds the blocks the panel shows at once and the rest as the body scrolls to them: every block
 /// is a view measured and laid out, and a few hundred of them held the main thread for seconds (`HoverBuildBenchmark`).
 @MainActor
+@Suite(.mainActorLane)
 struct HoverLazyBlocksTests {
     private static func prose(_ text: String) -> NSAttributedString {
         NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 12)])

@@ -9,6 +9,7 @@ import Testing
 /// Copying from a pane writes the source's characters: where the text shows a placeholder for a bidi control, the copy
 /// holds the control itself, as it did before the panes showed placeholders.
 @MainActor
+@Suite(.mainActorLane)
 struct BidiControlCopyTests {
     private static let rlo = "\u{202E}"
     private static let pdf = "\u{202C}"

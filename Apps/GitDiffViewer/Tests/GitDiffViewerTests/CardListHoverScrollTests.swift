@@ -20,6 +20,7 @@ private final class FlippedDocument: NSView {
 /// scroll view: scrolling the list moves the panel with its identifier, and closes it once the identifier leaves the
 /// list's visible area or slides under the card's pinned header (HOVER-09).
 @MainActor
+@Suite(.mainActorLane)
 struct CardListHoverScrollTests {
     private let retainedWindows = WindowRetainer()
     private let clock = TestClock()

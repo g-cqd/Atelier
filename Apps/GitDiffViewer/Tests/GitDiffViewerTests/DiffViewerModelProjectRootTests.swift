@@ -7,6 +7,7 @@ import Testing
 /// ``DiffViewerModel/currentProjectRoot`` follows the comparison's current repository, including a later switch
 /// through the source toolbar.
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelProjectRootTests {
     private let harness = ModelTestHarness()
 

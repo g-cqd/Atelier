@@ -11,6 +11,7 @@ import Testing
 /// same transaction, as ``DiffTextViewCoordinator/apply(_:keepingScroll:)`` does now. Runs interleave the two; run in
 /// release with GDV_BENCH=1.
 @MainActor
+@Suite(.mainActorLane)
 struct PaneStorageReplacementBenchmark {
     @Test(.enabled(if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil))
     func `a new document at five and fifty thousand rows`() throws {

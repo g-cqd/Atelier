@@ -9,6 +9,7 @@ import Testing
 /// Bidi controls in rendered text: each shows as a visible placeholder at its own offset, the row lays out in logical
 /// order, and hover and intraline emphasis keep the source's columns (Trojan Source, CVE-2021-42574).
 @MainActor
+@Suite(.mainActorLane)
 struct BidiControlTests {
     private static let rlo = "\u{202E}"
     private static let pdf = "\u{202C}"

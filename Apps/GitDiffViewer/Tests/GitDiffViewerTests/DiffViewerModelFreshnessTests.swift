@@ -9,7 +9,7 @@ import Testing
 /// the menus, and which costs nothing (GIT-01, PERF-03, GDV B4, S2 and S3). A synthetic watcher and a virtual clock
 /// drive the watcher; the time limit bounds a reload that never comes.
 @MainActor
-@Suite(.timeLimit(.minutes(1)))
+@Suite(.mainActorLane, .timeLimit(.minutes(1)))
 struct DiffViewerModelFreshnessTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
     private nonisolated static let head = ComparisonSource.gitRef(repository: root, ref: "HEAD")

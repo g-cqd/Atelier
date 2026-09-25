@@ -15,7 +15,9 @@ import Testing
 /// `set` in `let set = [1]` is a keyword to the lexer and a declared name to swift-syntax, so the first row changes
 /// colour when the tier lands, and the second, whose every word both tiers colour alike, does not.
 @MainActor
-@Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+@Suite(
+    .mainActorLane,
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
 struct RefinedColorsPixelsTests {
     static let text = "let set = [1]\nlet other = 2\n"
 

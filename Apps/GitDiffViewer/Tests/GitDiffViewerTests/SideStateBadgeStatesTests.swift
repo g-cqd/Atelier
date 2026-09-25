@@ -8,6 +8,7 @@ import Testing
 /// ``SideState/badgeStates``: git's status read beside every load, read again alone when the index moves, and never
 /// overwritten by a read that a newer one superseded.
 @MainActor
+@Suite(.mainActorLane)
 struct SideStateBadgeStatesTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
     private nonisolated static let info = RepositoryInfo(root: root, branches: ["main"], tags: [], commits: [])
