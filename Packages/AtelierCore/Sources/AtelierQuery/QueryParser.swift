@@ -12,7 +12,7 @@ public enum QueryParser: Sendable {
     private static let maxRecursionDepth = 128
 
     public static func parse(_ source: String) throws(QueryError) -> Query {
-        var scanner = Scanner(source: source)
+        var scanner = QueryScanner(source: source)
         var patterns: [QueryPattern] = []
 
         while scanner.skipWhitespaceAndComments() {
@@ -26,7 +26,7 @@ public enum QueryParser: Sendable {
 
     // MARK: - Private
 
-    private static func parsePattern(_ scanner: inout Scanner) throws(QueryError) -> QueryPattern {
+    private static func parsePattern(_ scanner: inout QueryScanner) throws(QueryError) -> QueryPattern {
         scanner.depth += 1
         defer { scanner.depth -= 1 }
         guard scanner.depth <= maxRecursionDepth else {
@@ -118,7 +118,7 @@ public enum QueryParser: Sendable {
         }
     }
 
-    private static func parseNodePattern(_ scanner: inout Scanner) throws(QueryError)
+    private static func parseNodePattern(_ scanner: inout QueryScanner) throws(QueryError)
         -> QueryPattern
     {
         scanner.advance()  // consume (
@@ -181,7 +181,7 @@ public enum QueryParser: Sendable {
     }
 
     /// A node pattern's children, fields and predicates, through its closing parenthesis.
-    private static func parseChildren(_ scanner: inout Scanner) throws(QueryError) -> [QueryPattern] {
+    private static func parseChildren(_ scanner: inout QueryScanner) throws(QueryError) -> [QueryPattern] {
         var children: [QueryPattern] = []
         while let ch = scanner.peek(), ch != ")" && ch != "@" && ch != "#" {
             if ch == "!" {
@@ -219,7 +219,7 @@ public enum QueryParser: Sendable {
         return children
     }
 
-    private static func parseLiteralPattern(_ scanner: inout Scanner) throws(QueryError)
+    private static func parseLiteralPattern(_ scanner: inout QueryScanner) throws(QueryError)
         -> QueryPattern
     {
         let value = try scanner.readString()
@@ -228,14 +228,14 @@ public enum QueryParser: Sendable {
         return .literal(value, capture: capture)
     }
 
-    private static func parseWildcard(_ scanner: inout Scanner) throws(QueryError) -> QueryPattern {
+    private static func parseWildcard(_ scanner: inout QueryScanner) throws(QueryError) -> QueryPattern {
         scanner.advance()  // consume _
         scanner.skipWhitespaceAndComments()
         let capture = try parseCapture(&scanner)
         return .wildcard(capture: capture)
     }
 
-    private static func parseAlternation(_ scanner: inout Scanner) throws(QueryError)
+    private static func parseAlternation(_ scanner: inout QueryScanner) throws(QueryError)
         -> QueryPattern
     {
         scanner.advance()  // consume [
@@ -252,12 +252,12 @@ public enum QueryParser: Sendable {
         return .alternation(alternatives)
     }
 
-    private static func parseAnchor(_ scanner: inout Scanner) -> QueryPattern {
+    private static func parseAnchor(_ scanner: inout QueryScanner) -> QueryPattern {
         scanner.advance()
         return .anchor
     }
 
-    private static func parsePredicates(_ scanner: inout Scanner) throws(QueryError)
+    private static func parsePredicates(_ scanner: inout QueryScanner) throws(QueryError)
         -> [QueryPattern]
     {
         var predicates: [QueryPattern] = []
@@ -280,7 +280,7 @@ public enum QueryParser: Sendable {
     }
 
     /// The capture at the scanner, unnumbered: ``Query`` numbers the captures of the patterns it holds.
-    private static func parseCapture(_ scanner: inout Scanner) throws(QueryError) -> QueryPattern.Capture? {
+    private static func parseCapture(_ scanner: inout QueryScanner) throws(QueryError) -> QueryPattern.Capture? {
         guard scanner.peek() == "@" else { return nil }
         scanner.advance()
         let name = scanner.readCaptureName()
@@ -315,7 +315,7 @@ public enum QueryParser: Sendable {
 
 extension QueryParser {
     /// The quantifier at the scanner, consumed, or nil when there is none.
-    private static func readQuantifier(_ scanner: inout Scanner) -> Quantifier? {
+    private static func readQuantifier(_ scanner: inout QueryScanner) -> Quantifier? {
         let quantifier: Quantifier
         switch scanner.peek() {
             case "+": quantifier = .oneOrMore
@@ -339,7 +339,7 @@ extension Quantifier {
 // MARK: - Predicates
 
 extension QueryParser {
-    private static func parsePredicatePattern(_ scanner: inout Scanner) throws(QueryError)
+    private static func parsePredicatePattern(_ scanner: inout QueryScanner) throws(QueryError)
         -> QueryPattern
     {
         guard scanner.peek() == "#" else {
@@ -442,160 +442,5 @@ extension QueryParser {
         guard let key = strings.first else { throw .syntaxError("\(name) requires a property name") }
         guard strings.count <= 2 else { throw .syntaxError("\(name) takes one property name and one value") }
         return (capture, key, strings.dropFirst().first)
-    }
-}
-
-// MARK: - Scanner
-
-private struct Scanner: Sendable {
-    var source: String
-    var index: String.Index
-    var depth: Int = 0
-
-    init(source: String) {
-        self.source = source
-        self.index = source.startIndex
-    }
-
-    var isAtEnd: Bool { index >= source.endIndex }
-
-    /// Where the scanner stands, to name in an error.
-    var position: Position { Position(source: source, index: index) }
-
-    /// A syntax error at the scanner's position.
-    func syntaxError(_ message: String) -> QueryError {
-        position.syntaxError(message)
-    }
-
-    func peek() -> Character? {
-        guard !isAtEnd else { return nil }
-        return source[index]
-    }
-
-    mutating func advance() {
-        guard !isAtEnd else { return }
-        index = source.index(after: index)
-    }
-
-    @discardableResult
-    mutating func skipWhitespaceAndComments() -> Bool {
-        while let ch = peek() {
-            if ch.isWhitespace {
-                advance()
-            } else if ch == ";" {
-                // Line comment
-                while let c = peek(), c != "\n" { advance() }
-            } else {
-                break
-            }
-        }
-        return !isAtEnd
-    }
-
-    mutating func readIdentifier() -> String {
-        var result = ""
-        while let ch = peek(), ch.isLetter || ch.isNumber || ch == "_" || ch == "." || ch == "-" {
-            result.append(ch)
-            advance()
-        }
-        return result
-    }
-
-    mutating func readCaptureName() -> String {
-        var result = ""
-        while let ch = peek(), ch.isLetter || ch.isNumber || ch == "_" || ch == "." || ch == "-" {
-            result.append(ch)
-            advance()
-        }
-        return result
-    }
-
-    mutating func readString() throws(QueryError) -> String {
-        guard peek() == "\"" else { throw syntaxError("Expected a string") }
-        let start = position
-        advance()
-        var result = ""
-        while let ch = peek(), ch != "\"" {
-            if ch == "\\" {
-                advance()
-                if let escaped = peek() {
-                    result.append(escaped)
-                    advance()
-                }
-            } else {
-                result.append(ch)
-                advance()
-            }
-        }
-        guard peek() == "\"" else { throw start.syntaxError("Unterminated string") }
-        advance()
-        return result
-    }
-
-    func isFieldPrefix() -> Bool {
-        // Look ahead for pattern: identifier followed by ':'
-        var tempIdx = index
-        while tempIdx < source.endIndex {
-            let ch = source[tempIdx]
-            if ch.isLetter || ch.isNumber || ch == "_" {
-                tempIdx = source.index(after: tempIdx)
-            } else if ch == ":" {
-                return true
-            } else {
-                return false
-            }
-        }
-        return false
-    }
-
-    func isParenthesizedPredicateStart() -> Bool {
-        guard peek() == "(" else { return false }
-
-        var tempIdx = source.index(after: index)
-        while tempIdx < source.endIndex {
-            let ch = source[tempIdx]
-
-            if ch.isWhitespace {
-                tempIdx = source.index(after: tempIdx)
-                continue
-            }
-
-            if ch == ";" {
-                while tempIdx < source.endIndex, source[tempIdx] != "\n" {
-                    tempIdx = source.index(after: tempIdx)
-                }
-                continue
-            }
-
-            return ch == "#"
-        }
-
-        return false
-    }
-
-    func isGroupStart() -> Bool {
-        guard let next = peek() else { return false }
-        return next == "(" || next == "[" || next == "\"" || next == "."
-    }
-}
-
-/// A place in a query's text, which an error names by line and column; both count from 1, the column in characters.
-private struct Position: Sendable {
-    var source: String
-    var index: String.Index
-
-    /// A syntax error at this position.
-    func syntaxError(_ message: String) -> QueryError {
-        var line = 1
-        var column = 1
-        for character in source[..<index] {
-            if character == "\n" || character == "\r\n" {
-                line += 1
-                column = 1
-            } else {
-                column += 1
-            }
-        }
-        return .syntaxError("\(message) at line \(line), column \(column)")
     }
 }
