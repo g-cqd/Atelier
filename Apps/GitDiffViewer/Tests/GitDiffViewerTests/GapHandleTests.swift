@@ -399,6 +399,45 @@ struct DiffGutterGapHandleTests {
     }
 
     @Test
+    func `letting go of a half away from any half leaves neither highlighted`() throws {
+        let fixture = try GutterFixture()
+        let gap = try #require(fixture.middleGap())
+        let halves = fixture.halves(of: gap)
+        let before = halves.map { fixture.pixels(in: $0.rect) }
+        let upper = try #require(halves.first)
+        let start = NSPoint(x: upper.rect.midX, y: upper.rect.midY)
+        let away = NSPoint(x: start.x, y: gap.band.maxY + 3 * fixture.rendered.lineHeight)
+
+        fixture.mouse(.mouseMoved, at: start)
+        fixture.mouse(.leftMouseDown, at: start)
+        fixture.mouse(.leftMouseDragged, at: away)
+        fixture.mouse(.leftMouseUp, at: away)
+
+        #expect(halves.map { fixture.pixels(in: $0.rect) } == before)
+    }
+
+    @Test
+    func `letting go of a half over the other highlights the other alone`() throws {
+        let fixture = try GutterFixture()
+        let gap = try #require(fixture.middleGap())
+        let halves = fixture.halves(of: gap)
+        let upper = try #require(halves.first)
+        let lower = try #require(halves.last)
+        let upperBefore = fixture.pixels(in: upper.rect)
+        let lowerBefore = fixture.pixels(in: lower.rect)
+        let start = NSPoint(x: upper.rect.midX, y: upper.rect.midY)
+        let over = NSPoint(x: lower.rect.midX, y: lower.rect.midY)
+
+        fixture.mouse(.mouseMoved, at: start)
+        fixture.mouse(.leftMouseDown, at: start)
+        fixture.mouse(.leftMouseDragged, at: over)
+        fixture.mouse(.leftMouseUp, at: over)
+
+        #expect(fixture.pixels(in: upper.rect) == upperBefore)
+        #expect(fixture.pixels(in: lower.rect) != lowerBefore)
+    }
+
+    @Test
     func `a gutter keeps its width whether or not its text offers a handle`() throws {
         let fixture = try GutterFixture()
         let text = (1 ... 60).map { "let value\($0) = \($0)" }.joined(separator: "\n") + "\n"

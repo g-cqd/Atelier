@@ -291,6 +291,9 @@ package final class DiffGutterView: NSView {
         guard handleDrag != nil else { return super.mouseUp(with: event) }
         handleDrag = nil
         needsDisplay = true
+        // The pointer let go wherever the drag took it: the half under it now is the one hovered, if any, not the one
+        // it pressed.
+        setHoveredHandle(gapHalf(at: convert(event.locationInWindow, from: nil)))
         onGapDrag?(.ended)
     }
 
