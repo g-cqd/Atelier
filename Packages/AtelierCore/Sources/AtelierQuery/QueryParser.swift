@@ -355,14 +355,38 @@ extension QueryParser {
                 guard args.count >= 2 else { throw .syntaxError("contains? requires 2 arguments") }
                 return .contains(capture: args[0], value: args[1])
             case "#is?":
-                guard args.count >= 2 else { throw .syntaxError("is? requires 2 arguments") }
-                return .is(capture: args[0], property: args[1])
+                let property = try parseProperty(name: "is?", args: args)
+                return .is(capture: property.capture, property: property.key, value: property.value)
             case "#is-not?":
-                guard args.count >= 2 else { throw .syntaxError("is-not? requires 2 arguments") }
-                return .isNot(capture: args[0], property: args[1])
+                let property = try parseProperty(name: "is-not?", args: args)
+                return .isNot(capture: property.capture, property: property.key, value: property.value)
             default:
                 return .directive(name: name, arguments: args)
         }
+    }
+
+    /// The arguments of a property predicate, read as tree-sitter reads them (`parse_property` in its Rust binding):
+    /// one to three, of which at most one is a capture, in any position; the first string is the key and the second,
+    /// if any, its value. `(#is-not? local)` names no capture, `(#is? @node named)` one.
+    private static func parseProperty(name: String, args: [String]) throws(QueryError)
+        -> (capture: String?, key: String, value: String?)
+    {
+        guard (1 ... 3).contains(args.count) else {
+            throw .syntaxError("\(name) takes 1 to 3 arguments, got \(args.count)")
+        }
+        var capture: String?
+        var strings: [String] = []
+        for argument in args {
+            if argument.hasPrefix("@") {
+                guard capture == nil else { throw .syntaxError("\(name) takes at most one capture") }
+                capture = argument
+            } else {
+                strings.append(argument)
+            }
+        }
+        guard let key = strings.first else { throw .syntaxError("\(name) requires a property name") }
+        guard strings.count <= 2 else { throw .syntaxError("\(name) takes one property name and one value") }
+        return (capture, key, strings.dropFirst().first)
     }
 }
 
