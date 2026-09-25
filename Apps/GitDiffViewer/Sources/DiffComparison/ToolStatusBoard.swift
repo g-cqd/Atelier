@@ -1,4 +1,6 @@
 package import AtelierDiagnostics
+package import AtelierLSP
+import AtelierSyntaxModel
 import Foundation
 import Observation
 
@@ -9,7 +11,9 @@ import Observation
 @MainActor
 package final class ToolStatusBoard {
     /// The id sourcekit-lsp's row and location are kept under.
-    package static let sourceKitLSPKey = "sourcekit-lsp"
+    package static let sourceKitLSPKey = LanguageServerDescriptor.sourceKitLSP.id
+    /// The language servers with a row, each kept under its id.
+    package static let languageServers = LanguageServerDescriptor.all
 
     /// By ``DiagnosticTool/rawValue`` for a tool, by server id for a language server; absent until probed.
     package private(set) var statuses: [String: ToolStatus] = [:]
@@ -19,6 +23,23 @@ package final class ToolStatusBoard {
     /// Bumped by every ``refreshAll(for:rediscovering:)``: a refresh another has replaced, when the tab changes scope
     /// mid-way, writes nothing more, so the rows never show the previous scope's statuses.
     @ObservationIgnored private var generation = 0
+
+    /// What a language server's row says it does: the languages whose hovers it answers, and the runtime it needs.
+    package static func footnote(for server: LanguageServerDescriptor) -> String {
+        let languages = server.languages.map(languageName).sorted().formatted(.list(type: .and))
+        let runtime = server.runtimeExecutableName.map { " It runs on \($0), found the same way." } ?? ""
+        return "Hover documentation runs it for \(languages), whether or not diagnostics are on.\(runtime)"
+    }
+
+    private static func languageName(_ language: Language) -> String {
+        switch language {
+            case .swift: "Swift"
+            case .typescript: "TypeScript"
+            case .javascript: "JavaScript"
+            case .go: "Go"
+            default: language.name
+        }
+    }
 
     package init(discovery: ToolDiscovery) {
         self.discovery = discovery
@@ -32,7 +53,7 @@ package final class ToolStatusBoard {
         let generation = generation
         isRefreshing = true
         if rediscovering { await discovery.invalidate() }
-        for key in DiagnosticTool.allCases.map(\.rawValue) + [Self.sourceKitLSPKey] {
+        for key in DiagnosticTool.allCases.map(\.rawValue) + Self.languageServers.map(\.id) {
             guard generation == self.generation else { return }
             await refresh(key: key, for: settings, generation: generation)
         }
@@ -40,8 +61,8 @@ package final class ToolStatusBoard {
         isRefreshing = false
     }
 
-    /// Probes the row under `key` for `settings`: a tool through its own location, sourcekit-lsp the way the language
-    /// server policy finds it. A disabled language server has no status.
+    /// Probes the row under `key` for `settings`: a tool through its own location, a language server the way the
+    /// language server policy finds it. A disabled language server has no status.
     package func refresh(key: String, for settings: ViewerSettings) async {
         await refresh(key: key, for: settings, generation: generation)
     }
@@ -57,13 +78,20 @@ package final class ToolStatusBoard {
         if let tool = DiagnosticTool(rawValue: key) {
             return await discovery.status(tool, location: settings.toolLocations[tool])
         }
-        guard key == Self.sourceKitLSPKey else { return nil }
+        guard let server = Self.languageServers.first(where: { $0.id == key }) else { return nil }
         let location = settings.lspServerLocations[key]
         if let location, !location.isEnabled { return nil }
-        let located = await discovery.locate(
-            executableName: Self.sourceKitLSPKey, overrideVariable: "GDV_SOURCEKIT_LSP",
-            customPath: location?.customPath, searchesToolchain: true)
-        // No version: sourcekit-lsp can only report one by launching the language server itself.
+        // The rungs ``LanguageServerDescriptor/executableQuery(customPath:overridePrefix:)`` gives the policy, with
+        // the rung that answered, which the row names.
+        var located: (url: URL, origin: ToolOrigin)?
+        for name in server.executableNames {
+            located = await discovery.locate(
+                executableName: name, overrideVariable: "GDV_" + server.environmentName,
+                customPath: location?.customPath, searchesToolchain: server.searchesToolchain,
+                homeRelativeDirectories: server.homeRelativeDirectories)
+            if located != nil { break }
+        }
+        // No version: a language server reports one only once launched, as its own initialize answer.
         return ToolStatus(tool: .swiftlint, url: located?.url, origin: located?.origin, version: nil)
     }
 }

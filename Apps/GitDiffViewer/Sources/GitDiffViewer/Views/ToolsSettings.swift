@@ -1,5 +1,6 @@
 import AppKit
 import AtelierDiagnostics
+import AtelierLSP
 import DiffComparison
 import DiffRendering
 import Foundation
@@ -108,14 +109,16 @@ struct ToolsSettings: View {
                     }
                 }
                 // Usable whatever the other settings (TOOL-02): a tool's path can be set before diagnostics are on,
-                // and hover, on by default, runs sourcekit-lsp with diagnostics off.
+                // and hover, on by default, runs the language servers with diagnostics off.
                 Section("Language Servers") {
-                    toolDisclosure(
-                        key: Self.sourceKitLSPKey, title: "sourcekit-lsp", executableName: "sourcekit-lsp",
-                        isEnabled: lspEnabledBinding(Self.sourceKitLSPKey),
-                        customPath: lspCustomPathBinding(Self.sourceKitLSPKey),
-                        footnote: "Hover documentation runs it, whether or not diagnostics are on."
-                    )
+                    ForEach(ToolStatusBoard.languageServers) { server in
+                        toolDisclosure(
+                            key: server.id, title: server.displayName,
+                            executableName: server.executableNames.first ?? server.id,
+                            isEnabled: lspEnabledBinding(server.id), customPath: lspCustomPathBinding(server.id),
+                            footnote: ToolStatusBoard.footnote(for: server)
+                        )
+                    }
                 }
                 if let trust {
                     TrustedRepositoriesSection(trust: trust)
@@ -127,8 +130,6 @@ struct ToolsSettings: View {
         .navigationTitle("Tools")
         .task(id: scope.selection) { await board.refreshAll(for: settings, rediscovering: false) }
     }
-
-    private static let sourceKitLSPKey = ToolStatusBoard.sourceKitLSPKey
 
     /// One tool's row: a summary line, and its path controls in a `DisclosureGroup` that expands on its own while
     /// the pinned path is broken.
