@@ -44,7 +44,7 @@ struct UnifiedExplorerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CommitGroupingStatusLine(state: model.commitGroups)
+            CommitGroupingStatusLine(state: model.commitGroups) { model.perform($0) }
             FileOutlineView(
                 sections: model.unifiedSections,
                 selectedPath: model.selectedPath,
@@ -74,10 +74,19 @@ struct UnifiedExplorerView: View {
 /// history is being read. Nothing while grouping is off, or on and settled (GIT-06).
 struct CommitGroupingStatusLine: View {
     let state: CommitGroupsState
+    /// Takes the way out the reason offers.
+    let perform: (CommitGroupingAction) -> Void
 
     var body: some View {
-        if let reason = state.unavailableReason {
-            line { Text(reason) }
+        if let reason = state.eligibility?.ineligibility {
+            line {
+                Text(reason.message)
+                if let action = reason.action {
+                    Button(action.title) { perform(action) }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                }
+            }
         } else if state.isUpdating {
             line {
                 ProgressView().controlSize(.mini)
