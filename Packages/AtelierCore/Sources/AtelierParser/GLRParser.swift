@@ -16,6 +16,14 @@ public final class GLRParser: Sendable {
     let tokenTerminals: [Int?]
     /// The grammar's symbols in tree-sitter's order, which breaks a tie between two parses.
     let symbolRanks: SymbolRanks
+    /// The terminal index of each external token, in the grammar's order; nil for one the table does not take.
+    let externalTerminals: [Int?]
+    /// The GOTO column of each rule's reductions, by rule index, read without hashing the non-terminal's name; nil for
+    /// a rule the table's reductions name inconsistently or never, which ``nonTerminalColumn(rule:nonTerminal:)`` looks
+    /// up by name.
+    private let reductionColumns: [Int?]
+    /// Whether precedence resolved a shift against a reduction in each state (``ParseTable/lostShifts``).
+    let hasLostShifts: [Bool]
     /// The lex modes built for stacks that can take only some of their state's tokens, by those tokens.
     let viableModes = Mutex<[[Int]: LazyLexMode]>([:])
 
@@ -36,6 +44,45 @@ public final class GLRParser: Sendable {
         self.scanner = TokenScanner(lexTable)
         self.tokenTerminals = lexTable.tokens.map { tIdx[$0.name] }
         self.symbolRanks = SymbolRanks(lexTable: lexTable, parseTable: parseTable, productions: productions)
+        self.externalTerminals = parseTable.externalSymbols.map { tIdx[$0] }
+        self.reductionColumns = Self.reductionColumns(of: parseTable, nonTerminalIndex: ntIdx)
+        self.hasLostShifts = (0 ..< parseTable.stateCount).map { parseTable.lostShifts[$0] != nil }
+    }
+
+    /// The GOTO column of the non-terminal each rule's reductions in `parseTable` name, by rule index; nil for a rule
+    /// named by no reduction, or by reductions to two non-terminals.
+    /// - Complexity: O(a) in the table's actions.
+    private static func reductionColumns(of parseTable: ParseTable, nonTerminalIndex: [String: Int]) -> [Int?] {
+        var names: [String?] = []
+        var inconsistent: Set<Int> = []
+        func record(_ action: Action) {
+            switch action {
+                case .reduce(let rule, _, let nonTerminal) where rule >= 0:
+                    if rule >= names.count {
+                        names.append(contentsOf: repeatElement(nil, count: rule + 1 - names.count))
+                    }
+                    if let name = names[rule] {
+                        if name != nonTerminal { inconsistent.insert(rule) }
+                    } else {
+                        names[rule] = nonTerminal
+                    }
+                case .conflict(let actions):
+                    // The resolver lists a conflict's reductions and shift, no conflict: this recurses once.
+                    actions.forEach(record)
+                case .shift, .reduce, .accept, .error:
+                    break
+            }
+        }
+        for row in parseTable.actions {
+            for action in row { record(action) }
+        }
+        return names.indices.map { inconsistent.contains($0) ? nil : names[$0].flatMap { nonTerminalIndex[$0] } }
+    }
+
+    /// The GOTO column of `nonTerminal`, to which `rule` reduces.
+    func nonTerminalColumn(rule: Int, nonTerminal: String) -> Int? {
+        if reductionColumns.indices.contains(rule), let column = reductionColumns[rule] { return column }
+        return nonTerminalIndex[nonTerminal]
     }
 
     static let maxStacks = 256
@@ -234,9 +281,9 @@ public final class GLRParser: Sendable {
                     continue
                 }
                 switch parseTable.actions[stack.state][lookahead] {
-                    case .reduce(_, let count, let nonTerminal)
+                    case .reduce(let rule, let count, let nonTerminal)
                     where lostShift(of: lookahead, in: stack.state) != nil
-                        && !reductionShifts(lookahead, on: stack, count: count, nonTerminal: nonTerminal):
+                        && !reductionShifts(lookahead, on: stack, rule: rule, count: count, nonTerminal: nonTerminal):
                         // Merged lookaheads made this reduction: the shift phase takes the shift it won against.
                         ready.append(consume stack)
                     case .reduce(let rule, let count, let nonTerminal) where budget > 0:
@@ -347,7 +394,7 @@ extension GLRParser {
     /// The node spans its children; an empty reduction sits where the node below it ends, at the start of the input
     /// if there is none. The nodes on a stack therefore stay in source order, so a node always ends after it starts.
     private func reduce(_ stack: inout ParseStack, rule: Int, count: Int, nonTerminal: String) -> Reduction {
-        guard let nonTerminalIdx = nonTerminalIndex[nonTerminal],
+        guard let nonTerminalIdx = nonTerminalColumn(rule: rule, nonTerminal: nonTerminal),
             let target = parseTable.gotos[stack.state(poppingSymbols: count)][nonTerminalIdx]
         else {
             return .missingGoto
