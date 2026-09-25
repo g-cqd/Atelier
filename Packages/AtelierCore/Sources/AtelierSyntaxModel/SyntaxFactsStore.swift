@@ -33,6 +33,8 @@ public final class SyntaxFactsStore: Sendable {
 
     private struct State {
         var entries: [Key: (facts: SyntaxFacts, bytes: Int, use: UInt64)] = [:]
+        /// The symbol kinds a language server gave, kept beside the facts under the same keys and budget.
+        var symbolKinds: [Key: (kinds: SymbolKinds, bytes: Int, use: UInt64)] = [:]
         var bytes = 0
         var clock: UInt64 = 0
         var extractions = 0
@@ -85,11 +87,52 @@ public final class SyntaxFactsStore: Sendable {
                 state.bytes -= replaced.bytes
             }
             state.bytes += bytes
-            while state.bytes > byteLimit, state.entries.count > 1,
-                let oldest = state.entries.filter({ $0.key != key }).min(by: { $0.value.use < $1.value.use })
-            {
-                state.bytes -= oldest.value.bytes
-                state.entries[oldest.key] = nil
+            Self.evict(&state, limit: byteLimit, keepingFacts: key)
+        }
+    }
+
+    /// The symbol kinds kept for `revision`, marked as used; nil when none are.
+    public func symbolKinds(for revision: SourceRevision) -> SymbolKinds? {
+        state.withLock { state in
+            let key = Key(revision)
+            guard var entry = state.symbolKinds[key] else { return nil }
+            state.clock += 1
+            entry.use = state.clock
+            state.symbolKinds[key] = entry
+            return entry.kinds
+        }
+    }
+
+    /// Keeps `kinds` for `revision`, then evicts the least recently used entries, facts or kinds, until the store is
+    /// within its limit.
+    public func insert(_ kinds: SymbolKinds, for revision: SourceRevision) {
+        let bytes = kinds.estimatedBytes
+        state.withLock { state in
+            let key = Key(revision)
+            state.clock += 1
+            if let replaced = state.symbolKinds.updateValue((kinds, bytes, state.clock), forKey: key) {
+                state.bytes -= replaced.bytes
+            }
+            state.bytes += bytes
+            Self.evict(&state, limit: byteLimit, keepingKinds: key)
+        }
+    }
+
+    /// Drops the least recently used facts or kinds, but the entry just kept, until `state` is within `limit`.
+    private static func evict(
+        _ state: inout State, limit: Int, keepingFacts facts: Key? = nil, keepingKinds kinds: Key? = nil
+    ) {
+        while state.bytes > limit, state.entries.count + state.symbolKinds.count > 1 {
+            let oldestFacts = state.entries.filter { $0.key != facts }.min { $0.value.use < $1.value.use }
+            let oldestKinds = state.symbolKinds.filter { $0.key != kinds }.min { $0.value.use < $1.value.use }
+            if let entry = oldestFacts, entry.value.use <= oldestKinds?.value.use ?? .max {
+                state.bytes -= entry.value.bytes
+                state.entries[entry.key] = nil
+            } else if let entry = oldestKinds {
+                state.bytes -= entry.value.bytes
+                state.symbolKinds[entry.key] = nil
+            } else {
+                return
             }
         }
     }

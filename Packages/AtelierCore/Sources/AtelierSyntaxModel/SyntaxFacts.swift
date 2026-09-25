@@ -74,3 +74,67 @@ public struct SyntaxFacts: Sendable {
     /// What an array's storage costs besides its elements.
     private static let arrayHeader = 32
 }
+
+/// What each span a language server named is (PERF-11 step 8): a keyword, a literal, a comment or a symbol, in UTF-8
+/// bytes of the text, so that hover asks the server over a symbol alone.
+public struct SymbolKinds: Sendable, Equatable {
+    public enum Kind: Sendable, Equatable {
+        case keyword
+        /// A string, a number or a Boolean.
+        case literal
+        case comment
+        /// A name the server resolved: a type, a function, a variable and the like.
+        case symbol
+    }
+
+    /// The spans, ascending and disjoint, in UTF-8 bytes of the text.
+    public let ranges: [Range<Int>]
+    public let kinds: [Kind]
+
+    /// The kinds of `tokens`, ascending and disjoint; an operator or punctuation token, which says nothing about what
+    /// hover could ask, is left out.
+    public init(tokens: [HighlightToken]) {
+        var ranges: [Range<Int>] = []
+        var kinds: [Kind] = []
+        for token in tokens {
+            guard let kind = Self.kind(of: token.role) else { continue }
+            ranges.append(token.byteRange)
+            kinds.append(kind)
+        }
+        self.ranges = ranges
+        self.kinds = kinds
+    }
+
+    /// The kind of the span covering the UTF-8 byte `offset`; nil where no span does.
+    /// - Complexity: O(log spans)
+    public func kind(atUTF8 offset: Int) -> Kind? {
+        var low = 0
+        var high = ranges.count
+        while low < high {
+            let middle = (low + high) / 2
+            if ranges[middle].upperBound <= offset {
+                low = middle + 1
+            } else {
+                high = middle
+            }
+        }
+        guard low < ranges.count, ranges[low].contains(offset) else { return nil }
+        return kinds[low]
+    }
+
+    /// An estimate of the memory the spans hold, which the facts store bounds.
+    public var estimatedBytes: Int {
+        64 + ranges.capacity * MemoryLayout<Range<Int>>.stride + kinds.capacity * MemoryLayout<Kind>.stride
+    }
+
+    /// The kind a token of `role` names; nil for an operator or punctuation.
+    public static func kind(of role: HighlightRole) -> Kind? {
+        switch role {
+            case .keyword, .keywordFunction, .keywordReturn, .keywordOperator: .keyword
+            case .string, .stringSpecial, .stringEscape, .number, .numberFloat, .boolean, .escape: .literal
+            case .comment, .commentDocumentation: .comment
+            case .operator, .punctuationBracket, .punctuationDelimiter, .punctuationSpecial: nil
+            default: .symbol
+        }
+    }
+}
