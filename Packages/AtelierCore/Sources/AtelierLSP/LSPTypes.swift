@@ -1,5 +1,7 @@
 // Hand-rolled Codable types for exactly the LSP requests the apps make: initialize, document
-// sync for open/close, and hover. Not a general-purpose LSP model.
+// sync, hover and semantic tokens. Not a general-purpose LSP model.
+
+import AtelierSyntaxModel
 
 /// Parameters for the `initialize` request. A nil field is left out of the request.
 public struct InitializeParams: Sendable, Encodable {
@@ -35,21 +37,85 @@ public struct WorkspaceFolder: Sendable, Codable, Equatable {
     }
 }
 
-/// The client capabilities advertised in `initialize`, trimmed to what hover needs.
+/// The client capabilities advertised in `initialize`, trimmed to what hover and semantic colour need.
 public struct ClientCapabilities: Sendable, Encodable {
     public let textDocument: TextDocumentClientCapabilities
+    public let workspace: WorkspaceClientCapabilities
 
-    public init(textDocument: TextDocumentClientCapabilities = TextDocumentClientCapabilities()) {
+    public init(
+        textDocument: TextDocumentClientCapabilities = TextDocumentClientCapabilities(),
+        workspace: WorkspaceClientCapabilities = WorkspaceClientCapabilities()
+    ) {
         self.textDocument = textDocument
+        self.workspace = workspace
     }
 }
 
-/// Per-feature text document capabilities, trimmed to hover.
+/// Per-feature text document capabilities, trimmed to hover and semantic tokens.
 public struct TextDocumentClientCapabilities: Sendable, Encodable {
     public let hover: HoverClientCapabilities
+    public let semanticTokens: SemanticTokensClientCapabilities
 
-    public init(hover: HoverClientCapabilities = HoverClientCapabilities()) {
+    public init(
+        hover: HoverClientCapabilities = HoverClientCapabilities(),
+        semanticTokens: SemanticTokensClientCapabilities = SemanticTokensClientCapabilities()
+    ) {
         self.hover = hover
+        self.semanticTokens = semanticTokens
+    }
+}
+
+/// Workspace capabilities: the server may ask the client to refresh its semantic tokens.
+public struct WorkspaceClientCapabilities: Sendable, Encodable {
+    public struct SemanticTokens: Sendable, Encodable {
+        public let refreshSupport: Bool
+    }
+
+    public let semanticTokens: SemanticTokens
+
+    public init(semanticTokensRefresh: Bool = true) {
+        semanticTokens = SemanticTokens(refreshSupport: semanticTokensRefresh)
+    }
+}
+
+/// What the client reads of semantic tokens: whole documents, as deltas against the last result, in the
+/// specification's standard types and modifiers and its relative format.
+public struct SemanticTokensClientCapabilities: Sendable, Encodable {
+    public struct Requests: Sendable, Encodable {
+        public struct Full: Sendable, Encodable {
+            public let delta: Bool
+        }
+
+        public let range: Bool
+        public let full: Full
+    }
+
+    /// The token types the specification defines, which ``LSPSemanticTokenDecoder`` maps to roles.
+    public static let standardTokenTypes = [
+        "namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter", "variable",
+        "property", "enumMember", "event", "function", "method", "macro", "keyword", "modifier", "comment", "string",
+        "number", "regexp", "operator", "decorator"
+    ]
+    /// The token modifiers the specification defines.
+    public static let standardTokenModifiers = [
+        "declaration", "definition", "readonly", "static", "deprecated", "abstract", "async", "modification",
+        "documentation", "defaultLibrary"
+    ]
+
+    public let requests: Requests
+    public let tokenTypes: [String]
+    public let tokenModifiers: [String]
+    public let formats: [String]
+    public let overlappingTokenSupport: Bool
+    public let multilineTokenSupport: Bool
+
+    public init(delta: Bool = true) {
+        requests = Requests(range: false, full: Requests.Full(delta: delta))
+        tokenTypes = Self.standardTokenTypes
+        tokenModifiers = Self.standardTokenModifiers
+        formats = ["relative"]
+        overlappingTokenSupport = false
+        multilineTokenSupport = false
     }
 }
 
@@ -252,5 +318,157 @@ public struct SymbolDetails: Sendable, Decodable, Equatable {
     public init(name: String?, systemModule: SystemModule?) {
         self.name = name
         self.systemModule = systemModule
+    }
+}
+
+// MARK: - Semantic tokens
+
+/// Identifies a text document at one version, for `textDocument/didChange`.
+public struct VersionedTextDocumentIdentifier: Sendable, Codable, Equatable {
+    public let uri: String
+    public let version: Int
+
+    public init(uri: String, version: Int) {
+        self.uri = uri
+        self.version = version
+    }
+}
+
+/// One change of a document: its whole new text, since the client sends the full content.
+public struct TextDocumentContentChangeEvent: Sendable, Codable, Equatable {
+    public let text: String
+
+    public init(text: String) {
+        self.text = text
+    }
+}
+
+/// Parameters for `textDocument/didChange`.
+public struct DidChangeTextDocumentParams: Sendable, Encodable {
+    public let textDocument: VersionedTextDocumentIdentifier
+    public let contentChanges: [TextDocumentContentChangeEvent]
+
+    public init(textDocument: VersionedTextDocumentIdentifier, contentChanges: [TextDocumentContentChangeEvent]) {
+        self.textDocument = textDocument
+        self.contentChanges = contentChanges
+    }
+}
+
+/// Parameters for `textDocument/semanticTokens/full`.
+public struct SemanticTokensParams: Sendable, Encodable {
+    public let textDocument: TextDocumentIdentifier
+
+    public init(textDocument: TextDocumentIdentifier) {
+        self.textDocument = textDocument
+    }
+}
+
+/// Parameters for `textDocument/semanticTokens/full/delta`: the result the delta is against.
+public struct SemanticTokensDeltaParams: Sendable, Encodable {
+    public let textDocument: TextDocumentIdentifier
+    public let previousResultId: String
+
+    public init(textDocument: TextDocumentIdentifier, previousResultId: String) {
+        self.textDocument = textDocument
+        self.previousResultId = previousResultId
+    }
+}
+
+/// A whole document's semantic tokens, and the result ID a later delta names.
+struct SemanticTokensResult: Decodable, Sendable {
+    let resultId: String?
+    let data: [UInt32]
+}
+
+/// A delta request's answer: the whole tokens again, or edits to the last result's data.
+enum SemanticTokensDeltaResult: Decodable, Sendable {
+    case full(SemanticTokensResult)
+    case delta(resultId: String?, edits: [LSPSemanticTokenDecoder.SemanticTokenEdit])
+
+    private enum CodingKeys: String, CodingKey {
+        case resultId
+        case data
+        case edits
+    }
+
+    private struct Edit: Decodable {
+        let start: Int
+        let deleteCount: Int
+        let data: [UInt32]?
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let resultId = try container.decodeIfPresent(String.self, forKey: .resultId)
+        if let edits = try container.decodeIfPresent([Edit].self, forKey: .edits) {
+            self = .delta(
+                resultId: resultId,
+                edits: edits.map { .init(start: $0.start, deleteCount: $0.deleteCount, data: $0.data ?? []) })
+        } else {
+            self = .full(
+                SemanticTokensResult(resultId: resultId, data: try container.decode([UInt32].self, forKey: .data)))
+        }
+    }
+}
+
+/// What a server's `initialize` answer says about semantic tokens: its legend, and whether it answers whole documents
+/// and deltas. Every other capability is left unread, so an answer the client cannot read beyond these keys still
+/// completes the handshake.
+struct InitializeResult: Decodable, Sendable {
+    struct SemanticTokensSupport: Sendable, Equatable {
+        let legend: SemanticTokensLegend
+        let full: Bool
+        let delta: Bool
+    }
+
+    let semanticTokens: SemanticTokensSupport?
+
+    private enum CodingKeys: String, CodingKey {
+        case capabilities
+    }
+
+    private enum CapabilityKeys: String, CodingKey {
+        case semanticTokensProvider
+    }
+
+    private struct Provider: Decodable {
+        struct Legend: Decodable {
+            let tokenTypes: [String]
+            let tokenModifiers: [String]
+        }
+
+        /// `full` is a Boolean or an object with `delta`.
+        struct Full: Decodable {
+            let isSupported: Bool
+            let delta: Bool
+
+            init(from decoder: any Decoder) throws {
+                let single = try decoder.singleValueContainer()
+                if let flag = try? single.decode(Bool.self) {
+                    isSupported = flag
+                    delta = false
+                } else {
+                    struct Options: Decodable { let delta: Bool? }
+                    isSupported = true
+                    delta = try single.decode(Options.self).delta ?? false
+                }
+            }
+        }
+
+        let legend: Legend
+        let full: Full?
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let capabilities = try? container.nestedContainer(keyedBy: CapabilityKeys.self, forKey: .capabilities)
+        guard let provider = try? capabilities?.decodeIfPresent(Provider.self, forKey: .semanticTokensProvider) else {
+            semanticTokens = nil
+            return
+        }
+        semanticTokens = SemanticTokensSupport(
+            legend: SemanticTokensLegend(
+                tokenTypes: provider.legend.tokenTypes, tokenModifiers: provider.legend.tokenModifiers),
+            full: provider.full?.isSupported ?? false, delta: provider.full?.delta ?? false)
     }
 }

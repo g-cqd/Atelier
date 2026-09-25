@@ -103,12 +103,12 @@ let package = Package(
             ],
             swiftSettings: strict
         ),
-        // A minimal Language Server Protocol client: base-protocol framing, JSON-RPC, and a sourcekit-lsp session
-        // for hover documentation.
+        // A minimal Language Server Protocol client: base-protocol framing, JSON-RPC, and language server sessions
+        // for hover documentation and, as a highlighting tier, semantic tokens.
         .target(
             name: "AtelierLSP",
             dependencies: [
-                "AtelierProcess", "AtelierSyntaxModel",
+                "AtelierHighlighting", "AtelierProcess", "AtelierSyntaxModel",
                 .product(name: "AemiJSON", package: "AemiJSON")
             ],
             swiftSettings: strict
@@ -283,8 +283,8 @@ let package = Package(
         .testTarget(
             name: "AtelierLSPTests",
             dependencies: [
-                "AtelierLSP", "AtelierProcess", .product(name: "AemiRuntime", package: "aemi"),
-                .product(name: "AemiTestKit", package: "aemi")
+                "AtelierHighlighting", "AtelierLSP", "AtelierProcess", "AtelierSwiftSyntax",
+                .product(name: "AemiRuntime", package: "aemi"), .product(name: "AemiTestKit", package: "aemi")
             ],
             swiftSettings: strict
         ),
