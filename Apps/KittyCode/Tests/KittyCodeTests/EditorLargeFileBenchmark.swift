@@ -366,6 +366,80 @@ struct EditorLargeFileBenchmark {
     }
 }
 
+/// A document its grammar colors (book D36): the main actor's share of a keystroke and of a refresh, which keep the
+/// grammar's color, and the full pass a refresh asks for.
+extension EditorLargeFileBenchmark {
+    /// A JSON file of 8,000 lines, about 150 KB and 44,000 tokens, under the grammar's size and token limits: a comment
+    /// line opens each group of ten, which the grammar colors and the lexer leaves plain.
+    private static let jsonText =
+        "{\n"
+        + (0 ..< 8_000)
+        .map { $0 % 10 == 0 ? "  // group \($0 / 10)" : "  \"key\($0)\": \($0)," }
+        .joined(separator: "\n") + "\n  \"last\": null\n}"
+
+    /// The JSON file opened through the open path, so its post-open pass colors it from its grammar, with the cursor
+    /// inside a comment and a 60-row screen halfway down; `root` is the temporary directory it lives in.
+    private func makeGrammarColoredState(tasks: TaskProviderSpy, root: URL) async throws -> EditorState {
+        let state = EditorState(
+            rootPath: root.path, config: KittyConfig(), taskProvider: tasks, searchPool: EditorTestPool.shared)
+        state.lastRenderRows = 60
+        state.finishOpeningFile(
+            requestID: state.nextOpenRequestID(), path: root.appending(path: "large.json").path, name: "large.json",
+            loadedFile: try WorkspaceFileLoading.decode(Data(Self.jsonText.utf8)), language: "json",
+            modificationDate: nil)
+        try await tasks.waitForAllTasks()
+        #expect(isGrammarColored(state), "the post-open pass colors the file from its grammar")
+        state.cursorRow = 4_001
+        state.cursorCol = 5
+        state.scrollOffset = 3_980
+        return state
+    }
+
+    /// Whether the comment line on screen holds the comment color, which only the grammar gives it.
+    private func isGrammarColored(_ state: EditorState) -> Bool {
+        let comment = state.syntaxTheme.style(for: "comment")
+        return state.highlightedLines[3_981].contains { $0.style == comment }
+    }
+
+    private func makeTemporaryRoot() throws -> URL {
+        let root = FileManager.default.temporaryDirectory.appending(path: "grammar-bench-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
+    }
+
+    @Test func `a keystroke in a JSON file its grammar colors`() async throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
+        let state = try await makeGrammarColoredState(tasks: tasks, root: root)
+        defer { state.shutdown() }
+        for _ in 0 ..< 5 { insertText("x", into: state) }
+        let clock = ContinuousClock()
+        let samples = (0 ..< 31).map { _ in clock.measure { insertText("x", into: state) } }
+        print("BENCH keystroke, grammar-colored JSON, 8K lines: \(Self.summary(samples))")
+    }
+
+    @Test func `refreshing the highlights of a JSON file its grammar colors`() async throws {
+        let root = try makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
+        let state = try await makeGrammarColoredState(tasks: tasks, root: root)
+        defer { state.shutdown() }
+        let clock = ContinuousClock()
+        var refresh: [Duration] = []
+        var landing: [Duration] = []
+        for _ in 0 ..< 11 {
+            let spawned = tasks.spawnedTaskCount
+            refresh.append(clock.measure { state.refreshHighlights() })
+            landing.append(try await clock.measure { try await awaitFullPass(tasks, after: spawned) })
+        }
+        print("BENCH refreshHighlights, grammar-colored JSON, 8K lines: \(Self.summary(refresh))")
+        print(
+            "BENCH full pass after a refresh, grammar-colored JSON, 8K lines: \(Self.summary(landing)); "
+                + "grammar color after the refreshes: \(isGrammarColored(state))")
+    }
+}
+
 /// A watcher that reports nothing, for a benchmark that calls the integration's reconcile itself.
 private struct IdleFileWatcher: FileWatching {
     var events: AsyncStream<FileWatcher.FileWatchEvent> { AsyncStream { $0.finish() } }
