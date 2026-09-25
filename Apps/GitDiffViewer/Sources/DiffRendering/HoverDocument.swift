@@ -87,6 +87,9 @@ package struct HoverDocument: @unchecked Sendable {
     package let diagnostics: [DiagnosticEntry]
     /// What the declaration says the symbol inherits from and conforms to, for Quick Help's Relationships section.
     package let relationships: [HoverRelationship]
+    /// A system symbol's page in Apple's developer documentation, which Quick Help's "Open in Developer
+    /// Documentation" opens; nil for any other symbol.
+    package let documentationURL: URL?
     /// The background declarations are drawn against: the hovered pane's ``DiffPalette/background``, so the theme's
     /// colors stay legible over the panel's material; nil for a document built by hand.
     package let chipBackground: NSColor?
@@ -98,7 +101,7 @@ package struct HoverDocument: @unchecked Sendable {
         title: String? = nil, declaration: NSAttributedString? = nil, summary: NSAttributedString? = nil,
         discussion: [Block] = [], parameters: [Field] = [], returns: NSAttributedString? = nil,
         provenance: Provenance = .unknown, extraCandidates: [Candidate] = [], diagnostics: [DiagnosticEntry] = [],
-        relationships: [HoverRelationship] = [], chipBackground: NSColor? = nil
+        relationships: [HoverRelationship] = [], documentationURL: URL? = nil, chipBackground: NSColor? = nil
     ) {
         self.title = title
         self.declaration = declaration
@@ -110,6 +113,7 @@ package struct HoverDocument: @unchecked Sendable {
         self.extraCandidates = extraCandidates
         self.diagnostics = diagnostics
         self.relationships = relationships
+        self.documentationURL = documentationURL
         self.chipBackground = chipBackground
     }
 
@@ -119,7 +123,8 @@ package struct HoverDocument: @unchecked Sendable {
         var document = HoverDocument(
             title: title, declaration: declaration, summary: summary, discussion: discussion, parameters: parameters,
             returns: returns, provenance: provenance, extraCandidates: extraCandidates,
-            diagnostics: self.diagnostics + diagnostics, relationships: relationships, chipBackground: chipBackground)
+            diagnostics: self.diagnostics + diagnostics, relationships: relationships,
+            documentationURL: documentationURL, chipBackground: chipBackground)
         document.panelMaterial = panelMaterial
         return document
     }
@@ -159,9 +164,23 @@ package struct HoverDocument: @unchecked Sendable {
             },
             diagnostics: [],
             relationships: parsed.declaration.map(HoverRelationships.relationships(fromDeclaration:)) ?? [],
+            documentationURL: content.documentationPage.flatMap(documentationURL(for:)),
             // Just short of opaque, so a trace of the panel's material keeps the chip set into the glass.
             chipBackground: chipColor(for: palette.background)
         )
+    }
+
+    /// The address of `page` in Apple's developer documentation, which lowercases the module and every name of the
+    /// path, labels included, as `https://developer.apple.com/documentation/foundation/filemanager/contents(atpath:)`.
+    package static func documentationURL(for page: HoverContent.DocumentationPage) -> URL? {
+        // A name's own slash, as an operator's, would read as a separator.
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove("/")
+        let components = ([page.module] + page.path).map { $0.lowercased() }
+        guard !components.contains(where: \.isEmpty) else { return nil }
+        let encoded = components.compactMap { $0.addingPercentEncoding(withAllowedCharacters: allowed) }
+        guard encoded.count == components.count else { return nil }
+        return URL(string: "https://developer.apple.com/documentation/" + encoded.joined(separator: "/"))
     }
 
     /// Preserves a system background's light and dark variants when giving the declaration chip its translucency.

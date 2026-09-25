@@ -223,7 +223,7 @@ package final class HoverDocumentationModel {
     private func primaryProvider(side: HoverQuerySide, onDiskRoot: URL?) async -> (any HoverProvider)? {
         guard side == .new, let onDiskRoot, let lspRegistry else { return nil }
         guard let service = await lspRegistry.service(forRoot: onDiskRoot) else { return nil }
-        return LSPHoverProvider(service: service)
+        return LSPHoverProvider(service: service, resolvesDocumentationPages: true)
     }
 
     /// A `file://` URI under `onDiskRoot` when given, or a synthetic `atelier-blob://<oid>/<path>` URI otherwise,

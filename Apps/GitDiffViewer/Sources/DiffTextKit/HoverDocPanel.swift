@@ -93,6 +93,8 @@ package final class HoverDocPanel {
     private let returnsHeader = HoverDocPanel.makeSectionLabel("Returns")
     private let returnsView: NSTextView
     private let diagnosticsStack = NSStackView()
+    /// Quick Help's "Open in Developer Documentation", for a system symbol.
+    private let documentationLinkView: NSTextView
     private let candidatesStack = NSStackView()
     private let contentStack = NSStackView()
     /// Holds the content stack inside whichever background ``HoverPanelMaterial`` makes, and tracks the pointer.
@@ -107,6 +109,7 @@ package final class HoverDocPanel {
     private var declarationHeight: NSLayoutConstraint?
     private var bodyHeight: NSLayoutConstraint?
     private var returnsHeight: NSLayoutConstraint?
+    private var documentationLinkHeight: NSLayoutConstraint?
 
     /// Whether ``show(document:anchorRect:in:)`` orders the panel's window in; a panel that does not is shown in
     /// every other respect, sized and placed, for tests that must put no window on screen.
@@ -125,6 +128,7 @@ package final class HoverDocPanel {
         summaryView = HoverDocPanel.makeProseTextView(linkDelegate: linkDelegate)
         declarationView = HoverDocPanel.makeCodeTextView(linkDelegate: linkDelegate)
         returnsView = HoverDocPanel.makeProseTextView(linkDelegate: linkDelegate)
+        documentationLinkView = HoverDocPanel.makeProseTextView(linkDelegate: linkDelegate)
         Self.liveCount += 1
     }
 
@@ -274,7 +278,7 @@ package final class HoverDocPanel {
 
         for view in [
             titleLabel, summaryView, declarationChip, headDivider, bodyScrollView, parametersHeader, parametersGrid,
-            returnsHeader, returnsView, candidatesStack, diagnosticsStack
+            returnsHeader, returnsView, candidatesStack, diagnosticsStack, documentationLinkView
         ] {
             contentStack.addArrangedSubview(view)
             let width = view.widthAnchor.constraint(equalToConstant: HoverPanelSizing.width - 24)
@@ -294,6 +298,8 @@ package final class HoverDocPanel {
         bodyHeight?.isActive = true
         returnsHeight = returnsView.heightAnchor.constraint(equalToConstant: 0)
         returnsHeight?.isActive = true
+        documentationLinkHeight = documentationLinkView.heightAnchor.constraint(equalToConstant: 0)
+        documentationLinkHeight?.isActive = true
 
         contentHost.addSubview(contentStack)
         NSLayoutConstraint.activate([
@@ -373,6 +379,12 @@ package final class HoverDocPanel {
 
         renderDiagnostics(document.diagnostics)
         diagnosticsStack.isHidden = document.diagnostics.isEmpty
+
+        let link = document.documentationURL.map(Self.documentationLink(to:)) ?? NSAttributedString()
+        documentationLinkView.textStorage?.setAttributedString(link)
+        documentationLinkView.isHidden = document.documentationURL == nil
+        documentationLinkHeight?.constant =
+            documentationLinkView.isHidden ? 0 : Self.measuredHeight(of: link, width: innerWidth)
 
         renderDiscussion(bodyBlocks, chipBackground: document.chipBackground, width: innerWidth)
         bodyScrollView.isHidden = bodyBlocks.isEmpty
@@ -545,6 +557,14 @@ extension HoverDocPanel {
         view.textContainer?.widthTracksTextView = true
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
+    }
+
+    /// Quick Help's link to a system symbol's page in Apple's developer documentation, opened as any link of the
+    /// panel is, through ``HoverLinkDelegate``.
+    static func documentationLink(to url: URL) -> NSAttributedString {
+        NSAttributedString(
+            string: "Open in Developer Documentation",
+            attributes: [.font: NSFont.systemFont(ofSize: HoverTypography.bodySize), .link: url])
     }
 
     fileprivate static func makeSectionLabel(_ title: String) -> NSTextField {
