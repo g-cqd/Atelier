@@ -1,5 +1,6 @@
 import AemiTesting
 import AtelierDiagnostics
+import AtelierLSP
 import AtelierTestSupport
 import DiffGit
 import Foundation
@@ -92,5 +93,58 @@ struct ToolStatusBoardTests {
 
         #expect(sut.statuses[DiagnosticTool.swiftformat.rawValue]?.isAvailable == false)
         #expect(!sut.isRefreshing)
+    }
+
+    @Test
+    func `clangd is found through the toolchain, rust-analyzer in cargo's directory and basedpyright in ~/.local/bin`()
+        async throws
+    {
+        let temp = FileManager.default.temporaryDirectory.appending(
+            path: "GitDiffViewerTests.board.\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let home = temp.appending(path: "home", directoryHint: .isDirectory)
+        let installed = [
+            "clangd": temp.appending(path: "toolchain/usr/bin/clangd"),
+            "rust-analyzer": home.appending(path: ".cargo/bin/rust-analyzer"),
+            "basedpyright": home.appending(path: ".local/bin/basedpyright-langserver")
+        ]
+        for executable in installed.values {
+            try FileManager.default.createDirectory(
+                at: executable.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try "#!/bin/sh\n".write(to: executable, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        }
+        let clangd = try #require(installed["clangd"])
+        let runner = FakeProcessRunner { spec in
+            guard spec.executable.path == "/usr/bin/xcrun", spec.arguments == ["--find", "clangd"] else {
+                return .failure(1, error: "")
+            }
+            return .success(clangd.path + "\n")
+        }
+        let discovery = ToolDiscovery(
+            runner: runner, bundledDirectory: nil, homeDirectory: home, environment: ["SHELL": "/bin/zsh"],
+            wellKnownDirectories: [])
+        let sut = ToolStatusBoard(discovery: discovery)
+
+        await sut.refreshAll(for: ViewerSettings(defaults: scratchDefaults.defaults), rediscovering: false)
+
+        for (id, executable) in installed {
+            #expect(sut.statuses[id]?.url?.path == executable.path, "\(id)")
+        }
+        #expect(sut.statuses["clangd"]?.origin == .toolchain)
+    }
+
+    @Test
+    func `each new language server's row names the languages it answers for`() {
+        // The list's separators follow the locale.
+        let clangd = ToolStatusBoard.footnote(for: .clangd)
+        #expect(clangd.hasPrefix("Hover documentation runs it for C"))
+        #expect(clangd.contains("C++") && clangd.contains("Objective-C") && !clangd.contains("objective-c"))
+        #expect(
+            ToolStatusBoard.footnote(for: .rustAnalyzer)
+                == "Hover documentation runs it for Rust, whether or not diagnostics are on.")
+        #expect(
+            ToolStatusBoard.footnote(for: .basedPyright)
+                == "Hover documentation runs it for Python, whether or not diagnostics are on.")
     }
 }
