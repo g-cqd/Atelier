@@ -93,9 +93,6 @@ package struct HoverDocument: @unchecked Sendable {
     /// The background declarations are drawn against: the hovered pane's ``DiffPalette/background``, so the theme's
     /// colors stay legible over the panel's material; nil for a document built by hand.
     package let chipBackground: NSColor?
-    /// What the panel showing this document is made of: the hovered window's setting, read as the document is
-    /// resolved, so a change of setting applies to the next document shown.
-    package var panelMaterial: HoverPanelMaterial = .liquidGlass
 
     package init(
         title: String? = nil, declaration: NSAttributedString? = nil, summary: NSAttributedString? = nil,
@@ -117,23 +114,14 @@ package struct HoverDocument: @unchecked Sendable {
         self.chipBackground = chipBackground
     }
 
-    /// This document with `diagnostics` after its own, every other field kept as it is, ``chipBackground`` and
-    /// ``panelMaterial`` included, so a row with findings shows its declaration on the same chip as any other row.
+    /// This document with `diagnostics` after its own, every other field kept as it is, ``chipBackground`` included,
+    /// so a row with findings shows its declaration on the same chip as any other row.
     package func adding(diagnostics: [DiagnosticEntry]) -> HoverDocument {
-        var document = HoverDocument(
+        HoverDocument(
             title: title, declaration: declaration, summary: summary, discussion: discussion, parameters: parameters,
             returns: returns, provenance: provenance, extraCandidates: extraCandidates,
             diagnostics: self.diagnostics + diagnostics, relationships: relationships,
             documentationURL: documentationURL, chipBackground: chipBackground)
-        document.panelMaterial = panelMaterial
-        return document
-    }
-
-    /// This document, shown on a panel made of `material`.
-    package func presented(on material: HoverPanelMaterial) -> HoverDocument {
-        var document = self
-        document.panelMaterial = material
-        return document
     }
 
     /// Structures and styles `content` for the hover panel: declarations colored with the hovered pane's `palette`,

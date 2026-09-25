@@ -75,6 +75,7 @@ private struct PaneOptions: Equatable {
     let layout: CardLayout
     let wrapMode: WrapMode
     let showsHover: Bool
+    let hoverPanelMaterial: HoverPanelMaterial
     let bouncesAtEdges: Bool
 }
 
@@ -97,7 +98,7 @@ private struct FileCardFrame: View {
                     layout: settings.mode.cardLayout,
                     wrapMode: WrapMode(wrapsLines: settings.wrapsLines, column: settings.wrapColumn),
                     showsHover: settings.showsHoverDocumentation && model.hoverDocs != nil,
-                    bouncesAtEdges: settings.bouncesAtEdges),
+                    hoverPanelMaterial: settings.hoverPanelMaterial, bouncesAtEdges: settings.bouncesAtEdges),
                 model: model)
         )
         // Set here, in the list's own graph, so a fold animates wherever it starts: an animation begun in the
@@ -447,11 +448,8 @@ private struct CardPane: View {
             layouts: content.layouts, side: side, gutter: gutter, width: width, wrapMode: options.wrapMode,
             onGapDrag: content.drag, onDisplayed: content.displayed,
             hoverEnabled: options.showsHover,
-            // The panel's material is read as the hit resolves, so a change of setting reaches the next panel without
-            // rebuilding the card's panes.
-            hoverResolver: diagnostics.hoverResolver(
-                docs: model.hoverDocs, palette: model.palette, settings: model.settings),
-            bouncesAtEdges: options.bouncesAtEdges,
+            hoverResolver: diagnostics.hoverResolver(docs: model.hoverDocs, palette: model.palette),
+            hoverPanelMaterial: options.hoverPanelMaterial, bouncesAtEdges: options.bouncesAtEdges,
             diagnosticOverlay: model.settings.diagnosticsEnabled ? diagnostics.overlay : nil,
             diagnosticsVersion: diagnostics.version, onDiagnosticClick: diagnostics.showFindings)
         if let rendered = layout?.rendered {
