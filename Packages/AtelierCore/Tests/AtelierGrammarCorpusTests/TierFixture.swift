@@ -1,5 +1,7 @@
 import Foundation
+import Synchronization
 
+@testable import AtelierGrammar
 @testable import AtelierGrammarCorpus
 
 /// A one-rule grammar that reads `hello`, registered as JSON's under a temporary grammars directory, with a
@@ -29,7 +31,31 @@ struct TierFixture {
         return SyntaxArtifactsCache(registry: registry, grammarsDirectory: grammarsDirectory)
     }
 
+    /// A registry that knows each language of `paths` in the directory it names, and counts its compiles in
+    /// `compiles`.
+    func registry(counting compiles: Counter, paths: [String: String] = ["json": "tiny"]) -> GrammarRegistry {
+        let registry = GrammarRegistry(cacheDirectory: cacheDirectory) { grammar throws(GrammarError) in
+            compiles.increment()
+            return try ParseTableCompiler.compile(grammar)
+        }
+        for (language, path) in paths {
+            registry.register(GrammarRegistry.LanguageEntry(name: language, extensions: [".\(language)"], path: path))
+        }
+        return registry
+    }
+
     func remove() {
         try? FileManager.default.removeItem(at: root)
+    }
+}
+
+/// A count several tasks add to.
+final class Counter: Sendable {
+    private let count = Mutex(0)
+
+    var value: Int { count.withLock { $0 } }
+
+    func increment() {
+        count.withLock { $0 += 1 }
     }
 }

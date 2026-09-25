@@ -221,6 +221,25 @@ public final class GrammarRegistry: Sendable {
         try loadedGrammar(for: languageName, grammarsPath: grammarsPath).key.fileStem
     }
 
+    /// The size in bytes of `languageName`'s compiled tables as the disk cache stores them, the measure of a table's
+    /// size: nil when the cache holds none. Nothing is decoded.
+    /// - Throws: `GrammarError.fileNotFound` when no entry names the language, or the grammar loader's error.
+    public func cachedTableBytes(for languageName: String, grammarsPath: String) throws(GrammarError) -> Int? {
+        diskCache.tableFileSize(for: try loadedGrammar(for: languageName, grammarsPath: grammarsPath).key)
+    }
+
+    /// Drops the compiled tables of `languageName` the registry holds in memory, so they are freed once no one else
+    /// holds them; the next ``compiledResult(for:grammarsPath:)`` reads them from the disk cache again. A failed
+    /// compile stays remembered.
+    public func forgetCompiledTables(for languageName: String) {
+        state.withLock { state in
+            guard let key = state.loadedGrammars[languageName]?.key, case .success = state.compileOutcomes[key] else {
+                return
+            }
+            state.compileOutcomes[key] = nil
+        }
+    }
+
     /// Reads a compiled table only when it is already cached; prewarming never starts a compile.
     public func cachedResult(
         for languageName: String, grammarsPath: String
