@@ -541,6 +541,34 @@ extension HoverDocumentationModelTests {
     }
 
     @Test
+    func `a TypeScript file answers from its JSDoc on either side when no language server resolves`() async throws {
+        let servers = ServerLog()
+        let model = makeSUT(lspRegistry: servers.registry())
+        let root = try makeScratchRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = """
+            /** Adds two numbers. */
+            export function add(a: number, b: number) { return a + b }
+            const sum = add(1, 2)
+            """
+        let entry = HoverDocumentationModel.FileEntry(
+            index: 0, leftPath: "src/math.ts", rightPath: "src/math.ts", oldText: source, newText: source,
+            oldBlobID: "old", newBlobID: "new")
+
+        try await feed(model, [entry], root: root)
+
+        for side in [HoverQuerySide.new, .old] {
+            // `add` spans columns 12..<15 of the last line.
+            let content = await model.hover(fileIndex: 0, side: side, line: 2, utf16Column: 13)
+            #expect(content?.source == .docIndex)
+            let expected = "```typescript\nexport function add(a: number, b: number)\n```\n\nAdds two numbers."
+            #expect(content?.markdown == expected)
+        }
+        // The new side asked for its server first; the old side, read from history, never did.
+        #expect(servers.all == ["typescript-language-server"])
+    }
+
+    @Test
     func `a file no language server serves gets no hover and starts nothing`() async throws {
         let servers = ServerLog()
         let model = makeSUT(lspRegistry: servers.registry())
