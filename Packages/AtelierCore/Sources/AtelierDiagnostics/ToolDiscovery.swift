@@ -66,11 +66,12 @@ public actor ToolDiscovery {
     }
 
     /// Locates `executableName` by the shared precedence: an environment override, a custom path, the app's
-    /// bundled copy, (optionally) the active toolchain, a fixed list of well-known install directories, then the
-    /// login shell's `$PATH`. The first executable file found wins; a relative override, custom path or `$PATH`
-    /// entry is skipped.
+    /// bundled copy, (optionally) the active toolchain, a fixed list of well-known install directories, then
+    /// `homeRelativeDirectories` under the home directory, then the login shell's `$PATH`. The first executable file
+    /// found wins; a relative override, custom path or `$PATH` entry is skipped.
     public func locate(
-        executableName: String, overrideVariable: String?, customPath: String?, searchesToolchain: Bool
+        executableName: String, overrideVariable: String?, customPath: String?, searchesToolchain: Bool,
+        homeRelativeDirectories: [String] = []
     ) async -> (url: URL, origin: ToolOrigin)? {
         if let overrideVariable, let override = environment[overrideVariable], isAbsoluteExecutable(override) {
             return (URL(filePath: override), .environment)
@@ -85,7 +86,7 @@ public actor ToolDiscovery {
         if searchesToolchain, let url = await xcrunFind(executableName) {
             return (url, .toolchain)
         }
-        let wellKnown = wellKnownDirectories
+        let wellKnown = wellKnownDirectories + homeRelativeDirectories.map { homeDirectory.appending(path: $0).path }
         for directory in wellKnown {
             let candidate = directory + "/" + executableName
             if isExecutable(candidate) { return (URL(filePath: candidate), .wellKnown) }
@@ -260,5 +261,20 @@ public actor ToolDiscovery {
     /// Whether `path` is absolute and names an executable file.
     private func isAbsoluteExecutable(_ path: String) -> Bool {
         path.hasPrefix("/") && isExecutable(path)
+    }
+}
+
+extension ToolDiscovery: ExecutableLocating {
+    /// The executable of the first of `query`'s names that the shared precedence finds, the names tried in order.
+    public func locateExecutable(_ query: ExecutableQuery) async -> URL? {
+        for name in query.names {
+            if let located = await locate(
+                executableName: name, overrideVariable: query.overrideVariable, customPath: query.customPath,
+                searchesToolchain: query.searchesToolchain, homeRelativeDirectories: query.homeRelativeDirectories)
+            {
+                return located.url
+            }
+        }
+        return nil
     }
 }

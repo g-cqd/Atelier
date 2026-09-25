@@ -340,4 +340,50 @@ struct ToolDiscoveryTests {
 
         #expect(retried.version == "0.65.1")
     }
+
+    @Test
+    func `a home-relative directory is searched after the well-known ones and before the login shell's PATH`()
+        async throws
+    {
+        let temp = TemporaryDirectory(prefix: "toolloc")
+        defer { temp.cleanup() }
+        let home = URL(filePath: temp.file("home"))
+        let goTool = home.appending(path: "go/bin/gopls")
+        try Self.makeExecutable(at: goTool)
+        let shellTool = URL(filePath: temp.file("shell/gopls"))
+        try Self.makeExecutable(at: shellTool)
+        let discovery = ToolDiscovery(
+            runner: Self.scriptedRunner(shellPathDirectories: [temp.file("shell")]), bundledDirectory: nil,
+            homeDirectory: home, environment: [:], wellKnownDirectories: [])
+
+        let located = await discovery.locate(
+            executableName: "gopls", overrideVariable: nil, customPath: nil, searchesToolchain: false,
+            homeRelativeDirectories: ["go/bin"])
+        let withoutDirectory = await discovery.locate(
+            executableName: "gopls", overrideVariable: nil, customPath: nil, searchesToolchain: false)
+
+        #expect(located?.url == goTool)
+        #expect(located?.origin == .wellKnown)
+        #expect(withoutDirectory?.url == shellTool)
+    }
+
+    @Test
+    func `an executable query takes its first name found`() async throws {
+        let temp = TemporaryDirectory(prefix: "toolloc")
+        defer { temp.cleanup() }
+        let home = URL(filePath: temp.file("home"))
+        let fallback = home.appending(path: ".local/bin/pyright")
+        try Self.makeExecutable(at: fallback)
+        let discovery = ToolDiscovery(
+            runner: Self.scriptedRunner(), bundledDirectory: nil, homeDirectory: home, environment: [:],
+            wellKnownDirectories: [])
+        let query = ExecutableQuery(names: ["basedpyright", "pyright"], homeRelativeDirectories: [".local/bin"])
+
+        #expect(await discovery.locateExecutable(query) == fallback)
+
+        let preferred = home.appending(path: ".local/bin/basedpyright")
+        try Self.makeExecutable(at: preferred)
+        #expect(await discovery.locateExecutable(query) == preferred)
+        #expect(await discovery.locateExecutable(ExecutableQuery(names: ["missing"])) == nil)
+    }
 }
