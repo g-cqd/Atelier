@@ -1,3 +1,4 @@
+import AemiCore
 import AppKit
 import AtelierDiagnostics
 import DiffComparison
@@ -20,8 +21,8 @@ final class PaneDiagnostics {
     /// Retains the transient findings popover, which `NSPopover.show` does not.
     @ObservationIgnored private var popover: NSPopover?
 
-    /// Maps `model`'s findings to the rows of `rendered` off the main actor, and applies the result unless a newer
-    /// mapping started meanwhile. Clears the rows at once while diagnostics are off.
+    /// Maps `model`'s findings to the rows of `rendered` off the main actor, on the model's task provider, and applies
+    /// the result unless a newer mapping started meanwhile. Clears the rows at once while diagnostics are off.
     func recompute(for rendered: RenderedText, model: DiffViewerModel) {
         generation &+= 1
         let generation = generation
@@ -32,7 +33,7 @@ final class PaneDiagnostics {
         }
         let right = SideFindings(paths: model.diagnosticFilePaths, findings: diagnostics.findingsByFile)
         let left = SideFindings(paths: model.diagnosticLeftFilePaths, findings: diagnostics.leftFindingsByFile)
-        Task {
+        model.taskProvider.task {
             let rows = await DiagnosticRowMapper.rowsOffMain(for: rendered, left: left, right: right)
             guard generation == self.generation else { return }
             overlay.replace(rows)
