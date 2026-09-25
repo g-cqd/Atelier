@@ -25,17 +25,18 @@ public final class GrammarParser: Sendable {
 extension SyntaxTree {
     /// The tree with `edit` applied to its node ranges: nodes after the edit shift, nodes overlapping it are
     /// adjusted. The source text is left as it was.
+    /// - Complexity: O(n) in the nodes that do not end before the edit, in a loop whatever the tree's depth.
     public func applying(edit: TextEdit) -> SyntaxTree {
-        let newRoot = applyEdit(to: root, edit: edit)
+        let newRoot = root.rewritten { applyEdit(to: &$0, edit: edit) }
         return SyntaxTree(root: newRoot, source: source, errorByteCount: errorByteCount)
     }
 
-    private func applyEdit(to node: SyntaxNode, edit: TextEdit) -> SyntaxNode {
-        var n = node
-
+    /// Applies `edit` to the ranges of `n` alone, and returns whether the nodes below it need it too: they do unless
+    /// `n` ends before the edit.
+    private func applyEdit(to n: inout SyntaxNode, edit: TextEdit) -> Bool {
         // If node is entirely before the edit, leave unchanged
         if n.byteRange.upperBound <= edit.startByte {
-            return n
+            return false
         }
 
         // If node is entirely after the edit, shift offsets
@@ -43,16 +44,10 @@ extension SyntaxTree {
             let delta = edit.newEndByte - edit.oldEndByte
             n.byteRange = (n.byteRange.lowerBound + delta) ..< (n.byteRange.upperBound + delta)
             n.pointRange = shift(n.pointRange, by: edit)
-            n.children = n.children.map { applyEdit(to: $0, edit: edit) }
-            n.fields = applyEdit(to: n.fields, edit: edit)
-            return n
+            return true
         }
 
-        // Node overlaps with edit — recurse into children
-        n.children = n.children.map { applyEdit(to: $0, edit: edit) }
-        n.fields = applyEdit(to: n.fields, edit: edit)
-
-        // Adjust this node's range
+        // Node overlaps with edit — adjust this node's range
         if n.byteRange.upperBound > edit.startByte {
             let newEnd: Int
             if n.byteRange.upperBound <= edit.oldEndByte {
@@ -74,16 +69,7 @@ extension SyntaxTree {
             n.pointRange = n.pointRange.lowerBound ..< max(n.pointRange.lowerBound, newEnd)
         }
 
-        return n
-    }
-
-    private func applyEdit(to fields: [String: [SyntaxNode]], edit: TextEdit) -> [String:
-        [SyntaxNode]]
-    {
-        Dictionary(
-            uniqueKeysWithValues: fields.map { key, nodes in
-                (key, nodes.map { applyEdit(to: $0, edit: edit) })
-            })
+        return true
     }
 
     private func shift(_ range: Range<Point>, by edit: TextEdit) -> Range<Point> {
