@@ -384,6 +384,25 @@ struct DocHoverControllerTests {
             y: DiffPaneMetrics.containerInset + (CGFloat(row) + fraction) * rendered.lineHeight)
     }
 
+    /// Past `alphaBeta`, over ` = 1`, on the side of its line the panel lies on: in the corridor between the symbol and
+    /// the panel, off both. The panel opens below the symbol, or above it where the screen leaves it no room below, so
+    /// the point is found from where it opened rather than assumed.
+    private func corridorPoint(_ sut: StayOpenSUT) throws -> NSPoint {
+        let anchor = try #require(
+            HoverHitTester.hit(
+                at: point(row: 0, column: 8, in: sut.rendered), textView: sut.textView, rendered: sut.rendered)
+        )
+        .anchorRect
+        let frame = try #require(sut.panel.frameOnScreen)
+        let window = try #require(sut.textView.window)
+        let panel = sut.textView.convert(window.convertFromScreen(frame), from: nil)
+        let below = panel.midY > anchor.midY
+        let past = point(row: 0, column: 14.5, lineFraction: below ? 0.85 : 0.15, in: sut.rendered)
+        try #require(HoverCorridor.rect(anchor: anchor, panel: panel).contains(past), "the point lies in the corridor")
+        try #require(!anchor.contains(past) && !panel.contains(past), "the point lies off the symbol and the panel")
+        return past
+    }
+
     /// Over the space between `let` and `alphaBeta`, in the line's top quarter: off the symbol, the corridor below it
     /// and the panel.
     private func awayPoint(_ sut: StayOpenSUT) -> NSPoint {
@@ -395,8 +414,7 @@ struct DocHoverControllerTests {
         let sut = try makeStayOpenSUT()
         try await showPanelOnRowZero(sut)
 
-        // Past `alphaBeta`, over ` = 1`, in the lower half of its line, which the panel below lies along.
-        sut.controller.pointerMoved(to: point(row: 0, column: 14.5, lineFraction: 0.85, in: sut.rendered))
+        sut.controller.pointerMoved(to: try corridorPoint(sut))
         sut.clock.advance(by: .seconds(5))
         try await sut.taskProvider.waitForAllTasks()
 
