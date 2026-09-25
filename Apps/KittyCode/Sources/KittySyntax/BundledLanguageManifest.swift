@@ -1,74 +1,29 @@
 import Foundation
-import Synchronization
-import System
 import os
 
-struct BundledLanguageEntry: Decodable, Sendable, Equatable {
-    let name: String
-    let extensions: [String]
-    let path: String
-}
-
+/// The manifest of the grammars KittyCode bundles, read once from the resource bundle.
 enum BundledLanguageManifest {
-    private struct Manifest: Sendable {
-        let entries: [BundledLanguageEntry]
-        let entriesByLanguage: [String: BundledLanguageEntry]
-        let entriesByExtension: [String: BundledLanguageEntry]
+    /// The bundled manifest; nil, with a fault logged, when it is missing or corrupt, which leaves every grammar
+    /// highlighter disabled.
+    static let manifest: GrammarManifest? = loadManifest()
+
+    static var entries: [GrammarRegistry.LanguageEntry] {
+        manifest?.entries ?? []
     }
 
-    private struct Storage: Sendable {
-        var didLoad = false
-        var manifest: Manifest?
+    static func entry(forLanguage language: String) -> GrammarRegistry.LanguageEntry? {
+        manifest?.entry(forLanguage: language)
     }
 
-    private static let storage = Mutex(Storage())
-
-    static var entries: [BundledLanguageEntry] {
-        loadedManifest()?.entries ?? []
+    static func entry(forFilename filename: String) -> GrammarRegistry.LanguageEntry? {
+        manifest?.entry(forFilename: filename)
     }
 
-    static func entry(forLanguage language: String) -> BundledLanguageEntry? {
-        loadedManifest()?.entriesByLanguage[language]
-    }
-
-    static func entry(forFilename filename: String) -> BundledLanguageEntry? {
-        let path = FilePath(filename)
-        if let basename = path.lastComponent?.string, basename.hasPrefix("."),
-            let entry = loadedManifest()?.entriesByExtension[basename.lowercased()]
-        {
-            return entry
-        }
-        let fileExtension = (path.extension ?? "").lowercased()
-        guard !fileExtension.isEmpty else { return nil }
-        return loadedManifest()?.entriesByExtension[".\(fileExtension)"]
-    }
-
-    private static func loadedManifest() -> Manifest? {
-        let cached = storage.withLock { state -> Manifest? in
-            guard state.didLoad else { return nil }
-            return state.manifest
-        }
-        if let cached {
-            return cached
-        }
-
-        let manifest = loadManifest()
-        return storage.withLock { state in
-            if state.didLoad {
-                return state.manifest
-            }
-
-            state.didLoad = true
-            state.manifest = manifest
-            return state.manifest
-        }
-    }
-
-    /// Reports a missing or corrupt bundled manifest, which leaves every grammar highlighter disabled.
+    /// Reports a missing or corrupt bundled manifest.
     private static let logger = Logger(
         subsystem: "kittycode.kittysyntax", category: "bundled-language-manifest")
 
-    private static func loadManifest() -> Manifest? {
+    private static func loadManifest() -> GrammarManifest? {
         guard
             let manifestURL = KittySyntaxResources.bundle.url(
                 forResource: "languages",
@@ -88,42 +43,12 @@ enum BundledLanguageManifest {
             )
             return nil
         }
-        let decodedEntries: [BundledLanguageEntry]
         do {
-            decodedEntries = try SyntaxJSON.decode([BundledLanguageEntry].self, from: data)
+            return try GrammarManifest.decode(data)
         } catch {
             logger.fault(
                 "languages.json decode failed: \(error.localizedDescription, privacy: .public)")
             return nil
         }
-
-        let normalizedEntries = decodedEntries.map { entry in
-            BundledLanguageEntry(
-                name: entry.name,
-                extensions: entry.extensions.map(Self.normalizeExtension),
-                path: entry.path
-            )
-        }
-
-        let entriesByLanguage = Dictionary(
-            uniqueKeysWithValues: normalizedEntries.map { ($0.name, $0) })
-        let entriesByExtension = normalizedEntries.reduce(into: [String: BundledLanguageEntry]()) {
-            result, entry in
-            for fileExtension in entry.extensions {
-                result[fileExtension] = entry
-            }
-        }
-
-        return Manifest(
-            entries: normalizedEntries,
-            entriesByLanguage: entriesByLanguage,
-            entriesByExtension: entriesByExtension
-        )
-    }
-
-    private static func normalizeExtension(_ fileExtension: String) -> String {
-        let trimmed = fileExtension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !trimmed.isEmpty else { return trimmed }
-        return trimmed.hasPrefix(".") ? trimmed : ".\(trimmed)"
     }
 }

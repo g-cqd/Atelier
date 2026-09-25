@@ -11,7 +11,7 @@ import Testing
 struct GrammarRegistryTests {
     @Test
     func `Register and lookup by extension`() async {
-        let registry = GrammarRegistry()
+        let registry = GrammarRegistry.scratch()
         registry.register(
             GrammarRegistry.LanguageEntry(
                 name: "swift", extensions: [".swift"], path: "swift"
@@ -22,7 +22,7 @@ struct GrammarRegistryTests {
 
     @Test
     func `Language names are sorted`() async {
-        let registry = GrammarRegistry()
+        let registry = GrammarRegistry.scratch()
         registry.register(
             GrammarRegistry.LanguageEntry(name: "swift", extensions: [".swift"], path: "swift"))
         registry.register(
@@ -35,14 +35,14 @@ struct GrammarRegistryTests {
 
     @Test
     func `entry forExtension returns nil for unregistered extension`() async {
-        let registry = GrammarRegistry()
+        let registry = GrammarRegistry.scratch()
         let entry = registry.entry(forExtension: ".xyz")
         #expect(entry == nil)
     }
 
     @Test
     func `entry forExtension normalises extension without leading dot`() async {
-        let registry = GrammarRegistry()
+        let registry = GrammarRegistry.scratch()
         registry.register(
             GrammarRegistry.LanguageEntry(name: "json", extensions: [".json"], path: "json"))
         let entry = registry.entry(forExtension: "json")
@@ -51,7 +51,7 @@ struct GrammarRegistryTests {
 
     @Test
     func `an extension registered without its dot is found`() {
-        let registry = GrammarRegistry()
+        let registry = GrammarRegistry.scratch()
         registry.register(GrammarRegistry.LanguageEntry(name: "elvish", extensions: ["elv"], path: "elvish"))
 
         #expect(registry.entry(forExtension: ".elv")?.name == "elvish")
@@ -60,7 +60,7 @@ struct GrammarRegistryTests {
 
     @Test
     func `an extension registered in capitals is found by a file name`() {
-        let registry = GrammarRegistry()
+        let registry = GrammarRegistry.scratch()
         registry.register(GrammarRegistry.LanguageEntry(name: "elvish", extensions: [".ELV"], path: "elvish"))
 
         #expect(registry.entry(forFilename: "build.elv")?.name == "elvish")
@@ -68,7 +68,7 @@ struct GrammarRegistryTests {
 
     @Test
     func `a registered dotfile name is found by its full path`() {
-        let registry = GrammarRegistry()
+        let registry = GrammarRegistry.scratch()
         registry.register(GrammarRegistry.LanguageEntry(name: "bash", extensions: [".bashrc"], path: "bash"))
 
         #expect(registry.entry(forFilename: "/home/user/.bashrc")?.name == "bash")
@@ -78,7 +78,7 @@ struct GrammarRegistryTests {
     func `loadManifest registers all 19 languages from bundled languages json`() async throws {
         let grammarsPath = try #require(KittySyntaxResources.bundle.resourcePath)
         let manifestPath = "\(grammarsPath)/Grammars/languages.json"
-        let registry = GrammarRegistry()
+        let registry = GrammarRegistry.scratch()
         try registry.loadManifest(from: manifestPath)
         let names = registry.languageNames
         #expect(names.count == 19)
@@ -114,7 +114,7 @@ struct GrammarRegistryTests {
 
     @Test
     func `entry forLanguage finds a registered language by name`() {
-        let registry = GrammarRegistry()
+        let registry = GrammarRegistry.scratch()
         registry.register(
             GrammarRegistry.LanguageEntry(
                 name: "ruby", extensions: [".rb", ".ruby"], path: "ruby"))
@@ -127,24 +127,14 @@ struct GrammarRegistryTests {
 
     @Test
     func `entry forLanguage returns nil for unregistered language`() {
-        let registry = GrammarRegistry()
+        let registry = GrammarRegistry.scratch()
         #expect(registry.entry(forLanguage: "elvish") == nil)
-    }
-
-    @Test
-    func `bundled entry bridges into LanguageEntry verbatim`() {
-        let bundled = BundledLanguageEntry(
-            name: "go", extensions: [".go"], path: "go")
-        let registry = GrammarRegistry.LanguageEntry(bundled: bundled)
-        #expect(registry.name == "go")
-        #expect(registry.extensions == [".go"])
-        #expect(registry.path == "go")
     }
 
     /// The lookup `LanguageHighlighter.detectLanguage(for:)` makes before the bundled manifest.
     @Test
     func `entry forFilename extracts extension and looks up`() {
-        let registry = GrammarRegistry()
+        let registry = GrammarRegistry.scratch()
         registry.register(
             GrammarRegistry.LanguageEntry(
                 name: "elvish", extensions: [".elv"], path: "elvish"))
@@ -153,5 +143,14 @@ struct GrammarRegistryTests {
         #expect(registry.entry(forFilename: "BUILD.ELV")?.name == "elvish")
         #expect(registry.entry(forFilename: "noext")?.name == nil)
         #expect(registry.entry(forFilename: "untracked.foo")?.name == nil)
+    }
+}
+
+extension GrammarRegistry {
+    /// A registry for tests that compile nothing, caching under a directory of its own.
+    static func scratch() -> GrammarRegistry {
+        GrammarRegistry(
+            cacheDirectory: FileManager.default.temporaryDirectory.appending(
+                path: "grammar-registry-\(UUID().uuidString)"))
     }
 }
