@@ -341,6 +341,11 @@ package final class ViewerSettings {
         }
     }
 
+    /// Whether a Swift side's colour is refined with swift-syntax once the lexer's has shown (PERF-11); on by default.
+    package var refinesSwiftColor: Bool {
+        didSet { if refinesSwiftColor != oldValue { store(refinesSwiftColor, Key.refinesSwiftColor, .appearance) } }
+    }
+
     let defaults: UserDefaults
 
     /// Set while scoped properties are reassigned their base value after their override was removed, so `store`
@@ -440,6 +445,7 @@ package final class ViewerSettings {
         bouncesAtEdges = defaults.bool(forKey: Key.bouncesAtEdges)
         scrollsPastEnd = defaults.bool(forKey: Key.scrollsPastEnd)
         scrollsToFirstChange = defaults.object(forKey: Key.scrollsToFirstChange) as? Bool ?? true
+        refinesSwiftColor = defaults.object(forKey: Key.refinesSwiftColor) as? Bool ?? true
         settingObserver = NotificationCenter.default.addObserver(
             forName: Self.settingChangedNotification, object: nil, queue: .main
         ) { [weak self] notification in
@@ -499,5 +505,6 @@ extension ViewerSettings {
         static let bouncesAtEdges = "bouncesAtEdges"
         static let scrollsPastEnd = "scrollsPastEnd"
         static let scrollsToFirstChange = "scrollsToFirstChange"
+        static let refinesSwiftColor = "refinesSwiftColor"
     }
 }

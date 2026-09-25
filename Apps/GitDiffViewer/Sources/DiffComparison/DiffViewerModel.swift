@@ -133,6 +133,7 @@ package final class DiffViewerModel {
             options: Self.options(settings, palette: palette), context: settings.contextLines,
             isolatesChanges: settings.isolatesChanges)
         pipeline.onEvent = { [weak self] event in self?.handle(event) }
+        pipeline.refinesSwiftColor = settings.refinesSwiftColor
         settings.addObserver(self) { [weak self] change in self?.settingsChanged(change) }
     }
 
@@ -175,6 +176,11 @@ package final class DiffViewerModel {
     package var collapsedFiles: Set<String> { folding.collapsed.filter(isFoldable) }
     package var isRendering: Bool { pipeline.isRendering }
     package var renderError: String? { pipeline.error }
+    /// What swift-syntax refined of `text`'s colour, for the pane that shows it; nil until it lands, and for a text
+    /// that is not Swift.
+    package func refinedSides(for text: RenderedText?) -> RefinedSides? {
+        text.flatMap { pipeline.refinedSides(forText: $0.id) }
+    }
     package var gapExpansions: [GapKey: GapExpansion] { pipeline.gapExpansions }
     /// Files composing the current card list, in render order.
     package var combinedFiles: [String] {
@@ -610,7 +616,9 @@ package final class DiffViewerModel {
                 palette = Self.palette(for: settings.themePath)
                 relayout()
             // The explorers' placement is an appearance setting, and grouping applies to the merged sidebar only.
-            case .appearance: refreshCommitGroups(force: false)
+            case .appearance:
+                refreshCommitGroups(force: false)
+                pipeline.refinesSwiftColor = settings.refinesSwiftColor
             // DiagnosticsModel observes ViewerSettings on its own; nothing for this model to do here.
             case .diagnostics: break
             case .freshness: freshness?.setEnabled(settings.autoRefresh)
@@ -625,6 +633,7 @@ package final class DiffViewerModel {
     /// waits for the next turn of the run loop.
     package func noteDisplayed(_ id: RenderedDiff.ID) {
         taskProvider.task {
+            pipeline.refineDisplayed(id)
             guard let elapsed = timer.displayed(id) else { return }
             PhaseTrace.log("displayed")
             timer.record(firstDisplay: elapsed)

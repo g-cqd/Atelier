@@ -212,6 +212,16 @@ private struct AppearanceSettings: View {
                     if scope.isEditingProject { Text("The same in every project.").settingsCaption() }
                 }
                 Section {
+                    Toggle(SettingLabel.refinesSwiftColor, isOn: $settings.refinesSwiftColor)
+                        .appWide(\.refinesSwiftColor, in: scope)
+                    Text(
+                        "Swift files show quick colors at once, then swift-syntax's, which reads the code as the compiler does."
+                    )
+                    .settingsCaption()
+                } header: {
+                    Text("Syntax Color")
+                }
+                Section {
                     Picker(SettingLabel.badgeScheme, selection: $settings.badgeScheme) {
                         Text("Classic").tag(BadgeScheme.classic)
                         Text("Xcode").tag(BadgeScheme.xcode)

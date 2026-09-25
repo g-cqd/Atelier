@@ -54,16 +54,25 @@ package enum RenderLayout: Sendable, Equatable {
 
 /// A file's diff and tokens, computed once per selection so re-layouts (gap drags, layout toggles) stay cheap.
 package final class PreparedDiff: Sendable {
+    /// Tells this preparation apart from every other, for what is kept per preparation of a side without a blob id.
+    package let id = UUID()
     package let title: String
     package let model: DiffModel
     /// Each side's lexical tokens per line, in UTF-16 offsets from the line's start, ready to place on a row.
     package let oldTokens: LineTokens
     package let newTokens: LineTokens
+    /// The two sides' texts and their language, which the tiers after the lexer read (PERF-11).
+    package let oldText: String
+    package let newText: String
+    package let language: Language
 
     package init(
         _ input: FileDiffInput, granularity: IntralineGranularity, heuristics: DiffHeuristics = DiffHeuristics()
     ) {
         title = input.title
+        oldText = input.oldText
+        newText = input.newText
+        language = input.language
         model = DiffModel(
             oldText: input.oldText, newText: input.newText, granularity: granularity, language: input.language,
             pipeline: DiffPipeline(heuristics: heuristics), tokenRanges: SwiftSyntaxTokenRanges())

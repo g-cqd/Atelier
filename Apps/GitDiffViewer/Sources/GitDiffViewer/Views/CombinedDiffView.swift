@@ -451,7 +451,9 @@ private struct CardPane: View {
             hoverResolver: diagnostics.hoverResolver(docs: model.hoverDocs, palette: model.palette),
             hoverPanelMaterial: options.hoverPanelMaterial, bouncesAtEdges: options.bouncesAtEdges,
             diagnosticOverlay: model.settings.diagnosticsEnabled ? diagnostics.overlay : nil,
-            diagnosticsVersion: diagnostics.version, onDiagnosticClick: diagnostics.showFindings)
+            diagnosticsVersion: diagnostics.version, onDiagnosticClick: diagnostics.showFindings
+        )
+        .refined(with: model.refinedSides(for: layout?.rendered))
         if let rendered = layout?.rendered {
             pane.followingDiagnostics(of: rendered, in: model, into: diagnostics)
         } else {

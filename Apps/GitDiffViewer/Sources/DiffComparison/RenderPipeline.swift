@@ -65,7 +65,7 @@ package final class RenderPipeline {
     @ObservationIgnored private var stamps: [Stamp] = []
 
     /// Bumped by every render; work from an older generation is dropped when it lands.
-    @ObservationIgnored private var generation = 0
+    @ObservationIgnored private(set) var generation = 0
     @ObservationIgnored private var completedGeneration = 0
     /// Whether a render is in flight: `completedGeneration < generation`, mirrored into an observed store so an
     /// observer sees both edges, since `generation` is bumped inside update passes and cannot be observed itself.
@@ -95,17 +95,20 @@ package final class RenderPipeline {
     package static let shelfCapacity = 3
 
     private let preparer: DiffPreparer
-    private let taskProvider: any TaskProvider
+    let taskProvider: any TaskProvider
     private let renderer: PaneRenderer
+    /// swift-syntax's colour for the displayed Swift sides (PERF-11); see `RenderPipeline+Refinement.swift`.
+    let refinement: SwiftColorRefinement
 
     package init(
         preparer: DiffPreparer, taskProvider: any TaskProvider, options: DiffRenderer.Options,
-        renderer: PaneRenderer = .live
+        renderer: PaneRenderer = .live, refiner: SyntaxRefiner = .live
     ) {
         self.preparer = preparer
         self.taskProvider = taskProvider
         self.options = options
         self.renderer = renderer
+        refinement = SwiftColorRefinement(refiner: refiner)
     }
 
     /// Options for the next renders. A change to how diffs render leaves what is published stale until `relayout`
