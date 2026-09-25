@@ -17,26 +17,20 @@ private let highlighterSignposter = OSSignposter(
     subsystem: "com.kittytui.syntax", category: "highlight")
 
 public enum LanguageHighlighter: Sendable {
-    /// Maximum source size in bytes for grammar-backed highlighting.
+    /// Maximum source size in bytes for grammar-backed highlighting, the grammar tier's (`GrammarEngine`).
     /// Beyond this, the session falls back to the lightweight lexical highlighter
     /// to prevent runaway memory from per-byte style arrays and token lists.
-    public static let maxGrammarSourceBytes = 512_000  // 512 KB
+    public static let maxGrammarSourceBytes = GrammarEngine.maxSourceBytes
 
     /// The share of a document's bytes, in percent, under ERROR nodes at which the document is highlighted lexically
-    /// rather than from its grammar, until a parse of a later version of it falls under the share again.
-    ///
-    /// Valid code that its grammar reads leaves little under ERROR nodes: 0.6% of `ltdl.c`, 9 of 200,220 bytes in 27
-    /// of this repository's Swift files, none of 176,667 bytes of JavaScript and Python. A parse that goes wrong leaves
-    /// far more: the parser of an earlier revision left 12.6% to 96.5% of 26 of those Swift files under ERROR nodes.
-    /// Between the two, 5% keeps the grammar through a few misread constructs and drops it for a document it fails on.
-    public static let maxErrorBytePercent = 5
+    /// rather than from its grammar, until a parse of a later version of it falls under the share again: the grammar
+    /// tier's gate (`GrammarEngine.maxErrorBytePercent`).
+    public static let maxErrorBytePercent = GrammarEngine.maxErrorBytePercent
 
-    /// Whether a document is highlighted from `tree`, its parse: the parse reduced to the grammar's start rule, and
-    /// less than ``maxErrorBytePercent`` percent of its bytes lie under ERROR nodes.
-    /// - Complexity: O(1): the parse counted its ERROR bytes as it built the tree.
+    /// Whether a document is highlighted from `tree`, its parse, by the grammar tier's gate
+    /// (`GrammarEngine.passesQualityGate(_:)`).
     static func passesQualityGate(_ tree: SyntaxTree) -> Bool {
-        tree.root.type != "_start"
-            && (tree.errorByteCount == 0 || tree.errorByteCount * 100 < tree.source.utf8.count * maxErrorBytePercent)
+        GrammarEngine.passesQualityGate(tree)
     }
 
     public final class Session {
@@ -46,11 +40,10 @@ public enum LanguageHighlighter: Sendable {
         }
 
         private final class GrammarSession {
-            let parser: GrammarParser
+            /// The grammar tier's engine: the parser, the query and each capture's role.
+            let engine: GrammarEngine
             let scanner: (any GrammarExternalScanner)?
-            let query: Query
-            /// The role of each of `query`'s capture names, resolved when the language's artifacts loaded.
-            let roles: CaptureRoles
+            var query: Query { engine.query }
             let highlighter: Highlighter
             let scratch = HighlightScratch()
             /// The hash of the last parsed source, the quick check before `parseTree(for:)` reuses `lastParsedTree`.
@@ -60,15 +53,9 @@ public enum LanguageHighlighter: Sendable {
             /// threw, true before any parse.
             private(set) var passesQualityGate = true
 
-            init(artifacts: SyntaxArtifacts, theme: Theme) {
-                parser = GrammarParser(
-                    parseTable: artifacts.parseTable,
-                    lexTable: artifacts.lexTable,
-                    productions: artifacts.productions
-                )
-                scanner = artifacts.scannerType?.init()
-                query = artifacts.query
-                roles = artifacts.roles
+            init(engine: GrammarEngine, theme: Theme) {
+                self.engine = engine
+                scanner = engine.makeScanner()
                 highlighter = Highlighter(theme: theme)
             }
 
@@ -86,7 +73,7 @@ public enum LanguageHighlighter: Sendable {
                 }
                 let tree: SyntaxTree
                 do {
-                    tree = try parser.parse(source, externalScanner: scanner)
+                    tree = try engine.parse(source, externalScanner: scanner)
                 } catch {
                     lastParsedSourceHash = nil
                     lastParsedTree = nil
@@ -143,9 +130,9 @@ public enum LanguageHighlighter: Sendable {
             if preferGrammar,
                 let language,
                 let artifacts = SyntaxArtifactsCache.shared.artifacts(for: language),
-                !artifacts.needsExternalScanner
+                let engine = GrammarEngine(artifacts)
             {
-                strategy = .grammar(GrammarSession(artifacts: artifacts, theme: theme))
+                strategy = .grammar(GrammarSession(engine: engine, theme: theme))
             } else {
                 strategy = .fallback
             }
@@ -192,8 +179,7 @@ public enum LanguageHighlighter: Sendable {
                         guard gs.passesQualityGate else {
                             return []
                         }
-                        let matches = QueryMatcher.execute(query: gs.query, tree: tree)
-                        return gs.highlighter.buildTokens(matches: matches, roles: gs.roles, layer: .structural)
+                        return gs.engine.tokens(in: tree)
                     } catch {
                         return []
                     }
@@ -271,9 +257,7 @@ public enum LanguageHighlighter: Sendable {
                         }
 
                         let byteRange = lineRangeToByteRange(source: source, lineRange: visibleLineRange)
-                        let matches = QueryMatcher.execute(
-                            query: gs.query, tree: tree, byteRange: byteRange)
-                        let tokens = gs.highlighter.buildTokens(matches: matches, roles: gs.roles, layer: .structural)
+                        let tokens = gs.engine.tokens(in: tree, byteRange: byteRange)
 
                         guard !tokens.isEmpty else {
                             return viewportFallback(source: source, visibleLineRange: visibleLineRange)
@@ -340,13 +324,8 @@ public enum LanguageHighlighter: Sendable {
                 if source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes {
                     if let tree = try? gs.parseTree(for: source) {
                         if gs.passesQualityGate {
-                            let matches = QueryMatcher.execute(
-                                query: gs.query, tree: tree, byteRange: byteRange)
                             let vpCount = viewportSource.utf8.count
-                            structuralTokens = gs.highlighter
-                                .buildTokens(
-                                    matches: matches, roles: gs.roles, layer: .structural
-                                )
+                            structuralTokens = gs.engine.tokens(in: tree, byteRange: byteRange)
                                 .compactMap { token -> HighlightToken? in
                                     let start = token.byteRange.lowerBound - byteRange.lowerBound
                                     let end = token.byteRange.upperBound - byteRange.lowerBound
