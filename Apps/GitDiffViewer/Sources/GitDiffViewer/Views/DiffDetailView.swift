@@ -150,14 +150,14 @@ private struct SplitDiffView: View {
                 model: model, rendered: old, gutter: .old, keepsScrollPosition: keepsScrollPosition,
                 wrapsLines: wrapsLines, wrapColumn: wrapColumn, showsMinimap: showsMinimap,
                 syncsScrolling: syncsScrolling, scrollRequest: scrollRequest, splitController: controller,
-                onGapDrag: onGapDrag, scrollMemoryPath: scrollMemoryPath
+                onGapDrag: onGapDrag, onDisplayed: onDisplayed, scrollMemoryPath: scrollMemoryPath
             )
             Divider()
             DiagnosticDiffTextView(
                 model: model, rendered: new, gutter: .new, keepsScrollPosition: keepsScrollPosition,
                 wrapsLines: wrapsLines, wrapColumn: wrapColumn, showsMinimap: showsMinimap,
                 syncsScrolling: syncsScrolling, scrollRequest: scrollRequest, splitController: controller,
-                onGapDrag: onGapDrag, scrollMemoryPath: scrollMemoryPath
+                onGapDrag: onGapDrag, onDisplayed: onDisplayed, scrollMemoryPath: scrollMemoryPath
             )
         }
         .onAppear { controller.wrapsLines = wrapsLines }
