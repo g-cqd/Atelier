@@ -1,4 +1,5 @@
 import AemiTesting
+import AtelierLSP
 import DiffCore
 import Foundation
 import Synchronization
@@ -163,6 +164,32 @@ struct CommitScopeSelectionTests {
             let sides = RenderPipeline.Sources(left: history.ref(history.reshape), right: workingTree)
             #expect(sut.pipeline.publishedSources == sides)
             #expect(sut.rendered?.addedLines == 1)
+        }
+    }
+
+    @Test
+    func `a commit's own change never asks a language server, while Uncommitted Changes on disk does`()
+        async throws
+    {
+        try await withHistory(uncommitted: true) { history in
+            let sut = makeSUT()
+            let asked = Mutex(0)
+            sut.attachHoverDocs(
+                lspRegistry: LanguageServerRegistry(
+                    admits: { _, _ in true },
+                    makeConfiguration: { _, _ in
+                        asked.withLock { $0 += 1 }
+                        return nil
+                    }))
+            try await load(sut, history.ref(history.base), .directory(history.root))
+
+            try await show(sut, ExplorerSection.selectionKey(forGroup: "commit:\(history.second)", path: "f.swift"))
+            _ = await sut.hoverDocs?.hover(fileIndex: 0, side: .new, line: 2, utf16Column: 1)
+            #expect(asked.withLock { $0 } == 0)
+
+            try await show(sut, ExplorerSection.selectionKey(forGroup: "uncommitted", path: "f.swift"))
+            _ = await sut.hoverDocs?.hover(fileIndex: 0, side: .new, line: 3, utf16Column: 1)
+            #expect(asked.withLock { $0 } == 1)
         }
     }
 
