@@ -58,6 +58,10 @@ package final class DiffGutterView: NSView {
     /// Reports a gap handle's drag, from the press to the release. The gutter only measures the pointer; what it
     /// reveals is the model's to decide.
     package var onGapDrag: ((GapDragEvent) -> Void)?
+    /// Called with the change whose marker is clicked in the compact inline view (book DIFF-04).
+    package var onChangeToggle: ((ChangeKey) -> Void)?
+    /// The change whose marker is under the pointer, drawn highlighted.
+    var hoveredChange: ChangeKey?
     /// Called when a decorated line number is clicked, with its row, its findings, its frame in this view's
     /// coordinates, and this view, so a popover can anchor on the line.
     package var onDiagnosticClick:
@@ -144,8 +148,8 @@ package final class DiffGutterView: NSView {
     private var palette: DiffPalette { rendered?.palette ?? .system }
 
     @objc private func clipViewDidScroll(_ notification: Notification) {
-        // The row under a still pointer changed; the next move finds its handle again.
-        setHoveredHandle(nil)
+        // The row under a still pointer changed; the next move finds its handle or its marker again.
+        updateHover(at: nil)
         needsDisplay = true
         window?.invalidateCursorRects(for: self)
     }
@@ -161,12 +165,23 @@ package final class DiffGutterView: NSView {
     }
 
     package override func mouseMoved(with event: NSEvent) {
-        let hit = gapHalf(at: convert(event.locationInWindow, from: nil))
-        setHoveredHandle(hit)
+        updateHover(at: convert(event.locationInWindow, from: nil))
     }
 
     package override func mouseExited(with event: NSEvent) {
-        setHoveredHandle(nil)
+        updateHover(at: nil)
+    }
+
+    /// Highlights the half of a gap's handle or the change marker under `point`, if any, and tells its help in the
+    /// tooltip.
+    private func updateHover(at point: NSPoint?) {
+        let handle = point.flatMap(gapHalf(at:))
+        let change = handle == nil ? point.flatMap(changeMarker(at:)) : nil
+        // A drag changes the count under a pointer that stays on the same half: the next move tells the new one.
+        let help = handle?.marker.handleHelp ?? change?.help
+        if toolTip != help { toolTip = help }
+        setHoveredHandle(handle)
+        setHoveredChange(change?.key)
     }
 
     package override func layout() {
@@ -191,6 +206,7 @@ package final class DiffGutterView: NSView {
                     half.hitArea, cursor: .rowResize(directions: half.handle == .extendsChangeAbove ? .down : .up))
             }
         }
+        addChangeMarkerCursorRects()
     }
 
     /// Marks for display the line numbers of `rows`, whose diagnostics changed. A gutter beside a clip view draws what
@@ -229,6 +245,11 @@ package final class DiffGutterView: NSView {
             onGapDrag?(.began(hit.marker, hit.handle, lineHeight: max(lineHeight, 1)))
             return
         }
+        // A marker lies in the padding before the numbers, which a line number's click does not reach for.
+        if let change = changeMarker(at: point) {
+            onChangeToggle?(change.key)
+            return
+        }
         if let (rowIndex, diagnostics, rect) = diagnosticHit(at: point) {
             onDiagnosticClick?(rowIndex, diagnostics.findings, rect, self)
             return
@@ -253,7 +274,7 @@ package final class DiffGutterView: NSView {
         needsDisplay = true
         // The pointer let go wherever the drag took it: the half under it now is the one hovered, if any, not the one
         // it pressed.
-        setHoveredHandle(gapHalf(at: convert(event.locationInWindow, from: nil)))
+        updateHover(at: convert(event.locationInWindow, from: nil))
         onGapDrag?(.ended)
     }
 
@@ -358,6 +379,7 @@ package final class DiffGutterView: NSView {
             }
         }
         drawGaps(in: dirtyRect)
+        drawChangeMarkers(in: dirtyRect)
     }
 
     /// A faint rounded-rect wash in the severity's colour behind a diagnostic-carrying line number.
@@ -471,12 +493,8 @@ extension DiffGutterView {
         return found
     }
 
-    /// Highlights the half of a gap's handle under the pointer, if any, and shows its gap's hidden lines, which no
-    /// row shows, in the tooltip.
+    /// Highlights the half of a gap's handle under the pointer, if any.
     private func setHoveredHandle(_ hit: (marker: GapMarker, handle: GapHandle)?) {
-        // A drag changes the count under a pointer that stays on the same half: the next move tells the new one.
-        let help = hit?.marker.handleHelp
-        if toolTip != help { toolTip = help }
         let id = hit.map { HandleID(key: $0.marker.key, handle: $0.handle) }
         guard id != hoveredHandle else { return }
         hoveredHandle = id
