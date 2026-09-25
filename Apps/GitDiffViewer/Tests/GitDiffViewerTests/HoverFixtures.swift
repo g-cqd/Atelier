@@ -1,7 +1,7 @@
 import Foundation
 
 /// Hover markdown as the tiers return it. The captured ones came from sourcekit-lsp in Xcode 26.6's default toolchain on
-/// 09-24, through `SDKDocumentationProvider.scratch` for the SDK tier and a `SourceKitLSPService` over a scratch
+/// 09-24, through `SDKDocumentationProvider.scratch` for the SDK tier and a `LanguageServerSession` over a scratch
 /// directory for the language server tier, byte for byte; the synthetic one has every block kind the panel draws.
 enum HoverFixtures {
     /// The SDK tier hovering `Bool` in `let includeNestedSections: Bool = true`: indented code blocks with blank

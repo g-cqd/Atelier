@@ -36,15 +36,15 @@ private func hoverResult(markdown: String) -> JSONValue {
 
 private func makeService(
     factory: ScriptedConnectionFactory, clock: any Clock<Duration> = ContinuousClock()
-) -> SourceKitLSPService {
-    let configuration = SourceKitLSPService.Configuration(
+) -> LanguageServerSession {
+    let configuration = LanguageServerSession.Configuration(
         serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
-    return SourceKitLSPService(configuration: configuration, clock: clock) { _ in await factory.make() }
+    return LanguageServerSession(configuration: configuration, clock: clock) { _ in await factory.make() }
 }
 
 /// The scratch sessions' request timeout, which ``makeService(factory:clock:)`` keeps.
 private let requestTimeout =
-    SourceKitLSPService.Configuration(
+    LanguageServerSession.Configuration(
         serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp")
     )
     .requestTimeout

@@ -74,8 +74,8 @@ struct SDKProbeDirectoryTests {
         let probeDirectory = try SDKDocumentationProvider.makeProbeDirectory(
             in: URL(filePath: parent.path, directoryHint: .isDirectory))
         let transport = PipeTransport()
-        let service = SourceKitLSPService(
-            configuration: SourceKitLSPService.Configuration(
+        let service = LanguageServerSession(
+            configuration: LanguageServerSession.Configuration(
                 serverExecutable: URL(filePath: "/usr/bin/true"), workspaceRoot: probeDirectory),
             clock: TestClock()
         ) { _ in LSPConnection(transport: transport) }

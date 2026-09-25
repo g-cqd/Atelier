@@ -24,8 +24,8 @@ private final class ResolutionSpy: Sendable {
         count.withLock { $0 += 1 }
         entered.open()
         try? await gate.wait()
-        let service = SourceKitLSPService(
-            configuration: SourceKitLSPService.Configuration(
+        let service = LanguageServerSession(
+            configuration: LanguageServerSession.Configuration(
                 serverExecutable: URL(filePath: "/usr/bin/false"), workspaceRoot: probeDirectory))
         return SDKHoverTier.Resolved(
             provider: SDKDocumentationProvider(service: service), probeDirectory: probeDirectory)

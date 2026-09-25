@@ -73,12 +73,12 @@ package final class LanguageServerPolicy {
 
     /// The configuration of a sourcekit-lsp session rooted at `root`, a canonical directory; nil when the user does not
     /// trust the repository, when sourcekit-lsp is off for `root`'s project, or when no executable resolves.
-    package func configuration(forRoot root: URL) async -> SourceKitLSPService.Configuration? {
+    package func configuration(forRoot root: URL) async -> LanguageServerSession.Configuration? {
         // Checked again although the registry admits every root first: an untrusted root never reaches a server.
         guard trust.isTrusted(root) else { return nil }
         let location = sourceKitLSPLocation(forRoot: root)
         guard sourceKitLSPDiscoveryEnabled(location), let executable = await locate(location) else { return nil }
-        return SourceKitLSPService.Configuration(serverExecutable: executable, workspaceRoot: root)
+        return LanguageServerSession.Configuration(serverExecutable: executable, workspaceRoot: root)
     }
 
     /// The executable of the SDK tier's scratch session, found from the app-wide location alone; nil when the app-wide

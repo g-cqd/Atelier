@@ -23,12 +23,12 @@ private struct SentRequest: Decodable {
 
 /// Captures the first `initialize` a service sends over an in-process transport, then ends the conversation so the
 /// hover that triggered it returns.
-private func capturedInitialize(configuration: SourceKitLSPService.Configuration) async throws -> InitializeEnvelope {
+private func capturedInitialize(configuration: LanguageServerSession.Configuration) async throws -> InitializeEnvelope {
     var configuration = configuration
     // No restart budget, so the failed handshake gives up at once instead of backing off on the virtual clock.
     configuration.maximumRestarts = 0
     let transport = PipeTransport()
-    let service = SourceKitLSPService(configuration: configuration, clock: TestClock()) { _ in
+    let service = LanguageServerSession(configuration: configuration, clock: TestClock()) { _ in
         LSPConnection(transport: transport)
     }
 
@@ -46,10 +46,10 @@ private func capturedInitialize(configuration: SourceKitLSPService.Configuration
 }
 
 @Suite
-struct SourceKitLSPServiceInitializationTests {
+struct LanguageServerSessionInitializationTests {
     @Test
     func `the initialize request turns background indexing off by default`() async throws {
-        let configuration = SourceKitLSPService.Configuration(
+        let configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(filePath: "/usr/bin/true"),
             workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory))
 
@@ -62,7 +62,7 @@ struct SourceKitLSPServiceInitializationTests {
 
     @Test
     func `a configuration without initialization options sends none`() async throws {
-        var configuration = SourceKitLSPService.Configuration(
+        var configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(filePath: "/usr/bin/true"),
             workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory))
         configuration.initializationOptions = nil
@@ -75,8 +75,8 @@ struct SourceKitLSPServiceInitializationTests {
     @Test(.timeLimit(.minutes(1)))
     func `an initialize reply nested past the result depth cap still completes the handshake`() async throws {
         let transport = PipeTransport()
-        let service = SourceKitLSPService(
-            configuration: SourceKitLSPService.Configuration(
+        let service = LanguageServerSession(
+            configuration: LanguageServerSession.Configuration(
                 serverExecutable: URL(filePath: "/usr/bin/true"),
                 workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory)),
             clock: TestClock()

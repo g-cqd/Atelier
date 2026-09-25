@@ -23,7 +23,7 @@ private func raceAgainstTimeout<T: Sendable>(
     }
 }
 
-/// Failures internal to ``SourceKitLSPService``, whose hover reports each as ``HoverOutcome/unavailable``.
+/// Failures internal to ``LanguageServerSession``, whose hover reports each as ``HoverOutcome/unavailable``.
 private enum LSPServiceError: Error, Sendable {
     case timedOut
 }
@@ -55,8 +55,8 @@ private struct SessionInitializeParams: Encodable, Sendable {
 /// The server is spawned and initialized on first use, keeps at most ``Configuration/openDocumentLimit`` documents
 /// open, and is shut down after ``Configuration/idleShutdown`` without a hover. A hover after any shutdown
 /// reconnects; only a failed connection attempt spends the restart budget.
-public actor SourceKitLSPService {
-    private static let logger = Logger(subsystem: "Atelier.LSP", category: "SourceKitLSPService")
+public actor LanguageServerSession {
+    private static let logger = Logger(subsystem: "Atelier.LSP", category: "LanguageServerSession")
 
     /// How to reach the server, and the policy for keeping the session alive.
     public struct Configuration: Sendable {
@@ -401,7 +401,7 @@ public actor SourceKitLSPService {
 
 // MARK: - Documentation pages
 
-extension SourceKitLSPService {
+extension LanguageServerSession {
     /// The page Apple's developer documentation gives the system symbol at the position, where a hover has opened
     /// `uri` with `content`; nil for the workspace's own symbols, when the server does not answer, and when the text
     /// reaches the symbol through a value rather than through its types. Asks `textDocument/symbolInfo` about
