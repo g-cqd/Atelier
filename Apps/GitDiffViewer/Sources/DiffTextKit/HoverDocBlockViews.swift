@@ -116,12 +116,13 @@ struct HoverBlockSlot {
     var shownHeight: CGFloat { height?.constant ?? view.fittingSize.height }
 }
 
-/// The body's top-level block views, top to bottom: the first ``shown`` show the discussion, and the rest, hidden,
-/// wait for a later block of their kind.
+/// The body's top-level block views, top to bottom: the first ``shown`` show the discussion, and the rest, out of the
+/// document, wait for a later block of their kind.
 ///
 /// Each view is pinned to the document by its own top, not arranged in a stack view: a stack of a few hundred views
 /// took 60 to 360 ms to remove them from, and as long to lay out once they were hidden, which detaches them from it.
-/// Pinned apart, a view is hidden, moved or removed without touching the others.
+/// Pinned apart, a view is moved, taken out or put back without touching the others; a view left in the document,
+/// even hidden, would still cost every layout pass of the panel.
 struct HoverBlockSlots {
     var slots: [HoverBlockSlot] = []
     var shown = 0
@@ -134,7 +135,7 @@ extension HoverDocPanel {
     /// blocks the panel can show at once are built: every block is a view measured and laid out, and a discussion of
     /// a few hundred of them took seconds (`HoverBuildBenchmark`). The rest are built as the body scrolls towards
     /// them, in ``bodyDidScroll()``. Each block takes the view the last discussion had at its place when its kind
-    /// matches, and the views left over are hidden.
+    /// matches, and the views left over are taken out of the document.
     func renderDiscussion(_ blocks: [HoverDocument.Block], chipBackground: NSColor?, width: CGFloat) {
         // Dropped first, so the scroll back to the top builds nothing of the discussion shown before.
         pendingDiscussion = nil
@@ -154,7 +155,8 @@ extension HoverDocPanel {
             buildPendingBlocks()
         }
         for slot in blockSlots.slots[blockSlots.shown ..< max(shownBefore, blockSlots.shown)] {
-            slot.view.isHidden = true
+            // Out of the document, a view costs its layout passes nothing; it keeps its text and its own size.
+            slot.view.removeFromSuperview()
         }
     }
 
@@ -211,20 +213,30 @@ extension HoverDocPanel {
             let existing = blockSlots.slots[index]
             if existing.kind == kind, kind.isReusable, existing.width == width {
                 let open = configure(existing, with: block, chipBackground: chipBackground, lazily: true)
-                existing.top?.constant = top
-                existing.view.isHidden = false
-                return (existing, open)
+                if existing.view.superview === bodyDocument {
+                    existing.top?.constant = top
+                    return (existing, open)
+                }
+                let placed = place(existing, at: top)
+                blockSlots.slots[index] = placed
+                return (placed, open)
             }
             existing.view.removeFromSuperview()
         }
         let made = makeSlot(for: block, width: width, chipBackground: chipBackground, lazily: true)
-        var slot = made.slot
+        let slot = place(made.slot, at: top)
+        if index < blockSlots.slots.count { blockSlots.slots[index] = slot } else { blockSlots.slots.append(slot) }
+        return (slot, made.openCode)
+    }
+
+    /// `slot` with its view in the body's document, `top` points down it.
+    private func place(_ slot: HoverBlockSlot, at top: CGFloat) -> HoverBlockSlot {
+        var slot = slot
         bodyDocument.addSubview(slot.view)
         let pin = slot.view.topAnchor.constraint(equalTo: bodyDocument.topAnchor, constant: top)
         NSLayoutConstraint.activate([pin, slot.view.leadingAnchor.constraint(equalTo: bodyDocument.leadingAnchor)])
         slot.top = pin
-        if index < blockSlots.slots.count { blockSlots.slots[index] = slot } else { blockSlots.slots.append(slot) }
-        return (slot, made.openCode)
+        return slot
     }
 
     /// Shows the next chunk of `open`'s lines under those it shows, and returns the height they add.

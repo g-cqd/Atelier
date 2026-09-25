@@ -64,6 +64,8 @@ struct HoverBlockReuseTests {
         try Self.prepare(panel, with: Self.document(Self.paragraphs(2, saying: "Short")))
 
         #expect(panel.shownBlockViews.count == 3)
+        // The views left over wait out of the document, where no layout pass of the panel reaches them.
+        #expect(panel.bodyDocument.subviews.count == 3)
         #expect(panel.bodyEndsWithItsLastBlock)
         let texts = panel.shownBlockViews.dropFirst().compactMap { ($0 as? NSTextView)?.string }
         #expect(texts == ["Short paragraph 0 of the discussion.", "Short paragraph 1 of the discussion."])
@@ -86,8 +88,7 @@ struct HoverBlockReuseTests {
 }
 
 extension HoverDocPanel {
-    /// The body's block views the discussion shows, top to bottom, the Overview heading first; hidden ones wait to be
-    /// reused.
+    /// The body's block views the discussion shows, top to bottom, the Overview heading first.
     var shownBlockViews: [NSView] {
         bodyDocument.layoutSubtreeIfNeeded()
         return bodyDocument.subviews.filter { !$0.isHidden }.sorted { $0.frame.minY < $1.frame.minY }
