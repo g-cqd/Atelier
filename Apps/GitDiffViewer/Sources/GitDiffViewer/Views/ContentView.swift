@@ -286,6 +286,13 @@ private struct LayoutShortcuts: View {
             Button("Stacked") { settings.mode = .stacked }.keyboardShortcut("3", modifiers: .command)
                 .disabled(!offersStacked)
             Button("Isolate changes") { settings.isolatesChanges.toggle() }.keyboardShortcut("4", modifiers: .command)
+            // The compact inline view's disclosures (book DIFF-04).
+            Button("Show or Hide Change") { model.toggleCurrentChange() }
+                .keyboardShortcut(.return, modifiers: [.command, .option])
+                .disabled(!model.showsCompactInline)
+            Button("Show or Hide All Changes") { model.toggleAllChanges() }
+                .keyboardShortcut(.return, modifiers: [.command, .option, .shift])
+                .disabled(!model.showsCompactInline)
         }
         .frame(width: 0, height: 0)
         .opacity(0)

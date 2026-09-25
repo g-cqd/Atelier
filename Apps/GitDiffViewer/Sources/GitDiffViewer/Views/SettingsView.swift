@@ -239,6 +239,12 @@ private struct AppearanceSettings: View {
                     }
                     Text("The card list shows Stacked side by side.")
                         .settingsCaption()
+                    Toggle(SettingLabel.compactsInlineView, isOn: $settings.compactsInlineView)
+                    Text(
+                        "Inline, shows the new file alone, with a marker in the gutter at each change. Click a marker, "
+                            + "or press ⌥⌘↩, to show the change in place."
+                    )
+                    .settingsCaption()
                     Toggle(SettingLabel.wrapsLines, isOn: $settings.wrapsLines)
                     Toggle("Wrap at a fixed column", isOn: wrapsAtColumn)
                         .disabled(!settings.wrapsLines)

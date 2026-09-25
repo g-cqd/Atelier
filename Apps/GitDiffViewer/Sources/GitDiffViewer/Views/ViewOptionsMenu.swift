@@ -45,6 +45,7 @@ struct ViewOptionsMenu: NSViewRepresentable {
         let showsStatusBar: Bool
         let showsHoverDocumentation: Bool
         let isolatesChanges: Bool
+        let compactsInlineView: Bool
         let granularity: IntralineGranularity
         let showsChangesOnly: Bool
         let showsIgnoredFiles: Bool
@@ -64,6 +65,7 @@ struct ViewOptionsMenu: NSViewRepresentable {
             showsStatusBar = settings.showsStatusBar
             showsHoverDocumentation = settings.showsHoverDocumentation
             isolatesChanges = settings.isolatesChanges
+            compactsInlineView = settings.compactsInlineView
             granularity = settings.granularity
             showsChangesOnly = settings.showsChangesOnly
             showsIgnoredFiles = settings.showsIgnoredFiles
@@ -109,7 +111,8 @@ struct ViewOptionsMenu: NSViewRepresentable {
                 toggle(
                     SettingLabel.showsHoverDocumentation, snapshot.showsHoverDocumentation,
                     #selector(toggleHoverDocumentation)),
-                toggle(SettingLabel.isolatesChanges, snapshot.isolatesChanges, #selector(toggleIsolate), key: "4")
+                toggle(SettingLabel.isolatesChanges, snapshot.isolatesChanges, #selector(toggleIsolate), key: "4"),
+                toggle(SettingLabel.compactsInlineView, snapshot.compactsInlineView, #selector(toggleCompactInline))
             ]
         }
 
@@ -231,6 +234,7 @@ struct ViewOptionsMenu: NSViewRepresentable {
         @objc func toggleStatusBar() { settings.showsStatusBar.toggle() }
         @objc func toggleHoverDocumentation() { settings.showsHoverDocumentation.toggle() }
         @objc func toggleIsolate() { settings.isolatesChanges.toggle() }
+        @objc func toggleCompactInline() { settings.compactsInlineView.toggle() }
         @objc func toggleBounce() { settings.bouncesAtEdges.toggle() }
         @objc func toggleScrollPastEnd() { settings.scrollsPastEnd.toggle() }
         @objc func toggleScrollToChange() { settings.scrollsToFirstChange.toggle() }
