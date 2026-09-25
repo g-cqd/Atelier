@@ -80,7 +80,7 @@ struct LineTokensTests {
 }
 
 /// A seeded generator, so a failing case reproduces.
-private struct SplitMix64 {
+struct SplitMix64 {
     private var state: UInt64
 
     init(seed: UInt64) { state = seed }

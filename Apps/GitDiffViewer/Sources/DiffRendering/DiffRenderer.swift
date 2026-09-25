@@ -380,20 +380,10 @@ extension DiffRenderer {
         var byte = 0
         var unit = 0
         for token in tokens {
-            advance(&byte, to: min(token.byteRange.lowerBound, bytes.count), in: bytes, counting: &unit)
+            UTF16Offsets.advance(&byte, to: min(token.byteRange.lowerBound, bytes.count), in: bytes, counting: &unit)
             let start = unit
-            advance(&byte, to: min(token.byteRange.upperBound, bytes.count), in: bytes, counting: &unit)
+            UTF16Offsets.advance(&byte, to: min(token.byteRange.upperBound, bytes.count), in: bytes, counting: &unit)
             ranges.append((NSRange(location: offset + start, length: unit - start), token.role))
-        }
-    }
-
-    /// Moves `byte` forward to `end`, adding to `unit` the UTF-16 units of the characters it passes: one for a lead
-    /// byte, two for the lead of a four-byte character, none for a continuation byte.
-    private static func advance(_ byte: inout Int, to end: Int, in bytes: Span<UInt8>, counting unit: inout Int) {
-        while byte < end {
-            let value = bytes[byte]
-            unit += (value & 0xC0 == 0x80 ? 0 : 1) + (value >= 0xF0 ? 1 : 0)
-            byte += 1
         }
     }
 }
