@@ -1,6 +1,6 @@
 public import AemiCore
 import AtelierGrammar
-import AtelierGrammarCorpus
+public import AtelierGrammarCorpus
 import AtelierLexers
 import AtelierParser
 import AtelierQuery
@@ -31,6 +31,15 @@ public enum LanguageHighlighter: Sendable {
     /// (`GrammarEngine.passesQualityGate(_:)`).
     static func passesQualityGate(_ tree: SyntaxTree) -> Bool {
         GrammarEngine.passesQualityGate(tree)
+    }
+
+    /// The grammar tier over KittyCode's grammars, for the tier job: the session's parse, gate and query, with the
+    /// tier's deadline, failure record, throughput predictor and breaker (PERF-11 step 4).
+    public static func grammarTier(
+        record: GrammarTierRecord = GrammarTierRecord(), deadline: Duration = GrammarTier.defaultDeadline,
+        clock: any Clock<Duration> = ContinuousClock()
+    ) -> GrammarTier {
+        GrammarTier(artifacts: .shared, record: record, deadline: deadline, clock: clock)
     }
 
     public final class Session {
