@@ -49,45 +49,62 @@ extension GLRParser {
         parseTable.lostShifts[state]?[terminal]
     }
 
-    private func canShift(_ terminal: Int, from states: VirtualStates, budget: inout Int) -> Bool {
-        var states = states
-        while budget > 0 {
-            budget -= 1
-            // Whether the reduction there shifts the token or leads nowhere, the parser shifts it.
-            if lostShift(of: terminal, in: states.top) != nil { return true }
-            switch parseTable.actions[states.top][terminal] {
-                case .shift, .accept:
-                    return true
-                case .error:
-                    return false
-                case .reduce(_, let count, let nonTerminal):
-                    guard states.reduce(count: count, to: nonTerminal, in: self) else { return false }
-                case .conflict(let actions):
-                    for action in actions {
-                        switch action {
-                            case .shift, .accept:
-                                return true
-                            case .reduce(_, let count, let nonTerminal):
-                                var branch = states
-                                if branch.reduce(count: count, to: nonTerminal, in: self),
-                                    canShift(terminal, from: branch, budget: &budget)
-                                {
-                                    return true
+    /// Runs the reductions from `start` until one of them shifts `terminal`. A conflict's branches wait on a worklist,
+    /// tried in the table's order, each to its end: tried recursively, a stack of nested conflicts overflows a
+    /// 512 KiB thread stack a few thousand levels down.
+    private func canShift(_ terminal: Int, from start: VirtualStates, budget: inout Int) -> Bool {
+        // The branches of the conflicts met so far still to try, the next on top.
+        var alternatives: [Alternative] = []
+        var branch: VirtualStates? = start
+        while true {
+            if var states = branch.take() {
+                explore: while budget > 0 {
+                    budget -= 1
+                    // Whether the reduction there shifts the token or leads nowhere, the parser shifts it.
+                    if lostShift(of: terminal, in: states.top) != nil { return true }
+                    switch parseTable.actions[states.top][terminal] {
+                        case .shift, .accept:
+                            return true
+                        case .error:
+                            break explore
+                        case .reduce(_, let count, let nonTerminal):
+                            guard states.reduce(count: count, to: nonTerminal, in: self) else { break explore }
+                        case .conflict(let actions):
+                            for action in actions.reversed() {
+                                switch action {
+                                    case .shift, .accept: alternatives.append(.shift)
+                                    case .reduce(_, let count, let nonTerminal):
+                                        alternatives.append(.reduce(states, count: count, nonTerminal: nonTerminal))
+                                    case .error, .conflict: continue
                                 }
-                            case .error, .conflict:
-                                continue
-                        }
+                            }
+                            break explore
                     }
+                }
+            }
+            switch alternatives.popLast() {
+                case nil:
                     return false
+                case .shift:
+                    return true
+                case .reduce(var states, let count, let nonTerminal):
+                    if states.reduce(count: count, to: nonTerminal, in: self) { branch = states }
             }
         }
-        return false
     }
 
     /// The target of the GOTO on `nonTerminal` from `state`, if the table has one.
     fileprivate func gotoState(from state: Int, on nonTerminal: String) -> Int? {
         nonTerminalIndex[nonTerminal].flatMap { parseTable.gotos[state][$0] }
     }
+}
+
+/// A branch of a conflict ``GLRParser/canShift(_:on:)`` has yet to try.
+private enum Alternative {
+    /// The conflict shifts the token.
+    case shift
+    /// The reduction of `count` symbols to `nonTerminal` from `states`, run when the branch's turn comes.
+    case reduce(VirtualStates, count: Int, nonTerminal: String)
 }
 
 /// A stack's states as reductions change them, the stack's own arrays untouched: the nodes still standing from it, and
