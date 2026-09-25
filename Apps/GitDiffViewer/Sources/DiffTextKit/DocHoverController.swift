@@ -239,17 +239,26 @@ package final class DocHoverController: NSObject {
             return
         }
         // Another identifier: the shown panel, if any, stays until this one's document replaces it.
+        lookUp(hit, with: resolve, after: debounce)
+    }
+
+    /// Looks `hit` up with `resolve` once `delay` passes, after any lookup still in flight, and shows its document
+    /// unless a newer lookup or a drop supersedes it; a hit with nothing to show closes the shown panel after the grace
+    /// delay.
+    private func lookUp(
+        _ hit: HoverHit, with resolve: @escaping @Sendable (HoverHit) async -> HoverDocument?, after delay: Duration
+    ) {
         cancelClose()
         generation += 1
         let myGeneration = generation
         let previous = pendingTask
         pendingTask?.cancel()
         currentHit = hit
-        pendingTask = taskProvider.task { [weak self, clock, debounce] in
+        pendingTask = taskProvider.task { [weak self, clock] in
             // Waiting for the previous task, cancelled or not, keeps resolution single-flight.
             await previous?.value
             guard let self, self.generation == myGeneration, !Task.isCancelled else { return }
-            try? await clock.sleep(for: debounce)
+            try? await clock.sleep(for: delay)
             guard self.generation == myGeneration, !Task.isCancelled else { return }
             let document = await resolve(hit)
             guard self.generation == myGeneration else { return }
