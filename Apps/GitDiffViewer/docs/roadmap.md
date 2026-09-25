@@ -146,7 +146,8 @@ they show, are in `xcode-reference.md`.
 4. **Compact inline view (a setting).** An inline mode that shows only the newest file's final content. The gutter,
    in the same visual language as the scope ribbon, marks each place with a change: an addition, a removal or a
    modification. Clicking a marker discloses that change in place, above the resulting lines. Compatible with the
-   isolated-changes mode: gaps collapse the same way and the markers survive around them.
+   isolated-changes mode: gaps collapse the same way and the markers survive around them. Designed in
+   `compact-inline-design.md`.
 5. **First change on open, placed right and optional (user-requested 09-24, book DIFF-08).** Opening a file scrolls
    to its first change three rows below the top of the visible area, clear of the toolbar and the tab bar (today it
    lands offset). A setting, on by default, turns the scroll off so files open at their top; a tab that comes back to
