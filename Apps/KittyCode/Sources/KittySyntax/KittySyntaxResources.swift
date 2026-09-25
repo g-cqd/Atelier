@@ -4,4 +4,9 @@ import Foundation
 /// Tests use `@testable import KittySyntax` to reach this.
 enum KittySyntaxResources {
     static let bundle: Bundle = .module
+
+    /// The bundled grammars: one directory per language, and `languages.json`.
+    static var grammarsDirectory: URL? {
+        bundle.resourceURL?.appending(path: "Grammars", directoryHint: .isDirectory)
+    }
 }

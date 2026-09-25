@@ -141,7 +141,7 @@ public enum LanguageHighlighter: Sendable {
 
             if preferGrammar,
                 let language,
-                let artifacts = SyntaxArtifactsCache.artifacts(for: language),
+                let artifacts = SyntaxArtifactsCache.shared.artifacts(for: language),
                 !artifacts.needsExternalScanner
             {
                 strategy = .grammar(GrammarSession(artifacts: artifacts, theme: theme))
@@ -529,8 +529,8 @@ public enum LanguageHighlighter: Sendable {
         for language: String, taskProvider: any TaskProvider = .default
     ) async -> Bool {
         await taskProvider.detachedTask(role: .work, priority: .userInitiated) {
-            await SyntaxArtifactsCache.loadIfNeeded(for: language)
-            return SyntaxArtifactsCache.artifacts(for: language) != nil
+            await SyntaxArtifactsCache.shared.loadIfNeeded(for: language)
+            return SyntaxArtifactsCache.shared.artifacts(for: language) != nil
         }
         .value
     }
@@ -538,172 +538,12 @@ public enum LanguageHighlighter: Sendable {
     @discardableResult
     public static func prewarmArtifacts<S: Sequence>(for languages: S) async -> Set<String>
     where S.Element == String {
-        await SyntaxArtifactsCache.prewarm(languages: languages)
-    }
-}
-
-private struct SyntaxArtifacts: Sendable {
-    let parseTable: ParseTable
-    let lexTable: LexTable
-    let productions: [ProductionRule]
-    let query: Query
-    /// The role of each of `query`'s capture names, resolved once per language.
-    let roles: CaptureRoles
-    let needsExternalScanner: Bool
-    let scannerType: (any GrammarExternalScanner.Type)?
-
-    init(
-        parseTable: ParseTable, lexTable: LexTable, productions: [ProductionRule], query: Query,
-        needsExternalScanner: Bool, scannerType: (any GrammarExternalScanner.Type)?
-    ) {
-        self.parseTable = parseTable
-        self.lexTable = lexTable
-        self.productions = productions
-        self.query = query
-        roles = CaptureRoles(captureNames: query.captureNames)
-        self.needsExternalScanner = needsExternalScanner
-        self.scannerType = scannerType
+        await SyntaxArtifactsCache.shared.prewarm(languages: languages)
     }
 }
 
 private struct SplitLinesScratch {
     var lines: [[StyledSpan]] = []
-}
-
-private enum SyntaxArtifactsCache {
-    private static let storage = Mutex([String: SyntaxArtifacts?]())
-
-    static func artifacts(for language: String) -> SyntaxArtifacts? {
-        storage.withLock { $0[language] } ?? nil
-    }
-
-    static func loadIfNeeded(for language: String) async {
-        let alreadyCached: Bool = storage.withLock { $0[language] != nil }
-        guard !alreadyCached else { return }
-
-        let loaded = await loadArtifacts(for: language, cachedOnly: false)
-        storage.withLock { cache in
-            guard !cache.keys.contains(language) else { return }
-            cache[language] = loaded
-        }
-    }
-
-    static func prewarm<S: Sequence>(languages: S) async -> Set<String> where S.Element == String {
-        let uniqueLanguages = Set(languages)
-        let uncachedLanguages = uniqueLanguages.filter { language in
-            storage.withLock { !$0.keys.contains(language) }
-        }
-
-        await withTaskGroup(of: (String, SyntaxArtifacts?).self) { group in
-            for language in uncachedLanguages {
-                group.addTask {
-                    (language, await loadArtifacts(for: language, cachedOnly: true))
-                }
-            }
-
-            for await (language, loadedArtifacts) in group {
-                guard let loadedArtifacts else { continue }
-                storage.withLock { cache in
-                    guard !cache.keys.contains(language) else { return }
-                    cache[language] = loadedArtifacts
-                }
-            }
-        }
-
-        return Set(
-            uniqueLanguages.filter { language in
-                storage.withLock {
-                    if case .some(.some(_)) = $0[language] {
-                        return true
-                    }
-                    return false
-                }
-            })
-    }
-
-    private static func loadArtifacts(for language: String, cachedOnly: Bool) async -> SyntaxArtifacts? {
-        // A runtime registration wins over the bundled manifest; either way `entry.path` names a `Grammars/` directory.
-        let entry: GrammarRegistry.LanguageEntry
-        if let registered = GrammarRegistry.shared.entry(forLanguage: language) {
-            entry = registered
-        } else if let bundled = BundledLanguageManifest.entry(forLanguage: language) {
-            entry = GrammarRegistry.LanguageEntry(bundled: bundled)
-        } else {
-            return nil
-        }
-
-        let bundle = KittySyntaxResources.bundle
-        guard
-            let resourcePath = bundle.resourcePath,
-            let queryURL = bundle.url(
-                forResource: "highlights",
-                withExtension: "scm",
-                subdirectory: "Grammars/\(entry.path)"
-            )
-        else {
-            return nil
-        }
-
-        guard let querySource = try? String(contentsOf: queryURL, encoding: .utf8),
-            let query = try? QueryParser.parse(querySource)
-        else {
-            return nil
-        }
-
-        // Loaded through the registry, whose disk cache spares a relaunch the parse-table compile.
-        let grammarsPath = "\(resourcePath)/Grammars"
-        let grammar: GrammarDefinition
-        do {
-            grammar = try GrammarRegistry.shared.grammar(
-                for: entry.name, grammarsPath: grammarsPath)
-        } catch {
-            return nil
-        }
-
-        let needsExternals = !grammar.externals.isEmpty
-        let scannerType = GrammarRegistry.shared.scannerType(forGrammar: grammar.name)
-
-        // Without its external scanners a grammar can't parse, so a session never reads its table, and compiling one
-        // (bash's especially) can take gigabytes: store empty tables and keep the flag for capability reporting.
-        if needsExternals && scannerType == nil {
-            if cachedOnly { return nil }
-            return SyntaxArtifacts(
-                parseTable: ParseTable(
-                    stateCount: 0, symbols: [], terminals: [], nonTerminals: [],
-                    actions: [], gotos: []),
-                lexTable: LexTable(),
-                productions: [],
-                query: query,
-                needsExternalScanner: true,
-                scannerType: nil
-            )
-        }
-
-        let compiled: ParseTableCompiler.CompilationResult
-        do {
-            if cachedOnly {
-                guard
-                    let stored = try GrammarRegistry.shared.cachedResult(
-                        for: entry.name, grammarsPath: grammarsPath)
-                else { return nil }
-                compiled = stored
-            } else {
-                compiled = try await GrammarRegistry.shared.compiledResult(
-                    for: entry.name, grammarsPath: grammarsPath)
-            }
-        } catch {
-            return nil
-        }
-
-        return SyntaxArtifacts(
-            parseTable: compiled.parseTable,
-            lexTable: compiled.lexTable,
-            productions: compiled.productions,
-            query: query,
-            needsExternalScanner: false,
-            scannerType: scannerType
-        )
-    }
 }
 
 private func splitDocumentSpans(

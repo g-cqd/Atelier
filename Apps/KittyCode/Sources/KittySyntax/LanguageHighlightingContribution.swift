@@ -77,7 +77,7 @@ public struct LanguageHighlightingContribution: Sendable, Equatable {
 
     /// Generate a contribution from a bundled language manifest entry and capability report.
     static func fromBundled(
-        entry: BundledLanguageEntry,
+        entry: GrammarRegistry.LanguageEntry,
         report: HighlightCapabilityReport
     ) -> LanguageHighlightingContribution {
         let detection = DetectionContribution(extensions: entry.extensions)

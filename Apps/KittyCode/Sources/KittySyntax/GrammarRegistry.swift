@@ -1,17 +1,13 @@
 import AemiJSON
 import AemiKernel
 public import AtelierGrammar
-import AtelierParser
-import AtelierScanners
-import Foundation
+public import Foundation
 import Synchronization
 
 /// The runtime registry of language grammars: registered entries, loaded grammars, and compiled parse tables and
-/// failed compiles, cached in memory and on disk. Its state sits behind a `Mutex`.
+/// failed compiles, cached in memory and on disk. Its state sits behind a `Mutex`. A language no entry is registered
+/// for falls back to its bundled manifest's entry.
 public final class GrammarRegistry: Sendable {
-    /// The process-wide registry, which the highlighter consults before `BundledLanguageManifest`.
-    public static let shared = GrammarRegistry()
-
     private struct State: Sendable {
         /// Entries keyed by file extension, lowercased and dot included (`.swift`).
         var entries: [String: LanguageEntry] = [:]
@@ -35,10 +31,12 @@ public final class GrammarRegistry: Sendable {
 
     private let state = Mutex(State())
     private let diskCache: CompiledTableCache
+    /// The entries a language without a registered one falls back to.
+    private let bundledManifest: GrammarManifest
     private let compile:
         @Sendable (GrammarDefinition) async throws(GrammarError) -> ParseTableCompiler.CompilationResult
 
-    public struct LanguageEntry: Sendable, Equatable {
+    public struct LanguageEntry: Sendable, Equatable, Decodable {
         public var name: String
         public var extensions: [String]
         public var path: String
@@ -50,8 +48,10 @@ public final class GrammarRegistry: Sendable {
         }
     }
 
-    public convenience init() {
-        self.init(cacheDirectory: CompiledTableCache.defaultDirectory) { grammar throws(GrammarError) in
+    /// A registry that keeps its disk cache in `cacheDirectory`, which the app chooses, and falls back to
+    /// `bundledManifest` for a language registered nowhere else.
+    public convenience init(cacheDirectory: URL, bundledManifest: GrammarManifest = .empty) {
+        self.init(cacheDirectory: cacheDirectory, bundledManifest: bundledManifest) { grammar throws(GrammarError) in
             try ParseTableCompiler.compile(grammar)
         }
     }
@@ -59,10 +59,12 @@ public final class GrammarRegistry: Sendable {
     /// A registry that keeps its disk cache in `cacheDirectory` and compiles grammars with `compile`.
     init(
         cacheDirectory: URL,
+        bundledManifest: GrammarManifest = .empty,
         compile:
             @escaping @Sendable (GrammarDefinition) async throws(GrammarError) -> ParseTableCompiler.CompilationResult
     ) {
         self.diskCache = CompiledTableCache(directory: cacheDirectory)
+        self.bundledManifest = bundledManifest
         self.compile = compile
     }
 
@@ -151,11 +153,6 @@ public final class GrammarRegistry: Sendable {
         state.withLock { $0.entriesByLanguage[languageName] }
     }
 
-    /// The bundled scanner for a grammar, when one has been ported and registered.
-    func scannerType(forGrammar name: String) -> (any GrammarExternalScanner.Type)? {
-        BundledScanners.byGrammarName[name]
-    }
-
     /// The entry registered for the lowercased extension or exact dotfile name of `filename`.
     public func entry(forFilename filename: String) -> LanguageEntry? {
         let path = filename as NSString
@@ -230,7 +227,7 @@ public final class GrammarRegistry: Sendable {
     }
 
     /// Reads a compiled table only when it is already cached; prewarming never starts a compile.
-    func cachedResult(
+    public func cachedResult(
         for languageName: String, grammarsPath: String
     ) throws(GrammarError) -> ParseTableCompiler.CompilationResult? {
         let grammar = try loadedGrammar(for: languageName, grammarsPath: grammarsPath)
@@ -238,15 +235,15 @@ public final class GrammarRegistry: Sendable {
         return try stored.get()
     }
 
+    /// The entry of `languageName`: its registered one, else its bundled one.
+    public func resolvedEntry(forLanguage languageName: String) -> LanguageEntry? {
+        entry(forLanguage: languageName) ?? bundledManifest.entry(forLanguage: languageName)
+    }
+
     /// The path of `languageName`'s grammar file, from its registered entry, else its bundled one.
     /// - Throws: `GrammarError.fileNotFound` when neither names the language.
     private func grammarPath(for languageName: String, grammarsPath: String) throws(GrammarError) -> String {
-        let resolvedEntry: LanguageEntry
-        if let registered = entry(forLanguage: languageName) {
-            resolvedEntry = registered
-        } else if let bundled = BundledLanguageManifest.entry(forLanguage: languageName) {
-            resolvedEntry = LanguageEntry(bundled: bundled)
-        } else {
+        guard let resolvedEntry = resolvedEntry(forLanguage: languageName) else {
             throw .fileNotFound("No entry for language: \(languageName)")
         }
         return "\(grammarsPath)/\(resolvedEntry.path)/grammar.json"
@@ -288,22 +285,4 @@ private struct ManifestEntryMembers {
             }
         }
     }
-}
-
-// MARK: - Bundled entry bridge
-
-extension GrammarRegistry.LanguageEntry {
-    /// A bundled entry in registry form, for lookups that fall back to the bundled manifest.
-    init(bundled: BundledLanguageEntry) {
-        self.init(name: bundled.name, extensions: bundled.extensions, path: bundled.path)
-    }
-}
-
-// MARK: - Syntax Error
-
-public enum SyntaxError: Error, Sendable, Equatable {
-    case unsupportedLanguage(String)
-    case grammarLoadFailed(String)
-    case queryLoadFailed(String)
-    case highlightingFailed(String)
 }

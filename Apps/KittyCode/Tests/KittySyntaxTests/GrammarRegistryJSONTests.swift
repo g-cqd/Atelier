@@ -12,7 +12,7 @@ struct GrammarRegistryJSONTests {
     @Test
     func `a manifest with a byte-order mark registers its entries`() throws {
         let manifest = Data(#"[{"name": "elvish", "extensions": [".elv"], "path": "elvish"}]"#.utf8)
-        let registry = GrammarRegistry()
+        let registry = GrammarRegistry.scratch()
 
         try registry.loadManifest(from: writeManifest(Data([0xEF, 0xBB, 0xBF]) + manifest))
 
@@ -30,7 +30,7 @@ struct GrammarRegistryJSONTests {
                 {"name": "escape", "extensions": [".e"], "path": "../etc"}
             ]
             """#
-        let registry = GrammarRegistry()
+        let registry = GrammarRegistry.scratch()
 
         try registry.loadManifest(from: writeManifest(Data(manifest.utf8)))
 
@@ -40,7 +40,7 @@ struct GrammarRegistryJSONTests {
     @Test
     func `a key repeated in a manifest entry keeps its first value`() throws {
         let manifest = #"[{"name": "first", "extensions": [".f"], "path": "first", "name": "second"}]"#
-        let registry = GrammarRegistry()
+        let registry = GrammarRegistry.scratch()
 
         try registry.loadManifest(from: writeManifest(Data(manifest.utf8)))
 
@@ -55,7 +55,7 @@ struct GrammarRegistryJSONTests {
         let path = try writeManifest(Data(manifest.utf8))
 
         #expect(throws: GrammarError.invalidJSON("Expected array of language entries")) {
-            try GrammarRegistry().loadManifest(from: path)
+            try GrammarRegistry.scratch().loadManifest(from: path)
         }
     }
 
@@ -64,9 +64,11 @@ struct GrammarRegistryJSONTests {
         let path = try writeManifest(Data("[{".utf8))
         let missing = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString).path
 
-        let error = #expect(throws: GrammarError.self) { try GrammarRegistry().loadManifest(from: path) }
+        let error = #expect(throws: GrammarError.self) { try GrammarRegistry.scratch().loadManifest(from: path) }
         #expect(error?.isInvalidJSON == true)
-        #expect(throws: GrammarError.fileNotFound(missing)) { try GrammarRegistry().loadManifest(from: missing) }
+        #expect(throws: GrammarError.fileNotFound(missing)) {
+            try GrammarRegistry.scratch().loadManifest(from: missing)
+        }
     }
 
     @Test
