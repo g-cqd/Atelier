@@ -11,6 +11,7 @@ import Testing
 /// In the card list, a file renamed without changes is its header alone: no seam, no pane, nothing to unfold (book
 /// DIFF-07, criterion 4).
 @MainActor
+@Suite(.mainActorLane)
 struct HeaderOnlyCardTests {
     private let harness = ModelTestHarness()
 

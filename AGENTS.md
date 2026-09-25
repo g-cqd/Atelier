@@ -32,6 +32,9 @@ One `BlockingOffloadPool` per app, created in the composition root and injected;
 - Waiting is event-driven: `TestClock.waitForSleepers` then `advance`, `TaskProviderSpy.waitForAllTasks`,
   `AsyncProbe`, `CountProbe`, observation tracking. No `Task.sleep`, `Task.yield`, polling or wall-clock assertions.
 - Benchmarks are env-gated (`GDV_BENCH`, ordo-one suites) and never run in the default `swift test`.
+- A GitDiffViewer suite on the main actor carries `@Suite(.mainActorLane)` (`MainActorLane.swift`): it lets two
+  main-actor test cases run at once, so a test's waits measure its own work rather than the queue of every other
+  test's main-thread work, which at a load of 50 and more failed hundreds of bounded waits together.
 - Main-actor tests share the one main thread, so a run lasts at least as long as their main-thread time added up,
   and under load their bounded waits fail together. A GitDiffViewer suite takes at most 1 s of it on an idle
   machine: compare pixels by their bytes before making colours, put pure sweeps in a suite that is not a main-actor

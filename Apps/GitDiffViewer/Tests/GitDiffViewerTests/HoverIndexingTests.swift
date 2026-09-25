@@ -10,6 +10,7 @@ import Testing
 /// What the window model asks of the hover index as a comparison loads and is laid out again: the corpus pass reads
 /// the right side's other Swift files only while hover documentation is on, and only once per comparison.
 @MainActor
+@Suite(.mainActorLane)
 struct HoverIndexingTests {
     private let harness = ModelTestHarness()
 

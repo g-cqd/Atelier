@@ -8,6 +8,7 @@ import Testing
 /// Settings and recents that Foundation's JSON coders wrote load unchanged, and what the app writes now still reads
 /// back through Foundation's `JSONDecoder`. The keys are spelled out because they are what users' defaults hold.
 @MainActor
+@Suite(.mainActorLane)
 struct DefaultsJSONCompatibilityTests {
     private let heuristics = DiffHeuristics(anchorsRareLines: true, slidesToIndentation: false, whitespace: .ignoreAll)
     private let toolLocations: [String: ToolLocation] = [

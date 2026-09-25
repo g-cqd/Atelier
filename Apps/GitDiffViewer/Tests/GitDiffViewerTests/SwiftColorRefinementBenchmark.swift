@@ -18,6 +18,7 @@ import Testing
 /// `GDV_BENCH=1 swift test -c release --filter SwiftColorRefinementBenchmark`. `GDV_BENCH_SWIFT` names the Swift file;
 /// without it, KittyCode's `EditorStateCore.swift`, 71 KB when the budget was set, stands in.
 @MainActor
+@Suite(.mainActorLane)
 struct SwiftColorRefinementBenchmark {
     private static let iterations = 15
     private static let warmUps = 3

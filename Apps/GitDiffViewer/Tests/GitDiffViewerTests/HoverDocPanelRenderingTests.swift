@@ -7,7 +7,7 @@ import Testing
 @testable import DiffTextKit
 
 @MainActor
-@Suite struct HoverDocPanelRenderingTests {
+@Suite(.mainActorLane) struct HoverDocPanelRenderingTests {
     private static let markdown = """
         ```swift
         func greet(name: String) -> String

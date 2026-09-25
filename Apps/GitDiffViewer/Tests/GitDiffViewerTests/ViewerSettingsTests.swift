@@ -9,6 +9,7 @@ import Testing
 @testable import DiffTextKit
 
 @MainActor
+@Suite(.mainActorLane)
 struct ViewerSettingsTests {
     private let scratchDefaults = ScratchDefaults(tag: "settings")
 

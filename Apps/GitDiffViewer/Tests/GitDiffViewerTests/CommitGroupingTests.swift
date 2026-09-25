@@ -233,7 +233,7 @@ struct CommitGroupingTests {
         #expect(!partial.leavesFirstParentChain)
     }
 
-    @Test
+    @Test(.mainActorLane)
     @MainActor
     func `the off-main build answers what the synchronous one does`() async {
         let comparison = Self.comparison(left: [Self.entry("a.swift", "1")], right: [Self.entry("a.swift", "2")])

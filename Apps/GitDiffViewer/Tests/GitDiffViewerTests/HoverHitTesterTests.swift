@@ -33,6 +33,7 @@ private func point(row: Int, column: Int, in rendered: RenderedText, centered: B
 }
 
 @MainActor
+@Suite(.mainActorLane)
 struct HoverHitTesterTests {
     private let text = "let alphaBeta = 1\n"
 

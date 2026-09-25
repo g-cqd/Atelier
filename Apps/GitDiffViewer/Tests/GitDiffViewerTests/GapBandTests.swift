@@ -8,6 +8,7 @@ import Testing
 /// The empty band a gap takes on its boundary, as in Xcode (book DIFF-02): how the layouts and the panes size and
 /// place it, and that nothing of a row reaches into it.
 @MainActor
+@Suite(.mainActorLane)
 struct GapBandTests {
     /// Forty lines changed at lines 12 and 30: a leading gap, a gap between the changes, and a trailing gap, each
     /// with a band.

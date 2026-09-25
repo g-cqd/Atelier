@@ -11,6 +11,7 @@ import Testing
 
 /// One swift-syntax parse per blob and side serves the intraline diff, the colour and hover (PERF-11 step 3).
 @MainActor
+@Suite(.mainActorLane)
 struct SyntaxFactsSharingTests {
     private static let old = "/// Greets.\nfunc greet() { print(\"hello world\") }\nlet a = 1\n"
     private static let new = "/// Greets.\nfunc greet() { print(\"hello there\") }\nlet a = 2\n"

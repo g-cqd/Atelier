@@ -9,6 +9,7 @@ import Testing
 /// Where a gap's handle sits in its band, exactly one row tall (book DIFF-02): a small rectangle split by a separator
 /// between two changes, and a lone half stuck to the band's edge at the top or the end of a file.
 @MainActor
+@Suite(.mainActorLane)
 struct GapHandleLayoutTests {
     private let key = GapKey(fileIndex: 0, gapIndex: 1)
     private let both: [GapHandle] = [.extendsChangeAbove, .extendsChangeBelow]
@@ -244,6 +245,7 @@ private final class GutterFixture {
 }
 
 @MainActor
+@Suite(.mainActorLane)
 struct DiffGutterGapHandleTests {
     @Test(arguments: [GapHandle.extendsChangeAbove, .extendsChangeBelow])
     func `a press on a half of a gap between two changes reports that half's handle`(handle: GapHandle) throws {
@@ -512,6 +514,7 @@ struct DiffGutterGapHandleTests {
 /// The gaps on the edges of a text and of its files: which boundaries the gutter finds there, and which halves it
 /// draws on them.
 @MainActor
+@Suite(.mainActorLane)
 struct DiffGutterGapEdgeTests {
     /// An embedded gutter over `rendered`, in an offscreen window, with the layout it reads, which it holds weakly.
     private func gutter(over rendered: RenderedText, style: GutterStyle) -> (DiffGutterView, StaticTextLayout, NSWindow)

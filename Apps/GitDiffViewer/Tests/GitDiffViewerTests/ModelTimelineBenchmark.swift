@@ -17,6 +17,7 @@ import Testing
 /// Every wait is event-driven: observation tracking wakes the benchmark when the model's state changes, and the
 /// task provider spy settles it when every task the model spawned has finished. No polling, no sleeps.
 @MainActor
+@Suite(.mainActorLane)
 struct ModelTimelineBenchmark {
     private let scratchDefaults = ScratchDefaults(tag: "bench")
 

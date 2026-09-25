@@ -16,6 +16,7 @@ private final class FlippedDocument: NSView {
 /// A 300 pt card with a 30 pt header, placed at y = 100 of a scrolling document by a host view (the way SwiftUI
 /// places it), in a 400 pt scroll view whose top 52 pt sit under bars.
 @MainActor
+@Suite(.mainActorLane)
 struct StickyCardViewTests {
     private let topInset: CGFloat = 52
     private let gap: CGFloat = 16

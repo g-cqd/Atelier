@@ -8,6 +8,7 @@ import Testing
 /// and scrolling to the first change when a file opens. Each is stored, reaches every window at once, and can differ
 /// per project, as the other settings of the Diff tab do.
 @MainActor
+@Suite(.mainActorLane)
 struct ScrollingSettingsTests {
     private let project = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
     private let scratchDefaults = ScratchDefaults(tag: "scrolling")

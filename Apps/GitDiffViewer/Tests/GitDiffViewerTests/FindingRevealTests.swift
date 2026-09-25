@@ -11,6 +11,7 @@ import Testing
 /// A Findings row opens its file and scrolls to its line (DUI-01, GDV S18): which row shows the line, and the model's
 /// hand-over of that row once the file is on screen.
 @MainActor
+@Suite(.mainActorLane)
 struct FindingRevealTests {
     private let harness = ModelTestHarness()
     private let old = "one\ntwo\nthree\nfour\n"

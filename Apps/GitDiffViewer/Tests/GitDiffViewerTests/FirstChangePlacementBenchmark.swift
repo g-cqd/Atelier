@@ -14,6 +14,7 @@ import Testing
 /// FirstChangePlacementBenchmark`. GDV_BENCH_ROWS sets the file's length and GDV_BENCH_RUNS the openings timed per
 /// side.
 @MainActor
+@Suite(.mainActorLane)
 struct FirstChangePlacementBenchmark {
     // Serialized: the layouts would otherwise share the main thread and time each other.
     @Test(

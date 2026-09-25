@@ -12,6 +12,7 @@ import Testing
 /// whole-layout invalidation the pane ran before, against ``DiffTextViewCoordinator/updateDiagnostics(_:version:)``,
 /// which redraws the rows it changed. Runs interleave the two; run in release with GDV_BENCH=1.
 @MainActor
+@Suite(.mainActorLane)
 struct DiagnosticRedrawBenchmark {
     /// Which rows a bump changes.
     enum Change: CaseIterable, CustomStringConvertible {

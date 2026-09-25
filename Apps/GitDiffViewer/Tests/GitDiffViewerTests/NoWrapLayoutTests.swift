@@ -7,6 +7,7 @@ import Testing
 
 /// Panes that never wrap size themselves from their rows, never from a whole-document layout.
 @MainActor
+@Suite(.mainActorLane)
 struct NoWrapLayoutTests {
     private let old = (1 ... 60).map { "let value\($0) = \($0)\n" }.joined()
     private var new: String {

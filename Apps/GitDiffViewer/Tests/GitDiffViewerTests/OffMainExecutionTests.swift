@@ -21,6 +21,7 @@ private func isOnMainThread() -> Bool {
 /// The `@concurrent` seams run off the main actor when called from it, and answer what their synchronous
 /// counterparts do.
 @MainActor
+@Suite(.mainActorLane)
 struct OffMainExecutionTests {
     /// A bare `@concurrent` function, proving the attribute alone leaves the main actor under this package's settings.
     @concurrent

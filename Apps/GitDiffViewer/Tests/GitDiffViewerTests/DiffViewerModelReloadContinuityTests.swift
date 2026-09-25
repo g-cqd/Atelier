@@ -11,6 +11,7 @@ import Testing
 /// A reload or an auto-refresh re-comparison must not discard already-loaded files: only files whose comparison
 /// state actually changed re-render, and fold state and scroll position survive for the rest.
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelReloadContinuityTests {
     private let harness = ModelTestHarness()
 

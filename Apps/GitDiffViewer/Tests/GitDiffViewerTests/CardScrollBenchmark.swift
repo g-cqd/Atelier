@@ -27,6 +27,7 @@ import Testing
 /// GDV_BENCH_PROFILE `step` or `reveal` repeats that phase alone for GDV_BENCH_PROFILE_SECONDS, for a sampling
 /// profiler, after writing the process's id to the file GDV_BENCH_PROFILE_MARK names.
 @MainActor
+@Suite(.mainActorLane)
 struct CardScrollBenchmark {
     private nonisolated static let environment = ProcessInfo.processInfo.environment
 

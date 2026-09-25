@@ -11,6 +11,7 @@ import Testing
 /// Gap handle drags through the window model: a drag only reveals, each handle grows its own change, and a drag
 /// renders the card it drags alone (book DIFF-02; GDV B7).
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelGapDragTests {
     private let harness = ModelTestHarness()
 

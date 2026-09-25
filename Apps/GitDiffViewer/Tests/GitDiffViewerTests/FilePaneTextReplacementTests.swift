@@ -6,6 +6,7 @@ import Testing
 /// A file pane shows another file after TextKit laid out much of the one it showed, as it has once the first change
 /// of a long file was near its end, or once the file was scrolled through.
 @MainActor
+@Suite(.mainActorLane)
 struct FilePaneTextReplacementTests {
     /// Dropping the rows TextKit laid out sized the pane again for each of them, one call inside the other, which
     /// overflowed the stack past some 1,800 rows.

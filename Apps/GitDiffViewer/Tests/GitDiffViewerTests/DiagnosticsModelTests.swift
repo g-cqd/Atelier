@@ -9,6 +9,7 @@ import Testing
 /// ``DiagnosticsModel``: merging streamed findings per tool, the summary, the changed paths it reports, and its
 /// reactions to settings, over a real ``DiagnosticsSession`` and a fake runner.
 @MainActor
+@Suite(.mainActorLane)
 struct DiagnosticsModelTests {
     private static let root = URL(filePath: "/repo")
     private let scratchDefaults = ScratchDefaults(tag: "diagnostics")

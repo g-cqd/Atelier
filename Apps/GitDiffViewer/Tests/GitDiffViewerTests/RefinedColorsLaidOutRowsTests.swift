@@ -12,6 +12,7 @@ import Testing
 /// it scrolls back in. A file pane lays out again whatever scrolls in, and colours its viewport alone. Lays a text out
 /// on the main actor, without drawing it.
 @MainActor
+@Suite(.mainActorLane)
 struct RefinedColorsLaidOutRowsTests {
     private static let rowCount = 200
     private static let text = Array(repeating: "let set = [1]", count: rowCount).joined(separator: "\n") + "\n"

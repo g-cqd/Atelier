@@ -22,7 +22,7 @@ import Testing
 /// test paid and the suite's 1 s budget could not (`scripts/main-actor-budget.sh`). They run one at a time, each from
 /// the file list with no tab open.
 @MainActor
-@Suite(.serialized)
+@Suite(.mainActorLane, .serialized)
 struct FileTabScrollRangeTests {
     private static let session = WindowSession()
 

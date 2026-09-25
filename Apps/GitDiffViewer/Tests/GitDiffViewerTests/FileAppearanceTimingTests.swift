@@ -12,6 +12,7 @@ import Testing
 /// The time to appearance ends when the detail area's panes first show the file, whichever layout shows it: the
 /// panes are new when the file opens, so their creation, not only a later update, reports it.
 @MainActor
+@Suite(.mainActorLane)
 struct FileAppearanceTimingTests {
     private let harness = ModelTestHarness()
 

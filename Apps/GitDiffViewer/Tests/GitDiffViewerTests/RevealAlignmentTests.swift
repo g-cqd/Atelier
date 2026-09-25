@@ -15,7 +15,9 @@ import Testing
 /// What shows is read from what the layers hold (``LayerPixels/composite(_:)``) and compared, by bytes, with what the
 /// same views draw when every one of them is asked to draw again: a view that kept an earlier drawing differs.
 @MainActor
-@Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+@Suite(
+    .mainActorLane,
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
 struct FilePaneRevealAlignmentTests {
     @Test(arguments: PaneLayout.allCases)
     func `after a reveal, a file pane's numbers, separator and drawing follow the revealed rows`(
@@ -28,7 +30,9 @@ struct FilePaneRevealAlignmentTests {
 /// ``FilePaneRevealAlignmentTests`` after the file updates, once lines were revealed. Each suite here checks one change
 /// in one kind of pane, so that each keeps within the main thread's budget.
 @MainActor
-@Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+@Suite(
+    .mainActorLane,
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
 struct FilePaneUpdateAlignmentTests {
     @Test(arguments: PaneLayout.allCases)
     func `after the file updates, a revealed file pane's numbers, separator and drawing follow its rows`(
@@ -41,7 +45,9 @@ struct FilePaneUpdateAlignmentTests {
 /// ``FilePaneRevealAlignmentTests`` with lines wrapped, where the split view aligns the two sides' rows once it has
 /// shown them.
 @MainActor
-@Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+@Suite(
+    .mainActorLane,
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
 struct WrappedFilePaneRevealAlignmentTests {
     @Test(arguments: PaneLayout.allCases)
     func `after a reveal, a wrapped file pane's numbers, separator and drawing follow the revealed rows`(
@@ -53,7 +59,9 @@ struct WrappedFilePaneRevealAlignmentTests {
 
 /// ``FilePaneUpdateAlignmentTests`` with lines wrapped.
 @MainActor
-@Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+@Suite(
+    .mainActorLane,
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
 struct WrappedFilePaneUpdateAlignmentTests {
     @Test(arguments: PaneLayout.allCases)
     func `after the file updates, a revealed wrapped file pane's numbers, separator and drawing follow its rows`(
@@ -66,7 +74,9 @@ struct WrappedFilePaneUpdateAlignmentTests {
 /// ``FilePaneRevealAlignmentTests`` in a card of the card list, inline or side by side, which the stacked layout shows
 /// too; a card's rows also sit where the card measured them, as a full layout of its text puts them.
 @MainActor
-@Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+@Suite(
+    .mainActorLane,
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
 struct CardPaneRevealAlignmentTests {
     @Test(arguments: [CardLayout.inline, .split], [false, true])
     func `after a reveal, a card's numbers, separator and drawing follow the revealed rows`(
@@ -83,7 +93,9 @@ struct CardPaneRevealAlignmentTests {
 
 /// ``CardPaneRevealAlignmentTests`` after the file updates, once lines were revealed.
 @MainActor
-@Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+@Suite(
+    .mainActorLane,
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
 struct CardPaneUpdateAlignmentTests {
     @Test(arguments: [CardLayout.inline, .split], [false, true])
     func `after the file updates, a revealed card's numbers, separator and drawing follow its rows`(

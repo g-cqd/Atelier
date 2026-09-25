@@ -6,6 +6,7 @@ import Testing
 
 /// ``SideBySidePanes``: two panes and a divider whose height is the taller pane's, whatever height is proposed.
 @MainActor
+@Suite(.mainActorLane)
 struct SideBySidePanesTests {
     private func makeSUT(width: CGFloat = 301) -> NSHostingController<SideBySidePanes<some View, some View>> {
         let host = NSHostingController(

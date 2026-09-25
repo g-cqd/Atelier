@@ -16,6 +16,7 @@ import Testing
 /// at their top while a tab shown again still comes back where it was (DIFF-08). The panes are read as
 /// `FileTabScrollRangeTests` reads them.
 @MainActor
+@Suite(.mainActorLane)
 struct ScrollingSettingsPaneTests {
     private let harness = ModelTestHarness()
 

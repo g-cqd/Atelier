@@ -8,6 +8,7 @@ import Testing
 /// A text whose last rows are empty, such as an added file's side of fillers or a file ending in blank lines, lays
 /// its last row out like any other row: as tall as the others, in its own colour, in cards and in the file pane.
 @MainActor
+@Suite(.mainActorLane)
 struct EmptyLastRowTests {
     private static let added = "let first = 1\nlet second = 2\nlet third = 3\n"
 

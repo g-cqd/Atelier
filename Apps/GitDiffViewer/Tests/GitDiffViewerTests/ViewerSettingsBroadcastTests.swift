@@ -11,6 +11,7 @@ import Testing
 /// Instances over the same `UserDefaults`, one per window and one for Settings: a base-default edit through one
 /// reaches every other instance's unoverridden keys without a reopen.
 @MainActor
+@Suite(.mainActorLane)
 struct ViewerSettingsBroadcastTests {
     private let scratchDefaults = ScratchDefaults(tag: "broadcast")
 

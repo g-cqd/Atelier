@@ -13,6 +13,7 @@ import Testing
 /// along so the handle stays in view as rows open above it (book DIFF-02). The gutter, the drag's controller and the
 /// pane are wired as the window wires them, on a test clock.
 @MainActor
+@Suite(.mainActorLane)
 struct FilePaneGapHoldTests {
     @Test
     func `a half held at the bottom edge of a file pane keeps revealing, its band in view`() async throws {

@@ -16,6 +16,7 @@ import Testing
 /// Run in release, alone on the machine: `GDV_BENCH=1 swift test -c release -Xswiftc -enable-testing
 /// --scratch-path .build-release --filter HoverBuildBenchmark`.
 @MainActor
+@Suite(.mainActorLane)
 struct HoverBuildBenchmark {
     private static let runs = 21
 

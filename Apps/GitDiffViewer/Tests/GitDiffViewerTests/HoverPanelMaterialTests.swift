@@ -8,6 +8,7 @@ import Testing
 /// The panel's background (book HOVER-08): Liquid Glass by default, the popover material when the setting asks for
 /// it, and either one clipped to the panel's rounded corners in a clear window, so no square corner shows.
 @MainActor
+@Suite(.mainActorLane)
 struct HoverPanelMaterialTests {
     private static let document = HoverDocument(
         declaration: NSAttributedString(

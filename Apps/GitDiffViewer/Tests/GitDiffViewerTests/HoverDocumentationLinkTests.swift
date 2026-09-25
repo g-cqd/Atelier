@@ -9,6 +9,7 @@ import Testing
 /// HOVER-20 criterion 5: a system symbol offers "Open in Developer Documentation", which opens its page in Apple's
 /// developer documentation through the panel's own link handling.
 @MainActor
+@Suite(.mainActorLane)
 struct HoverDocumentationLinkTests {
     @MainActor
     private final class OpenedLinks {

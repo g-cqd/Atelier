@@ -13,6 +13,7 @@ import Testing
 /// laid out: a pane sized from TextKit's usage bounds while they were empty, or held only what TextKit had laid out,
 /// cut its text off partway down and did not scroll to the rest.
 @MainActor
+@Suite(.mainActorLane)
 struct FilePaneScrollRangeTests {
     @Test(arguments: PaneLayout.allCases, [true, false])
     func `a new file pane shows a short file whole, with nothing to scroll`(layout: PaneLayout, wrapsLines: Bool)
@@ -62,6 +63,7 @@ struct FilePaneScrollRangeTests {
 /// Where a file pane shows the row the model asks for, as it asks for a file's first change when the file opens (book
 /// DIFF-08), and the row a click in the minimap asks for.
 @MainActor
+@Suite(.mainActorLane)
 struct FilePaneScrollToRowTests {
     @Test(arguments: PaneLayout.allCases, [true, false])
     func `a file opens with its first change three lines below the pane's top`(layout: PaneLayout, wrapsLines: Bool)

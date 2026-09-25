@@ -16,6 +16,7 @@ import Testing
 /// card's rows carry the comparison's file indexes, so a file's findings never land on another card, and a finding on
 /// a line a gap hides lands on no row.
 @MainActor
+@Suite(.mainActorLane)
 struct CardListDiagnosticsTests {
     private let harness = ModelTestHarness()
     private static let debounce: Duration = .milliseconds(250)

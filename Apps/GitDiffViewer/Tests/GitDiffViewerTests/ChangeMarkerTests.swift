@@ -28,6 +28,7 @@ struct ChangeMarkerLayoutTests {
 /// The compact inline view's markers in a gutter over an embedded text: where they sit on the rows, and what the pointer
 /// does with them (book DIFF-04).
 @MainActor
+@Suite(.mainActorLane)
 struct DiffGutterChangeMarkerTests {
     /// Thirty lines: line 5 modified and line 12 removed.
     private static func layout(context: Int = 2) -> StaticTextLayout? {

@@ -6,6 +6,7 @@ import Testing
 @testable import DiffComparison
 
 @MainActor
+@Suite(.mainActorLane)
 struct SDKTierResolutionTests {
     private let scratchDefaults = ScratchDefaults(tag: "sdkTier")
 

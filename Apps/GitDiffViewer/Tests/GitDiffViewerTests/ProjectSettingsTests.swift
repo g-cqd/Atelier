@@ -9,6 +9,7 @@ import Testing
 @testable import DiffTextKit
 
 @MainActor
+@Suite(.mainActorLane)
 struct ProjectSettingsTests {
     private let scratchDefaults = ScratchDefaults(tag: "projectSettings")
 

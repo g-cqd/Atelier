@@ -9,6 +9,7 @@ import Testing
 /// ``SideState/fetch()``: its runner, the arguments and isolation it sends git, its success and failure paths,
 /// and the remote names ``SideState/loadRemotesIfNeeded()`` reads for it.
 @MainActor
+@Suite(.mainActorLane)
 struct SideStateFetchTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
     private nonisolated static let info = RepositoryInfo(

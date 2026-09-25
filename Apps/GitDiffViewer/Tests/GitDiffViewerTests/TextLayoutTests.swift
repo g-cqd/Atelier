@@ -28,6 +28,7 @@ private final class CountingClock: Clock, Sendable {
 }
 
 @MainActor
+@Suite(.mainActorLane)
 struct TextLayoutTests {
     private let old = "alpha\nbeta\ngamma\n"
     private let new = "alpha\n" + String(repeating: "beta ", count: 30) + "\ngamma\n"

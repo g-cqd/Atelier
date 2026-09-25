@@ -71,6 +71,7 @@ private struct TrustGate {
 }
 
 @MainActor
+@Suite(.mainActorLane)
 struct LanguageServerTrustGateTests {
     private let documented = """
         /// Adds two numbers.

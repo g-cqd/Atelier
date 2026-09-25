@@ -13,6 +13,7 @@ import Testing
 
 /// The explorer trees the model derives: statuses, renames, folders, filters and the ignored section.
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelTreeTests {
     private let harness = ModelTestHarness()
 

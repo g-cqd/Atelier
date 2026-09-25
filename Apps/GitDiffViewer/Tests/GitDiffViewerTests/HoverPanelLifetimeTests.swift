@@ -10,6 +10,7 @@ import Testing
 /// A pane builds its hover panel on the first hover and releases it as it goes: switching between the file list and a
 /// file creates and tears down panes by the dozen, and a panel built with each one piled up.
 @MainActor
+@Suite(.mainActorLane)
 struct HoverPanelLifetimeTests {
     private let text = "let alphaBeta = 1\nlet gammaDelta = 2\n"
 

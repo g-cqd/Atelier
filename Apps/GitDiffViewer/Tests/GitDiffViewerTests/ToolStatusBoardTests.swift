@@ -11,6 +11,7 @@ import Testing
 /// ``ToolStatusBoard``: the Tools tab's statuses, and its Refresh finding a tool installed since the last probe
 /// (TOOL-01 criterion 3).
 @MainActor
+@Suite(.mainActorLane)
 struct ToolStatusBoardTests {
     private let scratchDefaults = ScratchDefaults(tag: "board")
     /// A second window's suite, so the tool the superseded refresh's window pins stays out of the newer one's.
