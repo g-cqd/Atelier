@@ -15,16 +15,20 @@ enum BundledGrammarFixture {
             parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
     }
 
-    private static func compile(language: String) throws -> ParseTableCompiler.CompilationResult {
+    /// The `grammar.json` KittyCode bundles for `language`.
+    static func grammarURL(language: String) -> URL {
         // Tests/AtelierParserTests/ → the repository root, four levels up from this file's directory.
-        let grammarURL = URL(filePath: #filePath)
+        URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appending(path: "Apps/KittyCode/Sources/KittySyntax/Grammars/\(language)/grammar.json")
-        let grammar = try GrammarLoader.parse(Data(contentsOf: grammarURL))
+    }
+
+    private static func compile(language: String) throws -> ParseTableCompiler.CompilationResult {
+        let grammar = try GrammarLoader.parse(Data(contentsOf: grammarURL(language: language)))
         return try ParseTableCompiler.compile(grammar)
     }
 }
