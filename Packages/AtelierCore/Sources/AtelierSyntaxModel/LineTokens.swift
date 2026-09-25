@@ -5,6 +5,9 @@
 /// line, and reads as `[[HighlightToken]]` did: `lineTokens[i]`, `lineTokens.count`.
 ///
 /// A second per-token buffer can share `offsets`: for token `k` of line `i`, `k` indexes both buffers.
+///
+/// The ranges are in the unit the tokens were cut in, until ``moveToUTF16(over:lineRanges:)`` moves them from UTF-8 to
+/// UTF-16.
 public struct LineTokens: Sendable, Equatable, RandomAccessCollection {
     /// Every line's tokens, line after line, each range relative to its line's start.
     public private(set) var tokens: [HighlightToken]
@@ -49,6 +52,45 @@ public struct LineTokens: Sendable, Equatable, RandomAccessCollection {
     /// - Complexity: O(tokens + lines), in two allocations.
     public init(_ tokens: [HighlightToken], lineRanges: [Range<Int>]) {
         self.init(tokens, bounds: Ranges(ranges: lineRanges))
+    }
+
+    /// Moves every line's tokens from UTF-8 offsets to UTF-16 offsets, both from the line's start, in one pass over
+    /// `text`. A byte before a line's first non-ASCII byte is one unit, so the ASCII stretches are skipped eight bytes
+    /// at a time, and a line walks its bytes only from its first non-ASCII byte to its last token's end.
+    /// - Parameters:
+    ///   - text: The whole text's UTF-8, which the tokens were cut from.
+    ///   - lineRanges: The ranges the tokens were cut at, in bytes of `text`.
+    /// - Complexity: O(bytes of `text` + tokens)
+    public mutating func moveToUTF16(over text: Span<UInt8>, lineRanges: [Range<Int>]) {
+        let offsets = offsets
+        var tokens = tokens.mutableSpan
+        // The first non-ASCII byte at or after the start of the last line that looked for one.
+        var nonASCII = -1
+        for line in lineRanges.indices {
+            let first = Int(offsets[line])
+            let past = Int(offsets[line + 1])
+            guard first < past else { continue }
+            let start = lineRanges[line].lowerBound
+            if nonASCII < start { nonASCII = UTF16Offsets.firstNonASCII(in: text, from: start) }
+            guard nonASCII < start + tokens[past - 1].byteRange.upperBound else { continue }
+            let prefix = nonASCII - start
+            var byte = nonASCII
+            var unit = prefix
+            for index in first ..< past {
+                let token = tokens[index]
+                let range = token.byteRange
+                guard range.upperBound > prefix else { continue }
+                var lower = range.lowerBound
+                if lower > prefix {
+                    UTF16Offsets.advance(&byte, to: start + lower, in: text, counting: &unit)
+                    lower = unit
+                }
+                UTF16Offsets.advance(&byte, to: start + range.upperBound, in: text, counting: &unit)
+                tokens[index] = HighlightToken(
+                    byteRange: lower ..< unit, role: token.role, modifiers: token.modifiers, layer: token.layer,
+                    priority: token.priority)
+            }
+        }
     }
 
     /// One pass over the tokens: lines only move forward, since the tokens are ascending and disjoint, so each token's

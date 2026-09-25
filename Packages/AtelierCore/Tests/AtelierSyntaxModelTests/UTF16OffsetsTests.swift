@@ -23,4 +23,19 @@ struct UTF16OffsetsTests {
             }
         }
     }
+
+    @Test
+    func `the first non ASCII byte is found past eight byte words and in the tail`() {
+        let text = Array("abcdefghijklmnopqrs é".utf8)
+        #expect(UTF16Offsets.firstNonASCII(in: text.span, from: 0) == 20)
+        #expect(UTF16Offsets.firstNonASCII(in: text.span, from: 20) == 20)
+        #expect(UTF16Offsets.firstNonASCII(in: text.span, from: 22) == 22)
+        let ascii = Array("abcdefghijk".utf8)
+        #expect(UTF16Offsets.firstNonASCII(in: ascii.span, from: 1) == ascii.count)
+        for offset in 0 ..< 17 {
+            var bytes = [UInt8](repeating: UInt8(ascii: "x"), count: 17)
+            bytes[offset] = 0xC3
+            #expect(UTF16Offsets.firstNonASCII(in: bytes.span, from: 0) == offset)
+        }
+    }
 }
