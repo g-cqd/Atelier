@@ -19,7 +19,8 @@ struct FilePaneScrollRangeTests {
     func `a new file pane shows a short file whole, with nothing to scroll`(layout: PaneLayout, wrapsLines: Bool)
         throws
     {
-        let sut = HostedPanes(showing: .lines(12), layout: layout, wrapsLines: wrapsLines)
+        // Short enough for either pane of the stacked layout, half the window each.
+        let sut = HostedPanes(showing: .lines(6), layout: layout, wrapsLines: wrapsLines)
 
         for pane in try sut.panes() {
             #expect(pane.textView.frame.height == pane.clip.bounds.height)
@@ -31,7 +32,7 @@ struct FilePaneScrollRangeTests {
     func `scrolled to its end, a file pane shows its last line at the bottom, its text laid out or not`(
         layout: PaneLayout, wrapsLines: Bool
     ) async throws {
-        let sut = HostedPanes(showing: .longLines(120), layout: layout, wrapsLines: wrapsLines)
+        let sut = HostedPanes(showing: .longLines(60), layout: layout, wrapsLines: wrapsLines)
         try await sut.alignSides()
 
         for pane in try sut.panes() {
@@ -51,7 +52,7 @@ struct FilePaneScrollRangeTests {
     func `a file pane that scrolls past its end scrolls its last line up to its top, however long its file`(
         layout: PaneLayout, wrapsLines: Bool
     ) throws {
-        let sut = HostedPanes(showing: .lines(120), layout: layout, wrapsLines: wrapsLines, scrollsPastEnd: true)
+        let sut = HostedPanes(showing: .lines(60), layout: layout, wrapsLines: wrapsLines, scrollsPastEnd: true)
         try sut.expectEachPaneScrollsItsLastLineToItsTop()
 
         sut.show(.lines(12))
@@ -69,7 +70,7 @@ struct FilePaneScrollToRowTests {
     func `a file opens with its first change three lines below the pane's top`(layout: PaneLayout, wrapsLines: Bool)
         async throws
     {
-        let sut = HostedPanes(showing: .longLines(120, changedAt: 60), layout: layout, wrapsLines: wrapsLines)
+        let sut = HostedPanes(showing: .longLines(60, changedAt: 30), layout: layout, wrapsLines: wrapsLines)
         try await sut.alignSides()
 
         let row = try #require(sut.requestedRow)
@@ -84,10 +85,10 @@ struct FilePaneScrollToRowTests {
     func `a file shown in the pane of another opens with its first change three lines below the pane's top`(
         layout: PaneLayout, wrapsLines: Bool
     ) async throws {
-        let sut = HostedPanes(showing: .lines(40), layout: layout, wrapsLines: wrapsLines)
+        let sut = HostedPanes(showing: .lines(20), layout: layout, wrapsLines: wrapsLines)
         try await sut.alignSides()
 
-        sut.show(.longLines(120, changedAt: 60))
+        sut.show(.longLines(60, changedAt: 30))
         try await sut.alignSides()
 
         let row = try #require(sut.requestedRow)
@@ -116,7 +117,7 @@ struct FilePaneScrollToRowTests {
     func `a change near the end of a long file opens three lines below the pane's top, the rows above not laid out`(
         wrapsLines: Bool
     ) throws {
-        let sut = HostedPanes(showing: .longLines(1_000, changedAt: 900), layout: .inline, wrapsLines: wrapsLines)
+        let sut = HostedPanes(showing: .longLines(600, changedAt: 540), layout: .inline, wrapsLines: wrapsLines)
 
         let row = try #require(sut.requestedRow)
         let pane = try #require(try sut.panes().first)
@@ -137,7 +138,7 @@ struct FilePaneScrollToRowTests {
         throws
     {
         let sut = HostedPanes(
-            showing: .longLines(1_000, changedAt: 900), layout: .inline, wrapsLines: true, scrollsPastEnd: true)
+            showing: .longLines(600, changedAt: 540), layout: .inline, wrapsLines: true, scrollsPastEnd: true)
 
         sut.scrollToBottom()
 
@@ -165,13 +166,13 @@ struct FilePaneScrollToRowTests {
     func `a click in the minimap brings its row to the pane's middle`(layout: PaneLayout, wrapsLines: Bool)
         async throws
     {
-        let sut = HostedPanes(showing: .longLines(120), layout: layout, wrapsLines: wrapsLines)
+        let sut = HostedPanes(showing: .longLines(60), layout: layout, wrapsLines: wrapsLines)
         try await sut.alignSides()
 
-        sut.selectInMinimap(row: 60)
+        sut.selectInMinimap(row: 30)
 
         for pane in try sut.panes() {
-            let offset = try pane.top(ofRow: 60) + pane.lineHeight / 2 - pane.clip.bounds.midY
+            let offset = try pane.top(ofRow: 30) + pane.lineHeight / 2 - pane.clip.bounds.midY
             #expect(abs(offset) < 1, "the row's middle is \(offset) below the pane's")
         }
     }
@@ -217,7 +218,7 @@ struct PaneText {
 /// show the file's first change comes with the file, as it does when a file opens.
 @MainActor
 final class HostedPanes {
-    static let paneHeight: CGFloat = 600
+    static let paneHeight: CGFloat = 300
 
     private let window: NSWindow
     private let host: NSHostingView<Panes>
@@ -233,7 +234,7 @@ final class HostedPanes {
 
     init(
         showing text: PaneText, layout: PaneLayout, wrapsLines: Bool, scrollsPastEnd: Bool = false,
-        size: NSSize = NSSize(width: 900, height: HostedPanes.paneHeight)
+        size: NSSize = NSSize(width: 600, height: HostedPanes.paneHeight)
     ) {
         let controller = SplitPaneController(clock: clock, taskProvider: taskProvider)
         // As the split view sets it when it appears.
