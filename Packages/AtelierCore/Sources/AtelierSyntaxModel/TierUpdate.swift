@@ -69,12 +69,18 @@ public struct TierRequest: Sendable {
     /// and moved to ``unit``: what an update over those lines carries.
     /// - Complexity: O(tokens + bytes of `lines`)
     public func lineTokens(_ tokens: [HighlightToken], lines: Range<Int>) -> LineTokens {
-        let ranges = Array(lineRanges[lines])
-        var cut = LineTokens(tokens, lineRanges: ranges)
-        guard unit == .utf16 else { return cut }
+        inUnit(LineTokens(tokens, lineRanges: Array(lineRanges[lines])), lines: lines)
+    }
+
+    /// `tokens`, one entry per line of `lines` in UTF-8 byte offsets from each line's start, moved to ``unit``.
+    /// - Complexity: O(1) for UTF-8 or an ASCII text; else O(tokens + bytes of `lines`)
+    public func inUnit(_ tokens: LineTokens, lines: Range<Int>) -> LineTokens {
+        guard unit == .utf16 else { return tokens }
         let utf8 = text.utf8Span
-        if !utf8.isKnownASCII { cut.moveToUTF16(over: utf8.span, lineRanges: ranges) }
-        return cut
+        guard !utf8.isKnownASCII else { return tokens }
+        var moved = tokens
+        moved.moveToUTF16(over: utf8.span, lineRanges: Array(lineRanges[lines]))
+        return moved
     }
 }
 
