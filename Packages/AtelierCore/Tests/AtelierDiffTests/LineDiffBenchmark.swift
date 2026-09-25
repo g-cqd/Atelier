@@ -74,7 +74,7 @@ struct LineDiffBenchmark {
     }
 
     /// Every Swift file under `Apps/` and `Packages/` at `revision`, by path, read through one `git cat-file --batch`.
-    private static func swiftSources(at revision: String, in repository: URL) throws -> [(path: String, text: String)] {
+    static func swiftSources(at revision: String, in repository: URL) throws -> [(path: String, text: String)] {
         let listing = try git(["ls-tree", "-r", "--name-only", revision], in: repository)
         let paths = String(decoding: listing, as: UTF8.self).split(separator: "\n").map(String.init)
             .filter { $0.hasSuffix(".swift") && ($0.hasPrefix("Apps/") || $0.hasPrefix("Packages/")) }.sorted()
@@ -96,7 +96,7 @@ struct LineDiffBenchmark {
         return texts
     }
 
-    private static func git(_ arguments: [String], in repository: URL, input: URL? = nil) throws -> Data {
+    static func git(_ arguments: [String], in repository: URL, input: URL? = nil) throws -> Data {
         let process = Process()
         process.executableURL = URL(filePath: "/usr/bin/git")
         process.arguments = ["-C", repository.path(percentEncoded: false)] + arguments
