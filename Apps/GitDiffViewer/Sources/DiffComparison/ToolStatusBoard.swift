@@ -37,6 +37,11 @@ package final class ToolStatusBoard {
             case .typescript: "TypeScript"
             case .javascript: "JavaScript"
             case .go: "Go"
+            case .c: "C"
+            case .cpp: "C++"
+            case .objectiveC: "Objective-C"
+            case .rust: "Rust"
+            case .python: "Python"
             default: language.name
         }
     }

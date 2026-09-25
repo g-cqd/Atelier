@@ -65,7 +65,9 @@ private struct RepositoryTrustPrompt: ViewModifier {
             Hover documentation can start a language server in \(path). Each loads the project, which runs code \
             the repository controls: sourcekit-lsp its package manifest, build plugins, macros and any build server \
             it names; gopls the go command and its tools; typescript-language-server the TypeScript plugins the \
-            project configures. Trust it only if you trust its authors.
+            project configures; rust-analyzer cargo and the tools its configuration names; basedpyright the Python \
+            interpreter its configuration names; clangd the compile flags its compilation database and .clangd files \
+            set. Trust it only if you trust its authors.
 
             Until you do, hovers show doc comments and Apple SDK documentation, and Fetch stays off; Trust \
             Repository… in the source menu asks again. Settings ▸ Tools lists the repositories you trust.
