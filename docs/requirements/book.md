@@ -1138,6 +1138,24 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   3. A stress test that stops or drops watchers while events arrive passes repeatedly.
 - **Priority:** Must. **Related:** GIT-01.
 
+#### GIT-06 · The flat file list grouped by commit
+- **Statement:** When the two compared states of a repository share their history, a setting groups the flat file
+  list into disclosable sections, one per commit, each holding the files that commit changed.
+- **Source:** 09-25, "i'd like that we investigate ways to improve the one flat sidebar file list, by having a
+  toggleable setting to group through disclosable section diffed files by commit when the 2 compared repo states
+  share the same ancestry, it can only work in flat sidebar, for repos".
+- **Acceptance criteria:**
+  1. A research note settles, before building: how a changed file is attributed to commits (each commit that touched
+     it, or the last one), merges and first-parent history, renames across commits, uncommitted changes as a section
+     of their own, what "share the same ancestry" admits (one side an ancestor of the other, or a common merge base),
+     the section header (subject, author, date, counts), what selecting a section does, and a cap for long ranges.
+  2. A setting, off by default, turns the grouping on; it applies only to the flat list style, and only when both
+     sides are states of one repository whose histories connect. Otherwise the list stays as it is and the setting
+     says why it does not apply.
+  3. Each section can be disclosed and collapsed, and remembers that state through a reload.
+  4. Building the groups never blocks the interface, and a range of many commits stays responsive.
+- **Priority:** Should (criterion 1 first). **Related:** CARD-09, GIT-03.
+
 ### WIN: Window chrome and stability
 
 #### WIN-01 · The toolbar customization persists
@@ -1833,3 +1851,5 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R116 | 09-24 | "the auto scrolling to the first change in the file is not working correctly, it's offset, and this should be a toggleable behaviour, add that to the roadmap" | DIFF-08 |
 | R117 | 09-24 | "there's a bug with the overscroll that creates a lot of empty space below the file that allows for more scrolling than necessary, the bouncing of scroll (and the fact we disabled it) should be a setting" | CARD-19, SET-09 |
 | R118 | 09-24 | "when a file fits in the view, we should not scroll to the first change, we should just display the file fully, and in the card list, a renamed file without change should not change a file content section (be collapsed and not expandable)" | DIFF-08 (criterion 4), DIFF-07 (criterion 4) |
+| R119 | 09-25 | "does the git diffviewer use the grammar parser we use in kitty?" (answered: no, it highlights with the shared lexers and swift-syntax) | — |
+| R120 | 09-25 | "i'd like that we investigate ways to improve the one flat sidebar file list, by having a toggleable setting to group through disclosable section diffed files by commit when the 2 compared repo states share the same ancestry, it can only work in flat sidebar, for repos" | GIT-06 |
