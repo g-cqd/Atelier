@@ -153,6 +153,21 @@ struct QueryMatcherTests {
     }
 
     @Test
+    func `An optional child takes at most one child`() throws {
+        let first = SyntaxNode(type: "item", byteRange: 0 ..< 1)
+        let second = SyntaxNode(type: "item", byteRange: 1 ..< 2)
+        let list = SyntaxNode(type: "list", children: [first, second], byteRange: 0 ..< 2)
+        let tree = SyntaxTree(root: list, source: "ab")
+
+        let optional = QueryMatcher.execute(query: try QueryParser.parse("(list (item)? @maybe)"), tree: tree)
+        let thenOne = QueryMatcher.execute(
+            query: try QueryParser.parse("(list (item)? @maybe (item) @last)"), tree: tree)
+
+        #expect(optional.map { $0.captures.map(\.node) } == [[first]])
+        #expect(thenOne.map { $0.captures.map(\.node) } == [[first, second]])
+    }
+
+    @Test
     func `Positional child matching respects order`() {
         let identifier = SyntaxNode(type: "identifier", byteRange: 0 ..< 1)
         let number = SyntaxNode(type: "number", byteRange: 1 ..< 2)
