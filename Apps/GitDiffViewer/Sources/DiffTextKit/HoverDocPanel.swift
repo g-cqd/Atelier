@@ -83,6 +83,9 @@ package final class HoverDocPanel {
     /// The discussion's blocks not built yet: a long discussion builds what the panel shows, and the rest as the body
     /// scrolls towards it.
     var pendingDiscussion: PendingDiscussion?
+    /// The body's top-level block views, kept from one document to the next so a reused panel reconfigures them
+    /// rather than removing them from the stack and building new ones.
+    var blockSlots = HoverBlockSlots()
     let bodyDocument = HoverFlippedView()
     let bodyScrollView = NSScrollView()
     /// Observes the body's scrolling, to build the blocks it scrolls towards.
