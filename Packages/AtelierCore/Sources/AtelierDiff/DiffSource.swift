@@ -1,16 +1,13 @@
 import AemiKernel
+public import AtelierText
 import Foundation
 
-/// Lines a diff runs over. A source addresses its lines by index and lends their bytes, so a rope, a mapped file
-/// or a list of substrings is diffed without making strings: identity comes from hashing the normalised bytes and
-/// equal hashes are confirmed byte by byte.
-public protocol DiffSource {
-    var lineCount: Int { get }
-    /// Lends the bytes of line `index`, without its terminator.
-    func withLineBytes<R>(at index: Int, _ body: (Span<UInt8>) throws -> R) rethrows -> R
-}
+/// Lines a diff runs over: a text kit's substrings, bytes, a rope or a string's ``TextLines``. A source lends its lines
+/// by index, so nothing is diffed through a string of its own: identity comes from hashing the normalised bytes and
+/// equal hashes are confirmed byte by byte (review §7.4: the diff and the lexers share one line source).
+public typealias DiffSource = LineSource
 
-extension DiffSource {
+extension LineSource {
     /// Leading whitespace width of line `index`, tabs to the next multiple of eight; nil for a blank line.
     public func indent(at index: Int) -> Int? {
         withLineBytes(at: index) { LineDiff.indent(of: $0) }
@@ -27,13 +24,13 @@ public struct SubstringLines: DiffSource {
 
     public var lineCount: Int { lines.count }
 
-    public func withLineBytes<R>(at index: Int, _ body: (Span<UInt8>) throws -> R) rethrows -> R {
+    public func withLineBytes<R, E: Error>(at index: Int, _ body: (Span<UInt8>) throws(E) -> R) throws(E) -> R {
         let line = lines[index]
-        if let result = try line.utf8.withContiguousStorageIfAvailable({ buffer in
-            try body(unsafe Span(_unsafeElements: buffer))
-        }) {
-            return result
+        var lent: Result<R, E>?
+        _ = line.utf8.withContiguousStorageIfAvailable { buffer in
+            lent = Result { () throws(E) -> R in try body(unsafe Span(_unsafeElements: buffer)) }
         }
+        if let lent { return try lent.get() }
         // A non-contiguous substring, which native strings never are: copy this one line.
         let bytes = Array(line.utf8)
         return try body(bytes.span)
@@ -50,7 +47,7 @@ public struct ByteLines: DiffSource {
 
     public var lineCount: Int { lines.count }
 
-    public func withLineBytes<R>(at index: Int, _ body: (Span<UInt8>) throws -> R) rethrows -> R {
+    public func withLineBytes<R, E: Error>(at index: Int, _ body: (Span<UInt8>) throws(E) -> R) throws(E) -> R {
         let line = lines[index]
         return try body(line.span)
     }
@@ -58,32 +55,36 @@ public struct ByteLines: DiffSource {
 
 /// Gives every distinct line one small integer, across both sides of a diff, under a whitespace mode.
 ///
-/// Identity is the XXH64 of the normalised bytes; the normalised bytes of every distinct line are kept in one
-/// arena, so a hash already seen is confirmed by one comparison against the arena and a collision can only cost
-/// that comparison, never a wrong match.
+/// Identity is the XXH64 of the normalised bytes, seeded per interner so no crafted input can line its hashes up
+/// (Aemi #31). The hashes index one flat open-addressed table (perf-core D4), and the normalised bytes of every
+/// distinct line are kept in one arena, so a hash already seen is confirmed by one comparison against the arena: a
+/// collision can only cost that comparison, never a wrong match. Identifiers are dense, in first-seen order.
 struct LineInterner {
     let whitespace: WhitespaceMode
-    /// The identifier first registered under a hash.
-    private var firstIdentifier: [UInt64: Int] = [:]
-    /// Further identifiers under a hash, for the rare collision.
-    private var collisions: [UInt64: [Int]] = [:]
+    private let seed: UInt64
+    /// One more than the identifier each slot holds; 0 for an empty slot. Always a power of two long, at most half
+    /// full.
+    private var slots: [Int] = Array(repeating: 0, count: 16)
+    /// The hash of each identifier's normalised bytes.
+    private var hashes: [UInt64] = []
     /// The normalised bytes of every identifier, back to back, and where each one lies.
     private var arena: [UInt8] = []
     private var ranges: [Range<Int>] = []
 
-    init(whitespace: WhitespaceMode) {
+    init(whitespace: WhitespaceMode, seed: UInt64 = .random(in: .min ... .max)) {
         self.whitespace = whitespace
+        self.seed = seed
     }
 
     /// One identifier per line of `source`, and each line's indent measured in the same pass; a later source's
     /// lines match an earlier source's.
     /// - Complexity: O(bytes of the source), plus one comparison per repeated line.
-    mutating func intern(_ source: some DiffSource) -> (identifiers: [Int], indents: [Int?]) {
+    mutating func intern(_ source: some LineSource) -> (identifiers: [Int], indents: [Int?]) {
         var identifiers: [Int] = []
         var indents: [Int?] = []
         identifiers.reserveCapacity(source.lineCount)
         indents.reserveCapacity(source.lineCount)
-        firstIdentifier.reserveCapacity(firstIdentifier.count + source.lineCount)
+        reserve(ranges.count + source.lineCount)
         var scratch: [UInt8] = []
         for line in 0 ..< source.lineCount {
             let (identifier, indent) = source.withLineBytes(at: line) { bytes in
@@ -100,26 +101,36 @@ struct LineInterner {
 
     /// The identifier of `normalized`, registering it when it is new.
     private mutating func identify(_ normalized: UnsafeRawBufferPointer) -> Int {
-        let hash = XXH64.hash(normalized)
-        if let first = firstIdentifier[hash] {
-            if matches(first, normalized) { return first }
-            for candidate in collisions[hash] ?? [] where matches(candidate, normalized) {
-                return candidate
-            }
-            let identifier = register(normalized)
-            collisions[hash, default: []].append(identifier)
-            return identifier
+        let hash = XXH64.hash(normalized, seed: seed)
+        let mask = slots.count - 1
+        var slot = Int(truncatingIfNeeded: hash) & mask
+        while slots[slot] != 0 {
+            let identifier = slots[slot] - 1
+            if hashes[identifier] == hash, matches(identifier, normalized) { return identifier }
+            slot = (slot + 1) & mask
         }
-        let identifier = register(normalized)
-        firstIdentifier[hash] = identifier
-        return identifier
-    }
-
-    private mutating func register(_ normalized: UnsafeRawBufferPointer) -> Int {
+        let identifier = ranges.count
         let start = arena.count
         arena.append(contentsOf: normalized)
         ranges.append(start ..< arena.count)
-        return ranges.count - 1
+        hashes.append(hash)
+        slots[slot] = identifier + 1
+        if 2 * ranges.count > slots.count { reserve(ranges.count) }
+        return identifier
+    }
+
+    /// Grows the table, when needed, so `count` identifiers keep it at most half full.
+    private mutating func reserve(_ count: Int) {
+        var capacity = slots.count
+        while capacity < 2 * count { capacity *= 2 }
+        guard capacity > slots.count else { return }
+        slots = Array(repeating: 0, count: capacity)
+        let mask = capacity - 1
+        for identifier in hashes.indices {
+            var slot = Int(truncatingIfNeeded: hashes[identifier]) & mask
+            while slots[slot] != 0 { slot = (slot + 1) & mask }
+            slots[slot] = identifier + 1
+        }
     }
 
     private func matches(_ identifier: Int, _ normalized: UnsafeRawBufferPointer) -> Bool {

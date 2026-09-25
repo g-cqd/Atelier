@@ -20,7 +20,7 @@ struct RopeLineSource: DiffSource {
         chunks = lines
     }
 
-    func withLineBytes<R>(at index: Int, _ body: (Span<UInt8>) throws -> R) rethrows -> R {
+    func withLineBytes<R, E: Error>(at index: Int, _ body: (Span<UInt8>) throws(E) -> R) throws(E) -> R {
         let line = chunks[index / Self.chunkSize][index % Self.chunkSize]
         return try body(line.utf8Span.span)
     }

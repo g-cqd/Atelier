@@ -63,7 +63,7 @@ let package = Package(
         // Line and intraline diffing, moved blocks, hunk layout and unified patches. Pure value code.
         .target(
             name: "AtelierDiff",
-            dependencies: ["AtelierSyntaxModel", .product(name: "AemiKernel", package: "aemi")],
+            dependencies: ["AtelierSyntaxModel", "AtelierText", .product(name: "AemiKernel", package: "aemi")],
             swiftSettings: strict
         ),
         // Hand-written scanners over borrowed UTF-8 bytes for the lexical tier; a scan allocates only its token array.
@@ -196,7 +196,8 @@ let package = Package(
             swiftSettings: strict
         ),
         .testTarget(
-            name: "AtelierDiffTests", dependencies: ["AtelierDiff", .product(name: "AemiTestKit", package: "aemi")],
+            name: "AtelierDiffTests",
+            dependencies: ["AtelierDiff", "AtelierText", .product(name: "AemiTestKit", package: "aemi")],
             swiftSettings: strict),
         .testTarget(name: "AtelierSyntaxModelTests", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
         .testTarget(
