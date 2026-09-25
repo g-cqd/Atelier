@@ -25,6 +25,21 @@ struct UTF16OffsetsTests {
     }
 
     @Test
+    func `eight bytes at a time count what one byte at a time does, on any bytes`() {
+        var random = SplitMix64(seed: 0xFF)
+        for _ in 0 ..< 500 {
+            let bytes = (0 ..< Int(random.next() % 40)).map { _ in UInt8(truncatingIfNeeded: random.next()) }
+            let start = bytes.isEmpty ? 0 : Int(random.next() % UInt64(bytes.count))
+            var byte = start
+            var unit = 0
+            UTF16Offsets.advance(&byte, to: bytes.count, in: bytes.span, counting: &unit)
+            let expected = bytes[start...].reduce(0) { $0 + ($1 & 0xC0 == 0x80 ? 0 : 1) + ($1 >= 0xF0 ? 1 : 0) }
+            #expect(byte == bytes.count)
+            #expect(unit == expected, "\(bytes) from \(start)")
+        }
+    }
+
+    @Test
     func `the first non ASCII byte is found past eight byte words and in the tail`() {
         let text = Array("abcdefghijklmnopqrs é".utf8)
         #expect(UTF16Offsets.firstNonASCII(in: text.span, from: 0) == 20)
