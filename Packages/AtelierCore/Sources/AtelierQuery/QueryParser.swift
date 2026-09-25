@@ -360,87 +360,124 @@ extension QueryParser {
 
         // Arguments: captures, strings and bare symbols. Each one read advances the scanner, and anything else is an
         // error, so the loop ends.
-        var args: [String] = []
+        var args: [PredicateArgument] = []
         while let ch = scanner.peek(), ch != ")" && ch != "#" {
             if ch == "@" {
                 let captureStart = scanner.position
                 scanner.advance()
                 let name = scanner.readCaptureName()
                 guard !name.isEmpty else { throw captureStart.syntaxError("Expected a capture name after @") }
-                args.append("@" + name)
+                args.append(.capture(name))
             } else if ch == "\"" {
-                let str = try scanner.readString()
-                args.append(str)
+                args.append(.string(try scanner.readString()))
             } else {
                 let symbolStart = scanner.position
                 let symbol = scanner.readIdentifier()
                 guard !symbol.isEmpty else {
                     throw symbolStart.syntaxError("Unexpected character \(ch.debugDescription) in a predicate")
                 }
-                args.append(symbol)
+                args.append(.string(symbol))
             }
             scanner.skipWhitespaceAndComments()
         }
 
-        let predicate = try buildPredicate(name: predName, args: args)
+        let predicate = try buildPredicate(name: predName, args: args, at: nameStart)
         return .predicate(predicate)
     }
 
     // swiftlint:disable:next cyclomatic_complexity
-    private static func buildPredicate(name: String, args: [String]) throws(QueryError) -> Predicate {
+    private static func buildPredicate(name: String, args: [PredicateArgument], at position: QueryPosition)
+        throws(QueryError) -> Predicate
+    {
         switch name {
             case "#eq?":
-                guard args.count >= 2 else { throw .syntaxError("eq? requires 2 arguments") }
-                return .eq(capture: args[0], value: args[1])
+                guard args.count >= 2 else { throw position.syntaxError("eq? requires 2 arguments") }
+                return .eq(capture: try captureArgument(of: "eq?", args, at: position), value: args[1].text)
             case "#not-eq?":
-                guard args.count >= 2 else { throw .syntaxError("not-eq? requires 2 arguments") }
-                return .notEq(capture: args[0], value: args[1])
+                guard args.count >= 2 else { throw position.syntaxError("not-eq? requires 2 arguments") }
+                return .notEq(capture: try captureArgument(of: "not-eq?", args, at: position), value: args[1].text)
             case "#match?":
-                guard args.count >= 2 else { throw .syntaxError("match? requires 2 arguments") }
-                return .match(capture: args[0], pattern: args[1])
+                guard args.count >= 2 else { throw position.syntaxError("match? requires 2 arguments") }
+                return .match(capture: try captureArgument(of: "match?", args, at: position), pattern: args[1].text)
             case "#not-match?":
-                guard args.count >= 2 else { throw .syntaxError("not-match? requires 2 arguments") }
-                return .notMatch(capture: args[0], pattern: args[1])
+                guard args.count >= 2 else { throw position.syntaxError("not-match? requires 2 arguments") }
+                let capture = try captureArgument(of: "not-match?", args, at: position)
+                return .notMatch(capture: capture, pattern: args[1].text)
             case "#any-of?":
                 guard args.count >= 2 else {
-                    throw .syntaxError("any-of? requires at least 2 arguments")
+                    throw position.syntaxError("any-of? requires at least 2 arguments")
                 }
-                return .anyOf(capture: args[0], values: Array(args.dropFirst()))
+                let capture = try captureArgument(of: "any-of?", args, at: position)
+                return .anyOf(capture: capture, values: args.dropFirst().map(\.text))
             case "#contains?":
-                guard args.count >= 2 else { throw .syntaxError("contains? requires 2 arguments") }
-                return .contains(capture: args[0], value: args[1])
+                guard args.count >= 2 else { throw position.syntaxError("contains? requires 2 arguments") }
+                return .contains(capture: try captureArgument(of: "contains?", args, at: position), value: args[1].text)
             case "#is?":
-                let property = try parseProperty(name: "is?", args: args)
+                let property = try parseProperty(name: "is?", args: args, at: position)
                 return .is(capture: property.capture, property: property.key, value: property.value)
             case "#is-not?":
-                let property = try parseProperty(name: "is-not?", args: args)
+                let property = try parseProperty(name: "is-not?", args: args, at: position)
                 return .isNot(capture: property.capture, property: property.key, value: property.value)
             default:
-                return .directive(name: name, arguments: args)
+                return .directive(name: name, arguments: args.map(\.text))
         }
+    }
+
+    /// The capture a text predicate tests, its first argument, which must be a capture as tree-sitter's Rust binding
+    /// requires ("First argument to #eq? predicate must be a capture name", lib/binding_rust/lib.rs): a quoted "@name"
+    /// is a string, not a capture.
+    private static func captureArgument(of name: String, _ args: [PredicateArgument], at position: QueryPosition)
+        throws(QueryError) -> String
+    {
+        guard case .capture = args[0] else {
+            throw position.syntaxError("\(name) takes a capture first, got the string \(args[0].text.debugDescription)")
+        }
+        return args[0].text
     }
 
     /// The arguments of a property predicate, read as tree-sitter reads them (`parse_property` in its Rust binding):
     /// one to three, of which at most one is a capture, in any position; the first string is the key and the second,
-    /// if any, its value. `(#is-not? local)` names no capture, `(#is? @node named)` one.
-    private static func parseProperty(name: String, args: [String]) throws(QueryError)
-        -> (capture: String?, key: String, value: String?)
+    /// if any, its value. `(#is-not? local)` names no capture, `(#is? @node named)` one, and in `(#is? "@node" named)`
+    /// the quoted "@node" is the key.
+    private static func parseProperty(name: String, args: [PredicateArgument], at position: QueryPosition)
+        throws(QueryError) -> (capture: String?, key: String, value: String?)
     {
         guard (1 ... 3).contains(args.count) else {
-            throw .syntaxError("\(name) takes 1 to 3 arguments, got \(args.count)")
+            throw position.syntaxError("\(name) takes 1 to 3 arguments, got \(args.count)")
         }
         var capture: String?
         var strings: [String] = []
         for argument in args {
-            if argument.hasPrefix("@") {
-                guard capture == nil else { throw .syntaxError("\(name) takes at most one capture") }
-                capture = argument
-            } else {
-                strings.append(argument)
+            switch argument {
+                case .capture:
+                    guard capture == nil else { throw position.syntaxError("\(name) takes at most one capture") }
+                    capture = argument.text
+                case .string(let string):
+                    strings.append(string)
             }
         }
-        guard let key = strings.first else { throw .syntaxError("\(name) requires a property name") }
-        guard strings.count <= 2 else { throw .syntaxError("\(name) takes one property name and one value") }
+        guard let key = strings.first else { throw position.syntaxError("\(name) requires a property name") }
+        guard strings.count <= 2 else {
+            throw position.syntaxError("\(name) takes one property name and one value")
+        }
         return (capture, key, strings.dropFirst().first)
+    }
+}
+
+/// A predicate's argument as the query writes it. Tree-sitter keeps captures and strings apart
+/// (TSQueryPredicateStepTypeCapture and TSQueryPredicateStepTypeString in lib/src/query.c), so a quoted "@name" is a
+/// string like any other, never a capture.
+private enum PredicateArgument {
+    /// `@name`, held without its `@`.
+    case capture(String)
+    /// A quoted string or a bare symbol.
+    case string(String)
+
+    /// The argument as ``Predicate`` holds it: a capture with its `@`, a string as it is.
+    var text: String {
+        switch self {
+            case .capture(let name): "@" + name
+            case .string(let string): string
+        }
     }
 }
