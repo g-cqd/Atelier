@@ -16,9 +16,41 @@ struct CodeScanner {
     func scan<Output: ScannerToken>(_ units: Span<UInt8>, as: Output.Type) -> [Output] {
         var tokens: [Output] = []
         tokens.reserveCapacity(units.count / 16 + 16)
+        _ = scan(units, from: .initial, endsText: true, into: &tokens)
+        return tokens
+    }
+
+    /// Appends the tokens of `units`, scanned from `state`, ascending and disjoint, with byte offsets.
+    /// - Parameters:
+    ///   - units: A whole text, or one line without its terminator, whose end then stands for a line break.
+    ///   - state: The state `units` starts in: ``LexState/initial`` for a text, the last line's for a line.
+    ///   - endsText: Whether the end of `units` ends the text, which a number ending in a dot tests.
+    ///   - tokens: Where the tokens go.
+    /// - Returns: The state at the end of `units`: a block comment or a string still open, or plain code.
+    /// - Complexity: O(`units.count`)
+    func scan<Output: ScannerToken>(
+        _ units: Span<UInt8>, from state: LexState, endsText: Bool, into tokens: inout [Output]
+    ) -> LexState {
         let classes = tables.classes.span
         let count = units.count
         var index = 0
+        switch state.mode {
+            case .blockComment:
+                guard let block = tables.syntax.blockComment else { break }
+                let (end, depth) = blockCommentBody(units, from: 0, depth: state.count, block: block)
+                if end > 0 { tokens.append(Output(kind: .comment, range: 0 ..< end)) }
+                guard depth == 0 else { return LexState(mode: .blockComment, count: depth) }
+                index = end
+            case .string:
+                let quote = state.quote
+                let (end, isOpen) = stringBody(
+                    units, from: 0, quote: quote, isTriple: state.isTriple, hashes: state.count)
+                if end > 0 { tokens.append(Output(kind: .string, range: 0 ..< end)) }
+                guard !isOpen else { return state }
+                index = end
+            default:
+                break
+        }
         while index < count {
             let unit = units[index]
             let flags = classes[Int(unit)]
@@ -36,44 +68,49 @@ struct CodeScanner {
                 }
             } else if flags & Class.digit != 0 {
                 let start = index
-                index = numberEnd(units, from: index, classes: classes)
+                index = numberEnd(units, from: index, classes: classes, endsText: endsText)
                 tokens.append(Output(kind: .number, range: start ..< index))
             } else if flags & Class.special != 0 {
-                let (kind, range) = scanSpecial(units, at: index, classes: classes)
+                let (kind, range, open) = scanSpecial(units, at: index, classes: classes)
                 if let kind { tokens.append(Output(kind: kind, range: range)) }
+                if let open { return open }
                 index = range.upperBound
             } else {
                 index += 1
             }
         }
-        return tokens
+        return .initial
     }
 
     /// What the special byte at `index` starts, tried in the order the languages need: a raw string, a directive, an
     /// Objective-C string, a comment, a string, an attribute or a variable. Returns the token's kind, nil when the
-    /// byte starts none, and the range to skip, which ends where scanning resumes.
+    /// byte starts none, the range to skip, which ends where scanning resumes, and the state at the end of `units`
+    /// when the token runs on past it.
     private func scanSpecial(
         _ units: Span<UInt8>, at index: Int, classes: Span<UInt8>
-    ) -> (kind: TokenKind?, range: Range<Int>) {
+    ) -> (kind: TokenKind?, range: Range<Int>, open: LexState?) {
         let unit = units[index]
         let next = index + 1 < units.count ? units[index + 1] : 0
         let nextStartsWord = classes[Int(next)] & Class.identifierStart != 0
         if tables.rawStrings, unit == ASCII.hash {
             var quote = index
             while quote < units.count, units[quote] == ASCII.hash { quote += 1 }
-            guard quote < units.count, units[quote] == ASCII.quote else { return (nil, index ..< quote) }
-            return (.string, index ..< stringEnd(units, from: quote, quote: ASCII.quote, hashes: quote - index))
+            guard quote < units.count, units[quote] == ASCII.quote else { return (nil, index ..< quote, nil) }
+            let (end, open) = stringEnd(units, from: quote, quote: ASCII.quote, hashes: quote - index)
+            return (.string, index ..< end, open)
         }
         let syntax = tables.syntax
         if syntax.hasPreprocessor, unit == ASCII.hash, nextStartsWord {
-            return (.attribute, index ..< wordEnd(units, from: index + 1, classes: classes))
+            return (.attribute, index ..< wordEnd(units, from: index + 1, classes: classes), nil)
         }
         if syntax.hasPreprocessor, unit == ASCII.at, classes[Int(next)] & Class.quote != 0 {
-            return (.string, index ..< stringEnd(units, from: index + 1, quote: next, hashes: 0))
+            let (end, open) = stringEnd(units, from: index + 1, quote: next, hashes: 0)
+            return (.string, index ..< end, open)
         }
         // A block comment first: Lua's `--[[` starts with its line comment's `--`.
         if let block = syntax.blockComment, matches(block.start, in: units, at: index) {
-            return (.comment, index ..< blockCommentEnd(units, from: index, block: block))
+            let (end, depth) = blockCommentBody(units, from: index + block.start.count, depth: 1, block: block)
+            return (.comment, index ..< end, depth > 0 ? LexState(mode: .blockComment, count: depth) : nil)
         }
         // Indexed: iterating an array of arrays allocates on every step of an unoptimized build.
         var comment = 0
@@ -83,18 +120,19 @@ struct CodeScanner {
             guard matches(pattern, in: units, at: index) else { continue }
             var end = index + pattern.count
             while end < units.count, units[end] != ASCII.newline { end += 1 }
-            return (.comment, index ..< end)
+            return (.comment, index ..< end, nil)
         }
         if classes[Int(unit)] & Class.quote != 0 {
-            return (.string, index ..< stringEnd(units, from: index, quote: unit, hashes: 0))
+            let (end, open) = stringEnd(units, from: index, quote: unit, hashes: 0)
+            return (.string, index ..< end, open)
         }
         if syntax.hasAnnotations, unit == ASCII.at, nextStartsWord {
-            return (.attribute, index ..< wordEnd(units, from: index + 1, classes: classes))
+            return (.attribute, index ..< wordEnd(units, from: index + 1, classes: classes), nil)
         }
         if syntax.hasVariables, unit == ASCII.dollar, nextStartsWord || next == ASCII.openBrace {
-            return (.attribute, index ..< variableEnd(units, from: index, classes: classes))
+            return (.attribute, index ..< variableEnd(units, from: index, classes: classes), nil)
         }
-        return (nil, index ..< index + 1)
+        return (nil, index ..< index + 1, nil)
     }
 
     /// The end of the compound keyword spelled from `start`, whose word part ends at `wordEnd`, such as Ruby's
@@ -129,14 +167,17 @@ struct CodeScanner {
         return end
     }
 
-    /// The end of a number: identifier characters, and dots followed by a digit or ending the text.
-    private func numberEnd(_ units: Span<UInt8>, from start: Int, classes: Span<UInt8>) -> Int {
+    /// The end of a number: identifier characters, and dots followed by a digit or, when `units` ends the text, ending
+    /// it.
+    private func numberEnd(_ units: Span<UInt8>, from start: Int, classes: Span<UInt8>, endsText: Bool) -> Int {
         var index = start
         while index < units.count {
             let unit = units[index]
             if classes[Int(unit)] & Class.identifier != 0 {
                 index += 1
-            } else if unit == ASCII.dot, index + 1 == units.count || classes[Int(units[index + 1])] & Class.digit != 0 {
+            } else if unit == ASCII.dot,
+                index + 1 < units.count ? classes[Int(units[index + 1])] & Class.digit != 0 : endsText
+            {
                 index += 1
             } else {
                 break
@@ -155,16 +196,16 @@ struct CodeScanner {
         return min(index + 1, units.count)
     }
 
-    /// The end of a block comment that opens at `start`, nested when the language nests them; the end of the text
-    /// when it never closes.
-    private func blockCommentEnd(
-        _ units: Span<UInt8>, from start: Int, block: (start: [UInt8], end: [UInt8])
-    ) -> Int {
+    /// Where a block comment ends when its body resumes at `start` inside `depth` levels of nesting, and the depth left
+    /// open at the end of `units`, zero once it closed. Nested when the language nests them.
+    private func blockCommentBody(
+        _ units: Span<UInt8>, from start: Int, depth: Int, block: (start: [UInt8], end: [UInt8])
+    ) -> (end: Int, depth: Int) {
         let nests = tables.syntax.nestsBlockComments
         let opening = block.start[0]
         let closing = block.end[0]
-        var index = start + block.start.count
-        var depth = 1
+        var index = start
+        var depth = depth
         while index < units.count, depth > 0 {
             let unit = units[index]
             if nests, unit == opening, matches(block.start, in: units, at: index) {
@@ -177,20 +218,31 @@ struct CodeScanner {
                 index += 1
             }
         }
-        return index
+        return (min(index, units.count), depth)
     }
 
-    /// The end of a string whose opening quote is at `start`, preceded by `hashes` hashes for a raw string: a raw
-    /// string closes only at a quote followed by as many hashes, and escapes only with a backslash followed by as
-    /// many. A tripled quote or a multi-line quote runs across lines; any other string stops at the end of its line.
-    private func stringEnd(_ units: Span<UInt8>, from start: Int, quote: UInt8, hashes: Int) -> Int {
-        let quoteFlags = tables.classes[Int(quote)]
+    /// The end of a string whose opening quote is at `start`, preceded by `hashes` hashes for a raw string, and the
+    /// state at the end of `units` when it runs on past it (``stringBody(_:from:quote:isTriple:hashes:)``).
+    private func stringEnd(_ units: Span<UInt8>, from start: Int, quote: UInt8, hashes: Int) -> (Int, LexState?) {
         let isTriple =
-            quoteFlags & Class.tripleQuote != 0 && start + 2 < units.count
+            tables.classes[Int(quote)] & Class.tripleQuote != 0 && start + 2 < units.count
             && units[start + 1] == quote && units[start + 2] == quote
-        let spansLines = isTriple || quoteFlags & Class.multilineQuote != 0
+        let (end, isOpen) = stringBody(
+            units, from: start + (isTriple ? 3 : 1), quote: quote, isTriple: isTriple, hashes: hashes)
+        return (end, isOpen ? LexState(mode: .string, quote: quote, isTriple: isTriple, count: hashes) : nil)
+    }
+
+    /// Where a string's body that resumes at `start` ends, and whether the string is still open at the end of `units`.
+    ///
+    /// A raw string closes only at a quote followed by as many hashes, and escapes only with a backslash followed by as
+    /// many. A tripled quote or a multi-line quote runs across lines; any other string stops at the end of its line,
+    /// unless an escape takes the line break, as a backslash ending a line does.
+    private func stringBody(
+        _ units: Span<UInt8>, from start: Int, quote: UInt8, isTriple: Bool, hashes: Int
+    ) -> (end: Int, isOpen: Bool) {
+        let spansLines = isTriple || tables.classes[Int(quote)] & Class.multilineQuote != 0
         let quotes = isTriple ? 3 : 1
-        var index = start + quotes
+        var index = start
         while index < units.count {
             let unit = units[index]
             if unit == ASCII.backslash {
@@ -206,14 +258,15 @@ struct CodeScanner {
                 }
             } else if unit == quote {
                 if closes(units, at: index, quote: quote, quotes: quotes, hashes: hashes) {
-                    return index + quotes + hashes
+                    return (index + quotes + hashes, false)
                 }
             } else if unit == ASCII.newline, !spansLines {
-                return index
+                return (index, false)
             }
             index += 1
         }
-        return units.count
+        // Past the end, an escape took the line break that ends `units`.
+        return (units.count, spansLines || index > units.count)
     }
 
     /// Whether `quotes` quotes and then `hashes` hashes start at `index`.
