@@ -8,13 +8,13 @@ import Testing
 
 /// Opt-in measurements of one bundled grammar per process; set `GDV_BENCH` and `ATELIER_GRAMMAR_MEASURE_NAME`.
 ///
-/// - The compile: its time, and how far it raised the process's peak footprint.
+/// - The compile: its time, wall and CPU, and how far it raised the process's peak footprint.
 /// - With `ATELIER_CORPUS_DIR`, the grammar's pinned upstream corpus, `<dir>/<name>/*.txt` (the grammar's
 ///   `SOURCE.json` names the repository and commit): each case parsed with the grammar's scanner and compared with
 ///   the tree tree-sitter gives, the first divergence of each mismatch, and the ERROR nodes and bytes of the parses,
 ///   with the scanner and without it.
-/// - With `ATELIER_LARGE_SAMPLE_DIR`, each file of `<dir>/<name>/`: its parse time, ERROR nodes and bytes, and
-///   whether the highlighter keeps the grammar for it after its quality gate.
+/// - With `ATELIER_LARGE_SAMPLE_DIR`, each file of `<dir>/<name>/`: its parse time, wall and CPU, ERROR nodes and
+///   bytes, and whether the highlighter keeps the grammar for it after its quality gate.
 @Suite
 struct BundledGrammarMeasurements {
     private static let environment = ProcessInfo.processInfo.environment
@@ -29,11 +29,13 @@ struct BundledGrammarMeasurements {
         let clock = ContinuousClock()
         let footprintBefore = Self.footprint()
         let start = clock.now
+        let cpuStart = Self.threadCPUTime()
         let compiled = try ParseTableCompiler.compile(grammar)
+        let compileCPU = Self.threadCPUTime() - cpuStart
         let compileTime = start.duration(to: clock.now)
         let peakRise = Self.footprint().peak - footprintBefore.peak
         print(
-            "MEASURE \(name) compile: \(compileTime), peak footprint +\(peakRise / 1_048_576) MiB, "
+            "MEASURE \(name) compile: \(compileTime), CPU \(compileCPU), peak footprint +\(peakRise / 1_048_576) MiB, "
                 + "\(compiled.parseTable.stateCount) states, \(compiled.lexTable.automaton.count) lexer states")
 
         let parser = GrammarParser(
@@ -157,7 +159,9 @@ struct BundledGrammarMeasurements {
         for file in try Self.files(in: directory) {
             let source = try String(contentsOf: file, encoding: .utf8)
             let start = clock.now
+            let cpuStart = Self.threadCPUTime()
             let tree = try parser.parse(source, externalScanner: scannerType?.init())
+            let parseCPU = Self.threadCPUTime() - cpuStart
             let parseTime = start.duration(to: clock.now)
             var counts = ErrorCounts()
             counts.add(tree)
@@ -165,7 +169,8 @@ struct BundledGrammarMeasurements {
             let session = LanguageHighlighter.makeSession(language: name)
             _ = session.highlightDocument(source: source)
             print(
-                "MEASURE \(name) sample \(file.lastPathComponent): \(source.utf8.count) bytes parsed in \(parseTime), "
+                "MEASURE \(name) sample \(file.lastPathComponent): \(source.utf8.count) bytes parsed in \(parseTime) "
+                    + "(CPU \(parseCPU)), "
                     + "\(counts.summary), grammar-highlighted \(session.isGrammarBacked)")
         }
         print("MEASURE \(name) samples: \(total.summary)")
@@ -212,6 +217,11 @@ struct BundledGrammarMeasurements {
             if try url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true { files.append(url) }
         }
         return files.sorted { $0.path < $1.path }
+    }
+
+    /// The CPU time the calling thread has used, which a loaded machine does not inflate as it does the wall clock.
+    private static func threadCPUTime() -> Duration {
+        .nanoseconds(Int64(clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)))
     }
 
     /// The process's physical footprint now and at its peak, in bytes; zeros if the kernel does not report them.
