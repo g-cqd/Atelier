@@ -282,7 +282,7 @@ package final class DiffTextViewCoordinator: NSObject {
     package func updateDiagnostics(_ overlay: DiagnosticOverlay?, version: Int) {
         let changed = diagnosticsDisplay.update(from: overlay, version: version)
         guard !changed.isEmpty else { return }
-        gutterView?.needsDisplay = true
+        gutterView?.redrawDiagnostics(ofRows: changed)
         guard let rendered else { return }
         textView?.redrawDiagnostics(ofRows: changed, in: rendered)
     }
