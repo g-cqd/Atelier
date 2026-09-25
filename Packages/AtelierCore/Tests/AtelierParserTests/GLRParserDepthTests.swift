@@ -72,6 +72,38 @@ struct GLRParserDepthTests {
         #expect(rootType == "s")
     }
 
+    @Test
+    func `Whether a deep stack can take a token is found on a pool-sized stack`() async throws {
+        // After `z`, the scanner is offered `Y` only if the stack can take it. Finding out reduces `a: z`, then meets,
+        // at each `x` below, two reductions on `Y`: `a: x a`, tried first, which leads one level further down, and
+        // `b: a`, which shifts `Y`. The first `b` tried is the lowest, 16,000 levels down.
+        let grammar = GrammarDefinition(
+            name: "nested_conflicts",
+            rules: [
+                ("source", .symbol("a")),
+                (
+                    "a",
+                    .choice([
+                        .seq([.string("x"), .symbol("a")]),
+                        .seq([.string("x"), .symbol("b"), .symbol("Y")]),
+                        .string("z")
+                    ])
+                ),
+                ("b", .symbol("a"))
+            ],
+            externals: [.symbol("Y")])
+        let compiled = try ParseTableCompiler.compile(grammar)
+        let parser = GLRParser(
+            parseTable: compiled.parseTable, lexTable: compiled.lexTable, productions: compiled.productions)
+        let source = String(repeating: "x", count: 16_000) + "z"
+
+        let rootType = await onThread {
+            (try? parser.parse(source, externalScanner: DecliningScanner()))?.root.type
+        }
+
+        #expect(rootType == "source")
+    }
+
     /// A parser for `s: item terminator?`, `item: left | right`, where `left` and `right` both repeat the token `x`,
     /// so a parse forks at the first `x`.
     private static func twinsParser(endingWith terminator: String?) throws -> GLRParser {
@@ -120,4 +152,15 @@ struct GLRParserDepthTests {
         guard let tree = try? parser.parse(source) else { return nil }
         return tree.root.type
     }
+}
+
+/// Declines every token: the parse only asks it for `Y`, which the grammar never needs.
+private struct DecliningScanner: GrammarExternalScanner {
+    static let externalNames = ["Y"]
+
+    mutating func scan(_ lexer: inout some ScannerLexer, validSymbols: [Bool]) -> Bool { false }
+
+    func serialize(into buffer: inout [UInt8]) {}
+
+    mutating func deserialize(_ state: ArraySlice<UInt8>) {}
 }
