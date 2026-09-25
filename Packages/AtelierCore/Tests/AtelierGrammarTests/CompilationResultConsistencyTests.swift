@@ -32,7 +32,15 @@ struct CompilationResultConsistencyTests {
     @Test
     func `A field on a step before the first is inconsistent`() throws {
         var tables = try Self.compiled()
-        tables.productions[1].fields = [-1: "left"]
+        tables.productions[1].fields = [ProductionField(step: -1, name: "left")]
+
+        #expect(!tables.isConsistent)
+    }
+
+    @Test
+    func `Fields out of step order are inconsistent`() throws {
+        var tables = try Self.compiled()
+        tables.productions[1].fields = [ProductionField(step: 1, name: "right"), ProductionField(step: 0, name: "left")]
 
         #expect(!tables.isConsistent)
     }

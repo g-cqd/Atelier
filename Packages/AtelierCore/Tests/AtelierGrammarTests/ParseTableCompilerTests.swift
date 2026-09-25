@@ -142,7 +142,7 @@ struct ParseTableCompilerTests {
                 $0.name == "source" && $0.symbols == ["lhs", "\"=\"", "rhs"]
             })
 
-        #expect(sourceRule.fields == [0: "left", 2: "right"])
+        #expect(sourceRule.fields == [ProductionField(step: 0, name: "left"), ProductionField(step: 2, name: "right")])
     }
 
     @Test

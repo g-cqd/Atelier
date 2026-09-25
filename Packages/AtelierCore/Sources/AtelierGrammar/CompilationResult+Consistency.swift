@@ -1,13 +1,16 @@
 extension ParseTableCompiler.CompilationResult {
     /// Whether every index in the tables lands inside them, as the parser and lexer assume without checking: a state,
     /// a rule, a lexer state or mode, a token, a step. Tables the compiler builds always are; tables read back from a
-    /// cache file may not be, and one bad index would trap on every launch that reads the file.
+    /// cache file may not be, and one bad index would trap on every launch that reads the file. A production's fields
+    /// must also come in increasing step order, the order the parser gives a field's nodes.
     ///
     /// - Complexity: O(n) in the size of the tables.
     public var isConsistent: Bool {
         parseTableIsConsistent && lexTable.isConsistent(stateCount: parseTable.stateCount)
             && productions.allSatisfy { production in
-                production.fields.keys.allSatisfy { $0 >= 0 } && production.aliases.keys.allSatisfy { $0 >= 0 }
+                (production.fields.first?.step ?? 0) >= 0
+                    && zip(production.fields, production.fields.dropFirst()).allSatisfy { $0.step < $1.step }
+                    && production.aliases.keys.allSatisfy { $0 >= 0 }
             }
     }
 
