@@ -678,3 +678,6 @@ answer wins (book D33 to D36):
   nothing for them.
 - **KittyCode's grammar color (D36):** fixed ahead of the tier work, so a qualifying language keeps its grammar color
   across refreshes and edits.
+- **Order of work (D37):** core and GitDiffViewer first. Steps 1 to 5 and 7 go ahead; step 6, KittyCode on the tier
+  job, is deferred with the other KittyCode-only work. Step 8 lands GitDiffViewer's half first, which needs steps 2
+  and 7 only; KittyCode's half waits for step 6.
