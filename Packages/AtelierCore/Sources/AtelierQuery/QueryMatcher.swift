@@ -118,8 +118,12 @@ public enum QueryMatcher: Sendable {
                             }
                         default:
                             if case .quantified(let inner, let quantifier) = childPattern {
+                                // `?` takes at most one child, as tree-sitter's zero-or-one step does
+                                // (TSQuantifierZeroOrOne in ts_query__parse_pattern, lib/src/query.c); `*` and `+` take
+                                // as many as match in a row.
+                                let limit = quantifier == .optional ? 1 : Int.max
                                 var matchCount = 0
-                                while childCursor < node.children.count {
+                                while matchCount < limit, childCursor < node.children.count {
                                     var candidateCaptures = localCaptures
                                     guard
                                         matchPattern(
@@ -142,7 +146,7 @@ public enum QueryMatcher: Sendable {
                                     case .zeroOrMore:
                                         break  // always OK
                                     case .optional:
-                                        break  // 0 or 1 match is fine; we stop after first non-match
+                                        break  // zero or one
                                 }
                             } else {
                                 var matched = false
