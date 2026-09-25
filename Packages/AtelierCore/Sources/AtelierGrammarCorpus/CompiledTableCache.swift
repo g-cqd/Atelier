@@ -42,6 +42,12 @@ struct CompiledTableCache: Sendable {
         return nil
     }
 
+    /// The size in bytes of the tables file stored for `key`; nil when there is none. One `stat(2)`: nothing is read.
+    func tableFileSize(for key: Key) -> Int? {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL(for: key, kind: .tables).path)
+        return (attributes?[.size] as? NSNumber)?.intValue
+    }
+
     /// Stores `outcome` for `key`. The cache only saves work, so a write that fails is dropped: the next launch
     /// compiles again.
     func store(_ outcome: Result<ParseTableCompiler.CompilationResult, GrammarError>, for key: Key) {
