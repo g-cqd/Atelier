@@ -30,7 +30,7 @@ import Testing
         let document = HoverDocument.build(
             from: HoverContent(markdown: Self.markdown, source: .languageServer), palette: .system)
         let panel = HoverDocPanel(ordersWindowIn: false)
-        panel.prepareOffscreenForTests(document: document.presented(on: .popover), appearance: appearance)
+        panel.prepareOffscreenForTests(document: document, material: .popover, appearance: appearance)
         return panel
     }
 

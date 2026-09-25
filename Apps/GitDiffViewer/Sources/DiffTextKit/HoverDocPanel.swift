@@ -148,12 +148,15 @@ package final class HoverDocPanel {
 
     private static let logger = Logger(subsystem: "fr.gcqd.GitDiffViewer", category: "HoverDocPanel")
 
-    /// Shows (or repositions and re-renders, if already shown) the panel for `document`, anchored at `anchorRect`
-    /// (in `textView`'s own coordinates) and attached as a child window of `textView`'s own window, whose
-    /// appearance it matches.
-    package func show(document: HoverDocument, anchorRect: NSRect, in textView: NSTextView) {
+    /// Shows (or repositions and re-renders, if already shown) the panel for `document` on a background made of
+    /// `material`, anchored at `anchorRect` (in `textView`'s own coordinates) and attached as a child window of
+    /// `textView`'s own window, whose appearance it matches.
+    package func show(
+        document: HoverDocument, material: HoverPanelMaterial = .liquidGlass, anchorRect: NSRect,
+        in textView: NSTextView
+    ) {
         guard let hostWindow = textView.window, let screen = hostWindow.screen else { return }
-        let (panel, size) = prepare(document: document, appearance: textView.effectiveAppearance)
+        let (panel, size) = prepare(document: document, material: material, appearance: textView.effectiveAppearance)
 
         setOrigin(forAnchorRect: anchorRect, panelSize: size, in: textView, hostWindow: hostWindow, screen: screen)
 
@@ -168,16 +171,20 @@ package final class HoverDocPanel {
     }
 
     /// Builds and sizes the same panel as ``show(document:anchorRect:in:)`` without ordering a window on screen.
-    package func prepareOffscreenForTests(document: HoverDocument, appearance: NSAppearance) {
-        _ = prepare(document: document, appearance: appearance)
+    package func prepareOffscreenForTests(
+        document: HoverDocument, material: HoverPanelMaterial = .liquidGlass, appearance: NSAppearance
+    ) {
+        _ = prepare(document: document, material: material, appearance: appearance)
     }
 
-    private func prepare(document: HoverDocument, appearance: NSAppearance) -> (NSPanel, NSSize) {
+    private func prepare(
+        document: HoverDocument, material: HoverPanelMaterial, appearance: NSAppearance
+    ) -> (NSPanel, NSSize) {
         let panel = panel ?? makePanel()
         self.panel = panel
-        if material != document.panelMaterial {
-            material = document.panelMaterial
-            panel.contentView = Self.makeBackground(document.panelMaterial, around: contentHost)
+        if self.material != material {
+            self.material = material
+            panel.contentView = Self.makeBackground(material, around: contentHost)
         }
         panel.appearance = appearance
         let contentHeight = render(document)

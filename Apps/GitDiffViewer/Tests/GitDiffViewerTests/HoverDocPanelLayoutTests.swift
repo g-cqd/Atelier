@@ -106,7 +106,7 @@ struct HoverDocPanelLayoutTests {
         let appearance = try #require(NSAppearance(named: .aqua))
 
         for (name, document) in Self.shapes {
-            panel.prepareOffscreenForTests(document: document.presented(on: material), appearance: appearance)
+            panel.prepareOffscreenForTests(document: document, material: material, appearance: appearance)
             let root = try #require(panel.contentViewForTests)
             root.layoutSubtreeIfNeeded()
             var views: [NSView] = []

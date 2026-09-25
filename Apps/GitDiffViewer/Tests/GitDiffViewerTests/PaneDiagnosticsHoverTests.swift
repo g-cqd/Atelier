@@ -56,7 +56,7 @@ struct PaneDiagnosticsHoverTests {
             for: rendered, left: .none,
             right: SideFindings(paths: [view.fileIndex: "c.swift"], findings: ["c.swift": findings]))
         let resolve = PaneDiagnostics.hoverResolver(
-            overlay: DiagnosticOverlay(rows: rows), material: { .liquidGlass },
+            overlay: DiagnosticOverlay(rows: rows),
             documentation: { _ in HoverDocument(title: "doc") })
         let row = try #require(rendered.rows.firstIndex { $0.newNumber == 1 })
         let hit = { (column: Int) in

@@ -364,6 +364,17 @@ struct DocHoverControllerTests {
         try #require(sut.controller.isPanelVisible)
     }
 
+    /// HOVER-08: the setting reaches the pane, whose controller hands it to the panel with the next document shown.
+    @Test
+    func `the panel a hover shows is made of the controller's material`() async throws {
+        let sut = try makeStayOpenSUT()
+        sut.controller.panelMaterial = .popover
+
+        try await showPanelOnRowZero(sut)
+
+        #expect(sut.panel.material == .popover)
+    }
+
     /// Row 0 at `column`, `fraction` of the way down the line.
     private func point(row: Int, column: Double, lineFraction fraction: CGFloat, in rendered: RenderedText) -> NSPoint {
         let charWidth = ("0" as NSString).size(withAttributes: [.font: rendered.palette.font]).width

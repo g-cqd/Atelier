@@ -21,6 +21,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     /// Shows documentation for the identifier under the pointer after it rests there, the same as ``DiffTextView``.
     package var hoverEnabled = false
     package var hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)?
+    /// What the documentation panel is made of, from the window's setting.
+    package var hoverPanelMaterial: HoverPanelMaterial = .liquidGlass
     /// Whether the pane rubber-bands past its edges sideways; otherwise it stops at them. It never scrolls down or
     /// up: the card list does, with its own bounce.
     package var bouncesAtEdges = false
@@ -37,7 +39,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         layouts: CardLayouts, side: RenderedSide, gutter: GutterStyle, width: CGFloat, wrapMode: WrapMode = .viewport,
         onGapDrag: ((GapDragEvent) -> Void)? = nil,
         onDisplayed: (() -> Void)? = nil, hoverEnabled: Bool = false,
-        hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil, bouncesAtEdges: Bool = false,
+        hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil,
+        hoverPanelMaterial: HoverPanelMaterial = .liquidGlass, bouncesAtEdges: Bool = false,
         diagnosticOverlay: DiagnosticOverlay? = nil, diagnosticsVersion: Int = 0,
         onDiagnosticClick: ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)? =
             nil
@@ -52,6 +55,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         self.onDisplayed = onDisplayed
         self.hoverEnabled = hoverEnabled
         self.hoverResolver = hoverResolver
+        self.hoverPanelMaterial = hoverPanelMaterial
         self.diagnosticOverlay = diagnosticOverlay
         self.diagnosticsVersion = diagnosticsVersion
         self.onDiagnosticClick = onDiagnosticClick
@@ -147,6 +151,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         }
         coordinator.hoverController.isEnabled = hoverEnabled
         coordinator.hoverController.resolve = hoverResolver
+        coordinator.hoverController.panelMaterial = hoverPanelMaterial
         coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
     }
 

@@ -53,14 +53,12 @@ final class PaneDiagnostics {
 
     /// Resolves a hover hit into `docs`' documentation styled with `palette`, joined by the findings underlined under
     /// the pointer; nil while no hover documentation model is attached.
-    func hoverResolver(docs: HoverDocumentationModel?, palette: DiffPalette, settings: ViewerSettings)
-        -> (@Sendable (HoverHit) async -> HoverDocument?)?
-    {
+    func hoverResolver(docs: HoverDocumentationModel?, palette: DiffPalette) -> (
+        @Sendable (HoverHit) async -> HoverDocument?
+    )? {
         guard let docs else { return nil }
         return Self.hoverResolver(
             overlay: overlay,
-            // Read as the hit resolves, so a change of setting reaches the next panel shown.
-            material: { await settings.hoverPanelMaterial },
             documentation: { hit in
                 let side: HoverQuerySide = hit.side == .new ? .new : .old
                 guard
@@ -74,18 +72,16 @@ final class PaneDiagnostics {
     /// Resolves a hover hit into its documentation joined by the findings underlined under the pointer (book HOVER-14),
     /// or those findings alone when there is no documentation; nil when there is neither.
     nonisolated static func hoverResolver(
-        overlay: DiagnosticOverlay, material: @escaping @Sendable () async -> HoverPanelMaterial,
-        documentation: @escaping @Sendable (HoverHit) async -> HoverDocument?
+        overlay: DiagnosticOverlay, documentation: @escaping @Sendable (HoverHit) async -> HoverDocument?
     ) -> @Sendable (HoverHit) async -> HoverDocument? {
         { hit in
-            let material = await material()
             let underPointer = overlay.row(hit.row)?.findings(underColumn: hit.utf16Column) ?? []
             let rowDiagnostics = underPointer.map { HoverDocument.DiagnosticEntry($0) }
             guard let document = await documentation(hit) else {
                 guard !rowDiagnostics.isEmpty else { return nil }
-                return HoverDocument(diagnostics: rowDiagnostics).presented(on: material)
+                return HoverDocument(diagnostics: rowDiagnostics)
             }
-            return document.adding(diagnostics: rowDiagnostics).presented(on: material)
+            return document.adding(diagnostics: rowDiagnostics)
         }
     }
 }

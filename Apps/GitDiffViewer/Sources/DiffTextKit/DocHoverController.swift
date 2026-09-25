@@ -25,6 +25,9 @@ package final class DocHoverController: NSObject {
 
     /// Resolves structured, colored documentation for a hit; `nil` means nothing to show.
     package var resolve: (@Sendable (HoverHit) async -> HoverDocument?)?
+    /// What the panel is made of (HOVER-08). A change reaches the next document shown; a panel already open keeps its
+    /// material until then.
+    package var panelMaterial: HoverPanelMaterial = .liquidGlass
     package let debounce: Duration
 
     private let clock: any Clock<Duration>
@@ -328,7 +331,7 @@ package final class DocHoverController: NSObject {
     private func show(document: HoverDocument, for hit: HoverHit) {
         guard let textView else { return }
         let panel = panel ?? builtPanel()
-        panel.show(document: document, anchorRect: hit.anchorRect, in: textView)
+        panel.show(document: document, material: panelMaterial, anchorRect: hit.anchorRect, in: textView)
         // A panel that could not show, as over a pane with no window, leaves no shown identifier behind.
         guard panel.isVisible else { return }
         cancelClose()
