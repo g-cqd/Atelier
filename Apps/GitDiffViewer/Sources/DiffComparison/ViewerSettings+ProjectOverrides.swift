@@ -45,7 +45,8 @@ extension ViewerSettings {
         \.lspServerLocations: Key.lspServerLocations, \.analyzedSides: Key.analyzedSides,
         \.appearanceScheme: Key.appearanceScheme, \.badgeScheme: Key.badgeScheme,
         \.matchesThemeAppearance: Key.matchesThemeAppearance, \.bouncesAtEdges: Key.bouncesAtEdges,
-        \.scrollsPastEnd: Key.scrollsPastEnd, \.scrollsToFirstChange: Key.scrollsToFirstChange
+        \.scrollsPastEnd: Key.scrollsPastEnd, \.scrollsToFirstChange: Key.scrollsToFirstChange,
+        \.refinesSwiftColor: Key.refinesSwiftColor
     ]
 
     /// Whether the setting behind `property` can differ per project; the Settings window greys out the others while
@@ -132,6 +133,9 @@ extension ViewerSettings {
             case Key.matchesThemeAppearance:
                 let value = defaults.object(forKey: effectiveKey(key)) as? Bool ?? false
                 if value != matchesThemeAppearance { matchesThemeAppearance = value }
+            case Key.refinesSwiftColor:
+                let value = defaults.object(forKey: effectiveKey(key)) as? Bool ?? true
+                if value != refinesSwiftColor { refinesSwiftColor = value }
             default:
                 return false
         }
