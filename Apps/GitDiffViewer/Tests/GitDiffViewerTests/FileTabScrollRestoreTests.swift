@@ -54,14 +54,15 @@ struct FileTabScrollRestoreTests {
     func `a long file's pane shown again comes back at the row it was scrolled to far down`(wrapsLines: Bool) throws {
         let memory = makeMemory()
         let sut = HostedTabPane(memory: memory)
-        let text = try Self.text(3_000)
+        // Past the text laid out above a row it places: some 530 rows of about 20 characters down.
+        let text = try Self.text(800)
         sut.show(text, path: "a.swift", wrapsLines: wrapsLines)
-        sut.scroll(to: 40_005)
+        sut.scroll(to: 8_005)
         let before = try #require(sut.top())
         #expect(text.lineStarts[before.row] > RowPlacement.textLaidOutAbove)
 
         sut.showList()
-        sut.show(try Self.text(3_000), path: "a.swift", wrapsLines: wrapsLines)
+        sut.show(try Self.text(800), path: "a.swift", wrapsLines: wrapsLines)
 
         let after = try #require(sut.top())
         #expect(after.row == before.row)
