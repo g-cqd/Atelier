@@ -1279,6 +1279,25 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
   5. Each budget is set from a measurement, and a benchmark guards it.
 - **Priority:** Must. **Related:** PERF-01, PERF-08, QUAL-08.
 
+#### PERF-11 · Syntax color arrives in tiers, each richer than the last
+- **Statement:** A file's syntax color is a tiered job. The lexer and the grammar parse start together; the lexer's
+  color shows at once and the grammar's replaces it when its parse lands; for Swift, swift-syntax and sourcekit-lsp's
+  semantic tokens refine it further when those tiers are enabled. Each tier also keeps what it learns, for the
+  features that can use it.
+- **Source:** 09-25, "imo, the highlighting should be a tiered job, lexer and grammar started in parallel, swift
+  syntax and sourcekit when enabled, used to also enrich the color syntaxing ideally and provide more information at
+  that moment as well".
+- **Acceptance criteria:**
+  1. The lexer and the grammar parse start in parallel, off the main thread. The first paint uses the lexer's color;
+     the grammar's replaces it once its parse passes the quality gate, as an attribute-only update (PERF-09).
+  2. For Swift, a swift-syntax tier and a sourcekit-lsp semantic-token tier each refine the color when enabled,
+     merged by layer, then width, then priority (3G's merger), without blocking the tiers below.
+  3. A slow, failing or disabled tier leaves the color of the tiers below it; nothing blanks or stalls.
+  4. What a tier learns (declaration kinds, symbol roles, semantic token types) is kept with the file for other
+     features, such as hover and navigation, rather than thrown away after coloring.
+  5. Both apps get the tiers through the shared core (MOD-01), and GitDiffViewer gains grammar color (4A).
+- **Priority:** Should (a design note first). **Related:** PERF-09, MOD-01, HOVER-16, LANG-01.
+
 #### PERF-10 · Switching between the file list and a single file is quick
 - **Statement:** Opening a file from the file list, and returning to the list by closing the file tabs, happen
   without a visible stall.
@@ -1853,3 +1872,4 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R118 | 09-24 | "when a file fits in the view, we should not scroll to the first change, we should just display the file fully, and in the card list, a renamed file without change should not change a file content section (be collapsed and not expandable)" | DIFF-08 (criterion 4), DIFF-07 (criterion 4) |
 | R119 | 09-25 | "does the git diffviewer use the grammar parser we use in kitty?" (answered: no, it highlights with the shared lexers and swift-syntax) | — |
 | R120 | 09-25 | "i'd like that we investigate ways to improve the one flat sidebar file list, by having a toggleable setting to group through disclosable section diffed files by commit when the 2 compared repo states share the same ancestry, it can only work in flat sidebar, for repos" | GIT-06 |
+| R121 | 09-25 | "imo, the highlighting should be a tiered job, lexer and grammar started in parallel, swift syntax and sourcekit when enabled, used to also enrich the color syntaxing ideally and provide more information at that moment as well" | PERF-11 |
