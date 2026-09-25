@@ -199,6 +199,12 @@ package final class ViewerSettings {
             if sidebarVisibility != oldValue { store(sidebarVisibility.rawValue, Key.sidebarVisibility, .appearance) }
         }
     }
+    /// The old pane's share of the length a file's two panes split between them, side by side or stacked (book
+    /// DIFF-01); 0.5 splits it evenly. Kept per window like ``sidebarVisibility`` (``windowLocalKeys``); the panes
+    /// clamp it to leave each its minimum.
+    package var paneRatio: Double {
+        didSet { if paneRatio != oldValue { store(paneRatio, Key.paneRatio, .appearance) } }
+    }
     package var wrapsLines: Bool {
         didSet { if wrapsLines != oldValue { store(wrapsLines, Key.wrapsLines, .appearance) } }
     }
@@ -410,7 +416,7 @@ package final class ViewerSettings {
 
     /// Settings each window keeps for itself: stored so the next window opens as the last one was left, never
     /// announced to the others, so hiding the sidebar in one window leaves every other window's alone.
-    static let windowLocalKeys: Set<String> = [Key.sidebarVisibility]
+    static let windowLocalKeys: Set<String> = [Key.sidebarVisibility, Key.paneRatio]
 
     /// Writes a user's edit to the adopted project's key for a scoped setting, to the base key otherwise, and
     /// announces it to every other instance, so each window on that project, or on none that overrides the key,
@@ -434,6 +440,7 @@ package final class ViewerSettings {
             defaults.string(forKey: Key.explorerPlacement).flatMap(ExplorerPlacement.init(rawValue:)) ?? .top
         sidebarVisibility =
             defaults.string(forKey: Key.sidebarVisibility).flatMap(SidebarVisibility.init(rawValue:)) ?? .all
+        paneRatio = Self.storedPaneRatio(defaults)
         wrapsLines = defaults.object(forKey: Key.wrapsLines) as? Bool ?? true
         syncsScrolling = defaults.object(forKey: Key.syncsScrolling) as? Bool ?? true
         showsChangesOnly = defaults.bool(forKey: Key.showsChangesOnly)
@@ -502,10 +509,17 @@ extension ViewerSettings {
             ?? (defaults.bool(forKey: Key.compactsFolders) ? .compact : .hierarchy)
     }
 
+    /// The stored pane ratio, or an even split when none is stored or the stored one leaves a pane nothing.
+    static func storedPaneRatio(_ defaults: UserDefaults) -> Double {
+        guard let ratio = defaults.object(forKey: Key.paneRatio) as? Double, ratio > 0, ratio < 1 else { return 0.5 }
+        return ratio
+    }
+
     enum Key {
         static let mode = "viewMode"
         static let explorerPlacement = "explorerPlacement"
         static let sidebarVisibility = "sidebarVisibility"
+        static let paneRatio = "paneRatio"
         static let wrapsLines = "wrapsLines"
         static let syncsScrolling = "syncsScrolling"
         static let showsChangesOnly = "showsChangesOnly"
