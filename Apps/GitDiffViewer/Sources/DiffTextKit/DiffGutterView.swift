@@ -229,6 +229,31 @@ package final class DiffGutterView: NSView {
         return found
     }
 
+    /// Opens `findings` of `rowIndex` as a click on the row's decorated line number opens the row's own, anchored on
+    /// that line number.
+    /// - Returns: False when nothing takes the click or the row is not laid out, true otherwise.
+    @discardableResult
+    package func showFindings(_ findings: [Finding], ofRow rowIndex: Int) -> Bool {
+        guard let onDiagnosticClick, let rect = lineNumberRect(ofRow: rowIndex) else { return false }
+        onDiagnosticClick(rowIndex, findings, rect, self)
+        return true
+    }
+
+    /// `rowIndex`'s line number in this view, as ``diagnosticHit(at:)`` measures it: the row's fragment, less the band
+    /// of a gap after it.
+    private func lineNumberRect(ofRow rowIndex: Int) -> NSRect? {
+        guard let source, let rendered, rendered.lineStarts.indices.contains(rowIndex),
+            let layoutManager = source.gutterLayoutManager, let contentManager = layoutManager.textContentManager,
+            let location = contentManager.location(
+                layoutManager.documentRange.location, offsetBy: rendered.lineStarts[rowIndex])
+        else { return nil }
+        layoutManager.ensureLayout(for: NSTextRange(location: location))
+        guard let fragment = layoutManager.textLayoutFragment(for: location) else { return nil }
+        let y = fragment.layoutFragmentFrame.minY + source.gutterInset - (clipView?.bounds.origin.y ?? 0)
+        let height = fragment.layoutFragmentFrame.height - rendered.bandSpacing(afterRow: rowIndex)
+        return NSRect(x: 0, y: y, width: bounds.width, height: height)
+    }
+
     package override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         // A press in a gap's band belongs to its handle; the rows around it keep their own clicks.

@@ -60,6 +60,15 @@ package enum HoverHitTester {
             row: location.row, anchorRect: anchorRect, identifierRange: identifierRange)
     }
 
+    /// The content row under `point`, in text-view coordinates, and the UTF-16 column of the character under it in
+    /// that row, identifier or not; nil over headers, filler rows, padding, and past a row's end.
+    @MainActor
+    package static func position(at point: NSPoint, textView: NSTextView, rendered: RenderedText) -> (
+        row: Int, utf16Column: Int
+    )? {
+        locate(point, textView: textView, rendered: rendered).map { ($0.row, $0.offset - $0.rowStart) }
+    }
+
     /// Where a point falls in the text: the character under it, its content row, and the laid-out line holding it.
     private struct Location {
         /// The character's document-absolute UTF-16 offset.
