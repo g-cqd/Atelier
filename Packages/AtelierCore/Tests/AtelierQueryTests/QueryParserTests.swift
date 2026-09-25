@@ -172,6 +172,29 @@ struct QueryParserTests {
     }
 
     @Test
+    func `A capture after a quantifier captures the repeated node`() throws {
+        let query = try QueryParser.parse(#"(annotation "@" @attribute (use_site_target)? @attribute)"#)
+        guard case .nodeMatch("annotation", let children, nil) = try #require(query.patterns.first) else {
+            throw QueryPatternExpectationError.expectedNodeMatch
+        }
+        #expect(
+            children == [
+                .literal("@", capture: "attribute"),
+                .quantified(
+                    pattern: .nodeMatch(type: "use_site_target", children: [], capture: "attribute"),
+                    quantifier: .optional)
+            ])
+    }
+
+    @Test
+    func `Quantifiers on one pattern join as tree-sitter joins them`() throws {
+        let optionalTwice = try requireQuantified(try #require(try QueryParser.parse("(a)? @x ?").patterns.first))
+        let optionalThenPlus = try requireQuantified(try #require(try QueryParser.parse("(a)?+").patterns.first))
+        #expect(optionalTwice.quantifier == .optional)
+        #expect(optionalThenPlus.quantifier == .zeroOrMore)
+    }
+
+    @Test
     func `Parse quantifier star`() throws {
         let query = try QueryParser.parse("(identifier)*")
         #expect(query.patterns.count == 1)

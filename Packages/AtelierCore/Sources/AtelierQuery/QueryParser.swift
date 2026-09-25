@@ -56,14 +56,21 @@ public enum QueryParser: Sendable {
                 throw .syntaxError("Unexpected character: \(ch)")
         }
 
-        // Check for trailing captures after pattern (e.g., (identifier) @var @name)
-        scanner.skipWhitespaceAndComments()
+        // Suffixes in any order and number, as tree-sitter reads them (ts_query__parse_pattern in lib/src/query.c):
+        // captures, `(identifier) @var @name`, and quantifiers, which join, `(use_site_target)? @attribute`.
         var allCaptures: [QueryPattern.Capture] = []
-        while scanner.peek() == "@" {
-            if let capture = try parseCapture(&scanner) {
-                allCaptures.append(capture)
-            }
+        var quantifier: Quantifier?
+        while true {
             scanner.skipWhitespaceAndComments()
+            if scanner.peek() == "@" {
+                if let capture = try parseCapture(&scanner) {
+                    allCaptures.append(capture)
+                }
+            } else if let next = readQuantifier(&scanner) {
+                quantifier = quantifier.map { $0.joined(with: next) } ?? next
+            } else {
+                break
+            }
         }
         if let first = allCaptures.first {
             pattern = attachCapture(first, to: pattern)
@@ -79,7 +86,12 @@ public enum QueryParser: Sendable {
 
         let predicates = try parsePredicates(&scanner)
         pattern = wrap(pattern, with: predicates)
-        pattern = applyQuantifier(pattern, scanner: &scanner)
+        if let next = readQuantifier(&scanner) {
+            quantifier = quantifier.map { $0.joined(with: next) } ?? next
+        }
+        if let quantifier {
+            pattern = .quantified(pattern: pattern, quantifier: quantifier)
+        }
 
         return pattern
     }
@@ -278,22 +290,6 @@ public enum QueryParser: Sendable {
         return .sequence([pattern] + predicates)
     }
 
-    private static func applyQuantifier(_ pattern: QueryPattern, scanner: inout Scanner)
-        -> QueryPattern
-    {
-        guard let next = scanner.peek(), next == "+" || next == "*" || next == "?" else {
-            return pattern
-        }
-        scanner.advance()
-        let quantifier: Quantifier
-        switch next {
-            case "+": quantifier = .oneOrMore
-            case "*": quantifier = .zeroOrMore
-            default: quantifier = .optional
-        }
-        return .quantified(pattern: pattern, quantifier: quantifier)
-    }
-
     private static func stripCapture(from pattern: QueryPattern) -> QueryPattern {
         switch pattern {
             case .nodeMatch(let type, let children, _):
@@ -305,6 +301,31 @@ public enum QueryParser: Sendable {
             default:
                 return pattern
         }
+    }
+}
+
+// MARK: - Quantifiers
+
+extension QueryParser {
+    /// The quantifier at the scanner, consumed, or nil when there is none.
+    private static func readQuantifier(_ scanner: inout Scanner) -> Quantifier? {
+        let quantifier: Quantifier
+        switch scanner.peek() {
+            case "+": quantifier = .oneOrMore
+            case "*": quantifier = .zeroOrMore
+            case "?": quantifier = .optional
+            default: return nil
+        }
+        scanner.advance()
+        return quantifier
+    }
+}
+
+extension Quantifier {
+    /// Two quantifiers on one pattern, as tree-sitter's `quantifier_join` (lib/src/query.c) combines them: the same one
+    /// twice is itself, and any other pair allows zero or more.
+    fileprivate func joined(with other: Quantifier) -> Quantifier {
+        self == other ? self : .zeroOrMore
     }
 }
 

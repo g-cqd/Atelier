@@ -111,6 +111,22 @@ struct QueryMatcherTests {
     }
 
     @Test
+    func `A capture after an optional child captures it when present`() throws {
+        let at = SyntaxNode(type: "@", byteRange: 0 ..< 1, isNamed: false)
+        let target = SyntaxNode(type: "use_site_target", byteRange: 1 ..< 6)
+        let annotation = SyntaxNode(type: "annotation", children: [at, target], byteRange: 0 ..< 6)
+        let bareAt = SyntaxNode(type: "@", byteRange: 7 ..< 8, isNamed: false)
+        let bare = SyntaxNode(type: "annotation", children: [bareAt], byteRange: 7 ..< 8)
+        let root = SyntaxNode(type: "source", children: [annotation, bare], byteRange: 0 ..< 8)
+        let tree = SyntaxTree(root: root, source: "@field @")
+
+        let query = try QueryParser.parse(#"(annotation "@" @attribute (use_site_target)? @attribute)"#)
+        let matches = QueryMatcher.execute(query: query, tree: tree)
+
+        #expect(matches.map { $0.captures.map(\.node) } == [[at, target], [bareAt]])
+    }
+
+    @Test
     func `Positional child matching respects order`() {
         let identifier = SyntaxNode(type: "identifier", byteRange: 0 ..< 1)
         let number = SyntaxNode(type: "number", byteRange: 1 ..< 2)
