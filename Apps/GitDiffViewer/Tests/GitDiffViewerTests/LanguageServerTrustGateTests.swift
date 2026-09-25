@@ -46,7 +46,7 @@ private struct TrustGate {
             at: root.appending(path: ".git", directoryHint: .isDirectory), withIntermediateDirectories: true)
         trust = RepositoryTrust(defaults: defaults)
         let policy = LanguageServerPolicy(
-            trust: trust, defaults: defaults, locate: { _ in URL(filePath: "/usr/bin/false") }, taskProvider: tasks)
+            trust: trust, defaults: defaults, locate: { _, _ in URL(filePath: "/usr/bin/false") }, taskProvider: tasks)
         let factory = factory
         registry = LanguageServerRegistry(
             admits: { root, _ in await policy.admitsSession(at: root) },

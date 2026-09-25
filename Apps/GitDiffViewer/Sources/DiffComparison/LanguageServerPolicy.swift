@@ -4,12 +4,15 @@ package import AtelierLSP
 import DiffGit
 package import Foundation
 
-/// Decides whether and how GitDiffViewer launches sourcekit-lsp: per repository root for the language-server tier,
-/// only where the user trusts the repository, and app-wide for the SDK tier, whose scratch session has no root.
+/// Decides whether and how GitDiffViewer launches its language servers (``LanguageServerDescriptor/all``): per
+/// workspace root for the language-server tier, only where the user trusts the repository that holds the root, and,
+/// for sourcekit-lsp, app-wide for the SDK tier, whose scratch session has no root.
 @MainActor
 package final class LanguageServerPolicy {
-    /// Finds sourcekit-lsp's executable for a persisted location, honoring its custom path; nil when none resolves.
-    package typealias Locate = @Sendable (ToolLocation?) async -> URL?
+    /// Finds a server's executable for its persisted location, honoring its custom path; nil when none resolves.
+    package typealias Locate = @Sendable (LanguageServerDescriptor, ToolLocation?) async -> URL?
+    /// The environment a server found at a URL runs with; nil for the app's own.
+    package typealias SessionEnvironment = @Sendable (LanguageServerDescriptor, URL) async -> [String: String]?
 
     /// The id sourcekit-lsp's location is stored under in ``ViewerSettings/lspServerLocations``.
     static let serverID = LanguageServerDescriptor.sourceKitLSP.id
@@ -17,25 +20,29 @@ package final class LanguageServerPolicy {
     private let trust: RepositoryTrust
     private let defaults: UserDefaults
     private let locate: Locate
+    private let environment: SessionEnvironment
     private let taskProvider: any TaskProvider
 
     /// - Parameters:
     ///   - trust: The user's decisions, which gate every session with a repository root.
     ///   - defaults: Where ``ViewerSettings`` persists `lspServerLocations`, app-wide and per project.
     ///   - locate: Finds the executable; ``locate(with:)`` in the app.
+    ///   - environment: The environment of a server's process; ``environment(with:)`` in the app.
     ///   - taskProvider: Spawns the shutdown of a revoked repository's session.
     package init(
         trust: RepositoryTrust, defaults: UserDefaults = .standard, locate: @escaping Locate,
-        taskProvider: any TaskProvider = .default
+        environment: @escaping SessionEnvironment = { _, _ in nil }, taskProvider: any TaskProvider = .default
     ) {
         self.trust = trust
         self.defaults = defaults
         self.locate = locate
+        self.environment = environment
         self.taskProvider = taskProvider
     }
 
-    /// Shuts a repository's session in `registry` down as soon as the user stops trusting the repository, rather than
-    /// at its idle shutdown. The registry already refuses the root from then on; this stops the server running there.
+    /// Shuts a repository's sessions in `registry` down, at its root and under it, as soon as the user stops trusting
+    /// the repository, rather than at their idle shutdown. The registry already refuses the roots from then on; this
+    /// stops the servers running there.
     package func stopSessionsOnRevocation(in registry: LanguageServerRegistry) {
         // Weak: the registry's own closures hold this policy, which holds the trust store that holds this closure.
         trust.onDecisionChanged = { [weak registry, taskProvider] root, decision in
@@ -44,40 +51,63 @@ package final class LanguageServerPolicy {
         }
     }
 
-    /// Looks sourcekit-lsp up through `discovery` the way the Tools settings do: the `GDV_SOURCEKIT_LSP` override, the
-    /// location's custom path, then the toolchain and the usual directories.
+    /// Looks a server up through `discovery` the way the Tools settings do: its `GDV_` override, the location's
+    /// custom path, then the toolchain when it has one and the usual directories.
     package static func locate(with discovery: ToolDiscovery) -> Locate {
-        { location in
-            await LanguageServerDescriptor.sourceKitLSP.locate(
-                using: discovery, customPath: location?.customPath, overridePrefix: "GDV_")
+        { server, location in
+            await server.locate(using: discovery, customPath: location?.customPath, overridePrefix: "GDV_")
         }
     }
 
-    /// Whether a sourcekit-lsp session may run at `root`, a canonical directory: sourcekit-lsp is on for `root`'s
-    /// project, and the user trusts the repository. A root the user never decided on is refused and asks the user,
-    /// once; a root where sourcekit-lsp is off asks nothing, since trusting it would start nothing.
-    package func admitsSession(at root: URL) -> Bool {
-        guard sourceKitLSPDiscoveryEnabled(sourceKitLSPLocation(forRoot: root)) else { return false }
-        switch trust.decision(for: root) {
+    /// A server's environment as ``LanguageServerDescriptor/sessionEnvironment(serverExecutable:locator:base:)``
+    /// builds it over the app's own, its runtime found through `discovery`, Homebrew's directory and the login
+    /// shell's `PATH` included, so that an app launched from the Finder starts it.
+    package static func environment(with discovery: ToolDiscovery) -> SessionEnvironment {
+        { server, executable in
+            await server.sessionEnvironment(
+                serverExecutable: executable, locator: discovery, base: ProcessInfo.processInfo.environment)
+        }
+    }
+
+    /// Whether a session of `server` may run at `root`, a canonical directory: the server is on for `root`'s project,
+    /// and the user trusts the repository that holds `root` (``trustRoot(of:)``). A repository the user never decided
+    /// on is refused and asks the user, once; a root where the server is off asks nothing, since trusting it would
+    /// start nothing.
+    package func admitsSession(at root: URL, server: LanguageServerDescriptor = .sourceKitLSP) -> Bool {
+        guard sourceKitLSPDiscoveryEnabled(location(of: server, forRoot: root)) else { return false }
+        let repository = Self.trustRoot(of: root)
+        switch trust.decision(for: repository) {
             case .trusted:
                 return true
             case .declined:
                 return false
             case nil:
-                trust.requestDecision(for: root)
+                trust.requestDecision(for: repository)
                 return false
         }
     }
 
-    /// The configuration of a sourcekit-lsp session rooted at `root`, a canonical directory; nil when the user does not
-    /// trust the repository, when sourcekit-lsp is off for `root`'s project, or when no executable resolves.
-    package func configuration(forRoot root: URL) async -> LanguageServerSession.Configuration? {
+    /// The configuration of a session of `server` rooted at `root`, a canonical directory; nil when the user does not
+    /// trust the repository that holds `root`, when the server is off for `root`'s project, or when no executable
+    /// resolves.
+    package func configuration(
+        forRoot root: URL, server: LanguageServerDescriptor = .sourceKitLSP
+    ) async -> LanguageServerSession.Configuration? {
         // Checked again although the registry admits every root first: an untrusted root never reaches a server.
-        guard trust.isTrusted(root) else { return nil }
-        let location = sourceKitLSPLocation(forRoot: root)
-        guard sourceKitLSPDiscoveryEnabled(location), let executable = await locate(location) else { return nil }
+        guard trust.isTrusted(Self.trustRoot(of: root)) else { return nil }
+        let location = location(of: server, forRoot: root)
+        guard sourceKitLSPDiscoveryEnabled(location), let executable = await locate(server, location) else {
+            return nil
+        }
         return LanguageServerSession.Configuration(
-            descriptor: .sourceKitLSP, serverExecutable: executable, workspaceRoot: root)
+            descriptor: server, serverExecutable: executable, workspaceRoot: root,
+            environment: await environment(server, executable))
+    }
+
+    /// The directory whose trust decision gates a session at `root`: the repository that holds it, which a server's
+    /// root markers can find below the repository's own root, or `root` itself outside every repository.
+    static func trustRoot(of root: URL) -> URL {
+        projectRoot(containing: root).flatMap(LanguageServerRegistry.canonicalRoot) ?? root
     }
 
     /// The executable of the SDK tier's scratch session, found from the app-wide location alone; nil when the app-wide
@@ -85,7 +115,7 @@ package final class LanguageServerPolicy {
     package func sdkServerExecutable() async -> URL? {
         let location = appWideSourceKitLSPLocation
         guard sourceKitLSPDiscoveryEnabled(location) else { return nil }
-        return await locate(location)
+        return await locate(.sourceKitLSP, location)
     }
 
     /// The SDK tier's scratch sessions over ``sdkServerExecutable()``, one per platform, in a new private probe
@@ -116,27 +146,27 @@ package final class LanguageServerPolicy {
     /// The app-wide sourcekit-lsp location. The SDK tier honours only this one: its session belongs to no
     /// repository, so no project's override applies to it.
     package var appWideSourceKitLSPLocation: ToolLocation? {
-        location(underKey: ViewerSettings.Key.lspServerLocations)
+        location(of: .sourceKitLSP, underKey: ViewerSettings.Key.lspServerLocations)
     }
 
-    /// sourcekit-lsp's location for a session rooted at `root`, as a window on `root`'s project reads it: the
-    /// project's override once it holds one, the app-wide value otherwise. `root`'s project is the repository it lies
-    /// in (``projectRoot(containing:)``); a root outside every repository has none.
-    package func sourceKitLSPLocation(forRoot root: URL) -> ToolLocation? {
+    /// `server`'s location for a session rooted at `root`, as a window on `root`'s project reads it: the project's
+    /// override once it holds one, the app-wide value otherwise. `root`'s project is the repository it lies in
+    /// (``projectRoot(containing:)``); a root outside every repository has none.
+    package func location(of server: LanguageServerDescriptor, forRoot root: URL) -> ToolLocation? {
         if let project = Self.projectRoot(containing: root) {
             let scopedKey = ViewerSettings.scopedKey(
                 ViewerSettings.Key.lspServerLocations, projectKey: ProjectIdentity(root: project).key)
-            if defaults.object(forKey: scopedKey) != nil { return location(underKey: scopedKey) }
+            if defaults.object(forKey: scopedKey) != nil { return location(of: server, underKey: scopedKey) }
         }
-        return appWideSourceKitLSPLocation
+        return location(of: server, underKey: ViewerSettings.Key.lspServerLocations)
     }
 
-    /// sourcekit-lsp's entry in the `lspServerLocations` value stored under `key`; nil when there is none, which
+    /// `server`'s entry in the `lspServerLocations` value stored under `key`; nil when there is none, which
     /// ``sourceKitLSPDiscoveryEnabled(_:)`` reads as enabled, as ``ViewerSettings`` does.
-    private func location(underKey key: String) -> ToolLocation? {
+    private func location(of server: LanguageServerDescriptor, underKey key: String) -> ToolLocation? {
         guard let data = defaults.data(forKey: key) else { return nil }
         do {
-            return try DefaultsJSON.decode([String: ToolLocation].self, from: data)[Self.serverID]
+            return try DefaultsJSON.decode([String: ToolLocation].self, from: data)[server.id]
         } catch {
             PhaseTrace.log("unreadable \(key), read as its default: \(error)")
             return nil

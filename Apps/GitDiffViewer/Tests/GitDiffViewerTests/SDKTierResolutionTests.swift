@@ -14,7 +14,7 @@ struct SDKTierResolutionTests {
         let defaults = scratchDefaults.defaults
         let policy = LanguageServerPolicy(
             trust: RepositoryTrust(defaults: defaults), defaults: defaults,
-            locate: { _ in URL(filePath: "/usr/bin/false") })
+            locate: { _, _ in URL(filePath: "/usr/bin/false") })
         let asked = Mutex<[SDKPlatform]>([])
 
         let resolved = try #require(
