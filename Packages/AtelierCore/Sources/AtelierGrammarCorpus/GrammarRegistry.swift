@@ -214,6 +214,13 @@ public final class GrammarRegistry: Sendable {
         return outcome
     }
 
+    /// The identity of `languageName`'s grammar: its language, the hash of its grammar file's bytes and the compiler's
+    /// format version, the key its compiled tables are cached under. An edited grammar or a newer compiler changes it.
+    /// - Throws: `GrammarError.fileNotFound` when no entry names the language, or the grammar loader's error.
+    public func grammarKey(for languageName: String, grammarsPath: String) throws(GrammarError) -> String {
+        try loadedGrammar(for: languageName, grammarsPath: grammarsPath).key.fileStem
+    }
+
     /// Reads a compiled table only when it is already cached; prewarming never starts a compile.
     public func cachedResult(
         for languageName: String, grammarsPath: String

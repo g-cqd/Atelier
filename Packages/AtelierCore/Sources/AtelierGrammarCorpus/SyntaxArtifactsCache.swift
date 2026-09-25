@@ -18,10 +18,13 @@ public struct SyntaxArtifacts: Sendable {
     /// Whether the grammar needs an external scanner that is not bundled; its tables are then empty.
     public let needsExternalScanner: Bool
     public let scannerType: (any GrammarExternalScanner.Type)?
+    /// The grammar's identity: its language, the hash of its `grammar.json` and the compiler's format version
+    /// (``GrammarRegistry/grammarKey(for:grammarsPath:)``).
+    public let grammarKey: String
 
     init(
         parseTable: ParseTable, lexTable: LexTable, productions: [ProductionRule], query: Query,
-        needsExternalScanner: Bool, scannerType: (any GrammarExternalScanner.Type)?
+        needsExternalScanner: Bool, scannerType: (any GrammarExternalScanner.Type)?, grammarKey: String
     ) {
         self.parseTable = parseTable
         self.lexTable = lexTable
@@ -30,6 +33,7 @@ public struct SyntaxArtifacts: Sendable {
         roles = CaptureRoles(captureNames: query.captureNames)
         self.needsExternalScanner = needsExternalScanner
         self.scannerType = scannerType
+        self.grammarKey = grammarKey
     }
 }
 
@@ -119,6 +123,12 @@ public final class SyntaxArtifactsCache: Sendable {
             return nil
         }
 
+        let grammarKey: String
+        do {
+            grammarKey = try registry.grammarKey(for: entry.name, grammarsPath: grammarsPath)
+        } catch {
+            return nil
+        }
         let needsExternals = !grammar.externals.isEmpty
         let scannerType = BundledScanners.byGrammarName[grammar.name]
 
@@ -134,7 +144,8 @@ public final class SyntaxArtifactsCache: Sendable {
                 productions: [],
                 query: query,
                 needsExternalScanner: true,
-                scannerType: nil
+                scannerType: nil,
+                grammarKey: grammarKey
             )
         }
 
@@ -158,7 +169,8 @@ public final class SyntaxArtifactsCache: Sendable {
             productions: compiled.productions,
             query: query,
             needsExternalScanner: false,
-            scannerType: scannerType
+            scannerType: scannerType,
+            grammarKey: grammarKey
         )
     }
 }
