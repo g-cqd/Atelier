@@ -66,8 +66,10 @@ let package = Package(
             swiftSettings: strict
         ),
         // Hand-written scanners over borrowed UTF-8 bytes for the lexical tier; a scan allocates only its token array.
+        // They also scan a line at a time from its entry state, over AtelierText's line sources (P1a).
         .target(
-            name: "AtelierLexers", dependencies: ["AtelierHighlighting", "AtelierSyntaxModel"], swiftSettings: strict),
+            name: "AtelierLexers", dependencies: ["AtelierHighlighting", "AtelierSyntaxModel", "AtelierText"],
+            swiftSettings: strict),
         // swift-syntax support: the syntax tier's token provider, the syntactic colour tier over SwiftIDEUtils'
         // classification, and the deep stack every swift-syntax parse and tree walk runs on.
         .target(
@@ -252,7 +254,9 @@ let package = Package(
         ),
         .testTarget(
             name: "AtelierLexersTests",
-            dependencies: ["AtelierLexers", "AtelierSyntaxModel", .product(name: "AemiTestKit", package: "aemi")],
+            dependencies: [
+                "AtelierLexers", "AtelierSyntaxModel", "AtelierText", .product(name: "AemiTestKit", package: "aemi")
+            ],
             swiftSettings: strict),
         .testTarget(
             name: "AtelierSwiftSyntaxTests",

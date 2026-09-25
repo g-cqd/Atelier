@@ -10,7 +10,30 @@ struct DataScanner {
     func scan<Output: ScannerToken>(_ units: Span<UInt8>, as: Output.Type) -> [Output] {
         var tokens: [Output] = []
         tokens.reserveCapacity(units.count / 16 + 16)
+        _ = scan(units, from: .initial, into: &tokens)
+        return tokens
+    }
+
+    /// Appends the tokens of `units`, scanned from `state`, ascending and disjoint, with byte offsets.
+    /// - Parameters:
+    ///   - units: A whole text, or one line without its terminator, whose end then stands for a line break.
+    ///   - state: The state `units` starts in: ``LexState/initial`` for a text, the last line's for a line.
+    ///   - tokens: Where the tokens go.
+    /// - Returns: The state at the end of `units`: a string still open, or plain data.
+    /// - Complexity: O(`units.count`)
+    func scan<Output: ScannerToken>(
+        _ units: Span<UInt8>, from state: LexState, into tokens: inout [Output]
+    ) -> LexState {
         var index = 0
+        if state.mode == .string {
+            let (end, isOpen) = quotedEnd(units, from: 0, quote: state.quote, isTriple: state.isTriple)
+            if end > 0 {
+                let key = !isOpen && isKey(units, endingAt: end)
+                tokens.append(Output(kind: key ? .attributeName : .string, range: 0 ..< end))
+            }
+            guard !isOpen else { return state }
+            index = end
+        }
         while index < units.count {
             let unit = units[index]
             if format != .json, unit == ASCII.hash, index == 0 || ASCII.isSpace(units[index - 1]) {
@@ -30,7 +53,9 @@ struct DataScanner {
                 tokens.append(Output(kind: .attribute, range: index ..< end))
                 index = end
             } else if unit == ASCII.quote || unit == ASCII.apostrophe && format != .json {
-                index = scanQuoted(units, from: index, quote: unit, tokens: &tokens)
+                let (end, open) = scanQuoted(units, from: index, quote: unit, tokens: &tokens)
+                if let open { return open }
+                index = end
             } else if ASCII.isDigit(unit)
                 || unit == ASCII.hyphen && index + 1 < units.count && ASCII.isDigit(units[index + 1])
             {
@@ -41,7 +66,7 @@ struct DataScanner {
                 index += 1
             }
         }
-        return tokens
+        return .initial
     }
 
     /// Whether only spaces and tabs precede `index` on its line. Checked only where a TOML table or a YAML document
@@ -82,12 +107,25 @@ struct DataScanner {
         return index
     }
 
+    /// Scans the string whose quote is at `start`; returns where scanning resumes and, when the string runs on past
+    /// the end of `units`, the state there.
     private func scanQuoted<Output: ScannerToken>(
         _ units: Span<UInt8>, from start: Int, quote: UInt8, tokens: inout [Output]
-    ) -> Int {
+    ) -> (Int, LexState?) {
         let isTriple =
             format == .toml && start + 2 < units.count && units[start + 1] == quote && units[start + 2] == quote
-        var index = start + (isTriple ? 3 : 1)
+        let (end, isOpen) = quotedEnd(units, from: start + (isTriple ? 3 : 1), quote: quote, isTriple: isTriple)
+        let key = !isOpen && isKey(units, endingAt: end)
+        tokens.append(Output(kind: key ? .attributeName : .string, range: start ..< end))
+        return (end, isOpen ? LexState(mode: .string, quote: quote, isTriple: isTriple) : nil)
+    }
+
+    /// Where a string's body that resumes at `start` ends, and whether it is still open at the end of `units`: a TOML
+    /// tripled string runs across lines, any other stops at its line's end, unless an escape takes the line break.
+    private func quotedEnd(
+        _ units: Span<UInt8>, from start: Int, quote: UInt8, isTriple: Bool
+    ) -> (end: Int, isOpen: Bool) {
+        var index = start
         while index < units.count {
             let unit = units[index]
             if unit == ASCII.backslash, quote == ASCII.quote {
@@ -96,20 +134,17 @@ struct DataScanner {
             }
             if isTriple {
                 if unit == quote, index + 2 < units.count, units[index + 1] == quote, units[index + 2] == quote {
-                    index += 3
-                    break
+                    return (index + 3, false)
                 }
             } else if unit == quote {
-                index += 1
-                break
+                return (index + 1, false)
             } else if unit == ASCII.newline {
-                break
+                return (index, false)
             }
             index += 1
         }
-        index = min(index, units.count)
-        tokens.append(Output(kind: isKey(units, endingAt: index) ? .attributeName : .string, range: start ..< index))
-        return index
+        // Past the end, an escape took the line break that ends `units`.
+        return (units.count, isTriple || index > units.count)
     }
 
     private func scanNumber<Output: ScannerToken>(
