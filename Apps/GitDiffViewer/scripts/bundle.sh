@@ -1,6 +1,7 @@
 #!/bin/sh
 # Builds GitDiffViewer in release and wraps it in .build/GitDiffViewer.app, with the diagnostic tools the app runs
-# in Contents/Helpers. Each helper has one known source, and none comes from PATH:
+# in Contents/Helpers and the grammar corpus bundle in Contents/Resources. Each helper has one known source, and
+# none comes from PATH:
 #   arcleak, dolly, deadwood  built at the commit helpers.lock pins, in a private checkout under
 #                             ~/Library/Caches/fr.gcqd.GitDiffViewer.build/tools, with only the dependencies
 #                             their committed Package.resolved pins
@@ -413,6 +414,13 @@ swift_run build -c release --product GitDiffViewer --force-resolved-versions --j
 bin_dir=$(swift_run build -c release --show-bin-path)
 mkdir -p "$staged_app/Contents/MacOS"
 cp "$bin_dir/GitDiffViewer" "$staged_app/Contents/MacOS/GitDiffViewer"
+# The grammars grammar colour reads, where GrammarCorpus.bundled() looks: the app's Contents/Resources.
+corpus=AtelierCore_AtelierGrammarCorpus.bundle
+[ -f "$bin_dir/$corpus/Contents/Resources/Grammars/languages.json" ] ||
+    [ -f "$bin_dir/$corpus/Grammars/languages.json" ] ||
+    die "the build made no $corpus with its grammars"
+mkdir -p "$staged_app/Contents/Resources"
+ditto "$bin_dir/$corpus" "$staged_app/Contents/Resources/$corpus"
 cat >"$staged_app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
