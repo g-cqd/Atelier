@@ -5,9 +5,6 @@ import Foundation
 /// Compiled grammar tables, and the errors of compiles that failed, on disk: one file per grammar file and compiler
 /// version, so a relaunch neither compiles a grammar again nor retries one that cannot compile.
 struct CompiledTableCache: Sendable {
-    /// Where `GrammarRegistry.shared` keeps its files.
-    static let defaultDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("kittycode-cache")
-
     /// What the outcome of a compile depends on: the grammar file's bytes and the compiler's format version.
     struct Key: Hashable, Sendable {
         /// `<language>-<16 hex digits of the grammar's SHA-256>-v<format version>`, safe as a file name.
