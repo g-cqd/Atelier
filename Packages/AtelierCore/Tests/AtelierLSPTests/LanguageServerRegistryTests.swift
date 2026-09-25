@@ -378,6 +378,24 @@ private func makeRegistry(
         #expect(await spy.callCount == 4)
     }
 
+    @Test
+    func `shutting a repository root down also forgets the sessions at roots under it`() async throws {
+        let scratch = ScratchRoot()
+        let spy = ConfigurationSpy()
+        let registry = makeRegistry(spy: spy)
+        let repository = try scratch.subdirectory("repo")
+        let nested = repository.appending(path: "web", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false)
+        let sibling = try scratch.subdirectory("repo-other")
+        let web = await registry.session(forRoot: nested, server: .typeScriptLanguageServer)
+        let other = await registry.session(forRoot: sibling, server: .typeScriptLanguageServer)
+
+        await registry.shutdown(root: repository)
+
+        #expect(await registry.session(forRoot: nested, server: .typeScriptLanguageServer) !== web)
+        #expect(await registry.session(forRoot: sibling, server: .typeScriptLanguageServer) === other)
+    }
+
     // MARK: - Workspace roots
 
     /// Creates `names`, relative to the scratch root, as empty files, and their directories.

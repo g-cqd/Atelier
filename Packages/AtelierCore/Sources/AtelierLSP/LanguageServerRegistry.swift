@@ -120,12 +120,14 @@ public actor LanguageServerRegistry {
         return service
     }
 
-    /// Shuts down every server's session at `root`, if any, and forgets them, so the root's next request resolves
-    /// afresh. Callers waiting on an initialization there get `nil` at once. A root that no longer resolves is looked
-    /// up by its path as given, which matches when `root` is already canonical.
+    /// Shuts down every server's session at `root` or in a directory under it, if any, and forgets them, so their
+    /// next request resolves afresh: a repository's sessions run at its root and at the nested roots its servers'
+    /// markers find. Callers waiting on an initialization there get `nil` at once. A root that no longer resolves is
+    /// looked up by its path as given, which matches when `root` is already canonical.
     public func shutdown(root: URL) async {
         let path = Self.canonicalRoot(root).map(Self.key(of:)) ?? Self.key(of: root)
-        let keys = entries.keys.filter { $0.root == path }
+        let prefix = path == "/" ? "/" : path + "/"
+        let keys = entries.keys.filter { $0.root == path || $0.root.hasPrefix(prefix) }
         var services: [LanguageServerSession] = []
         for key in keys {
             switch entries.removeValue(forKey: key) {
