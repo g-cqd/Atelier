@@ -56,6 +56,7 @@ package enum RenderLayout: Sendable, Equatable {
 package final class PreparedDiff: Sendable {
     package let title: String
     package let model: DiffModel
+    /// Each side's lexical tokens per line, in UTF-16 offsets from the line's start, ready to place on a row.
     package let oldTokens: LineTokens
     package let newTokens: LineTokens
 

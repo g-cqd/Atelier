@@ -98,6 +98,47 @@ struct LexerOffsetRegressionTests {
     }
 
     @Test
+    func `each line's tokens take its utf16 offsets on generated texts with CRLF lines and tokens that span lines`() {
+        let pieces = [
+            "let ", "x", " = ", "é", "✓", "変", "🙂", "𝔘", "\t", " // c🙂", "/* a", " 𝔘 */", "\"s🙂\"", "\"\"\"",
+            "\"open 🙂", "0x1F", "\r\n", "\n"
+        ]
+        var random = SplitMix64(seed: 0x15)
+        for _ in 0 ..< 300 {
+            let text = (0 ..< 40).map { _ in pieces[Int(random.next() % UInt64(pieces.count))] }.joined()
+            let lines = DiffModel.lines(of: text)
+            let byLine = DiffRenderer.tokensByLine(text: text, lines: lines, language: .swift)
+            // Each line's bytes where the string's own indices place them, the whole text's byte tokens cut there, and
+            // each bound moved to the UTF-16 length of the line's text before it.
+            let byteRanges = lines.map { line in
+                let start = text.utf8.distance(from: text.startIndex, to: line.startIndex)
+                return start ..< start + line.utf8.count
+            }
+            let byteLines = LineTokens(
+                LexicalHighlightEngine().highlight(utf8: Array(text.utf8), language: .swift), lineRanges: byteRanges)
+            #expect(byLine.count == lines.count)
+            for (index, line) in lines.enumerated() {
+                let bytes = Array(line.utf8)
+                let expected = byteLines[index]
+                    .map { token in
+                        let range = token.byteRange
+                        let units =
+                            Self.utf16Count(bytes[..<range.lowerBound])
+                            ..< Self.utf16Count(bytes[..<range.upperBound])
+                        return HighlightToken(
+                            byteRange: units, role: token.role, modifiers: token.modifiers, layer: token.layer,
+                            priority: token.priority)
+                    }
+                #expect(Array(byLine[index]) == expected, "line \(index) of \(text.debugDescription)")
+            }
+        }
+    }
+
+    private static func utf16Count(_ bytes: ArraySlice<UInt8>) -> Int {
+        String(decoding: bytes, as: UTF8.self).utf16.count
+    }
+
+    @Test
     func `plain files produce no lexical tokens`() {
         let text = "é\n🙂\n"
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
@@ -118,5 +159,20 @@ struct LexerOffsetRegressionTests {
             runs.append("\(range.location)+\(range.length):\(name)")
         }
         return runs
+    }
+}
+
+/// A seeded generator, so a failing case reproduces.
+private struct SplitMix64 {
+    private var state: UInt64
+
+    init(seed: UInt64) { state = seed }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var value = state
+        value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
+        return value ^ (value >> 31)
     }
 }
