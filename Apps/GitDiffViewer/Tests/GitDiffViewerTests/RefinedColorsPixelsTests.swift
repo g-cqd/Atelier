@@ -64,7 +64,8 @@ struct RefinedColorsPixelsTests {
 
         let after = try pane.pixels()
         #expect(try pane.renderingColor(at: 4) == rendered.palette.textColor)
-        #expect(try pane.renderingColor(at: 0) == keyword)
+        // `let` keeps the storage's keyword colour, so it needs no rendering attribute.
+        #expect(try pane.renderingColor(at: 0) == nil)
         #expect(after.differing(from: before, in: try pane.textBand(ofRow: 0)) > 0)
         #expect(after.differing(from: before, in: try pane.textBand(ofRow: 1)) == 0)
         let fresh = try HostedRefinedPane(rendered: rendered, sides: try Self.sides()).pixels()
