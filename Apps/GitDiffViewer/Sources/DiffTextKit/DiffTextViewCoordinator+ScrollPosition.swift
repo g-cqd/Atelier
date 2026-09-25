@@ -10,13 +10,20 @@ extension DiffTextViewCoordinator {
     /// pane was for that one, then comes back where it was itself, or starts at its top when it has no position; the
     /// same file keeps its position when `keepingScroll`, and starts at its top otherwise, as ``apply(_:keepingScroll:)``
     /// does.
+    ///
+    /// A position comes back as a row asked for does, at the end of the text view's next layout pass (see
+    /// ``scroll(toRow:in:centered:)``): its row at the pane's top again, less how far into it the pane was scrolled.
+    /// It wins over the first change, which the model does not ask for when a file comes back to its place, and it
+    /// holds even in a file that fits its pane, which one that scrolls past its end can scroll.
     package func show(_ rendered: RenderedText, keepingScroll: Bool, key: PaneScrollMemory.Key?) {
         let isAnotherFile = key != memoryKey
         if isAnotherFile { rememberPosition() }
         memoryKey = key
-        pendingPosition = nil
         apply(rendered, keepingScroll: keepingScroll && !isAnotherFile)
-        if isAnotherFile, let key, let position = scrollMemory?.position(for: key) { restore(position) }
+        guard isAnotherFile, let key, let position = scrollMemory?.position(for: key), !rendered.rows.isEmpty
+        else { return }
+        let row = min(position.row, rendered.rows.count - 1)
+        place(RowPlacement(row: row, anchor: .restored(offset: position.offset, x: position.x)))
     }
 
     /// Records where the pane is scrolled for the file on show.
@@ -33,39 +40,16 @@ extension DiffTextViewCoordinator {
         else { return nil }
         let top = clipView.bounds.minY
         let inset = textView.textContainerInset.height
-        let row =
-            layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: max(top - inset, 0)))
-            .map {
-                rendered.rowIndex(
-                    containing: contentManager.offset(
-                        from: layoutManager.documentRange.location, to: $0.rangeInElement.location))
-            } ?? rendered.rows.count - 1
-        guard let rowTop = self.top(ofRow: row) else { return nil }
+        // The fragment at the pane's top is laid out, as all that shows is: its frame is read, and nothing above it is
+        // laid out, which in a long file would cost as much as opening it at its end.
+        guard let fragment = layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: max(top - inset, 0))) else {
+            return nil
+        }
+        let row = rendered.rowIndex(
+            containing: contentManager.offset(
+                from: layoutManager.documentRange.location, to: fragment.rangeInElement.location))
+        let rowTop = fragment.layoutFragmentFrame.minY + inset
         return PaneScrollPosition(row: row, offset: Double(top - rowTop), x: Double(clipView.bounds.minX))
-    }
-
-    /// Scrolls to `position` now, or once the pane has a size when it has none yet, as a pane just made.
-    func restore(_ position: PaneScrollPosition) {
-        guard let rendered, !rendered.rows.isEmpty, let clipView = textView?.enclosingScrollView?.contentView else {
-            return
-        }
-        guard clipView.bounds.height > 0 else {
-            pendingPosition = position
-            return
-        }
-        pendingPosition = nil
-        let row = min(position.row, rendered.rows.count - 1)
-        // Laying the viewport out where the row lands can move it: the rows above it were only estimated. A second
-        // pass puts it back where it belongs, now that they are laid out.
-        for _ in 0 ..< 2 {
-            guard let rowTop = top(ofRow: row) else { return }
-            let target = NSPoint(x: max(0, position.x), y: max(0, rowTop + position.offset))
-            guard clipView.bounds.origin != target else { return }
-            // Laying out down to the row may have grown the text; give it the room to scroll there.
-            updateOverscroll(in: clipView)
-            scroll(clipView, to: target)
-            textView?.textLayoutManager?.textViewportLayoutController.layoutViewport()
-        }
     }
 
     /// Brings `row` into view at the end of the text view's next layout pass: its top three lines below the pane's top,
@@ -76,19 +60,29 @@ extension DiffTextViewCoordinator {
     /// laid out the text it shows, which a text applied in the same update has not: a row placed any earlier sat where
     /// the layout, the size or the text of the moment put it, and the pane showed it elsewhere.
     package func scroll(toRow row: Int, in scrollView: NSScrollView, centered: Bool = false) {
-        pendingPosition = nil
-        pendingScroll = RowPlacement(row: row, centered: centered)
+        place(RowPlacement(row: row, anchor: centered ? .centered : .nearTop))
+    }
+
+    /// Places `placement` at the end of the text view's next layout pass, in place of any placement pending.
+    private func place(_ placement: RowPlacement) {
+        pendingScroll = placement
         textView?.needsLayout = true
     }
 
     /// Places the row placed last again once the split view has aligned its rows, which moves them, unless the pane
     /// has been scrolled since.
     package func rowsDidAlign() {
+        placeAgainUnlessScrolled()
+    }
+
+    /// Places the row placed last again, where it was asked for, unless the pane has been scrolled since: the split
+    /// view's alignment of the rows, and a new size of the pane, have TextKit lay the text out anew, from estimates of
+    /// the rows above what shows, and the row moves with them.
+    func placeAgainUnlessScrolled() {
         guard pendingScroll == nil, let placedRow, let clipView = textView?.enclosingScrollView?.contentView,
             abs(clipView.bounds.minY - placedRow.y) < 0.5
         else { return }
-        pendingScroll = RowPlacement(row: placedRow.placement.row, centered: placedRow.placement.centered)
-        textView?.needsLayout = true
+        place(RowPlacement(row: placedRow.placement.row, anchor: placedRow.placement.anchor))
     }
 
     /// Sizes the pane to what TextKit laid out in the pass that ended, then places a row asked for.
@@ -97,36 +91,41 @@ extension DiffTextViewCoordinator {
         placePendingScroll()
     }
 
-    /// Places the row of ``scroll(toRow:in:centered:)``, if any, once the pane has a size, and checks it again at the
-    /// end of the next layout pass, until it stays in place.
+    /// Places the row of ``scroll(toRow:in:centered:)``, if any, once the pane has a size, and checks it again until it
+    /// stays in place.
     ///
     /// TextKit places a row after its estimates of the rows above it that it has not laid out, and moves it as it lays
-    /// them out: the text is laid out down to the row first. Rows can still move once placed: side by side, the other
-    /// pane's placement scrolls this one along, and TextKit lays out what then shows from its estimates.
+    /// them out: the text is laid out down to the row first. Rows can still move once placed, as TextKit lays out what
+    /// shows there and side by side as the other pane scrolls this one along: each placement lays the viewport out and
+    /// reads the row again, within this pass. A check left for the next pass would not come: a view that asks for
+    /// layout while it lays out is not laid out again for it.
     private func placePendingScroll() {
-        guard var placement = pendingScroll, let textView, let rendered,
+        guard let placement = pendingScroll, let textView, let rendered,
             let clipView = textView.enclosingScrollView?.contentView, clipView.bounds.height > 0
         else { return }
-        guard let top = top(ofRow: placement.row) else {
-            pendingScroll = nil
-            return
+        pendingScroll = nil
+        for _ in 0 ..< RowPlacement.passes {
+            guard let top = top(ofRow: placement.row) else { return }
+            updateOverscroll(in: clipView)
+            let target: NSPoint
+            switch placement.anchor {
+                case .restored(let offset, let x):
+                    target = NSPoint(x: max(0, x), y: clamped(top + offset, in: clipView))
+                case .nearTop, .centered:
+                    let margin =
+                        placement.anchor == .centered
+                        ? (clipView.bounds.height - rendered.lineHeight) / 2 : 3 * rendered.lineHeight
+                    // A text that fits the pane shows whole, from its top.
+                    let y = contentHeight() > clipView.bounds.height ? clamped(top - margin, in: clipView) : 0
+                    target = NSPoint(x: clipView.bounds.minX, y: y)
+            }
+            guard abs(clipView.bounds.minY - target.y) >= 0.5 || abs(clipView.bounds.minX - target.x) >= 0.5 else {
+                break
+            }
+            scroll(clipView, to: target)
+            textView.textLayoutManager?.textViewportLayoutController.layoutViewport()
         }
-        updateOverscroll(in: clipView)
-        let margin = placement.centered ? (clipView.bounds.height - rendered.lineHeight) / 2 : 3 * rendered.lineHeight
-        // A text that fits the pane shows whole, from its top.
-        let target = contentHeight() > clipView.bounds.height ? clamped(top - margin, in: clipView) : 0
-        let isInPlace = placement.top.map { abs($0 - top) < 0.5 } == true && abs(clipView.bounds.minY - target) < 0.5
-        guard !isInPlace, placement.passes < RowPlacement.passes else {
-            pendingScroll = nil
-            placedRow = (placement, clipView.bounds.minY)
-            return
-        }
-        scroll(clipView, toY: target)
-        textView.textLayoutManager?.textViewportLayoutController.layoutViewport()
-        placement.top = top
-        placement.passes += 1
-        pendingScroll = placement
-        textView.needsLayout = true
+        placedRow = (placement, clipView.bounds.minY)
     }
 
     /// The top of `row`'s line in the text view, laying the text out from its start down to the row.
@@ -143,12 +142,6 @@ extension DiffTextViewCoordinator {
         return fragment.layoutFragmentFrame.minY + textView.textContainerInset.height
     }
 
-    /// Scrolls `clipView` down to `y`, kept within the text view: never above its top, never past its end, where no
-    /// text is drawn.
-    private func scroll(_ clipView: NSClipView, toY y: CGFloat) {
-        scroll(clipView, to: NSPoint(x: clipView.bounds.minX, y: y))
-    }
-
     /// Scrolls `clipView` to `point`, its height kept within the text view.
     func scroll(_ clipView: NSClipView, to point: NSPoint) {
         clipView.scroll(to: NSPoint(x: point.x, y: clamped(point.y, in: clipView)))
@@ -161,14 +154,22 @@ extension DiffTextViewCoordinator {
     }
 }
 
-/// A row a file pane was asked to show, and how its placement went so far.
+/// A row a file pane was asked to show, where in the pane, and how its placement went so far.
 struct RowPlacement {
+    /// Where the row goes in the pane.
+    enum Anchor: Equatable {
+        /// Its top three lines below the pane's top: a change, or a finding.
+        case nearTop
+        /// Its middle at the pane's middle: a click in the minimap.
+        case centered
+        /// Where a remembered position had it: the pane's top `offset` points below the row's top, and scrolled `x`
+        /// points sideways (book TAB-10).
+        case restored(offset: Double, x: Double)
+    }
+
     /// The most placements one request makes: its own, then those that follow rows moved by layout.
     static let passes = 4
 
     let row: Int
-    let centered: Bool
-    /// Where the row lay when last placed, in the text view.
-    var top: CGFloat?
-    var passes = 0
+    let anchor: Anchor
 }
