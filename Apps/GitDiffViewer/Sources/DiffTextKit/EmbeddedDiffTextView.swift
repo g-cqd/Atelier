@@ -34,6 +34,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     /// Called with a row's findings and the clicked line number's frame, in the gutter's coordinates.
     package var onDiagnosticClick:
         ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)?
+    /// Colours a tier after the lexer found for the text's sides, drawn over the lexer's (``refined(with:)``).
+    package var refinedSides: RefinedSides?
 
     package init(
         layouts: CardLayouts, side: RenderedSide, gutter: GutterStyle, width: CGFloat, wrapMode: WrapMode = .viewport,
@@ -117,6 +119,9 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
             gutterView: gutterView, scrollView: nil, contentView: scrollView, minimapView: minimapView)
         context.coordinator.textView = textView
         context.coordinator.gutterView = gutterView
+        if let layoutManager = textView.textLayoutManager {
+            context.coordinator.refinedColors.install(on: layoutManager)
+        }
         context.coordinator.hoverController.attach(to: textView) { [weak coordinator = context.coordinator] in
             coordinator?.layout?.rendered
         }
@@ -158,6 +163,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         coordinator.hoverController.resolve = hoverResolver
         coordinator.hoverController.panelMaterial = hoverPanelMaterial
         coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
+        coordinator.refinedColors.update(rendered: layout.rendered, sides: refinedSides, view: textView)
     }
 
     /// Sizes the text view to the layout. Lines that fit take the clip view's width exactly and follow it: the width
@@ -212,6 +218,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         package let hoverController = DocHoverController()
         /// The storage the text view shows until it shows a layout's.
         let emptyStorage = NSTextContentStorage()
+        /// The colours drawn over the lexer's once a later tier lands (PERF-11).
+        package let refinedColors = RefinedColors()
         /// The diagnostics this pane draws, which its gutter and every fragment its text view lays out hold.
         package let diagnostics = PaneDiagnosticsDisplay()
 

@@ -44,6 +44,8 @@ package struct DiffTextView: NSViewRepresentable {
     package var scrollsPastEnd = false
     /// Whether the pane rubber-bands past its edges, down, up and sideways; otherwise it stops at them.
     package var bouncesAtEdges = false
+    /// Colours a tier after the lexer found for the text's sides, drawn over the lexer's (``refined(with:)``).
+    package var refinedSides: RefinedSides?
 
     package init(
         rendered: RenderedText, gutter: GutterStyle, keepsScrollPosition: Bool = false, wrapsLines: Bool = true,
@@ -161,6 +163,10 @@ package struct DiffTextView: NSViewRepresentable {
         )
         context.coordinator.scrollMemory = scrollMemory
         context.coordinator.show(rendered, keepingScroll: false, key: memoryKey)
+        if let layoutManager = textView.textLayoutManager {
+            context.coordinator.refinedColors.install(on: layoutManager)
+        }
+        context.coordinator.refinedColors.update(rendered: rendered, sides: refinedSides, view: textView)
         // A new pane shows its first render here, and `updateNSView` only reports the renders that replace it.
         onDisplayed?()
         context.coordinator.hoverController.attach(to: textView) { [weak coordinator = context.coordinator] in
@@ -205,6 +211,7 @@ package struct DiffTextView: NSViewRepresentable {
             coordinator.show(rendered, keepingScroll: keepsScrollPosition, key: memoryKey)
             onDisplayed?()
         }
+        coordinator.refinedColors.update(rendered: rendered, sides: refinedSides, view: coordinator.textView)
         if let scrollRequest, coordinator.handledScrollRequest != scrollRequest.id {
             coordinator.handledScrollRequest = scrollRequest.id
             coordinator.scroll(toRow: scrollRequest.row, in: scrollView)
@@ -245,6 +252,8 @@ package struct DiffTextView: NSViewRepresentable {
 package final class DiffTextViewCoordinator: NSObject {
     package let fragmentProvider = DiffFragmentProvider()
     package let hoverController = DocHoverController()
+    /// The colours drawn over the lexer's once a later tier lands (PERF-11).
+    package let refinedColors = RefinedColors()
     package var metrics: ViewportMetrics { fragmentProvider.metrics }
     package weak var textView: NSTextView?
     package weak var gutterView: DiffGutterView?
