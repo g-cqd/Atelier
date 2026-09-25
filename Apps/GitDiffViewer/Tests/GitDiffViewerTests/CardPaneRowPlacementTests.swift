@@ -74,6 +74,53 @@ struct CardPaneRowPlacementTests {
         #expect(separator >= rowBelow - revealed.gapBandHeight && separator < rowBelow)
     }
 
+    /// TextKit drops the layout of the rows a pass no longer shows; laid out again from what shows, rows above it sat
+    /// a wrapped row's extra lines away from where the card measured them.
+    @Test
+    func `a wrapped card scrolled deep and back shows each row where the card measured it`() throws {
+        let rendered = Self.file(lines: 600)
+        let sut = CardInList(showing: rendered, wrapMode: .viewport)
+        let text = try #require(rendered.unified)
+        let measured = MeasuredRows(text, wrapWidth: sut.wrapWidth)
+
+        for y in [6_000, 6_400, 6_800, 6_400, 6_000] {
+            sut.scroll(toCardY: CGFloat(y))
+            let shown = sut.shownRows()
+            try #require(shown.count > 10, "rows show at \(y)")
+            for (row, top) in shown {
+                #expect(abs(top - (measured.top(ofRow: row) + sut.inset)) < 0.5, "row \(row) at \(y)")
+            }
+        }
+    }
+
+    /// A card lays its text out from its top, so rows TextKit drops above what shows are typeset again on the next
+    /// scroll step, from the top. The card's layout manager declines the message TextKit drops them with, and the card
+    /// places its container itself only while TextKit still sends it: a later TextKit that renames it fails here.
+    @Test
+    func `a card's layout manager declines to drop the rows it laid out`() throws {
+        let sut = CardInList(showing: Self.file(lines: 40))
+        let flush = NSSelectorFromString("flushTextLayoutFragmentsFromLocation:direction:")
+
+        let layoutManager = try #require(sut.textView?.textLayoutManager)
+
+        #expect(NSTextLayoutManager.instancesRespond(to: flush))
+        #expect(layoutManager is RetainingTextLayoutManager)
+        #expect(!layoutManager.responds(to: flush))
+        #expect((sut.textView as? DiffPaneTextView)?.placesContainerAtInset == true)
+    }
+
+    /// AppKit works out a text view's container origin from its whole laid-out text when the container keeps its own
+    /// width, as a wrapped card's does, and reads it on every pass.
+    @Test
+    func `a wrapped card showing its top lays out only the rows near its top`() {
+        let sut = CardInList(showing: Self.file(lines: 600), wrapMode: .viewport)
+
+        let laidOut = sut.fragments()
+
+        #expect(!laidOut.isEmpty)
+        #expect(laidOut.count < 100, "\(laidOut.count) rows of 600 laid out")
+    }
+
     @Test
     func `a card that grows while scrolled deep still shows its last line at its end`() throws {
         let sut = CardInList(showing: Self.file(lines: 400))
@@ -96,10 +143,17 @@ struct CardPaneRowPlacementTests {
 private struct MeasuredRows {
     private let tops: [Int: CGFloat]
 
-    init(_ rendered: RenderedText) {
+    /// - Parameters:
+    ///   - rendered: The card's text.
+    ///   - wrapWidth: The width the card wraps at, or nil for a card that never wraps.
+    init(_ rendered: RenderedText, wrapWidth: CGFloat? = nil) {
         let layout = StaticTextLayout(rendered: rendered)
-        // A column no row reaches lays the whole text out, one line per row, as the card measures it.
-        layout.layOut(mode: .column(100_000), viewportWidth: 600)
+        if let wrapWidth {
+            layout.layOut(mode: .viewport, viewportWidth: wrapWidth)
+        } else {
+            // A column no row reaches lays the whole text out, one line per row, as the card measures it.
+            layout.layOut(mode: .column(100_000), viewportWidth: 600)
+        }
         let layoutManager = layout.layoutManager
         var tops: [Int: CGFloat] = [:]
         let start = layoutManager.documentRange.location
@@ -133,9 +187,11 @@ private final class CardInList {
     private let list: NSScrollView
     private let document = FlippedDocument()
     private let body: NSHostingController<EmbeddedDiffTextView>
+    private let wrapMode: WrapMode
 
-    init(showing rendered: RenderedDiff) {
-        body = NSHostingController(rootView: Self.pane(rendered))
+    init(showing rendered: RenderedDiff, wrapMode: WrapMode = .none) {
+        self.wrapMode = wrapMode
+        body = NSHostingController(rootView: Self.pane(rendered, wrapMode: wrapMode))
         body.sizingOptions = []
         body.safeAreaRegions = []
         list = NSScrollView(frame: NSRect(x: 0, y: 0, width: Self.width, height: 300))
@@ -149,9 +205,9 @@ private final class CardInList {
         place()
     }
 
-    private static func pane(_ rendered: RenderedDiff) -> EmbeddedDiffTextView {
+    private static func pane(_ rendered: RenderedDiff, wrapMode: WrapMode) -> EmbeddedDiffTextView {
         EmbeddedDiffTextView(
-            layouts: CardLayouts(rendered: rendered), side: .unified, gutter: .dual, width: width, wrapMode: .none)
+            layouts: CardLayouts(rendered: rendered), side: .unified, gutter: .dual, width: width, wrapMode: wrapMode)
     }
 
     var textView: NSTextView? { Self.first(NSTextView.self, in: body.view) }
@@ -164,7 +220,7 @@ private final class CardInList {
 
     /// Shows a new render of the card, as the list does when a reveal or a reload renders it again.
     func show(_ rendered: RenderedDiff) {
-        body.rootView = Self.pane(rendered)
+        body.rootView = Self.pane(rendered, wrapMode: wrapMode)
         place()
     }
 
@@ -201,6 +257,25 @@ private final class CardInList {
         }
         return rows
     }
+
+    /// The fragment of each row the card's text view holds laid out, shown or not, read without laying anything out.
+    func fragments() -> [Int: NSTextLayoutFragment] {
+        guard let layoutManager = textView?.textLayoutManager, let content = layoutManager.textContentManager,
+            let rendered = gutter?.rendered
+        else { return [:] }
+        let start = layoutManager.documentRange.location
+        var fragments: [Int: NSTextLayoutFragment] = [:]
+        layoutManager.enumerateTextLayoutFragments(from: start) { fragment in
+            guard fragment.state == .layoutAvailable else { return true }
+            let offset = content.offset(from: start, to: fragment.rangeInElement.location)
+            fragments[rendered.rowIndex(containing: offset)] = fragment
+            return true
+        }
+        return fragments
+    }
+
+    /// The width the card's text wraps at.
+    var wrapWidth: CGFloat { textView?.textContainer?.size.width ?? .nan }
 
     /// The y the gutter gives each row's line number that shows, in the card.
     func gutterRows() -> [Int: CGFloat] {
