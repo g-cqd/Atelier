@@ -24,6 +24,8 @@ package struct DiffTextView: NSViewRepresentable {
     /// Shows documentation for the identifier under the pointer after it rests there.
     package var hoverEnabled = false
     package var hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)?
+    /// What the documentation panel is made of, from the window's setting.
+    package var hoverPanelMaterial: HoverPanelMaterial = .liquidGlass
     /// Diagnostics drawn over this pane's rows: a squiggle in the text, and a tinted line number in the gutter.
     package var diagnosticOverlay: DiagnosticOverlay?
     /// Bumped by the caller whenever `diagnosticOverlay`'s content changes in place (`replace(_:)`), since the
@@ -51,6 +53,7 @@ package struct DiffTextView: NSViewRepresentable {
         onGapDrag: ((GapDragEvent) -> Void)? = nil,
         onDisplayed: (() -> Void)? = nil, hoverEnabled: Bool = false,
         hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil,
+        hoverPanelMaterial: HoverPanelMaterial = .liquidGlass,
         diagnosticOverlay: DiagnosticOverlay? = nil, diagnosticsVersion: Int = 0,
         onDiagnosticClick: ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)? =
             nil,
@@ -74,6 +77,7 @@ package struct DiffTextView: NSViewRepresentable {
         self.onDisplayed = onDisplayed
         self.hoverEnabled = hoverEnabled
         self.hoverResolver = hoverResolver
+        self.hoverPanelMaterial = hoverPanelMaterial
         self.diagnosticOverlay = diagnosticOverlay
         self.diagnosticsVersion = diagnosticsVersion
         self.onDiagnosticClick = onDiagnosticClick
@@ -194,6 +198,7 @@ package struct DiffTextView: NSViewRepresentable {
         splitController?.syncsScrolling = syncsScrolling
         coordinator.hoverController.isEnabled = hoverEnabled
         coordinator.hoverController.resolve = hoverResolver
+        coordinator.hoverController.panelMaterial = hoverPanelMaterial
         coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
         coordinator.scrollMemory = scrollMemory
         if coordinator.rendered?.id != rendered.id {

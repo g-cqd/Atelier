@@ -17,10 +17,12 @@ struct HoverPanelMaterialTests {
             string: "A value type describing how a capture session should be configured.",
             attributes: [.font: NSFont.systemFont(ofSize: 12)]))
 
-    private func preparedPanel(_ document: HoverDocument, panel: HoverDocPanel = HoverDocPanel(ordersWindowIn: false))
-        throws -> HoverDocPanel
-    {
-        panel.prepareOffscreenForTests(document: document, appearance: try #require(NSAppearance(named: .aqua)))
+    private func preparedPanel(
+        _ document: HoverDocument, material: HoverPanelMaterial = .liquidGlass,
+        panel: HoverDocPanel = HoverDocPanel(ordersWindowIn: false)
+    ) throws -> HoverDocPanel {
+        panel.prepareOffscreenForTests(
+            document: document, material: material, appearance: try #require(NSAppearance(named: .aqua)))
         return panel
     }
 
@@ -42,7 +44,7 @@ struct HoverPanelMaterialTests {
 
     @Test
     func `a panel is made of the popover material when the setting asks for it`() throws {
-        let panel = try preparedPanel(Self.document.presented(on: .popover))
+        let panel = try preparedPanel(Self.document, material: .popover)
 
         let effectView = try #require(panel.contentViewForTests as? NSVisualEffectView)
         #expect(effectView.material == .popover)
@@ -51,7 +53,7 @@ struct HoverPanelMaterialTests {
 
     @Test(arguments: HoverPanelMaterial.allCases)
     func `the background is clipped to the panel's corners in a clear window`(material: HoverPanelMaterial) throws {
-        let panel = try preparedPanel(Self.document.presented(on: material))
+        let panel = try preparedPanel(Self.document, material: material)
         let background = try #require(panel.contentViewForTests)
         let window = try #require(panel.windowForTests)
 
@@ -68,7 +70,7 @@ struct HoverPanelMaterialTests {
     /// is all zeros, premultiplied or not.
     @Test(arguments: HoverPanelMaterial.allCases)
     func `no square corner of the material shows past the rounded shape`(material: HoverPanelMaterial) throws {
-        let panel = try preparedPanel(Self.document.presented(on: material))
+        let panel = try preparedPanel(Self.document, material: material)
         let background = try #require(panel.contentViewForTests)
         background.layoutSubtreeIfNeeded()
         let bitmap = try #require(background.bitmapImageRepForCachingDisplay(in: background.bounds))
@@ -91,7 +93,7 @@ struct HoverPanelMaterialTests {
     func `a panel shown again follows a changed material, content and all`() throws {
         let panel = HoverDocPanel(ordersWindowIn: false)
         for material in [HoverPanelMaterial.liquidGlass, .popover, .liquidGlass] {
-            _ = try preparedPanel(Self.document.presented(on: material), panel: panel)
+            _ = try preparedPanel(Self.document, material: material, panel: panel)
             let background = try #require(panel.contentViewForTests)
             background.layoutSubtreeIfNeeded()
 
