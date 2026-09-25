@@ -85,4 +85,19 @@ extension GitClient {
         return GitCommitPage(
             commits: commits, isComplete: isComplete, continuation: firstParent && !isComplete ? oldestParent : nil)
     }
+
+    /// The working tree's changes on top of `HEAD`: every tracked file whose content on disk or in the index differs
+    /// from `HEAD` (`git diff --raw -M HEAD`, renames detected, the new blob unknown for a file only on disk), then
+    /// every untracked file git does not ignore, as an addition. A submodule's own working tree is not entered, since
+    /// git would obey its configuration, which the gate never saw.
+    /// - Throws: ``GitError`` when git fails, for example in a repository with no commit yet.
+    public func uncommittedChanges() async throws -> [GitFileChange] {
+        async let tracked = run([
+            "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--no-relative", "--ignore-submodules=dirty",
+            "--no-abbrev", "--raw", "-M", "-z", "--end-of-options", "HEAD", "--"
+        ])
+        async let untracked = run(["ls-files", "-z", "--others", "--exclude-standard"])
+        return GitParsers.rawChanges(try await tracked)
+            + GitParsers.paths(try await untracked).map { GitFileChange(status: .added, path: $0) }
+    }
 }
