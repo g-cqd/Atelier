@@ -12,6 +12,31 @@ package final class DiffPaneTextView: NSTextView {
     /// Called at the end of each layout pass, once TextKit has laid out what shows.
     package var onLayout: (() -> Void)?
 
+    /// Whether the text container sits at the container inset exactly, as a card's does, instead of where AppKit
+    /// puts it.
+    ///
+    /// AppKit reads the origin on every pass, to place the viewport and to set up drawing, and works it out from the
+    /// text's laid-out size when the container does not follow the view's width, as a wrapped card's does not: each
+    /// read lays out the whole text first. A card's container is as wide as its view and starts at the inset, so its
+    /// origin needs none of that.
+    package var placesContainerAtInset = false {
+        didSet { if placesContainerAtInset != oldValue { needsLayout = true } }
+    }
+
+    /// Whether the view sizes itself to its text when AppKit asks, as when the clip view around it changes frame.
+    /// A card sizes its text view itself, and TextKit lays the whole text out to answer.
+    package var sizesToFitText = true
+
+    package override func sizeToFit() {
+        guard sizesToFitText else { return }
+        super.sizeToFit()
+    }
+
+    package override var textContainerOrigin: NSPoint {
+        guard placesContainerAtInset else { return super.textContainerOrigin }
+        return NSPoint(x: textContainerInset.width, y: textContainerInset.height)
+    }
+
     package override func layout() {
         super.layout()
         onLayout?()

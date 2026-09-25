@@ -84,11 +84,16 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
 
-        let textView = DiffPaneTextView(usingTextLayoutManager: true)
-        // Each row where the card measured it: see ContiguousTextContainer.
-        if let container = textView.textContainer {
-            textView.replaceTextContainer(ContiguousTextContainer(size: container.size))
-        }
+        // Each row where the card measured it, and laid out once: see ContiguousTextContainer and
+        // RetainingTextLayoutManager. The layout manager joins a layout's storage in `attach`.
+        let container = ContiguousTextContainer(size: NSSize(width: 0, height: DiffPaneMetrics.unboundedExtent))
+        let layoutManager = RetainingTextLayoutManager()
+        layoutManager.textContainer = container
+        context.coordinator.emptyStorage.addTextLayoutManager(layoutManager)
+        let textView = DiffPaneTextView(frame: .zero, textContainer: container)
+        textView.placesContainerAtInset = RetainingTextLayoutManager.retainsFragments
+        // The card sizes the text view: see `size`.
+        textView.sizesToFitText = false
         textView.isEditable = false
         textView.isSelectable = true
         textView.isRichText = false
@@ -205,6 +210,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         package var appliedSize: NSSize?
         package var appliedMode: WrapMode?
         package let hoverController = DocHoverController()
+        /// The storage the text view shows until it shows a layout's.
+        let emptyStorage = NSTextContentStorage()
         /// The diagnostics this pane draws, which its gutter and every fragment its text view lays out hold.
         package let diagnostics = PaneDiagnosticsDisplay()
 
@@ -262,4 +269,27 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
 /// (`NSTextLayoutManager.textContainer`). A card that wraps is laid out whole either way.
 private final class ContiguousTextContainer: NSTextContainer {
     override var isSimpleRectangularTextContainer: Bool { false }
+}
+
+/// A layout manager that keeps every row it laid out, where TextKit's viewport would drop what it no longer shows.
+///
+/// After each viewport pass, TextKit discards the layout of the rows outside the viewport, by sending
+/// `flushTextLayoutFragmentsFromLocation:direction:` to a layout manager that responds to it. A card's container makes
+/// TextKit lay out from the top (``ContiguousTextContainer``), so each scroll step typeset again every row above what
+/// shows, up to a second a step deep in a 20,000-row card (CardScrollBenchmark). Declining that message keeps the rows
+/// laid out, as the card's own measuring layout keeps them, so a step only walks the rows above. It holds the layout of
+/// every row down to the deepest one shown, which the card's measuring layout already holds when it wraps.
+///
+/// Nothing private is called: the class only says it does not respond. If TextKit stops asking under that name,
+/// ``retainsFragments`` turns false, and cards place their container as AppKit does, which lays the text out again as
+/// before (``DiffPaneTextView/placesContainerAtInset``).
+final class RetainingTextLayoutManager: NSTextLayoutManager {
+    private static let flush = NSSelectorFromString("flushTextLayoutFragmentsFromLocation:direction:")
+
+    /// Whether TextKit flushes under the name this class declines, so that its layout managers keep what they laid out.
+    static let retainsFragments = NSTextLayoutManager.instancesRespond(to: flush)
+
+    override func responds(to selector: Selector!) -> Bool {
+        selector == Self.flush ? false : super.responds(to: selector)
+    }
 }
