@@ -14,6 +14,9 @@ package struct CommitGroupsState: Equatable, Sendable {
     package var isUpdating = false
     /// The range was listed with every parent, since the left side sits inside a branch the right side merged.
     package var includesMergedBranches = false
+    /// The commit the range's tip resolved to when ``grouping`` was built: `HEAD`'s when the right side is the working
+    /// tree, which Uncommitted Changes shows its files against (D39).
+    package var tipCommit: String?
 
     package static let off = CommitGroupsState()
 
@@ -190,10 +193,12 @@ extension DiffViewerModel {
         commitGroups.grouping = built.grouping
         commitGroups.sections = built.sections
         commitGroups.includesMergedBranches = !listing.firstParent
+        commitGroups.tipCommit = listing.tipID
         commitGroups.isUpdating = !final
         if final {
             dropVanishedCommitGroupTabs()
-            // A selected group's files may have changed with the groups: show them as they now stand.
+            // A selected group's files, or a file under one, may have changed with the groups: show them as they now
+            // stand.
             if let selectedPath, ExplorerSection.groupID(inSelection: selectedPath) != nil { render() }
         }
     }

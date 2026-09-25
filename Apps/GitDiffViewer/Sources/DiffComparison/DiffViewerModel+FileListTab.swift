@@ -2,9 +2,13 @@ import DiffRendering
 
 /// The file list's fixed tab and the scroll positions of the tabs it leaves open (book TAB-10).
 extension DiffViewerModel {
-    /// The left-side path of the file on show on its own; nil while cards or nothing show.
+    /// The key of the file on show on its own, which its panes keep their scroll position under: its left-side path,
+    /// or its selection key under a commit group, so the same file under two commits scrolls apart; nil while cards
+    /// or nothing show.
     package var renderedPath: String? {
-        if case .file(let pair) = pipeline.target { pair.path } else { nil }
+        guard case .file(let pair) = pipeline.target else { return nil }
+        if let scope = commitScope, scope.isSingleFile, scope.file(atPath: pair.path) != nil { return scope.key }
+        return pair.path
     }
 
     /// Shows the tab, or the file list, one `step` away from the one showing, as ⌃Tab and ⌃⇧Tab do.

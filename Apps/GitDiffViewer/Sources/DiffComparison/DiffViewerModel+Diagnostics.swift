@@ -24,12 +24,24 @@ extension DiffViewerModel {
     package var diagnosticFilePaths: [Int: String] { diagnosticFilePathMaps.right }
 
     /// Both sides' file-index-to-path maps of the current render target, built once per target: every pane reads
-    /// them on every findings change, so building them per read costs a card list the square of its card count.
+    /// them on every findings change, so building them per read costs a card list the square of its card count. A
+    /// commit group's own change keeps only the sides it shares with the comparison, the only ones analyzed: the
+    /// working tree's under Uncommitted Changes, none under a commit (D39).
     /// - Complexity: O(1) while the target is unchanged, O(files) after it changes.
     package var diagnosticFilePathMaps: DiagnosticFilePaths {
-        if let cache = diagnosticFilePathCache, cache.targetVersion == pipeline.targetVersion { return cache.paths }
-        let paths = DiagnosticFilePaths(for: pipeline.target?.pairs ?? [])
-        diagnosticFilePathCache = (pipeline.targetVersion, paths)
+        let scope = commitScope
+        if let cache = diagnosticFilePathCache, cache.targetVersion == pipeline.targetVersion,
+            cache.scope == scope?.key
+        {
+            return cache.paths
+        }
+        var paths = DiagnosticFilePaths(for: pipeline.target?.pairs ?? [])
+        if let scope {
+            paths = DiagnosticFilePaths(
+                right: scope.right == right.source ? paths.right : [:],
+                left: scope.left == left.source ? paths.left : [:])
+        }
+        diagnosticFilePathCache = (pipeline.targetVersion, scope?.key, paths)
         diagnosticFilePathBuilds += 1
         return paths
     }
@@ -79,6 +91,14 @@ extension DiffViewerModel {
     /// The severity counts of the file at `leftPath`: the right side's findings, keyed by its right path, and the left
     /// side's, keyed by `leftPath`, whichever sides were analyzed.
     package func diagnosticSeverityCounts(for leftPath: String) -> DiagnosticSeverityCounts {
+        if let scope = commitScope, let file = scope.file(atPath: leftPath) {
+            // Only a side the comparison shares with the change shown was analyzed, and its findings apply.
+            let rightPath = scope.right == right.source ? file.pair.new?.relativePath : nil
+            let leftPath = scope.left == left.source ? file.pair.old?.relativePath : nil
+            let rightFindings = rightPath.flatMap { diagnostics?.findingsByFile[$0] } ?? []
+            let leftFindings = leftPath.flatMap { diagnostics?.leftFindingsByFile[$0] } ?? []
+            return DiagnosticSeverityCounts(rightFindings + leftFindings)
+        }
         let right = diagnostics?.findingsByFile[counterpartPath(of: leftPath, in: .left)] ?? []
         let left = diagnostics?.leftFindingsByFile[leftPath] ?? []
         return DiagnosticSeverityCounts(right + left)

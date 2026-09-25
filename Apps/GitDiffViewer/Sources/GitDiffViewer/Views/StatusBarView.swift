@@ -39,16 +39,22 @@ struct StatusBarView: View {
                 Text("+\(model.renderedFiles.reduce(0) { $0 + $1.rendered.addedLines })").foregroundStyle(.green)
                 Text("−\(model.renderedFiles.reduce(0) { $0 + $1.rendered.removedLines })").foregroundStyle(.red)
             case .file(let rendered):
-                if let path = model.selectedPath {
+                if let key = model.selectedPath, let path = model.filePath(forSelection: key) {
                     let summary = model.changeSummary(for: path, rendered: rendered)
                     ChangeGlyphBadge(
                         glyph: ChangeGlyph(summary.kind), scheme: model.settings.badgeScheme,
-                        state: model.badgeState(ofPath: path)
+                        state: model.shownBadgeState(ofPath: path)
                     )
                     .help(ChangeGlyph(summary.kind).title)
-                    Text(model.displayPath(for: path))
+                    Text(model.shownDisplayPath(for: path))
                         .font(.system(.caption, design: .monospaced))
                         .truncationMode(.middle)
+                    // A file under a commit group shows that group's own change: say which.
+                    if key != path {
+                        Text("in \(model.selectionLabel(key))")
+                            .foregroundStyle(.secondary)
+                            .truncationMode(.tail)
+                    }
                     if summary.addedLines + summary.removedLines > 0 {
                         Text("+\(summary.addedLines)").foregroundStyle(.green)
                         Text("−\(summary.removedLines)").foregroundStyle(.red)
