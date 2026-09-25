@@ -31,7 +31,7 @@ struct StatusBarView: View {
                 let count = model.combinedFiles.count
                 Text("\(count) changed \(count == 1 ? "file" : "files")")
                 if let path = model.selectedPath {
-                    Text("in \(path)")
+                    Text("in \(model.selectionLabel(path))")
                         .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(.secondary)
                         .truncationMode(.middle)

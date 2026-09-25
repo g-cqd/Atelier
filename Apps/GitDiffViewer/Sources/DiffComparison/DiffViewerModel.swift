@@ -321,9 +321,9 @@ package final class DiffViewerModel {
         refreshCommitGroups(force: true)
         updateDiagnostics()
         updateFreshness()
-        tabs.keepOnly { comparison.contains($0) }
+        tabs.keepOnly(where: selectionExists)
         retainScrollPositions()
-        if let selectedPath, !comparison.contains(selectedPath) {
+        if let selectedPath, !selectionExists(selectedPath) {
             applySelection(tabs.activePath, keepingPublished: true)
         } else if selectedPath == nil, tabs.tabs.isEmpty, let singleFiles = comparison.singleFiles {
             // Only before any tab is open: with one open, a missing selection is the file list's tab, shown on
@@ -498,7 +498,9 @@ package final class DiffViewerModel {
         }
         let target: RenderPipeline.Target
         if isShowingCombinedFiles {
-            let paths = comparison.changedPaths(under: selectedPath, limit: Self.combinedFileLimit)
+            let paths =
+                selectedPath.flatMap { commitGroupPaths(forSelection: $0, limit: Self.combinedFileLimit) }
+                ?? comparison.changedPaths(under: selectedPath, limit: Self.combinedFileLimit)
             // A fold of a file the list no longer holds would skew the fold count the toolbar reads.
             folding.keepOnly(Set(paths))
             guard !paths.isEmpty else {

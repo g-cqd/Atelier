@@ -76,6 +76,7 @@ extension DiffViewerModel {
             cancelCommitGroups()
             commitGroupsRequest = nil
             commitGroups = .off
+            dropVanishedCommitGroupTabs()
             return
         }
         // The comparison is the one on screen until both sides land; the groups wait for it too.
@@ -87,10 +88,12 @@ extension DiffViewerModel {
         cancelCommitGroups()
         guard case .needsAncestry(let range) = verdict else {
             commitGroups = CommitGroupsState(eligibility: verdict)
+            dropVanishedCommitGroupTabs()
             return
         }
         guard let history else {
             commitGroups = CommitGroupsState(eligibility: .doesNotApply(.historyUnreadable("git is not available")))
+            dropVanishedCommitGroupTabs()
             return
         }
         commitGroups.eligibility = verdict
@@ -125,6 +128,7 @@ extension DiffViewerModel {
                 right: right.source, ancestry: ancestry)
             guard case .applies = eligibility else {
                 commitGroups = CommitGroupsState(eligibility: eligibility)
+                dropVanishedCommitGroupTabs()
                 return
             }
             commitGroups.eligibility = eligibility
@@ -159,6 +163,7 @@ extension DiffViewerModel {
         } catch {
             guard generation == commitGroupsGeneration else { return }
             commitGroups = CommitGroupsState(eligibility: .doesNotApply(.historyUnreadable(error.localizedDescription)))
+            dropVanishedCommitGroupTabs()
         }
     }
 
@@ -173,6 +178,11 @@ extension DiffViewerModel {
         commitGroups.sections = built.sections
         commitGroups.includesMergedBranches = !listing.firstParent
         commitGroups.isUpdating = !final
+        if final {
+            dropVanishedCommitGroupTabs()
+            // A selected group's files may have changed with the groups: show them as they now stand.
+            if let selectedPath, ExplorerSection.groupID(inSelection: selectedPath) != nil { render() }
+        }
     }
 
     @concurrent
