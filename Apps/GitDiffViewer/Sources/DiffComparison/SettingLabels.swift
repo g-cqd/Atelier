@@ -25,6 +25,12 @@ package enum SettingLabel {
     package static let cleansUpEmphasis = "Clean up scattered emphasis"
     package static let detectsMovedBlocks = "Mark blocks that only moved"
 
+    // MARK: Diff / Scrolling
+
+    package static let bouncesAtEdges = "Bounce at the edges"
+    package static let scrollsPastEnd = "Scroll past the last line"
+    package static let scrollsToFirstChange = "Scroll to the first change when a file opens"
+
     // MARK: Appearance
 
     package static let diffLayout = "Diff layout"

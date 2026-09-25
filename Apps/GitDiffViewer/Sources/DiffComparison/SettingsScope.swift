@@ -139,6 +139,9 @@ extension SettingOverride {
             case Key.contextLines: SettingLabel.contextLines
             case Key.granularity: SettingLabel.granularity
             case Key.diffHeuristics: SettingLabel.matching
+            case Key.bouncesAtEdges: SettingLabel.bouncesAtEdges
+            case Key.scrollsPastEnd: SettingLabel.scrollsPastEnd
+            case Key.scrollsToFirstChange: SettingLabel.scrollsToFirstChange
             case Key.showsHoverDocumentation: SettingLabel.showsHoverDocumentation
             case Key.diagnosticsEnabled: SettingLabel.diagnosticsEnabled
             case Key.analyzedSides: SettingLabel.analyzedSides
@@ -164,6 +167,9 @@ extension SettingOverride {
             case Key.contextLines: "\(settings.contextLines)"
             case Key.granularity: settings.granularity.displayName
             case Key.diffHeuristics: describe(settings.diffHeuristics)
+            case Key.bouncesAtEdges: onOff(settings.bouncesAtEdges)
+            case Key.scrollsPastEnd: onOff(settings.scrollsPastEnd)
+            case Key.scrollsToFirstChange: onOff(settings.scrollsToFirstChange)
             case Key.showsHoverDocumentation: onOff(settings.showsHoverDocumentation)
             case Key.diagnosticsEnabled: onOff(settings.diagnosticsEnabled)
             case Key.analyzedSides: settings.analyzedSides.displayName

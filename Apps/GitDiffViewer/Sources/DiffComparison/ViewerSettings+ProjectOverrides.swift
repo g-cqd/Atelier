@@ -12,7 +12,11 @@ extension ViewerSettings {
         switch category {
             case .general:
                 [Key.showsChangesOnly, Key.showsIgnoredFiles, Key.treeStyle, Key.showsMinimap, Key.autoRefresh]
-            case .diff: [Key.isolatesChanges, Key.contextLines, Key.granularity, Key.diffHeuristics]
+            case .diff:
+                [
+                    Key.isolatesChanges, Key.contextLines, Key.granularity, Key.diffHeuristics, Key.bouncesAtEdges,
+                    Key.scrollsPastEnd, Key.scrollsToFirstChange
+                ]
             case .appearance: [Key.mode, Key.wrapsLines, Key.wrapColumn]
             case .tools:
                 [
@@ -34,7 +38,8 @@ extension ViewerSettings {
         \.showsHoverDocumentation: Key.showsHoverDocumentation, \.toolLocations: Key.toolLocations,
         \.lspServerLocations: Key.lspServerLocations, \.analyzedSides: Key.analyzedSides,
         \.appearanceScheme: Key.appearanceScheme, \.badgeScheme: Key.badgeScheme,
-        \.matchesThemeAppearance: Key.matchesThemeAppearance
+        \.matchesThemeAppearance: Key.matchesThemeAppearance, \.bouncesAtEdges: Key.bouncesAtEdges,
+        \.scrollsPastEnd: Key.scrollsPastEnd, \.scrollsToFirstChange: Key.scrollsToFirstChange
     ]
 
     /// Whether the setting behind `property` can differ per project; the Settings window greys out the others while
@@ -58,11 +63,29 @@ extension ViewerSettings {
     }
 
     /// Re-reads `key` through ``effectiveKey(_:)`` and assigns it through its setter only when the value changed.
-    /// The three groups exist only to stay under the complexity budget.
+    /// The groups exist only to stay under the complexity budget.
     func reload(key: String) {
         if reloadLayoutSetting(key) { return }
         if reloadDiffSetting(key) { return }
         if reloadDiagnosticsSetting(key) { return }
+        if reloadScrollingSetting(key) { return }
+    }
+
+    private func reloadScrollingSetting(_ key: String) -> Bool {
+        switch key {
+            case Key.bouncesAtEdges:
+                let value = defaults.bool(forKey: effectiveKey(key))
+                if value != bouncesAtEdges { bouncesAtEdges = value }
+            case Key.scrollsPastEnd:
+                let value = defaults.bool(forKey: effectiveKey(key))
+                if value != scrollsPastEnd { scrollsPastEnd = value }
+            case Key.scrollsToFirstChange:
+                let value = defaults.object(forKey: effectiveKey(key)) as? Bool ?? true
+                if value != scrollsToFirstChange { scrollsToFirstChange = value }
+            default:
+                return false
+        }
+        return true
     }
 
     private func reloadLayoutSetting(_ key: String) -> Bool {
