@@ -18,19 +18,29 @@ package final class RefinedColors {
     /// What the pane colours ``rendered``'s rows with; nil leaves the storage's colours.
     package private(set) var sides: RefinedSides?
     private weak var layoutManager: NSTextLayoutManager?
+    /// Whether the layout manager keeps the rows it laid out when they leave the viewport, as a card's does.
+    private var retainsLayout = false
 
     package init() {}
 
     /// Makes this the validator of `layoutManager`'s rendering attributes.
-    package func install(on layoutManager: NSTextLayoutManager) {
+    /// - Parameters:
+    ///   - layoutManager: The pane's layout manager.
+    ///   - retainsLayout: Whether it keeps the rows it laid out when they leave the viewport, as a card's does
+    ///     (`DiffPaneTextView`): TextKit asks the validator for a row only when it lays the row out, so when colours
+    ///     land, every row laid out is coloured, not only the viewport's.
+    package func install(on layoutManager: NSTextLayoutManager, retainsLayout: Bool = false) {
         self.layoutManager = layoutManager
+        self.retainsLayout = retainsLayout
         layoutManager.renderingAttributesValidator = { [weak self] layoutManager, fragment in
             MainActor.assumeIsolated { self?.validate(fragment, in: layoutManager) }
         }
     }
 
     /// Shows `sides` over `rendered`: a no-op unless either changed. Clears the colours the pane drew before, colours
-    /// the fragments laid out in the viewport again, and redraws them; nothing is laid out again.
+    /// the fragments laid out in the viewport again, or every fragment laid out when the layout manager keeps them, and
+    /// redraws them; nothing is laid out again.
+    /// - Complexity: O(rows coloured + their tokens)
     /// - Parameters:
     ///   - rendered: The text the pane shows.
     ///   - sides: What to colour its rows with; nil gives back the lexer's colours.
@@ -44,7 +54,12 @@ package final class RefinedColors {
         let range = layoutManager.documentRange
         if hadColors { layoutManager.removeRenderingAttribute(.foregroundColor, for: range) }
         layoutManager.invalidateRenderingAttributes(for: range)
-        if let viewport = layoutManager.textViewportLayoutController.viewportRange {
+        if retainsLayout {
+            _ = layoutManager.enumerateTextLayoutFragments(from: range.location) { fragment in
+                if fragment.state == .layoutAvailable { validate(fragment, in: layoutManager) }
+                return true
+            }
+        } else if let viewport = layoutManager.textViewportLayoutController.viewportRange {
             layoutManager.enumerateTextLayoutFragments(from: viewport.location) { fragment in
                 guard fragment.rangeInElement.location.compare(viewport.endLocation) == .orderedAscending else {
                     return false
