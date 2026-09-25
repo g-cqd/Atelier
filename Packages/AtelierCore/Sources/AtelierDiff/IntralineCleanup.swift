@@ -10,36 +10,42 @@ public protocol IntralineRefining: Sendable {
 
 /// diff-match-patch's semantic cleanup: an equality short enough to be coincidence between two changes is folded
 /// into them, so `foo` to `bar` reads as one replacement rather than as scattered common letters.
+///
+/// The runs of the script are ranges of it, and a folded equality is a flag per edit, so a pass allocates nothing per
+/// edit (perf-core D5); the script is rebuilt once at the end.
 public struct SemanticCleanup: IntralineRefining {
     public init() {}
 
     public func refine(_ edits: [DiffEdit], oldRanges: [Range<Int>], newRanges: [Range<Int>]) -> [DiffEdit] {
         var runs = Run.runs(of: edits, oldRanges: oldRanges, newRanges: newRanges)
+        var folded = [Bool](repeating: false, count: edits.count)
         var changed = true
         while changed {
             changed = false
-            var index = 0
-            while index < runs.count {
+            var index = 1
+            while index < runs.count - 1 {
                 let run = runs[index]
-                guard run.isEqual, index > 0, index < runs.count - 1 else {
-                    index += 1
-                    continue
-                }
-                let before = Run.changeLength(of: runs, endingAt: index)
-                let after = Run.changeLength(of: runs, startingAt: index + 1)
-                if run.units <= max(before.deleted, before.inserted), run.units <= max(after.deleted, after.inserted) {
-                    runs[index] = Run(
-                        edits: run.edits.flatMap { edit -> [DiffEdit] in
-                            guard case .equal(let old, let new) = edit else { return [edit] }
-                            return [.delete(old: old), .insert(new: new)]
-                        }, deleted: run.deleted, inserted: run.inserted, isEqual: false)
+                // An equality no longer than the longer side of the change on either side of it is folded in.
+                if run.isEqual, run.units <= runs[index - 1].units, run.units <= runs[index + 1].units {
+                    for edit in run.edits { folded[edit] = true }
+                    runs[index].isEqual = false
                     changed = true
                 }
                 index += 1
             }
             if changed { runs = Run.merged(runs) }
         }
-        return runs.flatMap(\.edits).sorted(by: Self.scriptOrder)
+        var result: [DiffEdit] = []
+        result.reserveCapacity(edits.count)
+        for (index, edit) in edits.enumerated() {
+            if folded[index], case .equal(let old, let new) = edit {
+                result.append(.delete(old: old))
+                result.append(.insert(new: new))
+            } else {
+                result.append(edit)
+            }
+        }
+        return result.sorted(by: Self.scriptOrder)
     }
 
     /// Deletions before insertions within one change, both in index order; equalities keep their place.
@@ -55,60 +61,54 @@ public struct SemanticCleanup: IntralineRefining {
         }
     }
 
+    /// A run of equalities, or of deletions and insertions, as a range of the script.
     private struct Run {
-        var edits: [DiffEdit]
+        var edits: Range<Int>
         /// Units on the old side and on the new side; equal for an equality.
         var deleted: Int
         var inserted: Int
         var isEqual: Bool
 
+        /// The units of the run's longer side.
         var units: Int { max(deleted, inserted) }
-        var changeLength: (deleted: Int, inserted: Int) { (deleted, inserted) }
 
         static func runs(of edits: [DiffEdit], oldRanges: [Range<Int>], newRanges: [Range<Int>]) -> [Run] {
             var runs: [Run] = []
-            for edit in edits {
+            for (index, edit) in edits.enumerated() {
                 let run: Run
                 switch edit {
                     case .equal(let old, _):
-                        run = Run(
-                            edits: [edit], deleted: oldRanges[old].count, inserted: oldRanges[old].count, isEqual: true)
+                        let units = oldRanges[old].count
+                        run = Run(edits: index ..< index + 1, deleted: units, inserted: units, isEqual: true)
                     case .delete(let old):
-                        run = Run(edits: [edit], deleted: oldRanges[old].count, inserted: 0, isEqual: false)
+                        run = Run(
+                            edits: index ..< index + 1, deleted: oldRanges[old].count, inserted: 0, isEqual: false)
                     case .insert(let new):
-                        run = Run(edits: [edit], deleted: 0, inserted: newRanges[new].count, isEqual: false)
+                        run = Run(
+                            edits: index ..< index + 1, deleted: 0, inserted: newRanges[new].count, isEqual: false)
                 }
-                if let last = runs.last, last.isEqual == run.isEqual {
-                    runs[runs.count - 1].edits += run.edits
-                    runs[runs.count - 1].deleted += run.deleted
-                    runs[runs.count - 1].inserted += run.inserted
-                } else {
-                    runs.append(run)
-                }
+                append(run, to: &runs)
             }
             return runs
         }
 
         static func merged(_ runs: [Run]) -> [Run] {
             var merged: [Run] = []
-            for run in runs {
-                if let last = merged.last, last.isEqual == run.isEqual {
-                    merged[merged.count - 1].edits += run.edits
-                    merged[merged.count - 1].deleted += run.deleted
-                    merged[merged.count - 1].inserted += run.inserted
-                } else {
-                    merged.append(run)
-                }
-            }
+            merged.reserveCapacity(runs.count)
+            for run in runs { append(run, to: &merged) }
             return merged
         }
 
-        static func changeLength(of runs: [Run], endingAt index: Int) -> (deleted: Int, inserted: Int) {
-            index > 0 ? runs[index - 1].changeLength : (0, 0)
-        }
-
-        static func changeLength(of runs: [Run], startingAt index: Int) -> (deleted: Int, inserted: Int) {
-            index < runs.count ? runs[index].changeLength : (0, 0)
+        /// Adds `run` to `runs`, joined to the last one when both are equalities or both are changes: the runs of a
+        /// script are contiguous, so joining extends the range.
+        private static func append(_ run: Run, to runs: inout [Run]) {
+            guard let last = runs.last, last.isEqual == run.isEqual else {
+                runs.append(run)
+                return
+            }
+            runs[runs.count - 1] = Run(
+                edits: last.edits.lowerBound ..< run.edits.upperBound, deleted: last.deleted + run.deleted,
+                inserted: last.inserted + run.inserted, isEqual: last.isEqual)
         }
     }
 }
