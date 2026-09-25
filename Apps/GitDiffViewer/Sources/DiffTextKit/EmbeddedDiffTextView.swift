@@ -120,7 +120,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         context.coordinator.textView = textView
         context.coordinator.gutterView = gutterView
         if let layoutManager = textView.textLayoutManager {
-            context.coordinator.refinedColors.install(on: layoutManager)
+            context.coordinator.refinedColors.install(on: layoutManager, retainsLayout: true)
         }
         context.coordinator.hoverController.attach(to: textView) { [weak coordinator = context.coordinator] in
             coordinator?.layout?.rendered
