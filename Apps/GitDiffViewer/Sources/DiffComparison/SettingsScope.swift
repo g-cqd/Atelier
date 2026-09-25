@@ -1,5 +1,6 @@
 import AtelierDiagnostics
 import DiffCore
+import DiffRendering
 package import Foundation
 import Observation
 
@@ -143,6 +144,7 @@ extension SettingOverride {
             case Key.scrollsPastEnd: SettingLabel.scrollsPastEnd
             case Key.scrollsToFirstChange: SettingLabel.scrollsToFirstChange
             case Key.showsHoverDocumentation: SettingLabel.showsHoverDocumentation
+            case Key.hoverPanelMaterial: SettingLabel.hoverPanelMaterial
             case Key.diagnosticsEnabled: SettingLabel.diagnosticsEnabled
             case Key.analyzedSides: SettingLabel.analyzedSides
             case Key.autoRefresh: SettingLabel.autoRefresh
@@ -171,6 +173,7 @@ extension SettingOverride {
             case Key.scrollsPastEnd: onOff(settings.scrollsPastEnd)
             case Key.scrollsToFirstChange: onOff(settings.scrollsToFirstChange)
             case Key.showsHoverDocumentation: onOff(settings.showsHoverDocumentation)
+            case Key.hoverPanelMaterial: settings.hoverPanelMaterial.displayName
             case Key.diagnosticsEnabled: onOff(settings.diagnosticsEnabled)
             case Key.analyzedSides: settings.analyzedSides.displayName
             case Key.autoRefresh: onOff(settings.autoRefresh)
