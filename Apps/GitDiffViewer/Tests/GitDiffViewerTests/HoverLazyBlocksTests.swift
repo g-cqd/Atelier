@@ -29,13 +29,13 @@ struct HoverLazyBlocksTests {
     func `a long discussion builds what the panel shows, and the rest as the body scrolls to it`() throws {
         let panel = try Self.preparedPanel(for: Self.document(paragraphs: 120))
         // The Overview heading, then the paragraphs.
-        let built = panel.bodyStack.arrangedSubviews.count
+        let built = panel.shownBlockViews.count
         #expect(built < 121)
         #expect(panel.panelHeightForTests == HoverPanelSizing.maxHeight)
 
         panel.scrollThroughDiscussion()
 
-        #expect(panel.bodyStack.arrangedSubviews.count == 121)
+        #expect(panel.shownBlockViews.count == 121)
         panel.bodyStack.layoutSubtreeIfNeeded()
         #expect(abs(panel.bodyDocument.frame.height - panel.bodyStack.fittingSize.height) < 1)
     }
@@ -44,7 +44,7 @@ struct HoverLazyBlocksTests {
     func `a discussion that fits is built whole at once`() throws {
         let panel = try Self.preparedPanel(for: Self.document(paragraphs: 3))
 
-        #expect(panel.bodyStack.arrangedSubviews.count == 4)
+        #expect(panel.shownBlockViews.count == 4)
         #expect(panel.pendingDiscussion == nil)
     }
 
@@ -57,7 +57,7 @@ struct HoverLazyBlocksTests {
             document: Self.document(paragraphs: 2), appearance: try #require(NSAppearance(named: .aqua)))
 
         #expect(panel.pendingDiscussion == nil)
-        #expect(panel.bodyStack.arrangedSubviews.count == 3)
+        #expect(panel.shownBlockViews.count == 3)
     }
 }
 
