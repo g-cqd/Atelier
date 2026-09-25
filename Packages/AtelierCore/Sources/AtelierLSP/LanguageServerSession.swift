@@ -42,6 +42,20 @@ public enum HoverOutcome: Sendable, Equatable {
     }
 }
 
+/// What a semantic tokens request came to.
+public enum SemanticTokensOutcome: Sendable, Equatable {
+    /// The document's tokens, in the server's relative encoding, and the legend that names their types.
+    case tokens(data: [UInt32], legend: SemanticTokensLegend)
+    /// The server does not give semantic tokens.
+    case unsupported
+    /// The document changed while the request was out, so the reply was for an older version and was dropped.
+    case superseded
+    /// No reply came within the request timeout.
+    case timedOut
+    /// No answer: the document is not on disk, or the server is unavailable, went away, failed or was cancelled.
+    case unavailable
+}
+
 /// A long-lived language server session, kept warm across hovers and shut down when idle. Nothing in it is one
 /// server's: the executable, its arguments and its options come in through the ``Configuration``, which
 /// ``LanguageServerDescriptor`` builds for each server.
@@ -123,6 +137,11 @@ public actor LanguageServerSession {
     /// Least-recently-used order, oldest first.
     private var openOrder: [String] = []
 
+    /// What the server said of semantic tokens when it initialized; nil when it has none, or before it initialized.
+    private var semanticSupport: InitializeResult.SemanticTokensSupport?
+    /// Each open document's last semantic tokens, which a delta request names and applies to.
+    private var semanticStates: [String: LSPSemanticTokenDecoder.SemanticTokensState] = [:]
+
     /// Bumped per scheduled idle shutdown; a timer that fires with a stale generation does nothing.
     private var idleGeneration = 0
     private var idleTask: Task<Void, Never>?
@@ -139,6 +158,9 @@ public actor LanguageServerSession {
 
     /// The server's executable name, which the log names it by.
     private nonisolated var serverName: String { configuration.serverExecutable.lastPathComponent }
+
+    /// How long any request after the handshake may take.
+    public nonisolated var requestTimeout: Duration { configuration.requestTimeout }
 
     /// The directory the server runs in and takes as its workspace (`rootUri`).
     public nonisolated var workspaceRoot: URL { configuration.workspaceRoot }
@@ -191,6 +213,8 @@ public actor LanguageServerSession {
         self.connection = nil
         openDocuments.removeAll()
         openOrder.removeAll()
+        semanticStates.removeAll()
+        semanticSupport = nil
         await gracefulTeardown(connection)
     }
 
@@ -218,7 +242,7 @@ public actor LanguageServerSession {
         do {
             let created = try await connectionFactory(configuration)
             newConnection = created
-            try await performHandshake(created)
+            let initialized = try await performHandshake(created)
             guard connectionGeneration == startedGeneration else {
                 // A teardown ran meanwhile: stop this connection instead of publishing it.
                 await created.stop()
@@ -226,6 +250,7 @@ public actor LanguageServerSession {
                 return nil
             }
             connection = created
+            semanticSupport = initialized.semanticTokens
             resumeEstablishingWaiters(with: created)
             return created
         } catch {
@@ -263,17 +288,19 @@ public actor LanguageServerSession {
         }
     }
 
-    private func performHandshake(_ connection: LSPConnection) async throws {
+    /// Starts `connection` and initializes the server: what the server answered, read for its semantic tokens.
+    private func performHandshake(_ connection: LSPConnection) async throws -> InitializeResult {
         await connection.start()
         let root = configuration.workspaceRoot
         let params = InitializeParams(
             processId: Int(ProcessInfo.processInfo.processIdentifier), rootUri: root.absoluteString,
             initializationOptions: configuration.initializationOptions,
             workspaceFolders: [WorkspaceFolder(uri: root.absoluteString, name: root.lastPathComponent)])
-        _ = try await raceAgainstTimeout(clock: clock, timeout: configuration.initializeTimeout) {
-            try await connection.request("initialize", params, as: DiscardedResult.self)
+        let result = try await raceAgainstTimeout(clock: clock, timeout: configuration.initializeTimeout) {
+            try await connection.request("initialize", params, as: InitializeResult.self)
         }
         try await connection.notify("initialized", InitializedParams())
+        return result
     }
 
     /// Drops a connection whose transport is gone, skipping the `shutdown`/`exit` exchange it cannot answer.
@@ -283,6 +310,8 @@ public actor LanguageServerSession {
         self.connection = nil
         openDocuments.removeAll()
         openOrder.removeAll()
+        semanticStates.removeAll()
+        semanticSupport = nil
         await connection.stop()
     }
 
@@ -338,6 +367,8 @@ public actor LanguageServerSession {
         self.connection = nil
         openDocuments.removeAll()
         openOrder.removeAll()
+        semanticStates.removeAll()
+        semanticSupport = nil
         await gracefulTeardown(connection)
     }
 
@@ -351,17 +382,16 @@ public actor LanguageServerSession {
                 touch(uri)
                 return
             }
-            await send(
-                "textDocument/didClose", DidCloseTextDocumentParams(textDocument: TextDocumentIdentifier(uri: uri)),
-                on: connection)
+            // The whole new text, one version on: the server keeps the document, and a semantic tokens delta against
+            // its last result stays meaningful.
             let newVersion = existing.version + 1
-            await send(
-                "textDocument/didOpen",
-                DidOpenTextDocumentParams(
-                    textDocument: TextDocumentItem(
-                        uri: uri, languageId: languageID, version: newVersion, text: content)),
-                on: connection)
             openDocuments[uri] = OpenDocument(version: newVersion, contentHash: hash)
+            await send(
+                "textDocument/didChange",
+                DidChangeTextDocumentParams(
+                    textDocument: VersionedTextDocumentIdentifier(uri: uri, version: newVersion),
+                    contentChanges: [TextDocumentContentChangeEvent(text: content)]),
+                on: connection)
             touch(uri)
             return
         }
@@ -370,13 +400,13 @@ public actor LanguageServerSession {
             await evictOldest(on: connection)
         }
 
+        openDocuments[uri] = OpenDocument(version: 1, contentHash: hash)
+        openOrder.append(uri)
         await send(
             "textDocument/didOpen",
             DidOpenTextDocumentParams(
                 textDocument: TextDocumentItem(uri: uri, languageId: languageID, version: 1, text: content)),
             on: connection)
-        openDocuments[uri] = OpenDocument(version: 1, contentHash: hash)
-        openOrder.append(uri)
     }
 
     private func touch(_ uri: String) {
@@ -389,6 +419,7 @@ public actor LanguageServerSession {
         guard !openOrder.isEmpty else { return }
         let oldest = openOrder.removeFirst()
         openDocuments.removeValue(forKey: oldest)
+        semanticStates.removeValue(forKey: oldest)
         await send(
             "textDocument/didClose", DidCloseTextDocumentParams(textDocument: TextDocumentIdentifier(uri: oldest)),
             on: connection)
@@ -409,6 +440,73 @@ public actor LanguageServerSession {
         try await session.start()
         let transport = ProcessSessionTransport(session: session)
         return LSPConnection(transport: transport)
+    }
+}
+
+// MARK: - Semantic tokens
+
+extension LanguageServerSession {
+    /// The semantic tokens of `uri`, a `file://` document, opened with `content` on the server first: the whole
+    /// document's the first time, then a delta against the last result when the server gives deltas. A reply for an
+    /// older version of the document, which a change of `content` made meanwhile, is dropped. A URI that is not a
+    /// `file://` one, as a git blob's, is never sent. Restarts the idle timer.
+    public func semanticTokens(uri: String, languageID: String, content: String) async -> SemanticTokensOutcome {
+        guard uri.hasPrefix("file://"), !permanentlyUnavailable else { return .unavailable }
+        defer { scheduleIdleShutdown() }
+        guard let connection = await ensureConnection() else { return .unavailable }
+        guard let support = semanticSupport, support.full else { return .unsupported }
+        await ensureOpen(uri: uri, languageID: languageID, content: content, on: connection)
+        guard let version = openDocuments[uri]?.version else { return .unavailable }
+        let generation = connectionGeneration
+        let document = TextDocumentIdentifier(uri: uri)
+        let previous = support.delta ? semanticStates[uri] : nil
+        do {
+            var state = previous ?? LSPSemanticTokenDecoder.SemanticTokensState()
+            if let previous, let previousID = previous.resultId {
+                let reply = try await raceAgainstTimeout(clock: clock, timeout: configuration.requestTimeout) {
+                    try await connection.requestOptional(
+                        "textDocument/semanticTokens/full/delta",
+                        SemanticTokensDeltaParams(textDocument: document, previousResultId: previousID),
+                        as: SemanticTokensDeltaResult.self)
+                }
+                // The delta applies to the result it names, which a concurrent request may have replaced.
+                guard isCurrent(uri, version: version, generation: generation),
+                    semanticStates[uri]?.resultId == previousID
+                else { return .superseded }
+                switch reply {
+                    case .full(let result): state.applyFull(resultId: result.resultId, data: result.data)
+                    case .delta(let resultID, let edits): state.applyDelta(resultId: resultID, edits: edits)
+                    case nil: state.applyFull(resultId: nil, data: [])
+                }
+            } else {
+                let reply = try await raceAgainstTimeout(clock: clock, timeout: configuration.requestTimeout) {
+                    try await connection.requestOptional(
+                        "textDocument/semanticTokens/full", SemanticTokensParams(textDocument: document),
+                        as: SemanticTokensResult.self)
+                }
+                guard isCurrent(uri, version: version, generation: generation) else { return .superseded }
+                state.applyFull(resultId: reply?.resultId, data: reply?.data ?? [])
+            }
+            semanticStates[uri] = state
+            return .tokens(data: state.data, legend: support.legend)
+        } catch LSPServiceError.timedOut {
+            Self.logger.info("Semantic tokens timed out for a document")
+            return .timedOut
+        } catch LSPConnectionError.transportClosed(let reason) {
+            let server = serverName
+            Self.logger.error(
+                "\(server, privacy: .public) went away during semantic tokens: \(reason, privacy: .public)")
+            await abruptTeardown()
+            return .unavailable
+        } catch {
+            Self.logger.info("Semantic tokens got no answer: \(String(describing: error), privacy: .public)")
+            return .unavailable
+        }
+    }
+
+    /// Whether `uri` is still open at `version` on the connection of `generation`.
+    private func isCurrent(_ uri: String, version: Int, generation: Int) -> Bool {
+        connectionGeneration == generation && openDocuments[uri]?.version == version
     }
 }
 

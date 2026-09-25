@@ -33,6 +33,12 @@ private struct DecodedDidOpenParams: Decodable {
     let textDocument: TextDocumentItem
 }
 
+/// Mirrors `DidChangeTextDocumentParams`, likewise `Encodable`-only.
+private struct DecodedDidChangeParams: Decodable {
+    let textDocument: VersionedTextDocumentIdentifier
+    let contentChanges: [TextDocumentContentChangeEvent]
+}
+
 /// Mirrors `DidCloseTextDocumentParams`, likewise `Encodable`-only.
 private struct DecodedDidCloseParams: Decodable {
     let textDocument: TextDocumentIdentifier
@@ -75,7 +81,7 @@ struct LanguageServerSessionTests {
     }
 
     @Test
-    func `didOpen fires once per uri and reopens with a bumped version on changed content`() async throws {
+    func `didOpen fires once per uri, and changed content is sent as didChange with a bumped version`() async throws {
         let factory = ScriptedConnectionFactory()
         let configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
@@ -106,19 +112,17 @@ struct LanguageServerSessionTests {
             transport, id: try #require(secondHover.id), result: hoverResult(markdown: "a"))
         _ = try #require(await second.content)
 
-        // Third hover, changed content: didClose then didOpen (version bumped), then hover.
+        // Third hover, changed content: didChange with the whole text and a bumped version, then hover.
         async let third = service.hover(
             uri: "file:///a.swift", languageID: "swift", content: "let x = 2", line: 0, utf16Column: 4)
-        await transport.sink.waitForCount(8)
-        let didClose = try await decodeSent(transport, at: 5)
-        #expect(didClose.method == "textDocument/didClose")
-        let reopen = try await decodeSent(transport, at: 6)
-        #expect(reopen.method == "textDocument/didOpen")
-        let reopenParams = try #require(reopen.params)
-        let reopenData = try JSONEncoder().encode(reopenParams)
-        let reopenPayload = try JSONDecoder().decode(DecodedDidOpenParams.self, from: reopenData)
-        #expect(reopenPayload.textDocument.version == 2)
-        let thirdHover = try await decodeSent(transport, at: 7)
+        await transport.sink.waitForCount(7)
+        let change = try await decodeSent(transport, at: 5)
+        #expect(change.method == "textDocument/didChange")
+        let changeData = try JSONEncoder().encode(try #require(change.params))
+        let changeParams = try JSONDecoder().decode(DecodedDidChangeParams.self, from: changeData)
+        #expect(changeParams.textDocument == VersionedTextDocumentIdentifier(uri: "file:///a.swift", version: 2))
+        #expect(changeParams.contentChanges == [TextDocumentContentChangeEvent(text: "let x = 2")])
+        let thirdHover = try await decodeSent(transport, at: 6)
         #expect(thirdHover.method == "textDocument/hover")
         try respond(transport, id: try #require(thirdHover.id), result: hoverResult(markdown: "b"))
         let thirdResult = try #require(await third.content)
