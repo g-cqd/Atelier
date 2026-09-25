@@ -176,6 +176,7 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
 | D34 | 09-25 | PERF-11: how is grammar color turned on per language? | "On once a language qualifies (Recommended)": on by default once its corpus, gate and speed checks pass; a setting per language turns it off | PERF-11 |
 | D35 | 09-25 | PERF-11: how are sourcekit-lsp semantic tokens offered? | "On by default where possible": used automatically for every working-tree side and KittyCode file once the language server is trusted | PERF-11 |
 | D36 | 09-25 | Fix KittyCode dropping grammar color on refresh ahead of the tier work? | "Yes, keep grammar color now (Recommended)" | PERF-11 |
+| D37 | 09-25 | What comes first in the plan? | Typed: "i'd prefer that you cancel the work you started on kitty code, what has priority to me is core shared code or gitdiffviewer relevant improvement, reschedule the roadmap accordingly please": core shared code and GitDiffViewer improvements first; work that only improves KittyCode is deferred | PROC |
 
 ## Answered questions (09-23 09:37)
 
@@ -1882,3 +1883,4 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R119 | 09-25 | "does the git diffviewer use the grammar parser we use in kitty?" (answered: no, it highlights with the shared lexers and swift-syntax) | — |
 | R120 | 09-25 | "i'd like that we investigate ways to improve the one flat sidebar file list, by having a toggleable setting to group through disclosable section diffed files by commit when the 2 compared repo states share the same ancestry, it can only work in flat sidebar, for repos" | GIT-06 |
 | R121 | 09-25 | "imo, the highlighting should be a tiered job, lexer and grammar started in parallel, swift syntax and sourcekit when enabled, used to also enrich the color syntaxing ideally and provide more information at that moment as well" | PERF-11 |
+| R122 | 09-25 | "i'd prefer that you cancel the work you started on kitty code, what has priority to me is core shared code or gitdiffviewer relevant improvement, reschedule the roadmap accordingly please" | D37 |
