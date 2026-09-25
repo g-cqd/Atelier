@@ -1,12 +1,15 @@
 import AemiTestKit
+import AtelierGrammar
+import AtelierQuery
 import Foundation
 import KittyCodecs
 import Testing
 
 @testable import KittySyntax
 
-/// Stress tests guarding the parse, highlight and tree-drop path against per-call accumulation. Only the bash load
-/// check runs by default; the allocation and RSS measurements are opt-in through `ATELIER_BENCH`.
+/// Stress tests guarding the parse, highlight and tree-drop path against per-call accumulation. Only the check of what
+/// bash's load reads before its table runs by default; the whole load is opt-in through `GDV_BENCH`, and the
+/// allocation and RSS measurements through `ATELIER_BENCH`.
 @Suite
 @MainActor
 struct MemoryLeakRegressionTests {
@@ -37,7 +40,24 @@ struct MemoryLeakRegressionTests {
         greet world
         """
 
+    /// What loading bash's artifacts reads before its parse table: the manifest's entry, the grammar, whose external
+    /// tokens need the scanner registered for it, and the highlight query. The table is the next test's.
     @Test
+    func `bash grammar, scanner and highlight query load`() throws {
+        let entry = try #require(BundledLanguageManifest.entry(forLanguage: "bash"))
+        let bundle = KittySyntaxResources.bundle
+        let resourcePath = try #require(bundle.resourcePath)
+        let grammar = try GrammarRegistry.shared.grammar(for: entry.name, grammarsPath: "\(resourcePath)/Grammars")
+        #expect(!grammar.externals.isEmpty)
+        #expect(GrammarRegistry.shared.scannerType(forGrammar: grammar.name) != nil, "bash has no external scanner")
+        let queryURL = try #require(
+            bundle.url(forResource: "highlights", withExtension: "scm", subdirectory: "Grammars/\(entry.path)"))
+        _ = try QueryParser.parse(String(contentsOf: queryURL, encoding: .utf8))
+    }
+
+    /// The whole load, parse table included: 47 MB decoded from the compiled-table cache, or compiled when the cache
+    /// is cold, which takes 3 s of a debug build alone and 12 s under a full run's load. Opt-in: `GDV_BENCH=1`.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil))
     func `bash grammar artifacts load successfully`() async {
         // A runaway bash compile would hang this test outright, so it needs no time bound.
         let loaded = await LanguageHighlighter.ensureArtifacts(for: "bash")
