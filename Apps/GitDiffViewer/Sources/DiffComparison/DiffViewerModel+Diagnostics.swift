@@ -52,7 +52,7 @@ extension DiffViewerModel {
     /// Builds this window's hover documentation: a doc-comment index shared by every pane, tiered behind
     /// `lspRegistry` for on-disk Swift files on the new side. It indexes only while the setting shows hover
     /// documentation, and indexes the comparison on screen when the setting turns it on.
-    package func attachHoverDocs(lspRegistry: SourceKitLSPRegistry?) {
+    package func attachHoverDocs(lspRegistry: LanguageServerRegistry?) {
         let hoverDocs = HoverDocumentationModel(
             lspRegistry: lspRegistry, taskProvider: taskProvider, index: DocCommentIndex(store: syntaxFacts))
         hoverDocs.isEnabled = settings.showsHoverDocumentation

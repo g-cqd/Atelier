@@ -36,7 +36,7 @@ package final class LanguageServerPolicy {
 
     /// Shuts a repository's session in `registry` down as soon as the user stops trusting the repository, rather than
     /// at its idle shutdown. The registry already refuses the root from then on; this stops the server running there.
-    package func stopSessionsOnRevocation(in registry: SourceKitLSPRegistry) {
+    package func stopSessionsOnRevocation(in registry: LanguageServerRegistry) {
         // Weak: the registry's own closures hold this policy, which holds the trust store that holds this closure.
         trust.onDecisionChanged = { [weak registry, taskProvider] root, decision in
             guard decision == .declined, let registry else { return }

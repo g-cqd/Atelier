@@ -170,7 +170,7 @@ final class AppServices {
     /// Whether and how sourcekit-lsp launches, per repository and for the SDK tier.
     let languageServerPolicy: LanguageServerPolicy
     /// One sourcekit-lsp session per trusted workspace root, shared by every comparison window.
-    let lspRegistry: SourceKitLSPRegistry
+    let lspRegistry: LanguageServerRegistry
     /// The on-device Apple SDK documentation tier, resolved once and shared by every comparison window.
     let sdkHoverTier: SDKHoverTier
 
@@ -188,7 +188,7 @@ final class AppServices {
         let policy = LanguageServerPolicy(
             trust: repositoryTrust, locate: LanguageServerPolicy.locate(with: toolDiscovery))
         languageServerPolicy = policy
-        let registry = SourceKitLSPRegistry(
+        let registry = LanguageServerRegistry(
             admits: { root in await policy.admitsSession(at: root) },
             makeConfiguration: { root in await policy.configuration(forRoot: root) })
         lspRegistry = registry
