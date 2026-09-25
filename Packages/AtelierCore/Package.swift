@@ -42,7 +42,8 @@ let package = Package(
         .library(name: "AtelierSearch", targets: ["AtelierSearch"]),
         .library(name: "AtelierDiagnostics", targets: ["AtelierDiagnostics"]),
         .library(name: "AtelierLSP", targets: ["AtelierLSP"]),
-        .library(name: "AtelierDocIndex", targets: ["AtelierDocIndex"])
+        .library(name: "AtelierDocIndex", targets: ["AtelierDocIndex"]),
+        .library(name: "AtelierDocComment", targets: ["AtelierDocComment"])
     ],
     dependencies: [
         .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "85065dc105c2f52cac1688242353a5c7eb0e45ce"),
@@ -112,12 +113,17 @@ let package = Package(
             ],
             swiftSettings: strict
         ),
-        // Documentation from source alone: doc comments indexed over swift-syntax trees, and the identifier under a
-        // position, for hover content that needs no build context. Files parse side by side through AemiRuntime.
+        // Doc comments without a parser: each language's comment convention rendered to markdown, declaration heads
+        // read after the lexer's comment and string tokens, and the identifier under a position (HOVER-16).
+        .target(
+            name: "AtelierDocComment", dependencies: ["AtelierLexers", "AtelierSyntaxModel"], swiftSettings: strict),
+        // Documentation from source alone: doc comments indexed over swift-syntax trees for Swift and through
+        // AtelierDocComment's extractors for other languages, and the identifier under a position, for hover content
+        // that needs no build context. Files parse side by side through AemiRuntime.
         .target(
             name: "AtelierDocIndex",
             dependencies: [
-                "AtelierSwiftSyntax", "AtelierSyntaxModel",
+                "AtelierDocComment", "AtelierSwiftSyntax", "AtelierSyntaxModel",
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "AemiRuntime", package: "aemi")
@@ -284,9 +290,12 @@ let package = Package(
         .testTarget(
             name: "AtelierDocIndexTests",
             dependencies: [
-                "AtelierDocIndex", "AtelierSwiftSyntax", "AtelierSyntaxModel",
+                "AtelierDocIndex", "AtelierDocComment", "AtelierSwiftSyntax", "AtelierSyntaxModel",
                 .product(name: "AemiTestKit", package: "aemi")
             ],
+            swiftSettings: strict),
+        .testTarget(
+            name: "AtelierDocCommentTests", dependencies: ["AtelierDocComment", "AtelierSyntaxModel"],
             swiftSettings: strict)
     ]
 )
