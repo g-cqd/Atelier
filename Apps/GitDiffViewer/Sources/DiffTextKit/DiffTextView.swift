@@ -265,6 +265,8 @@ package final class DiffTextViewCoordinator: NSObject {
     private var unwrappedWidth: (id: UUID, width: CGFloat)?
     /// Sizes the pane again whenever TextKit's usage bounds change; see ``followLayout()``.
     fileprivate var usageObservation: NSKeyValueObservation?
+    /// Whether the pane is being sized for a change of TextKit's usage bounds; see ``followLayout()``.
+    private var isFollowingUsage = false
     /// Whether the pane scrolls past the end of its text until the last line reaches the top; otherwise it stops with
     /// the last line at the bottom. See ``updateOverscroll(in:)``.
     package var scrollsPastEnd = false
@@ -462,11 +464,21 @@ package final class DiffTextViewCoordinator: NSObject {
     /// ran before this: when the text was applied, and when the clip view took its size, whose new width drops what
     /// TextKit had laid out. Only a resize of the text view or of its clip view sized the pane again, and TextKit
     /// resizes the text view only past the size the pane had: a pane could keep a size that its text had long outgrown.
+    ///
+    /// Sizing the pane reads TextKit's layout, which first carries out the invalidations TextKit has pending, and each
+    /// fragment one of them drops changes the usage bounds again, within the read: a change that comes while the pane
+    /// is being sized is left to that sizing, which reads the layout they leave. Sizing the pane for each of them in
+    /// turn nested one call per fragment dropped, and a text laid out over some 1,800 rows, replaced, overflowed the
+    /// stack.
     package func followLayout() {
         usageObservation = textView?.textLayoutManager?
             .observe(\.usageBoundsForTextContainer) { [weak self] _, _ in
                 MainActor.assumeIsolated {
-                    guard let self, let clipView = self.textView?.enclosingScrollView?.contentView else { return }
+                    guard let self, !self.isFollowingUsage,
+                        let clipView = self.textView?.enclosingScrollView?.contentView
+                    else { return }
+                    self.isFollowingUsage = true
+                    defer { self.isFollowingUsage = false }
                     self.updateOverscroll(in: clipView)
                 }
             }
