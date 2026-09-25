@@ -25,6 +25,8 @@ struct DiagnosticDiffTextView: View {
     /// The file shown, whose scroll position the pane keeps in the model's ``DiffViewerModel/scrollMemory`` while its
     /// tab is open; nil keeps none.
     var scrollMemoryPath: String?
+    /// The height of bars above the pane that AppKit does not know of, the tab bar, which it runs beneath (TAB-09).
+    var underBars: CGFloat = 0
 
     /// This pane's findings, since its rows are its own.
     @State private var diagnostics = PaneDiagnostics()
@@ -42,7 +44,8 @@ struct DiagnosticDiffTextView: View {
             diagnosticsVersion: diagnostics.version,
             onDiagnosticClick: diagnostics.showFindings,
             scrollMemory: model.scrollMemory, scrollMemoryPath: scrollMemoryPath,
-            scrollsPastEnd: model.settings.scrollsPastEnd, bouncesAtEdges: model.settings.bouncesAtEdges
+            scrollsPastEnd: model.settings.scrollsPastEnd, bouncesAtEdges: model.settings.bouncesAtEdges,
+            underBars: underBars
         )
         .refined(with: model.refinedSides(for: rendered))
         .followingDiagnostics(of: rendered, in: model, into: diagnostics)

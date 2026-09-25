@@ -101,11 +101,11 @@ struct FileTabScrollRangeTests {
         let content = try #require(layoutManager.textContentManager)
         let origin = pane.textView.textContainerOrigin.y
         let fragment = try #require(
-            layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: pane.clip.bounds.minY - origin)))
+            layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: pane.shownTop - origin)))
         let row = pane.rendered.rowIndex(
             containing: content.offset(from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
         )
-        return (row, pane.clip.bounds.minY - origin - fragment.layoutFragmentFrame.minY)
+        return (row, pane.shownTop - origin - fragment.layoutFragmentFrame.minY)
     }
 
     static func text(_ lines: [String], changing changed: Int? = nil) -> String {
@@ -119,7 +119,7 @@ struct FileTabScrollRangeTests {
         let row = try #require(model.scrollRequest?.row, comment)
         for pane in try panes(in: content) {
             #expect(pane.textView.frame.height >= pane.rowsHeight, comment)
-            let below = try pane.top(ofRow: row) - pane.clip.bounds.minY
+            let below = try pane.top(ofRow: row) - pane.shownTop
             #expect(abs(below - 3 * pane.lineHeight) < 1, "\(comment): the row is \(below) below the pane's top")
         }
     }
@@ -127,10 +127,10 @@ struct FileTabScrollRangeTests {
     /// Each file pane shows its text whole, from its top, its text view filling the pane.
     static func expectWhole(in content: NSView, _ comment: Comment) throws {
         for pane in try panes(in: content) {
-            #expect(pane.clip.bounds.minY == 0, comment)
-            #expect(pane.textView.frame.height >= pane.clip.bounds.height, comment)
+            #expect(pane.shownTop == 0, comment)
+            #expect(pane.textView.frame.height >= pane.shownHeight, comment)
             #expect(pane.textView.frame.height >= pane.rowsHeight, comment)
-            #expect(try pane.bottom(ofRow: pane.lastRow) + pane.below <= pane.clip.bounds.height, comment)
+            #expect(try pane.bottom(ofRow: pane.lastRow) + pane.below <= pane.clip.bounds.maxY, comment)
         }
     }
 

@@ -42,6 +42,8 @@ struct DiffDetailView: View {
     let model: DiffViewerModel
 
     private var showsTabs: Bool { !model.tabs.tabs.isEmpty }
+    /// The tab bar's height as last laid out, which the file panes run beneath (book TAB-09).
+    @State private var tabBarHeight: CGFloat = 0
 
     var body: some View {
         content
@@ -49,7 +51,14 @@ struct DiffDetailView: View {
             // A bar rather than a row stacked above the content: the card list scrolls beneath the tabs as it does
             // beneath the toolbar, and the system extends its scroll edge effect over them.
             .safeAreaBar(edge: .top, spacing: 0) {
-                if showsTabs { TabBarView(model: model) }
+                if showsTabs {
+                    TabBarView(model: model)
+                        .onGeometryChange(for: CGFloat.self) {
+                            $0.size.height
+                        } action: { height in
+                            tabBarHeight = height
+                        }
+                }
             }
     }
 
@@ -59,13 +68,15 @@ struct DiffDetailView: View {
                 CombinedDiffView(model: model)
                     .updatingMarker(model.shownComparison)
             case .file(let rendered):
-                // The AppKit panes stay below the bar: SwiftUI hands neither the bar's inset nor its edge effect to
-                // an NSScrollView, so a divider closes the bar here instead.
-                VStack(spacing: 0) {
-                    if showsTabs { Divider() }
-                    panes(for: rendered)
-                        .updatingMarker(model.shownComparison)
-                }
+                // The panes run beneath the toolbar and the tab bar, as the card list does (book TAB-09). AppKit knows
+                // the toolbar but not the tab bar, a SwiftUI bar: each pane beneath it takes its height as safe area of
+                // its own, and the system's scroll edge effect covers both. The marker stays below the bars.
+                Color.clear
+                    .overlay {
+                        panes(for: rendered, underBars: showsTabs ? tabBarHeight : 0)
+                            .ignoresSafeArea(.container, edges: .top)
+                    }
+                    .updatingMarker(model.shownComparison)
             case .loading:
                 ProgressView("Comparing…")
             case .error(let error):
@@ -86,7 +97,8 @@ struct DiffDetailView: View {
         }
     }
 
-    @ViewBuilder private func panes(for rendered: RenderedDiff) -> some View {
+    /// The file's panes; `underBars` is the height of the tab bar, which AppKit does not know of, above them.
+    @ViewBuilder private func panes(for rendered: RenderedDiff, underBars: CGFloat) -> some View {
         switch model.settings.mode {
             case .inline:
                 if let unified = rendered.unified {
@@ -101,7 +113,8 @@ struct DiffDetailView: View {
                         scrollRequest: model.scrollRequest,
                         onGapDrag: { model.handleGapDrag($0) },
                         onDisplayed: { model.noteDisplayed(rendered.id) },
-                        scrollMemoryPath: model.renderedPath
+                        scrollMemoryPath: model.renderedPath,
+                        underBars: underBars
                     )
                 }
             case .split, .stacked:
@@ -119,7 +132,8 @@ struct DiffDetailView: View {
                         scrollRequest: model.scrollRequest,
                         onGapDrag: { model.handleGapDrag($0) },
                         onDisplayed: { model.noteDisplayed(rendered.id) },
-                        scrollMemoryPath: model.renderedPath
+                        scrollMemoryPath: model.renderedPath,
+                        underBars: underBars
                     )
                 }
         }
@@ -140,6 +154,8 @@ private struct SplitDiffView: View {
     let onGapDrag: (GapDragEvent) -> Void
     let onDisplayed: () -> Void
     let scrollMemoryPath: String?
+    /// The tab bar's height above the panes: both run beneath it side by side, the old one alone stacked.
+    let underBars: CGFloat
 
     @State private var controller = SplitPaneController()
 
@@ -150,14 +166,16 @@ private struct SplitDiffView: View {
                 model: model, rendered: old, gutter: .old, keepsScrollPosition: keepsScrollPosition,
                 wrapsLines: wrapsLines, wrapColumn: wrapColumn, showsMinimap: showsMinimap,
                 syncsScrolling: syncsScrolling, scrollRequest: scrollRequest, splitController: controller,
-                onGapDrag: onGapDrag, onDisplayed: onDisplayed, scrollMemoryPath: scrollMemoryPath
+                onGapDrag: onGapDrag, onDisplayed: onDisplayed, scrollMemoryPath: scrollMemoryPath,
+                underBars: underBars
             )
             Divider()
             DiagnosticDiffTextView(
                 model: model, rendered: new, gutter: .new, keepsScrollPosition: keepsScrollPosition,
                 wrapsLines: wrapsLines, wrapColumn: wrapColumn, showsMinimap: showsMinimap,
                 syncsScrolling: syncsScrolling, scrollRequest: scrollRequest, splitController: controller,
-                onGapDrag: onGapDrag, onDisplayed: onDisplayed, scrollMemoryPath: scrollMemoryPath
+                onGapDrag: onGapDrag, onDisplayed: onDisplayed, scrollMemoryPath: scrollMemoryPath,
+                underBars: isStacked ? 0 : underBars
             )
         }
         .onAppear { controller.wrapsLines = wrapsLines }
