@@ -132,6 +132,7 @@ public indirect enum QueryPattern: Sendable, Equatable {
     case nodeMatch(type: String, children: [QueryPattern], capture: Capture?)
     case fieldMatch(name: String, pattern: QueryPattern)
     case literal(String, capture: Capture?)
+    /// A bare `_`: any node, named or anonymous.
     case wildcard(capture: Capture?)
     case alternation([QueryPattern])
     case negatedField(String)
@@ -143,7 +144,8 @@ public indirect enum QueryPattern: Sendable, Equatable {
 
 extension QueryPattern {
     /// The type of a ``nodeMatch(type:children:capture:)`` that matches a named node of any type: tree-sitter's
-    /// `(_ ...)`, a wildcard node with children. `(_)` alone is ``wildcard(capture:)``.
+    /// parenthesized wildcard, `(_)` or `(_ ...)` with children. A bare `_` is ``wildcard(capture:)``, which matches
+    /// any node, named or anonymous.
     public static let namedWildcardType = "_"
 
     /// A capture in a pattern: its name, and its index in the ``Query/captureNames`` of the query that holds the
