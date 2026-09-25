@@ -25,7 +25,8 @@ public struct Point: Sendable, Equatable, Hashable, Comparable {
 ///
 /// Freeing a node frees its subtree in a loop, whichever copy is dropped last: a tree, a parse stack, a copy read from
 /// ``SyntaxTree/root``, or an array of nodes. Freed recursively, a chain of nodes overflows a 512 KiB thread stack
-/// between 2,000 and 3,000 levels.
+/// between 2,000 and 3,000 levels. Only a subtree without fields and at most ``maxInlineHeight`` levels tall is freed
+/// recursively, a few frames per level, and it costs no allocation of its own: most of a tree's nodes are such.
 public struct SyntaxNode: Sendable, Equatable {
     public var type: String
     public var byteRange: Range<Int>
@@ -33,17 +34,54 @@ public struct SyntaxNode: Sendable, Equatable {
     public var isError: Bool
     public var isExtra: Bool
     public var isNamed: Bool
-    /// The node's children and fields; nil for a node with neither, such as a token.
-    fileprivate var subtrees: Subtrees?
+    /// How many levels an inline subtree has below this node, 0 for a leaf; `UInt8.max` for a shared one.
+    fileprivate var inlineHeight: UInt8
+    fileprivate var storage: Storage
+
+    /// The most levels a subtree kept inline has below its root: freeing it takes a few frames per level.
+    static let maxInlineHeight: UInt8 = 8
 
     public var children: [SyntaxNode] {
-        get { subtrees?.children ?? [] }
-        _modify { yield &uniqueSubtrees().children }
+        get {
+            switch storage {
+                case .inline(let children): children
+                case .shared(let subtrees): subtrees.children
+            }
+        }
+        _modify {
+            switch storage {
+                case .shared:
+                    yield &uniqueSubtrees().children
+                case .inline(var children):
+                    // Released here, so that `children` is unique and changes in place.
+                    storage = .inline([])
+                    defer { (storage, inlineHeight) = Self.storage(children: children, fields: [:]) }
+                    yield &children
+            }
+        }
     }
 
     public var fields: [String: [SyntaxNode]] {
-        get { subtrees?.fields ?? [:] }
-        _modify { yield &uniqueSubtrees().fields }
+        get {
+            switch storage {
+                case .inline: [:]
+                case .shared(let subtrees): subtrees.fields
+            }
+        }
+        _modify {
+            switch storage {
+                case .shared:
+                    yield &uniqueSubtrees().fields
+                case .inline(let children):
+                    var fields: [String: [SyntaxNode]] = [:]
+                    defer {
+                        if !fields.isEmpty {
+                            (storage, inlineHeight) = Self.storage(children: children, fields: fields)
+                        }
+                    }
+                    yield &fields
+            }
+        }
     }
 
     public init(
@@ -62,18 +100,36 @@ public struct SyntaxNode: Sendable, Equatable {
         self.isError = isError
         self.isExtra = isExtra
         self.isNamed = isNamed
-        self.subtrees = children.isEmpty && fields.isEmpty ? nil : Subtrees(children: children, fields: fields)
+        (storage, inlineHeight) = Self.storage(children: children, fields: fields)
+    }
+
+    /// Where a node with `children` and `fields` keeps them, and its inline height: inline when it has no fields and
+    /// its children are inline, at most ``maxInlineHeight`` levels below it; shared otherwise.
+    fileprivate static func storage(children: [SyntaxNode], fields: [String: [SyntaxNode]]) -> (Storage, UInt8) {
+        if fields.isEmpty {
+            var height: UInt8 = 0
+            for child in children {
+                guard child.inlineHeight < maxInlineHeight else {
+                    height = .max
+                    break
+                }
+                height = max(height, child.inlineHeight + 1)
+            }
+            if height <= maxInlineHeight { return (.inline(children), height) }
+        }
+        return (.shared(Subtrees(children: children, fields: fields)), .max)
     }
 
     /// Whether the two nodes have the same attributes, children and fields, compared in a loop: compared recursively,
     /// two chains overflow a 512 KiB thread stack a few thousand levels down.
-    /// - Complexity: O(n) in the nodes the two do not share. A pair of subtrees reached twice, as a field reaches its
-    ///   child's, is compared once: comparing fields and children alike doubles the work at each level a field names.
+    /// - Complexity: O(n) in the nodes the two do not share. A pair of shared subtrees reached twice, as a field
+    ///   reaches its child's, is compared once: comparing fields and children alike doubles the work at each level a
+    ///   field names. An inline subtree has no fields.
     public static func == (lhs: SyntaxNode, rhs: SyntaxNode) -> Bool {
         guard lhs.hasSameAttributes(as: rhs) else { return false }
         // The pairs of subtrees still to compare, below two nodes with the same attributes.
-        var pending: [(Subtrees?, Subtrees?)] = []
-        if lhs.subtrees !== rhs.subtrees { pending.append((lhs.subtrees, rhs.subtrees)) }
+        var pending: [(Storage, Storage)] = []
+        if !lhs.storage.isIdentical(to: rhs.storage) { pending.append((lhs.storage, rhs.storage)) }
         var compared: Set<SubtreesPair> = []
         /// Whether the two lists have the same count and their nodes the same attributes, pair by pair; queues the
         /// pairs' subtrees.
@@ -81,15 +137,21 @@ public struct SyntaxNode: Sendable, Equatable {
             guard leftNodes.count == rightNodes.count else { return false }
             for (leftNode, rightNode) in zip(leftNodes, rightNodes) {
                 guard leftNode.hasSameAttributes(as: rightNode) else { return false }
-                if leftNode.subtrees !== rightNode.subtrees { pending.append((leftNode.subtrees, rightNode.subtrees)) }
+                if !leftNode.storage.isIdentical(to: rightNode.storage) {
+                    pending.append((leftNode.storage, rightNode.storage))
+                }
             }
             return true
         }
         while let (left, right) = pending.popLast() {
-            let (leftFields, rightFields) = (left?.fields ?? [:], right?.fields ?? [:])
+            let (leftFields, rightFields) = (left.fields, right.fields)
             guard leftFields.count == rightFields.count else { return false }
-            if let left, let right, !compared.insert(SubtreesPair(left: left, right: right)).inserted { continue }
-            guard queue(left?.children ?? [], right?.children ?? []) else { return false }
+            if case .shared(let left) = left, case .shared(let right) = right,
+                !compared.insert(SubtreesPair(left: left, right: right)).inserted
+            {
+                continue
+            }
+            guard queue(left.children, right.children) else { return false }
             for (name, leftNodes) in leftFields {
                 guard let rightNodes = rightFields[name], queue(leftNodes, rightNodes) else { return false }
             }
@@ -107,56 +169,67 @@ public struct SyntaxNode: Sendable, Equatable {
     /// overflows a 512 KiB thread stack a few thousand levels down.
     ///
     /// `rewrite` changes a node's own attributes, never its children or fields, and returns whether the nodes below it
-    /// need rewriting too; those of a node it returns false for stay as they are. Subtrees reached twice, as a field
-    /// reaches its child's, are rebuilt once and stay shared.
+    /// need rewriting too; those of a node it returns false for stay as they are. Shared subtrees reached twice, as a
+    /// field reaches its child's, are rebuilt once and stay shared.
     /// - Complexity: O(n) in the nodes rewritten.
     func rewritten(by rewrite: (inout SyntaxNode) -> Bool) -> SyntaxNode {
         var root = self
-        guard rewrite(&root), let subtrees = root.subtrees else { return root }
-        // Each original subtree's rebuilt copy, and the path from the root to the node being rewritten: one frame per
-        // subtree being rebuilt, its current node the one whose subtrees the frame above rebuilds.
-        var copies: [ObjectIdentifier: Subtrees] = [:]
-        var frames = [RewriteFrame(subtrees)]
+        guard rewrite(&root), !root.isLeaf else { return root }
+        // Each shared subtree's rebuilt copy, and the path from the root to the node being rewritten: one frame per
+        // subtree being rebuilt, its current node the one whose subtree the frame above rebuilds.
+        var copies: [ObjectIdentifier: (Storage, UInt8)] = [:]
+        var frames = [RewriteFrame(root.storage)]
         while let top = frames.indices.last {
             guard var node = frames[top].current else {
                 let frame = frames.removeLast()
                 let copy = frame.rebuilt
-                copies[ObjectIdentifier(frame.original)] = copy
+                if let original = frame.original { copies[ObjectIdentifier(original)] = copy }
                 guard let parent = frames.indices.last else {
-                    root.subtrees = copy
+                    (root.storage, root.inlineHeight) = copy
                     return root
                 }
-                frames[parent].finishCurrent(withSubtrees: copy)
+                frames[parent].finishCurrent(withStorage: copy)
                 continue
             }
-            guard rewrite(&node), let below = node.subtrees else {
+            guard rewrite(&node), !node.isLeaf else {
                 frames[top].finishCurrent(node)
                 continue
             }
-            if let copy = copies[ObjectIdentifier(below)] {
-                node.subtrees = copy
+            if case .shared(let below) = node.storage, let copy = copies[ObjectIdentifier(below)] {
+                (node.storage, node.inlineHeight) = copy
                 frames[top].finishCurrent(node)
                 continue
             }
             frames[top].replaceCurrent(node)
-            frames.append(RewriteFrame(below))
+            frames.append(RewriteFrame(node.storage))
         }
         return root
     }
 
-    /// This node's subtrees, copied first if another node shares them, so a change reaches this node alone.
-    private mutating func uniqueSubtrees() -> Subtrees {
-        // Checked before binding: the binding is a reference of its own.
-        if isKnownUniquelyReferenced(&subtrees), let subtrees { return subtrees }
-        let copy = Subtrees(children: children, fields: fields)
-        subtrees = copy
-        return copy
+    /// Whether the node has neither children nor fields, as a token.
+    private var isLeaf: Bool {
+        if case .inline(let children) = storage { children.isEmpty } else { false }
     }
 
-    /// Moves this node's children and fields to `lists` when no other node shares them, so that dropping the node
-    /// frees nothing below it. Shared subtrees stay: their other holder keeps them alive.
+    /// This node's shared subtrees, copied first if another node shares them, so a change reaches this node alone.
+    private mutating func uniqueSubtrees() -> Subtrees {
+        guard case .shared(var subtrees) = storage else { preconditionFailure("the node's subtrees are inline") }
+        // Released here, so that `subtrees` is the only reference unless another node holds one.
+        storage = .inline([])
+        if !isKnownUniquelyReferenced(&subtrees) {
+            subtrees = Subtrees(children: subtrees.children, fields: subtrees.fields)
+        }
+        storage = .shared(subtrees)
+        return subtrees
+    }
+
+    /// Moves this node's shared children and fields to `lists` when no other node shares them, so that dropping the
+    /// node frees nothing below it. Shared subtrees another node holds stay: their other holder keeps them alive. An
+    /// inline subtree stays too: it is freed recursively, a few levels.
     fileprivate mutating func moveUnsharedSubtrees(to lists: inout [[SyntaxNode]]) {
-        guard isKnownUniquelyReferenced(&subtrees), let subtrees else { return }
+        guard case .shared(var subtrees) = storage else { return }
+        storage = .inline([])
+        guard isKnownUniquelyReferenced(&subtrees) else { return }
         subtrees.moveContents(to: &lists)
     }
 
@@ -193,6 +266,44 @@ public struct SyntaxNode: Sendable, Equatable {
     }
 }
 
+// MARK: - Storage
+
+/// Where a node keeps its children and fields.
+private enum Storage {
+    /// Children without fields, each inline too, at most ``SyntaxNode/maxInlineHeight`` levels below the node: a
+    /// leaf's is empty, and allocates nothing.
+    case inline([SyntaxNode])
+    /// Any other children and fields, freed in a loop by their last holder.
+    case shared(Subtrees)
+
+    var children: [SyntaxNode] {
+        switch self {
+            case .inline(let children): children
+            case .shared(let subtrees): subtrees.children
+        }
+    }
+
+    var fields: [String: [SyntaxNode]] {
+        switch self {
+            case .inline: [:]
+            case .shared(let subtrees): subtrees.fields
+        }
+    }
+
+    var isShared: Bool {
+        if case .shared = self { true } else { false }
+    }
+
+    /// Whether the two hold the same children and fields by identity, as a copy of a node holds its original's.
+    func isIdentical(to other: Storage) -> Bool {
+        switch (self, other) {
+            case (.inline(let left), .inline(let right)): left.isTriviallyIdentical(to: right)
+            case (.shared(let left), .shared(let right)): left === right
+            default: false
+        }
+    }
+}
+
 // MARK: - Subtrees
 
 /// A node's children and fields, behind a reference so that the last node to drop them can free them in a loop.
@@ -216,7 +327,7 @@ private final class Subtrees: @unchecked Sendable {
     /// with its forks, is only released: each subtree is taken apart once, by its last holder.
     /// - Complexity: O(n) in the nodes no other holder shares; O(`children.count`) when every child is a leaf.
     deinit {
-        guard !fields.isEmpty || children.contains(where: { $0.subtrees != nil }) else { return }
+        guard !fields.isEmpty || children.contains(where: \.storage.isShared) else { return }
         var lists: [[SyntaxNode]] = []
         moveContents(to: &lists)
         while let last = lists.indices.last {
@@ -255,26 +366,29 @@ private struct SubtreesPair: Hashable {
 /// A subtree ``SyntaxNode/rewritten(by:)`` is rebuilding: its children, then each field's nodes, and the node it is
 /// at.
 private struct RewriteFrame {
-    let original: Subtrees
+    /// The shared subtree being rebuilt; nil for an inline one.
+    let original: Subtrees?
     /// The children, then each field's nodes in the order of `names`; rewritten up to the current node.
     private var lists: [[SyntaxNode]]
     private let names: [String]
     private var list = 0
     private var index = 0
 
-    init(_ original: Subtrees) {
-        self.original = original
-        names = Array(original.fields.keys)
-        lists = [original.children] + names.map { original.fields[$0] ?? [] }
+    init(_ storage: Storage) {
+        if case .shared(let subtrees) = storage { original = subtrees } else { original = nil }
+        let fields = storage.fields
+        names = Array(fields.keys)
+        lists = [storage.children] + names.map { fields[$0] ?? [] }
         skipFinishedLists()
     }
 
     /// The node to rewrite next, nil once every one is.
     var current: SyntaxNode? { list < lists.count ? lists[list][index] : nil }
 
-    /// The subtree over the rewritten nodes.
-    var rebuilt: Subtrees {
-        Subtrees(children: lists[0], fields: Dictionary(uniqueKeysWithValues: zip(names, lists.dropFirst())))
+    /// The storage of the rewritten nodes, and its inline height.
+    var rebuilt: (Storage, UInt8) {
+        SyntaxNode.storage(
+            children: lists[0], fields: Dictionary(uniqueKeysWithValues: zip(names, lists.dropFirst())))
     }
 
     /// Replaces the current node with `node`, rewritten but for the subtrees below it, which a frame above rebuilds.
@@ -282,9 +396,9 @@ private struct RewriteFrame {
         lists[list][index] = node
     }
 
-    /// Gives the current node, rewritten, the rebuilt `subtrees`, and moves to the next node.
-    mutating func finishCurrent(withSubtrees subtrees: Subtrees) {
-        lists[list][index].subtrees = subtrees
+    /// Gives the current node, rewritten, the rebuilt `storage`, and moves to the next node.
+    mutating func finishCurrent(withStorage storage: (Storage, UInt8)) {
+        (lists[list][index].storage, lists[list][index].inlineHeight) = storage
         advance()
     }
 
