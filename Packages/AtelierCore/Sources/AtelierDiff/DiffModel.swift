@@ -92,6 +92,31 @@ public struct DiffModel: Sendable {
         tokenRanges: any SyntaxTokenRanging,
         limits: DiffLimits = DiffLimits()
     ) {
+        self.init(structureOf: oldText, newText: newText, pipeline: pipeline, limits: limits)
+        let oldLines = self.oldLines
+        let newLines = self.newLines
+        let changes = structure.changes
+        let tokens = SyntaxTokenSource(provider: tokenRanges, language: language, oldText: oldText, newText: newText)
+        let options = IntralineEmphasis.Options(
+            granularity: granularity, refiners: pipeline.intralineRefiners, tokens: tokens, limits: limits)
+        let emphasis = IntralineEmphasis.emphasize(
+            Array(changes.indices), of: changes, pairs: changePairs, options: options,
+            isCancelled: { false }, units: { isOld, index in Array((isOld ? oldLines[index] : newLines[index]).utf16) })
+        if let emphasis { self = applying(emphasis) }
+        if pipeline.detectsMovedBlocks { self = applying(MovedBlocks.detect(in: structure, limits: limits)) }
+    }
+
+    /// The first phase alone, from synchronous code: the rows of the two texts, with each change's pairs, and neither
+    /// emphasis nor moved lines, which ``applying(_:)`` adds as they are found. What a text needs to be drawn first.
+    /// - Parameters:
+    ///   - oldText: The left side, split into lines on `\n`.
+    ///   - newText: The right side, split into lines on `\n`.
+    ///   - pipeline: The stages the diff goes through; its pairing pairs each change's lines.
+    ///   - limits: The bounds the line diff and the pairing keep to.
+    public init(
+        structureOf oldText: String, newText: String, pipeline: DiffPipeline = DiffPipeline(),
+        limits: DiffLimits = DiffLimits()
+    ) {
         let old = TextLines(oldText)
         let new = TextLines(newText)
         let structure = LineDiff.makeStructure(old: old, new: new, pipeline: pipeline, limits: limits)
@@ -105,14 +130,6 @@ public struct DiffModel: Sendable {
         self.init(
             structure: structure, pairs: pairs, oldText: old.text, newText: new.text, oldLines: oldLines,
             newLines: newLines)
-        let tokens = SyntaxTokenSource(provider: tokenRanges, language: language, oldText: oldText, newText: newText)
-        let options = IntralineEmphasis.Options(
-            granularity: granularity, refiners: pipeline.intralineRefiners, tokens: tokens, limits: limits)
-        let emphasis = IntralineEmphasis.emphasize(
-            Array(structure.changes.indices), of: structure.changes, pairs: pairs, options: options,
-            isCancelled: { false }, units: { isOld, index in Array((isOld ? oldLines[index] : newLines[index]).utf16) })
-        if let emphasis { self = applying(emphasis) }
-        if pipeline.detectsMovedBlocks { self = applying(MovedBlocks.detect(in: structure, limits: limits)) }
     }
 
     /// The rows of `structure`, with each change's pairs in the split layout and no emphasis yet: what a text needs to
