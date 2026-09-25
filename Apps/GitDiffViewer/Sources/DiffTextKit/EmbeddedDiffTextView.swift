@@ -20,13 +20,17 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     /// Shows documentation for the identifier under the pointer after it rests there, the same as ``DiffTextView``.
     package var hoverEnabled = false
     package var hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)?
+    /// Whether the pane rubber-bands past its edges sideways; otherwise it stops at them. It never scrolls down or
+    /// up: the card list does, with its own bounce.
+    package var bouncesAtEdges = false
 
     package init(
         layouts: CardLayouts, side: RenderedSide, gutter: GutterStyle, width: CGFloat, wrapMode: WrapMode = .viewport,
         onGapDrag: ((GapDragEvent) -> Void)? = nil,
         onDisplayed: (() -> Void)? = nil, hoverEnabled: Bool = false,
-        hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil
+        hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil, bouncesAtEdges: Bool = false
     ) {
+        self.bouncesAtEdges = bouncesAtEdges
         self.layouts = layouts
         self.side = side
         self.gutter = gutter
@@ -55,9 +59,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         scrollView.hasHorizontalScroller = true
         scrollView.hasVerticalScroller = false
         scrollView.autohidesScrollers = true
-        // The pane stops at its edges instead of rubber-banding past them, sideways as down and up.
+        // Down and up, the card list scrolls and bounces; the pane scrolls only sideways, bouncing as `update` sets.
         scrollView.verticalScrollElasticity = .none
-        scrollView.horizontalScrollElasticity = .none
         scrollView.usesPredominantAxisScrolling = true
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
@@ -108,6 +111,10 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     /// first, the text view never lays the text out for a stale frame.
     private func update(_ pane: DiffPaneView, context: Context) {
         pane.gutterView.onGapDrag = onGapDrag
+        let elasticity: NSScrollView.Elasticity = bouncesAtEdges ? .automatic : .none
+        if let scrollView = pane.contentView as? NSScrollView, scrollView.horizontalScrollElasticity != elasticity {
+            scrollView.horizontalScrollElasticity = elasticity
+        }
         guard let layout, let textView = context.coordinator.textView, width > 0 else { return }
         let coordinator = context.coordinator
         let isNewLayout = coordinator.layout !== layout

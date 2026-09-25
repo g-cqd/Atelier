@@ -40,6 +40,8 @@ package struct DiffTextView: NSViewRepresentable {
     /// Whether the pane scrolls past the end of its text until the last line reaches the top; otherwise it stops with
     /// the last line at the bottom.
     package var scrollsPastEnd = false
+    /// Whether the pane rubber-bands past its edges, down, up and sideways; otherwise it stops at them.
+    package var bouncesAtEdges = false
 
     package init(
         rendered: RenderedText, gutter: GutterStyle, keepsScrollPosition: Bool = false, wrapsLines: Bool = true,
@@ -53,8 +55,9 @@ package struct DiffTextView: NSViewRepresentable {
         onDiagnosticClick: ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)? =
             nil,
         scrollMemory: PaneScrollMemory? = nil, scrollMemoryPath: String? = nil,
-        scrollsPastEnd: Bool = false
+        scrollsPastEnd: Bool = false, bouncesAtEdges: Bool = false
     ) {
+        self.bouncesAtEdges = bouncesAtEdges
         self.scrollMemory = scrollMemory
         self.scrollMemoryPath = scrollMemoryPath
         self.scrollsPastEnd = scrollsPastEnd
@@ -87,9 +90,7 @@ package struct DiffTextView: NSViewRepresentable {
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.automaticallyAdjustsContentInsets = false
-        // The pane stops at its edges, down, up and sideways, instead of rubber-banding past them.
-        scrollView.verticalScrollElasticity = .none
-        scrollView.horizontalScrollElasticity = .none
+        Self.setElasticity(of: scrollView, bouncing: bouncesAtEdges)
 
         let textView = scrollView.documentView as? NSTextView ?? DiffPaneTextView(usingTextLayoutManager: true)
         textView.isEditable = false
@@ -179,6 +180,7 @@ package struct DiffTextView: NSViewRepresentable {
             coordinator.updateOverscroll(in: scrollView.contentView)
             splitController?.wrapsLines = wrapsLines
         }
+        Self.setElasticity(of: scrollView, bouncing: bouncesAtEdges)
         if coordinator.scrollsPastEnd != scrollsPastEnd {
             coordinator.scrollsPastEnd = scrollsPastEnd
             coordinator.updateOverscroll(in: scrollView.contentView)
@@ -210,6 +212,13 @@ package struct DiffTextView: NSViewRepresentable {
         coordinator.hoverController.detach()
         coordinator.usageObservation = nil
         NotificationCenter.default.removeObserver(coordinator)
+    }
+
+    /// Lets `scrollView` rubber-band past its edges as AppKit does by default, or stops it at them, on both axes.
+    static func setElasticity(of scrollView: NSScrollView, bouncing: Bool) {
+        let elasticity: NSScrollView.Elasticity = bouncing ? .automatic : .none
+        if scrollView.verticalScrollElasticity != elasticity { scrollView.verticalScrollElasticity = elasticity }
+        if scrollView.horizontalScrollElasticity != elasticity { scrollView.horizontalScrollElasticity = elasticity }
     }
 
     /// The coordinator, declared at file scope to keep this type under `type_body_length`.
