@@ -105,6 +105,19 @@ extension DiffViewerModel {
         }
     }
 
+    /// Takes the way out a "doesn't apply" state offers (GIT-06, D30, D32): the merged sidebar, the flat list, the sides
+    /// swapped, or the left side moved to the merge base of a diverged comparison, which is GitHub's view of it.
+    package func perform(_ action: CommitGroupingAction) {
+        switch action {
+            case .useMergedSidebar: settings.explorerPlacement = .unifiedSidebar
+            case .useFlatList: settings.treeStyle = .flat
+            case .swapSides: swapSides()
+            case .compareFromMergeBase(let commit):
+                guard case .gitRef(let repository, _)? = left.source else { return }
+                left.load(.gitRef(repository: repository, ref: commit), repository: left.repository)
+        }
+    }
+
     /// Stops any load in flight, which terminates its git run, and makes a load that already returned stale.
     func cancelCommitGroups() {
         commitGroupsTask?.cancel()

@@ -376,4 +376,59 @@ struct DiffViewerModelCommitGroupsTests {
                     action: .compare(.repository(Self.repository, leftRef: "main", rightRef: "c300")))
             ])
     }
+
+    // MARK: The "doesn't apply" actions (step 9)
+
+    @Test
+    func `Use Merged Sidebar and Use Flat List set what grouping needs, and then it applies`() async throws {
+        let history = ScriptedHistory(length: 2)
+        let (sut, _) = makeSUT(history)
+        sut.settings.explorerPlacement = .sidebar
+        sut.settings.treeStyle = .compact
+        serve(history)
+        try await load(sut)
+        #expect(sut.commitGroups.eligibility?.ineligibility?.action == .useMergedSidebar)
+
+        sut.perform(.useMergedSidebar)
+        try await harness.taskProvider.waitForAllTasks()
+        #expect(sut.settings.explorerPlacement == .unifiedSidebar)
+        #expect(sut.commitGroups.eligibility?.ineligibility?.action == .useFlatList)
+
+        sut.perform(.useFlatList)
+        try await harness.taskProvider.waitForAllTasks()
+        #expect(sut.settings.treeStyle == .flat)
+        #expect(sut.unifiedSections.map(\.id) == ["commit:c2", "commit:c1"])
+    }
+
+    @Test
+    func `Swap Sides puts the older state on the left`() async throws {
+        let history = ScriptedHistory(length: 2)
+        let (sut, _) = makeSUT(history)
+        serve(history)
+        sut.left.load(Self.feature, repository: nil)
+        sut.right.load(Self.main, repository: nil)
+        try await harness.taskProvider.waitForAllTasks()
+        #expect(sut.commitGroups.eligibility?.ineligibility == .newerStateOnLeft)
+
+        sut.perform(.swapSides)
+        try await harness.taskProvider.waitForAllTasks()
+
+        #expect(sut.left.source == Self.main)
+        #expect(sut.unifiedSections.map(\.id) == ["commit:c2", "commit:c1"])
+    }
+
+    @Test
+    func `Compare from Merge Base moves the left side to the merge base's commit`() async throws {
+        let history = ScriptedHistory(length: 2, diverged: true)
+        let (sut, _) = makeSUT(history)
+        serve(history)
+        try await load(sut)
+        let action = try #require(sut.commitGroups.eligibility?.ineligibility?.action)
+
+        sut.perform(action)
+        try await harness.taskProvider.waitForAllTasks()
+
+        #expect(action == .compareFromMergeBase("c0"))
+        #expect(sut.left.source == .gitRef(repository: Self.repository, ref: "c0"))
+    }
 }
