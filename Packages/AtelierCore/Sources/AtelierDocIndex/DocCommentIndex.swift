@@ -1,3 +1,4 @@
+public import AtelierDocComment
 import AtelierSwiftSyntax
 public import AtelierSyntaxModel
 
@@ -49,9 +50,13 @@ public struct DocEntry: Sendable, Equatable {
     public let uri: String
 }
 
-/// Documentation extracted from Swift doc comments, kept current by re-indexing only the files whose content
-/// changed. Files parse side by side, off the actor, so lookups carry on while an update runs, and a lookup reads
-/// one name's entries rather than every file's.
+/// Documentation extracted from doc comments, kept current by re-indexing only the files whose content changed. Files
+/// parse side by side, off the actor, so lookups carry on while an update runs, and a lookup reads one name's entries
+/// rather than every file's.
+///
+/// A file's language, from its URI's extension, picks its extractor: a Swift file is read with swift-syntax, and any
+/// other with its entry in the index's extractor table, ``defaultExtractors`` unless given; a file of a language the
+/// table lacks has no entries.
 public actor DocCommentIndex {
     private struct FileState {
         /// The blob id the file was indexed at, when the caller gave one.
@@ -65,27 +70,54 @@ public actor DocCommentIndex {
     private var files: [String: FileState] = [:]
     /// Every file's entries by name, then by URI.
     private var byName: [String: [String: [DocEntry]]] = [:]
-    /// Turns one file's content into its entries.
+    /// Turns one Swift file's content into its entries.
     private nonisolated let extractor: @Sendable (_ uri: String, _ content: String) -> [DocEntry]
+    /// Reads the declarations of every other language's files, by language.
+    private nonisolated let extractors: [Language: any DeclarationExtracting]
     /// Where a file with a blob id finds its declarations, when another reader parsed it first, and leaves them.
     private nonisolated let store: SyntaxFactsStore?
 
-    public init() {
-        self.init(extractor: Self.extractEntries(uri:content:))
+    /// The extractor of each language the index reads besides Swift: the lexical one for TypeScript, JavaScript and Go
+    /// (HOVER-16). A language whose grammar qualifies moves to the grammar's declarations here, and nowhere else.
+    public static let defaultExtractors: [Language: any DeclarationExtracting] = [
+        .typescript: LexicalDeclarationExtractor(), .javascript: LexicalDeclarationExtractor(),
+        .go: LexicalDeclarationExtractor()
+    ]
+
+    /// - Parameter extractors: The extractor of each language besides Swift.
+    public init(extractors: [Language: any DeclarationExtracting] = defaultExtractors) {
+        self.init(extractor: Self.extractEntries(uri:content:), extractors: extractors)
     }
 
-    /// An index that extracts entries with `extractor`, such as a spy counting the files parsed.
-    public init(extractor: @escaping @Sendable (_ uri: String, _ content: String) -> [DocEntry]) {
+    /// An index that extracts Swift files' entries with `extractor`, such as a spy counting the files parsed.
+    public init(
+        extractor: @escaping @Sendable (_ uri: String, _ content: String) -> [DocEntry],
+        extractors: [Language: any DeclarationExtracting] = defaultExtractors
+    ) {
         self.extractor = extractor
+        self.extractors = extractors
         store = nil
     }
 
-    /// An index whose files with a blob id take their declarations from `store` (PERF-11 step 3): a file the colour
-    /// tier or the intraline diff parsed is not parsed again, and one parsed here leaves every fact there for them.
-    /// Files without one are parsed for their declarations alone.
-    public init(store: SyntaxFactsStore) {
+    /// An index whose Swift files with a blob id take their declarations from `store` (PERF-11 step 3): a file the
+    /// colour tier or the intraline diff parsed is not parsed again, and one parsed here leaves every fact there for
+    /// them. Swift files without one are parsed for their declarations alone.
+    public init(store: SyntaxFactsStore, extractors: [Language: any DeclarationExtracting] = defaultExtractors) {
         extractor = Self.extractEntries(uri:content:)
+        self.extractors = extractors
         self.store = store
+    }
+
+    /// Whether the index reads files of `language`.
+    public nonisolated func indexes(_ language: Language) -> Bool {
+        language == .swift || extractors[language] != nil
+    }
+
+    /// The language of the file `uri` names, a `file://` or `atelier-blob://` URI, by its extension. Read from the
+    /// text, not through `URL`, which would take a `#` or `?` in a blob path for a fragment or a query.
+    public static func language(ofURI uri: String) -> Language {
+        guard let name = uri.split(separator: "/").last, let dot = name.lastIndex(of: ".") else { return .plain }
+        return Language(fileExtension: String(name[name.index(after: dot)...]))
     }
 
     /// How many files the index holds.
@@ -118,11 +150,17 @@ public actor DocCommentIndex {
             }
         }
         let extractor = extractor
+        let extractors = extractors
         let store = store
         let limit = ProcessInfo.processInfo.activeProcessorCount
         let parsed = try await mapConcurrently(changed, limit: limit) { change in
             try Task.checkCancellation()
             let file = change.file
+            let language = Self.language(ofURI: file.uri)
+            if language != .swift {
+                let declarations = extractors[language]?.declarations(in: file.content, language: language) ?? []
+                return Self.entries(of: declarations, uri: file.uri)
+            }
             if let store, let blobID = file.blobID {
                 let revision = SourceRevision(documentID: file.uri, language: .swift, key: .content(blobID))
                 let facts = await SwiftSyntaxFacts.facts(for: revision, text: file.content, in: store)
