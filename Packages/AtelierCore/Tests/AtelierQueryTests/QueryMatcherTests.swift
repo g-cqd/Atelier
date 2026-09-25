@@ -82,6 +82,35 @@ struct QueryMatcherTests {
     }
 
     @Test
+    func `A wildcard node with a field matches a named node of any type that has it`() throws {
+        let key = SyntaxNode(type: "identifier", byteRange: 0 ..< 1)
+        let colon = SyntaxNode(type: ":", byteRange: 1 ..< 2, isNamed: false)
+        let pair = SyntaxNode(type: "pair", children: [key, colon], byteRange: 0 ..< 2, fields: ["key": [key]])
+        let keyless = SyntaxNode(type: "pair", children: [], byteRange: 2 ..< 2)
+        let root = SyntaxNode(type: "mapping", children: [pair, keyless], byteRange: 0 ..< 2)
+        let tree = SyntaxTree(root: root, source: "k:")
+
+        let query = try QueryParser.parse("(_ key: (identifier) @property) @entry")
+        let matches = QueryMatcher.execute(query: query, tree: tree)
+
+        #expect(matches.map { $0.captures.map(\.node) } == [[key, pair]])
+    }
+
+    @Test
+    func `A wildcard node with a child skips anonymous nodes`() throws {
+        let inner = SyntaxNode(type: "identifier", byteRange: 0 ..< 1)
+        let anonymous = SyntaxNode(type: ".", children: [inner], byteRange: 0 ..< 1, isNamed: false)
+        let named = SyntaxNode(type: "navigation_suffix", children: [inner], byteRange: 0 ..< 1)
+        let root = SyntaxNode(type: "source", children: [anonymous, named], byteRange: 0 ..< 1)
+        let tree = SyntaxTree(root: root, source: "x")
+
+        let query = try QueryParser.parse("(_ (identifier)) @parent")
+        let matches = QueryMatcher.execute(query: query, tree: tree)
+
+        #expect(matches.map { $0.captures.map(\.node) } == [[named]])
+    }
+
+    @Test
     func `Positional child matching respects order`() {
         let identifier = SyntaxNode(type: "identifier", byteRange: 0 ..< 1)
         let number = SyntaxNode(type: "number", byteRange: 1 ..< 2)
