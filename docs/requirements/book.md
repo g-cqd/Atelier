@@ -177,6 +177,9 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
 | D35 | 09-25 | PERF-11: how are sourcekit-lsp semantic tokens offered? | "On by default where possible": used automatically for every working-tree side and KittyCode file once the language server is trusted | PERF-11 |
 | D36 | 09-25 | Fix KittyCode dropping grammar color on refresh ahead of the tier work? | "Yes, keep grammar color now (Recommended)" | PERF-11 |
 | D37 | 09-25 | What comes first in the plan? | Typed: "i'd prefer that you cancel the work you started on kitty code, what has priority to me is core shared code or gitdiffviewer relevant improvement, reschedule the roadmap accordingly please": core shared code and GitDiffViewer improvements first; work that only improves KittyCode is deferred | PROC |
+| D38 | 09-25 | What comes first now? | Typed: "the gitdiffviewer ui and ux topics related to the gutter, and the rendering and hover work are right now what i would prioritize, i was not expecting you to do the commit grouping stuff now": GitDiffViewer's gutter UI and UX (DIFF-02 to DIFF-04, DIFF-06), the rendering work (CARD-12, PERF-09, PERF-11, REND) and hover (HOVER-16) come first; commit grouping gets only its fix | PROC |
+| D39 | 09-25 | GIT-06: what does a file under a commit show? | Typed: "when using grouping the diff happens against the previous commit state so we should always have the net difference between 2 commits not a weird sum": that commit's change, from its first parent to the commit; replaces D31 | GIT-06 |
+| D40 | 09-25 | How do agents build, hand back and use worktrees? | Typed (R124 to R126): build once per completed step in one configuration, with no combination matrix; the agent's final run after rebasing onto main is the verification and the coordinator does not rebuild it; few long-lived worktrees. Written into the skills (`3ac96f9`, `515e4e0`) and `AGENTS.md` (`eeba05e`) | PROC |
 
 ## Answered questions (09-23 09:37)
 
@@ -1163,7 +1166,11 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
      says why it does not apply.
   3. Each section can be disclosed and collapsed, and remembers that state through a reload.
   4. Building the groups never blocks the interface, and a range of many commits stays responsive.
-  Criterion 1 is settled by `Apps/GitDiffViewer/docs/commit-grouping-design.md` and decisions D29 to D32.
+  5. A file selected under a commit shows that commit's own change to it, from the commit's first parent to the
+     commit, never the whole range's sum; a selected commit shows its own changes the same way, and Uncommitted
+     Changes shows HEAD against the working tree (D39).
+  Criterion 1 is settled by `Apps/GitDiffViewer/docs/commit-grouping-design.md` and decisions D29 to D32; D39
+  replaces D31's net diff.
 - **Priority:** Should. **Related:** CARD-09, GIT-03.
 
 ### WIN: Window chrome and stability
@@ -1884,3 +1891,9 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R120 | 09-25 | "i'd like that we investigate ways to improve the one flat sidebar file list, by having a toggleable setting to group through disclosable section diffed files by commit when the 2 compared repo states share the same ancestry, it can only work in flat sidebar, for repos" | GIT-06 |
 | R121 | 09-25 | "imo, the highlighting should be a tiered job, lexer and grammar started in parallel, swift syntax and sourcekit when enabled, used to also enrich the color syntaxing ideally and provide more information at that moment as well" | PERF-11 |
 | R122 | 09-25 | "i'd prefer that you cancel the work you started on kitty code, what has priority to me is core shared code or gitdiffviewer relevant improvement, reschedule the roadmap accordingly please" | D37 |
+| R123 | 09-25 | "the agents seem to be waiting a lot again, inspect that please" | PROC-13; exclusive jobs drained the machine (the quiet-window change in the work tool) |
+| R124 | 09-25 (mid-turn) | "for future work, we need to stop building and building and increment building every 2 minutes and check build against 10 different combinations of things" | D40 |
+| R125 | 09-25 (mid-turn) | "also, when an agent goes back to you it has already build-tested the result" and "also, i'm not convinced by the usage of worktrees at scale" | D40 |
+| R126 | 09-25 (mid-turn) | "please maybe refine the skills guidance across the whole skillset to refine a bit further how to handle all of that" | D40 |
+| R127 | 09-25 | "i'd prefer that you cancel the one you just started please, and that you gives me the whole list of things we have yet to do" | The grammar table work (queue item 8) stopped before any change |
+| R128 | 09-25 | "the gitdiffviewer ui and ux topics related to the gutter, and the rendering and hover work are right now what i would prioritize, i was not expecting you to do the commit grouping stuff now and now it's not working very well, i'd like that when using grouping the diff happens against the previous commit state so we should always have the net difference between 2 commits not a weird sum" | D38, D39, GIT-06 criterion 5 |
