@@ -360,10 +360,27 @@ extension DiffRenderer {
     /// - Returns: One entry per line, as ``tokensByLine(text:lines:language:)`` returns them.
     /// - Complexity: O(bytes of `text` + lines + tokens), in a handful of allocations.
     package static func tokensByLine(_ tokens: [HighlightToken], text: String, lines: [Substring]) -> LineTokens {
-        // Each line starts where it sits in the text. A CRLF line's `\r` is in the text but not in the line, so the walk
-        // steps over it; a sum of the lines' lengths alone would put every later line one byte early. A line ends where
-        // its own text does: a token that runs into the `\r` or the newline after it, such as a comment or an
-        // unterminated string, stops at the line's last character.
+        let utf8 = text.utf8Span
+        let bytes = utf8.span
+        let lineRanges = lineRanges(of: text, lines: lines)
+        var byLine = LineTokens(tokens, lineRanges: lineRanges)
+        // An ASCII text's byte offsets are already its UTF-16 ones.
+        if !utf8.isKnownASCII { byLine.moveToUTF16(over: bytes, lineRanges: lineRanges) }
+        return byLine
+    }
+
+    /// Where each of `lines` lies in `text`, in UTF-8 bytes, without its line break.
+    ///
+    /// Each line starts where it sits in the text. A CRLF line's `\r` is in the text but not in the line, so the walk
+    /// steps over it; a sum of the lines' lengths alone would put every later line one byte early. A line ends where its
+    /// own text does: a token that runs into the `\r` or the newline after it, such as a comment or an unterminated
+    /// string, stops at the line's last character.
+    /// - Parameters:
+    ///   - text: One side of the diff.
+    ///   - lines: `text`'s lines in order, as `DiffModel.lines(of:)` cuts them.
+    /// - Returns: One range per line, ascending and disjoint.
+    /// - Complexity: O(lines)
+    package static func lineRanges(of text: String, lines: [Substring]) -> [Range<Int>] {
         let utf8 = text.utf8Span
         let bytes = utf8.span
         var lineRanges: [Range<Int>] = []
@@ -376,10 +393,7 @@ extension DiffRenderer {
             if start < bytes.count, bytes[start] == UInt8(ascii: "\r") { start += 1 }
             start += 1
         }
-        var byLine = LineTokens(tokens, lineRanges: lineRanges)
-        // An ASCII text's byte offsets are already its UTF-16 ones.
-        if !utf8.isKnownASCII { byLine.moveToUTF16(over: bytes, lineRanges: lineRanges) }
-        return byLine
+        return lineRanges
     }
 }
 
