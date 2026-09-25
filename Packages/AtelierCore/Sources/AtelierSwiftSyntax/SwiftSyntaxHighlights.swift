@@ -75,15 +75,20 @@ public enum SwiftSyntaxHighlights {
         init(_ source: String, isCancelled: () -> Bool) throws(Failure) {
             let tree = Parser.parse(source: source)
             if isCancelled() { throw .cancelled }
-            let facts = TreeFacts(viewMode: .sourceAccurate)
-            facts.walk(tree)
+            let walk = TreeWalk(collectsDeclarations: false)
+            walk.walk(tree)
             let byteCount = source.utf8.count
             if byteCount > 0 {
-                let share = Double(facts.unexpectedBytes) / Double(byteCount)
+                let share = Double(walk.unexpectedBytes) / Double(byteCount)
                 if share > SwiftSyntaxHighlights.maximumUnexpectedShare { throw .tooManyUnexpectedBytes(share: share) }
             }
+            self.init(tree: tree, declarationNames: walk.declarationNames)
+        }
+
+        /// A tree parsed and walked already, as the facts' extraction has it.
+        init(tree: SourceFileSyntax, declarationNames: [Int: HighlightRole]) {
             self.tree = tree
-            declarationNames = facts.declarationNames
+            self.declarationNames = declarationNames
         }
 
         /// The syntactic tokens that meet `bytes`, a UTF-8 range of the text, or every token for nil; a token that
@@ -130,42 +135,6 @@ public enum SwiftSyntaxHighlights {
             case .operator: .operator
             case .identifier, .dollarIdentifier, .argumentLabel, .editorPlaceholder, .none: nil
         }
-    }
-}
-
-/// One walk over a tree for what the classification alone does not tell: where each declaration's name starts and
-/// what it declares, and how many bytes lie in unexpected nodes.
-private final class TreeFacts: SyntaxVisitor {
-    /// The role of each declaration's name, by the UTF-8 offset of its first byte.
-    var declarationNames: [Int: HighlightRole] = [:]
-    var unexpectedBytes = 0
-
-    override func visit(_ node: UnexpectedNodesSyntax) -> SyntaxVisitorContinueKind {
-        unexpectedBytes += node.totalLength.utf8Length
-        return .skipChildren
-    }
-
-    override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind { name(node.name, .type) }
-    override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind { name(node.name, .type) }
-    override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind { name(node.name, .type) }
-    override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind { name(node.name, .type) }
-    override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind { name(node.name, .type) }
-    override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind { name(node.name, .type) }
-    override func visit(_ node: AssociatedTypeDeclSyntax) -> SyntaxVisitorContinueKind { name(node.name, .type) }
-    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind { name(node.name, .function) }
-    override func visit(_ node: MacroDeclSyntax) -> SyntaxVisitorContinueKind { name(node.name, .function) }
-    override func visit(_ node: EnumCaseElementSyntax) -> SyntaxVisitorContinueKind { name(node.name, .constant) }
-
-    override func visit(_ node: PatternBindingSyntax) -> SyntaxVisitorContinueKind {
-        if let identifier = node.pattern.as(IdentifierPatternSyntax.self) {
-            declarationNames[identifier.identifier.positionAfterSkippingLeadingTrivia.utf8Offset] = .variable
-        }
-        return .visitChildren
-    }
-
-    private func name(_ token: TokenSyntax, _ role: HighlightRole) -> SyntaxVisitorContinueKind {
-        declarationNames[token.positionAfterSkippingLeadingTrivia.utf8Offset] = role
-        return .visitChildren
     }
 }
 
