@@ -79,7 +79,10 @@ struct DiagnosticDiffTextView: View {
         guard let hoverDocs = model.hoverDocs else { return nil }
         let palette = rendered.palette
         let overlay = overlay
+        let settings = model.settings
         return { hit in
+            // Read as the hit resolves, so a change of setting reaches the next panel shown.
+            let material = await settings.hoverPanelMaterial
             let side: HoverQuerySide = hit.side == .new ? .new : .old
             let rowDiagnostics = overlay.row(hit.row)?.findings.map { HoverDocument.DiagnosticEntry($0) } ?? []
             guard
@@ -87,9 +90,10 @@ struct DiagnosticDiffTextView: View {
                     fileIndex: hit.fileIndex, side: side, line: hit.line, utf16Column: hit.utf16Column)
             else {
                 guard !rowDiagnostics.isEmpty else { return nil }
-                return HoverDocument(diagnostics: rowDiagnostics)
+                return HoverDocument(diagnostics: rowDiagnostics).presented(on: material)
             }
             return HoverDocument.build(from: content, palette: palette).adding(diagnostics: rowDiagnostics)
+                .presented(on: material)
         }
     }
 
