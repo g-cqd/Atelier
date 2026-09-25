@@ -70,4 +70,28 @@ extension DiffViewerModel {
         // The caller sets the refinement back from the setting right after, which refines what shows again.
         if pipeline.refinesSwiftColor { pipeline.refinesSwiftColor = false }
     }
+
+    /// Refines the displayed Swift sides afresh once the user trusts `root`, a canonical repository root, when the
+    /// right side shown is a folder in it, or holds it: a side refined while the repository was untrusted got no
+    /// semantic colour, and its content, refined already, would not ask again until it changed. The refinement's own
+    /// reset runs it, as the setting does; nothing happens while semantic colour or the refinement is off.
+    func retrySemanticColor(afterTrusting root: URL) {
+        guard semanticColor.isEnabled, pipeline.refinesSwiftColor,
+            case .directory(let directory)? = commitScope?.right ?? right.source,
+            let shown = LanguageServerRegistry.canonicalRoot(directory),
+            Self.nests(shown, root)
+        else { return }
+        pipeline.refinesSwiftColor = false
+        pipeline.refinesSwiftColor = true
+    }
+
+    /// Whether one of two canonical directories is the other or lies inside it.
+    private static func nests(_ first: URL, _ second: URL) -> Bool {
+        let paths = [first, second]
+            .map { url in
+                let path = url.path(percentEncoded: false)
+                return path.hasSuffix("/") ? path : path + "/"
+            }
+        return paths[0].hasPrefix(paths[1]) || paths[1].hasPrefix(paths[0])
+    }
 }
