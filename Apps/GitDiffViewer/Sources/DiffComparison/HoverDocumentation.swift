@@ -222,7 +222,7 @@ package final class HoverDocumentationModel {
 
     private func primaryProvider(side: HoverQuerySide, onDiskRoot: URL?) async -> (any HoverProvider)? {
         guard side == .new, let onDiskRoot, let lspRegistry else { return nil }
-        guard let service = await lspRegistry.service(forRoot: onDiskRoot) else { return nil }
+        guard let service = await lspRegistry.session(forRoot: onDiskRoot, server: .sourceKitLSP) else { return nil }
         return LanguageServerHoverProvider(service: service, resolvesDocumentationPages: true)
     }
 

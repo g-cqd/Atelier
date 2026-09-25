@@ -189,8 +189,14 @@ final class AppServices {
             trust: repositoryTrust, locate: LanguageServerPolicy.locate(with: toolDiscovery))
         languageServerPolicy = policy
         let registry = LanguageServerRegistry(
-            admits: { root in await policy.admitsSession(at: root) },
-            makeConfiguration: { root in await policy.configuration(forRoot: root) })
+            admits: { root, server in
+                guard server == .sourceKitLSP else { return false }
+                return await policy.admitsSession(at: root)
+            },
+            makeConfiguration: { root, server in
+                guard server == .sourceKitLSP else { return nil }
+                return await policy.configuration(forRoot: root)
+            })
         lspRegistry = registry
         policy.stopSessionsOnRevocation(in: registry)
         let sdkRunner = diagnosticsRunner

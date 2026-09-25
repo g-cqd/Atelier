@@ -49,8 +49,8 @@ private struct TrustGate {
             trust: trust, defaults: defaults, locate: { _ in URL(filePath: "/usr/bin/false") }, taskProvider: tasks)
         let factory = factory
         registry = LanguageServerRegistry(
-            admits: { root in await policy.admitsSession(at: root) },
-            makeConfiguration: { root in
+            admits: { root, _ in await policy.admitsSession(at: root) },
+            makeConfiguration: { root, _ in
                 guard await policy.configuration(forRoot: root) != nil else { return nil }
                 return factory.configuration(forRoot: root)
             })
@@ -105,8 +105,8 @@ struct LanguageServerTrustGateTests {
         let gate = try TrustGate()
         defer { gate.removeRoot() }
 
-        #expect(await gate.registry.service(forRoot: gate.root) == nil)
-        #expect(await gate.registry.service(forRoot: gate.root) == nil)
+        #expect(await gate.registry.session(forRoot: gate.root, server: .sourceKitLSP) == nil)
+        #expect(await gate.registry.session(forRoot: gate.root, server: .sourceKitLSP) == nil)
 
         let request = try #require(gate.trust.claimNextRequest())
         #expect(request.root == gate.canonicalRoot)
@@ -117,10 +117,10 @@ struct LanguageServerTrustGateTests {
     func `a declined repository neither starts a session nor asks again`() async throws {
         let gate = try TrustGate()
         defer { gate.removeRoot() }
-        _ = await gate.registry.service(forRoot: gate.root)
+        _ = await gate.registry.session(forRoot: gate.root, server: .sourceKitLSP)
         gate.trust.answer(try #require(gate.trust.claimNextRequest()), trusts: false)
 
-        #expect(await gate.registry.service(forRoot: gate.root) == nil)
+        #expect(await gate.registry.session(forRoot: gate.root, server: .sourceKitLSP) == nil)
         #expect(gate.factory.roots.isEmpty)
         #expect(gate.trust.nextRequest == nil)
     }
@@ -131,7 +131,7 @@ struct LanguageServerTrustGateTests {
         defer { gate.removeRoot() }
         try gate.trustRoot()
 
-        let service = try #require(await gate.registry.service(forRoot: gate.root))
+        let service = try #require(await gate.registry.session(forRoot: gate.root, server: .sourceKitLSP))
 
         #expect(gate.factory.roots == [try #require(gate.canonicalRoot)])
         #expect(service.workspaceRoot == gate.canonicalRoot)
@@ -142,15 +142,15 @@ struct LanguageServerTrustGateTests {
         let gate = try TrustGate()
         defer { gate.removeRoot() }
         try gate.trustRoot()
-        let running = try #require(await gate.registry.service(forRoot: gate.root))
+        let running = try #require(await gate.registry.session(forRoot: gate.root, server: .sourceKitLSP))
 
         gate.trust.revoke(gate.root)
         try await gate.tasks.waitForAllTasks()
 
-        #expect(await gate.registry.service(forRoot: gate.root) == nil)
+        #expect(await gate.registry.session(forRoot: gate.root, server: .sourceKitLSP) == nil)
         // Trusted again, the root starts afresh: the revocation forgot the running session.
         try gate.trustRoot()
-        let restarted = try #require(await gate.registry.service(forRoot: gate.root))
+        let restarted = try #require(await gate.registry.session(forRoot: gate.root, server: .sourceKitLSP))
         #expect(restarted !== running)
         #expect(gate.factory.roots.count == 2)
     }
@@ -160,7 +160,7 @@ struct LanguageServerTrustGateTests {
         let gate = try TrustGate(appWideLocation: ToolLocation(isEnabled: false))
         defer { gate.removeRoot() }
 
-        #expect(await gate.registry.service(forRoot: gate.root) == nil)
+        #expect(await gate.registry.session(forRoot: gate.root, server: .sourceKitLSP) == nil)
 
         #expect(gate.trust.nextRequest == nil)
         #expect(gate.factory.roots.isEmpty)
