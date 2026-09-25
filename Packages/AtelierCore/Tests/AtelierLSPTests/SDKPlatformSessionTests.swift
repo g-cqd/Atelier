@@ -23,7 +23,7 @@ private actor PlatformSessions {
         self.gate = gate
     }
 
-    func make(_ platform: SDKPlatform) async -> SourceKitLSPService? {
+    func make(_ platform: SDKPlatform) async -> LanguageServerSession? {
         asked.append(platform)
         entered.open()
         if let gate {
@@ -43,8 +43,8 @@ private actor PlatformSessions {
             ])
         ])
         factories[platform] = factory
-        return SourceKitLSPService(
-            configuration: SourceKitLSPService.Configuration(
+        return LanguageServerSession(
+            configuration: LanguageServerSession.Configuration(
                 serverExecutable: URL(filePath: "/usr/bin/true"),
                 workspaceRoot: URL(filePath: "/probe-\(platform.rawValue)", directoryHint: .isDirectory)),
             clock: TestClock()

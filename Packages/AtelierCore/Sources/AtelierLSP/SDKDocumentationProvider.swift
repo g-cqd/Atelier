@@ -26,12 +26,12 @@ public enum SDKProbeDirectoryError: Error, Sendable, Equatable {
 /// hover asks again.
 public actor SDKDocumentationProvider: HoverProvider {
     /// Makes the session that resolves a platform's probes, or nil when the platform has none, as without its SDK.
-    public typealias SessionFactory = @Sendable (SDKPlatform) async -> SourceKitLSPService?
+    public typealias SessionFactory = @Sendable (SDKPlatform) async -> LanguageServerSession?
 
     private enum Session {
-        case ready(SourceKitLSPService?)
+        case ready(LanguageServerSession?)
         /// Being made; the callers waiting on it.
-        case making([CheckedContinuation<SourceKitLSPService?, Never>])
+        case making([CheckedContinuation<LanguageServerSession?, Never>])
     }
 
     private static let logger = Logger(subsystem: "Atelier.LSP", category: "SDKDocumentationProvider")
@@ -76,7 +76,7 @@ public actor SDKDocumentationProvider: HoverProvider {
     }
 
     /// A provider that resolves every platform's probes through `service`.
-    public init(service: SourceKitLSPService, cacheCapacity: Int = 256, resolvesDocumentationPages: Bool = false) {
+    public init(service: LanguageServerSession, cacheCapacity: Int = 256, resolvesDocumentationPages: Bool = false) {
         self.init(
             sessions: { _ in service }, cacheCapacity: cacheCapacity,
             resolvesDocumentationPages: resolvesDocumentationPages)
@@ -109,7 +109,7 @@ public actor SDKDocumentationProvider: HoverProvider {
         isShutDown = true
         let current = sessions
         sessions.removeAll()
-        var services: [SourceKitLSPService] = []
+        var services: [LanguageServerSession] = []
         for session in current.values {
             switch session {
                 case .ready(let service?): services.append(service)
@@ -125,14 +125,14 @@ public actor SDKDocumentationProvider: HoverProvider {
     // MARK: - Platforms and their sessions
 
     /// The session for `platform`, or the Mac's when `platform` has none; nil when neither has one.
-    private func session(preferring platform: SDKPlatform) async -> (SDKPlatform, SourceKitLSPService)? {
+    private func session(preferring platform: SDKPlatform) async -> (SDKPlatform, LanguageServerSession)? {
         if let service = await session(for: platform) { return (platform, service) }
         guard platform != .macOS, let service = await session(for: .macOS) else { return nil }
         return (.macOS, service)
     }
 
     /// `platform`'s session, made by the first caller while later ones wait for it, and kept, a nil one included.
-    private func session(for platform: SDKPlatform) async -> SourceKitLSPService? {
+    private func session(for platform: SDKPlatform) async -> LanguageServerSession? {
         switch sessions[platform] {
             case .ready(let service):
                 return service
@@ -182,7 +182,7 @@ public actor SDKDocumentationProvider: HoverProvider {
     /// Settled only when every probe it sent was answered, since a probe that got none might have had prose. A first
     /// probe that gets no answer sends no second one: the server is not answering yet.
     private func probeWithFallback(
-        on service: SourceKitLSPService, chain: String, chainStartsUppercase: Bool, imports: [String]
+        on service: LanguageServerSession, chain: String, chainStartsUppercase: Bool, imports: [String]
     ) async -> (content: HoverContent?, isSettled: Bool) {
         let first = await probe(
             on: service, chain: chain, chainStartsUppercase: chainStartsUppercase, imports: imports,
@@ -206,7 +206,7 @@ public actor SDKDocumentationProvider: HoverProvider {
 
     /// One probe on `service`, whose document is named under the session's workspace root, its probe directory.
     private func probe(
-        on service: SourceKitLSPService, chain: String, chainStartsUppercase: Bool, imports: [String],
+        on service: LanguageServerSession, chain: String, chainStartsUppercase: Bool, imports: [String],
         typePosition: Bool
     ) async -> HoverOutcome {
         // A session reconnects on its next hover, so one that `shutdown()` ended while this query waited on its first
@@ -438,7 +438,7 @@ extension SDKDocumentationProvider {
                     guard let located = await locateSDK(platform) else { return nil }
                     sdk = located
                 }
-                return SourceKitLSPService(
+                return LanguageServerSession(
                     configuration: scratchConfiguration(
                         for: platform, sdk: sdk, serverExecutable: serverExecutable, probeDirectory: probeDirectory,
                         idleShutdown: idleShutdown, requestTimeout: requestTimeout))
@@ -451,9 +451,9 @@ extension SDKDocumentationProvider {
     public static func scratchConfiguration(
         for platform: SDKPlatform, sdk: SDKLocation?, serverExecutable: URL, probeDirectory: URL,
         idleShutdown: Duration = .seconds(180), requestTimeout: Duration = .seconds(2)
-    ) -> SourceKitLSPService.Configuration {
+    ) -> LanguageServerSession.Configuration {
         var options: [String: JSONValue] = [:]
-        if case .object(let hoverOptions) = SourceKitLSPService.Configuration.hoverInitializationOptions {
+        if case .object(let hoverOptions) = LanguageServerSession.Configuration.hoverInitializationOptions {
             options = hoverOptions
         }
         if let sdk, let target = platform.targetTriple(sdkVersion: sdk.version) {
@@ -461,7 +461,7 @@ extension SDKDocumentationProvider {
                 "sdk": .string(sdk.path), "swiftCompilerFlags": .array([.string("-target"), .string(target)])
             ])
         }
-        return SourceKitLSPService.Configuration(
+        return LanguageServerSession.Configuration(
             serverExecutable: serverExecutable, workspaceRoot: probeDirectory, idleShutdown: idleShutdown,
             requestTimeout: requestTimeout, initializationOptions: .object(options))
     }
