@@ -271,6 +271,40 @@ import Testing
         #expect(rope._testSnapshotCachesAreEmpty)
     }
 
+    /// Lines of every kind, cut across leaves at every byte, a character split between two leaves included: each
+    /// range reads as the text split at its newlines.
+    @Test(arguments: [true, false])
+    func `ranged line reads agree with the text split at its newlines across leaves`(endsWithNewline: Bool) {
+        let shapes = ["", "a", "crlf\r", "\r", "é日本語 wide", String(repeating: "long line ", count: 70), "\u{FFFD}x"]
+        var text = (0 ..< 160).map { "\($0) " + shapes[$0 % shapes.count] }.joined(separator: "\n")
+        if endsWithNewline { text += "\n" }
+        var rope = Rope(text)
+        rope.invalidateSnapshotCaches()
+        // Split by bytes: a string splits "\r\n" as one character.
+        let lines = Array(text.utf8).split(separator: 0x0A, omittingEmptySubsequences: false)
+            .map { String(decoding: $0, as: UTF8.self) }
+        #expect(rope._testTreeShape.leafCount > 20)
+
+        for lower in 0 ... lines.count {
+            for upper in stride(from: lower, through: lines.count + 1, by: 5) {
+                #expect(rope.lines(in: lower ..< upper) == Array(lines[lower ..< min(upper, lines.count)]))
+            }
+        }
+        #expect(rope._testSnapshotCachesAreEmpty)
+    }
+
+    @Test
+    func `a ranged line read decodes a character split between two leaves whole`() {
+        // The rope halves 1,024 bytes into two leaves of 512, the second starting inside the two bytes of "é".
+        let first = String(repeating: "a", count: 511) + "é" + String(repeating: "b", count: 506)
+        var rope = Rope(first + "\nlast")
+        rope.invalidateSnapshotCaches()
+        #expect(rope.byteCount == 1_024)
+        #expect(rope._testTreeShape.leafCount == 2)
+
+        #expect(rope.lines(in: 0 ..< 2) == [first, "last"])
+    }
+
     @Test
     func `ranged line reads keep empty lines and a trailing empty line`() {
         var rope = Rope("a\n\nb\n")
