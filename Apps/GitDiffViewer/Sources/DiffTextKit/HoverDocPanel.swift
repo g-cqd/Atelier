@@ -353,8 +353,10 @@ package final class HoverDocPanel {
         declarationHeight?.constant =
             declarationChip.isHidden ? 0 : Self.measuredHeight(of: declaration, width: chipInnerWidth)
 
+        // The relationships are read from the declaration: over a bare declaration they would only repeat it.
+        let bodyBlocks = Self.bodyBlocks(for: document, showsRelationships: hasDocumentation)
         let hasHead = !titleLabel.isHidden || !summaryView.isHidden || !declarationChip.isHidden
-        headDivider.isHidden = !(hasHead && (hasDiscussion || hasFields))
+        headDivider.isHidden = !(hasHead && (!bodyBlocks.isEmpty || hasFields))
 
         renderParameters(document.parameters)
         parametersHeader.isHidden = document.parameters.isEmpty
@@ -372,8 +374,8 @@ package final class HoverDocPanel {
         renderDiagnostics(document.diagnostics)
         diagnosticsStack.isHidden = document.diagnostics.isEmpty
 
-        renderDiscussion(document.discussion, chipBackground: document.chipBackground, width: innerWidth)
-        bodyScrollView.isHidden = !hasDiscussion
+        renderDiscussion(bodyBlocks, chipBackground: document.chipBackground, width: innerWidth)
+        bodyScrollView.isHidden = bodyBlocks.isEmpty
         let bodyFullHeight = bodyScrollView.isHidden ? 0 : blockSlots.contentHeight
         // The scroll view keeps its zero-size document view unless we give it the blocks' measured bounds.
         bodyDocument.setFrameSize(NSSize(width: innerWidth, height: bodyFullHeight))
