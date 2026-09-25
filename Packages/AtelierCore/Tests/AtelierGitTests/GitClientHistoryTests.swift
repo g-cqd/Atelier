@@ -138,4 +138,132 @@ struct GitClientHistoryTests {
         #expect(try await client.commitCount(from: base, to: feature, firstParent: true) == 2)
         #expect(try await client.commitCount(from: feature, to: base, firstParent: false) == 0)
     }
+
+    // MARK: commitChanges
+
+    @Test
+    func `the listing asks git for one page of the range with the pinned configuration`() async throws {
+        let (client, runner) = Self.client(answering: .success(""))
+
+        _ = try await client.commitChanges(from: "main", to: "feature", firstParent: true, limit: 200)
+
+        let spec = try #require(runner.commandSpecs.first)
+        #expect(spec.arguments.starts(with: GitIsolation.strictConfigurationFlags))
+        #expect(spec.arguments.contains("diff.autoRefreshIndex=false"))
+        #expect(spec.environment == GitIsolation.strict.environment)
+        #expect(
+            Array(spec.arguments.drop(while: { $0 != "log" }))
+                == [
+                    "log", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--no-color", "--no-relative",
+                    "--no-abbrev", "--root", "--raw", "-M", "-z", GitParsers.commitChangesFormat, "--first-parent",
+                    "--diff-merges=first-parent", "-n", "200", "--end-of-options", "main..feature", "--"
+                ])
+    }
+
+    @Test
+    func `a page of no commits, or of a bad size, never reaches git`() async {
+        let (client, runner) = Self.client(answering: .success(""))
+
+        await #expect(throws: GitError.self) {
+            try await client.commitChanges(from: "main", to: "feature", firstParent: true, limit: 0)
+        }
+        #expect(runner.specs.isEmpty)
+    }
+
+    @Test
+    func `real git lists a merge along first parents with everything it brought in`() async throws {
+        let repository = try GitHistoryRepository()
+        defer { repository.remove() }
+        try repository.write("a.txt", "1\n")
+        let base = try repository.commit("base")
+        try repository.git("switch", "-q", "-c", "feature")
+        try repository.write("f1.txt", "1\n")
+        try repository.commit("feature one")
+        try repository.write("f2.txt", "2\n")
+        try repository.commit("feature two")
+        try repository.git("switch", "-q", "main")
+        try repository.write("a.txt", "2\n")
+        let mainline = try repository.commit("main one")
+        try repository.git("merge", "-q", "--no-ff", "-m", "Merge feature", "feature")
+        let merge = try repository.head()
+        let client = repository.client()
+
+        let firstParents = try await client.commitChanges(from: base, to: merge, firstParent: true, limit: 10)
+        let every = try await client.commitChanges(from: base, to: merge, firstParent: false, limit: 10)
+
+        #expect(firstParents.commits.map(\.subject) == ["Merge feature", "main one"])
+        #expect(firstParents.commits.first?.isMerge == true)
+        #expect(firstParents.commits.first?.parentIDs.first == mainline)
+        #expect(firstParents.commits.first?.changes.map(\.path).sorted() == ["f1.txt", "f2.txt"])
+        #expect(firstParents.commits.last?.authorName == "Tess Ter")
+        #expect(firstParents.isComplete && firstParents.continuation == nil)
+        #expect(every.commits.count == 4)
+        #expect(every.commits.first { $0.isMerge }?.changes.isEmpty == true)
+    }
+
+    @Test
+    func `real git follows a file renamed twice, one commit at a time`() async throws {
+        let repository = try GitHistoryRepository()
+        defer { repository.remove() }
+        try repository.write("a.txt", "a file long enough to be recognized after a move\n")
+        let base = try repository.commit("base")
+        try repository.git("mv", "a.txt", "b.txt")
+        try repository.commit("first move")
+        try FileManager.default.createDirectory(
+            at: repository.root.appending(path: "dir"), withIntermediateDirectories: true)
+        try repository.git("mv", "b.txt", "dir/c d.txt")
+        let tip = try repository.commit("second move")
+
+        let page = try await repository.client().commitChanges(from: base, to: tip, firstParent: true, limit: 10)
+
+        #expect(page.commits.map { $0.changes.map(\.status) } == [[.renamed], [.renamed]])
+        #expect(page.commits.map { $0.changes.first?.oldPath } == ["b.txt", "a.txt"])
+        #expect(page.commits.map { $0.changes.first?.path } == ["dir/c d.txt", "b.txt"])
+    }
+
+    @Test
+    func `real git lists a file changed then changed back under both commits`() async throws {
+        let repository = try GitHistoryRepository()
+        defer { repository.remove() }
+        try repository.write("a.txt", "1\n")
+        let base = try repository.commit("base")
+        try repository.write("a.txt", "2\n")
+        try repository.commit("change")
+        try repository.write("a.txt", "1\n")
+        let tip = try repository.commit("change back")
+
+        let page = try await repository.client().commitChanges(from: base, to: tip, firstParent: true, limit: 10)
+
+        #expect(page.commits.map(\.subject) == ["change back", "change"])
+        #expect(page.commits.map { $0.changes.map(\.path) } == [["a.txt"], ["a.txt"]])
+        #expect(page.commits[0].changes[0].newBlobID == page.commits[1].changes[0].oldBlobID)
+    }
+
+    @Test
+    func `real git pages continue from the first parent of the oldest commit listed`() async throws {
+        let repository = try GitHistoryRepository()
+        defer { repository.remove() }
+        try repository.write("n.txt", "0\n")
+        let base = try repository.commit("base")
+        for step in 1 ... 5 {
+            try repository.write("n.txt", "\(step)\n")
+            try repository.commit("step \(step)")
+        }
+        let tip = try repository.head()
+        let client = repository.client()
+
+        let whole = try await client.commitChanges(from: base, to: tip, firstParent: true, limit: 10)
+        var pages: [GitCommitPage] = []
+        var next: String? = tip
+        while let page = next {
+            let listed = try await client.commitChanges(from: base, to: page, firstParent: true, limit: 2)
+            pages.append(listed)
+            next = listed.continuation
+        }
+
+        #expect(pages.flatMap(\.commits) == whole.commits)
+        #expect(pages.map(\.commits.count) == [2, 2, 1])
+        #expect(pages.map(\.isComplete) == [false, false, true])
+        #expect(pages.first?.continuation == whole.commits[2].id)
+    }
 }
