@@ -38,7 +38,8 @@ extension DiffTextViewCoordinator {
             let contentManager = layoutManager.textContentManager,
             let clipView = textView.enclosingScrollView?.contentView
         else { return nil }
-        let top = clipView.bounds.minY
+        // The pane's top below the bars over it.
+        let top = clipView.bounds.minY + clipView.contentInsets.top
         let inset = textView.textContainerInset.height
         // The fragment at the pane's top is laid out, as all that shows is: its frame is read, and nothing above it is
         // laid out, which in a long file would cost as much as opening it at its end.
@@ -106,6 +107,9 @@ extension DiffTextViewCoordinator {
         guard let placement = pendingScroll, let textView, let rendered,
             let clipView = textView.enclosingScrollView?.contentView, clipView.bounds.height > 0
         else { return }
+        // The pane's top lies below the bars over it, which cover the text above it (book TAB-09).
+        let obscured = clipView.contentInsets.top
+        let shown = clipView.bounds.height - obscured
         pendingScroll = nil
         for _ in 0 ..< RowPlacement.passes {
             guard let top = top(ofRow: placement.row) else { return }
@@ -113,13 +117,12 @@ extension DiffTextViewCoordinator {
             let target: NSPoint
             switch placement.anchor {
                 case .restored(let offset, let x):
-                    target = NSPoint(x: max(0, x), y: clamped(top + offset, in: clipView))
+                    target = NSPoint(x: max(0, x), y: clamped(top + offset - obscured, in: clipView))
                 case .nearTop, .centered:
                     let margin =
-                        placement.anchor == .centered
-                        ? (clipView.bounds.height - rendered.lineHeight) / 2 : 3 * rendered.lineHeight
+                        placement.anchor == .centered ? (shown - rendered.lineHeight) / 2 : 3 * rendered.lineHeight
                     // A text that fits the pane shows whole, from its top.
-                    let y = contentHeight() > clipView.bounds.height ? clamped(top - margin, in: clipView) : 0
+                    let y = contentHeight() > shown ? clamped(top - margin - obscured, in: clipView) : -obscured
                     target = NSPoint(x: clipView.bounds.minX, y: y)
             }
             guard abs(clipView.bounds.minY - target.y) >= 0.5 || abs(clipView.bounds.minX - target.x) >= 0.5 else {
@@ -161,9 +164,10 @@ extension DiffTextViewCoordinator {
         clipView.enclosingScrollView?.reflectScrolledClipView(clipView)
     }
 
-    /// `y` kept between the text view's top and the furthest `clipView` scrolls in it.
+    /// `y` kept between the text view's top, below the bars over the pane, and the furthest `clipView` scrolls in it.
     private func clamped(_ y: CGFloat, in clipView: NSClipView) -> CGFloat {
-        min(max(y, 0), max((textView?.frame.height ?? 0) - clipView.bounds.height, 0))
+        let highest = -clipView.contentInsets.top
+        return min(max(y, highest), max((textView?.frame.height ?? 0) - clipView.bounds.height, highest))
     }
 }
 

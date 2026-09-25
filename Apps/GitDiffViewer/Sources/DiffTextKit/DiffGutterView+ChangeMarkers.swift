@@ -68,7 +68,7 @@ extension DiffGutterView {
     func changeMarkerElements() -> [ChangeMarkerElement] {
         guard let rendered else { return [] }
         var elements: [ChangeMarkerElement] = []
-        forEachChangeMarker(in: visibleRect) { change, shape in
+        forEachChangeMarker(in: unobscuredRect(of: visibleRect)) { change, shape in
             let frame = ChangeMarkerLayout.hitArea(of: shape, lineHeight: rendered.lineHeight)
             elements.append(
                 ChangeMarkerElement(change: change, frame: frame, parent: self) { [weak self] in
@@ -88,7 +88,7 @@ extension DiffGutterView {
     /// Each marker in view takes a pointing hand over its hit area.
     func addChangeMarkerCursorRects() {
         guard let rendered else { return }
-        forEachChangeMarker(in: visibleRect) { _, shape in
+        forEachChangeMarker(in: unobscuredRect(of: visibleRect)) { _, shape in
             addCursorRect(ChangeMarkerLayout.hitArea(of: shape, lineHeight: rendered.lineHeight), cursor: .pointingHand)
         }
     }
