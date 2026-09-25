@@ -29,6 +29,32 @@ struct QueryMatcherTests {
     }
 
     @Test
+    func `A parenthesized wildcard matches named nodes and a bare one any node`() throws {
+        let name = SyntaxNode(type: "identifier", byteRange: 0 ..< 1)
+        let comma = SyntaxNode(type: ",", byteRange: 1 ..< 2, isNamed: false)
+        let root = SyntaxNode(type: "source", children: [name, comma], byteRange: 0 ..< 2)
+        let tree = SyntaxTree(root: root, source: "a,")
+
+        let named = QueryMatcher.execute(query: try QueryParser.parse("(_) @node"), tree: tree)
+        let any = QueryMatcher.execute(query: try QueryParser.parse("_ @node"), tree: tree)
+
+        #expect(named.map { $0.captures.map(\.node) } == [[root], [name]])
+        #expect(any.map { $0.captures.map(\.node) } == [[root], [name], [comma]])
+    }
+
+    @Test
+    func `A parenthesized wildcard child skips anonymous children`() throws {
+        let open = SyntaxNode(type: "(", byteRange: 0 ..< 1, isNamed: false)
+        let argument = SyntaxNode(type: "identifier", byteRange: 1 ..< 2)
+        let call = SyntaxNode(type: "call", children: [open, argument], byteRange: 0 ..< 2)
+        let tree = SyntaxTree(root: call, source: "(a")
+
+        let matches = QueryMatcher.execute(query: try QueryParser.parse("(call (_) @inner)"), tree: tree)
+
+        #expect(matches.map { $0.captures.map(\.node) } == [[argument]])
+    }
+
+    @Test
     func `Match within byte range`() {
         let node1 = SyntaxNode(type: "identifier", byteRange: 0 ..< 3)
         let node2 = SyntaxNode(type: "identifier", byteRange: 10 ..< 13)

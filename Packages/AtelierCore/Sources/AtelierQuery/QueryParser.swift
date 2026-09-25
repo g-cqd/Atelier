@@ -4,7 +4,8 @@
 /// ```scm
 /// (function_declaration name: (identifier) @function.name)
 /// "if" @keyword
-/// (_) @any
+/// (_) @named
+/// _ @any
 /// (identifier) @var (#eq? @var "self")
 /// ```
 public enum QueryParser: Sendable {
@@ -147,7 +148,8 @@ public enum QueryParser: Sendable {
         }
 
         // A wildcard node, `(_)`, or one with children, `(_ key: (flow_node))`, which matches a named node of any
-        // type as tree-sitter's WILDCARD_SYMBOL step does (lib/src/query.c).
+        // type as tree-sitter's WILDCARD_SYMBOL step does: parenthesized, the step is named (`step->is_named` in
+        // ts_query__parse_pattern, lib/src/query.c; docs "The Wildcard Node"). A bare `_` matches any node.
         if scanner.peek() == "_" {
             scanner.advance()
             scanner.skipWhitespaceAndComments()
@@ -161,7 +163,8 @@ public enum QueryParser: Sendable {
                 throw .syntaxError("Expected )")
             }
             scanner.advance()
-            return wrap(.wildcard(capture: capture), with: predicates)
+            let node = QueryPattern.nodeMatch(type: QueryPattern.namedWildcardType, children: [], capture: capture)
+            return wrap(node, with: predicates)
         }
 
         // Node type

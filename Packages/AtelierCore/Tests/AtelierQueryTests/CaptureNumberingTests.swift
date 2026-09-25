@@ -56,7 +56,7 @@ struct CaptureNumberingTests {
             return
         }
         #expect(capture?.index == 0)
-        #expect(query == (try QueryParser.parse(#"(a) @x (_) @y "z" @x"#)))
+        #expect(query == (try QueryParser.parse(#"(a) @x _ @y "z" @x"#)))
     }
 
     private static func collectCaptures(_ pattern: QueryPattern, into captures: inout [QueryPattern.Capture]) {
