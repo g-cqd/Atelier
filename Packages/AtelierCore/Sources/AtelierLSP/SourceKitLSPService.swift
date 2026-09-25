@@ -398,3 +398,55 @@ public actor SourceKitLSPService {
         return LSPConnection(transport: transport)
     }
 }
+
+// MARK: - Documentation pages
+
+extension SourceKitLSPService {
+    /// The page Apple's developer documentation gives the system symbol at the position, where a hover has opened
+    /// `uri` with `content`; nil for the workspace's own symbols, when the server does not answer, and when the text
+    /// reaches the symbol through a value rather than through its types. Asks `textDocument/symbolInfo` about
+    /// the symbol, for its name and labels, and about the type its chain starts with, whose module files the page even
+    /// when another module declares the symbol, as Foundation does `String.Encoding.utf8`. Restarts the idle timer.
+    public func documentationPage(
+        uri: String, languageID: String, content: String, line: Int, utf16Column: Int
+    ) async -> HoverContent.DocumentationPage? {
+        guard !permanentlyUnavailable,
+            let chain = DocumentationChain(content: content, line: line, utf16Column: utf16Column)
+        else { return nil }
+        defer { scheduleIdleShutdown() }
+        guard let connection = await ensureConnection() else { return nil }
+        await ensureOpen(uri: uri, languageID: languageID, content: content, on: connection)
+
+        guard let symbol = await systemSymbol(uri: uri, line: line, utf16Column: utf16Column, on: connection) else {
+            return nil
+        }
+        guard chain.segments.count > 1, !chain.startsWith(module: symbol.module) else {
+            return chain.page(module: symbol.module, symbolName: symbol.name)
+        }
+        guard let root = await systemSymbol(uri: uri, line: line, utf16Column: chain.rootColumn, on: connection)
+        else { return nil }
+        return chain.page(module: root.module, symbolName: symbol.name)
+    }
+
+    /// The name and top-level module of the system symbol at the position, as `textDocument/symbolInfo` gives them;
+    /// nil for a symbol with sources, or when no answer comes.
+    private func systemSymbol(
+        uri: String, line: Int, utf16Column: Int, on connection: LSPConnection
+    ) async -> (name: String, module: String)? {
+        let params = HoverParams(
+            textDocument: TextDocumentIdentifier(uri: uri), position: Position(line: line, character: utf16Column))
+        do {
+            let symbols = try await raceAgainstTimeout(clock: clock, timeout: configuration.requestTimeout) {
+                try await connection.requestOptional("textDocument/symbolInfo", params, as: [SymbolDetails].self)
+            }
+            guard let symbol = symbols?.first(where: { $0.systemModule != nil }), let name = symbol.name,
+                let module = symbol.systemModule?.moduleName.split(separator: ".").first
+            else { return nil }
+            return (name, String(module))
+        } catch {
+            // A page is extra: whatever went wrong, the hover that asked for it stands, and reports its own failures.
+            Self.logger.debug("No symbol info: \(String(describing: error), privacy: .public)")
+            return nil
+        }
+    }
+}
