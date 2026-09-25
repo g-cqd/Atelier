@@ -185,7 +185,7 @@ package enum DiffRenderer {
                         length = shown.line.utf16.count
                         for unit in shown.line.utf16 where unit == 9 { tabs += 1 }
                         for token in shown.tokens {
-                            let range = token.byteRange
+                            let range = token.range
                             spans.tokens.append(
                                 (NSRange(location: offset + range.lowerBound, length: range.count), token.role))
                         }
@@ -202,7 +202,7 @@ package enum DiffRenderer {
                         length = shown.line.utf16.count
                         for unit in shown.line.utf16 where unit == 9 { tabs += 1 }
                         for token in shown.tokens {
-                            let range = token.byteRange
+                            let range = token.range
                             spans.tokens.append(
                                 (NSRange(location: offset + range.lowerBound, length: range.count), token.role))
                         }
@@ -322,7 +322,7 @@ package enum DiffRenderer {
         let ref: DiffLineRef
         let line: Substring
         /// In UTF-16 offsets from the line's start.
-        let tokens: ArraySlice<HighlightToken>
+        let tokens: ArraySlice<LineToken>
     }
 
     private static func shownLine(of row: DiffRow, in file: PreparedDiff, side: RenderedSide) -> ShownLine? {
