@@ -59,6 +59,43 @@ struct HoverLazyBlocksTests {
         #expect(panel.pendingDiscussion == nil)
         #expect(panel.shownBlockViews.count == 3)
     }
+
+    @Test
+    func `a long code block is measured and shown as far as the body scrolls to it`() throws {
+        let lines = (0 ..< 600).map { "let value\($0) = compute(\($0), scale: \($0 % 7))" }
+        let code = NSAttributedString(
+            string: lines.joined(separator: "\n"),
+            attributes: [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)])
+        let panel = try Self.preparedPanel(
+            for: HoverDocument(
+                summary: Self.prose("Loads."), discussion: [.code(code), .paragraph(Self.prose("After it."))]))
+        let chip = try #require(
+            panel.shownBlockViews.compactMap { $0 as? NSBox }.first { $0.boxType == NSBox.BoxType.custom })
+        let codeView = try #require(Self.textViews(under: chip).first)
+        #expect(codeView.string.split(separator: "\n").count < 600)
+
+        panel.scrollThroughDiscussion()
+
+        #expect(codeView.string == code.string)
+        #expect(panel.shownBlockViews.count == 3)
+        panel.bodyStack.layoutSubtreeIfNeeded()
+        let innerWidth =
+            HoverPanelSizing.width - 2 * HoverPanelMetrics.edgeInset - 2 * HoverPanelMetrics.chipHorizontalPadding
+        let whole =
+            HoverDocPanel.measuredHeight(of: code, width: innerWidth) + 2 * HoverPanelMetrics.chipVerticalPadding
+        #expect(abs(chip.frame.height - whole) < 1)
+        #expect(abs(panel.bodyDocument.frame.height - panel.bodyStack.fittingSize.height) < 1)
+    }
+
+    private static func textViews(under root: NSView) -> [NSTextView] {
+        var found: [NSTextView] = []
+        var pending = [root]
+        while let view = pending.popLast() {
+            if let textView = view as? NSTextView { found.append(textView) }
+            pending.append(contentsOf: view.subviews)
+        }
+        return found
+    }
 }
 
 extension HoverDocPanel {
