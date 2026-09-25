@@ -14,15 +14,21 @@ import Testing
 /// `ci` changes `a.swift` and adds `file<i>.swift`; the working tree has `a.swift` changed and `new.swift` untracked.
 final class ScriptedHistory: Sendable {
     let length: Int
-    private let refs: [String: String]
+    private let refs: Mutex<[String: String]>
     private let diverged: Bool
     private let logRanges = Mutex<[String]>([])
     private static let commands: Set<String> = ["rev-parse", "merge-base", "log", "rev-list", "diff", "ls-files"]
 
     init(length: Int, refs: [String: String] = [:], diverged: Bool = false) {
         self.length = length
-        self.refs = ["main": "c0", "feature": "c\(length)", "HEAD": "c\(length)"].merging(refs) { _, new in new }
+        self.refs = Mutex(
+            ["main": "c0", "feature": "c\(length)", "HEAD": "c\(length)"].merging(refs) { _, new in new })
         self.diverged = diverged
+    }
+
+    /// Points `ref` at another commit, as a commit on a branch does.
+    func move(_ ref: String, to id: String) {
+        refs.withLock { $0[ref] = id }
     }
 
     /// The ranges `log` was asked for, in order.
@@ -35,7 +41,8 @@ final class ScriptedHistory: Sendable {
         switch arguments.first {
             case "rev-parse":
                 let ref = String(arguments.last?.dropLast("^{commit}".count) ?? "")
-                return refs[ref].map { .success("\($0)\n") } ?? .failure(128, error: "fatal: bad revision")
+                return refs.withLock { $0[ref] }.map { .success("\($0)\n") }
+                    ?? .failure(128, error: "fatal: bad revision")
             case "merge-base" where arguments.contains("--is-ancestor"):
                 let (a, b) = (arguments[arguments.count - 2], arguments[arguments.count - 1])
                 if diverged, a != b { return .failure(1, error: "") }
@@ -191,6 +198,21 @@ struct DiffViewerModelCommitGroupsTests {
 
         #expect(history.listedRanges == ["c0..c3"])
         #expect(sut.unifiedSections.map(\.id) == ["commit:c3", "commit:c2", "commit:c1"])
+    }
+
+    @Test
+    func `a right side moved forward lists only its new commits and puts them on top`() async throws {
+        let history = ScriptedHistory(length: 5, refs: ["feature": "c3"])
+        let (sut, _) = makeSUT(history)
+        serve(history)
+        try await load(sut)
+
+        history.move("feature", to: "c5")
+        sut.reloadSources()
+        try await harness.taskProvider.waitForAllTasks()
+
+        #expect(history.listedRanges == ["c0..c3", "c3..c5"])
+        #expect(sut.unifiedSections.map(\.id) == (1 ... 5).reversed().map { "commit:c\($0)" })
     }
 
     @Test
