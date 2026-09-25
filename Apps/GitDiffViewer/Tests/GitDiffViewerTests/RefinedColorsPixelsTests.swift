@@ -23,11 +23,17 @@ struct RefinedColorsPixelsTests {
         DiffRenderer.render(oldText: text, newText: text, language: .swift)
     }
 
-    /// swift-syntax's tokens for both sides of ``text``.
+    /// swift-syntax's tokens for both sides of ``text``, as one update of its layer.
     static func sides() throws -> RefinedSides {
         let tokens = try SwiftSyntaxHighlights.tokens(in: text)
         let lines = DiffRenderer.tokensByLine(tokens, text: text, lines: DiffModel.lines(of: text))
-        return RefinedSides(old: lines, new: lines)
+        var layered = LayeredLineTokens(lineCount: lines.count)
+        layered.apply(
+            TierUpdate(
+                layer: .syntactic, coverage: .complete,
+                revision: SourceRevision(documentID: "a.swift", language: .swift, key: .content("blob")),
+                lines: 0 ..< lines.count, tokens: lines))
+        return RefinedSides(old: layered, new: layered)
     }
 
     @Test

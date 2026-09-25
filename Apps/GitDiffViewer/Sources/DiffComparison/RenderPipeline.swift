@@ -102,13 +102,13 @@ package final class RenderPipeline {
 
     package init(
         preparer: DiffPreparer, taskProvider: any TaskProvider, options: DiffRenderer.Options,
-        renderer: PaneRenderer = .live, refiner: SyntaxRefiner = .live
+        renderer: PaneRenderer = .live, refinement: SwiftColorRefinement = SwiftColorRefinement()
     ) {
         self.preparer = preparer
         self.taskProvider = taskProvider
         self.options = options
         self.renderer = renderer
-        refinement = SwiftColorRefinement(refiner: refiner)
+        self.refinement = refinement
     }
 
     /// Options for the next renders. A change to how diffs render leaves what is published stale until `relayout`

@@ -1,5 +1,7 @@
 import AemiCore
 import AemiTesting
+import AtelierHighlighting
+import AtelierSwiftSyntax
 import DiffCore
 import Foundation
 import Synchronization
@@ -10,7 +12,7 @@ import Testing
 @testable import DiffRendering
 
 /// A syntactic tier that counts the sides it is handed and can hold them, and answers a line without a token per line.
-final class RefinerSpy: Sendable {
+final class TierSpy: Sendable {
     private let state = Mutex((texts: [String](), isHolding: false))
     let started = AsyncProbe<String>()
     let release = AsyncProbe<Void>()
@@ -22,17 +24,34 @@ final class RefinerSpy: Sendable {
         set { state.withLock { $0.isHolding = newValue } }
     }
 
-    var refiner: SyntaxRefiner {
-        SyntaxRefiner { [self] text, lines in
-            let holds = state.withLock { state in
-                state.texts.append(text)
-                return state.isHolding
-            }
-            if holds {
-                started.send(text)
-                _ = try await release.next()
-            }
-            return LineTokens(emptyLines: lines.count)
+    var tier: Tier { Tier(spy: self) }
+
+    /// Records the text, holds when asked to, then emits every line at once.
+    fileprivate func run(_ request: TierRequest) async throws -> TierUpdate {
+        let holds = state.withLock { state in
+            state.texts.append(request.text)
+            return state.isHolding
+        }
+        if holds {
+            started.send(request.text)
+            _ = try await release.next()
+        }
+        let lines = 0 ..< request.lineRanges.count
+        return TierUpdate(
+            layer: .syntactic, coverage: .complete, revision: request.revision, lines: lines,
+            tokens: LineTokens(emptyLines: lines.count))
+    }
+
+    struct Tier: AtelierHighlighting.HighlightTier {
+        let spy: TierSpy
+
+        var layer: HighlightLayer { .syntactic }
+        var coverage: TierCoverage { .complete }
+
+        func supports(_ language: Language) -> Bool { language == .swift }
+
+        func run(_ request: TierRequest, emit: (TierUpdate) async -> Void) async throws {
+            await emit(try await spy.run(request))
         }
     }
 }
@@ -43,14 +62,14 @@ final class RefinerSpy: Sendable {
 struct RenderPipelineRefinementTests {
     private let reader = FakeSourceReader()
     private let taskProvider = TaskProviderSpy.tolerant()
-    private let spy = RefinerSpy()
+    private let spy = TierSpy()
     private let sut: RenderPipeline
 
     init() {
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider)
         sut = RenderPipeline(
             preparer: preparer, taskProvider: taskProvider, options: DiffRenderer.Options(sides: [.old, .new]),
-            refiner: spy.refiner)
+            refinement: SwiftColorRefinement(tiers: [spy.tier], clock: TestClock()))
         sut.configure(options: DiffRenderer.Options(sides: [.old, .new]), context: 2, isolatesChanges: false)
         reader.blobContents["old"] = "let set = [1]\nlet b = 2\n"
         reader.blobContents["new"] = "let set = [1]\nlet b = 3\n"
@@ -91,7 +110,7 @@ struct RenderPipelineRefinementTests {
 
         #expect(spy.texts.count == 2)
         let old = try #require(sides(of: file.old))
-        #expect(old.old?.count == 2 && old.new?.count == 2)
+        #expect(old.old?.lineCount == 2 && old.new?.lineCount == 2)
         #expect(sides(of: file.new)?.id == old.id)
     }
 
@@ -181,6 +200,51 @@ struct RenderPipelineRefinementTests {
         #expect(relaid.id != file.id)
         #expect(spy.texts.count == 2)
         #expect(sides(of: relaid.unified) != nil)
+    }
+}
+
+/// Through the core tier job, a side takes the colour step 1's direct parse gave it, line for line (PERF-11 step 2).
+@MainActor
+struct RenderPipelineTierJobTests {
+    private let reader = FakeSourceReader()
+    private let taskProvider = TaskProviderSpy.tolerant()
+    private let sut: RenderPipeline
+
+    /// Non-ASCII text, a CRLF line and a block comment across lines: what the cutting into UTF-16 lines must keep.
+    private static let text = "let café = \"😀\" // naïve\r\n/* a\n   b */ struct Set { var set = [1] }\n"
+
+    init() {
+        let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider)
+        sut = RenderPipeline(
+            preparer: preparer, taskProvider: taskProvider, options: DiffRenderer.Options(sides: [.old, .new]),
+            refinement: SwiftColorRefinement(clock: TestClock()))
+        reader.blobContents["old"] = Self.text
+        reader.blobContents["new"] = Self.text + "let tail = 2\n"
+    }
+
+    @Test
+    func `each line takes the tokens a direct parse gives it`() async throws {
+        let pair = FilePair(
+            path: "a.swift", old: SourceEntry(relativePath: "a.swift", blobID: "old", size: 1),
+            new: SourceEntry(relativePath: "a.swift", blobID: "new", size: 1))
+        sut.render(
+            .file(pair), left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
+            granularity: .word, heuristics: DiffHeuristics(), keepingPublished: false)
+        try await taskProvider.waitForAllTasks()
+        let file = try #require(sut.file)
+
+        sut.refineDisplayed(file.id)
+        try await taskProvider.waitForAllTasks()
+
+        let new = try #require(file.new)
+        let sides = try #require(sut.refinedSides(forText: new.id))
+        let text = Self.text + "let tail = 2\n"
+        let direct = DiffRenderer.tokensByLine(
+            try await SwiftSyntaxHighlights.tokens(in: text), text: text, lines: DiffModel.lines(of: text))
+        for (row, meta) in new.rows.enumerated() {
+            guard let number = meta.newNumber else { continue }
+            #expect(sides.tokens(of: meta, on: .new) == Array(direct[number - 1]), "row \(row)")
+        }
     }
 }
 

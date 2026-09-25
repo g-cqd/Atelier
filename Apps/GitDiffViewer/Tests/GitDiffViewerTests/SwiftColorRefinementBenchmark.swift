@@ -1,13 +1,16 @@
 import AppKit
+import AtelierHighlighting
+import AtelierSwiftSyntax
 import DiffCore
 import Foundation
+import Synchronization
 import Testing
 
 @testable import DiffRendering
 @testable import DiffTextKit
 
-/// Opt-in timing of the syntactic tier (PERF-11 step 1) against its budgets (design note, section 4.7): swift-syntax's
-/// parse and classification of one side of about 71 KB, cut into line tokens, within 50 ms; and applying what lands to
+/// Opt-in timing of the syntactic tier (PERF-11 steps 1 and 2) against its budgets (design note, section 4.7): swift-syntax's
+/// parse and classification of one side of about 71 KB through the tier job, cut into line tokens, within 50 ms; and applying what lands to
 /// one screen of a pane, within 1 ms of the main thread. The budgets hold CPU time, which a loaded machine does not
 /// inflate; the wall times are printed beside it.
 ///
@@ -51,12 +54,21 @@ struct SwiftColorRefinementBenchmark {
         let lines = DiffModel.lines(of: text)
         var tier: [Double] = []
         var tierCPU: [Double] = []
-        var refined = LineTokens(emptyLines: 0)
+        var refined = LayeredLineTokens(lineCount: 0)
+        let request = TierRequest(
+            revision: SourceRevision(documentID: "sample.swift", language: .swift, key: .content("sample")), text: text,
+            lineRanges: DiffRenderer.lineRanges(of: text, lines: lines), visibleLines: 0 ..< 80, unit: .utf16)
         for iteration in 0 ..< Self.iterations {
-            // The parse runs on a thread of its own, so the process's CPU time counts it; nothing else runs meanwhile.
+            // The parse runs on threads of its own, so the process's CPU time counts it; nothing else runs meanwhile.
             let cpu = Self.cpuMilliseconds(CLOCK_PROCESS_CPUTIME_ID)
             let start = ContinuousClock.now
-            refined = try await SyntaxRefiner.live.refine(text, lines: lines)
+            let updates = Mutex([TierUpdate]())
+            await HighlightTiers.run(request, tiers: [SwiftSyntaxTier(deadline: nil)], clock: ContinuousClock()) {
+                event in
+                if case .update(let update) = event { updates.withLock { $0.append(update) } }
+            }
+            refined = LayeredLineTokens(lineCount: lines.count)
+            for update in updates.withLock({ $0 }) { refined.apply(update) }
             guard iteration >= Self.warmUps else { continue }
             tier.append(Self.milliseconds(ContinuousClock.now - start))
             tierCPU.append(Self.cpuMilliseconds(CLOCK_PROCESS_CPUTIME_ID) - cpu)
@@ -95,11 +107,12 @@ struct SwiftColorRefinementBenchmark {
             applicationCPU.append(Self.cpuMilliseconds(CLOCK_THREAD_CPUTIME_ID) - cpu)
             landingCPU.append(landed - cpu)
         }
+        let tokenCount = (0 ..< lines.count).map { refined.merged(line: $0)?.count ?? 0 }.reduce(0, +)
         let lexical = LexicalHighlightEngine().highlight(utf8: Array(text.utf8), language: .swift).count
 
         print(
             "SwiftColorRefinementBenchmark: \(text.utf8.count) bytes, \(lines.count) lines, "
-                + "\(refined.tokens.count) tokens; tier median \(Self.median(tierCPU)) ms CPU, "
+                + "\(tokenCount) tokens; tier median \(Self.median(tierCPU)) ms CPU, "
                 + "\(Self.median(tier)) ms wall (budget \(Self.tierBudget)); \(screen.count) rows, application median "
                 + "\(Self.median(applicationCPU)) ms CPU, \(Self.median(application)) ms wall "
                 + "(budget \(Self.applicationBudget)), of which the landing's own \(Self.median(landingCPU)) ms CPU; "

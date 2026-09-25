@@ -56,7 +56,8 @@ let package = Package(
         .target(
             name: "DiffRendering",
             dependencies: [
-                "DiffCore", "DiffGit", .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),
+                "DiffCore", "DiffGit", .product(name: "AtelierHighlighting", package: "AtelierCore"),
+                .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),
                 .product(name: "AtelierTheme", package: "AtelierCore")
             ],
             swiftSettings: strict
@@ -75,6 +76,7 @@ let package = Package(
             name: "DiffComparison",
             dependencies: [
                 "DiffCore", "DiffGit", "DiffRendering", .product(name: "AtelierFileTree", package: "AtelierCore"),
+                .product(name: "AtelierHighlighting", package: "AtelierCore"),
                 .product(name: "AtelierDiagnostics", package: "AtelierCore"),
                 .product(name: "AtelierLSP", package: "AtelierCore"),
                 .product(name: "AtelierDocIndex", package: "AtelierCore"),
@@ -97,6 +99,7 @@ let package = Package(
             dependencies: [
                 "DiffComparison", "DiffGit", "DiffRendering", "DiffTextKit", "GitDiffViewer",
                 .product(name: "AtelierDiagnostics", package: "AtelierCore"),
+                .product(name: "AtelierHighlighting", package: "AtelierCore"),
                 .product(name: "AtelierSources", package: "AtelierCore"),
                 .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),
                 .product(name: "AtelierTestSupport", package: "AtelierCore"),

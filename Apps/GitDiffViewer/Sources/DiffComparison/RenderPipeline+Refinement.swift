@@ -1,16 +1,18 @@
 import AemiCore
+package import AtelierHighlighting
 package import DiffCore
 import DiffGit
 package import DiffRendering
 package import Foundation
 import Observation
 
-/// What the syntactic tier found for the files the pipeline publishes (PERF-11 step 1): swift-syntax's colour for each
-/// displayed Swift side, over the lexer's first paint.
+/// What the tiers after the lexer found for the files the pipeline publishes (PERF-11): swift-syntax's colour for each
+/// displayed Swift side, over the lexer's first paint, through the core tier job (`HighlightTiers`).
 ///
 /// A side is refined once per content: its blob id, which is a content hash on every kind of source, or, for a side
 /// without one, the preparation that read it. Both sides of a file with one blob share one result, and a file shown
-/// again, relaid out or reloaded unchanged, takes its colour from here at once, without a parse.
+/// again, relaid out or reloaded unchanged, takes its colour from here at once, without a parse. A side's lines land
+/// in chunks, the visible ones first, each merged into its ``LayeredLineTokens`` as it lands.
 @MainActor
 @Observable
 package final class SwiftColorRefinement {
@@ -35,12 +37,16 @@ package final class SwiftColorRefinement {
     package private(set) var byText: [UUID: RefinedSides] = [:]
     /// Whether displayed Swift sides are refined; off, nothing is parsed and every pane keeps the lexer's colour.
     @ObservationIgnored package internal(set) var isEnabled = true
-    /// How many refinements started, a parse each; for tests and traces.
+    /// How many tier jobs started, one per side; for tests and traces.
     @ObservationIgnored package private(set) var started = 0
-    @ObservationIgnored let refiner: SyntaxRefiner
-    @ObservationIgnored private var cache: [ContentKey: LineTokens] = [:]
+    /// The tiers each displayed side runs, and the clock their deadlines are measured on.
+    @ObservationIgnored let tiers: [any AtelierHighlighting.HighlightTier]
+    @ObservationIgnored let clock: any Clock<Duration>
+    @ObservationIgnored private var cache: [ContentKey: LayeredLineTokens] = [:]
     @ObservationIgnored private var cacheOrder: [ContentKey] = []
     @ObservationIgnored private var inFlight: [ContentKey: Task<Void, Never>] = [:]
+    /// The sides whose job ran to its end, every tier finished or failed: they are not refined again.
+    @ObservationIgnored private var ended: Set<ContentKey> = []
     /// The rendered files a pane reported on screen, kept while they stay published, so turning the setting on
     /// refines what shows.
     @ObservationIgnored private var displayed: Set<RenderedDiff.ID> = []
@@ -53,8 +59,15 @@ package final class SwiftColorRefinement {
         let new: ContentKey?
     }
 
-    init(refiner: SyntaxRefiner) {
-        self.refiner = refiner
+    /// - Parameters:
+    ///   - tiers: The tiers each displayed side runs.
+    ///   - clock: The clock their deadlines are measured on.
+    package init(
+        tiers: [any AtelierHighlighting.HighlightTier] = RefinedSides.tiers,
+        clock: any Clock<Duration> = ContinuousClock()
+    ) {
+        self.tiers = tiers
+        self.clock = clock
     }
 
     /// Stops every refinement and forgets every result; which files show is kept.
@@ -63,6 +76,7 @@ package final class SwiftColorRefinement {
         inFlight = [:]
         cache = [:]
         cacheOrder = []
+        ended = []
         sidesByPair = [:]
         if !byText.isEmpty { byText = [:] }
     }
@@ -82,12 +96,9 @@ package final class SwiftColorRefinement {
 
     var displayedFiles: Set<RenderedDiff.ID> { displayed }
 
-    func tokens(for key: ContentKey) -> LineTokens? {
-        cache[key]
-    }
-
-    func isRunning(_ key: ContentKey) -> Bool {
-        inFlight[key] != nil
+    /// Whether `key`'s job is running, or ran to its end: either way it needs no new job.
+    func isRefined(_ key: ContentKey) -> Bool {
+        inFlight[key] != nil || ended.contains(key)
     }
 
     func track(_ task: Task<Void, Never>, for key: ContentKey) {
@@ -95,20 +106,28 @@ package final class SwiftColorRefinement {
         inFlight[key] = task
     }
 
-    /// Takes a refinement's tokens under its key, the oldest past ``cacheCapacity`` going.
-    func land(_ tokens: LineTokens, for key: ContentKey) {
-        inFlight[key] = nil
-        if cache.updateValue(tokens, forKey: key) == nil { cacheOrder.append(key) }
+    /// Merges a tier's update into its side's layers, the oldest side past ``cacheCapacity`` going.
+    func land(_ update: TierUpdate, lineCount: Int, for key: ContentKey) {
+        if cache[key] == nil {
+            cache[key] = LayeredLineTokens(lineCount: lineCount)
+            cacheOrder.append(key)
+        }
+        cache[key]?.apply(update)
         if cacheOrder.count > Self.cacheCapacity {
-            for evicted in cacheOrder.prefix(cacheOrder.count - Self.cacheCapacity) { cache[evicted] = nil }
+            for evicted in cacheOrder.prefix(cacheOrder.count - Self.cacheCapacity) {
+                cache[evicted] = nil
+                ended.remove(evicted)
+            }
             cacheOrder.removeFirst(cacheOrder.count - Self.cacheCapacity)
         }
         sidesByPair = sidesByPair.filter { $0.key.old != key && $0.key.new != key }
     }
 
-    /// A refinement that ended without tokens: the side keeps the lexer's colour.
-    func fail(_ key: ContentKey) {
+    /// A side's job ended: when it ran to its end, the side is not refined again, whatever its tiers found; when it
+    /// was cancelled, the next display starts it again. Lines no tier reached keep the lexer's colour.
+    func end(_ key: ContentKey, cancelled: Bool) {
         inFlight[key] = nil
+        if !cancelled { ended.insert(key) }
     }
 
     /// Sets ``byText`` to the refined sides of `files`, each a published file with its two sides' keys; unchanged
@@ -202,35 +221,63 @@ extension RenderPipeline {
         return .preparation(diff.id, side)
     }
 
+    /// Runs the tier job on one side of `file`, unless its content is refined already or being refined: each update
+    /// lands on the main actor as it comes, the visible lines first.
     private func start(_ side: RenderedSide, of file: PublishedFile, textID: RenderedDiff.ID) {
-        guard let key = side == .old ? file.old : file.new, refinement.tokens(for: key) == nil,
-            !refinement.isRunning(key)
-        else { return }
+        guard let key = side == .old ? file.old : file.new, !refinement.isRefined(key) else { return }
         let text = side == .old ? file.diff.oldText : file.diff.newText
         let lines = side == .old ? file.diff.model.oldLines : file.diff.model.newLines
+        let request = TierRequest(
+            revision: Self.revision(of: key, path: file.diff.title, language: file.diff.language), text: text,
+            lineRanges: DiffRenderer.lineRanges(of: text, lines: lines),
+            visibleLines: Self.visibleLines(of: side, in: file.diff), unit: .utf16)
         let stamp = SwiftColorRefinement.Stamp(generation: generation, textID: textID, key: key)
-        let refiner = refinement.refiner
+        let lineCount = lines.count
+        let tiers = refinement.tiers
+        let clock = refinement.clock
         refinement.track(
             taskProvider.task(priority: .utility) {
-                do {
-                    let tokens = try await refiner.refine(text, lines: lines)
-                    self.land(tokens, stamp: stamp)
-                } catch {
-                    self.refinement.fail(key)
+                await HighlightTiers.run(request, tiers: tiers, clock: clock) { event in
+                    guard case .update(let update) = event else { return }
+                    await self.land(update, lineCount: lineCount, stamp: stamp)
                 }
+                self.refinement.end(key, cancelled: Task.isCancelled)
             }, for: key)
     }
 
-    /// Takes a refinement that landed, unless it was cancelled, or its render was superseded and no published file
-    /// shows its content any more; then colours every published text that shows it.
-    private func land(_ tokens: LineTokens, stamp: SwiftColorRefinement.Stamp) {
+    /// Takes a tier's update, unless its job was cancelled, or its render was superseded and no published file shows
+    /// its content any more; then colours every published text that shows it.
+    private func land(_ update: TierUpdate, lineCount: Int, stamp: SwiftColorRefinement.Stamp) {
         let files = publishedFiles()
         let isShown = files.contains { $0.rendered.id == stamp.textID || $0.old == stamp.key || $0.new == stamp.key }
-        guard !Task.isCancelled, refinement.isEnabled, stamp.generation == generation || isShown else {
-            refinement.fail(stamp.key)
-            return
-        }
-        refinement.land(tokens, for: stamp.key)
+        guard !Task.isCancelled, refinement.isEnabled, stamp.generation == generation || isShown else { return }
+        refinement.land(update, lineCount: lineCount, for: stamp.key)
         refinement.publish(files.map { ($0.rendered, $0.old, $0.new) })
     }
+
+    /// The revision a side's job reads: its file's path, its language and its content's key.
+    private static func revision(of key: SwiftColorRefinement.ContentKey, path: String, language: Language)
+        -> SourceRevision
+    {
+        switch key {
+            case .blob(let blob, _): SourceRevision(documentID: path, language: language, key: .content(blob))
+            case .preparation(let id, let side):
+                SourceRevision(documentID: path, language: language, key: .content("\(id.uuidString)/\(side)"))
+        }
+    }
+
+    /// The lines of `side` a pane most likely shows first: those around the file's first change, where a file opens
+    /// by default, or its top when it has none. The job colours them first; the pipeline does not know the viewport.
+    private static func visibleLines(of side: RenderedSide, in diff: PreparedDiff) -> Range<Int> {
+        let rows = diff.model.splitRows
+        let first =
+            diff.model.splitChangeRanges.lazy.flatMap { rows[$0] }
+            .compactMap { side == .old ? $0.old?.index : $0.new?.index }.first ?? 0
+        let start = max(first - Self.linesAboveChange, 0)
+        return start ..< start + Self.visibleLineCount
+    }
+
+    /// How many lines the job colours first, and how many of them lie above the first change.
+    private static let visibleLineCount = 80
+    private static let linesAboveChange = 20
 }
