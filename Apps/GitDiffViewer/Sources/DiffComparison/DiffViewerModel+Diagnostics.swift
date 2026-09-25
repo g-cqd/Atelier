@@ -50,7 +50,7 @@ extension DiffViewerModel {
     // MARK: Hover documentation
 
     /// Builds this window's hover documentation: a doc-comment index shared by every pane, tiered behind
-    /// `lspRegistry` for on-disk Swift files on the new side. It indexes only while the setting shows hover
+    /// `lspRegistry` for on-disk files on the new side. It indexes only while the setting shows hover
     /// documentation, and indexes the comparison on screen when the setting turns it on.
     package func attachHoverDocs(lspRegistry: LanguageServerRegistry?) {
         let hoverDocs = HoverDocumentationModel(
@@ -68,8 +68,8 @@ extension DiffViewerModel {
         updateHoverDocs()
     }
 
-    /// Feeds ``hoverDocs`` both sides of every file prepared so far behind the render target, and the right side's
-    /// on-disk root when there is one; nothing while hover documentation is off.
+    /// Feeds ``hoverDocs`` both sides of every file prepared so far behind the render target, and the on-disk root of
+    /// the right side shown when there is one; nothing while hover documentation is off.
     func updateHoverDocs() {
         guard let hoverDocs, hoverDocs.isEnabled else { return }
         let allPairs = pipeline.target?.pairs ?? []
@@ -77,7 +77,10 @@ extension DiffViewerModel {
         // Feed the prefix that landed: waiting for every card would starve the index until the last one lands.
         let pairs = allPairs.prefix(prepared.count)
         guard !pairs.isEmpty else { return }
-        let root: URL? = if case .directory(let rightRoot) = right.source { rightRoot } else { nil }
+        // The new side's own source: a commit's change shown under the grouping by commit is read from git, and has
+        // no on-disk root for a language server even when the comparison's right side is the working tree.
+        let shownRight = commitScope?.right ?? right.source
+        let root: URL? = if case .directory(let rightRoot) = shownRight { rightRoot } else { nil }
         let files = zip(pairs.indices, zip(pairs, prepared))
             .map { index, pair in
                 let (filePair, diff) = pair
