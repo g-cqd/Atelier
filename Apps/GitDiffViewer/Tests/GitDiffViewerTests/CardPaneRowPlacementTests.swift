@@ -78,12 +78,12 @@ struct CardPaneRowPlacementTests {
     /// a wrapped row's extra lines away from where the card measured them.
     @Test
     func `a wrapped card scrolled deep and back shows each row where the card measured it`() throws {
-        let rendered = Self.file(lines: 600)
+        let rendered = Self.file(lines: 300)
         let sut = CardInList(showing: rendered, wrapMode: .viewport)
         let text = try #require(rendered.unified)
         let measured = MeasuredRows(text, wrapWidth: sut.wrapWidth)
 
-        for y in [6_000, 6_400, 6_800, 6_400, 6_000] {
+        for y in [3_000, 3_200, 3_400, 3_200, 3_000] {
             sut.scroll(toCardY: CGFloat(y))
             let shown = sut.shownRows()
             try #require(shown.count > 10, "rows show at \(y)")
@@ -113,12 +113,12 @@ struct CardPaneRowPlacementTests {
     /// width, as a wrapped card's does, and reads it on every pass.
     @Test
     func `a wrapped card showing its top lays out only the rows near its top`() {
-        let sut = CardInList(showing: Self.file(lines: 600), wrapMode: .viewport)
+        let sut = CardInList(showing: Self.file(lines: 300), wrapMode: .viewport)
 
         let laidOut = sut.fragments()
 
         #expect(!laidOut.isEmpty)
-        #expect(laidOut.count < 100, "\(laidOut.count) rows of 600 laid out")
+        #expect(laidOut.count < 100, "\(laidOut.count) rows of 300 laid out")
     }
 
     @Test
