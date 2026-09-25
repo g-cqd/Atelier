@@ -48,6 +48,8 @@ package enum HoverPanelMetrics {
     package static let chipVerticalPadding: CGFloat = 6
     /// The chip's own corner radius, a notch smaller than the panel's own so it reads as set into the glass.
     package static let chipCornerRadius: CGFloat = 4
+    /// The panel's corner radius, which its background, glass or popover material, is clipped to.
+    package static let panelCornerRadius: CGFloat = 8
 }
 
 /// The rich hover panel: an arrow-less, non-activating child window styled like Xcode's Quick Help, sized to its
@@ -92,6 +94,10 @@ package final class HoverDocPanel {
     private let diagnosticsStack = NSStackView()
     private let candidatesStack = NSStackView()
     private let contentStack = NSStackView()
+    /// Holds the content stack inside whichever background ``HoverPanelMaterial`` makes, and tracks the pointer.
+    private let contentHost = NSView()
+    /// What the panel's background is made of, as last built; nil before the panel is.
+    private(set) var material: HoverPanelMaterial?
 
     // `NSTextView` has no intrinsic size, so the text slots need explicit heights, recomputed by every render. The
     // declaration's is its text view's, not its chip's: the chip pads the text view on every edge, so a chip of zero
@@ -164,12 +170,18 @@ package final class HoverDocPanel {
     private func prepare(document: HoverDocument, appearance: NSAppearance) -> (NSPanel, NSSize) {
         let panel = panel ?? makePanel()
         self.panel = panel
+        if material != document.panelMaterial {
+            material = document.panelMaterial
+            panel.contentView = Self.makeBackground(document.panelMaterial, around: contentHost)
+        }
         panel.appearance = appearance
         let contentHeight = render(document)
         let (height, scrolls) = HoverPanelSizing.clampedHeight(forContentHeight: contentHeight)
         bodyScrollView.hasVerticalScroller = scrolls
         let size = NSSize(width: HoverPanelSizing.width, height: height)
         panel.setContentSize(size)
+        // The window's shadow follows its content's rounded alpha, which a new size or background changes.
+        panel.invalidateShadow()
         return (panel, size)
     }
 
@@ -204,8 +216,11 @@ package final class HoverDocPanel {
     /// For tests: the panel's height as ``show(document:anchorRect:in:)`` last sized it; nil before it is first shown.
     package var panelHeightForTests: CGFloat? { panel?.frame.size.height }
 
-    /// For tests: the root of the panel's view hierarchy; nil before it is first shown.
+    /// For tests: the root of the panel's view hierarchy, its background; nil before it is first shown.
     package var contentViewForTests: NSView? { panel?.contentView }
+
+    /// For tests: the panel's window; nil before it is first shown.
+    package var windowForTests: NSWindow? { panel }
 
     /// Hides the panel and detaches it from its host window; a no-op when it is not showing.
     package func close() {
@@ -232,17 +247,6 @@ package final class HoverDocPanel {
         panel.backgroundColor = .clear
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-
-        let effectView = NSVisualEffectView()
-        effectView.material = .popover
-        effectView.blendingMode = .behindWindow
-        effectView.state = .active
-        effectView.wantsLayer = true
-        effectView.layer?.cornerRadius = 8
-        effectView.layer?.cornerCurve = .continuous
-        effectView.layer?.masksToBounds = true
-        // `.behindWindow` material ignores the layer mask; only a `maskImage` clips it to the rounded corners.
-        effectView.maskImage = Self.roundedMaskImage(cornerRadius: 8)
 
         contentStack.orientation = .vertical
         contentStack.alignment = .leading
@@ -290,18 +294,18 @@ package final class HoverDocPanel {
         returnsHeight = returnsView.heightAnchor.constraint(equalToConstant: 0)
         returnsHeight?.isActive = true
 
-        effectView.addSubview(contentStack)
+        contentHost.addSubview(contentStack)
         NSLayoutConstraint.activate([
-            contentStack.leadingAnchor.constraint(equalTo: effectView.leadingAnchor),
-            contentStack.trailingAnchor.constraint(equalTo: effectView.trailingAnchor),
-            contentStack.topAnchor.constraint(equalTo: effectView.topAnchor),
-            contentStack.bottomAnchor.constraint(lessThanOrEqualTo: effectView.bottomAnchor)
+            contentStack.leadingAnchor.constraint(equalTo: contentHost.leadingAnchor),
+            contentStack.trailingAnchor.constraint(equalTo: contentHost.trailingAnchor),
+            contentStack.topAnchor.constraint(equalTo: contentHost.topAnchor),
+            contentStack.bottomAnchor.constraint(lessThanOrEqualTo: contentHost.bottomAnchor)
         ])
-        panel.contentView = effectView
 
+        // On the host, which moves from one background to the next, so a change of material keeps the tracking.
         let area = NSTrackingArea(
             rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
-        effectView.addTrackingArea(area)
+        contentHost.addTrackingArea(area)
         trackingArea = area
         return panel
     }
@@ -588,23 +592,6 @@ extension HoverDocPanel {
         box.translatesAutoresizingMaskIntoConstraints = false
         box.widthAnchor.constraint(equalToConstant: HoverPanelSizing.width - 24).isActive = true
         return box
-    }
-}
-
-extension HoverDocPanel {
-    /// A stretchable rounded-rect mask with cap insets of `cornerRadius`, so its corners keep their curve at any size.
-    fileprivate static func roundedMaskImage(cornerRadius: CGFloat) -> NSImage {
-        let edge = cornerRadius * 2 + 1
-        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
-            let path = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
-            NSColor.black.setFill()
-            path.fill()
-            return true
-        }
-        image.capInsets = NSEdgeInsets(
-            top: cornerRadius, left: cornerRadius, bottom: cornerRadius, right: cornerRadius)
-        image.resizingMode = .stretch
-        return image
     }
 }
 

@@ -22,13 +22,15 @@ import Testing
         - Returns: The greeting text.
         """
 
+    /// On the popover material: drawn offscreen, Liquid Glass draws its own shape over the content it composites
+    /// on screen, so no ink would show against it.
     private func preparedPanel(dark: Bool) throws -> HoverDocPanel {
         let name: NSAppearance.Name = dark ? .darkAqua : .aqua
         let appearance = try #require(NSAppearance(named: name))
         let document = HoverDocument.build(
             from: HoverContent(markdown: Self.markdown, source: .languageServer), palette: .system)
         let panel = HoverDocPanel(ordersWindowIn: false)
-        panel.prepareOffscreenForTests(document: document, appearance: appearance)
+        panel.prepareOffscreenForTests(document: document.presented(on: .popover), appearance: appearance)
         return panel
     }
 
