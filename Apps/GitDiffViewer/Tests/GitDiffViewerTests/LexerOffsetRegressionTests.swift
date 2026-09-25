@@ -42,6 +42,61 @@ struct LexerOffsetRegressionTests {
         #expect(Self.colourRuns(of: unified.attributed) == Self.pinnedRuns)
     }
 
+    /// CRLF endings, astral characters (four UTF-8 bytes, two UTF-16 units) and tokens that span lines: a block
+    /// comment, a multi-line string, and an unterminated string and comment clipped at their lines' ends.
+    private static let spanningOld = [
+        "/* a block comment 🙂 that",
+        "   spans 𝔘 three lines ✓ */ let a = \"𝒳\" // tail 👍",
+        "let s = \"\"\"",
+        "  multi 🙂 line",
+        "  string 𝔘 é",
+        "  \"\"\"; let n = 0x1F",
+        "let 𝑥 = \"open 🙂",
+        "/* unterminated 🙂 comment"
+    ]
+    .joined(separator: "\r\n")
+    private static let spanningNew = spanningOld.replacingOccurrences(of: "0x1F", with: "0x2F")
+        .replacingOccurrences(of: "multi 🙂 line", with: "multi 🙂🙂 line")
+
+    /// The colour runs of the three panes of the spanning diff, pinned from the renderer of commit 47919dd, which moved
+    /// each row's tokens to UTF-16 as it placed them.
+    private static let spanningPinnedRuns: [RenderedSide: [String]] = [
+        .unified: [
+            "0+26:comment", "26+1:text", "27+28:comment", "55+1:text", "56+3:keyword", "59+5:text", "64+4:string",
+            "68+1:text", "69+10:comment", "79+1:text", "80+3:keyword", "83+5:text", "88+3:string", "91+1:text",
+            "92+15:string", "107+1:text", "108+17:string", "125+1:text", "126+13:string", "139+1:text", "140+5:string",
+            "145+2:text", "147+3:keyword", "150+5:text", "155+4:number", "159+1:text", "160+5:string", "165+2:text",
+            "167+3:keyword", "170+5:text", "175+4:number", "179+1:text", "180+3:keyword", "183+6:text", "189+8:string",
+            "197+1:text", "198+26:comment"
+        ],
+        .old: [
+            "0+26:comment", "26+1:text", "27+28:comment", "55+1:text", "56+3:keyword", "59+5:text", "64+4:string",
+            "68+1:text", "69+10:comment", "79+1:text", "80+3:keyword", "83+5:text", "88+3:string", "91+1:text",
+            "92+15:string", "107+1:text", "108+13:string", "121+1:text", "122+5:string", "127+2:text", "129+3:keyword",
+            "132+5:text", "137+4:number", "141+1:text", "142+3:keyword", "145+6:text", "151+8:string", "159+1:text",
+            "160+26:comment"
+        ],
+        .new: [
+            "0+26:comment", "26+1:text", "27+28:comment", "55+1:text", "56+3:keyword", "59+5:text", "64+4:string",
+            "68+1:text", "69+10:comment", "79+1:text", "80+3:keyword", "83+5:text", "88+3:string", "91+1:text",
+            "92+17:string", "109+1:text", "110+13:string", "123+1:text", "124+5:string", "129+2:text", "131+3:keyword",
+            "134+5:text", "139+4:number", "143+1:text", "144+3:keyword", "147+6:text", "153+8:string", "161+1:text",
+            "162+26:comment"
+        ]
+    ]
+
+    @Test
+    func `token colours keep their utf16 ranges on CRLF lines, astral characters and tokens that span lines`() throws {
+        let rendered = DiffRenderer.render(oldText: Self.spanningOld, newText: Self.spanningNew, language: .swift)
+        let panes: [(RenderedSide, RenderedText?)] = [
+            (.unified, rendered.unified), (.old, rendered.old), (.new, rendered.new)
+        ]
+        for (side, pane) in panes {
+            let text = try #require(pane)
+            #expect(Self.colourRuns(of: text.attributed) == Self.spanningPinnedRuns[side], "\(side)")
+        }
+    }
+
     @Test
     func `plain files produce no lexical tokens`() {
         let text = "é\n🙂\n"
