@@ -53,7 +53,8 @@ package final class DiffViewerModel {
     let gapDrags: GapDragController
     private let preparer: DiffPreparer
     let reader: any SourceReading
-    let taskProvider: any TaskProvider
+    /// Spawns the model's work, and its views' work on its behalf, so a test settles on one provider.
+    package let taskProvider: any TaskProvider
     @ObservationIgnored private var sourcesTask: Task<Void, Never>?
     @ObservationIgnored private var prologueTask: Task<LoadedSides?, Never>?
     @ObservationIgnored private var renamesTask: Task<Void, Never>?
