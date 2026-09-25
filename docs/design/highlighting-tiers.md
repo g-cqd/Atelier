@@ -662,3 +662,19 @@ Every run goes through `~/.agent-harness/bin/work run --agent tiers --weight 2 -
 - The repository's own gated benchmarks cover parts of this: `BundledGrammarMeasurements` (a compile and large
   samples per grammar), `LexerThroughputBenchmark`, `TokenPipelineBenchmark` and `SyntaxTierModelTests`' benchmark.
   The benchmarks each step adds guard the budgets in section 4.7.
+
+
+## Decisions (09-25)
+
+The user settled the open questions this note raised; where an answer differs from the recommendation above, the
+answer wins (book D33 to D36):
+
+- **Q1, Swift's structural tier (D33):** "merged but glr as background and not prioritized". swift-syntax is the Swift
+  structural tier and paints first; the GLR Swift grammar still runs for Swift, in the background at the lowest
+  priority, never ahead of any other tier's work, and its layer merges under swift-syntax's when it lands.
+- **Q2, grammar color per language (D34):** on by default once a language qualifies; a setting per language turns it off.
+- **Q3, semantic tokens (D35):** on by default where possible: used automatically for every working-tree side and
+  KittyCode file once the language server is trusted. History-only sides still get none, since sourcekit-lsp returns
+  nothing for them.
+- **KittyCode's grammar color (D36):** fixed ahead of the tier work, so a qualifying language keeps its grammar color
+  across refreshes and edits.

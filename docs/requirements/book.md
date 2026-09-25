@@ -172,6 +172,10 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
 | D30 | 09-25 | GIT-06: which sidebar gets the grouping? | "Merged sidebar, flat style (Recommended)" | GIT-06 |
 | D31 | 09-25 | GIT-06: what does selecting a commit's section show? | "Its files' net diff (Recommended)": a context menu adds Compare This Commit | GIT-06 |
 | D32 | 09-25 | GIT-06: diverged histories? | "Offer to compare from the merge base (Recommended)": the list stays ungrouped and says why | GIT-06 |
+| D33 | 09-25 | PERF-11: for Swift, does swift-syntax replace the GLR Swift grammar? | Typed: "merged but glr as background and not prioritized": swift-syntax is the Swift structural tier; the GLR Swift grammar still runs, in the background at low priority, and its layer merges in when it lands | PERF-11 |
+| D34 | 09-25 | PERF-11: how is grammar color turned on per language? | "On once a language qualifies (Recommended)": on by default once its corpus, gate and speed checks pass; a setting per language turns it off | PERF-11 |
+| D35 | 09-25 | PERF-11: how are sourcekit-lsp semantic tokens offered? | "On by default where possible": used automatically for every working-tree side and KittyCode file once the language server is trusted | PERF-11 |
+| D36 | 09-25 | Fix KittyCode dropping grammar color on refresh ahead of the tier work? | "Yes, keep grammar color now (Recommended)" | PERF-11 |
 
 ## Answered questions (09-23 09:37)
 
