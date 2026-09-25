@@ -31,8 +31,9 @@ final class PaneDiagnostics {
             version += 1
             return
         }
-        let right = SideFindings(paths: model.diagnosticFilePaths, findings: diagnostics.findingsByFile)
-        let left = SideFindings(paths: model.diagnosticLeftFilePaths, findings: diagnostics.leftFindingsByFile)
+        let paths = model.diagnosticFilePathMaps
+        let right = SideFindings(paths: paths.right, findings: diagnostics.findingsByFile)
+        let left = SideFindings(paths: paths.left, findings: diagnostics.leftFindingsByFile)
         model.taskProvider.task {
             let rows = await DiagnosticRowMapper.rowsOffMain(for: rendered, left: left, right: right)
             guard generation == self.generation else { return }

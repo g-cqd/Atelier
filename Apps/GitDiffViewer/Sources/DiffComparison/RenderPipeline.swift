@@ -50,6 +50,8 @@ package final class RenderPipeline {
     package private(set) var cards: [RenderedFile] = []
     /// The target of what is published; `prepared` holds its diffs, one per pair that landed, in order.
     package private(set) var target: Target?
+    /// Bumped each time ``target`` is set, so what is derived from its pairs is kept until the next one.
+    @ObservationIgnored package private(set) var targetVersion = 0
     /// The sources `file` or `cards` were rendered from, set in the same step as they are; nil while neither shows
     /// anything. The model compares them with the sides' own to tell a previous comparison kept on screen.
     package private(set) var publishedSources: Sources?
@@ -125,6 +127,7 @@ package final class RenderPipeline {
         isRendering = false
         unpublish()
         target = nil
+        targetVersion &+= 1
         error = nil
     }
 
@@ -158,6 +161,7 @@ package final class RenderPipeline {
             gapExpansions = carriedExpansions(into: target)
             unpublish()
             self.target = target
+            targetVersion &+= 1
             publishedGranularity = granularity
             publishedHeuristics = heuristics
         }
@@ -246,6 +250,7 @@ package final class RenderPipeline {
         PhaseTrace.log("publish \(files.count) whole")
         gapExpansions = carriedExpansions(into: job.target)
         target = job.target
+        targetVersion &+= 1
         prepared = diffs
         stamps = files.map(\.stamp)
         contentVersion += 1
