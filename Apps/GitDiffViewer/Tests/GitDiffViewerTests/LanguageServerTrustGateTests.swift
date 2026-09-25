@@ -2,6 +2,8 @@ import AemiTesting
 import AtelierDiagnostics
 import AtelierLSP
 import AtelierSyntaxModel
+import DiffGit
+import DiffRendering
 import Foundation
 import Synchronization
 import Testing
@@ -20,6 +22,12 @@ private final class FactorySpy: Sendable {
         return LanguageServerSession.Configuration(
             serverExecutable: URL(filePath: "/usr/bin/false"), workspaceRoot: root)
     }
+
+    /// Records `root` and resolves no session, for a caller that would start the one it gets.
+    func noConfiguration(forRoot root: URL) -> LanguageServerSession.Configuration? {
+        recorded.withLock { $0.append(root) }
+        return nil
+    }
 }
 
 /// A repository root on disk and the app's trust gate over it, wired as `AppServices` wires them.
@@ -34,9 +42,12 @@ private struct TrustGate {
     /// The suite the trust decisions and the settings persist to, removed with the gate.
     private let scratchDefaults = ScratchDefaults(tag: "trustGate")
 
-    /// - Parameter appWideLocation: sourcekit-lsp's app-wide setting, written as Settings writes it.
+    /// - Parameters:
+    ///   - appWideLocation: sourcekit-lsp's app-wide setting, written as Settings writes it.
+    ///   - resolvesSessions: Whether a root that reaches the factory gets a session; without, the factory records the
+    ///     root and resolves none, for a caller that asks the server something, which would start it.
     /// - Throws: When the root cannot be created.
-    init(appWideLocation: ToolLocation? = nil) throws {
+    init(appWideLocation: ToolLocation? = nil, resolvesSessions: Bool = true) throws {
         let defaults = scratchDefaults.defaults
         if let appWideLocation {
             ViewerSettings(defaults: defaults).lspServerLocations = [LanguageServerPolicy.serverID: appWideLocation]
@@ -52,7 +63,7 @@ private struct TrustGate {
             admits: { root, _ in await policy.admitsSession(at: root) },
             makeConfiguration: { root, _ in
                 guard await policy.configuration(forRoot: root) != nil else { return nil }
-                return factory.configuration(forRoot: root)
+                return resolvesSessions ? factory.configuration(forRoot: root) : factory.noConfiguration(forRoot: root)
             })
         policy.stopSessionsOnRevocation(in: registry)
         self.policy = policy
@@ -63,6 +74,15 @@ private struct TrustGate {
     func trustRoot() throws {
         trust.requestTrust(for: root)
         trust.answer(try #require(trust.claimNextRequest()), trusts: true)
+    }
+
+    /// Trusts a repository of its own, apart from ``root``, which it removes at once; a request for ``root`` stays.
+    func trustAnotherRepository() throws {
+        let other = FileManager.default.temporaryDirectory.appending(path: "gdv-gate-other-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: other) }
+        let canonical = try #require(LanguageServerRegistry.canonicalRoot(other))
+        trust.answer(RepositoryTrust.Request(root: canonical), trusts: true)
     }
 
     func removeRoot() {
@@ -164,6 +184,82 @@ struct LanguageServerTrustGateTests {
         #expect(await gate.registry.session(forRoot: gate.root, server: .sourceKitLSP) == nil)
 
         #expect(gate.trust.nextRequest == nil)
+        #expect(gate.factory.roots.isEmpty)
+    }
+
+    // MARK: - Asking again once trusted
+
+    @Test
+    func `a hover refused before the user trusts the repository asks its language server once they do`()
+        async throws
+    {
+        let gate = try TrustGate(resolvesSessions: false)
+        defer { gate.removeRoot() }
+        let model = HoverDocumentationModel(lspRegistry: gate.registry, taskProvider: gate.tasks)
+        model.comparisonChanged(
+            root: gate.root,
+            files: [
+                HoverDocumentationModel.FileEntry(
+                    index: 0, leftPath: "Sources/Math.swift", rightPath: "Sources/Math.swift", oldText: documented,
+                    newText: documented, oldBlobID: "old", newBlobID: "new")
+            ])
+        try await gate.tasks.waitForAllTasks()
+        _ = await model.hover(fileIndex: 0, side: .new, line: 1, utf16Column: 6)
+        #expect(gate.factory.roots.isEmpty)
+
+        gate.trust.answer(try #require(gate.trust.claimNextRequest()), trusts: true)
+        let content = await model.hover(fileIndex: 0, side: .new, line: 1, utf16Column: 6)
+
+        #expect(gate.factory.roots == [try #require(gate.canonicalRoot)])
+        #expect(content?.markdown.contains("Adds two numbers.") == true)
+    }
+
+    /// A window's model over `gate`'s repository as its right side, holding `a.swift` changed, with the file shown and
+    /// its sides refined while the repository is untrusted.
+    private func showSwiftFile(in gate: TrustGate, harness: ModelTestHarness) async throws -> DiffViewerModel {
+        let sut = harness.makeSUT()
+        sut.attachHoverDocs(lspRegistry: gate.registry, trust: gate.trust)
+        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]
+        harness.reader.entries[.directory(gate.root)] = [harness.entry("a.swift", "2")]
+        harness.reader.blobContents["1"] = "let a = 1\n"
+        harness.reader.blobContents["2"] = "let a = 2\n"
+        sut.left.load(.directory(ModelTestHarness.leftURL), repository: nil)
+        sut.right.load(.directory(gate.root), repository: nil)
+        try await harness.taskProvider.waitForAllTasks()
+        sut.noteDisplayed(try #require(sut.renderedFiles.first?.rendered.id))
+        try await harness.taskProvider.waitForAllTasks()
+        try await gate.tasks.waitForAllTasks()
+        return sut
+    }
+
+    @Test
+    func `trusting the repository shown asks for the shown Swift sides' semantic colour again`() async throws {
+        let gate = try TrustGate(resolvesSessions: false)
+        defer { gate.removeRoot() }
+        let harness = ModelTestHarness()
+        let sut = try await showSwiftFile(in: gate, harness: harness)
+        #expect(gate.factory.roots.isEmpty)
+        let asked = sut.pipeline.refinement.started
+
+        gate.trust.answer(try #require(gate.trust.claimNextRequest()), trusts: true)
+        try await harness.taskProvider.waitForAllTasks()
+
+        #expect(gate.factory.roots == [try #require(gate.canonicalRoot)])
+        #expect(sut.pipeline.refinement.started > asked)
+    }
+
+    @Test
+    func `trusting another repository refines nothing again`() async throws {
+        let gate = try TrustGate(resolvesSessions: false)
+        defer { gate.removeRoot() }
+        let harness = ModelTestHarness()
+        let sut = try await showSwiftFile(in: gate, harness: harness)
+        let asked = sut.pipeline.refinement.started
+
+        try gate.trustAnotherRepository()
+        try await harness.taskProvider.waitForAllTasks()
+
+        #expect(sut.pipeline.refinement.started == asked)
         #expect(gate.factory.roots.isEmpty)
     }
 }

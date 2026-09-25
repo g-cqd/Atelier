@@ -63,7 +63,7 @@ struct ComparisonWindow: View {
                 hasStarted = true
                 model.attachDiagnostics(engine: services.diagnosticsEngine, settings: settings)
                 model.attachSideAnalysis(trust: services.repositoryTrust, runner: services.runner)
-                model.attachHoverDocs(lspRegistry: services.lspRegistry)
+                model.attachHoverDocs(lspRegistry: services.lspRegistry, trust: services.repositoryTrust)
                 model.attachFreshness()
                 model.start(configuration)
                 recents.record(configuration)
