@@ -33,6 +33,48 @@ struct PendingDiscussion {
     let width: CGFloat
     let chipBackground: NSColor?
     var last: HoverBuiltBlock?
+    /// The code block shown last, when some of its lines are still to show.
+    var openCode: OpenCodeBlock?
+}
+
+/// A code block shown in part: measuring a long one whole on a throwaway stack took hundreds of milliseconds, so its
+/// lines are measured and shown a chunk at a time, as the body scrolls to them.
+struct OpenCodeBlock {
+    let code: NSAttributedString
+    /// Where the lines shown end: at the newline before the first line still to show.
+    var shownEnd: Int
+    let slot: HoverBlockSlot
+
+    var isComplete: Bool { shownEnd == code.length }
+}
+
+/// Where a long code block's chunks end.
+enum HoverCodeChunks {
+    /// The lines a chunk holds: at the panel's code sizes, their height is past the panel's own.
+    static let lines = 100
+
+    /// The end of the chunk of `text` that starts at `start`: after ``lines`` lines, or at the text's end when half a
+    /// chunk or less would be left after them, so that the last chunk is never short and a short code block is a
+    /// single chunk.
+    static func end(of text: NSString, from start: Int) -> Int {
+        let end = lineEnd(of: text, from: start, lines: lines)
+        guard end < text.length, lineEnd(of: text, from: end + 1, lines: lines / 2) < text.length else {
+            return text.length
+        }
+        return end
+    }
+
+    /// The offset of the newline that ends the `lines`th line from `start`, or the text's length when fewer are left.
+    private static func lineEnd(of text: NSString, from start: Int, lines: Int) -> Int {
+        var location = start
+        for _ in 0 ..< lines {
+            let newline = text.range(
+                of: "\n", options: .literal, range: NSRange(location: location, length: text.length - location))
+            guard newline.location != NSNotFound else { return text.length }
+            location = newline.location + 1
+        }
+        return location - 1
+    }
 }
 
 /// A top-level block's view, with what showing another block of its kind in it takes.
@@ -124,41 +166,65 @@ extension HoverDocPanel {
     private func buildPendingBlocks() -> CGFloat {
         guard var pending = pendingDiscussion else { return 0 }
         var filled: CGFloat = 0
-        while filled < HoverPanelSizing.maxHeight, let block = pending.blocks.popFirst() {
-            let view = showNext(block, width: pending.width, chipBackground: pending.chipBackground)
+        while filled < HoverPanelSizing.maxHeight {
+            if var open = pending.openCode {
+                filled += showNextChunk(of: &open)
+                pending.openCode = open.isComplete ? nil : open
+                continue
+            }
+            guard let block = pending.blocks.popFirst() else { break }
+            let (view, open) = showNext(block, width: pending.width, chipBackground: pending.chipBackground)
             let isHeading = if case .heading = block { true } else { false }
             let spacing = pending.last.map { Self.spacing(after: $0, beforeHeading: isHeading) } ?? 0
             if let last = pending.last { bodyStack.setCustomSpacing(spacing, after: last.view) }
             filled += spacing + view.fittingSize.height
             pending.last = (view, isHeading)
+            pending.openCode = open
         }
-        pendingDiscussion = pending.blocks.isEmpty ? nil : pending
+        pendingDiscussion = pending.blocks.isEmpty && pending.openCode == nil ? nil : pending
         return filled
     }
 
     /// Shows `block` at the body's next place: in the view already there when it is of the block's kind and width,
-    /// and otherwise in a new view that takes its place.
-    private func showNext(_ block: HoverDocument.Block, width: CGFloat, chipBackground: NSColor?) -> NSView {
+    /// and otherwise in a new view that takes its place. Returns the view, and a long code block's lines still to show.
+    private func showNext(
+        _ block: HoverDocument.Block, width: CGFloat, chipBackground: NSColor?
+    ) -> (view: NSView, openCode: OpenCodeBlock?) {
         let index = blockSlots.shown
         blockSlots.shown += 1
         let kind = HoverBlockSlot.Kind(block)
         if index < blockSlots.slots.count {
             let existing = blockSlots.slots[index]
             if existing.kind == kind, kind.isReusable, existing.width == width {
-                configure(existing, with: block, chipBackground: chipBackground)
+                let open = configure(existing, with: block, chipBackground: chipBackground, lazily: true)
                 existing.view.isHidden = false
-                return existing.view
+                return (existing.view, open)
             }
-            let slot = makeSlot(for: block, width: width, chipBackground: chipBackground)
+            let (slot, open) = makeSlot(for: block, width: width, chipBackground: chipBackground, lazily: true)
             bodyStack.insertArrangedSubview(slot.view, at: index)
             existing.view.removeFromSuperview()
             blockSlots.slots[index] = slot
-            return slot.view
+            return (slot.view, open)
         }
-        let slot = makeSlot(for: block, width: width, chipBackground: chipBackground)
+        let (slot, open) = makeSlot(for: block, width: width, chipBackground: chipBackground, lazily: true)
         bodyStack.addArrangedSubview(slot.view)
         blockSlots.slots.append(slot)
-        return slot.view
+        return (slot.view, open)
+    }
+
+    /// Shows the next chunk of `open`'s lines under those it shows, and returns the height they add.
+    private func showNextChunk(of open: inout OpenCodeBlock) -> CGFloat {
+        let start = open.shownEnd + 1
+        let end = HoverCodeChunks.end(of: open.code.string as NSString, from: start)
+        let lines = open.code.attributedSubstring(from: NSRange(location: start, length: end - start))
+        let height = Self.measuredHeight(
+            of: lines, width: open.slot.width - 2 * HoverPanelMetrics.chipHorizontalPadding)
+        // From the newline that ends the lines shown, which the chunk measured alone does without.
+        let added = open.code.attributedSubstring(from: NSRange(location: open.shownEnd, length: end - open.shownEnd))
+        open.slot.textView?.textStorage?.append(added)
+        open.slot.height?.constant += height
+        open.shownEnd = end
+        return height
     }
 
     /// The space between `previous` and the block after it: wider above a heading and tighter below one.
@@ -173,7 +239,7 @@ extension HoverDocPanel {
     ) {
         var previous: HoverBuiltBlock?
         for block in blocks {
-            let slot = makeSlot(for: block, width: width, chipBackground: chipBackground)
+            let (slot, _) = makeSlot(for: block, width: width, chipBackground: chipBackground, lazily: false)
             let isHeading = if case .heading = block { true } else { false }
             stack.addArrangedSubview(slot.view)
             if let previous {
@@ -183,8 +249,10 @@ extension HoverDocPanel {
         }
     }
 
-    /// A new view for `block`, showing it.
-    private func makeSlot(for block: HoverDocument.Block, width: CGFloat, chipBackground: NSColor?) -> HoverBlockSlot {
+    /// A new view for `block`, showing it as ``configure(_:with:chipBackground:lazily:)`` does.
+    private func makeSlot(
+        for block: HoverDocument.Block, width: CGFloat, chipBackground: NSColor?, lazily: Bool
+    ) -> (slot: HoverBlockSlot, openCode: OpenCodeBlock?) {
         let kind = HoverBlockSlot.Kind(block)
         let slot: HoverBlockSlot
         switch block {
@@ -214,25 +282,32 @@ extension HoverDocPanel {
                 rule.widthAnchor.constraint(equalToConstant: width).isActive = true
                 slot = HoverBlockSlot(kind: kind, view: rule, width: width, textView: nil, height: nil)
         }
-        configure(slot, with: block, chipBackground: chipBackground)
-        return slot
+        return (slot, configure(slot, with: block, chipBackground: chipBackground, lazily: lazily))
     }
 
     /// Shows `block` in `slot`'s view, of the block's kind: its text sized to the slot's width, and code in a box like
-    /// the declaration's, on the hovered pane's background so its colors read as they do there.
-    private func configure(_ slot: HoverBlockSlot, with block: HoverDocument.Block, chipBackground: NSColor?) {
+    /// the declaration's, on the hovered pane's background so its colors read as they do there. `lazily`, a long code
+    /// block shows its first chunk of lines, and the rest are returned for the body to show as it scrolls to them.
+    private func configure(
+        _ slot: HoverBlockSlot, with block: HoverDocument.Block, chipBackground: NSColor?, lazily: Bool
+    ) -> OpenCodeBlock? {
         switch block {
             case .paragraph(let text), .heading(_, let text):
                 slot.textView?.textStorage?.setAttributedString(text)
                 slot.height?.constant = Self.measuredHeight(of: text, width: slot.width)
+                return nil
             case .code(let code):
-                slot.textView?.textStorage?.setAttributedString(code)
                 (slot.view as? NSBox)?.fillColor = chipBackground ?? .clear
+                let end = lazily ? HoverCodeChunks.end(of: code.string as NSString, from: 0) : code.length
+                let shown =
+                    end == code.length ? code : code.attributedSubstring(from: NSRange(location: 0, length: end))
+                slot.textView?.textStorage?.setAttributedString(shown)
                 let innerWidth = slot.width - 2 * HoverPanelMetrics.chipHorizontalPadding
                 slot.height?.constant =
-                    Self.measuredHeight(of: code, width: innerWidth) + 2 * HoverPanelMetrics.chipVerticalPadding
+                    Self.measuredHeight(of: shown, width: innerWidth) + 2 * HoverPanelMetrics.chipVerticalPadding
+                return end == code.length ? nil : OpenCodeBlock(code: code, shownEnd: end, slot: slot)
             case .list, .quote, .rule:
-                break
+                return nil
         }
     }
 
