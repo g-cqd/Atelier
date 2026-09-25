@@ -77,6 +77,7 @@ extension ViewerSettings {
             lineHeightMultiple = 0
             appearanceScheme = .system
             badgeScheme = .classic
+            diffColors = .standard
             matchesThemeAppearance = false
             refinesSwiftColor = true
             compactsInlineView = false
@@ -178,7 +179,7 @@ extension ViewerSettings {
                 return [
                     themePath != nil, lineHeightMultiple != 0, mode != .split, wrapsLines != true, wrapColumn != 0,
                     appearanceScheme != .system, badgeScheme != .classic, matchesThemeAppearance != false,
-                    refinesSwiftColor != true, compactsInlineView != false
+                    refinesSwiftColor != true, compactsInlineView != false, diffColors != .standard
                 ]
                 .count { $0 }
             case .tools:

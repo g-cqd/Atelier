@@ -230,8 +230,19 @@ private struct AppearanceSettings: View {
                     .appWide(\.badgeScheme, in: scope)
                     Text("Xcode's scheme reads a modification and a rename both as blue.")
                         .settingsCaption()
+                    Picker(SettingLabel.diffColors, selection: $settings.diffColors) {
+                        Text("Red and green").tag(DiffColors.standard)
+                        Text("Xcode").tag(DiffColors.xcode)
+                    }
+                    .pickerStyle(.segmented)
+                    .appWide(\.diffColors, in: scope)
+                    Text(
+                        "Xcode's colors show a removed line gray and an added one blue, with a blue bar beside each "
+                            + "change in the gutter."
+                    )
+                    .settingsCaption()
                 } header: {
-                    Text("Badges")
+                    Text("Change Colors")
                 }
                 Section("Layout") {
                     Picker(SettingLabel.diffLayout, selection: $settings.mode) {

@@ -112,7 +112,7 @@ package final class DiffViewerModel {
         self.history = history
         self.taskProvider = taskProvider
         timer = OperationTimer(uptime: { .nanoseconds(uptime()) })
-        let palette = Self.palette(for: settings.themePath)
+        let palette = Self.palette(for: settings)
         self.palette = palette
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider, store: syntaxFacts)
         self.preparer = preparer
@@ -564,8 +564,11 @@ package final class DiffViewerModel {
         )
     }
 
-    private static func palette(for themePath: String?) -> DiffPalette {
-        themePath.flatMap(XcodeThemeLibrary.theme(at:)).map(DiffPalette.init(theme:)) ?? .system
+    /// The palette of the selected Xcode theme, or the system one when none is selected or it cannot be read, with
+    /// changes in the chosen diff colours (book D18).
+    private static func palette(for settings: ViewerSettings) -> DiffPalette {
+        let theme = settings.themePath.flatMap(XcodeThemeLibrary.theme(at:)).map(DiffPalette.init(theme:)) ?? .system
+        return theme.with(diffColors: settings.diffColors)
     }
 
     private func handle(_ event: RenderPipeline.Event) {
@@ -618,7 +621,7 @@ package final class DiffViewerModel {
             case .diff: renderSelection()
             case .layout: relayout()
             case .palette:
-                palette = Self.palette(for: settings.themePath)
+                palette = Self.palette(for: settings)
                 relayout()
             // The explorers' placement is an appearance setting, and grouping applies to the merged sidebar only.
             case .appearance:

@@ -1,4 +1,5 @@
 import AppKit
+import DiffCore
 import DiffRendering
 
 /// The compact inline view's change markers in the gutter (book DIFF-04; `compact-inline-design.md`): drawn over the
@@ -74,6 +75,19 @@ extension DiffGutterView {
         guard let rendered else { return }
         forEachChangeMarker(in: visibleRect) { _, shape in
             addCursorRect(ChangeMarkerLayout.hitArea(of: shape, lineHeight: rendered.lineHeight), cursor: .pointingHand)
+        }
+    }
+
+    /// Xcode's change bar beside every changed row near `rect`, with the Xcode diff colours (book D18): one solid bar
+    /// in the leading padding, where the compact inline view draws its markers instead, down each row's own height, so
+    /// that the rows of one change join into one bar and a gap's band breaks it.
+    func drawChangeBars(in rect: NSRect) {
+        guard let rendered, rendered.changes.isEmpty, let color = rendered.palette.changeBar else { return }
+        color.setFill()
+        forEachFragment(in: rect) { fragment, row, rowIndex, y in
+            guard [.added, .removed, .modified].contains(row.kind) else { return }
+            let height = fragment.layoutFragmentFrame.height - rendered.bandSpacing(afterRow: rowIndex)
+            NSRect(x: ChangeMarkerLayout.barX, y: y, width: ChangeMarkerLayout.barWidth, height: height).fill()
         }
     }
 
