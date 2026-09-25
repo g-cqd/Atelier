@@ -193,6 +193,27 @@ package final class DiffGutterView: NSView {
         }
     }
 
+    /// Marks for display the line numbers of `rows`, whose diagnostics changed. A gutter beside a clip view draws what
+    /// shows only, and draws again on every scroll, so it marks the rows in view alone; an embedded gutter, as tall as
+    /// its document, keeps what it drew of rows out of view, so it is marked whole.
+    /// - Complexity: O(rows in view), plus a lookup of the first fragment.
+    package func redrawDiagnostics(ofRows rows: [Int]) {
+        guard clipView != nil else {
+            needsDisplay = true
+            return
+        }
+        let changed = Set(rows)
+        forEachFragment(in: visibleRect) { fragment, _, rowIndex, y in
+            guard changed.contains(rowIndex) else { return }
+            // A number's underlay reaches past its row by a point or two.
+            let row = NSRect(x: 0, y: y, width: bounds.width, height: fragment.layoutFragmentFrame.height)
+            setNeedsDisplay(row.insetBy(dx: 0, dy: -Self.underlayOverhang))
+        }
+    }
+
+    /// How far a line number's underlay may reach above or below its row.
+    private static let underlayOverhang: CGFloat = 4
+
     /// The row whose decorated line number sits under `point`, with its diagnostics and the number's frame.
     private func diagnosticHit(at point: NSPoint) -> (
         rowIndex: Int, diagnostics: DiagnosticOverlay.RowDiagnostics, rect: NSRect
