@@ -85,6 +85,8 @@ package struct HoverDocument: @unchecked Sendable {
     package let extraCandidates: [Candidate]
     /// Diagnostics shown with the hover; ``build(from:palette:)`` leaves it empty.
     package let diagnostics: [DiagnosticEntry]
+    /// What the declaration says the symbol inherits from and conforms to, for Quick Help's Relationships section.
+    package let relationships: [HoverRelationship]
     /// The background declarations are drawn against: the hovered pane's ``DiffPalette/background``, so the theme's
     /// colors stay legible over the panel's material; nil for a document built by hand.
     package let chipBackground: NSColor?
@@ -96,7 +98,7 @@ package struct HoverDocument: @unchecked Sendable {
         title: String? = nil, declaration: NSAttributedString? = nil, summary: NSAttributedString? = nil,
         discussion: [Block] = [], parameters: [Field] = [], returns: NSAttributedString? = nil,
         provenance: Provenance = .unknown, extraCandidates: [Candidate] = [], diagnostics: [DiagnosticEntry] = [],
-        chipBackground: NSColor? = nil
+        relationships: [HoverRelationship] = [], chipBackground: NSColor? = nil
     ) {
         self.title = title
         self.declaration = declaration
@@ -107,6 +109,7 @@ package struct HoverDocument: @unchecked Sendable {
         self.provenance = provenance
         self.extraCandidates = extraCandidates
         self.diagnostics = diagnostics
+        self.relationships = relationships
         self.chipBackground = chipBackground
     }
 
@@ -116,7 +119,7 @@ package struct HoverDocument: @unchecked Sendable {
         var document = HoverDocument(
             title: title, declaration: declaration, summary: summary, discussion: discussion, parameters: parameters,
             returns: returns, provenance: provenance, extraCandidates: extraCandidates,
-            diagnostics: self.diagnostics + diagnostics, chipBackground: chipBackground)
+            diagnostics: self.diagnostics + diagnostics, relationships: relationships, chipBackground: chipBackground)
         document.panelMaterial = panelMaterial
         return document
     }
@@ -155,6 +158,7 @@ package struct HoverDocument: @unchecked Sendable {
                 Candidate(declaration: declaration(candidate.declaration), summary: prose(candidate.summary))
             },
             diagnostics: [],
+            relationships: parsed.declaration.map(HoverRelationships.relationships(fromDeclaration:)) ?? [],
             // Just short of opaque, so a trace of the panel's material keeps the chip set into the glass.
             chipBackground: chipColor(for: palette.background)
         )
