@@ -19,6 +19,8 @@ package struct DiffTextView: NSViewRepresentable {
     package var splitController: SplitPaneController?
     /// Reports a gap handle's drag in the gutter.
     package var onGapDrag: ((GapDragEvent) -> Void)?
+    /// Called with the change whose gutter marker is clicked in the compact inline view (book DIFF-04).
+    package var onChangeToggle: ((ChangeKey) -> Void)?
     /// Called once the pane shows a new render, its first included.
     package var onDisplayed: (() -> Void)?
     /// Shows documentation for the identifier under the pointer after it rests there.
@@ -52,7 +54,7 @@ package struct DiffTextView: NSViewRepresentable {
         wrapColumn: Int = 0,
         showsMinimap: Bool = true, syncsScrolling: Bool = true, scrollRequest: ScrollRequest? = nil,
         splitController: SplitPaneController? = nil,
-        onGapDrag: ((GapDragEvent) -> Void)? = nil,
+        onGapDrag: ((GapDragEvent) -> Void)? = nil, onChangeToggle: ((ChangeKey) -> Void)? = nil,
         onDisplayed: (() -> Void)? = nil, hoverEnabled: Bool = false,
         hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil,
         hoverPanelMaterial: HoverPanelMaterial = .liquidGlass,
@@ -76,6 +78,7 @@ package struct DiffTextView: NSViewRepresentable {
         self.scrollRequest = scrollRequest
         self.splitController = splitController
         self.onGapDrag = onGapDrag
+        self.onChangeToggle = onChangeToggle
         self.onDisplayed = onDisplayed
         self.hoverEnabled = hoverEnabled
         self.hoverResolver = hoverResolver
@@ -118,6 +121,7 @@ package struct DiffTextView: NSViewRepresentable {
         gutterView.source = textView
         gutterView.style = gutter
         gutterView.onGapDrag = onGapDrag
+        gutterView.onChangeToggle = onChangeToggle
         gutterView.overlay = context.coordinator.diagnostics
         gutterView.onDiagnosticClick = onDiagnosticClick
         context.coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
@@ -200,6 +204,7 @@ package struct DiffTextView: NSViewRepresentable {
             pane.needsLayout = true
         }
         coordinator.gutterView?.onGapDrag = onGapDrag
+        coordinator.gutterView?.onChangeToggle = onChangeToggle
         coordinator.gutterView?.onDiagnosticClick = onDiagnosticClick
         splitController?.syncsScrolling = syncsScrolling
         coordinator.hoverController.isEnabled = hoverEnabled

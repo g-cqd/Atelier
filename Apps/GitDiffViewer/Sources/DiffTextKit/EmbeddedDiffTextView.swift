@@ -16,6 +16,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     package let width: CGFloat
     package var wrapMode: WrapMode = .viewport
     package var onGapDrag: ((GapDragEvent) -> Void)?
+    /// Called with the change whose gutter marker is clicked in the compact inline view (book DIFF-04).
+    package var onChangeToggle: ((ChangeKey) -> Void)?
     /// Called once the pane shows a new render.
     package var onDisplayed: (() -> Void)?
     /// Shows documentation for the identifier under the pointer after it rests there, the same as ``DiffTextView``.
@@ -39,7 +41,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
 
     package init(
         layouts: CardLayouts, side: RenderedSide, gutter: GutterStyle, width: CGFloat, wrapMode: WrapMode = .viewport,
-        onGapDrag: ((GapDragEvent) -> Void)? = nil,
+        onGapDrag: ((GapDragEvent) -> Void)? = nil, onChangeToggle: ((ChangeKey) -> Void)? = nil,
         onDisplayed: (() -> Void)? = nil, hoverEnabled: Bool = false,
         hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil,
         hoverPanelMaterial: HoverPanelMaterial = .liquidGlass, bouncesAtEdges: Bool = false,
@@ -54,6 +56,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         self.width = width
         self.wrapMode = wrapMode
         self.onGapDrag = onGapDrag
+        self.onChangeToggle = onChangeToggle
         self.onDisplayed = onDisplayed
         self.hoverEnabled = hoverEnabled
         self.hoverResolver = hoverResolver
@@ -142,6 +145,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     /// first, the text view never lays the text out for a stale frame.
     private func update(_ pane: DiffPaneView, context: Context) {
         pane.gutterView.onGapDrag = onGapDrag
+        pane.gutterView.onChangeToggle = onChangeToggle
         pane.gutterView.onDiagnosticClick = onDiagnosticClick
         let elasticity: NSScrollView.Elasticity = bouncesAtEdges ? .automatic : .none
         if let scrollView = pane.contentView as? NSScrollView, scrollView.horizontalScrollElasticity != elasticity {
