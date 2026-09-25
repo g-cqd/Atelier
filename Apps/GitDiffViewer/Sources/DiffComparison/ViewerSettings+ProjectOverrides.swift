@@ -47,7 +47,7 @@ extension ViewerSettings {
         \.appearanceScheme: Key.appearanceScheme, \.badgeScheme: Key.badgeScheme, \.diffColors: Key.diffColors,
         \.matchesThemeAppearance: Key.matchesThemeAppearance, \.bouncesAtEdges: Key.bouncesAtEdges,
         \.scrollsPastEnd: Key.scrollsPastEnd, \.scrollsToFirstChange: Key.scrollsToFirstChange,
-        \.refinesSwiftColor: Key.refinesSwiftColor
+        \.refinesSwiftColor: Key.refinesSwiftColor, \.semanticColor: Key.semanticColor
     ]
 
     /// Whether the setting behind `property` can differ per project; the Settings window greys out the others while
@@ -143,6 +143,9 @@ extension ViewerSettings {
             case Key.refinesSwiftColor:
                 let value = defaults.object(forKey: effectiveKey(key)) as? Bool ?? true
                 if value != refinesSwiftColor { refinesSwiftColor = value }
+            case Key.semanticColor:
+                let value = defaults.object(forKey: effectiveKey(key)) as? Bool ?? true
+                if value != semanticColor { semanticColor = value }
             default:
                 return false
         }

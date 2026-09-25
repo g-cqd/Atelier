@@ -61,6 +61,9 @@ package final class HoverDocumentationModel {
     private let oldSideDocs: DocIndexHoverProvider
     private let newSideDocs: DocIndexHoverProvider
     private let lspRegistry: LanguageServerRegistry?
+    /// Where the semantic tier keeps what each side's spans are, so a hover over a keyword, a literal or a comment
+    /// does not ask the language server.
+    private let symbolKinds: SyntaxFactsStore?
     /// The servers hovers ask, each for its own languages.
     private let languageServers: [LanguageServerDescriptor]
     private let taskProvider: any TaskProvider
@@ -109,12 +112,15 @@ package final class HoverDocumentationModel {
     ///   - languageServers: The servers hovers ask through `lspRegistry`, each for its own languages.
     ///   - taskProvider: Spawns the feeds' passes.
     ///   - index: The doc-comment index the feeds fill, such as one whose parses a test counts.
+    ///   - symbolKinds: The store the semantic tier keeps each side's symbol kinds in; nil asks the server anywhere.
     package init(
         lspRegistry: LanguageServerRegistry?,
         languageServers: [LanguageServerDescriptor] = LanguageServerDescriptor.all,
-        taskProvider: any TaskProvider = .default, index: DocCommentIndex = DocCommentIndex()
+        taskProvider: any TaskProvider = .default, index: DocCommentIndex = DocCommentIndex(),
+        symbolKinds: SyntaxFactsStore? = nil
     ) {
         self.lspRegistry = lspRegistry
+        self.symbolKinds = symbolKinds
         self.languageServers = languageServers
         self.taskProvider = taskProvider
         self.index = index
@@ -226,11 +232,33 @@ package final class HoverDocumentationModel {
         let uri = Self.uri(path: path, blobID: blobID, onDiskRoot: onDiskRoot)
         let query = HoverQuery(documentURI: uri, content: content, line: line, utf16Column: utf16Column)
 
-        let primary = primaryProvider(side: side, onDiskRoot: onDiskRoot)
+        var spanKind: SymbolKinds.Kind?
+        if let blobID, let offset = Self.utf8Offset(in: content, line: line, utf16Column: utf16Column),
+            let kinds = symbolKinds?
+                .symbolKinds(
+                    for: SourceRevision(documentID: path, language: language, key: .content(blobID)))
+        {
+            spanKind = kinds.kind(atUTF8: offset)
+        }
+        // Over a keyword, a literal or a comment the server has nothing to say, and is not asked.
+        let asksServer = spanKind.map { $0 == .symbol } ?? true
+        let primary = asksServer ? primaryProvider(side: side, onDiskRoot: onDiskRoot) : nil
         let docs = side == .new ? newSideDocs : oldSideDocs
         let tiers = [primary, isIndexed ? docs : nil, isSwift ? sdkProvider : nil].compactMap { $0 }
         guard !tiers.isEmpty else { return nil }
         return try? await TieredHoverProviders(tiers).hover(query)
+    }
+
+    /// The UTF-8 offset of zero-based `line` and `utf16Column` in `content`; nil past the text.
+    nonisolated static func utf8Offset(in content: String, line: Int, utf16Column: Int) -> Int? {
+        let utf16 = content.utf16
+        var index = utf16.startIndex
+        for _ in 0 ..< line {
+            guard let newline = utf16[index...].firstIndex(of: UInt16(UInt8(ascii: "\n"))) else { return nil }
+            index = utf16.index(after: newline)
+        }
+        guard let position = utf16.index(index, offsetBy: utf16Column, limitedBy: utf16.endIndex) else { return nil }
+        return content.utf8.distance(from: content.utf8.startIndex, to: position)
     }
 
     /// The language server tier, for the new side of an on-disk file only: a side read from git history, as a

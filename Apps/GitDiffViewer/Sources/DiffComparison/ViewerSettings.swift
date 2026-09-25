@@ -358,6 +358,12 @@ package final class ViewerSettings {
         didSet { if refinesSwiftColor != oldValue { store(refinesSwiftColor, Key.refinesSwiftColor, .appearance) } }
     }
 
+    /// Whether names in a Swift side on disk take sourcekit-lsp's semantic colour over swift-syntax's (PERF-11 step 8),
+    /// in repositories the user trusts; on by default (D35).
+    package var semanticColor: Bool {
+        didSet { if semanticColor != oldValue { store(semanticColor, Key.semanticColor, .appearance) } }
+    }
+
     let defaults: UserDefaults
 
     /// Set while scoped properties are reassigned their base value after their override was removed, so `store`
@@ -460,6 +466,7 @@ package final class ViewerSettings {
         scrollsPastEnd = defaults.bool(forKey: Key.scrollsPastEnd)
         scrollsToFirstChange = defaults.object(forKey: Key.scrollsToFirstChange) as? Bool ?? true
         refinesSwiftColor = defaults.object(forKey: Key.refinesSwiftColor) as? Bool ?? true
+        semanticColor = defaults.object(forKey: Key.semanticColor) as? Bool ?? true
         settingObserver = NotificationCenter.default.addObserver(
             forName: Self.settingChangedNotification, object: nil, queue: .main
         ) { [weak self] notification in
@@ -522,5 +529,6 @@ extension ViewerSettings {
         static let scrollsPastEnd = "scrollsPastEnd"
         static let scrollsToFirstChange = "scrollsToFirstChange"
         static let refinesSwiftColor = "refinesSwiftColor"
+        static let semanticColor = "semanticColor"
     }
 }

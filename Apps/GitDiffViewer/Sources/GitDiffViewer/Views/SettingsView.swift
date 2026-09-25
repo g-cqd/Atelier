@@ -218,6 +218,14 @@ private struct AppearanceSettings: View {
                         "Swift files show quick colors at once, then swift-syntax's, which reads the code as the compiler does."
                     )
                     .settingsCaption()
+                    Toggle(SettingLabel.semanticColor, isOn: $settings.semanticColor)
+                        .appWide(\.semanticColor, in: scope)
+                        .disabled(!settings.refinesSwiftColor)
+                    Text(
+                        "Names in files on disk then take sourcekit-lsp's colors, in repositories you trust; keywords, "
+                            + "comments and literals keep swift-syntax's."
+                    )
+                    .settingsCaption()
                 } header: {
                     Text("Syntax Color")
                 }
