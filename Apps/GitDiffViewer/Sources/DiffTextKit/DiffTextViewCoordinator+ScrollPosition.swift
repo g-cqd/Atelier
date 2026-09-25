@@ -69,9 +69,11 @@ extension DiffTextViewCoordinator {
         textView?.needsLayout = true
     }
 
-    /// Places the row placed last again once the split view has aligned its rows, which moves them, unless the pane
-    /// has been scrolled since.
+    /// Draws the line numbers again where the split view's alignment moved their rows, and places the row placed last
+    /// again, unless the pane has been scrolled since (book DIFF-06). The text redraws the rows it lays out again; the
+    /// gutter beside it would keep the numbers where the rows were.
     package func rowsDidAlign() {
+        gutterView?.needsDisplay = true
         placeAgainUnlessScrolled()
     }
 
