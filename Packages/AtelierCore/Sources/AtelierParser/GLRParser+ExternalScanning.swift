@@ -45,50 +45,32 @@ extension GLRParser {
             var next: [ParseStack] = []
             while var stack = active.popLast() {
                 let token: ParseToken
-                do throws(ParseError) {
-                    switch try readToken(
-                        for: &stack, utf8: utf8, scanner: scanner, externalScanner: &scannerValue,
-                        readCount: &readCount, isCancelled: isCancelled)
-                    {
-                        case .end:
-                            finished.append(stack)
-                            continue
-                        case .extra:
-                            next.append(stack)
-                            continue
-                        case .token(let read):
-                            token = read
-                    }
-                } catch {
-                    stack.releaseNodes()
-                    ParseStack.releaseAll(&active)
-                    ParseStack.releaseAll(&next)
-                    ParseStack.releaseAll(&finished)
-                    throw error
+                switch try readToken(
+                    for: &stack, utf8: utf8, scanner: scanner, externalScanner: &scannerValue,
+                    readCount: &readCount, isCancelled: isCancelled)
+                {
+                    case .end:
+                        finished.append(stack)
+                        continue
+                    case .extra:
+                        next.append(stack)
+                        continue
+                    case .token(let read):
+                        token = read
                 }
                 // The stack moves into `advance`, so its arrays have one owner and each push and reduction writes
-                // them in place: a copy left here would copy the whole stack on every token. `advance` releases
-                // the stacks it holds when it throws.
+                // them in place: a copy left here would copy the whole stack on every token.
                 let tokenIndex = stack.tokenIndex
-                do throws(ParseError) {
-                    for var branch in try advance([consume stack], past: token, at: tokenIndex) {
-                        branch.tokenIndex += 1
-                        next.append(branch)
-                    }
-                } catch {
-                    ParseStack.releaseAll(&active)
-                    ParseStack.releaseAll(&next)
-                    ParseStack.releaseAll(&finished)
-                    throw error
+                for var branch in try advance([consume stack], past: token, at: tokenIndex) {
+                    branch.tokenIndex += 1
+                    next.append(branch)
                 }
             }
             next = ParseStack.mergingIdenticalHistories(consume next, ranks: symbolRanks)
             next = ParseStack.droppingOutdone(consume next, finished: finished)
             if next.count > Self.maxScanningStacks {
                 next.sort { $0.isPreferred(over: $1, ranks: symbolRanks) }
-                var dropped = Array(next[Self.maxScanningStacks...])
                 next.removeSubrange(Self.maxScanningStacks...)
-                ParseStack.releaseAll(&dropped)
             }
             active = next
         }
@@ -96,10 +78,7 @@ extension GLRParser {
         if let end = terminalIndex["$end"] {
             var exceededDepth = false
             finished = applyReduces(to: consume finished, lookahead: end, exceededDepth: &exceededDepth)
-            guard !exceededDepth else {
-                ParseStack.releaseAll(&finished)
-                throw Self.treeTooDeep
-            }
+            guard !exceededDepth else { throw Self.treeTooDeep }
         }
         guard let best = ParseStack.takingBest(from: &finished, ranks: symbolRanks) else {
             throw .parsingFailed("No valid parse at the end of input")

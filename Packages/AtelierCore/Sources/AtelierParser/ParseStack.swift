@@ -1,9 +1,5 @@
 /// One stack of a GLR parse: the nodes shifted or reduced so far, and the LR state each was pushed in.
 struct ParseStack: Sendable {
-    /// Nodes up to this many levels tall are freed by ordinary, recursive release: a 512 KiB thread overflows
-    /// between 2,000 and 3,000 levels, and this leaves most of it to the caller.
-    static let recursiveReleaseHeight = 512
-
     /// The state each node of `nodes` was pushed in, then the current state: one entry more than `nodes`.
     private(set) var states: [Int]
     private(set) var nodes: [SyntaxNode]
@@ -131,49 +127,15 @@ struct ParseStack: Sendable {
         }
     }
 
-    /// Empties the stack without recursing into a deep subtree: a node taller than `recursiveReleaseHeight` is freed
-    /// by ``SyntaxTree/releaseIteratively(_:)``, unless `survivor` holds the same node at the same position, which
-    /// keeps it alive.
-    mutating func releaseNodes(sparing survivor: ParseStack? = nil) {
-        var deepNodes: [SyntaxNode] = []
-        for index in nodes.indices where heights[index] > Self.recursiveReleaseHeight {
-            let node = nodes[index]
-            if let survivor, survivor.nodes.indices.contains(index),
-                survivor.nodes[index].children.isTriviallyIdentical(to: node.children)
-            {
-                continue
-            }
-            deepNodes.append(node)
-        }
-        nodes = []
-        heights = []
-        states = [state]
-        SyntaxTree.releaseIteratively(consume deepNodes)
-    }
-
-    /// Takes out the stack `ranks` prefers, the first of them on a tie, and releases the others; nil when `stacks` is
+    /// Takes out the stack `ranks` prefers, the first of them on a tie, and drops the others; nil when `stacks` is
     /// empty.
     static func takingBest(from stacks: inout [ParseStack], ranks: SymbolRanks) -> ParseStack? {
         guard let bestIndex = stacks.indices.min(by: { stacks[$0].isPreferred(over: stacks[$1], ranks: ranks) }) else {
             return nil
         }
         let best = stacks.remove(at: bestIndex)
-        for index in stacks.indices {
-            stacks[index].releaseNodes(sparing: best)
-        }
-        return best
-    }
-
-    /// Empties every stack in `stacks` without recursing into a deep subtree. A stack that shares nodes with the first
-    /// spares them, so only the first frees them.
-    static func releaseAll(_ stacks: inout [ParseStack]) {
-        guard !stacks.isEmpty else { return }
-        var first = stacks.removeFirst()
-        for index in stacks.indices {
-            stacks[index].releaseNodes(sparing: first)
-        }
         stacks.removeAll()
-        first.releaseNodes()
+        return best
     }
 
     /// `stacks` without the stacks another stack outdoes, in order, as tree-sitter drops a version once a better one
@@ -182,7 +144,7 @@ struct ParseStack: Sendable {
     /// each read the rest of the input on their own.
     /// - Complexity: O(s log s) for s stacks.
     static func droppingOutdone(_ stacks: consuming [ParseStack], finished: [ParseStack]) -> [ParseStack] {
-        var stacks = consume stacks
+        let stacks = consume stacks
         guard stacks.count > 1 || !finished.isEmpty else { return stacks }
         let order = stacks.indices.sorted { stacks[$0].cursor.offset > stacks[$1].cursor.offset }
         var lowestCost = finished.map(\.errorCost).min() ?? Int.max
@@ -199,17 +161,14 @@ struct ParseStack: Sendable {
         }
         guard outdone.contains(true) else { return stacks }
         var kept: [ParseStack] = []
-        var dropped: [ParseStack] = []
-        for (index, stack) in stacks.enumerated() {
-            if outdone[index] { dropped.append(stack) } else { kept.append(stack) }
+        for (index, stack) in stacks.enumerated() where !outdone[index] {
+            kept.append(stack)
         }
-        stacks = []
-        releaseAll(&dropped)
         return kept
     }
 
     /// `stacks` with one stack per state history, in order: stacks with the same history parse the rest of the input
-    /// alike, so the first one `ranks` prefers stands for all of them, and the others are released.
+    /// alike, so the first one `ranks` prefers stands for all of them, and the others are dropped.
     ///
     /// - Complexity: O(s · d) for s stacks d states deep, comparing only stacks that share a current state, plus the
     ///   nodes two stacks that tie on errors and dynamic precedence do not share.
@@ -235,7 +194,6 @@ struct ParseStack: Sendable {
                 if stack.isPreferred(over: kept[twin], ranks: ranks) {
                     swap(&stack, &kept[twin])
                 }
-                stack.releaseNodes(sparing: kept[twin])
                 continue
             }
             keptIndicesByState[stack.state, default: []].append(kept.count)
