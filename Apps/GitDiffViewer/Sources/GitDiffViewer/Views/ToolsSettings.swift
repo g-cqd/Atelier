@@ -1,6 +1,7 @@
 import AppKit
 import AtelierDiagnostics
 import DiffComparison
+import DiffRendering
 import Foundation
 import SwiftUI
 
@@ -70,6 +71,10 @@ struct ToolsSettings: View {
                 Section("Diagnostics") {
                     Toggle(SettingLabel.diagnosticsEnabled, isOn: $settings.diagnosticsEnabled)
                     Toggle(SettingLabel.showsHoverDocumentation, isOn: $settings.showsHoverDocumentation)
+                    Picker(SettingLabel.hoverPanelMaterial, selection: $settings.hoverPanelMaterial) {
+                        ForEach(HoverPanelMaterial.allCases) { Text($0.displayName).tag($0) }
+                    }
+                    .disabled(!settings.showsHoverDocumentation)
                     Picker(SettingLabel.analyzedSides, selection: $settings.analyzedSides) {
                         ForEach(AnalyzedSides.allCases) { Text($0.displayName).tag($0) }
                     }
