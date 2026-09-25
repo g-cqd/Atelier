@@ -44,6 +44,9 @@ struct DiffDetailView: View {
     private var showsTabs: Bool { !model.tabs.tabs.isEmpty }
     /// The tab bar's height as last laid out, which the file panes run beneath (book TAB-09).
     @State private var tabBarHeight: CGFloat = 0
+    /// The height of the bars over the top of the file panes, the toolbar's and the tab bar's, as last laid out: the
+    /// upper pane of a stacked file runs beneath them, and splits only what they leave with the lower one (DIFF-01).
+    @State private var barsHeight: CGFloat = 0
 
     var body: some View {
         content
@@ -72,6 +75,11 @@ struct DiffDetailView: View {
                 // the toolbar but not the tab bar, a SwiftUI bar: each pane beneath it takes its height as safe area of
                 // its own, and the system's scroll edge effect covers both. The marker stays below the bars.
                 Color.clear
+                    .onGeometryChange(for: CGFloat.self) {
+                        $0.safeAreaInsets.top
+                    } action: { height in
+                        barsHeight = height
+                    }
                     .overlay {
                         panes(for: rendered, underBars: showsTabs ? tabBarHeight : 0)
                             .ignoresSafeArea(.container, edges: .top)
@@ -133,7 +141,8 @@ struct DiffDetailView: View {
                         onGapDrag: { model.handleGapDrag($0) },
                         onDisplayed: { model.noteDisplayed(rendered.id) },
                         scrollMemoryPath: model.renderedPath,
-                        underBars: underBars
+                        underBars: underBars,
+                        barsHeight: barsHeight
                     )
                 }
         }
@@ -156,12 +165,20 @@ private struct SplitDiffView: View {
     let scrollMemoryPath: String?
     /// The tab bar's height above the panes: both run beneath it side by side, the old one alone stacked.
     let underBars: CGFloat
+    /// The height of every bar above the panes, the toolbar's included, which the upper pane alone runs beneath when
+    /// stacked.
+    let barsHeight: CGFloat
 
     @State private var controller = SplitPaneController()
 
+    /// The window's own pane ratio, which a drag of the divider writes once it ends (book DIFF-01).
+    private var ratio: Binding<Double> {
+        let settings = model.settings
+        return Binding(get: { settings.paneRatio }, set: { settings.paneRatio = $0 })
+    }
+
     var body: some View {
-        let layout = isStacked ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
-        layout {
+        ResizablePanes(axis: isStacked ? .vertical : .horizontal, ratio: ratio, covered: isStacked ? barsHeight : 0) {
             DiagnosticDiffTextView(
                 model: model, rendered: old, gutter: .old, keepsScrollPosition: keepsScrollPosition,
                 wrapsLines: wrapsLines, wrapColumn: wrapColumn, showsMinimap: showsMinimap,
@@ -169,7 +186,7 @@ private struct SplitDiffView: View {
                 onGapDrag: onGapDrag, onDisplayed: onDisplayed, scrollMemoryPath: scrollMemoryPath,
                 underBars: underBars
             )
-            Divider()
+        } trailing: {
             DiagnosticDiffTextView(
                 model: model, rendered: new, gutter: .new, keepsScrollPosition: keepsScrollPosition,
                 wrapsLines: wrapsLines, wrapColumn: wrapColumn, showsMinimap: showsMinimap,
