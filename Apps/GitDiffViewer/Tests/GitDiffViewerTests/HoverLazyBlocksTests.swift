@@ -36,8 +36,7 @@ struct HoverLazyBlocksTests {
         panel.scrollThroughDiscussion()
 
         #expect(panel.shownBlockViews.count == 121)
-        panel.bodyStack.layoutSubtreeIfNeeded()
-        #expect(abs(panel.bodyDocument.frame.height - panel.bodyStack.fittingSize.height) < 1)
+        #expect(panel.bodyEndsWithItsLastBlock)
     }
 
     @Test
@@ -78,13 +77,12 @@ struct HoverLazyBlocksTests {
 
         #expect(codeView.string == code.string)
         #expect(panel.shownBlockViews.count == 3)
-        panel.bodyStack.layoutSubtreeIfNeeded()
         let innerWidth =
             HoverPanelSizing.width - 2 * HoverPanelMetrics.edgeInset - 2 * HoverPanelMetrics.chipHorizontalPadding
         let whole =
             HoverDocPanel.measuredHeight(of: code, width: innerWidth) + 2 * HoverPanelMetrics.chipVerticalPadding
         #expect(abs(chip.frame.height - whole) < 1)
-        #expect(abs(panel.bodyDocument.frame.height - panel.bodyStack.fittingSize.height) < 1)
+        #expect(panel.bodyEndsWithItsLastBlock)
     }
 
     private static func textViews(under root: NSView) -> [NSTextView] {
