@@ -5,13 +5,35 @@ import SwiftSyntax
 
 /// Token boundaries per line for the syntax tier of the intraline diff: swift-syntax tokens for Swift, with comments
 /// split into words, and the code-aware lexer for every other language.
+///
+/// Given a ``SyntaxFactsStore``, a Swift text with a revision takes its boundaries from the facts one parse found for
+/// it, the colour tier's and hover's parse among them, and a text parsed here leaves its facts there (PERF-11 step 3).
 public struct SwiftSyntaxTokenRanges: SelectedSyntaxTokenRanging {
-    public init() {}
+    private let store: SyntaxFactsStore?
+    private let revision: @Sendable (_ text: String, _ language: Language) -> SourceRevision?
 
-    /// - Complexity: O(text) plus one swift-syntax parse for Swift.
+    /// A provider that parses every Swift text it is asked about.
+    public init() {
+        store = nil
+        revision = { _, _ in nil }
+    }
+
+    /// A provider that reads a Swift text's boundaries from `store`, parsing only a text the store has no facts for.
+    /// - Parameters:
+    ///   - store: Where the facts are kept.
+    ///   - revision: The revision of a text the provider is asked about; nil parses it without the store.
+    public init(
+        store: SyntaxFactsStore, revision: @escaping @Sendable (_ text: String, _ language: Language) -> SourceRevision?
+    ) {
+        self.store = store
+        self.revision = revision
+    }
+
+    /// - Complexity: O(text) plus one swift-syntax parse for Swift, none when the store has the text's facts.
     public func tokenRangesByLine(text: String, language: Language) -> [[Range<Int>]] {
         switch language {
             case .swift:
+                if let stored = storedBoundaries(of: text) { return stored }
                 let ranges = Self.swiftTokenRanges(text: text, selectedLines: nil)
                 return Self.splitByLine(
                     Self.utf16Ranges(from: ranges, in: text), text: text, lineCount: Self.lineCount(text))
@@ -26,10 +48,16 @@ public struct SwiftSyntaxTokenRanges: SelectedSyntaxTokenRanging {
     ///   - language: The language that selects the Swift parser or code-aware lexer.
     ///   - lineIndices: Zero-based line indices to convert; invalid indices are ignored.
     /// - Returns: UTF-16 ranges relative to each valid requested line.
-    /// - Complexity: O(text + returned ranges) plus one swift-syntax parse for Swift.
+    /// - Complexity: O(text + returned ranges) plus one swift-syntax parse for Swift, none when the store has the
+    ///   text's facts.
     public func tokenRangesByLine(text: String, language: Language, lineIndices: [Int]) -> [Int: [Range<Int>]] {
         switch language {
             case .swift:
+                if let stored = storedBoundaries(of: text) {
+                    return Dictionary(
+                        lineIndices.filter(stored.indices.contains).map { ($0, stored[$0]) },
+                        uniquingKeysWith: { first, _ in first })
+                }
                 let lines = Self.selectedLines(in: text, indices: Set(lineIndices))
                 guard !lines.isEmpty else { return [:] }
                 let ranges = Self.swiftTokenRanges(text: text, selectedLines: lines)
@@ -72,30 +100,47 @@ public struct SwiftSyntaxTokenRanges: SelectedSyntaxTokenRanging {
         }
     }
 
+    /// The boundaries of a Swift text from the facts the store keeps for it, or finds and keeps; nil without a store
+    /// or a revision for the text.
+    private func storedBoundaries(of text: String) -> [[Range<Int>]]? {
+        guard let store, let revision = revision(text, .swift) else { return nil }
+        return SwiftSyntaxFacts.facts(for: revision, text: text, in: store)?.tokenBoundaries
+    }
+
+    /// Every line's boundaries in a parsed Swift text, as ``tokenRangesByLine(text:language:)`` finds them; on the
+    /// caller's stack, which must be deep enough.
+    static func tokenBoundaries(of tree: SourceFileSyntax, text: String) -> [[Range<Int>]] {
+        splitByLine(
+            utf16Ranges(from: tokenRanges(in: tree, selectedLines: nil), in: text), text: text,
+            lineCount: lineCount(text))
+    }
+
     /// Parsed and walked on ``SwiftSyntaxStack``: a side whose brackets never close nests past a worker thread's stack.
     private static func swiftTokenRanges(text: String, selectedLines: [LineSpan]?) -> [Range<Int>] {
-        SwiftSyntaxStack.run {
-            var collector = RangeCollector(selectedLines: selectedLines)
-            let tree = Parser.parse(source: text)
-            for token in tree.tokens(viewMode: .sourceAccurate) {
-                if let last = selectedLines?.last, token.position.utf8Offset >= last.utf8.upperBound { break }
-                var offset = token.position.utf8Offset
-                for piece in token.leadingTrivia.pieces {
-                    append(trivia: piece, at: offset, to: &collector)
-                    offset += piece.sourceLength.utf8Length
-                }
-                let length = token.text.utf8.count
-                if length > 0 {
-                    collector.append(offset ..< (offset + length))
-                }
-                offset += length
-                for piece in token.trailingTrivia.pieces {
-                    append(trivia: piece, at: offset, to: &collector)
-                    offset += piece.sourceLength.utf8Length
-                }
+        SwiftSyntaxStack.run { tokenRanges(in: Parser.parse(source: text), selectedLines: selectedLines) }
+    }
+
+    /// The token and comment-word ranges of a parsed tree, in UTF-8 bytes, those of `selectedLines` alone when given.
+    private static func tokenRanges(in tree: SourceFileSyntax, selectedLines: [LineSpan]?) -> [Range<Int>] {
+        var collector = RangeCollector(selectedLines: selectedLines)
+        for token in tree.tokens(viewMode: .sourceAccurate) {
+            if let last = selectedLines?.last, token.position.utf8Offset >= last.utf8.upperBound { break }
+            var offset = token.position.utf8Offset
+            for piece in token.leadingTrivia.pieces {
+                append(trivia: piece, at: offset, to: &collector)
+                offset += piece.sourceLength.utf8Length
             }
-            return collector.ranges
+            let length = token.text.utf8.count
+            if length > 0 {
+                collector.append(offset ..< (offset + length))
+            }
+            offset += length
+            for piece in token.trailingTrivia.pieces {
+                append(trivia: piece, at: offset, to: &collector)
+                offset += piece.sourceLength.utf8Length
+            }
         }
+        return collector.ranges
     }
 
     /// Comments are split into words so a changed word inside a comment is emphasized on its own.
