@@ -35,6 +35,30 @@ struct SDKDocumentationProviderIntegrationTests {
     }
 
     @Test(.timeLimit(.minutes(3)))
+    func `a system symbol's page is filed under the module of its chain's first type`() async throws {
+        let serverExecutable = try #require(Self.resolveSourceKitLSP(), "sourcekit-lsp not found")
+        let probeDirectory = try SDKDocumentationProvider.makeProbeDirectory()
+        let provider = SDKDocumentationProvider.scratch(
+            serverExecutable: serverExecutable, probeDirectory: probeDirectory, locateSDK: { _ in nil },
+            resolvesDocumentationPages: true)
+
+        func page(of line: String) async throws -> HoverContent.DocumentationPage? {
+            let query = HoverQuery(
+                documentURI: "file:///probe.swift", content: "import Foundation\n" + line, line: 1,
+                utf16Column: line.utf16.count - 1)
+            return try await provider.hover(query)?.documentationPage
+        }
+        let utf8 = try await page(of: "let encoding = String.Encoding.utf8")
+        let manager = try await page(of: "let manager = FileManager.default")
+        await provider.shutdown()
+        try FileManager.default.removeItem(at: probeDirectory)
+
+        // Foundation declares the encoding; Apple's documentation files it under Swift's String.
+        #expect(utf8 == HoverContent.DocumentationPage(module: "Swift", path: ["String", "Encoding", "utf8"]))
+        #expect(manager == HoverContent.DocumentationPage(module: "Foundation", path: ["FileManager", "default"]))
+    }
+
+    @Test(.timeLimit(.minutes(3)))
     func `resolves UIView against the iOS simulator SDK`() async throws {
         let serverExecutable = try #require(Self.resolveSourceKitLSP(), "sourcekit-lsp not found")
         let pool = BlockingOffloadPool(width: 1)
