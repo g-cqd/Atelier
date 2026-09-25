@@ -1,3 +1,4 @@
+import AtelierGrammarCorpus
 public import AtelierSyntaxModel
 
 /// The grammar tier behind the shared engine interface: tree-sitter grammars parsed by the GLR parser, queried for
@@ -22,10 +23,6 @@ public struct GrammarHighlightEngine: HighlightEngine {
 
     /// The bundled grammar manifest's name for a language; nil for the languages no grammar ships for.
     static func grammarName(of language: Language) -> String? {
-        switch language {
-            case .shell: "bash"
-            case .plain, .objectiveC, .fish: nil
-            default: language.name
-        }
+        GrammarEngine.grammarName(of: language)
     }
 }
