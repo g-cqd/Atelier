@@ -62,8 +62,8 @@ public struct SequenceRouter: Sendable {
     private var utf8Buffer: [UInt8] = []
     private var utf8ExpectedBytes: Int = 0
     private var utf8Modifiers: KeyModifiers = []
-    /// While dropping an overflowed paste, how many bytes of the end marker the last bytes matched; while dropping an
-    /// overflowed OSC, 1 when the last byte was the ESC of an `ESC \` terminator.
+    /// While in a paste, kept or dropped past its cap, how many bytes of the end marker the last bytes matched; while
+    /// dropping an overflowed OSC, 1 when the last byte was the ESC of an `ESC \` terminator.
     private var terminatorProgress = 0
 
     public init() {}
@@ -201,6 +201,7 @@ public struct SequenceRouter: Sendable {
                         if firstParam == 200 {
                             routeState = .paste
                             buffer.removeAll(keepingCapacity: true)
+                            terminatorProgress = 0
                         } else if let keyCode = Self.csiTildeKeyCode(for: firstParam) {
                             events.append(
                                 .key(KeyEvent(keyCode: keyCode, modifiers: mods, eventType: eventType)))
@@ -266,20 +267,15 @@ public struct SequenceRouter: Sendable {
 
             case .paste:
                 buffer.append(byte)
-                if buffer.count >= Self.pasteEndMarker.count,
-                    buffer.suffix(Self.pasteEndMarker.count).elementsEqual(Self.pasteEndMarker)
-                {
+                // One step of the end-marker match per byte, rather than comparing the buffer's tail with it.
+                if advancePasteEndMarker(byte) {
                     let pasteBytes = buffer.dropLast(Self.pasteEndMarker.count)
                     // Invalid UTF-8 becomes U+FFFD rather than costing the whole paste.
                     events.append(.paste(String(decoding: pasteBytes, as: UTF8.self)))
                     resetRouting()
                 } else if buffer.count > Self.maxPasteSize {
                     events.append(.overflow(.paste))
-                    // The last bytes kept may already start the end marker.
-                    terminatorProgress = 0
-                    for keptByte in buffer.suffix(Self.pasteEndMarker.count - 1) {
-                        _ = advancePasteEndMarker(keptByte)
-                    }
+                    // The match carries on over the dropped bytes: the last bytes kept may already start the marker.
                     buffer = []
                     routeState = .pasteOverflow
                 }
@@ -405,7 +401,7 @@ public struct SequenceRouter: Sendable {
         terminatorProgress = 0
     }
 
-    /// Feeds one byte of an overflowed paste to the end-marker match; true when the byte completes the marker.
+    /// Feeds one byte of a paste to the end-marker match; true when the byte completes the marker.
     private mutating func advancePasteEndMarker(_ byte: UInt8) -> Bool {
         if byte == Self.pasteEndMarker[terminatorProgress] {
             terminatorProgress += 1
