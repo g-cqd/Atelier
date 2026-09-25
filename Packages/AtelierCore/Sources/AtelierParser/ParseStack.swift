@@ -111,10 +111,13 @@ struct ParseStack: Sendable {
     /// The current state becomes the one the first symbol was pushed in.
     mutating func popSymbols(_ count: Int) -> (symbols: [SyntaxNode], skippedAbove: [SyntaxNode]) {
         let range = symbolRange(ofTop: count)
-        let popped = (Array(nodes[range]), Array(nodes[range.upperBound...]))
-        nodes.removeSubrange(range.lowerBound...)
-        heights.removeSubrange(range.lowerBound...)
-        states.removeSubrange((range.lowerBound + 1)...)
+        let popped = (Array(nodes[range]), range.upperBound == nodes.count ? [] : Array(nodes[range.upperBound...]))
+        // The same entries `removeSubrange(range.lowerBound...)` removes from each array, `states` keeping its extra
+        // one, through the cheaper path for the end of an array.
+        let removed = nodes.count - range.lowerBound
+        nodes.removeLast(removed)
+        heights.removeLast(removed)
+        states.removeLast(removed)
         return popped
     }
 
