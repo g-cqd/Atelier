@@ -85,14 +85,14 @@ private let hoverAnswer: JSONValue = .object([
     "contents": .object(["kind": .string("markdown"), "value": .string("```swift\nstruct Bool\n```\n\nA value.")])
 ])
 
-private func makeService(_ factory: ScriptedConnectionFactory) -> SourceKitLSPService {
-    let configuration = SourceKitLSPService.Configuration(
+private func makeService(_ factory: ScriptedConnectionFactory) -> LanguageServerSession {
+    let configuration = LanguageServerSession.Configuration(
         serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
-    return SourceKitLSPService(configuration: configuration, clock: TestClock()) { _ in await factory.make() }
+    return LanguageServerSession(configuration: configuration, clock: TestClock()) { _ in await factory.make() }
 }
 
 @Suite
-struct SourceKitLSPServiceDocumentationPageTests {
+struct LanguageServerSessionDocumentationPageTests {
     @Test
     func `a member's page is filed under the module of its chain's first type`() async throws {
         let factory = ScriptedConnectionFactory(answering: ["initialize": .object([:]), "shutdown": .null])

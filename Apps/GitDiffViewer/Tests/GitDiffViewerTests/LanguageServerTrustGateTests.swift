@@ -15,9 +15,10 @@ private final class FactorySpy: Sendable {
 
     var roots: [URL] { recorded.withLock { $0 } }
 
-    func configuration(forRoot root: URL) -> SourceKitLSPService.Configuration {
+    func configuration(forRoot root: URL) -> LanguageServerSession.Configuration {
         recorded.withLock { $0.append(root) }
-        return SourceKitLSPService.Configuration(serverExecutable: URL(filePath: "/usr/bin/false"), workspaceRoot: root)
+        return LanguageServerSession.Configuration(
+            serverExecutable: URL(filePath: "/usr/bin/false"), workspaceRoot: root)
     }
 }
 

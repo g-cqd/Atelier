@@ -39,13 +39,13 @@ private struct DecodedDidCloseParams: Decodable {
 }
 
 @Suite
-struct SourceKitLSPServiceTests {
+struct LanguageServerSessionTests {
     @Test
     func `hover performs the initialize handshake once and returns markdown`() async throws {
         let factory = ScriptedConnectionFactory()
-        let configuration = SourceKitLSPService.Configuration(
+        let configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
-        let service = SourceKitLSPService(configuration: configuration) { _ in await factory.make() }
+        let service = LanguageServerSession(configuration: configuration) { _ in await factory.make() }
 
         async let hover = service.hover(
             uri: "file:///a.swift", languageID: "swift", content: "let x = 1", line: 0, utf16Column: 4)
@@ -77,9 +77,9 @@ struct SourceKitLSPServiceTests {
     @Test
     func `didOpen fires once per uri and reopens with a bumped version on changed content`() async throws {
         let factory = ScriptedConnectionFactory()
-        let configuration = SourceKitLSPService.Configuration(
+        let configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
-        let service = SourceKitLSPService(configuration: configuration) { _ in await factory.make() }
+        let service = LanguageServerSession(configuration: configuration) { _ in await factory.make() }
 
         // First hover: initialize, initialized, didOpen v1, hover.
         async let first = service.hover(
@@ -128,10 +128,10 @@ struct SourceKitLSPServiceTests {
     @Test
     func `the least recently used document is closed past the open limit`() async throws {
         let factory = ScriptedConnectionFactory()
-        var configuration = SourceKitLSPService.Configuration(
+        var configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
         configuration.openDocumentLimit = 1
-        let service = SourceKitLSPService(configuration: configuration) { _ in await factory.make() }
+        let service = LanguageServerSession(configuration: configuration) { _ in await factory.make() }
 
         async let first = service.hover(
             uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
@@ -165,10 +165,10 @@ struct SourceKitLSPServiceTests {
     @Test
     func `a request that never answers times out as unavailable and sends cancelRequest`() async throws {
         let factory = ScriptedConnectionFactory()
-        let configuration = SourceKitLSPService.Configuration(
+        let configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
         let clock = TestClock()
-        let service = SourceKitLSPService(configuration: configuration, clock: clock) { _ in await factory.make() }
+        let service = LanguageServerSession(configuration: configuration, clock: clock) { _ in await factory.make() }
 
         async let hover = service.hover(
             uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
@@ -196,9 +196,9 @@ struct SourceKitLSPServiceTests {
         let factory = ScriptedConnectionFactory(answering: [
             "initialize": .object([:]), "textDocument/hover": .null, "shutdown": .null
         ])
-        let configuration = SourceKitLSPService.Configuration(
+        let configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
-        let service = SourceKitLSPService(configuration: configuration, clock: TestClock()) { _ in
+        let service = LanguageServerSession(configuration: configuration, clock: TestClock()) { _ in
             await factory.make()
         }
 
@@ -212,14 +212,14 @@ struct SourceKitLSPServiceTests {
     @Test
     func `a server that never answers initialize exhausts the restart budget`() async throws {
         let factory = ScriptedConnectionFactory()
-        var configuration = SourceKitLSPService.Configuration(
+        var configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
         configuration.requestTimeout = .milliseconds(10)
         configuration.maximumRestarts = 2
         // Zero, so idle-shutdown sleeps resolve at once and are never mistaken for the timeouts below.
         configuration.idleShutdown = .zero
         let clock = TestClock()
-        let service = SourceKitLSPService(configuration: configuration, clock: clock) { _ in await factory.make() }
+        let service = LanguageServerSession(configuration: configuration, clock: clock) { _ in await factory.make() }
 
         // Three attempts total: the first try plus two restarts. Each times out on `initialize` and, except
         // the last, backs off for one second on the injected clock before the next hover can reconnect.
@@ -248,9 +248,9 @@ struct SourceKitLSPServiceTests {
     @Test
     func `two concurrent first hovers share one connection instead of racing two initializes`() async throws {
         let factory = ScriptedConnectionFactory()
-        let configuration = SourceKitLSPService.Configuration(
+        let configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
-        let service = SourceKitLSPService(configuration: configuration) { _ in await factory.make() }
+        let service = LanguageServerSession(configuration: configuration) { _ in await factory.make() }
 
         async let first = service.hover(
             uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
@@ -285,13 +285,13 @@ struct SourceKitLSPServiceTests {
     @Test
     func `a connection that fails to initialize is stopped rather than leaked`() async throws {
         let factory = ScriptedConnectionFactory()
-        var configuration = SourceKitLSPService.Configuration(
+        var configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
         configuration.requestTimeout = .milliseconds(10)
         configuration.maximumRestarts = 0
         configuration.idleShutdown = .zero
         let clock = TestClock()
-        let service = SourceKitLSPService(configuration: configuration, clock: clock) { _ in await factory.make() }
+        let service = LanguageServerSession(configuration: configuration, clock: clock) { _ in await factory.make() }
 
         async let hover = service.hover(
             uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)
@@ -308,11 +308,11 @@ struct SourceKitLSPServiceTests {
     @Test
     func `an idle session shuts down gracefully and reconnects on the next hover`() async throws {
         let factory = ScriptedConnectionFactory()
-        var configuration = SourceKitLSPService.Configuration(
+        var configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
         configuration.idleShutdown = .milliseconds(10)
         let clock = TestClock()
-        let service = SourceKitLSPService(configuration: configuration, clock: clock) { _ in await factory.make() }
+        let service = LanguageServerSession(configuration: configuration, clock: clock) { _ in await factory.make() }
 
         async let hover = service.hover(
             uri: "file:///a.swift", languageID: "swift", content: "a", line: 0, utf16Column: 0)

@@ -15,11 +15,11 @@ private actor ConfigurationSpy {
         resolves = value
     }
 
-    func makeConfiguration(for root: URL) -> SourceKitLSPService.Configuration? {
+    func makeConfiguration(for root: URL) -> LanguageServerSession.Configuration? {
         callCount += 1
         roots.append(root)
         guard resolves else { return nil }
-        return SourceKitLSPService.Configuration(
+        return LanguageServerSession.Configuration(
             serverExecutable: URL(filePath: "/usr/bin/true"), workspaceRoot: root)
     }
 }

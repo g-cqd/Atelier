@@ -8,13 +8,13 @@ public import Foundation
 /// first, so a root it refuses gets no session, neither a running one nor a new one.
 public actor SourceKitLSPRegistry {
     private let admits: @Sendable (URL) async -> Bool
-    private let makeConfiguration: @Sendable (URL) async -> SourceKitLSPService.Configuration?
+    private let makeConfiguration: @Sendable (URL) async -> LanguageServerSession.Configuration?
 
-    private typealias Waiter = CheckedContinuation<SourceKitLSPService?, Never>
+    private typealias Waiter = CheckedContinuation<LanguageServerSession?, Never>
 
     /// A root's resolved session, or the callers waiting on its first initialization.
     private enum Entry {
-        case ready(SourceKitLSPService?)
+        case ready(LanguageServerSession?)
         /// `token` names the initialization, so one whose entry was removed meanwhile stops instead of publishing.
         case inProgress(token: Int, waiters: [Waiter])
     }
@@ -31,7 +31,7 @@ public actor SourceKitLSPRegistry {
     ///     resolves there, which is cached.
     public init(
         admits: @Sendable @escaping (URL) async -> Bool,
-        makeConfiguration: @Sendable @escaping (URL) async -> SourceKitLSPService.Configuration?
+        makeConfiguration: @Sendable @escaping (URL) async -> LanguageServerSession.Configuration?
     ) {
         self.admits = admits
         self.makeConfiguration = makeConfiguration
@@ -40,7 +40,7 @@ public actor SourceKitLSPRegistry {
     /// The session for `root`, created on the first admitted request; `nil` when `root` names no existing directory,
     /// when the admission check refuses it, or when no server executable resolves for it (cached). Concurrent first
     /// requests share one initialization, so a root never gets two services.
-    public func service(forRoot root: URL) async -> SourceKitLSPService? {
+    public func service(forRoot root: URL) async -> LanguageServerSession? {
         guard let canonical = Self.canonicalRoot(root) else { return nil }
         guard await admits(canonical) else { return nil }
         let key = Self.key(of: canonical)
@@ -62,7 +62,7 @@ public actor SourceKitLSPRegistry {
                 let token = nextToken
                 entries[key] = .inProgress(token: token, waiters: [])
                 let configuration = await makeConfiguration(canonical)
-                let service = configuration.map { SourceKitLSPService(configuration: $0) }
+                let service = configuration.map { LanguageServerSession(configuration: $0) }
                 let stillAdmitted = await admits(canonical)
                 return await publish(service, key: key, token: token, admitted: stillAdmitted)
         }
@@ -71,8 +71,8 @@ public actor SourceKitLSPRegistry {
     /// Publishes one initialization's outcome to its waiters. The new service is shut down instead when its entry
     /// was removed meanwhile, and dropped uncached when the root lost its admission during the initialization.
     private func publish(
-        _ service: SourceKitLSPService?, key: String, token: Int, admitted: Bool
-    ) async -> SourceKitLSPService? {
+        _ service: LanguageServerSession?, key: String, token: Int, admitted: Bool
+    ) async -> LanguageServerSession? {
         guard case .inProgress(let current, let waiters) = entries[key], current == token else {
             // `shutdown(root:)` or `shutdownAll()` removed the entry and already answered its waiters.
             if let service { await service.shutdown() }
@@ -108,7 +108,7 @@ public actor SourceKitLSPRegistry {
     public func shutdownAll() async {
         let removed = entries
         entries.removeAll()
-        var readyServices: [SourceKitLSPService] = []
+        var readyServices: [LanguageServerSession] = []
         for entry in removed.values {
             switch entry {
                 case .ready(let service):

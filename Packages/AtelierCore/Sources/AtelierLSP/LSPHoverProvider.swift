@@ -1,15 +1,15 @@
 public import AtelierSyntaxModel
 
-/// A ``HoverProvider`` backed by a ``SourceKitLSPService`` session.
+/// A ``HoverProvider`` backed by a ``LanguageServerSession``.
 public struct LSPHoverProvider: HoverProvider {
-    private let service: SourceKitLSPService
+    private let service: LanguageServerSession
     private let resolvesDocumentationPages: Bool
 
     /// - Parameters:
     ///   - service: The session the hovers go to.
     ///   - resolvesDocumentationPages: Whether an answer about a system symbol carries its page in Apple's developer
     ///     documentation, which takes the server one or two more requests after the hover.
-    public init(service: SourceKitLSPService, resolvesDocumentationPages: Bool = false) {
+    public init(service: LanguageServerSession, resolvesDocumentationPages: Bool = false) {
         self.service = service
         self.resolvesDocumentationPages = resolvesDocumentationPages
     }
