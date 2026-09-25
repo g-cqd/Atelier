@@ -15,7 +15,7 @@ extension GLRParser {
     func viableExternals(for stack: ParseStack) -> [Bool] {
         var valid = parseTable.validExternals[stack.state]
         for index in valid.indices where valid[index] && !parseTable.externalIsExtra[index] {
-            guard let terminal = terminalIndex[parseTable.externalSymbols[index]] else { continue }
+            guard let terminal = externalTerminals[index] else { continue }
             valid[index] = canShift(terminal, on: stack)
         }
         return valid
@@ -37,16 +37,16 @@ extension GLRParser {
     /// Whether the reduction of `count` symbols to `nonTerminal` leads `stack` to shift `terminal`, as
     /// ``canShift(_:on:)`` runs it: when it does not, the reduction was made by merged lookaheads, and the parser takes
     /// the shift precedence set against it (``ParseTable/lostShifts``).
-    func reductionShifts(_ terminal: Int, on stack: ParseStack, count: Int, nonTerminal: String) -> Bool {
+    func reductionShifts(_ terminal: Int, on stack: ParseStack, rule: Int, count: Int, nonTerminal: String) -> Bool {
         var states = VirtualStates(states: stack.states, nodes: stack.nodes)
-        guard states.reduce(count: count, to: nonTerminal, in: self) else { return false }
+        guard states.reduce(rule: rule, count: count, to: nonTerminal, in: self) else { return false }
         var budget = parseTable.stateCount + stack.nodes.count
         return canShift(terminal, from: states, budget: &budget)
     }
 
     /// The target of the shift of `terminal` that precedence resolved against in `state`, if it did.
     func lostShift(of terminal: Int, in state: Int) -> Int? {
-        parseTable.lostShifts[state]?[terminal]
+        hasLostShifts[state] ? parseTable.lostShifts[state]?[terminal] : nil
     }
 
     /// Runs the reductions from `start` until one of them shifts `terminal`.
@@ -70,32 +70,38 @@ extension GLRParser {
                             return true
                         case .error:
                             break explore
-                        case .reduce(_, let count, let nonTerminal):
-                            guard states.reduce(count: count, to: nonTerminal, in: self) else { break explore }
+                        case .reduce(let rule, let count, let nonTerminal):
+                            guard states.reduce(rule: rule, count: count, to: nonTerminal, in: self) else {
+                                break explore
+                            }
                         case .conflict(let actions):
                             if actions.contains(where: \.takesToken) { return true }
-                            for case .reduce(_, let count, let nonTerminal) in actions.reversed() {
-                                alternatives.append(Alternative(states: states, count: count, nonTerminal: nonTerminal))
+                            for case .reduce(let rule, let count, let nonTerminal) in actions.reversed() {
+                                alternatives.append(
+                                    Alternative(states: states, rule: rule, count: count, nonTerminal: nonTerminal))
                             }
                             break explore
                     }
                 }
             }
             guard var next = alternatives.popLast() else { return false }
-            if next.states.reduce(count: next.count, to: next.nonTerminal, in: self) { branch = next.states }
+            if next.states.reduce(rule: next.rule, count: next.count, to: next.nonTerminal, in: self) {
+                branch = next.states
+            }
         }
     }
 
-    /// The target of the GOTO on `nonTerminal` from `state`, if the table has one.
-    fileprivate func gotoState(from state: Int, on nonTerminal: String) -> Int? {
-        nonTerminalIndex[nonTerminal].flatMap { parseTable.gotos[state][$0] }
+    /// The target of the GOTO on `nonTerminal`, to which `rule` reduces, from `state`, if the table has one.
+    fileprivate func gotoState(from state: Int, rule: Int, nonTerminal: String) -> Int? {
+        nonTerminalColumn(rule: rule, nonTerminal: nonTerminal).flatMap { parseTable.gotos[state][$0] }
     }
 }
 
-/// A reduction of a conflict ``GLRParser/canShift(_:on:)`` has yet to try: `count` symbols to `nonTerminal` from
-/// `states`, run when its turn comes.
+/// A reduction of a conflict ``GLRParser/canShift(_:on:)`` has yet to try: rule `rule`, `count` symbols to
+/// `nonTerminal`, from `states`, run when its turn comes.
 private struct Alternative {
     var states: VirtualStates
+    let rule: Int
     let count: Int
     let nonTerminal: String
 }
@@ -131,7 +137,7 @@ private struct VirtualStates {
 
     /// Pops `count` symbols as `ParseStack.popSymbols` does, skipped tokens aside, and pushes the GOTO state from the
     /// state then on top; false when the table has none.
-    mutating func reduce(count: Int, to nonTerminal: String, in parser: GLRParser) -> Bool {
+    mutating func reduce(rule: Int, count: Int, to nonTerminal: String, in parser: GLRParser) -> Bool {
         var remaining = max(count, 0)
         let fromPushed = min(remaining, pushed.count)
         pushed.removeLast(fromPushed)
@@ -143,7 +149,7 @@ private struct VirtualStates {
                 if !nodes[standing].isError { remaining -= 1 }
             }
         }
-        guard let target = parser.gotoState(from: top, on: nonTerminal) else { return false }
+        guard let target = parser.gotoState(from: top, rule: rule, nonTerminal: nonTerminal) else { return false }
         pushed.append(target)
         return true
     }
