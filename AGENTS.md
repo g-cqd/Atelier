@@ -42,8 +42,9 @@ One `BlockingOffloadPool` per app, created in the composition root and injected;
   on the main actor, make your final GitDiffViewer suite run the budget run:
   `Apps/GitDiffViewer/scripts/main-actor-budget.sh` runs the whole suite with the main thread sampled, ranks the
   suites by their main-thread time and fails past the budget. Run it once, after rebasing onto `main`, with
-  `work run --weight 4`; the coordinator does not run it again. Under load an unrelated suite can pass the 1 s
-  budget: rerun once, and report both runs if a suite is over twice. It exits 2 with "no usable sample" when
+  `work run --weight 8`: an exclusive job now waits at most a minute and then holds only new heavy jobs, for three
+  minutes at most, so two lanes' budget runs no longer overlap and inflate each other. The coordinator does not run
+  it again. A suite over the 1 s budget only under load: rerun once, and report both runs if it is over twice. It exits 2 with "no usable sample" when
   `sample` fails to attach to the test process; that says nothing of the suites, so run it again.
 
 ## Builds, hand-back and worktrees
