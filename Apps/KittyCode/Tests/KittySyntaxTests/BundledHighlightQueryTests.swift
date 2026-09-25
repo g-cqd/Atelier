@@ -9,7 +9,7 @@ import Testing
 struct BundledHighlightQueryTests {
     @Test(arguments: BundledLanguageManifest.entries.map(\.path))
     func `bundled highlight query parses`(language: String) throws {
-        let resourcePath = try #require(KittySyntaxResources.bundle.resourcePath)
+        let resourcePath = try #require(KittySyntaxResources.resourcePath)
         let source = try String(contentsOfFile: "\(resourcePath)/Grammars/\(language)/highlights.scm", encoding: .utf8)
 
         let query = try QueryParser.parse(source)

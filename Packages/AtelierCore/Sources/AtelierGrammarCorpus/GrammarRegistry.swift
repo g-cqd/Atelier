@@ -1,5 +1,3 @@
-import AemiJSON
-import AemiKernel
 public import AtelierGrammar
 public import Foundation
 import Synchronization
@@ -89,56 +87,13 @@ public final class GrammarRegistry: Sendable {
         return lowercased.hasPrefix(".") ? lowercased : ".\(lowercased)"
     }
 
-    /// Registers the entries of a `languages.json` file (`name`, `extensions`, `path`), skipping malformed ones and
-    /// any whose `path` isn't a single safe name. A key repeated in one entry keeps its first value.
-    /// - Throws: `GrammarError.fileNotFound` when the file can't be read, `.invalidJSON` when it isn't an array of
-    ///   entries.
-    public func loadManifest(from path: String) throws(GrammarError) {
-        let url = URL(fileURLWithPath: path)
-        let data: Data
-        do {
-            data = try Data(contentsOf: url)
-        } catch {
-            throw .fileNotFound(path)
-        }
-        let document: JSONDocument
-        do {
-            document = try SyntaxJSON.parse(data)
-        } catch {
-            throw .invalidJSON(String(describing: error))
-        }
-        guard let items = document.root.array, items.allSatisfy(\.isObject) else {
-            throw .invalidJSON("Expected array of language entries")
-        }
-        for item in items {
-            let entry = ManifestEntryMembers(item)
-            guard let name = entry.name?.string,
-                let extensions = entry.extensions.flatMap(Self.strings),
-                let path = entry.path?.string
-            else { continue }
-            // The manifest is untrusted: a `path` like `../../etc` would read files outside the grammar root.
-            guard Self.isSafePathToken(path) else { continue }
-            register(LanguageEntry(name: name, extensions: extensions, path: path))
-        }
-    }
-
-    /// The elements of an array of strings; nil when `node` is not an array or holds anything but strings.
-    private static func strings(_ node: JSON) -> [String]? {
-        guard let elements = node.array else { return nil }
-        let strings = elements.compactMap(\.string)
-        return strings.count == elements.count ? strings : nil
-    }
-
-    private static func isSafePathToken(_ value: String) -> Bool {
-        guard !value.isEmpty,
-            !value.hasPrefix("~"),
-            !value.contains(".."),
-            !value.contains("/"),
-            !value.contains("\\")
-        else { return false }
-        return value.allSatisfy { ch in
-            guard let byte = ch.asciiValue else { return false }
-            return ASCII.isAlphanumeric(byte) || ch == "_" || ch == "-" || ch == "."
+    /// Registers the entries of the `languages.json` file at `path`, skipping those ``GrammarManifest/decode(_:)``
+    /// skips: malformed ones and any whose `path` isn't a single safe name.
+    /// - Throws: `GrammarManifestError.unreadable` when the file can't be read, `.invalidJSON` when it isn't JSON,
+    ///   `.notAnArrayOfEntries` when it isn't an array of entries.
+    public func loadManifest(from path: String) throws(GrammarManifestError) {
+        for entry in try GrammarManifest.load(from: URL(fileURLWithPath: path)).entries {
+            register(entry)
         }
     }
 
@@ -265,24 +220,5 @@ public final class GrammarRegistry: Sendable {
     /// The contents of a cache file for `result`.
     static func encodeCompiledTables(_ result: ParseTableCompiler.CompilationResult) throws -> Data {
         try SyntaxJSON.encode(result)
-    }
-}
-
-/// The members a manifest entry reads, each the first of its key.
-private struct ManifestEntryMembers {
-    var name: JSON?
-    var extensions: JSON?
-    var path: JSON?
-
-    /// Visits `object`'s members once.
-    init(_ object: JSON) {
-        object.forEachMember { key, value in
-            switch key {
-                case "name": name = name ?? value
-                case "extensions": extensions = extensions ?? value
-                case "path": path = path ?? value
-                default: break
-            }
-        }
     }
 }
