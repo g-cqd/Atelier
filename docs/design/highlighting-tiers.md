@@ -707,6 +707,48 @@ PERF-09 lane, not a step of section 7.
   panes do not report the rows they show.
 - Budgets and guards: stage deadlines on the injected clock, and a benchmark per stage.
 
+## 11. P2 as built, and where a scope fold enters (09-25)
+
+**The stages** (PERF-09), in GitDiffViewer:
+- **Stage 0, the text.** A preparation keeps the diff's first phase only: `DiffModel(structureOf:newText:)`, the
+  structure and each change's pairs. The renderer builds plain text: the font, the text colour, the paragraph styles,
+  the bidi placeholders and bold headers. Nothing is lexed or parsed on the way to the first text.
+- **Stage 1, colour.** Once a pane shows a published file, each side runs the tier job: the lexer as tier 0
+  (`ProgressiveHighlighting`), swift-syntax over it on Swift sides. A side is coloured once per content, its blob id.
+  The layers land in `DiffDecorations`, and each pane's `DecorationStore` paints them through TextKit's rendering
+  attributes validator.
+- **Stage 2, marks.** In parallel, the file's moved lines and intraline emphasis are found off the main actor:
+  `MovedBlocks.detect(in:)`, then `IntralineEmphasis` for the changes the panes show, then the rest in chunks of 64, all
+  within a 250 ms deadline on the decorator's clock. They land as each side's emphasis by source line and the moved
+  lines. A row's layout fragment reads them when it draws: the emphasis, and the calmer background of a moved row.
+- **Stage 3, diagnostics.** Unchanged: the overlay redraws rows.
+- **Events.** `RenderPipeline` sends `.decorated(fileID, layer)` as each stage lands on a published file, always after
+  that file's `.published`. It can come after `.finished`, which still means that everything is published.
+- **The viewport** (`perf11-viewport`). Panes register a reader of their visible rows with a `DecorationViewport`,
+  keyed by text. When a stage starts, it maps those rows to each side's source lines. The scrolling pane reads its rows
+  from TextKit. A card estimates them from the part of its text view visible through the scroll views around it, one
+  line a row. A pane that reports nothing leaves the stage to start around the first change.
+- **Fail-safe.** A tier that fails, or a marks job past its deadline, leaves what it landed, and plain text where it
+  did not reach. Clearing the pipeline, or showing other content, cancels the jobs, and what they find is dropped.
+- **One parse per side.** The colour tier and the syntax granularity's emphasis now run side by side. So the facts
+  store coalesces extractions: a caller that misses a revision already being extracted waits for that extraction.
+
+**Where a scope fold enters** (DIFF-03). A fold has two parts, and only one of them is a decoration.
+- **The ribbon.** Showing a scope is a decoration.
+  - It adds a layer to `DiffDecorations`: each side's scopes, as ranges of source lines with their kind and depth.
+  - A stage finds them off the main actor from the facts store's declarations: the parse the colour tier made for
+    Swift, and grammar definitions for other languages once step 4 lands.
+  - They land like the marks, with a `.decorated(fileID, .scopes)` event and a new `markVersion`.
+  - The gutter draws the ribbon from the pane's `DecorationSnapshot` when it draws, the way a row's fragment reads its
+    emphasis. So a ribbon that lands, or changes, lays nothing out.
+- **Folding.** Folding a scope changes which rows show, and that is layout. It goes where gap expansions and disclosed
+  changes already go: into the render stamp, as a set of folded scopes keyed by file and scope index, carried across a
+  reload by path. The file is then rendered again off the main actor with the scope's rows collapsed, as a gap
+  collapses its rows.
+- **What survives a fold.** Every decoration is keyed by source line, not by row. So the refolded text takes its
+  colour, emphasis and ribbon at once from what the decorator holds, with no new job; `refreshDecorations()` hands them
+  over when the new text is published.
+
 ## Appendix: rerunning the measurements
 
 Every run goes through `~/.agent-harness/bin/work run --agent tiers --weight 2 -- …`, with
