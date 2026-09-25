@@ -153,7 +153,7 @@ struct QueryMatcherTests {
     }
 
     @Test
-    func `An optional child takes at most one child`() throws {
+    func `An optional child takes at most one child, anywhere after the step before it`() throws {
         let first = SyntaxNode(type: "item", byteRange: 0 ..< 1)
         let second = SyntaxNode(type: "item", byteRange: 1 ..< 2)
         let list = SyntaxNode(type: "list", children: [first, second], byteRange: 0 ..< 2)
@@ -163,8 +163,11 @@ struct QueryMatcherTests {
         let thenOne = QueryMatcher.execute(
             query: try QueryParser.parse("(list (item)? @maybe (item) @last)"), tree: tree)
 
-        #expect(optional.map { $0.captures.map(\.node) } == [[first]])
-        #expect(thenOne.map { $0.captures.map(\.node) } == [[first, second]])
+        // As tree-sitter gives them: `(item)?` takes either item, and after it `(item)` the other one or both.
+        #expect(optional.map { $0.captures.map(\.node) } == [[first], [second]])
+        #expect(
+            thenOne.map { $0.captures.map { "\($0.name) \($0.node.byteRange)" } }
+                == [["last 0..<1"], ["maybe 0..<1", "last 1..<2"]])
     }
 
     @Test
@@ -221,6 +224,49 @@ struct QueryMatcherTests {
         let matches = QueryMatcher.execute(query: try QueryParser.parse("[(identifier) @a (_) @b]"), tree: tree)
 
         #expect(Set(matches.map { $0.captures.map(\.name) }) == [["a"], ["b"]])
+    }
+
+    @Test
+    func `A repeated child takes each run of adjacent siblings, after any siblings it skips`() throws {
+        // `ls a "s" b c`: tree-sitter repeats a quantified step only on the next sibling, and starts it anywhere.
+        let name = SyntaxNode(type: "command_name", byteRange: 0 ..< 2)
+        let a = SyntaxNode(type: "word", byteRange: 3 ..< 4)
+        let string = SyntaxNode(type: "string", byteRange: 5 ..< 8)
+        let b = SyntaxNode(type: "word", byteRange: 9 ..< 10)
+        let c = SyntaxNode(type: "word", byteRange: 11 ..< 12)
+        let command = SyntaxNode(type: "command", children: [name, a, string, b, c], byteRange: 0 ..< 12)
+        let tree = SyntaxTree(root: command, source: #"ls a "s" b c"#)
+
+        let star = QueryMatcher.execute(query: try QueryParser.parse("(command (word)* @word)"), tree: tree)
+        let plus = QueryMatcher.execute(query: try QueryParser.parse("(command (word)+ @word)"), tree: tree)
+
+        #expect(star.map { $0.captures.map(\.node) } == [[a], [b, c]])
+        #expect(plus.map { $0.captures.map(\.node) } == [[a], [b, c]])
+    }
+
+    @Test
+    func `A repeated child before another child combines each run with each later child`() throws {
+        // `[1, "a", 2, "b"]`, whose commas end every run; tree-sitter gives these three matches.
+        func punctuation(_ text: String, at offset: Int) -> SyntaxNode {
+            SyntaxNode(type: text, byteRange: offset ..< offset + 1, isNamed: false)
+        }
+        let one = SyntaxNode(type: "number", byteRange: 1 ..< 2)
+        let a = SyntaxNode(type: "string", byteRange: 4 ..< 7)
+        let two = SyntaxNode(type: "number", byteRange: 9 ..< 10)
+        let b = SyntaxNode(type: "string", byteRange: 12 ..< 15)
+        let array = SyntaxNode(
+            type: "array",
+            children: [
+                punctuation("[", at: 0), one, punctuation(",", at: 2), a, punctuation(",", at: 7), two,
+                punctuation(",", at: 10), b, punctuation("]", at: 15)
+            ],
+            byteRange: 0 ..< 16)
+        let tree = SyntaxTree(root: array, source: #"[1, "a", 2, "b"]"#)
+
+        let matches = QueryMatcher.execute(
+            query: try QueryParser.parse("(array (number)* @number (string) @string)"), tree: tree)
+
+        #expect(matches.map { $0.captures.map(\.node) } == [[one, a], [one, b], [two, b]])
     }
 
     @Test
