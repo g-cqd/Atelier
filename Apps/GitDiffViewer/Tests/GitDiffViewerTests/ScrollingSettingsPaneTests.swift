@@ -82,7 +82,7 @@ struct ScrollingSettingsPaneTests {
                 // Its lines are short and never wrap: its rows at one line each are its text's height.
                 let end =
                     pastEnd
-                    ? pane.rowsHeight - pane.below - pane.lineHeight + pane.clip.bounds.height : pane.rowsHeight
+                    ? pane.rowsHeight - pane.below - pane.lineHeight + pane.shownHeight : pane.rowsHeight
                 #expect(abs(pane.textView.frame.height - end) < 1, "scrolling past the end \(pastEnd)")
             }
         }
@@ -141,7 +141,7 @@ struct ScrollingSettingsPaneTests {
     private static func expectTop(of model: DiffViewerModel, in content: NSView, _ comment: Comment) throws {
         #expect(model.scrollRequest == nil, comment)
         for pane in try FileTabScrollRangeTests.panes(in: content) {
-            #expect(pane.clip.bounds.minY == 0, comment)
+            #expect(pane.shownTop == 0, comment)
             #expect(pane.textView.frame.height >= pane.rowsHeight, comment)
         }
     }
