@@ -47,6 +47,26 @@ struct FileTabScrollRestoreTests {
         #expect(abs(after.offset - before.offset) < 1)
     }
 
+    /// Far down a long file, the row comes back placed after TextKit's estimates of the rows above it, which are not
+    /// laid out for it (`FilePaneScrollToRowTests`).
+    @Test(arguments: [false, true])
+    func `a long file's pane shown again comes back at the row it was scrolled to far down`(wrapsLines: Bool) throws {
+        let memory = makeMemory()
+        let sut = HostedTabPane(memory: memory)
+        let text = try Self.text(3_000)
+        sut.show(text, path: "a.swift", wrapsLines: wrapsLines)
+        sut.scroll(to: 40_005)
+        let before = try #require(sut.top())
+        #expect(text.lineStarts[before.row] > RowPlacement.textLaidOutAbove)
+
+        sut.showList()
+        sut.show(try Self.text(3_000), path: "a.swift", wrapsLines: wrapsLines)
+
+        let after = try #require(sut.top())
+        #expect(after.row == before.row)
+        #expect(abs(after.offset - before.offset) < 1)
+    }
+
     @Test
     func `a file pane showing another file moves to it at its top, and the first file keeps its row`() throws {
         let memory = makeMemory(retaining: ["a.swift", "b.swift"])

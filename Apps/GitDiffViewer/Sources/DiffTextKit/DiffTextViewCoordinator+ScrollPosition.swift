@@ -95,10 +95,11 @@ extension DiffTextViewCoordinator {
     /// stays in place.
     ///
     /// TextKit places a row after its estimates of the rows above it that it has not laid out, and moves it as it lays
-    /// them out: the text is laid out down to the row first. Rows can still move once placed, as TextKit lays out what
-    /// shows there and side by side as the other pane scrolls this one along: each placement lays the viewport out and
-    /// reads the row again, within this pass. A check left for the next pass would not come: a view that asks for
-    /// layout while it lays out is not laid out again for it.
+    /// them out: the text is laid out down to the row first, unless that would take long (see ``top(ofRow:)``). Rows
+    /// can still move once placed, as TextKit lays out what shows there, the rows above the row among it, and side by
+    /// side as the other pane scrolls this one along: each placement lays the viewport out and reads the row again,
+    /// within this pass. A check left for the next pass would not come: a view that asks for layout while it lays out
+    /// is not laid out again for it.
     private func placePendingScroll() {
         guard let placement = pendingScroll, let textView, let rendered,
             let clipView = textView.enclosingScrollView?.contentView, clipView.bounds.height > 0
@@ -128,15 +129,25 @@ extension DiffTextViewCoordinator {
         placedRow = (placement, clipView.bounds.minY)
     }
 
-    /// The top of `row`'s line in the text view, laying the text out from its start down to the row.
+    /// The top of `row`'s line in the text view, laid out.
+    ///
+    /// The text is laid out from its start down to the row when that costs little, or when the pane scrolls in step
+    /// with the other side, whose estimates differ from this one's while one scroll offset has to show the row at the
+    /// same place in both. Otherwise the row alone is laid out, and TextKit places it after its estimates of the rows
+    /// above it: laying out every row above a change near the end of a long file took hundreds of milliseconds, many
+    /// times what the rest of opening it takes (`FirstChangePlacementBenchmark`). The text's height follows the same
+    /// estimates until the rows above are laid out.
     private func top(ofRow row: Int) -> CGFloat? {
         guard let textView, let rendered, rendered.lineStarts.indices.contains(row),
             let layoutManager = textView.textLayoutManager, let contentManager = layoutManager.textContentManager,
             let location = contentManager.location(
-                layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row]),
-            let range = NSTextRange(location: layoutManager.documentRange.location, end: location)
+                layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row])
         else { return nil }
-        layoutManager.ensureLayout(for: range)
+        if rendered.lineStarts[row] <= RowPlacement.textLaidOutAbove || splitController?.syncsScrolling == true,
+            let above = NSTextRange(location: layoutManager.documentRange.location, end: location)
+        {
+            layoutManager.ensureLayout(for: above)
+        }
         layoutManager.ensureLayout(for: NSTextRange(location: location))
         guard let fragment = layoutManager.textLayoutFragment(for: location) else { return nil }
         return fragment.layoutFragmentFrame.minY + textView.textContainerInset.height
@@ -169,6 +180,9 @@ struct RowPlacement {
 
     /// The most placements one request makes: its own, then those that follow rows moved by layout.
     static let passes = 4
+    /// The most text above a row, in UTF-16 units, that a placement lays out rather than place the row after TextKit's
+    /// estimates of it: some 200 lines, which added 2.5 ms to opening a file in a release build.
+    static let textLaidOutAbove = 8_192
 
     let row: Int
     let anchor: Anchor
