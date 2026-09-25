@@ -15,8 +15,12 @@ public actor LanguageServerRegistry {
     public typealias ConfigurationFactory =
         @Sendable (URL, LanguageServerDescriptor) async -> LanguageServerSession.Configuration?
 
+    /// A session over a configuration, not yet started.
+    public typealias SessionFactory = @Sendable (LanguageServerSession.Configuration) -> LanguageServerSession
+
     private let admits: Admission
     private let makeConfiguration: ConfigurationFactory
+    private let makeSession: SessionFactory
 
     /// A session's table key: its root's canonical path and its server's id.
     private struct Key: Hashable {
@@ -43,9 +47,14 @@ public actor LanguageServerRegistry {
     ///     before a new session is published; its answer is never cached.
     ///   - makeConfiguration: The session's configuration for the server at an admitted canonical root, or nil when
     ///     the server does not resolve there, which is cached.
-    public init(admits: @escaping Admission, makeConfiguration: @escaping ConfigurationFactory) {
+    ///   - makeSession: The session over a configuration; a test's runs a scripted server rather than a process.
+    public init(
+        admits: @escaping Admission, makeConfiguration: @escaping ConfigurationFactory,
+        makeSession: @escaping SessionFactory = { LanguageServerSession(configuration: $0) }
+    ) {
         self.admits = admits
         self.makeConfiguration = makeConfiguration
+        self.makeSession = makeSession
     }
 
     /// `server`'s session for the document at `document`, a file URL, rooted at the nearest directory holding one of
@@ -84,7 +93,7 @@ public actor LanguageServerRegistry {
                 let token = nextToken
                 entries[key] = .inProgress(token: token, waiters: [])
                 let configuration = await makeConfiguration(canonical, server)
-                let service = configuration.map { LanguageServerSession(configuration: $0) }
+                let service = configuration.map(makeSession)
                 let stillAdmitted = await admits(canonical, server)
                 return await publish(service, key: key, token: token, admitted: stillAdmitted)
         }
