@@ -94,6 +94,113 @@ public enum GitParsers {
             }
     }
 
+    /// The `log` format ``commitChanges(_:)`` reads: a record separator marking each commit, then its id, parents,
+    /// author time, author name and subject, each ending in a NUL, the one byte none of them can hold.
+    static let commitChangesFormat = "--format=%x1e%H%x00%P%x00%at%x00%an%x00%s"
+
+    /// Splits `log -z --raw --no-abbrev` output in the ``commitChangesFormat``: per commit, a header of five
+    /// NUL-terminated fields starting with the record separator, then its raw records, each a NUL-terminated
+    /// `:<mode> <mode> <blob> <blob> <status>` followed by one path, or two for a rename or a copy. The first record
+    /// of a commit carries a leading newline. Fields are read by position, so a subject or a path holding a
+    /// separator, a newline or any other byte but NUL reads intact. A commit whose header is cut short ends the
+    /// listing; a record that fits no format is skipped.
+    /// - Complexity: O(output)
+    public static func commitChanges(_ data: Data) -> [GitCommitChanges] {
+        let fields = nulTerminatedFields(data)
+        var commits: [GitCommitChanges] = []
+        var index = 0
+        while index < fields.count {
+            guard fields[index].first == 0x1E else {
+                index += 1
+                continue
+            }
+            guard index + 5 <= fields.count else { break }
+            let id = string(fields[index].dropFirst())
+            let parents = string(fields[index + 1]).split(separator: " ").map(String.init)
+            let time = TimeInterval(string(fields[index + 2])) ?? 0
+            let author = string(fields[index + 3])
+            let subject = string(fields[index + 4])
+            index += 5
+            var changes: [GitFileChange] = []
+            while index < fields.count, fields[index].first != 0x1E {
+                if let (change, consumed) = rawChange(fields, at: index) {
+                    changes.append(change)
+                    index += consumed
+                } else {
+                    index += 1
+                }
+            }
+            commits.append(
+                GitCommitChanges(
+                    id: id, parentIDs: parents, authorName: author, authorDate: Date(timeIntervalSince1970: time),
+                    subject: subject, changes: changes))
+        }
+        return commits
+    }
+
+    /// Splits `diff --raw -z --no-abbrev` output: the raw records of ``commitChanges(_:)`` without commit headers.
+    /// - Complexity: O(output)
+    public static func rawChanges(_ data: Data) -> [GitFileChange] {
+        let fields = nulTerminatedFields(data)
+        var changes: [GitFileChange] = []
+        var index = 0
+        while index < fields.count {
+            if let (change, consumed) = rawChange(fields, at: index) {
+                changes.append(change)
+                index += consumed
+            } else {
+                index += 1
+            }
+        }
+        return changes
+    }
+
+    /// The fields of NUL-terminated output, empty ones kept, since an empty subject or author is still a field.
+    private static func nulTerminatedFields(_ data: Data) -> [Data] {
+        var fields = data.split(separator: 0, omittingEmptySubsequences: false)
+        if fields.last?.isEmpty == true { fields.removeLast() }
+        return fields
+    }
+
+    private static func string(_ bytes: Data) -> String {
+        String(decoding: bytes, as: UTF8.self)
+    }
+
+    /// The raw record starting at `fields[index]` and how many fields it spans, or nil when that field starts no
+    /// record or its paths are missing. The leading newline git puts before a commit's first record is skipped.
+    private static func rawChange(_ fields: [Data], at index: Int) -> (GitFileChange, Int)? {
+        var meta = fields[index]
+        if meta.first == 0x0A { meta = meta.dropFirst() }
+        guard meta.first == UInt8(ascii: ":"), meta.dropFirst().first != UInt8(ascii: ":") else { return nil }
+        let parts = string(meta.dropFirst()).split(separator: " ")
+        guard parts.count == 5, let letter = parts[4].first else { return nil }
+        let oldBlob = blobID(parts[2])
+        let newBlob = blobID(parts[3])
+        let hasTwoPaths = letter == "R" || letter == "C"
+        guard index + (hasTwoPaths ? 2 : 1) < fields.count else { return nil }
+        let first = string(fields[index + 1])
+        switch letter {
+            case "R":
+                let change = GitFileChange(
+                    status: .renamed, path: string(fields[index + 2]), oldPath: first, oldBlobID: oldBlob,
+                    newBlobID: newBlob)
+                return (change, 3)
+            case "C":
+                return (GitFileChange(status: .added, path: string(fields[index + 2]), newBlobID: newBlob), 3)
+            case "A":
+                return (GitFileChange(status: .added, path: first, newBlobID: newBlob), 2)
+            case "D":
+                return (GitFileChange(status: .deleted, path: first, oldBlobID: oldBlob), 2)
+            default:
+                return (GitFileChange(status: .modified, path: first, oldBlobID: oldBlob, newBlobID: newBlob), 2)
+        }
+    }
+
+    /// A raw record's object id, nil for git's all-zero id: no object on that side, or one not hashed yet.
+    private static func blobID(_ field: Substring) -> String? {
+        field.allSatisfy { $0 == "0" } ? nil : String(field)
+    }
+
     /// Splits `status --porcelain=v2 -z --branch` output: NUL-terminated records, a rename or copy record followed by
     /// its original path as one more record. Records that do not fit the format are skipped.
     /// - Complexity: O(output)

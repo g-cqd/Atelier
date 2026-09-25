@@ -56,4 +56,33 @@ extension GitClient {
         }
         return count
     }
+
+    /// The commits `to` has that `from` has not, newest first, with the files each changed, `limit` at most: one page
+    /// of `git log --raw -M`, renames detected per commit and copies read as additions.
+    ///
+    /// With `firstParent`, only `to`'s first-parent chain is walked, and each merge lists its whole diff against its
+    /// first parent, so a merged branch reads as one commit. The next page is the same call with `to` set to the
+    /// page's ``GitCommitPage/continuation``, which starts git's walk where this one ended; `--skip` would walk every
+    /// listed commit again. Without `firstParent`, every commit is listed, parents before children
+    /// (`--topo-order`), and a merge lists no files.
+    ///
+    /// The run goes through the client's hardened runner, with the isolation's pinned configuration: no signature
+    /// program (`--no-show-signature`), no external diff or text conversion, no colour, no path made relative.
+    /// - Throws: ``GitError/invalidArgument(_:)`` for a ref git could read as an option or a `limit` under 1, and
+    ///   ``GitError`` when git fails.
+    public func commitChanges(from: String, to: String, firstParent: Bool, limit: Int) async throws -> GitCommitPage {
+        guard limit > 0 else { throw GitError.invalidArgument("a page of \(limit) commits") }
+        let range = "\(try Self.checked(from))..\(try Self.checked(to))"
+        let walk = firstParent ? ["--first-parent", "--diff-merges=first-parent"] : ["--topo-order"]
+        let commits = GitParsers.commitChanges(
+            try await run(
+                [
+                    "log", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--no-color", "--no-relative",
+                    "--no-abbrev", "--root", "--raw", "-M", "-z", GitParsers.commitChangesFormat
+                ] + walk + ["-n", String(limit), "--end-of-options", range, "--"]))
+        let oldestParent = commits.last?.parentIDs.first
+        let isComplete = commits.count < limit || oldestParent == nil
+        return GitCommitPage(
+            commits: commits, isComplete: isComplete, continuation: firstParent && !isComplete ? oldestParent : nil)
+    }
 }
