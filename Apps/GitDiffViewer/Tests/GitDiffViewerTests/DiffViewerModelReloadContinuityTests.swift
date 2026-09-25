@@ -194,6 +194,34 @@ struct DiffViewerModelReloadContinuityTests {
     }
 
     @Test
+    func `a reload that removes a folded file drops its fold, so the fold count matches the list`() async throws {
+        let sut = harness.makeSUT()
+        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [
+            harness.entry("a.swift", "1"), harness.entry("b.swift", "2")
+        ]
+        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [
+            harness.entry("a.swift", "3"), harness.entry("b.swift", "4")
+        ]
+        try await harness.load(sut)
+        sut.toggleCollapsed("b.swift")
+        #expect(sut.collapsedFiles == ["b.swift"])
+
+        // b.swift leaves both sides; a.swift alone stays listed.
+        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("a.swift", "1")]
+        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("a.swift", "3")]
+        sut.left.reload()
+        try await harness.taskProvider.waitForAllTasks()
+        sut.right.reload()
+        try await harness.taskProvider.waitForAllTasks()
+
+        #expect(sut.foldableFiles == ["a.swift"])
+        #expect(sut.collapsedFiles.isEmpty)
+        sut.setAllCollapsed(true)
+        #expect(sut.collapsedFiles == ["a.swift"])
+        #expect(sut.collapsedFiles.count == sut.foldableFiles.count)
+    }
+
+    @Test
     func `reloading a selected file that did not change is a no-op, and its scroll survives when it did change`()
         async throws
     {

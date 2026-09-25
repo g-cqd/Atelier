@@ -19,6 +19,11 @@ package struct CardFolding: Equatable {
         if collapsed.remove(path) == nil { collapsed.insert(path) }
     }
 
+    /// Forgets the folds of files that `paths` no longer lists.
+    package mutating func keepOnly(_ paths: Set<String>) {
+        collapsed.formIntersection(paths)
+    }
+
     package mutating func setAll(_ paths: [String], collapsed isCollapsed: Bool) {
         collapsed = isCollapsed ? Set(paths) : []
     }
