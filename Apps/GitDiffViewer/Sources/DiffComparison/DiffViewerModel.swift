@@ -579,8 +579,9 @@ package final class DiffViewerModel {
                 }
                 if isShowingCombinedFiles {
                     folding.applyDefaults(to: renderedFiles.map(\.path), status: status(ofPath:))
-                } else if isFirst, let rendered, rendered.changeCount > 0, !rendered.keepsScrollPosition,
-                    !returnsToRememberedPosition
+                    // With the scroll to the first change off, the file opens at its top (DIFF-08).
+                } else if isFirst, settings.scrollsToFirstChange, let rendered, rendered.changeCount > 0,
+                    !rendered.keepsScrollPosition, !returnsToRememberedPosition
                 {
                     navigator.focusFirst()
                     requestScrollToCurrentChange()
