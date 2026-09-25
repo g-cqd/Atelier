@@ -1,4 +1,5 @@
 import AtelierGrammar
+import AtelierGrammarCorpus
 public import AtelierParser
 public import AtelierQuery
 public import AtelierSyntaxModel
@@ -187,25 +188,7 @@ public final class Highlighter: Sendable {
         roles: CaptureRoles,
         layer: HighlightLayer = .structural
     ) -> [HighlightToken] {
-        let maxPatternIndex = matches.map(\.patternIndex).max() ?? 0
-        var tokens: [HighlightToken] = []
-        tokens.reserveCapacity(matches.reduce(into: 0) { $0 += $1.captures.count })
-
-        for match in matches {
-            for capture in match.captures {
-                guard let resolved = roles[capture.index] else { continue }
-                tokens.append(
-                    HighlightToken(
-                        byteRange: capture.node.byteRange,
-                        role: resolved.role,
-                        modifiers: resolved.modifiers,
-                        layer: layer,
-                        priority: maxPatternIndex - match.patternIndex
-                    ))
-            }
-        }
-
-        return tokens
+        GrammarEngine.tokens(matches: matches, roles: roles, layer: layer)
     }
 
     /// Convert merged tokens to styled spans using a role-based theme resolver.
