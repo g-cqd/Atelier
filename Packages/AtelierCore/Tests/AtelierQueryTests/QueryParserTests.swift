@@ -133,6 +133,20 @@ struct QueryParserTests {
     }
 
     @Test
+    func `A missing closing parenthesis is an error at its line and column`() {
+        #expect(throws: QueryError.syntaxError("Expected ) at line 2, column 3")) {
+            try QueryParser.parse("(identifier\n  @a")
+        }
+    }
+
+    @Test
+    func `A parenthesis without a node type is an error at its line and column`() {
+        #expect(throws: QueryError.syntaxError("Expected node type at line 2, column 3")) {
+            try QueryParser.parse("(\n  $)")
+        }
+    }
+
+    @Test
     func `is-not? without a property name or with four arguments is an error`() {
         #expect(throws: QueryError.self) { try QueryParser.parse("((identifier) @id (#is-not? @id))") }
         #expect(throws: QueryError.self) { try QueryParser.parse("((identifier) @id (#is-not? @id a b c))") }
