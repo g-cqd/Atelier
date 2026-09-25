@@ -63,7 +63,7 @@ package final class SwiftColorRefinement {
     ///   - tiers: The tiers each displayed side runs.
     ///   - clock: The clock their deadlines are measured on.
     package init(
-        tiers: [any AtelierHighlighting.HighlightTier] = RefinedSides.tiers,
+        tiers: [any AtelierHighlighting.HighlightTier] = RefinedSides.tiers(),
         clock: any Clock<Duration> = ContinuousClock()
     ) {
         self.tiers = tiers

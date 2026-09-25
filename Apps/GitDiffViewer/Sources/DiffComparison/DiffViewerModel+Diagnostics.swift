@@ -1,5 +1,6 @@
 import AemiCore
 package import AtelierDiagnostics
+import AtelierDocIndex
 package import AtelierLSP
 import Darwin
 import DiffCore
@@ -52,7 +53,8 @@ extension DiffViewerModel {
     /// `lspRegistry` for on-disk Swift files on the new side. It indexes only while the setting shows hover
     /// documentation, and indexes the comparison on screen when the setting turns it on.
     package func attachHoverDocs(lspRegistry: SourceKitLSPRegistry?) {
-        let hoverDocs = HoverDocumentationModel(lspRegistry: lspRegistry, taskProvider: taskProvider)
+        let hoverDocs = HoverDocumentationModel(
+            lspRegistry: lspRegistry, taskProvider: taskProvider, index: DocCommentIndex(store: syntaxFacts))
         hoverDocs.isEnabled = settings.showsHoverDocumentation
         self.hoverDocs = hoverDocs
         // The setting is an appearance change, which the model's own observer passes over.
