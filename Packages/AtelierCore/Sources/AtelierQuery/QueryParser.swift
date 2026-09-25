@@ -154,8 +154,14 @@ public enum QueryParser: Sendable {
         }
 
         scanner.skipWhitespaceAndComments()
+        let children = try parseChildren(&scanner)
 
-        // Children and fields
+        // Capture will be attached by the caller (parsePattern)
+        return .nodeMatch(type: type, children: children, capture: nil)
+    }
+
+    /// A node pattern's children, fields and predicates, through its closing parenthesis.
+    private static func parseChildren(_ scanner: inout Scanner) throws(QueryError) -> [QueryPattern] {
         var children: [QueryPattern] = []
         while let ch = scanner.peek(), ch != ")" && ch != "@" && ch != "#" {
             if ch == "!" {
@@ -186,9 +192,7 @@ public enum QueryParser: Sendable {
             throw .syntaxError("Expected )")
         }
         scanner.advance()
-
-        // Capture will be attached by the caller (parsePattern)
-        return .nodeMatch(type: type, children: children, capture: nil)
+        return children
     }
 
     private static func parseLiteralPattern(_ scanner: inout Scanner) throws(QueryError)
