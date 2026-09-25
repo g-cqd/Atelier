@@ -63,6 +63,21 @@ extension DiffGutterView {
         return found
     }
 
+    /// The markers in view as buttons for VoiceOver: each names its change and whether it shows, and a press
+    /// discloses or folds it, as a click does.
+    func changeMarkerElements() -> [ChangeMarkerElement] {
+        guard let rendered else { return [] }
+        var elements: [ChangeMarkerElement] = []
+        forEachChangeMarker(in: visibleRect) { change, shape in
+            let frame = ChangeMarkerLayout.hitArea(of: shape, lineHeight: rendered.lineHeight)
+            elements.append(
+                ChangeMarkerElement(change: change, frame: frame, parent: self) { [weak self] in
+                    self?.onChangeToggle?(change.key)
+                })
+        }
+        return elements
+    }
+
     /// Highlights the marker of the change `key`, if any.
     func setHoveredChange(_ key: ChangeKey?) {
         guard key != hoveredChange else { return }
@@ -124,5 +139,41 @@ extension DiffGutterView {
                     path.fill()
             }
         }
+    }
+}
+
+/// A change marker as VoiceOver finds it (book DIFF-04): a button named for its change, which a press discloses or
+/// folds.
+@MainActor
+final class ChangeMarkerElement: NSAccessibilityElement {
+    let key: ChangeKey
+    private let action: () -> Void
+
+    init(change: RenderedChange, frame: NSRect, parent: NSView, action: @escaping () -> Void) {
+        key = change.key
+        self.action = action
+        super.init()
+        setAccessibilityRole(.button)
+        setAccessibilityLabel(Self.label(of: change))
+        setAccessibilityHelp(change.isDisclosed ? "Hides the change" : "Shows the change in place")
+        setAccessibilityParent(parent)
+        setAccessibilityFrameInParentSpace(frame)
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        action()
+        return true
+    }
+
+    /// The change and whether it shows: "Modified, 2 lines removed, 3 added, hidden".
+    static func label(of change: RenderedChange) -> String {
+        func lines(_ count: Int) -> String { "\(count) \(count == 1 ? "line" : "lines")" }
+        let what =
+            switch change.kind {
+                case .added: "Added, \(lines(change.addedLines))"
+                case .removed: "Removed, \(lines(change.removedLines))"
+                case .modified: "Modified, \(lines(change.removedLines)) removed, \(change.addedLines) added"
+            }
+        return "\(what), \(change.isDisclosed ? "shown" : "hidden")"
     }
 }

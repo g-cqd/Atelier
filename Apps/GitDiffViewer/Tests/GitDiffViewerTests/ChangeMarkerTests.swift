@@ -155,6 +155,21 @@ struct DiffGutterChangeMarkerTests {
     }
 
     @Test
+    func `each marker in view is a button for VoiceOver, named for its change, that a press toggles`() throws {
+        let fixture = Fixture(try #require(Self.layout()))
+        let markers = fixture.markers()
+
+        let elements = (fixture.gutter.accessibilityChildren() ?? []).compactMap { $0 as? ChangeMarkerElement }
+
+        #expect(elements.map(\.key) == markers.map { $0.change.key })
+        #expect(elements.allSatisfy { $0.accessibilityRole() == .button })
+        #expect(elements.first?.accessibilityLabel() == "Modified, 1 line removed, 1 added, hidden")
+        #expect(elements.last?.accessibilityLabel() == "Removed, 1 line, hidden")
+        for element in elements { _ = element.accessibilityPerformPress() }
+        #expect(fixture.toggled == markers.map { $0.change.key })
+    }
+
+    @Test
     func `the minimap marks a folded change's rows, and the row after a folded removal, as changed`() throws {
         let rendered = try #require(Self.layout(context: 30)).rendered
         let kinds = MinimapView.kinds(of: rendered)

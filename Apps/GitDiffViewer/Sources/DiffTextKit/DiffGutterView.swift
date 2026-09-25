@@ -161,6 +161,10 @@ package final class DiffGutterView: NSView {
         followListScrolling()
     }
 
+    package override func accessibilityChildren() -> [Any]? {
+        (super.accessibilityChildren() ?? []) + changeMarkerElements()
+    }
+
     package override func updateTrackingAreas() {
         super.updateTrackingAreas()
         guard hoverTracking == nil else { return }
