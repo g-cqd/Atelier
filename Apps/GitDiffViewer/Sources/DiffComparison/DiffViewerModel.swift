@@ -38,7 +38,7 @@ package final class DiffViewerModel {
     /// sides' ``SideState/badgeStates`` merged, a right-side file under its left-side counterpart.
     package internal(set) var unifiedBadgeStates = BadgeChangeStates.uniform(.staged)
     package private(set) var folding = CardFolding()
-    package private(set) var scrollRequest: ScrollRequest?
+    package internal(set) var scrollRequest: ScrollRequest?
     /// The palette for the selected Xcode theme, or the system one when none is selected or it cannot be read.
     /// Read once per theme change: it comes from a property list on disk.
     package private(set) var palette: DiffPalette
@@ -46,7 +46,7 @@ package final class DiffViewerModel {
     /// when their file shows again.
     package let scrollMemory = PaneScrollMemory()
     private var timer: OperationTimer
-    private var navigator = ChangeNavigator()
+    var navigator = ChangeNavigator()
 
     let pipeline: RenderPipeline
     /// Runs gap handle drags, revealing rows through ``pipeline`` one card at a time.
@@ -650,30 +650,5 @@ package final class DiffViewerModel {
             PhaseTrace.log("displayed")
             timer.record(firstDisplay: elapsed)
         }
-    }
-
-    // MARK: Change navigation
-
-    package func goToNextChange() {
-        navigator.next(count: changeCount)
-        requestScrollToCurrentChange()
-    }
-
-    package func goToPreviousChange() {
-        navigator.previous(count: changeCount)
-        requestScrollToCurrentChange()
-    }
-
-    /// In a file the request names a row; in a file list it names the file card to bring into view.
-    private func requestScrollToCurrentChange() {
-        guard let index = navigator.current(count: changeCount).map({ $0 - 1 }) else { return }
-        if isShowingCombinedFiles {
-            scrollRequest = ScrollRequest(row: index)
-            return
-        }
-        guard let rendered else { return }
-        let starts = settings.mode == .inline ? rendered.unifiedChangeStarts : rendered.splitChangeStarts
-        guard index < starts.count else { return }
-        scrollRequest = ScrollRequest(row: starts[index])
     }
 }
