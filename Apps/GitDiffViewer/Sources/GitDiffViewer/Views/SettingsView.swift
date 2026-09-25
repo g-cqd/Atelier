@@ -200,6 +200,19 @@ private struct AppearanceSettings: View {
     let runner: any ProcessRunner
     @State private var themes: [XcodeThemeLibrary.Entry] = []
 
+    /// Whether the language named `name` takes its grammar's colour: on unless the setting lists it.
+    private func grammarColorBinding(_ name: String) -> Binding<Bool> {
+        Binding(
+            get: { !settings.grammarColorOff.contains(name) },
+            set: { isOn in
+                if isOn {
+                    settings.grammarColorOff.remove(name)
+                } else {
+                    settings.grammarColorOff.insert(name)
+                }
+            })
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             SettingsScopeBar(scope: scope)
@@ -228,6 +241,20 @@ private struct AppearanceSettings: View {
                     .settingsCaption()
                 } header: {
                     Text("Syntax Color")
+                }
+                Section {
+                    ForEach(ColorTierGate.settingRows) { row in
+                        Toggle(row.title, isOn: grammarColorBinding(row.id))
+                            .appWide(\.grammarColorOff, in: scope)
+                    }
+                    Text(
+                        "Files in these languages show quick colors at once, then their grammar's. A grammar whose "
+                            + "compiled tables are larger than 20 MB, such as TypeScript's or C++'s, keeps the quick "
+                            + "colors, and so does a file its grammar cannot read within a quarter of a second."
+                    )
+                    .settingsCaption()
+                } header: {
+                    Text(SettingLabel.grammarColor)
                 }
                 Section {
                     Picker(SettingLabel.badgeScheme, selection: $settings.badgeScheme) {

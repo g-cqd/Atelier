@@ -63,6 +63,10 @@ package final class DiffViewerModel {
     let syntaxFacts = SyntaxFactsStore()
     /// Which displayed Swift sides take sourcekit-lsp's semantic colour.
     let semanticColor = SemanticColorSource()
+    /// Which tiers the refinement runs: grammar colour per language, and Swift's while its setting is on.
+    let colorGate = ColorTierGate()
+    /// The app's grammar colour, once the window attaches it.
+    @ObservationIgnored var attachedGrammarColor: GrammarColorServices?
     let reader: any SourceReading
     /// Spawns the model's work, and its views' work on its behalf, so a test settles on one provider.
     package let taskProvider: any TaskProvider
@@ -123,7 +127,7 @@ package final class DiffViewerModel {
         let pipeline = RenderPipeline(
             preparer: preparer, taskProvider: taskProvider, options: Self.options(settings, palette: palette),
             decorator: DiffDecorator(
-                tiers: DiffDecorations.tiers(store: syntaxFacts) + [semanticColor.tier(store: syntaxFacts)],
+                tiers: Self.tiers(store: syntaxFacts, semantic: semanticColor, gate: colorGate),
                 clock: decorationClock))
         self.pipeline = pipeline
         gapDrags = GapDragController(
@@ -143,7 +147,7 @@ package final class DiffViewerModel {
             options: Self.options(settings, palette: palette), context: settings.contextLines,
             isolatesChanges: settings.isolatesChanges)
         pipeline.onEvent = { [weak self] event in self?.handle(event) }
-        pipeline.refinesSwiftColor = settings.refinesSwiftColor
+        followColorSettings()
         semanticColor.isEnabled = settings.semanticColor
         semanticColor.readShownRight { [weak self] in
             guard let self else { return (nil, []) }
@@ -641,7 +645,7 @@ package final class DiffViewerModel {
             case .appearance:
                 refreshCommitGroups(force: false)
                 followSemanticColorSetting()
-                pipeline.refinesSwiftColor = settings.refinesSwiftColor
+                followColorSettings()
             // DiagnosticsModel observes ViewerSettings on its own; nothing for this model to do here.
             case .diagnostics: break
             case .freshness: freshness?.setEnabled(settings.autoRefresh)
