@@ -215,6 +215,10 @@ public actor LSPConnection {
             let reply: Data
             if method == "workspace/configuration" {
                 reply = try JSONRPCMessage.response(id: id, result: .array([.null]))
+            } else if method == "workspace/semanticTokens/refresh" {
+                // The client asks for tokens afresh whenever a text is shown again; the request itself needs only an
+                // answer.
+                reply = try JSONRPCMessage.response(id: id, result: .null)
             } else {
                 reply = try JSONRPCMessage.errorResponse(id: id, code: -32601, message: "method not found")
             }
