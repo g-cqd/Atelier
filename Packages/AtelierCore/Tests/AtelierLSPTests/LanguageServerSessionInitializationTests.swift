@@ -49,9 +49,9 @@ private func capturedInitialize(configuration: LanguageServerSession.Configurati
 @Suite
 struct LanguageServerSessionInitializationTests {
     @Test
-    func `the initialize request turns background indexing off by default`() async throws {
+    func `a sourcekit-lsp session's initialize request turns background indexing off`() async throws {
         let configuration = LanguageServerSession.Configuration(
-            serverExecutable: URL(filePath: "/usr/bin/true"),
+            descriptor: .sourceKitLSP, serverExecutable: URL(filePath: "/usr/bin/true"),
             workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory))
 
         let envelope = try await capturedInitialize(configuration: configuration)
@@ -74,10 +74,9 @@ struct LanguageServerSessionInitializationTests {
 
     @Test
     func `a configuration without initialization options sends none`() async throws {
-        var configuration = LanguageServerSession.Configuration(
+        let configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(filePath: "/usr/bin/true"),
             workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory))
-        configuration.initializationOptions = nil
 
         let envelope = try await capturedInitialize(configuration: configuration)
 
