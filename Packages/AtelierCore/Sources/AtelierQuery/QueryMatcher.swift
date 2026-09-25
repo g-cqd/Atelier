@@ -92,7 +92,11 @@ public enum QueryMatcher: Sendable {
     ) -> Bool {
         switch pattern {
             case .nodeMatch(let type, let children, let capture):
-                guard node.type == type else { return false }
+                if type == QueryPattern.namedWildcardType {
+                    guard node.isNamed else { return false }
+                } else {
+                    guard node.type == type else { return false }
+                }
                 var localCaptures = captures
                 var childCursor = 0
                 for childPattern in children {

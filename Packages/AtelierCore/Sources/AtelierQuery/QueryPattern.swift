@@ -45,13 +45,14 @@ public struct Query: Sendable, Equatable {
 
     /// The node types `pattern` can match at its root, or nil when it can match a node of any type.
     ///
-    /// A node match names its type. A sequence matches each part against the same node, so any part that names types
-    /// bounds them. An alternation matches one of its alternatives, so it can match the types they name together, or
-    /// any type if one of them can. A literal matches an anonymous node by its text, whatever its type.
+    /// A node match names its type, unless it is a wildcard node with children. A sequence matches each part against
+    /// the same node, so any part that names types bounds them. An alternation matches one of its alternatives, so it
+    /// can match the types they name together, or any type if one of them can. A literal matches an anonymous node by
+    /// its text, whatever its type.
     static func rootTypes(of pattern: QueryPattern) -> Set<String>? {
         switch pattern {
             case .nodeMatch(let type, _, _):
-                return [type]
+                return type == QueryPattern.namedWildcardType ? nil : [type]
             case .sequence(let parts):
                 for part in parts {
                     if let types = rootTypes(of: part) { return types }
@@ -141,6 +142,10 @@ public indirect enum QueryPattern: Sendable, Equatable {
 }
 
 extension QueryPattern {
+    /// The type of a ``nodeMatch(type:children:capture:)`` that matches a named node of any type: tree-sitter's
+    /// `(_ ...)`, a wildcard node with children. `(_)` alone is ``wildcard(capture:)``.
+    public static let namedWildcardType = "_"
+
     /// A capture in a pattern: its name, and its index in the ``Query/captureNames`` of the query that holds the
     /// pattern. A string literal is a capture of that name; the query numbers it.
     public struct Capture: Sendable, Hashable, ExpressibleByStringLiteral {

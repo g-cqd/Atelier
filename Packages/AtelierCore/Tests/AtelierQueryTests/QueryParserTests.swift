@@ -120,6 +120,25 @@ struct QueryParserTests {
     }
 
     @Test
+    func `A wildcard node reads its children and fields`() throws {
+        let query = try QueryParser.parse("(flow_mapping (_ key: (flow_node) @property (plain_scalar)) @pair)")
+        guard case .nodeMatch("flow_mapping", let children, nil) = try #require(query.patterns.first) else {
+            throw QueryPatternExpectationError.expectedNodeMatch
+        }
+        #expect(
+            children == [
+                .nodeMatch(
+                    type: QueryPattern.namedWildcardType,
+                    children: [
+                        .fieldMatch(
+                            name: "key", pattern: .nodeMatch(type: "flow_node", children: [], capture: "property")),
+                        .nodeMatch(type: "plain_scalar", children: [], capture: nil)
+                    ],
+                    capture: "pair")
+            ])
+    }
+
+    @Test
     func `Capture after alternation is applied to each alternative`() throws {
         let query = try QueryParser.parse("[(true) (false) (null)] @constant.builtin")
         #expect(query.patterns.count == 1)
