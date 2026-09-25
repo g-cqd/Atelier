@@ -51,8 +51,8 @@ final class PaneDiagnostics {
         popover.show(relativeTo: anchorRect, of: view, preferredEdge: .minY)
     }
 
-    /// Resolves a hover hit into `docs`' documentation styled with `palette`, joined by the findings of the hovered
-    /// row; nil while no hover documentation model is attached.
+    /// Resolves a hover hit into `docs`' documentation styled with `palette`, joined by the findings underlined under
+    /// the pointer; nil while no hover documentation model is attached.
     func hoverResolver(docs: HoverDocumentationModel?, palette: DiffPalette, settings: ViewerSettings)
         -> (@Sendable (HoverHit) async -> HoverDocument?)?
     {
@@ -71,15 +71,16 @@ final class PaneDiagnostics {
             })
     }
 
-    /// Resolves a hover hit into its documentation joined by the findings of the hovered row, or those findings
-    /// alone when there is no documentation; nil when there is neither.
+    /// Resolves a hover hit into its documentation joined by the findings underlined under the pointer (book HOVER-14),
+    /// or those findings alone when there is no documentation; nil when there is neither.
     nonisolated static func hoverResolver(
         overlay: DiagnosticOverlay, material: @escaping @Sendable () async -> HoverPanelMaterial,
         documentation: @escaping @Sendable (HoverHit) async -> HoverDocument?
     ) -> @Sendable (HoverHit) async -> HoverDocument? {
         { hit in
             let material = await material()
-            let rowDiagnostics = overlay.row(hit.row)?.findings.map { HoverDocument.DiagnosticEntry($0) } ?? []
+            let underPointer = overlay.row(hit.row)?.findings(underColumn: hit.utf16Column) ?? []
+            let rowDiagnostics = underPointer.map { HoverDocument.DiagnosticEntry($0) }
             guard let document = await documentation(hit) else {
                 guard !rowDiagnostics.isEmpty else { return nil }
                 return HoverDocument(diagnostics: rowDiagnostics).presented(on: material)
