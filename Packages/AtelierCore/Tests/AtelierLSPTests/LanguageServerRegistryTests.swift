@@ -62,13 +62,13 @@ private final class ScratchRoot: Sendable {
 
 private func makeRegistry(
     spy: ConfigurationSpy, admission: AdmissionScript = AdmissionScript(admitted: true)
-) -> SourceKitLSPRegistry {
-    SourceKitLSPRegistry(
+) -> LanguageServerRegistry {
+    LanguageServerRegistry(
         admits: { root in await admission.admits(root) },
         makeConfiguration: { root in await spy.makeConfiguration(for: root) })
 }
 
-@Suite struct SourceKitLSPRegistryTests {
+@Suite struct LanguageServerRegistryTests {
     @Test func sameRootReturnsTheSameInstance() async {
         let scratch = ScratchRoot()
         let spy = ConfigurationSpy()
@@ -115,7 +115,7 @@ private func makeRegistry(
         let spy = ConfigurationSpy()
         let gate = AsyncLatch()
         let entered = AsyncLatch()
-        let registry = SourceKitLSPRegistry(
+        let registry = LanguageServerRegistry(
             admits: { _ in true },
             makeConfiguration: { root in
                 // Only the first caller gets here; `spy.callCount` below catches a second initialization.
@@ -187,7 +187,7 @@ private func makeRegistry(
         #expect(throughLink != nil)
         #expect(throughLink === direct)
         let configured = try #require(await spy.roots.first)
-        #expect(configured == SourceKitLSPRegistry.canonicalRoot(target))
+        #expect(configured == LanguageServerRegistry.canonicalRoot(target))
     }
 
     @Test
@@ -211,8 +211,8 @@ private func makeRegistry(
         let file = scratch.url.appending(path: "file.swift")
         try Data("let x = 1\n".utf8).write(to: file)
 
-        #expect(SourceKitLSPRegistry.canonicalRoot(file) == nil)
-        #expect(SourceKitLSPRegistry.canonicalRoot(try #require(URL(string: "https://example.com/repo"))) == nil)
+        #expect(LanguageServerRegistry.canonicalRoot(file) == nil)
+        #expect(LanguageServerRegistry.canonicalRoot(try #require(URL(string: "https://example.com/repo"))) == nil)
     }
 
     // MARK: - Admission
@@ -256,7 +256,7 @@ private func makeRegistry(
         let admission = AdmissionScript(admitted: true)
         let gate = AsyncLatch()
         let entered = AsyncLatch()
-        let registry = SourceKitLSPRegistry(
+        let registry = LanguageServerRegistry(
             admits: { root in await admission.admits(root) },
             makeConfiguration: { root in
                 entered.open()
@@ -306,7 +306,7 @@ private func makeRegistry(
         let spy = ConfigurationSpy()
         let gate = AsyncLatch()
         let entered = AsyncLatch()
-        let registry = SourceKitLSPRegistry(
+        let registry = LanguageServerRegistry(
             admits: { _ in true },
             makeConfiguration: { root in
                 entered.open()

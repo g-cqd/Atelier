@@ -28,7 +28,7 @@ private struct TrustGate {
     let root: URL
     let trust: RepositoryTrust
     let policy: LanguageServerPolicy
-    let registry: SourceKitLSPRegistry
+    let registry: LanguageServerRegistry
     let factory = FactorySpy()
     let tasks = TaskProviderSpy.tolerant()
     /// The suite the trust decisions and the settings persist to, removed with the gate.
@@ -48,7 +48,7 @@ private struct TrustGate {
         let policy = LanguageServerPolicy(
             trust: trust, defaults: defaults, locate: { _ in URL(filePath: "/usr/bin/false") }, taskProvider: tasks)
         let factory = factory
-        registry = SourceKitLSPRegistry(
+        registry = LanguageServerRegistry(
             admits: { root in await policy.admitsSession(at: root) },
             makeConfiguration: { root in
                 guard await policy.configuration(forRoot: root) != nil else { return nil }
@@ -58,7 +58,7 @@ private struct TrustGate {
         self.policy = policy
     }
 
-    var canonicalRoot: URL? { SourceKitLSPRegistry.canonicalRoot(root) }
+    var canonicalRoot: URL? { LanguageServerRegistry.canonicalRoot(root) }
 
     func trustRoot() throws {
         trust.requestTrust(for: root)

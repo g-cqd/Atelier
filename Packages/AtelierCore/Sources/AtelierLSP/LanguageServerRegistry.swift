@@ -6,7 +6,7 @@ public import Foundation
 /// Roots are keyed by their canonical path (``canonicalRoot(_:)``), so every spelling of one directory, with or
 /// without a trailing slash or through a symbolic link, shares one session. Every request asks the admission check
 /// first, so a root it refuses gets no session, neither a running one nor a new one.
-public actor SourceKitLSPRegistry {
+public actor LanguageServerRegistry {
     private let admits: @Sendable (URL) async -> Bool
     private let makeConfiguration: @Sendable (URL) async -> LanguageServerSession.Configuration?
 

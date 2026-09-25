@@ -3,7 +3,7 @@ package import Foundation
 import Observation
 
 /// The user's trust decision per repository, keyed by the repository's canonical root
-/// (``SourceKitLSPRegistry/canonicalRoot(_:)``) and kept in user defaults. A repository the user never decided on is
+/// (``LanguageServerRegistry/canonicalRoot(_:)``) and kept in user defaults. A repository the user never decided on is
 /// untrusted: nothing that runs the repository's own code, such as sourcekit-lsp, starts there.
 ///
 /// Deciding is asked once: a root with a decision is never asked about again unless the user asks on purpose
@@ -97,7 +97,7 @@ package final class RepositoryTrust {
     /// Asks the user about the repository at `root` unless they already decided, as a hover does; a root already
     /// waiting or shown is not asked about twice.
     package func requestDecision(for root: URL) {
-        guard let canonical = SourceKitLSPRegistry.canonicalRoot(root), decisions[Self.key(of: canonical)] == nil
+        guard let canonical = LanguageServerRegistry.canonicalRoot(root), decisions[Self.key(of: canonical)] == nil
         else { return }
         enqueue(Request(root: canonical))
     }
@@ -105,7 +105,7 @@ package final class RepositoryTrust {
     /// Asks the user to trust the repository at `root`, even one they declined before, as an explicit command does;
     /// nothing happens for a trusted root.
     package func requestTrust(for root: URL) {
-        guard let canonical = SourceKitLSPRegistry.canonicalRoot(root),
+        guard let canonical = LanguageServerRegistry.canonicalRoot(root),
             decisions[Self.key(of: canonical)] != .trusted
         else { return }
         enqueue(Request(root: canonical))
@@ -167,7 +167,7 @@ package final class RepositoryTrust {
 
     /// The storage key of the directory at `root`: its canonical path, or nil when it names no existing directory.
     private static func canonicalPath(of root: URL) -> String? {
-        SourceKitLSPRegistry.canonicalRoot(root).map(key(of:))
+        LanguageServerRegistry.canonicalRoot(root).map(key(of:))
     }
 
     /// A canonical root's path without its trailing slash.

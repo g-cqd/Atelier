@@ -36,7 +36,7 @@ private final class ScratchRepositories {
         let root = parent.appending(path: name, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(
             at: root.appending(path: ".git", directoryHint: .isDirectory), withIntermediateDirectories: true)
-        return try #require(SourceKitLSPRegistry.canonicalRoot(root))
+        return try #require(LanguageServerRegistry.canonicalRoot(root))
     }
 
     deinit { try? FileManager.default.removeItem(at: parent) }
@@ -119,7 +119,7 @@ struct LanguageServerPolicyTests {
     func `a project without an override, or a folder outside every repository, reads the app-wide value`() throws {
         let repositories = try ScratchRepositories()
         let root = try repositories.repository("project")
-        let outside = try #require(SourceKitLSPRegistry.canonicalRoot(repositories.parent))
+        let outside = try #require(LanguageServerRegistry.canonicalRoot(repositories.parent))
         let defaults = scratchDefaults.defaults
         let appWide = ToolLocation(isEnabled: true, customPath: "/opt/sourcekit-lsp")
         setAppWideLocation(appWide, defaults: defaults)

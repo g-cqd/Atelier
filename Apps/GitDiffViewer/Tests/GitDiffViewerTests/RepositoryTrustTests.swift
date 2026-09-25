@@ -52,12 +52,12 @@ struct RepositoryTrustTests {
         let trust = RepositoryTrust(defaults: scratchDefaults.defaults)
 
         trust.requestTrust(for: link)
-        #expect(trust.nextRequest?.root == SourceKitLSPRegistry.canonicalRoot(real))
+        #expect(trust.nextRequest?.root == LanguageServerRegistry.canonicalRoot(real))
         try answerNext(trust, trusts: true)
 
         #expect(trust.isTrusted(real))
         #expect(trust.isTrusted(link))
-        #expect(trust.trustedRoots == [try #require(SourceKitLSPRegistry.canonicalRoot(real))])
+        #expect(trust.trustedRoots == [try #require(LanguageServerRegistry.canonicalRoot(real))])
     }
 
     @Test
@@ -93,7 +93,7 @@ struct RepositoryTrustTests {
         trust.requestTrust(for: trusted)
         #expect(trust.nextRequest == nil)
         trust.requestTrust(for: declined)
-        #expect(trust.nextRequest?.root == SourceKitLSPRegistry.canonicalRoot(declined))
+        #expect(trust.nextRequest?.root == LanguageServerRegistry.canonicalRoot(declined))
     }
 
     @Test
@@ -119,14 +119,14 @@ struct RepositoryTrustTests {
         trust.requestDecision(for: second)
 
         let shown = try #require(trust.claimNextRequest())
-        #expect(shown.root == SourceKitLSPRegistry.canonicalRoot(first))
+        #expect(shown.root == LanguageServerRegistry.canonicalRoot(first))
         #expect(trust.nextRequest == nil)
         #expect(trust.claimNextRequest() == nil)
 
         trust.release(shown)
         #expect(trust.claimNextRequest() == shown)
         trust.answer(shown, trusts: true)
-        #expect(trust.nextRequest?.root == SourceKitLSPRegistry.canonicalRoot(second))
+        #expect(trust.nextRequest?.root == LanguageServerRegistry.canonicalRoot(second))
     }
 
     @Test
@@ -150,7 +150,7 @@ struct RepositoryTrustTests {
     @Test
     func `an unreadable stored decision reads as untrusted`() throws {
         let scratch = try ScratchDirectories()
-        let root = try #require(SourceKitLSPRegistry.canonicalRoot(try scratch.directory("repository")))
+        let root = try #require(LanguageServerRegistry.canonicalRoot(try scratch.directory("repository")))
         let defaults = scratchDefaults.defaults
         defaults.set(
             [root.path(percentEncoded: false).trimmingSuffix("/"): "always"], forKey: RepositoryTrust.storageKey)
@@ -195,7 +195,7 @@ struct RepositoryTrustTests {
         #expect(trust.decision(for: root) == .declined)
         #expect(trust.trustedRoots.isEmpty)
         #expect(changes.count == 1)
-        #expect(changes.first?.0 == SourceKitLSPRegistry.canonicalRoot(root))
+        #expect(changes.first?.0 == LanguageServerRegistry.canonicalRoot(root))
         #expect(changes.first?.1 == .declined)
     }
 }
