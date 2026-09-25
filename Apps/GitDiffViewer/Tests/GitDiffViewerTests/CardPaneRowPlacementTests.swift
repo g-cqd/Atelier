@@ -140,7 +140,7 @@ struct CardPaneRowPlacementTests {
 
 /// Where a fully laid-out text puts each row: the tops a card's height counts on.
 @MainActor
-private struct MeasuredRows {
+struct MeasuredRows {
     private let tops: [Int: CGFloat]
 
     /// - Parameters:
