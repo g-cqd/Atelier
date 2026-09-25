@@ -299,6 +299,32 @@ public struct Rope: Sendable {
     }
 }
 
+// MARK: - Line source
+
+extension Rope: LineSource {
+    /// Lends line `index`'s bytes, without its `\n`, in place when they lie in one leaf and gathered once when they run
+    /// across leaves. A `\r` before the `\n` stays in the line: the editor keeps it as text.
+    /// - Complexity: O(log n + the line's length)
+    public func withLineBytes<R, E: Error>(at index: Int, _ body: (Span<UInt8>) throws(E) -> R) throws(E) -> R {
+        let range = lineRange(forLine: index)
+        var lent: Result<R, E>?
+        var gathered: [UInt8] = []
+        storage.root.forEachChunk(in: range) { chunk in
+            guard lent == nil, gathered.isEmpty, chunk.count == range.count else {
+                gathered.append(contentsOf: chunk)
+                return
+            }
+            do throws(E) {
+                lent = .success(try body(unsafe Span(_unsafeElements: chunk)))
+            } catch {
+                lent = .failure(error)
+            }
+        }
+        if let lent { return try lent.get() }
+        return try body(gathered.span)
+    }
+}
+
 // MARK: - Storage (CoW reference type)
 
 extension Rope {
