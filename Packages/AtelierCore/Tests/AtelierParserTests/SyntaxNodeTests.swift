@@ -113,6 +113,42 @@ struct SyntaxNodeTests {
         #expect(emptied == SyntaxNode(type: "leaf"))
     }
 
+    @Test(arguments: [false, true])
+    func `A chain grown one level at a time through its nodes' children or fields frees on a pool-sized stack`(
+        throughFields: Bool
+    ) async {
+        // A node keeps a small subtree without fields inline, freed recursively; each level added here must move the
+        // chain out of line once it is too tall, or dropping it recurses 100,000 levels.
+        let depth = await onThread {
+            let root = Self.makeChain(depth: 100_000) { inner in
+                var node = SyntaxNode(type: "branch")
+                if throughFields { node.fields["inner"] = [inner] } else { node.children.append(inner) }
+                return node
+            }
+            var depth = 1
+            var node = root
+            while let inner = throughFields ? node.fields["inner"]?.first : node.children.first {
+                depth += 1
+                node = inner
+            }
+            return depth
+        }
+        #expect(depth == 100_000)
+    }
+
+    @Test
+    func `Nodes with the same children and fields are equal however they came by them`() {
+        let leaf = SyntaxNode(type: "leaf")
+        var emptiedFields = SyntaxNode(type: "pair", children: [leaf], fields: ["key": [leaf]])
+        emptiedFields.fields = [:]
+        var grown = SyntaxNode(type: "pair")
+        grown.children.append(leaf)
+
+        #expect(emptiedFields == SyntaxNode(type: "pair", children: [leaf]))
+        #expect(grown == SyntaxNode(type: "pair", children: [leaf]))
+        #expect(grown == emptiedFields)
+    }
+
     /// A `depth`-level chain from a leaf of type `leafType` up, each level made by `wrap` from the one below.
     private static func makeChain(
         depth: Int, leafType: String = "leaf", wrap: (SyntaxNode) -> SyntaxNode
