@@ -6,11 +6,17 @@ public import AtelierParser
 /// and a node's patterns in query order. At each node it tries only the patterns whose root can match the node's type
 /// (``Query/candidatePatterns(forType:)``). The walk keeps its path on the heap, so any depth of tree is safe; only a
 /// pattern's own nesting, which ``QueryParser`` bounds, reaches the call stack.
+///
+/// As tree-sitter's query cursor does, a pattern matches a node in every way it can: each child step may take any
+/// later child than the step before it, so `(command (_) @arg)` matches once per named child. Of the ways that
+/// capture the same nodes, or only some of the nodes another way captures, it keeps one, the longest, and then the
+/// pattern's predicates filter what is left, as tree-sitter's bindings filter the matches its cursor returns.
 public enum QueryMatcher: Sendable {
     /// Execute a query against a syntax tree and return all matches.
     ///
     /// - Complexity: O(n × c) pattern attempts for n nodes and c patterns that can match a node's type, and O(depth)
-    ///   memory besides the matches.
+    ///   memory besides the matches. An attempt tries every way the pattern's child steps can take the node's
+    ///   children: one per child for a single child step, and at worst a product over the child steps.
     public static func execute(query: Query, tree: SyntaxTree) -> [QueryMatch] {
         collectMatches(of: query, in: tree, byteRange: nil, pointRange: nil)
     }
@@ -42,6 +48,29 @@ public enum QueryMatcher: Sendable {
 
     // MARK: - Private
 
+    /// The captures and predicates of the way being matched, pushed as the way goes deeper into its pattern and popped
+    /// as it backs out, so every way of a walk shares the two buffers.
+    private struct MatchState {
+        var captures: [QueryMatch.Capture] = []
+        var predicates: [Predicate] = []
+
+        /// Calls `body` with `capture` of `node` pushed, when there is one, and pops it after.
+        mutating func with(
+            _ capture: QueryPattern.Capture?, of node: SyntaxNode, _ body: (inout MatchState) -> Bool
+        ) -> Bool {
+            guard let capture else { return body(&self) }
+            captures.append(QueryMatch.Capture(node: node, name: capture.name, index: capture.index))
+            defer { captures.removeLast() }
+            return body(&self)
+        }
+    }
+
+    /// One way a pattern matched a node: its captures, and the predicates they must pass.
+    private struct Way {
+        var captures: [QueryMatch.Capture]
+        var predicates: [Predicate]
+    }
+
     private static func collectMatches(
         of query: Query,
         in tree: SyntaxTree,
@@ -55,6 +84,8 @@ public enum QueryMatcher: Sendable {
         let bytes = source.utf8Span.span
         let everyPattern = Array(query.patterns.indices)
         var matches: [QueryMatch] = []
+        var state = MatchState()
+        var ways: [Way] = []
         // One entry per level of the current path: that level's siblings and the next one to visit.
         var levels: [(siblings: [SyntaxNode], next: Int)] = [([tree.root], 0)]
         while let top = levels.indices.last {
@@ -68,11 +99,17 @@ public enum QueryMatcher: Sendable {
             if let byteRange, !node.byteRange.overlaps(byteRange) { continue }
             if let pointRange, !node.pointRange.overlaps(pointRange) { continue }
             for patternIndex in indexed ? query.candidatePatterns(forType: node.type) : everyPattern {
-                var captures: [QueryMatch.Capture] = []
-                if matchPattern(
-                    query.patterns[patternIndex], against: node, source: source, bytes: bytes, captures: &captures)
-                {
-                    matches.append(QueryMatch(patternIndex: patternIndex, captures: captures))
+                ways.removeAll(keepingCapacity: true)
+                _ = forEachWay(of: query.patterns[patternIndex], at: node, bytes: bytes, state: &state) { state in
+                    ways.append(Way(captures: state.captures, predicates: state.predicates))
+                    return true
+                }
+                if ways.count > 1 { removeShorterWays(&ways) }
+                for way in ways
+                where way.predicates.allSatisfy({
+                    Predicates.evaluate($0, captures: way.captures, source: source)
+                }) {
+                    matches.append(QueryMatch(patternIndex: patternIndex, captures: way.captures))
                 }
             }
             if !node.children.isEmpty {
@@ -82,163 +119,249 @@ public enum QueryMatcher: Sendable {
         return matches
     }
 
+    /// Calls `body` once for each way `pattern` matches `node`, with the way's captures and predicates pushed on
+    /// `state`, which it leaves as it found it. It stops, and returns false, as soon as `body` returns false.
     // swiftlint:disable:next cyclomatic_complexity function_body_length
-    private static func matchPattern(
-        _ pattern: QueryPattern,
-        against node: SyntaxNode,
-        source: String,
+    private static func forEachWay(
+        of pattern: QueryPattern,
+        at node: SyntaxNode,
         bytes: Span<UInt8>,
-        captures: inout [QueryMatch.Capture]
+        state: inout MatchState,
+        _ body: (inout MatchState) -> Bool
     ) -> Bool {
         switch pattern {
-            case .nodeMatch(let type, let children, let capture):
+            case .nodeMatch(let type, let steps, let capture):
                 if type == QueryPattern.namedWildcardType {
-                    guard node.isNamed else { return false }
+                    guard node.isNamed else { return true }
                 } else {
-                    guard node.type == type else { return false }
+                    guard node.type == type else { return true }
                 }
-                var localCaptures = captures
-                var childCursor = 0
-                for childPattern in children {
-                    switch childPattern {
-                        case .fieldMatch(let name, let fieldPattern):
-                            guard let fieldNode = node.child(forField: name) else { return false }
-                            var fieldCaptures = localCaptures
-                            if !matchPattern(
-                                fieldPattern, against: fieldNode, source: source, bytes: bytes, captures: &fieldCaptures
-                            ) {
-                                return false
-                            }
-                            localCaptures = fieldCaptures
-                        case .negatedField(let name):
-                            if node.fields[name] != nil { return false }
-                        case .predicate(let pred):
-                            if !evaluatePredicate(pred, captures: localCaptures, source: source) {
-                                return false
-                            }
-                        default:
-                            if case .quantified(let inner, let quantifier) = childPattern {
-                                // `?` takes at most one child, as tree-sitter's zero-or-one step does
-                                // (TSQuantifierZeroOrOne in ts_query__parse_pattern, lib/src/query.c); `*` and `+` take
-                                // as many as match in a row.
-                                let limit = quantifier == .optional ? 1 : Int.max
-                                var matchCount = 0
-                                while matchCount < limit, childCursor < node.children.count {
-                                    var candidateCaptures = localCaptures
-                                    guard
-                                        matchPattern(
-                                            inner,
-                                            against: node.children[childCursor],
-                                            source: source,
-                                            bytes: bytes,
-                                            captures: &candidateCaptures
-                                        )
-                                    else {
-                                        break
-                                    }
-                                    childCursor += 1
-                                    localCaptures = candidateCaptures
-                                    matchCount += 1
-                                }
-                                switch quantifier {
-                                    case .oneOrMore:
-                                        if matchCount == 0 { return false }
-                                    case .zeroOrMore:
-                                        break  // always OK
-                                    case .optional:
-                                        break  // zero or one
-                                }
-                            } else {
-                                var matched = false
-                                while childCursor < node.children.count {
-                                    var candidateCaptures = localCaptures
-                                    if matchPattern(
-                                        childPattern,
-                                        against: node.children[childCursor],
-                                        source: source,
-                                        bytes: bytes,
-                                        captures: &candidateCaptures
-                                    ) {
-                                        childCursor += 1
-                                        localCaptures = candidateCaptures
-                                        matched = true
-                                        break
-                                    }
-                                    childCursor += 1
-                                }
-                                if !matched { return false }
-                            }
-                    }
+                guard !steps.isEmpty else { return state.with(capture, of: node, body) }
+                return forEachWay(ofSteps: steps[...], from: 0, of: node, bytes: bytes, state: &state) { state in
+                    state.with(capture, of: node, body)
                 }
-                if let capture {
-                    localCaptures.append(QueryMatch.Capture(node: node, name: capture.name, index: capture.index))
-                }
-                captures = localCaptures
-                return true
 
             case .literal(let value, let capture):
                 // A quoted pattern names an anonymous node, as in tree-sitter; a named node that reads the same, such
                 // as a JSON string's content `:`, or a node built over one, is not it.
-                guard !node.isNamed, Self.bytes(of: node, in: bytes, equal: value) else { return false }
-                if let capture {
-                    captures.append(QueryMatch.Capture(node: node, name: capture.name, index: capture.index))
-                }
-                return true
+                guard !node.isNamed, Self.bytes(of: node, in: bytes, equal: value) else { return true }
+                return state.with(capture, of: node, body)
 
             case .wildcard(let capture):
-                if let capture {
-                    captures.append(QueryMatch.Capture(node: node, name: capture.name, index: capture.index))
-                }
-                return true
+                return state.with(capture, of: node, body)
 
             case .alternation(let alternatives):
-                for alt in alternatives {
-                    var altCaptures: [QueryMatch.Capture] = []
-                    if matchPattern(alt, against: node, source: source, bytes: bytes, captures: &altCaptures) {
-                        captures.append(contentsOf: altCaptures)
-                        return true
-                    }
+                // Each alternative that matches is a way of its own, as each is a branch of tree-sitter's steps.
+                for alternative in alternatives {
+                    guard forEachWay(of: alternative, at: node, bytes: bytes, state: &state, body) else { return false }
                 }
-                return false
+                return true
 
             case .fieldMatch(let name, let fieldPattern):
-                guard let fieldNode = node.child(forField: name) else { return false }
-                return matchPattern(
-                    fieldPattern, against: fieldNode, source: source, bytes: bytes, captures: &captures)
+                for fieldNode in node.fields[name] ?? [] {
+                    guard forEachWay(of: fieldPattern, at: fieldNode, bytes: bytes, state: &state, body) else {
+                        return false
+                    }
+                }
+                return true
 
             case .negatedField(let name):
-                return node.fields[name] == nil
+                return node.fields[name] == nil ? body(&state) : true
 
-            case .predicate(let pred):
-                return evaluatePredicate(pred, captures: captures, source: source)
+            case .predicate(let predicate):
+                state.predicates.append(predicate)
+                defer { state.predicates.removeLast() }
+                return body(&state)
 
-            case .sequence(let patterns):
-                var localCaptures = captures
-                for p in patterns
-                where !matchPattern(p, against: node, source: source, bytes: bytes, captures: &localCaptures) {
-                    return false
-                }
-                captures = localCaptures
-                return true
+            case .sequence(let parts):
+                return forEachWay(ofParts: parts[...], at: node, bytes: bytes, state: &state, body)
 
             case .quantified(let inner, let quantifier):
-                // Quantified patterns are only meaningful as children of nodeMatch.
-                // At the top level, match the inner pattern according to quantifier rules.
-                switch quantifier {
-                    case .optional, .zeroOrMore:
-                        // Zero matches is acceptable — try matching but don't fail
-                        var tryCaptures = captures
-                        _ = matchPattern(inner, against: node, source: source, bytes: bytes, captures: &tryCaptures)
-                        captures = tryCaptures
-                        return true
-                    case .oneOrMore:
-                        // Must match at least once
-                        return matchPattern(inner, against: node, source: source, bytes: bytes, captures: &captures)
+                // Quantified patterns are only meaningful as children of nodeMatch. At the top level, `+` is its inner
+                // pattern, and `?` and `*` are its inner pattern, or no capture at all where that does not match.
+                if quantifier == .oneOrMore {
+                    return forEachWay(of: inner, at: node, bytes: bytes, state: &state, body)
                 }
+                var matched = false
+                let finished = forEachWay(of: inner, at: node, bytes: bytes, state: &state) { state in
+                    matched = true
+                    return body(&state)
+                }
+                guard finished else { return false }
+                return matched ? true : body(&state)
 
             case .anchor:
+                return body(&state)
+        }
+    }
+
+    /// Calls `body` once for each way all of `parts` match `node`, as a sequence matches one node with each of them.
+    private static func forEachWay(
+        ofParts parts: ArraySlice<QueryPattern>,
+        at node: SyntaxNode,
+        bytes: Span<UInt8>,
+        state: inout MatchState,
+        _ body: (inout MatchState) -> Bool
+    ) -> Bool {
+        guard let first = parts.first else { return body(&state) }
+        return forEachWay(of: first, at: node, bytes: bytes, state: &state) { state in
+            forEachWay(ofParts: parts.dropFirst(), at: node, bytes: bytes, state: &state, body)
+        }
+    }
+
+    /// Calls `body` once for each way `steps`, the child patterns of a node pattern, match `node`'s children from
+    /// `cursor` on.
+    ///
+    /// A child step takes any child after the one the step before it took, skipping those between, as a tree-sitter
+    /// step that is not anchored may match any later sibling (`later_sibling_can_match` in ts_query_cursor__advance,
+    /// lib/src/query.c). Field, negated-field and predicate steps take no child.
+    private static func forEachWay(
+        ofSteps steps: ArraySlice<QueryPattern>,
+        from cursor: Int,
+        of node: SyntaxNode,
+        bytes: Span<UInt8>,
+        state: inout MatchState,
+        _ body: (inout MatchState) -> Bool
+    ) -> Bool {
+        guard let step = steps.first else { return body(&state) }
+        let rest = steps.dropFirst()
+        switch step {
+            case .fieldMatch(let name, let fieldPattern):
+                for fieldNode in node.fields[name] ?? [] {
+                    let finished = forEachWay(of: fieldPattern, at: fieldNode, bytes: bytes, state: &state) { state in
+                        forEachWay(ofSteps: rest, from: cursor, of: node, bytes: bytes, state: &state, body)
+                    }
+                    guard finished else { return false }
+                }
+                return true
+
+            case .negatedField(let name):
+                guard node.fields[name] == nil else { return true }
+                return forEachWay(ofSteps: rest, from: cursor, of: node, bytes: bytes, state: &state, body)
+
+            case .predicate(let predicate):
+                state.predicates.append(predicate)
+                defer { state.predicates.removeLast() }
+                return forEachWay(ofSteps: rest, from: cursor, of: node, bytes: bytes, state: &state, body)
+
+            case .anchor:
+                // An anchor takes the child at the cursor, whatever it is.
+                guard cursor < node.children.count else { return true }
+                return forEachWay(ofSteps: rest, from: cursor + 1, of: node, bytes: bytes, state: &state, body)
+
+            case .quantified(let inner, let quantifier):
+                // From the cursor, as many children in a row as match, and at most one for `?`.
+                let limit = quantifier == .optional ? 1 : Int.max
+                let children = node.children
+                let captureCount = state.captures.count
+                let predicateCount = state.predicates.count
+                defer {
+                    state.captures.removeSubrange(captureCount...)
+                    state.predicates.removeSubrange(predicateCount...)
+                }
+                var next = cursor
+                while next - cursor < limit, next < children.count,
+                    let way = firstWay(of: inner, at: children[next], bytes: bytes, state: &state)
+                {
+                    state.captures.append(contentsOf: way.captures)
+                    state.predicates.append(contentsOf: way.predicates)
+                    next += 1
+                }
+                if quantifier == .oneOrMore, next == cursor { return true }
+                return forEachWay(ofSteps: rest, from: next, of: node, bytes: bytes, state: &state, body)
+
+            default:
+                let children = node.children
+                for index in cursor ..< max(cursor, children.count) {
+                    let finished = forEachWay(of: step, at: children[index], bytes: bytes, state: &state) { state in
+                        forEachWay(ofSteps: rest, from: index + 1, of: node, bytes: bytes, state: &state, body)
+                    }
+                    guard finished else { return false }
+                }
                 return true
         }
+    }
+
+    /// The captures and predicates of the first way `pattern` matches `node`, or nil when it does not.
+    private static func firstWay(
+        of pattern: QueryPattern, at node: SyntaxNode, bytes: Span<UInt8>, state: inout MatchState
+    ) -> Way? {
+        let captureCount = state.captures.count
+        let predicateCount = state.predicates.count
+        var first: Way?
+        _ = forEachWay(of: pattern, at: node, bytes: bytes, state: &state) { state in
+            first = Way(
+                captures: Array(state.captures[captureCount...]),
+                predicates: Array(state.predicates[predicateCount...]))
+            return false
+        }
+        return first
+    }
+
+    /// Keeps, of the ways one pattern matched one node, those tree-sitter's cursor keeps: it drops a way that captures
+    /// the same nodes as an earlier one, or only some of the nodes another way captures, the "longest-match criteria"
+    /// of ts_query_cursor__advance, which compares ways with ts_query_cursor__compare_captures (lib/src/query.c). The
+    /// ways left keep their order.
+    ///
+    /// - Complexity: O(w) hashing for w ways that all capture as many nodes; O(w²) comparisons otherwise.
+    private static func removeShorterWays(_ ways: inout [Way]) {
+        var keep = [Bool](repeating: true, count: ways.count)
+        // Ways that capture as many nodes can only repeat each other: find the repeats by a hash of their captures.
+        var firstWayByHash: [Int: [Int]] = [:]
+        for (index, way) in ways.enumerated() {
+            let hash = captureHash(of: way.captures)
+            if let earlier = firstWayByHash[hash],
+                earlier.contains(where: { captures(ways[$0].captures, contain: way.captures, strictly: false) })
+            {
+                keep[index] = false
+            } else {
+                firstWayByHash[hash, default: []].append(index)
+            }
+        }
+        // A way that captures fewer nodes than another may capture some of them.
+        let counts = ways.map(\.captures.count)
+        if let fewest = counts.min(), let most = counts.max(), fewest < most {
+            for shorter in ways.indices where keep[shorter] {
+                for longer in ways.indices
+                where keep[longer] && counts[longer] > counts[shorter]
+                    && captures(ways[longer].captures, contain: ways[shorter].captures, strictly: true)
+                {
+                    keep[shorter] = false
+                    break
+                }
+            }
+        }
+        ways = ways.indices.filter { keep[$0] }.map { ways[$0] }
+    }
+
+    /// A hash of `captures` as a multiset: the same whatever their order.
+    private static func captureHash(of captures: [QueryMatch.Capture]) -> Int {
+        var sum = 0
+        for capture in captures {
+            var hasher = Hasher()
+            hasher.combine(capture.index)
+            hasher.combine(capture.node.byteRange)
+            sum &+= hasher.finalize()
+        }
+        return sum
+    }
+
+    /// Whether every capture of `shorter` is one of `longer`'s, each matched once: the same capture of the same node.
+    /// With `strictly` false, `longer` must hold nothing else, so the two capture the same nodes.
+    private static func captures(
+        _ longer: [QueryMatch.Capture], contain shorter: [QueryMatch.Capture], strictly: Bool
+    ) -> Bool {
+        guard strictly ? longer.count > shorter.count : longer.count == shorter.count else { return false }
+        var used = [Bool](repeating: false, count: longer.count)
+        for capture in shorter {
+            guard
+                let match = longer.indices.first(where: {
+                    !used[$0] && longer[$0].index == capture.index && longer[$0].node == capture.node
+                })
+            else { return false }
+            used[match] = true
+        }
+        return true
     }
 
     /// Whether `node`'s bytes in the source are `value`'s UTF-8, compared in place, byte for byte, as tree-sitter
@@ -256,13 +379,5 @@ public enum QueryMatcher: Sendable {
             offset += 1
         }
         return true
-    }
-
-    private static func evaluatePredicate(
-        _ predicate: Predicate,
-        captures: [QueryMatch.Capture],
-        source: String
-    ) -> Bool {
-        Predicates.evaluate(predicate, captures: captures, source: source)
     }
 }
