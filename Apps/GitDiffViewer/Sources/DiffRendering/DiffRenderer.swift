@@ -10,15 +10,23 @@ package enum DiffRenderer {
         package var lineHeightMultiple: Double = 0
         /// Sides to render; the inline layout needs only `.unified`, the split layouts only `.old` and `.new`.
         package var sides: Set<RenderedSide> = [.unified, .old, .new]
+        /// Whether the inline side shows the new file with each change folded into it, but for the changes in
+        /// ``disclosedChanges`` (book DIFF-04).
+        package var compactsInline = false
+        /// The changes a compact inline side shows whole.
+        package var disclosedChanges: Set<ChangeKey> = []
 
         package init(
             granularity: IntralineGranularity = .word, palette: DiffPalette = .system, lineHeightMultiple: Double = 0,
-            sides: Set<RenderedSide> = [.unified, .old, .new]
+            sides: Set<RenderedSide> = [.unified, .old, .new], compactsInline: Bool = false,
+            disclosedChanges: Set<ChangeKey> = []
         ) {
             self.granularity = granularity
             self.palette = palette
             self.lineHeightMultiple = lineHeightMultiple
             self.sides = sides
+            self.compactsInline = compactsInline
+            self.disclosedChanges = disclosedChanges
         }
     }
 
@@ -50,7 +58,12 @@ package enum DiffRenderer {
         for (offset, file) in prepared.enumerated() {
             let index = firstFileIndex + offset
             let header = withHeaders ? file.title : nil
-            unifiedRows += rows(of: file, fileIndex: index, layout: layout, header: header, split: false)
+            if options.compactsInline {
+                unifiedRows += compactRows(
+                    of: file, fileIndex: index, layout: layout, header: header, disclosed: options.disclosedChanges)
+            } else {
+                unifiedRows += rows(of: file, fileIndex: index, layout: layout, header: header, split: false)
+            }
             splitRows += rows(of: file, fileIndex: index, layout: layout, header: header, split: true)
             changeCount += file.model.unifiedChangeStarts.count
             for row in file.model.unifiedRows {
@@ -84,8 +97,12 @@ package enum DiffRenderer {
 
     // MARK: Row selection
 
-    private enum RenderRow {
+    enum RenderRow {
         case diff(DiffRow, fileIndex: Int, file: PreparedDiff)
+        /// An added line of a folded change, shown as the new file reads (book DIFF-04).
+        case folded(DiffRow, fileIndex: Int, file: PreparedDiff)
+        /// A change of a compact inline side, which takes no row: the rows after it are its own.
+        case change(PendingChange)
         case gap(GapMarker)
         case header(String, fileIndex: Int)
     }
@@ -145,6 +162,7 @@ package enum DiffRenderer {
         var text = ""
         var metas: [RowMeta] = []
         var gaps: [RenderedGap] = []
+        var changes: [RenderedChange] = []
         var lineStarts: [Int] = []
         var spans = RenderSpans()
         metas.reserveCapacity(rows.count)
@@ -156,6 +174,26 @@ package enum DiffRenderer {
             var length = 0
             var tabs = 0
             switch row {
+                case .change(let change):
+                    changes.append(change.rendered(from: metas.count))
+                    continue
+                case .folded(let diffRow, let fileIndex, let file):
+                    // The line as the new file reads: no tint and no emphasis, numbered on the new side alone.
+                    let shown = shownLine(of: diffRow, in: file, side: side)
+                    if let shown {
+                        text.append(contentsOf: spans.placeholders.reveal(shown.line, at: offset))
+                        length = shown.line.utf16.count
+                        for unit in shown.line.utf16 where unit == 9 { tabs += 1 }
+                        for token in shown.tokens {
+                            let range = token.byteRange
+                            spans.tokens.append(
+                                (NSRange(location: offset + range.lowerBound, length: range.count), token.role))
+                        }
+                    }
+                    metas.append(
+                        RowMeta(
+                            kind: .context, oldNumber: nil, newNumber: diffRow.new.map { $0.index + 1 },
+                            fileIndex: fileIndex))
                 case .diff(let diffRow, let fileIndex, let file):
                     let shown = shownLine(of: diffRow, in: file, side: side)
                     let kind = displayedKind(of: diffRow, side: side, hasLine: shown != nil)
@@ -205,7 +243,7 @@ package enum DiffRenderer {
         return RenderedText(
             side: side, palette: options.palette, attributed: styled.attributed, rows: metas, gaps: gaps,
             lineStarts: lineStarts, longestLine: longestLine, baselineOffset: styled.baselineOffset,
-            lineHeight: styled.lineHeight
+            lineHeight: styled.lineHeight, changes: changes
         )
     }
 
@@ -312,8 +350,13 @@ package enum DiffRenderer {
 }
 
 extension DiffRenderer {
-    /// Output indices of the first row of each run of changed rows.
+    /// Output indices of the first row of each run of changed rows. A compact inline side's changes start where they
+    /// lie, a folded removal at the row after it, or at the last row below the last.
     private static func changeStarts(in rows: [RenderRow]) -> [Int] {
+        let isCompact = rows.contains { row in
+            if case .change = row { true } else { false }
+        }
+        if isCompact { return compactChangeStarts(in: rows) }
         var starts: [Int] = []
         var inChange = false
         var index = 0
@@ -321,7 +364,7 @@ extension DiffRenderer {
             let isChange: Bool
             switch row {
                 case .diff(let diff, _, _): isChange = diff.kind != .context
-                case .header: isChange = false
+                case .header, .folded, .change: isChange = false
                 case .gap:
                     // A gap takes no row, but the changes on either side of it are still two.
                     inChange = false
