@@ -173,9 +173,9 @@ struct HoverLinkTests {
         let panel = shownPanel(recordingInto: opened)
         let textViews = Self.descendants(of: try #require(panel.contentViewForTests), as: NSTextView.self)
 
-        // Declaration, abstract, the Overview heading, the discussion's paragraph, returns, and the candidate's
-        // declaration and summary.
-        #expect(textViews.count == 7)
+        // Declaration, abstract, the Overview heading, the discussion's paragraph, returns, the candidate's
+        // declaration and summary, and the documentation link's, hidden for a symbol with no page.
+        #expect(textViews.count == 8)
         for textView in textViews {
             let delegate = try #require(textView.delegate)
             // `true` tells `NSTextView` the click is handled; anything else makes it open the link itself.
@@ -190,7 +190,7 @@ struct HoverLinkTests {
         let panel = shownPanel(recordingInto: opened)
         let textViews = Self.descendants(of: try #require(panel.contentViewForTests), as: NSTextView.self)
 
-        #expect(textViews.count == 7)
+        #expect(textViews.count == 8)
         for textView in textViews {
             let delegate = try #require(textView.delegate)
             #expect(delegate.textView?(textView, clickedOnLink: Self.https, at: 0) == true)

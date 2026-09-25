@@ -105,7 +105,8 @@ package final class LanguageServerPolicy {
             let probeDirectory = try SDKDocumentationProvider.makeProbeDirectory()
             let sdks = located
             let provider = SDKDocumentationProvider.scratch(
-                serverExecutable: executable, probeDirectory: probeDirectory, locateSDK: { sdks[$0] })
+                serverExecutable: executable, probeDirectory: probeDirectory, locateSDK: { sdks[$0] },
+                resolvesDocumentationPages: true)
             return SDKHoverTier.Resolved(provider: provider, probeDirectory: probeDirectory)
         } catch {
             PhaseTrace.log("SDK documentation is off: \(error)")
