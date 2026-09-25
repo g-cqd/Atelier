@@ -318,6 +318,10 @@ package final class ViewerSettings {
         }
     }
     /// Which colours a change badge's letter is drawn in: classic red/green/orange/purple, or Xcode's own.
+    /// The colours a diff's changes take, the app's red and green or Xcode's gray and blue (book D18).
+    package var diffColors: DiffColors {
+        didSet { if diffColors != oldValue { store(diffColors.rawValue, Key.diffColors, .palette) } }
+    }
     package var badgeScheme: BadgeScheme {
         didSet { if badgeScheme != oldValue { store(badgeScheme.rawValue, Key.badgeScheme, .appearance) } }
     }
@@ -450,6 +454,7 @@ package final class ViewerSettings {
         appearanceScheme =
             defaults.string(forKey: Key.appearanceScheme).flatMap(AppearanceScheme.init(rawValue:)) ?? .system
         badgeScheme = defaults.string(forKey: Key.badgeScheme).flatMap(BadgeScheme.init(rawValue:)) ?? .classic
+        diffColors = defaults.string(forKey: Key.diffColors).flatMap(DiffColors.init(rawValue:)) ?? .standard
         matchesThemeAppearance = defaults.object(forKey: Key.matchesThemeAppearance) as? Bool ?? false
         bouncesAtEdges = defaults.bool(forKey: Key.bouncesAtEdges)
         scrollsPastEnd = defaults.bool(forKey: Key.scrollsPastEnd)
@@ -511,6 +516,7 @@ extension ViewerSettings {
         static let settingsPane = "settingsPane"
         static let appearanceScheme = "appearanceScheme"
         static let badgeScheme = "badgeScheme"
+        static let diffColors = "diffColors"
         static let matchesThemeAppearance = "matchesThemeAppearance"
         static let bouncesAtEdges = "bouncesAtEdges"
         static let scrollsPastEnd = "scrollsPastEnd"

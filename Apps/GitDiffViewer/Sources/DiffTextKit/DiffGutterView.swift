@@ -379,6 +379,7 @@ package final class DiffGutterView: NSView {
             }
         }
         drawGaps(in: dirtyRect)
+        drawChangeBars(in: dirtyRect)
         drawChangeMarkers(in: dirtyRect)
     }
 

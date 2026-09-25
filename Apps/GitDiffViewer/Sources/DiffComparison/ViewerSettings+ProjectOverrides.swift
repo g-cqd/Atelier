@@ -43,7 +43,7 @@ extension ViewerSettings {
         \.showsHoverDocumentation: Key.showsHoverDocumentation, \.hoverPanelMaterial: Key.hoverPanelMaterial,
         \.toolLocations: Key.toolLocations,
         \.lspServerLocations: Key.lspServerLocations, \.analyzedSides: Key.analyzedSides,
-        \.appearanceScheme: Key.appearanceScheme, \.badgeScheme: Key.badgeScheme,
+        \.appearanceScheme: Key.appearanceScheme, \.badgeScheme: Key.badgeScheme, \.diffColors: Key.diffColors,
         \.matchesThemeAppearance: Key.matchesThemeAppearance, \.bouncesAtEdges: Key.bouncesAtEdges,
         \.scrollsPastEnd: Key.scrollsPastEnd, \.scrollsToFirstChange: Key.scrollsToFirstChange,
         \.refinesSwiftColor: Key.refinesSwiftColor
@@ -133,6 +133,9 @@ extension ViewerSettings {
             case Key.badgeScheme:
                 let value = defaults.string(forKey: effectiveKey(key)).flatMap(BadgeScheme.init(rawValue:)) ?? .classic
                 if value != badgeScheme { badgeScheme = value }
+            case Key.diffColors:
+                let value = defaults.string(forKey: effectiveKey(key)).flatMap(DiffColors.init(rawValue:)) ?? .standard
+                if value != diffColors { diffColors = value }
             case Key.matchesThemeAppearance:
                 let value = defaults.object(forKey: effectiveKey(key)) as? Bool ?? false
                 if value != matchesThemeAppearance { matchesThemeAppearance = value }
