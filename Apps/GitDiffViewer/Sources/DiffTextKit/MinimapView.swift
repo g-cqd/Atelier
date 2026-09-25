@@ -135,25 +135,41 @@ package final class MinimapView: NSView {
             return nextStart - rendered.lineStarts[row] - 1
         }
         if geometry.detail == .full {
-            return rendered.rows.enumerated()
-                .map { row, meta in
-                    Bucket(
-                        y: geometry.y(ofRow: row), height: geometry.pitch, kind: meta.kind, length: length(ofRow: row))
+            return Self.kinds(of: rendered).enumerated()
+                .map { row, kind in
+                    Bucket(y: geometry.y(ofRow: row), height: geometry.pitch, kind: kind, length: length(ofRow: row))
                 }
         }
         var buckets = [Bucket?](repeating: nil, count: geometry.bucketCount)
-        for (row, meta) in rendered.rows.enumerated() {
+        for (row, kind) in Self.kinds(of: rendered).enumerated() {
             let index = geometry.bucket(ofRow: row)
             let rowLength = length(ofRow: row)
             if var bucket = buckets[index] {
-                if Self.priority(of: meta.kind) > Self.priority(of: bucket.kind) { bucket.kind = meta.kind }
+                if Self.priority(of: kind) > Self.priority(of: bucket.kind) { bucket.kind = kind }
                 bucket.length = max(bucket.length, rowLength)
                 buckets[index] = bucket
             } else {
-                buckets[index] = Bucket(y: CGFloat(index), height: 1, kind: meta.kind, length: rowLength)
+                buckets[index] = Bucket(y: CGFloat(index), height: 1, kind: kind, length: rowLength)
             }
         }
         return buckets.compactMap { $0 }
+    }
+
+    /// The kind each row shows as in the strip: its own, but for the rows of a change the compact inline view folds
+    /// (book DIFF-04), which read as unchanged in the text and still show as changed here, and the row after a folded
+    /// removal, which marks where its lines were.
+    /// - Complexity: O(rows + changes)
+    static func kinds(of rendered: RenderedText) -> [RowKind] {
+        var kinds = rendered.rows.map(\.kind)
+        guard !kinds.isEmpty else { return kinds }
+        for change in rendered.changes where !change.isDisclosed {
+            if change.rows.isEmpty {
+                kinds[min(change.rows.lowerBound, kinds.count - 1)] = .removed
+            } else {
+                for row in change.rows where kinds.indices.contains(row) { kinds[row] = .added }
+            }
+        }
+        return kinds
     }
 
     private static func priority(of kind: RowKind) -> Int {
