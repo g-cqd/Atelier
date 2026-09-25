@@ -1,7 +1,7 @@
 public import AtelierSyntaxModel
 
 /// A ``HoverProvider`` backed by a ``LanguageServerSession``.
-public struct LSPHoverProvider: HoverProvider {
+public struct LanguageServerHoverProvider: HoverProvider {
     private let service: LanguageServerSession
     private let resolvesDocumentationPages: Bool
 
