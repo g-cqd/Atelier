@@ -11,6 +11,11 @@ public final class DocumentBuffer {
     public let editHistory: BufferEditHistory
     public var highlightedLines: LineHighlights
     public var highlightSession: LanguageHighlighter.Session?
+    /// The language whose grammar highlighted this buffer when it opened, its parse passing the quality gate: the
+    /// buffer's full passes and reparses highlight from that grammar while it stays the buffer's language (book D36).
+    public var qualifiedGrammarLanguage: String?
+    /// The text whose every line `highlightedLines` holds in that grammar's color; nil once other lines replace them.
+    public var grammarHighlightedText: HighlightedText?
     public var highlightGeneration: Int = 0
     public var gitLineDecorations: GitLineDecorations = .empty
     public var postOpenProcessingTask: Task<Void, Never>?
@@ -36,6 +41,7 @@ public final class DocumentBuffer {
         document.cachedMaxLineWidth = nil
         highlightedLines = [[StyledSpan(text: "", style: .default)]]
         highlightSession = nil
+        grammarHighlightedText = nil
     }
 
     // Cache forwarders for `EditorState`'s forwarding layer; everything else invalidates through
@@ -194,6 +200,7 @@ public final class DocumentBuffer {
         selection = nil
         highlightedLines = []
         highlightSession = nil
+        grammarHighlightedText = nil
         document.invalidateTextSnapshotCache()
         documentVersion += 1
 
@@ -232,5 +239,18 @@ public final class DocumentBuffer {
 
     deinit {
         postOpenProcessingTask?.cancel()
+    }
+}
+
+/// One version of a buffer's text, as its highlights record the text they were computed for.
+public struct HighlightedText: Equatable, Sendable {
+    /// The buffer's `documentVersion`, which every edit, undo, redo and reload advances.
+    public let documentVersion: Int
+    /// The rope's O(1) hash, for text replaced without a new version.
+    public let contentHash: Int
+
+    public init(documentVersion: Int, contentHash: Int) {
+        self.documentVersion = documentVersion
+        self.contentHash = contentHash
     }
 }
