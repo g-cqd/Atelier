@@ -131,7 +131,48 @@ struct HoverBlockSlots {
 }
 
 extension HoverDocPanel {
-    /// Shows `blocks` in ``bodyDocument``, under an Overview heading, each block its own view `width` wide. Only the
+    /// The body's blocks for `document`, as Quick Help lays them out: the discussion under an Overview heading, then,
+    /// when `showsRelationships`, a Relationships section with a titled group of names for each of the document's
+    /// ``HoverDocument/relationships``.
+    static func bodyBlocks(for document: HoverDocument, showsRelationships: Bool) -> [HoverDocument.Block] {
+        var blocks: [HoverDocument.Block] = []
+        if !document.discussion.isEmpty {
+            blocks.append(sectionHeading("Overview"))
+            blocks += document.discussion
+        }
+        if showsRelationships, !document.relationships.isEmpty {
+            blocks.append(sectionHeading("Relationships"))
+            let (size, weight) = HoverTypography.heading(level: 3)
+            let names = NSFont.monospacedSystemFont(ofSize: HoverTypography.bodySize - 1, weight: .regular)
+            for relationship in document.relationships {
+                blocks.append(
+                    .heading(
+                        level: 3,
+                        text: NSAttributedString(
+                            string: relationship.kind.title,
+                            attributes: [
+                                .font: NSFont.systemFont(ofSize: size, weight: weight),
+                                .foregroundColor: NSColor.labelColor
+                            ])))
+                blocks.append(
+                    .paragraph(
+                        NSAttributedString(
+                            string: relationship.names.joined(separator: "\n"),
+                            attributes: [.font: names, .foregroundColor: NSColor.labelColor])))
+            }
+        }
+        return blocks
+    }
+
+    /// A heading that opens one of the body's sections, as Overview does.
+    private static func sectionHeading(_ title: String) -> HoverDocument.Block {
+        .heading(
+            level: 2,
+            text: NSAttributedString(
+                string: title, attributes: [.font: headingFont(level: 2), .foregroundColor: NSColor.labelColor]))
+    }
+
+    /// Shows `blocks` in ``bodyDocument``, each block its own view `width` wide. Only the
     /// blocks the panel can show at once are built: every block is a view measured and laid out, and a discussion of
     /// a few hundred of them took seconds (`HoverBuildBenchmark`). The rest are built as the body scrolls towards
     /// them, in ``bodyDidScroll()``. Each block takes the view the last discussion had at its place when its kind
@@ -144,14 +185,8 @@ extension HoverDocPanel {
         blockSlots.shown = 0
         blockSlots.contentHeight = 0
         if !blocks.isEmpty {
-            let overview = NSAttributedString(
-                string: "Overview",
-                attributes: [
-                    .font: Self.headingFont(level: 2), .foregroundColor: NSColor.labelColor
-                ])
             pendingDiscussion = PendingDiscussion(
-                blocks: ArraySlice([.heading(level: 2, text: overview)] + blocks), width: width,
-                chipBackground: chipBackground)
+                blocks: ArraySlice(blocks), width: width, chipBackground: chipBackground)
             buildPendingBlocks()
         }
         for slot in blockSlots.slots[blockSlots.shown ..< max(shownBefore, blockSlots.shown)] {
