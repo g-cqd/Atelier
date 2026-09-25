@@ -180,6 +180,12 @@ extension QueryPattern {
 public enum Predicate: Sendable, Equatable {
     case eq(capture: String, value: String)
     case notEq(capture: String, value: String)
+    /// `(#eq? @capture @other)`: the two captures' texts are the same. A second argument that is a capture names a
+    /// capture, as tree-sitter reads it (`TextPredicateCapture::EqCapture` in its Rust binding, lib/binding_rust/lib.rs),
+    /// not the text "@other".
+    case eqCapture(capture: String, other: String)
+    /// `(#not-eq? @capture @other)`: the two captures' texts differ.
+    case notEqCapture(capture: String, other: String)
     case match(capture: String, pattern: String)
     case notMatch(capture: String, pattern: String)
     case anyOf(capture: String, values: [String])

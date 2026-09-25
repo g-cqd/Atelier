@@ -25,6 +25,22 @@ public enum Predicates: Sendable {
                 }
                 return text != value
 
+            case .eqCapture(let capture, let other):
+                guard let text = captureText(capture, captures: captures, source: source),
+                    let otherText = captureText(other, captures: captures, source: source)
+                else {
+                    return false
+                }
+                return text == otherText
+
+            case .notEqCapture(let capture, let other):
+                guard let text = captureText(capture, captures: captures, source: source),
+                    let otherText = captureText(other, captures: captures, source: source)
+                else {
+                    return false
+                }
+                return text != otherText
+
             case .match(let capture, let pattern):
                 guard let text = captureText(capture, captures: captures, source: source) else {
                     return false
