@@ -3,7 +3,7 @@ import Foundation
 /// Merges highlight tokens from multiple layers into a single non-overlapping sequence.
 ///
 /// Where tokens overlap, each byte takes the token that wins it:
-/// 1. The higher layer wins: semantic over structural over lexical, however narrow the lower token.
+/// 1. The higher layer wins: semantic over syntactic over structural over lexical, however narrow the lower token.
 /// 2. Within a layer, the narrower token wins, so a token nested in another shows through it: an escape sequence keeps
 ///    its colour inside a string, although the query lists the string's pattern first.
 /// 3. Within a layer and a width, the higher priority wins: on identical ranges, the earlier query pattern, which
