@@ -103,6 +103,47 @@ public struct SyntaxNode: Sendable, Equatable {
             && isError == other.isError && isExtra == other.isExtra && isNamed == other.isNamed
     }
 
+    /// This node, `rewrite` applied to it and to the nodes below it, rebuilt in a loop: rebuilt recursively, a chain
+    /// overflows a 512 KiB thread stack a few thousand levels down.
+    ///
+    /// `rewrite` changes a node's own attributes, never its children or fields, and returns whether the nodes below it
+    /// need rewriting too; those of a node it returns false for stay as they are. Subtrees reached twice, as a field
+    /// reaches its child's, are rebuilt once and stay shared.
+    /// - Complexity: O(n) in the nodes rewritten.
+    func rewritten(by rewrite: (inout SyntaxNode) -> Bool) -> SyntaxNode {
+        var root = self
+        guard rewrite(&root), let subtrees = root.subtrees else { return root }
+        // Each original subtree's rebuilt copy, and the path from the root to the node being rewritten: one frame per
+        // subtree being rebuilt, its current node the one whose subtrees the frame above rebuilds.
+        var copies: [ObjectIdentifier: Subtrees] = [:]
+        var frames = [RewriteFrame(subtrees)]
+        while let top = frames.indices.last {
+            guard var node = frames[top].current else {
+                let frame = frames.removeLast()
+                let copy = frame.rebuilt
+                copies[ObjectIdentifier(frame.original)] = copy
+                guard let parent = frames.indices.last else {
+                    root.subtrees = copy
+                    return root
+                }
+                frames[parent].finishCurrent(withSubtrees: copy)
+                continue
+            }
+            guard rewrite(&node), let below = node.subtrees else {
+                frames[top].finishCurrent(node)
+                continue
+            }
+            if let copy = copies[ObjectIdentifier(below)] {
+                node.subtrees = copy
+                frames[top].finishCurrent(node)
+                continue
+            }
+            frames[top].replaceCurrent(node)
+            frames.append(RewriteFrame(below))
+        }
+        return root
+    }
+
     /// This node's subtrees, copied first if another node shares them, so a change reaches this node alone.
     private mutating func uniqueSubtrees() -> Subtrees {
         // Checked before binding: the binding is a reference of its own.
@@ -208,6 +249,61 @@ private struct SubtreesPair: Hashable {
     init(left: Subtrees, right: Subtrees) {
         self.left = ObjectIdentifier(left)
         self.right = ObjectIdentifier(right)
+    }
+}
+
+/// A subtree ``SyntaxNode/rewritten(by:)`` is rebuilding: its children, then each field's nodes, and the node it is
+/// at.
+private struct RewriteFrame {
+    let original: Subtrees
+    /// The children, then each field's nodes in the order of `names`; rewritten up to the current node.
+    private var lists: [[SyntaxNode]]
+    private let names: [String]
+    private var list = 0
+    private var index = 0
+
+    init(_ original: Subtrees) {
+        self.original = original
+        names = Array(original.fields.keys)
+        lists = [original.children] + names.map { original.fields[$0] ?? [] }
+        skipFinishedLists()
+    }
+
+    /// The node to rewrite next, nil once every one is.
+    var current: SyntaxNode? { list < lists.count ? lists[list][index] : nil }
+
+    /// The subtree over the rewritten nodes.
+    var rebuilt: Subtrees {
+        Subtrees(children: lists[0], fields: Dictionary(uniqueKeysWithValues: zip(names, lists.dropFirst())))
+    }
+
+    /// Replaces the current node with `node`, rewritten but for the subtrees below it, which a frame above rebuilds.
+    mutating func replaceCurrent(_ node: SyntaxNode) {
+        lists[list][index] = node
+    }
+
+    /// Gives the current node, rewritten, the rebuilt `subtrees`, and moves to the next node.
+    mutating func finishCurrent(withSubtrees subtrees: Subtrees) {
+        lists[list][index].subtrees = subtrees
+        advance()
+    }
+
+    /// Replaces the current node with `node`, rewritten with the subtrees below it, and moves to the next node.
+    mutating func finishCurrent(_ node: SyntaxNode) {
+        lists[list][index] = node
+        advance()
+    }
+
+    private mutating func advance() {
+        index += 1
+        skipFinishedLists()
+    }
+
+    private mutating func skipFinishedLists() {
+        while list < lists.count, index == lists[list].count {
+            list += 1
+            index = 0
+        }
     }
 }
 
