@@ -44,6 +44,7 @@ struct DiagnosticDiffTextView: View {
             scrollMemory: model.scrollMemory, scrollMemoryPath: scrollMemoryPath,
             scrollsPastEnd: model.settings.scrollsPastEnd, bouncesAtEdges: model.settings.bouncesAtEdges
         )
+        .refined(with: model.refinedSides(for: rendered))
         .followingDiagnostics(of: rendered, in: model, into: diagnostics)
     }
 }
