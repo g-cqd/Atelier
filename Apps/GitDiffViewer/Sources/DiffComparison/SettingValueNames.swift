@@ -1,4 +1,5 @@
 package import DiffCore
+package import DiffRendering
 
 // The names a setting's values read as wherever they are listed rather than picked, such as a project's overrides,
 // matching the choices the Settings window's pickers offer.
@@ -51,6 +52,15 @@ extension AnalyzedSides {
             case .leftOnly: "Left side only"
             case .rightOnly: "Right side only"
             case .none: "No side"
+        }
+    }
+}
+
+extension HoverPanelMaterial {
+    package var displayName: String {
+        switch self {
+            case .liquidGlass: "Liquid Glass"
+            case .popover: "Popover"
         }
     }
 }

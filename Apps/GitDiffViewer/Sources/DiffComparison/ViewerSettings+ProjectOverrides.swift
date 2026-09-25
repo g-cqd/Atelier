@@ -1,5 +1,6 @@
 import AtelierDiagnostics
 import DiffCore
+import DiffRendering
 import Foundation
 
 /// The per-project override surface: adoption, cross-instance reloads, the known projects, and override clearing.
@@ -20,8 +21,8 @@ extension ViewerSettings {
             case .appearance: [Key.mode, Key.wrapsLines, Key.wrapColumn]
             case .tools:
                 [
-                    Key.diagnosticsEnabled, Key.showsHoverDocumentation, Key.analyzedSides, Key.toolLocations,
-                    Key.lspServerLocations
+                    Key.diagnosticsEnabled, Key.showsHoverDocumentation, Key.hoverPanelMaterial, Key.analyzedSides,
+                    Key.toolLocations, Key.lspServerLocations
                 ]
         }
     }
@@ -35,7 +36,8 @@ extension ViewerSettings {
         \.treeStyle: Key.treeStyle, \.wrapColumn: Key.wrapColumn, \.themePath: Key.themePath,
         \.lineHeightMultiple: Key.lineHeightMultiple, \.contextLines: Key.contextLines,
         \.isolatesChanges: Key.isolatesChanges, \.diagnosticsEnabled: Key.diagnosticsEnabled,
-        \.showsHoverDocumentation: Key.showsHoverDocumentation, \.toolLocations: Key.toolLocations,
+        \.showsHoverDocumentation: Key.showsHoverDocumentation, \.hoverPanelMaterial: Key.hoverPanelMaterial,
+        \.toolLocations: Key.toolLocations,
         \.lspServerLocations: Key.lspServerLocations, \.analyzedSides: Key.analyzedSides,
         \.appearanceScheme: Key.appearanceScheme, \.badgeScheme: Key.badgeScheme,
         \.matchesThemeAppearance: Key.matchesThemeAppearance, \.bouncesAtEdges: Key.bouncesAtEdges,
@@ -182,6 +184,11 @@ extension ViewerSettings {
             case Key.showsHoverDocumentation:
                 let value = defaults.object(forKey: effectiveKey(key)) as? Bool ?? true
                 if value != showsHoverDocumentation { showsHoverDocumentation = value }
+            case Key.hoverPanelMaterial:
+                let value =
+                    defaults.string(forKey: effectiveKey(key)).flatMap(HoverPanelMaterial.init(rawValue:))
+                    ?? .liquidGlass
+                if value != hoverPanelMaterial { hoverPanelMaterial = value }
             case Key.toolLocations:
                 let value = Self.decodeToolLocations(defaults.data(forKey: effectiveKey(key)))
                 if value != toolLocations { toolLocations = value }

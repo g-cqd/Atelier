@@ -1,7 +1,7 @@
 package import AtelierDiagnostics
 package import DiffCore
 import DiffGit
-import DiffRendering
+package import DiffRendering
 package import Foundation
 import Observation
 
@@ -266,6 +266,15 @@ package final class ViewerSettings {
             }
         }
     }
+    /// What the hover panel is made of, Liquid Glass by default (book HOVER-08); the next panel shown follows a
+    /// change, and one already open keeps its material until it shows another document.
+    package var hoverPanelMaterial: HoverPanelMaterial {
+        didSet {
+            if hoverPanelMaterial != oldValue {
+                store(hoverPanelMaterial.rawValue, Key.hoverPanelMaterial, .appearance)
+            }
+        }
+    }
     /// Per-tool enablement and custom executable path, keyed by tool; every tool is enabled by default.
     package var toolLocations: [DiagnosticTool: ToolLocation] {
         didSet {
@@ -407,6 +416,8 @@ package final class ViewerSettings {
         isolatesChanges = defaults.bool(forKey: Key.isolatesChanges)
         diagnosticsEnabled = defaults.bool(forKey: Key.diagnosticsEnabled)
         showsHoverDocumentation = defaults.object(forKey: Key.showsHoverDocumentation) as? Bool ?? true
+        hoverPanelMaterial =
+            defaults.string(forKey: Key.hoverPanelMaterial).flatMap(HoverPanelMaterial.init(rawValue:)) ?? .liquidGlass
         toolLocations = Self.decodeToolLocations(defaults.data(forKey: Key.toolLocations))
         lspServerLocations =
             defaults.data(forKey: Key.lspServerLocations)
@@ -470,6 +481,7 @@ extension ViewerSettings {
         static let isolatesChanges = "isolatesChanges"
         static let diagnosticsEnabled = "diagnosticsEnabled"
         static let showsHoverDocumentation = "hoverDocumentation"
+        static let hoverPanelMaterial = "hoverPanelMaterial"
         static let toolLocations = "diagnosticToolLocations"
         static let lspServerLocations = "lspServerLocations"
         static let analyzedSides = "analyzedSides"
