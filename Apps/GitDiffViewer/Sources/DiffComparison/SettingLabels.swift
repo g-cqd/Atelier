@@ -40,6 +40,7 @@ package enum SettingLabel {
     package static let wrapColumn = "Wrap column"
     package static let appearanceScheme = "Appearance"
     package static let badgeScheme = "Badge colors"
+    package static let diffColors = "Diff colors"
     package static let matchesThemeAppearance = "Match window appearance to theme"
     package static let refinesSwiftColor = "Refine Swift color with swift-syntax"
 

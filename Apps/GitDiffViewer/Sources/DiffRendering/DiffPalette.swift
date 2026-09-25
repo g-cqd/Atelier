@@ -11,6 +11,17 @@ package enum RenderedSide: Sendable, Hashable {
     case new
 }
 
+/// The colours a diff's changes take (book D18): the app's red and green, or Xcode's gray and blue.
+package enum DiffColors: String, CaseIterable, Identifiable, Sendable {
+    /// Removed lines red and added ones green.
+    case standard
+    /// Xcode's source control colours: removed lines gray, added ones blue, changed tokens tan and blue, and a blue
+    /// change bar in the gutter.
+    case xcode
+
+    package var id: String { rawValue }
+}
+
 /// Colors and font of the diff panes: the system look, or one derived from an Xcode theme.
 package struct DiffPalette: @unchecked Sendable, Equatable {
     package let font: NSFont
@@ -25,6 +36,8 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
     /// The height TextKit gives a line of `font` at its natural spacing, measured once here: it is what a line
     /// height multiple multiplies, and rendering runs on several threads at once.
     package let defaultLineHeight: CGFloat
+    /// The colours changes take (book D18).
+    package let diffColors: DiffColors
     private let roleColors: [HighlightRole: NSColor]
 
     package static let system = DiffPalette(
@@ -46,7 +59,7 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
     private init(
         font: NSFont, textColor: NSColor, background: NSColor, selection: NSColor, gutterBackground: NSColor,
         gutterText: NSColor, gutterChangedText: NSColor, lineHeightMultiple: Double,
-        roleColors: [HighlightRole: NSColor]
+        roleColors: [HighlightRole: NSColor], diffColors: DiffColors = .standard
     ) {
         self.font = font
         self.textColor = textColor
@@ -58,6 +71,16 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
         self.lineHeightMultiple = lineHeightMultiple
         defaultLineHeight = NSLayoutManager().defaultLineHeight(for: font)
         self.roleColors = roleColors
+        self.diffColors = diffColors
+    }
+
+    /// This palette with changes in `diffColors`.
+    package func with(diffColors: DiffColors) -> DiffPalette {
+        guard diffColors != self.diffColors else { return self }
+        return DiffPalette(
+            font: font, textColor: textColor, background: background, selection: selection,
+            gutterBackground: gutterBackground, gutterText: gutterText, gutterChangedText: gutterChangedText,
+            lineHeightMultiple: lineHeightMultiple, roleColors: roleColors, diffColors: diffColors)
     }
 
     /// The colours a theme states for its roles; a role the theme leaves out resolves through the theme's own
@@ -96,10 +119,9 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
         if isMoved, [.added, .removed, .modified].contains(kind) { return NSColor.systemBlue.withAlphaComponent(0.12) }
         return switch kind {
             case .context: nil
-            case .added: NSColor.systemGreen.withAlphaComponent(0.16)
-            case .removed: NSColor.systemRed.withAlphaComponent(0.16)
-            case .modified:
-                side == .old ? NSColor.systemRed.withAlphaComponent(0.16) : NSColor.systemGreen.withAlphaComponent(0.16)
+            case .added: addedBackground
+            case .removed: removedBackground
+            case .modified: side == .old ? removedBackground : addedBackground
             case .filler: textColor.withAlphaComponent(0.06)
             case .header: textColor.withAlphaComponent(0.1)
         }
@@ -107,12 +129,39 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
 
     package func emphasis(for kind: RowKind, side: RenderedSide) -> NSColor {
         switch kind {
-            case .added: NSColor.systemGreen.withAlphaComponent(0.4)
-            case .removed: NSColor.systemRed.withAlphaComponent(0.4)
-            case .modified:
-                side == .old ? NSColor.systemRed.withAlphaComponent(0.4) : NSColor.systemGreen.withAlphaComponent(0.4)
+            case .added: addedEmphasis
+            case .removed: removedEmphasis
+            case .modified: side == .old ? removedEmphasis : addedEmphasis
             case .context, .filler, .header: .clear
         }
+    }
+
+    /// Behind a removed line: red, or Xcode's gray (image 12).
+    private var removedBackground: NSColor {
+        diffColors == .xcode ? textColor.withAlphaComponent(0.07) : NSColor.systemRed.withAlphaComponent(0.16)
+    }
+
+    /// Behind an added line: green, or Xcode's light blue.
+    private var addedBackground: NSColor {
+        diffColors == .xcode
+            ? NSColor.systemBlue.withAlphaComponent(0.12) : NSColor.systemGreen.withAlphaComponent(0.16)
+    }
+
+    /// Behind a changed token of a removed line: red, or Xcode's tan.
+    private var removedEmphasis: NSColor {
+        diffColors == .xcode
+            ? NSColor.systemOrange.withAlphaComponent(0.28) : NSColor.systemRed.withAlphaComponent(0.4)
+    }
+
+    /// Behind a changed token of an added line: green, or Xcode's blue.
+    private var addedEmphasis: NSColor {
+        diffColors == .xcode ? NSColor.systemBlue.withAlphaComponent(0.3) : NSColor.systemGreen.withAlphaComponent(0.4)
+    }
+
+    /// Xcode's change bar, down the gutter's leading edge beside every changed row (book D18); nil in the app's own
+    /// colours, which have none.
+    package var changeBar: NSColor? {
+        diffColors == .xcode ? .systemBlue : nil
     }
 
     /// Context is faint. Inline, every change shares one color so the strip reads as a map of where changes are;
@@ -123,10 +172,9 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
             case (.filler, _): nil
             case (.header, _): textColor.withAlphaComponent(0.6)
             case (.added, .unified), (.removed, .unified), (.modified, .unified): .controlAccentColor
-            case (.added, _): .systemGreen
-            case (.removed, _): .systemRed
-            case (.modified, .old): .systemRed
-            case (.modified, .new): .systemGreen
+            case (.added, _), (.modified, .new): diffColors == .xcode ? .systemBlue : .systemGreen
+            case (.removed, _), (.modified, .old):
+                diffColors == .xcode ? textColor.withAlphaComponent(0.45) : .systemRed
         }
     }
 
