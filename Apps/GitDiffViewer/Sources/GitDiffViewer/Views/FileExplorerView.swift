@@ -40,6 +40,7 @@ struct FileExplorerView: View {
 struct UnifiedExplorerView: View {
     let model: DiffViewerModel
     let uiState: ExplorerUIState
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,7 +55,9 @@ struct UnifiedExplorerView: View {
                 uiState: uiState,
                 badgeScheme: model.settings.badgeScheme,
                 badgeStates: model.unifiedBadgeStates,
-                includesMergedBranches: model.commitGroups.includesMergedBranches
+                includesMergedBranches: model.commitGroups.includesMergedBranches,
+                sectionMenu: { model.commitGroupMenu(forSelection: $0) },
+                onOpenComparison: { openWindow(value: $0) }
             )
         }
         .overlay {

@@ -39,7 +39,8 @@ struct TabBarView: View {
                     FileListTab(isActive: model.tabs.isShowingFileList) { model.showFileList() }
                     ForEach(model.tabs.tabs) { tab in
                         TabItem(
-                            tab: tab, isActive: tab.id == model.tabs.activeID,
+                            tab: tab, title: model.selectionTitle(tab.path), detail: model.selectionDetail(tab.path),
+                            isActive: tab.id == model.tabs.activeID,
                             isFolder: !model.comparison.isFile(tab.path),
                             glyph: model.status(ofPath: tab.path).flatMap(ChangeGlyph.init),
                             badgeScheme: model.settings.badgeScheme,
@@ -130,6 +131,10 @@ private struct FileListTab: View {
 /// One tab: its leading slot, its name, and a pin when it is kept open. ``TabAppearance`` decides how it draws.
 private struct TabItem: View {
     let tab: DiffTab
+    /// What the tab reads: a file's name, or a commit group's title.
+    let title: String
+    /// The tab's tooltip: the path, or a commit group's description.
+    let detail: String
     let isActive: Bool
     let isFolder: Bool
     /// The tab's change, in the state- and scheme-independent vocabulary the leading slot's badge resolves from;
@@ -153,7 +158,7 @@ private struct TabItem: View {
             slot(closeDiscOpacity: appearance.closeDiscOpacity)
                 .frame(width: ChangeGlyph.size, height: ChangeGlyph.size)
                 .contentTransition(.symbolEffect)
-            Text(URL(filePath: tab.path).lastPathComponent)
+            Text(title)
                 .italic(appearance.isItalic)
                 .lineLimit(1)
             if appearance.showsPin {
@@ -184,7 +189,7 @@ private struct TabItem: View {
                 if !hovering { isHoveringClose = false }
             }
         }
-        .help(tab.path + (tab.isPinned ? "" : " (double-click to keep)"))
+        .help(detail + (tab.isPinned ? "" : " (double-click to keep)"))
     }
 
     /// The tab's fixed-size leading visual, always in the same place so nothing else in the tab shifts: see
