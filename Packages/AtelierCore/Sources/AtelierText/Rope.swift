@@ -143,24 +143,40 @@ public struct Rope: Sendable {
     }
 
     /// The lines with indices in `range`, clamped to the rope, without the terminating newlines.
-    /// - Complexity: O(log n + bytes of the lines) when the lines cache is cold: one ranged byte read, split once.
+    ///
+    /// Reads the leaves the lines lie in one after another, in place: a line within one leaf is decoded from the
+    /// leaf's bytes, and only a line that runs on into the next leaf is gathered first, so that a character split
+    /// between two leaves decodes whole.
+    /// - Complexity: O(log n + bytes of the lines) when the lines cache is cold.
     public func lines(in range: Range<Int>) -> [String] {
         let clamped = range.clamped(to: 0 ..< lineCount)
         guard !clamped.isEmpty else { return [] }
         if let cached = storage.cachedLines {
             return Array(cached[clamped])
         }
-        let start = lineRange(forLine: clamped.lowerBound).lowerBound
-        let end = lineRange(forLine: clamped.upperBound - 1).upperBound
-        let data = bytes(in: start ..< end)
+        let start = byteOffset(forLine: clamped.lowerBound)
+        let end = clamped.upperBound == lineCount ? byteCount : byteOffset(forLine: clamped.upperBound) - 1
         var lines: [String] = []
         lines.reserveCapacity(clamped.count)
-        var lineStart = data.startIndex
-        for index in data.indices where data[index] == 0x0A {
-            lines.append(String(decoding: data[lineStart ..< index], as: UTF8.self))
-            lineStart = index + 1
+        // The bytes of a line begun in an earlier leaf.
+        var carried: [UInt8] = []
+        storage.root.forEachChunk(in: start ..< end) { chunk in
+            guard let base = chunk.baseAddress else { return }
+            var lineStart = 0
+            while lineStart < chunk.count, let found = memchr(base + lineStart, 0x0A, chunk.count - lineStart) {
+                let newline = UnsafeRawPointer(base).distance(to: UnsafeRawPointer(found))
+                if carried.isEmpty {
+                    lines.append(String(decoding: chunk[lineStart ..< newline], as: UTF8.self))
+                } else {
+                    carried.append(contentsOf: chunk[lineStart ..< newline])
+                    lines.append(String(decoding: carried, as: UTF8.self))
+                    carried.removeAll(keepingCapacity: true)
+                }
+                lineStart = newline + 1
+            }
+            carried.append(contentsOf: chunk[lineStart...])
         }
-        lines.append(String(decoding: data[lineStart...], as: UTF8.self))
+        lines.append(String(decoding: carried, as: UTF8.self))
         return lines
     }
 
@@ -535,6 +551,29 @@ enum RopeNode: Sendable {
                     let rightLower = max(0, range.lowerBound - leftCount)
                     let rightUpper = range.upperBound - leftCount
                     branch.right.appendBytes(in: rightLower ..< rightUpper, to: &out)
+                }
+        }
+    }
+
+    /// Calls `body` with the bytes of each leaf that `range` covers, in order, clipped to `range`.
+    func forEachChunk(in range: Range<Int>, _ body: (UnsafeBufferPointer<UInt8>) -> Void) {
+        if range.isEmpty { return }
+        switch self {
+            case .leaf(let leaf):
+                let lower = max(0, range.lowerBound)
+                let upper = min(leaf.data.count, range.upperBound)
+                guard lower < upper else { return }
+                leaf.data.withUnsafeBytes { raw in
+                    body(UnsafeBufferPointer(rebasing: raw.bindMemory(to: UInt8.self)[lower ..< upper]))
+                }
+            case .branch(let branch):
+                let leftCount = branch.left.byteCount
+                if range.lowerBound < leftCount {
+                    branch.left.forEachChunk(in: range.lowerBound ..< min(leftCount, range.upperBound), body)
+                }
+                if range.upperBound > leftCount {
+                    branch.right.forEachChunk(
+                        in: max(0, range.lowerBound - leftCount) ..< range.upperBound - leftCount, body)
                 }
         }
     }
