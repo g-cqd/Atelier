@@ -87,6 +87,7 @@ final class ScriptedHistory: Sendable {
 
 /// `DiffViewerModel`'s grouping by commit: when it loads, what it asks git, how it pages, and what it keeps.
 @MainActor
+@Suite(.mainActorLane)
 struct DiffViewerModelCommitGroupsTests {
     private let harness = ModelTestHarness()
     private static let repository = URL(filePath: "/repo", directoryHint: .isDirectory)

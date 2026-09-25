@@ -11,6 +11,7 @@ import Testing
 /// underlined finding (book HOVER-14). The single-file view and the card list both show their text in a
 /// ``DiffPaneTextView`` beside a ``DiffGutterView`` in a ``DiffPaneView``, under a ``DocHoverController``, as here.
 @MainActor
+@Suite(.mainActorLane)
 struct HoverContextMenuTests {
     /// "alphaValue" is columns 4 to 13 of row 0, zero-based; "gamma" columns 4 to 8 of row 1.
     fileprivate static let text = "let alphaValue = betaValue\nlet gamma = 1\n"

@@ -9,6 +9,7 @@ import Testing
 /// the ref check that reloads only when the commit moved (GDV S3), and the listing filter that asks git about
 /// unlisted paths alone (GDV S2).
 @MainActor
+@Suite(.mainActorLane)
 struct SideStateFreshnessCheckTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
     private nonisolated static let info = RepositoryInfo(root: root, branches: ["main"], tags: [], commits: [])

@@ -17,7 +17,9 @@ import Testing
 /// `CALayer.render(in:)` makes AppKit draw every view again, and `cacheDisplay(in:to:)` redraws everything too, so
 /// both show squiggles the screen never gets.
 @MainActor
-@Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+@Suite(
+    .mainActorLane,
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
 struct DiagnosticRedrawPixelsTests {
     private static let rowCount = 12
     /// The row that carries the diagnostics; an odd row, so that its neighbours on both sides have none.
@@ -130,7 +132,9 @@ struct DiagnosticRedrawPixelsTests {
 /// What a card pane shows of its diagnostics, read as ``DiagnosticRedrawPixelsTests`` reads a scrolling pane's (book
 /// DIAG-03). A suite of its own, so each keeps within the main thread's budget.
 @MainActor
-@Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+@Suite(
+    .mainActorLane,
+    .enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
 struct CardPaneDiagnosticPixelsTests {
     private static let rowCount = 12
     /// The row that carries the diagnostics; an odd row, so that its neighbours on both sides have none.

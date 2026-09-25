@@ -41,6 +41,7 @@ struct DiffColorsTests {
 
 /// The diff colours through the settings and the window model, and Xcode's change bar in the gutter.
 @MainActor
+@Suite(.mainActorLane)
 struct DiffColorsSettingTests {
     private let harness = ModelTestHarness()
 

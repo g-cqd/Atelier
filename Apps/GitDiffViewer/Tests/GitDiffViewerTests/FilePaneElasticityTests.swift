@@ -9,6 +9,7 @@ import Testing
 /// A file pane stops at its edges, as it does by default: it never rubber-bands past them, down, up or sideways,
 /// unless bouncing at the edges is turned on (book SET-09).
 @MainActor
+@Suite(.mainActorLane)
 struct FilePaneElasticityTests {
     @Test(arguments: [false, true])
     func `a file pane never rubber-bands, whether its lines fit or run past it`(overflowing: Bool) throws {

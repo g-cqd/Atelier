@@ -8,6 +8,7 @@ import Testing
 @testable import DiffTextKit
 
 @MainActor
+@Suite(.mainActorLane)
 struct RecentComparisonsTests {
     private let repository = URL(filePath: "/repos/app", directoryHint: .isDirectory)
     private let scratchDefaults = ScratchDefaults(tag: "recents")

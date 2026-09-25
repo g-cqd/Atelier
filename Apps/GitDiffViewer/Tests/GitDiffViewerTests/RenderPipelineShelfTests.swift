@@ -11,6 +11,7 @@ import Testing
 /// The card list a file takes off screen comes back, when the file's tab closes, with the cards it showed rather
 /// than rendered anew, unless something about how they render changed meanwhile (book PERF-10).
 @MainActor
+@Suite(.mainActorLane)
 struct RenderPipelineShelfTests {
     private let harness = PipelineHarness()
 

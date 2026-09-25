@@ -8,6 +8,7 @@ import Testing
 /// Each side's explorer draws a change's git state in the comparison, keyed by its own paths, so the same file draws
 /// the same state in both trees (CARD-11): filled for a committed or staged change, stroked for an unstaged one.
 @MainActor
+@Suite(.mainActorLane)
 struct ExplorerBadgeStatesTests {
     private nonisolated static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
     private nonisolated static let info = RepositoryInfo(root: root, branches: ["main"], tags: [], commits: [])

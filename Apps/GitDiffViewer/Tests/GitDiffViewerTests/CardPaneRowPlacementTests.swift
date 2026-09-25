@@ -10,6 +10,7 @@ import Testing
 /// scrolled when its text changes (book DIFF-06, CARD-17). TextKit lays out only what shows; a row it lays out below
 /// rows it has not laid out goes where it estimates those rows end, and it estimates a long line as two.
 @MainActor
+@Suite(.mainActorLane)
 struct CardPaneRowPlacementTests {
     /// `count` lines; every seventh is long enough that TextKit, estimating it before laying it out, takes it for
     /// two lines.

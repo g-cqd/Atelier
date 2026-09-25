@@ -10,7 +10,7 @@ import Testing
 /// HOVER-20: a hover reads as Xcode's Quick Help, from every tier: the symbol's name, its abstract, its declaration in a
 /// box, a divider, then the discussion under an Overview heading, block by block.
 @MainActor
-@Suite struct HoverQuickHelpTests {
+@Suite(.mainActorLane) struct HoverQuickHelpTests {
     private static func kind(_ block: HoverDocument.Block) -> String {
         switch block {
             case .paragraph: "paragraph"

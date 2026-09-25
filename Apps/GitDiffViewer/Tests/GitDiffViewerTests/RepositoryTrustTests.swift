@@ -24,6 +24,7 @@ private final class ScratchDirectories {
 }
 
 @MainActor
+@Suite(.mainActorLane)
 struct RepositoryTrustTests {
     private let scratchDefaults = ScratchDefaults(tag: "trust")
 

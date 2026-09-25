@@ -59,6 +59,7 @@ final class TierSpy: Sendable {
 /// The render pipeline runs swift-syntax on each displayed Swift side after the lexer's first paint, once per content,
 /// and hands what lands only to the texts still published (PERF-11 step 1).
 @MainActor
+@Suite(.mainActorLane)
 struct RenderPipelineRefinementTests {
     private let reader = FakeSourceReader()
     private let taskProvider = TaskProviderSpy.tolerant()
@@ -205,6 +206,7 @@ struct RenderPipelineRefinementTests {
 
 /// Through the core tier job, a side takes the colour step 1's direct parse gave it, line for line (PERF-11 step 2).
 @MainActor
+@Suite(.mainActorLane)
 struct RenderPipelineTierJobTests {
     private let reader = FakeSourceReader()
     private let taskProvider = TaskProviderSpy.tolerant()
@@ -250,6 +252,7 @@ struct RenderPipelineTierJobTests {
 
 /// The window's setting turns the tier on and off, and is on by default.
 @MainActor
+@Suite(.mainActorLane)
 struct SwiftColorRefinementSettingTests {
     private let harness = ModelTestHarness()
 

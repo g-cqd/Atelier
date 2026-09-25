@@ -12,6 +12,7 @@ import Testing
 /// findings change: the model builds those maps once per render target, not once per pane, so a change costs the card
 /// list its card count rather than its square.
 @MainActor
+@Suite(.mainActorLane)
 struct PaneDiagnosticsFilePathsTests {
     private let harness = ModelTestHarness()
 

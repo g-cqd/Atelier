@@ -8,6 +8,7 @@ import Testing
 
 /// A file pane that scrolls past its end, scrolled to its end, shows its last line whole, at the top of the pane.
 @MainActor
+@Suite(.mainActorLane)
 struct FilePaneOverscrollTests {
     private let paneHeight: CGFloat = 300
 

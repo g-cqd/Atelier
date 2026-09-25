@@ -10,6 +10,7 @@ import Testing
 
 /// Opt-in phase timing of the whole pipeline over a patch file; run with GDV_BENCH=1 and GDV_BENCH_PATCH=path.
 @MainActor
+@Suite(.mainActorLane)
 struct PipelineBenchmark {
     /// Accumulates the time of each phase and remembers the slowest file for it.
     private struct PhaseTimings {

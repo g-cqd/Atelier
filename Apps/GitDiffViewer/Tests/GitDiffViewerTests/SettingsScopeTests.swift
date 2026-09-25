@@ -7,6 +7,7 @@ import Testing
 /// ``SettingsScope``: what the Settings window edits, the known projects it lists, and what resetting or removing
 /// one does (book SET-03, decision D11).
 @MainActor
+@Suite(.mainActorLane)
 struct SettingsScopeTests {
     private let app = ProjectIdentity(root: URL(filePath: "/repos/app", directoryHint: .isDirectory))
     private let other = ProjectIdentity(root: URL(filePath: "/repos/other", directoryHint: .isDirectory))

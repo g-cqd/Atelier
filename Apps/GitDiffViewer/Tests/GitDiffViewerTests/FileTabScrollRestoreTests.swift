@@ -9,6 +9,7 @@ import Testing
 /// A file tab keeps its panes' scroll position while the file list shows in its place, and gets it back when it
 /// shows again, rendered anew (book TAB-10).
 @MainActor
+@Suite(.mainActorLane)
 struct FileTabScrollRestoreTests {
     private static func text(_ count: Int = 300) throws -> RenderedText {
         let lines = (1 ... count).map { "let value\($0) = \($0)" }.joined(separator: "\n") + "\n"

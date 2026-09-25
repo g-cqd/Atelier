@@ -68,6 +68,7 @@ struct HoverRelationshipsTests {
 }
 
 @MainActor
+@Suite(.mainActorLane)
 struct HoverRelationshipsPanelTests {
     private static func shownTexts(of document: HoverDocument) throws -> [String] {
         let panel = HoverDocPanel(ordersWindowIn: false)

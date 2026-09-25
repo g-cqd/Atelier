@@ -8,6 +8,7 @@ import Testing
 /// The panel's constraints hold together for every shape of document: none is broken to recover from a conflict, and
 /// none leaves a view's frame undetermined.
 @MainActor
+@Suite(.mainActorLane)
 struct HoverDocPanelLayoutTests {
     private static func code(_ text: String) -> NSAttributedString {
         NSAttributedString(string: text, attributes: [.font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)])

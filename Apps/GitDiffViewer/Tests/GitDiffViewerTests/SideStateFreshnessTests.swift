@@ -8,6 +8,7 @@ import Testing
 
 /// ``SideState/refreshRepositoryInfo()``: re-reads repository info without touching entries.
 @MainActor
+@Suite(.mainActorLane)
 struct SideStateFreshnessTests {
     private static let root = URL(filePath: "/repo", directoryHint: .isDirectory)
 

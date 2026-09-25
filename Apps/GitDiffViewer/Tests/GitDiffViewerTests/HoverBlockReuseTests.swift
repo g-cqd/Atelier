@@ -8,6 +8,7 @@ import Testing
 /// A panel a pane reuses shows each document in the block views the last one left, where the kinds match: removing
 /// a few hundred views from the body's stack held the main thread for 60 to 360 ms (`HoverBuildBenchmark`).
 @MainActor
+@Suite(.mainActorLane)
 struct HoverBlockReuseTests {
     private static func prose(_ text: String) -> NSAttributedString {
         NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 12)])
