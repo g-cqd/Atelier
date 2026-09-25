@@ -226,8 +226,19 @@ struct ContentView: View {
         }
         .defaultCustomization(.hidden)
         ToolbarItem(id: ToolbarID.viewOptions, placement: .primaryAction) {
-            ViewOptionsMenu(settings: settings)
+            ViewOptionsItem(settings: settings, model: model)
         }
+    }
+}
+
+/// The View options menu, reading why grouping by commit does not apply in its own body, so a new reason rebuilds this
+/// item alone and not the whole toolbar.
+private struct ViewOptionsItem: View {
+    let settings: ViewerSettings
+    let model: DiffViewerModel
+
+    var body: some View {
+        ViewOptionsMenu(settings: settings, commitGroupingUnavailableReason: model.commitGroups.unavailableReason)
     }
 }
 

@@ -29,6 +29,8 @@ struct FileOutlineView: NSViewRepresentable {
     var badgeScheme: BadgeScheme = .classic
     /// Where each row's change stands against the index, keyed by this explorer's own paths.
     var badgeStates: BadgeChangeStates = .uniform(.staged)
+    /// Whether the grouped list's history was read with every parent, which its commit headers say on hover.
+    var includesMergedBranches = false
 
     func makeCoordinator() -> Coordinator {
         Coordinator(uiState: uiState)
@@ -84,6 +86,7 @@ struct FileOutlineView: NSViewRepresentable {
         coordinator.uiState = uiState
         coordinator.badgeScheme = badgeScheme
         coordinator.badgeStates = badgeStates
+        coordinator.includesMergedBranches = includesMergedBranches
         if coordinator.isSidebar != isSidebar {
             coordinator.applyPlacement(isSidebar: isSidebar, to: outline)
         }
@@ -97,7 +100,9 @@ struct FileOutlineView: NSViewRepresentable {
     }
 
     /// Data source and delegate. Items are reused across rebuilds through `itemsByKey`, so the outline view's own
-    /// expansion and selection bookkeeping keeps matching them. Main-actor by the target's default isolation.
+    /// expansion and selection bookkeeping keeps matching them. A file listed under several commit sections has a row,
+    /// and a key, in each; a selection of its path lands on the row last clicked, else on the newest section's.
+    /// Main-actor by the target's default isolation.
     final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
         /// Section rows take ids no path can have, so they never collide with a file in `itemsByKey`.
         private static let sectionPrefix = "\u{0}section:"
@@ -110,10 +115,15 @@ struct FileOutlineView: NSViewRepresentable {
         var uiState: ExplorerUIState
         var badgeScheme: BadgeScheme = .classic
         var badgeStates: BadgeChangeStates = .uniform(.staged)
+        var includesMergedBranches = false
         weak var outlineView: NSOutlineView?
 
         private var roots: [OutlineItem] = []
         private var itemsByKey: [String: OutlineItem] = [:]
+        /// Every row of a path, in outline order: one, or one per commit section that lists it.
+        private var itemsByPath: [String: [OutlineItem]] = [:]
+        /// The sections that start folded when the user never folded or unfolded them.
+        private var collapsedByDefault: Set<String> = []
         /// The selection last put in the view, by the model or by the user; a model selection equal to it is a no-op.
         private var lastAppliedSelection: String?
         private var isApplyingModelSelection = false
@@ -144,37 +154,53 @@ struct FileOutlineView: NSViewRepresentable {
                 )
             }
             var reused: [String: OutlineItem] = [:]
-            func build(_ node: PathNode, parent: OutlineItem?, continuesChain: Bool) -> OutlineItem {
-                let item = itemsByKey[node.id] ?? OutlineItem(node: node)
+            var byPath: [String: [OutlineItem]] = [:]
+            /// `scope` keys the rows of a commit section apart from the same paths under another one.
+            func build(_ node: PathNode, parent: OutlineItem?, continuesChain: Bool, scope: String? = nil)
+                -> OutlineItem
+            {
+                let key = scope.map { $0 + "\u{0}" + node.id } ?? node.id
+                let item = itemsByKey[key] ?? OutlineItem(key: key, node: node)
                 item.node = node
                 item.parent = parent
+                byPath[node.id, default: []].append(item)
                 // The head of a chain is keyed by the whole chain, so a fold survives a switch to the compact style,
                 // where the chain is one row. The links below it have no row there, so they take a key of their own;
                 // the bare id would not do, since the deepest link's id is the head's chain key.
                 item.chainKey = continuesChain ? "\u{1}" + node.id : node.chainKey
                 let childContinues = node.children?.count == 1 && node.children?.first?.isDirectory == true
                 item.children = (node.children ?? []).map { build($0, parent: item, continuesChain: childContinues) }
-                reused[node.id] = item
+                reused[key] = item
                 return item
             }
-            if sections.count == 1, let only = sections.first {
+            if sections.count == 1, let only = sections.first, only.commitGroup == nil {
                 roots = only.nodes.map { build($0, parent: nil, continuesChain: false) }
             } else {
                 roots = sections.map { section in
                     let node = PathNode(
                         id: Self.sectionPrefix + section.id, name: section.title, isDirectory: true,
                         children: section.nodes)
-                    let item = itemsByKey[node.id] ?? OutlineItem(node: node)
+                    let item = itemsByKey[node.id] ?? OutlineItem(key: node.id, node: node)
                     item.node = node
                     item.parent = nil
                     item.chainKey = node.id
                     item.isSection = true
-                    item.children = section.nodes.map { build($0, parent: item, continuesChain: false) }
+                    item.section = section
+                    let scope = section.commitGroup.map { _ in section.id }
+                    let details = section.pathsInChange
+                    let files = section.nodes.map { child in
+                        let row = build(child, parent: item, continuesChain: false, scope: scope)
+                        row.detail = details[child.id].map { "Named \($0) in this commit" }
+                        return row
+                    }
+                    item.children = files + noteItems(of: section, under: item, keyedBy: node.id, into: &reused)
                     reused[node.id] = item
                     return item
                 }
             }
+            collapsedByDefault = Set(ExplorerSection.collapsedByDefault(sections).map { Self.sectionPrefix + $0 })
             itemsByKey = reused
+            itemsByPath = byPath
             reload(in: outline, selecting: path)
         }
 
@@ -196,7 +222,7 @@ struct FileOutlineView: NSViewRepresentable {
         /// a hidden folder cannot be expanded and gets its state when its parent opens.
         private func applyExpansionState(to items: [OutlineItem], in outline: NSOutlineView) {
             for item in items where item.node.isDirectory {
-                if uiState.isCollapsed(item.chainKey) {
+                if uiState.isCollapsed(item.chainKey, byDefault: collapsedByDefault.contains(item.chainKey)) {
                     if outline.isItemExpanded(item) { outline.collapseItem(item) }
                 } else {
                     if !outline.isItemExpanded(item) { outline.expandItem(item) }
@@ -223,7 +249,7 @@ struct FileOutlineView: NSViewRepresentable {
             lastAppliedSelection = path
             isApplyingModelSelection = true
             defer { isApplyingModelSelection = false }
-            guard let path, let item = itemsByKey[path] else {
+            guard let path, let item = row(for: path, in: outline) else {
                 outline.deselectAll(nil)
                 return
             }
@@ -242,7 +268,7 @@ struct FileOutlineView: NSViewRepresentable {
         /// Selects `path` when it has a row, without opening the folders above it. Only a selection the model just
         /// moved is worth scrolling to; a rebuild keeps the user where they were.
         private func restoreSelection(_ path: String?, in outline: NSOutlineView, revealing: Bool) {
-            guard let path, let item = itemsByKey[path] else {
+            guard let path, let item = row(for: path, in: outline) else {
                 if outline.selectedRow >= 0 { outline.deselectAll(nil) }
                 return
             }
@@ -267,9 +293,9 @@ struct FileOutlineView: NSViewRepresentable {
                 isApplyingModelSelection = false
                 return
             }
-            guard item.key != lastAppliedSelection else { return }
-            lastAppliedSelection = item.key
-            onSelect(item.key)
+            guard item.path != lastAppliedSelection else { return }
+            lastAppliedSelection = item.path
+            onSelect(item.path)
         }
 
         @objc func doubleClicked(_ sender: NSOutlineView) {
@@ -278,15 +304,15 @@ struct FileOutlineView: NSViewRepresentable {
             // A double action replaces the native toggle on folders; return pins them.
             if item.node.isDirectory {
                 if sender.isItemExpanded(item) { sender.collapseItem(item) } else { sender.expandItem(item) }
-            } else {
-                onPin(item.key)
+            } else if !item.isNote {
+                onPin(item.path)
             }
         }
 
         func pinSelection() {
             guard let outline = outlineView, let item = selectedItem(in: outline) else { return }
-            lastAppliedSelection = item.key
-            onPin(item.key)
+            lastAppliedSelection = item.path
+            onPin(item.path)
         }
 
         /// Whether a folder was selected to toggle; otherwise the key goes to type-select.
@@ -304,7 +330,8 @@ struct FileOutlineView: NSViewRepresentable {
             guard let item = notification.userInfo?["NSObject"] as? OutlineItem, let outline = outlineView else {
                 return
             }
-            uiState.setCollapsed(false, item.chainKey)
+            // A section's default fold is not the user's choice, so only a fold the user made is remembered for it.
+            if !item.isSection || !isRestoringExpansion { uiState.setCollapsed(false, item.chainKey) }
             guard !isRestoringExpansion else { return }
             // Folders that appeared while this one was folded come up in their remembered state.
             isRestoringExpansion = true
@@ -323,7 +350,7 @@ struct FileOutlineView: NSViewRepresentable {
         func outlineViewItemDidCollapse(_ notification: Notification) {
             isCollapsing = false
             guard let item = notification.userInfo?["NSObject"] as? OutlineItem else { return }
-            uiState.setCollapsed(true, item.chainKey)
+            if !item.isSection || !isRestoringExpansion { uiState.setCollapsed(true, item.chainKey) }
         }
 
         // MARK: Data source
@@ -350,16 +377,59 @@ struct FileOutlineView: NSViewRepresentable {
 
 /// The outline's rows as views, and which of them select.
 extension FileOutlineView.Coordinator {
+    // MARK: Rows
+
+    /// The inert lines under a section's files, reused by key like every other row.
+    private func noteItems(
+        of section: ExplorerSection, under parent: OutlineItem, keyedBy sectionKey: String,
+        into reused: inout [String: OutlineItem]
+    ) -> [OutlineItem] {
+        section.noteLines.enumerated()
+            .map { index, text in
+                let key = sectionKey + "\u{0}note\(index)"
+                let node = PathNode(id: key, name: text, isDirectory: false, children: nil)
+                let note = itemsByKey[key] ?? OutlineItem(key: key, node: node)
+                note.node = node
+                note.parent = parent
+                note.isNote = true
+                reused[key] = note
+                return note
+            }
+    }
+
+    /// The row that shows `path`: the selected one when it already does, as after a click on one of a file's
+    /// rows, else the first in outline order, which is the newest commit section's.
+    private func row(for path: String, in outline: NSOutlineView) -> OutlineItem? {
+        if let selected = selectedItem(in: outline), selected.path == path { return selected }
+        return itemsByPath[path]?.first
+    }
+
     // MARK: Delegate
 
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         guard let item = item as? OutlineItem else { return nil }
+        if item.isSection, let section = item.section, let group = section.commitGroup {
+            let header =
+                outlineView.makeView(withIdentifier: CommitSectionCellView.identifier, owner: nil)
+                as? CommitSectionCellView ?? CommitSectionCellView()
+            header.configure(
+                title: section.title, count: group.rows.count,
+                tooltip: section.headerTooltip(includesMergedBranches: includesMergedBranches))
+            return header
+        }
         if item.isSection {
             let header =
                 outlineView.makeView(withIdentifier: SectionCellView.identifier, owner: nil) as? SectionCellView
                 ?? SectionCellView()
             header.textField?.stringValue = item.node.name
             return header
+        }
+        if item.isNote {
+            let note =
+                outlineView.makeView(withIdentifier: NoteCellView.identifier, owner: nil) as? NoteCellView
+                ?? NoteCellView()
+            note.textField?.stringValue = item.node.name
+            return note
         }
         let cell =
             outlineView.makeView(withIdentifier: FileCellView.identifier, owner: nil) as? FileCellView
@@ -368,41 +438,55 @@ extension FileOutlineView.Coordinator {
         return cell
     }
 
+    /// A plain section heads its rows as a source list's group row; a commit section is an ordinary row drawn as a
+    /// header, since a group row can never be selected.
     func outlineView(_ outlineView: NSOutlineView, isGroupItem item: Any) -> Bool {
-        (item as? OutlineItem)?.isSection == true
+        guard let item = item as? OutlineItem else { return false }
+        return item.isSection && item.section?.commitGroup == nil
     }
 
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
-        (item as? OutlineItem)?.isSection == false
+        guard let item = item as? OutlineItem else { return false }
+        return !item.isSection && !item.isNote
     }
 
     func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any)
         -> String?
     {
-        guard let item = item as? OutlineItem, !item.isSection else { return nil }
+        guard let item = item as? OutlineItem, !item.isSection, !item.isNote else { return nil }
         return item.node.name
     }
 
     private func configure(_ cell: FileCellView, for item: OutlineItem) {
         cell.configure(
-            node: item.node, glyph: status(item.key).flatMap(ChangeGlyph.init), scheme: badgeScheme,
-            state: badgeStates.state(of: item.key))
+            node: item.node, glyph: status(item.path).flatMap(ChangeGlyph.init), scheme: badgeScheme,
+            state: badgeStates.state(of: item.path), detail: item.detail)
     }
 }
 
 /// One row of the outline, kept between rebuilds so the outline view recognises it.
 final class OutlineItem: NSObject {
+    /// Unique in the outline: the path, scoped by its commit section when the list is grouped by commit.
     let key: String
     var node: PathNode
     var children: [OutlineItem] = []
     /// See ``PathNode/chainKey``.
     var chainKey: String
-    /// A group row heading one of the explorer's sections; it has no file and cannot be selected.
+    /// A row heading one of the explorer's sections; it has no file.
     var isSection = false
+    /// The section a header row heads.
+    var section: ExplorerSection?
+    /// An inert line inside a section, such as "No net changes": no file, never selected.
+    var isNote = false
+    /// What a file row's tooltip adds, such as the name it had in its commit.
+    var detail: String?
     weak var parent: OutlineItem?
 
-    init(node: PathNode) {
-        key = node.id
+    /// The model's path for the row: the file or folder it shows.
+    var path: String { node.id }
+
+    init(key: String, node: PathNode) {
+        self.key = key
         self.node = node
         chainKey = node.id
     }
