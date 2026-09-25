@@ -34,6 +34,55 @@ import Testing
         return panel
     }
 
+    nonisolated private static let sectionLabels = ["PARAMETERS", "name"]
+
+    /// The panel in one appearance, drawn whole and then without each part the tests below compare it without, with
+    /// its body's layout read before any drawing. Drawing a 2x panel is most of this main-actor suite's time, so it is
+    /// drawn once per appearance for the whole suite, each drawing serving several tests. Each part is cleared, drawn
+    /// without, and restored in turn, the body last, and nothing reads the panel after that.
+    private struct Drawings {
+        let bodyHeight: CGFloat
+        let bodyLayoutHeight: CGFloat
+        let full: NSBitmapImageRep
+        let withoutBody: NSBitmapImageRep
+        let withoutLabel: [String: NSBitmapImageRep]
+    }
+
+    private static var drawings: [Bool: Drawings] = [:]
+
+    private func drawings(dark: Bool) throws -> Drawings {
+        if let drawn = Self.drawings[dark] { return drawn }
+        let panel = try preparedPanel(dark: dark)
+        let root = try #require(panel.contentViewForTests)
+        let body = try #require(
+            descendants(of: root, as: NSTextView.self).first { $0.string.contains("Summarizes a greeting") })
+        let container = try #require(body.textContainer)
+        let bodyLayoutHeight =
+            body.textLayoutManager?.usageBoundsForTextContainer.height
+            ?? body.layoutManager?.usedRect(for: container).height ?? 0
+        let bodyHeight = body.bounds.height
+
+        let full = try bitmap(of: root)
+        var withoutLabel: [String: NSBitmapImageRep] = [:]
+        for label in Self.sectionLabels {
+            let field = try #require(descendants(of: root, as: NSTextField.self).first { $0.stringValue == label })
+            let original = field.textColor
+            field.textColor = .clear
+            withoutLabel[label] = try bitmap(of: root)
+            field.textColor = original
+        }
+        let original = body.attributedString()
+        body.textStorage?.setAttributedString(NSAttributedString())
+        let withoutBody = try bitmap(of: root)
+        body.textStorage?.setAttributedString(original)
+
+        let drawn = Drawings(
+            bodyHeight: bodyHeight, bodyLayoutHeight: bodyLayoutHeight, full: full, withoutBody: withoutBody,
+            withoutLabel: withoutLabel)
+        Self.drawings[dark] = drawn
+        return drawn
+    }
+
     private func descendants<View: NSView>(of root: NSView, as type: View.Type) -> [View] {
         var found: [View] = []
         var pending = [root]
@@ -52,11 +101,22 @@ import Testing
         return bitmap
     }
 
-    private func colorDifference(_ lhs: NSColor, _ rhs: NSColor) -> CGFloat {
-        guard let a = lhs.usingColorSpace(.deviceRGB), let b = rhs.usingColorSpace(.deviceRGB) else { return 0 }
-        return max(
-            max(abs(a.redComponent - b.redComponent), abs(a.greenComponent - b.greenComponent)),
-            max(abs(a.blueComponent - b.blueComponent), abs(a.alphaComponent - b.alphaComponent)))
+    /// A pixel's colour as the comparisons below read it: its device RGB components, and its luminance.
+    private struct PixelColor {
+        let deviceRGB: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat)?
+        let luminance: CGFloat?
+    }
+
+    private func pixelColor(_ color: NSColor) -> PixelColor {
+        let device = color.usingColorSpace(.deviceRGB)
+        return PixelColor(
+            deviceRGB: device.map { ($0.redComponent, $0.greenComponent, $0.blueComponent, $0.alphaComponent) },
+            luminance: luminance(color))
+    }
+
+    private func colorDifference(_ lhs: PixelColor, _ rhs: PixelColor) -> CGFloat {
+        guard let a = lhs.deviceRGB, let b = rhs.deviceRGB else { return 0 }
+        return max(max(abs(a.red - b.red), abs(a.green - b.green)), max(abs(a.blue - b.blue), abs(a.alpha - b.alpha)))
     }
 
     /// Two bitmaps of one layout, read byte by byte: a pixel whose samples match in both is the same color, so the
@@ -70,9 +130,9 @@ import Testing
         private let bytesPerRow: Int
         private let bytesPerPixel: Int
 
-        /// Nil unless both bitmaps store their pixels alike, meshed and whole bytes to a pixel.
+        /// Nil unless both bitmaps store their pixels alike, meshed and in whole bytes, at most eight to a pixel.
         init?(_ first: NSBitmapImageRep, _ second: NSBitmapImageRep) {
-            guard !first.isPlanar, !second.isPlanar, first.bitsPerPixel % 8 == 0,
+            guard !first.isPlanar, !second.isPlanar, first.bitsPerPixel % 8 == 0, first.bitsPerPixel <= 64,
                 first.bitsPerPixel == second.bitsPerPixel, first.bytesPerRow == second.bytesPerRow,
                 first.bitmapFormat == second.bitmapFormat, first.colorSpace == second.colorSpace,
                 first.pixelsWide == second.pixelsWide, first.pixelsHigh == second.pixelsHigh,
@@ -97,20 +157,55 @@ import Testing
             let offset = y * bytesPerRow + x * bytesPerPixel
             return memcmp(firstBytes + offset, secondBytes + offset, bytesPerPixel) == 0
         }
+
+        /// The samples of the pixel at `x`, `y` in each bitmap, as one number apiece: `colorAt(x:y:)` makes a colour
+        /// from those samples alone, and both bitmaps store them alike, so equal numbers are the same colour.
+        func samples(x: Int, y: Int) -> (first: UInt64, second: UInt64) {
+            let offset = y * bytesPerRow + x * bytesPerPixel
+            var first: UInt64 = 0
+            var second: UInt64 = 0
+            withUnsafeMutableBytes(of: &first) {
+                $0.copyMemory(from: UnsafeRawBufferPointer(start: firstBytes + offset, count: bytesPerPixel))
+            }
+            withUnsafeMutableBytes(of: &second) {
+                $0.copyMemory(from: UnsafeRawBufferPointer(start: secondBytes + offset, count: bytesPerPixel))
+            }
+            return (first, second)
+        }
+    }
+
+    /// How many pixels of `first` `counts` holds true for with the one at the same place in `second`. Only pixels
+    /// whose bytes differ are read, and each distinct pixel value becomes a colour once: making colours for every
+    /// differing pixel held the main actor for a large part of this suite's time.
+    private func countPixels(
+        _ first: NSBitmapImageRep, _ second: NSBitmapImageRep, where counts: (PixelColor, PixelColor) -> Bool
+    ) -> Int {
+        let bytes = SameLayoutBytes(first, second)
+        var colors: [UInt64: PixelColor] = [:]
+        func color(of bitmap: NSBitmapImageRep, x: Int, y: Int, samples: UInt64?) -> PixelColor? {
+            if let samples, let made = colors[samples] { return made }
+            guard let color = bitmap.colorAt(x: x, y: y) else { return nil }
+            let made = pixelColor(color)
+            if let samples { colors[samples] = made }
+            return made
+        }
+        var count = 0
+        for y in 0 ..< first.pixelsHigh where bytes?.sameRow(y) != true {
+            for x in 0 ..< first.pixelsWide {
+                if bytes?.samePixel(x: x, y: y) == true { continue }
+                let samples = bytes?.samples(x: x, y: y)
+                guard let one = color(of: first, x: x, y: y, samples: samples?.first),
+                    let other = color(of: second, x: x, y: y, samples: samples?.second)
+                else { continue }
+                if counts(one, other) { count += 1 }
+            }
+        }
+        return count
     }
 
     private func changedPixels(between before: NSBitmapImageRep, and after: NSBitmapImageRep) -> Int {
         guard before.pixelsWide == after.pixelsWide, before.pixelsHigh == after.pixelsHigh else { return 0 }
-        let bytes = SameLayoutBytes(before, after)
-        var count = 0
-        for y in 0 ..< before.pixelsHigh where bytes?.sameRow(y) != true {
-            for x in 0 ..< before.pixelsWide {
-                if bytes?.samePixel(x: x, y: y) == true { continue }
-                guard let first = before.colorAt(x: x, y: y), let second = after.colorAt(x: x, y: y) else { continue }
-                if colorDifference(first, second) > 0.08 { count += 1 }
-            }
-        }
-        return count
+        return countPixels(before, after) { colorDifference($0, $1) > 0.08 }
     }
 
     private func luminance(_ color: NSColor) -> CGFloat? {
@@ -123,66 +218,43 @@ import Testing
     }
 
     private func contrastRatio(_ first: NSColor, _ second: NSColor) -> CGFloat? {
-        guard let firstLuminance = luminance(first), let secondLuminance = luminance(second) else { return nil }
+        contrastRatio(luminance(first), luminance(second))
+    }
+
+    private func contrastRatio(_ firstLuminance: CGFloat?, _ secondLuminance: CGFloat?) -> CGFloat? {
+        guard let firstLuminance, let secondLuminance else { return nil }
         return (max(firstLuminance, secondLuminance) + 0.05) / (min(firstLuminance, secondLuminance) + 0.05)
     }
 
     private func highContrastChangedPixels(in full: NSBitmapImageRep, withoutContent blank: NSBitmapImageRep) -> Int {
-        let bytes = SameLayoutBytes(full, blank)
-        var count = 0
-        for y in 0 ..< full.pixelsHigh where bytes?.sameRow(y) != true {
-            for x in 0 ..< full.pixelsWide {
-                if bytes?.samePixel(x: x, y: y) == true { continue }
-                guard let ink = full.colorAt(x: x, y: y), let background = blank.colorAt(x: x, y: y),
-                    colorDifference(ink, background) > 0.08,
-                    let ratio = contrastRatio(ink, background)
-                else { continue }
-                if ratio >= 4.5 { count += 1 }
-            }
+        countPixels(full, blank) { ink, background in
+            guard colorDifference(ink, background) > 0.08,
+                let ratio = contrastRatio(ink.luminance, background.luminance)
+            else { return false }
+            return ratio >= 4.5
         }
-        return count
     }
 
     @Test(arguments: [false, true])
     func `the panel lays out and draws its body text in each appearance`(dark: Bool) throws {
-        let panel = try preparedPanel(dark: dark)
-        let root = try #require(panel.contentViewForTests)
-        let body = try #require(
-            descendants(of: root, as: NSTextView.self).first { $0.string.contains("Summarizes a greeting") })
-        let container = try #require(body.textContainer)
-        let layoutHeight =
-            body.textLayoutManager?.usageBoundsForTextContainer.height
-            ?? body.layoutManager?.usedRect(for: container).height ?? 0
-        #expect(body.bounds.height > 0)
-        #expect(layoutHeight > 0)
+        let drawings = try drawings(dark: dark)
+        #expect(drawings.bodyHeight > 0)
+        #expect(drawings.bodyLayoutHeight > 0)
 
-        let full = try bitmap(of: root)
+        let full = drawings.full
         if let path = ProcessInfo.processInfo.environment["HOVER_RENDER_DIR"] {
             let url = URL(filePath: path, directoryHint: .isDirectory)
                 .appending(path: dark ? "hover-dark.png" : "hover-light.png")
             try #require(full.representation(using: .png, properties: [:])).write(to: url)
         }
-        let original = body.attributedString()
-        body.textStorage?.setAttributedString(NSAttributedString())
-        let withoutBody = try bitmap(of: root)
-        body.textStorage?.setAttributedString(original)
-        let changed = changedPixels(between: full, and: withoutBody)
+        let changed = changedPixels(between: full, and: drawings.withoutBody)
         #expect(changed > 100)
     }
 
     @Test(arguments: [false, true])
     func `the drawn prose contrasts with the panel in each appearance`(dark: Bool) throws {
-        let panel = try preparedPanel(dark: dark)
-        let root = try #require(panel.contentViewForTests)
-        let body = try #require(
-            descendants(of: root, as: NSTextView.self).first { $0.string.contains("Summarizes a greeting") })
-        let full = try bitmap(of: root)
-        let original = body.attributedString()
-        body.textStorage?.setAttributedString(NSAttributedString())
-        let blank = try bitmap(of: root)
-        body.textStorage?.setAttributedString(original)
-
-        let contrastingPixels = highContrastChangedPixels(in: full, withoutContent: blank)
+        let drawings = try drawings(dark: dark)
+        let contrastingPixels = highContrastChangedPixels(in: drawings.full, withoutContent: drawings.withoutBody)
         #expect(contrastingPixels > 100)
     }
 
@@ -206,18 +278,11 @@ import Testing
         #expect(try #require(ratio) >= 4.5)
     }
 
-    @Test(arguments: ["PARAMETERS", "name"], [false, true])
+    @Test(arguments: sectionLabels, [false, true])
     func `section labels contrast with the panel in each appearance`(label: String, dark: Bool) throws {
-        let panel = try preparedPanel(dark: dark)
-        let root = try #require(panel.contentViewForTests)
-        let field = try #require(descendants(of: root, as: NSTextField.self).first { $0.stringValue == label })
-        let full = try bitmap(of: root)
-        let original = field.textColor
-        field.textColor = .clear
-        let blank = try bitmap(of: root)
-        field.textColor = original
-
-        #expect(highContrastChangedPixels(in: full, withoutContent: blank) > 20)
+        let drawings = try drawings(dark: dark)
+        let blank = try #require(drawings.withoutLabel[label])
+        #expect(highContrastChangedPixels(in: drawings.full, withoutContent: blank) > 20)
     }
 
     @Test(arguments: [false, true])
