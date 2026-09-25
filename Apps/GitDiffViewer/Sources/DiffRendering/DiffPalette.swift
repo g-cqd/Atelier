@@ -130,6 +130,16 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
         }
     }
 
+    /// The colour of the gutter's marker for a change of the compact inline view (book DIFF-04): green for an addition,
+    /// red for a removal, and blue for a modification, as Xcode's change bar.
+    package func changeMarker(for kind: RenderedChange.Kind) -> NSColor {
+        switch kind {
+            case .added: .systemGreen
+            case .removed: .systemRed
+            case .modified: .systemBlue
+        }
+    }
+
     /// The hairline that separates the two halves of a gap's handle, across the gutter and the text alike (book
     /// DIFF-02): Xcode's, 241 on its white gutter.
     package var gapSeparator: NSColor {
