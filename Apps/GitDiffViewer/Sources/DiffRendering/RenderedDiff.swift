@@ -66,8 +66,15 @@ package final class PreparedDiff: Sendable {
     package let newText: String
     package let language: Language
 
+    /// - Parameters:
+    ///   - input: The two sides, their language and their revisions.
+    ///   - granularity: How finely changed lines are compared.
+    ///   - heuristics: The diff's heuristics.
+    ///   - store: Where a side with a revision finds the facts of a parse another reader made, and leaves its own
+    ///     (PERF-11 step 3); nil parses a Swift side for its syntax granularity alone.
     package init(
-        _ input: FileDiffInput, granularity: IntralineGranularity, heuristics: DiffHeuristics = DiffHeuristics()
+        _ input: FileDiffInput, granularity: IntralineGranularity, heuristics: DiffHeuristics = DiffHeuristics(),
+        store: SyntaxFactsStore? = nil
     ) {
         title = input.title
         oldText = input.oldText
@@ -75,9 +82,21 @@ package final class PreparedDiff: Sendable {
         language = input.language
         model = DiffModel(
             oldText: input.oldText, newText: input.newText, granularity: granularity, language: input.language,
-            pipeline: DiffPipeline(heuristics: heuristics), tokenRanges: SwiftSyntaxTokenRanges())
+            pipeline: DiffPipeline(heuristics: heuristics), tokenRanges: Self.tokenRanges(for: input, store: store))
         oldTokens = DiffRenderer.tokensByLine(text: input.oldText, lines: model.oldLines, language: input.language)
         newTokens = DiffRenderer.tokensByLine(text: input.newText, lines: model.newLines, language: input.language)
+    }
+
+    /// The syntax granularity's provider: one that reads each side's facts from `store` when the side has a revision.
+    private static func tokenRanges(for input: FileDiffInput, store: SyntaxFactsStore?) -> SwiftSyntaxTokenRanges {
+        guard let store, input.oldRevision != nil || input.newRevision != nil else { return SwiftSyntaxTokenRanges() }
+        let old = (text: input.oldText, revision: input.oldRevision)
+        let new = (text: input.newText, revision: input.newRevision)
+        return SwiftSyntaxTokenRanges(store: store) { text, _ in
+            // The diff asks about the very strings it was given, so the comparison finds them equal at once.
+            if text == old.text { return old.revision }
+            return text == new.text ? new.revision : nil
+        }
     }
 }
 
@@ -86,12 +105,20 @@ package struct FileDiffInput: Sendable {
     package let oldText: String
     package let newText: String
     package let language: Language
+    /// What each side's content is, when its blob id is known: the key its facts are kept under.
+    package let oldRevision: SourceRevision?
+    package let newRevision: SourceRevision?
 
-    package init(title: String, oldText: String, newText: String, language: Language) {
+    package init(
+        title: String, oldText: String, newText: String, language: Language, oldRevision: SourceRevision? = nil,
+        newRevision: SourceRevision? = nil
+    ) {
         self.title = title
         self.oldText = oldText
         self.newText = newText
         self.language = language
+        self.oldRevision = oldRevision
+        self.newRevision = newRevision
     }
 }
 

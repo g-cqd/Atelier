@@ -16,12 +16,15 @@ package final class DiffPreparer {
 
     private let reader: any SourceReading
     private let taskProvider: any TaskProvider
+    /// Where a side's syntax facts are kept, shared with the colour tier and hover (PERF-11 step 3).
+    private let store: SyntaxFactsStore?
     private var cache: [Key: PreparedDiff] = [:]
     private var prefetchTask: Task<Void, Never>?
 
-    package init(reader: any SourceReading, taskProvider: any TaskProvider) {
+    package init(reader: any SourceReading, taskProvider: any TaskProvider, store: SyntaxFactsStore? = nil) {
         self.reader = reader
         self.taskProvider = taskProvider
+        self.store = store
     }
 
     private struct Key: Hashable {
@@ -62,9 +65,10 @@ package final class DiffPreparer {
         let misses = pairs.indices.filter { result[$0] == nil }
         guard !misses.isEmpty else { return result.compactMap { $0 } }
 
-        let prepared = try await Self.load(
-            misses.map { pairs[$0] }, left: left, right: right, granularity: granularity, heuristics: heuristics,
-            reader: reader)
+        let store = store
+        let prepared = try await Self.load(misses.map { pairs[$0] }, left: left, right: right, reader: reader) {
+            PreparedDiff($0, granularity: granularity, heuristics: heuristics, store: store)
+        }
         try Task.checkCancellation()
         if cache.count + prepared.count > Self.cacheLimit { cache.removeAll(keepingCapacity: true) }
         for (index, diff) in zip(misses, prepared) {
@@ -97,24 +101,27 @@ package final class DiffPreparer {
         prefetchTask = nil
     }
 
+    /// Reads `pairs`' sides and prepares each file with `prepare`, the files side by side.
     @concurrent
     private static func load(
-        _ pairs: [FilePair], left: ComparisonSource, right: ComparisonSource, granularity: IntralineGranularity,
-        heuristics: DiffHeuristics, reader: any SourceReading
+        _ pairs: [FilePair], left: ComparisonSource, right: ComparisonSource, reader: any SourceReading,
+        prepare: @escaping @Sendable (FileDiffInput) -> PreparedDiff
     ) async throws -> [PreparedDiff] {
         async let oldTexts = reader.contents(of: pairs.compactMap(\.old), in: left)
         async let newTexts = reader.contents(of: pairs.compactMap(\.new), in: right)
         let (olds, news) = try await (oldTexts, newTexts)
         let inputs = pairs.map { pair in
-            FileDiffInput(
+            let language = Language(fileExtension: URL(filePath: pair.path).pathExtension)
+            func revision(_ entry: SourceEntry?) -> SourceRevision? {
+                entry?.blobID.map { SourceRevision(documentID: pair.path, language: language, key: .content($0)) }
+            }
+            return FileDiffInput(
                 title: pair.path,
                 oldText: pair.old.flatMap { olds[$0.relativePath] } ?? "",
                 newText: pair.new.flatMap { news[$0.relativePath] } ?? "",
-                language: Language(fileExtension: URL(filePath: pair.path).pathExtension)
+                language: language, oldRevision: revision(pair.old), newRevision: revision(pair.new)
             )
         }
-        return try await mapConcurrently(inputs, limit: ProcessInfo.processInfo.activeProcessorCount) {
-            PreparedDiff($0, granularity: granularity, heuristics: heuristics)
-        }
+        return try await mapConcurrently(inputs, limit: ProcessInfo.processInfo.activeProcessorCount, prepare)
     }
 }

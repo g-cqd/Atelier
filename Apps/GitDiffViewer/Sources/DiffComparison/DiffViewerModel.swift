@@ -57,6 +57,9 @@ package final class DiffViewerModel {
     /// Runs gap handle drags, revealing rows through ``pipeline`` one card at a time.
     let gapDrags: GapDragController
     private let preparer: DiffPreparer
+    /// What one parse of each Swift side learned, shared by the intraline diff, the colour tier and hover, so a side
+    /// is parsed once for all three (PERF-11 step 3).
+    let syntaxFacts = SyntaxFactsStore()
     let reader: any SourceReading
     /// Spawns the model's work, and its views' work on its behalf, so a test settles on one provider.
     package let taskProvider: any TaskProvider
@@ -111,11 +114,11 @@ package final class DiffViewerModel {
         timer = OperationTimer(uptime: { .nanoseconds(uptime()) })
         let palette = Self.palette(for: settings.themePath)
         self.palette = palette
-        let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider)
+        let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider, store: syntaxFacts)
         self.preparer = preparer
         let pipeline = RenderPipeline(
             preparer: preparer, taskProvider: taskProvider, options: Self.options(settings, palette: palette),
-            refinement: SwiftColorRefinement(clock: clock))
+            refinement: SwiftColorRefinement(tiers: RefinedSides.tiers(store: syntaxFacts), clock: clock))
         self.pipeline = pipeline
         gapDrags = GapDragController(
             taskProvider: taskProvider, clock: clock, expansion: { pipeline.expansion(of: $0) },

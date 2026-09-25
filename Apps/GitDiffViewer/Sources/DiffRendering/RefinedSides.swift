@@ -36,6 +36,9 @@ package struct RefinedSides: Sendable {
 }
 
 extension RefinedSides {
-    /// The tiers GitDiffViewer runs after the lexer's first paint: swift-syntax on Swift sides (D33).
-    package static let tiers: [any AtelierHighlighting.HighlightTier] = [SwiftSyntaxTier()]
+    /// The tiers GitDiffViewer runs after the lexer's first paint: swift-syntax on Swift sides (D33), reading and
+    /// filling `store` when given one, so a side the intraline diff or hover parsed is not parsed again (step 3).
+    package static func tiers(store: SyntaxFactsStore? = nil) -> [any AtelierHighlighting.HighlightTier] {
+        [SwiftSyntaxTier(store: store)]
+    }
 }
