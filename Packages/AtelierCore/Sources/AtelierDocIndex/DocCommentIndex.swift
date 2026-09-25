@@ -1,6 +1,5 @@
 import AtelierSwiftSyntax
-import SwiftParser
-import SwiftSyntax
+public import AtelierSyntaxModel
 
 import func AemiRuntime.mapConcurrently
 import class Foundation.ProcessInfo
@@ -68,6 +67,8 @@ public actor DocCommentIndex {
     private var byName: [String: [String: [DocEntry]]] = [:]
     /// Turns one file's content into its entries.
     private nonisolated let extractor: @Sendable (_ uri: String, _ content: String) -> [DocEntry]
+    /// Where a file with a blob id finds its declarations, when another reader parsed it first, and leaves them.
+    private nonisolated let store: SyntaxFactsStore?
 
     public init() {
         self.init(extractor: Self.extractEntries(uri:content:))
@@ -76,6 +77,15 @@ public actor DocCommentIndex {
     /// An index that extracts entries with `extractor`, such as a spy counting the files parsed.
     public init(extractor: @escaping @Sendable (_ uri: String, _ content: String) -> [DocEntry]) {
         self.extractor = extractor
+        store = nil
+    }
+
+    /// An index whose files with a blob id take their declarations from `store` (PERF-11 step 3): a file the colour
+    /// tier or the intraline diff parsed is not parsed again, and one parsed here leaves every fact there for them.
+    /// Files without one are parsed for their declarations alone.
+    public init(store: SyntaxFactsStore) {
+        extractor = Self.extractEntries(uri:content:)
+        self.store = store
     }
 
     /// How many files the index holds.
@@ -108,10 +118,17 @@ public actor DocCommentIndex {
             }
         }
         let extractor = extractor
+        let store = store
         let limit = ProcessInfo.processInfo.activeProcessorCount
         let parsed = try await mapConcurrently(changed, limit: limit) { change in
             try Task.checkCancellation()
-            return await SwiftSyntaxStack.run { extractor(change.file.uri, change.file.content) }
+            let file = change.file
+            if let store, let blobID = file.blobID {
+                let revision = SourceRevision(documentID: file.uri, language: .swift, key: .content(blobID))
+                let facts = await SwiftSyntaxFacts.facts(for: revision, text: file.content, in: store)
+                return facts.map { Self.entries(of: $0.declarations, uri: file.uri) } ?? []
+            }
+            return await SwiftSyntaxStack.run { extractor(file.uri, file.content) }
         }
         // The last check before anything lands, with no suspension until the files are in.
         try Task.checkCancellation()
@@ -261,161 +278,16 @@ public actor DocCommentIndex {
 
     /// The documented declarations of one Swift file, parsed with swift-syntax on ``AtelierSwiftSyntax/SwiftSyntaxStack``.
     public static func extractEntries(uri: String, content: String) -> [DocEntry] {
-        SwiftSyntaxStack.run {
-            let tree = Parser.parse(source: content)
-            let visitor = DocCommentVisitor(uri: uri)
-            visitor.walk(tree)
-            return visitor.entries
-        }
-    }
-}
-
-/// Walks a syntax tree collecting an entry for every named declaration that carries a doc comment.
-private final class DocCommentVisitor: SyntaxVisitor {
-    private let uri: String
-    private(set) var entries: [DocEntry] = []
-
-    init(uri: String) {
-        self.uri = uri
-        super.init(viewMode: .sourceAccurate)
+        entries(of: SwiftSyntaxFacts.declarations(in: content), uri: uri)
     }
 
-    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-        addEntry(name: node.name.text, decl: DeclSyntax(node), trivia: node.leadingTrivia)
-        return .visitChildren
-    }
-
-    override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
-        addEntry(name: "init", decl: DeclSyntax(node), trivia: node.leadingTrivia)
-        return .visitChildren
-    }
-
-    override func visit(_ node: SubscriptDeclSyntax) -> SyntaxVisitorContinueKind {
-        addEntry(name: "subscript", decl: DeclSyntax(node), trivia: node.leadingTrivia)
-        return .visitChildren
-    }
-
-    override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-        addEntry(name: node.name.text, decl: DeclSyntax(node), trivia: node.leadingTrivia)
-        return .visitChildren
-    }
-
-    override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
-        addEntry(name: node.name.text, decl: DeclSyntax(node), trivia: node.leadingTrivia)
-        return .visitChildren
-    }
-
-    override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
-        addEntry(name: node.name.text, decl: DeclSyntax(node), trivia: node.leadingTrivia)
-        return .visitChildren
-    }
-
-    override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
-        addEntry(name: node.name.text, decl: DeclSyntax(node), trivia: node.leadingTrivia)
-        return .visitChildren
-    }
-
-    override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
-        addEntry(name: node.name.text, decl: DeclSyntax(node), trivia: node.leadingTrivia)
-        return .visitChildren
-    }
-
-    override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
-        addEntry(name: node.name.text, decl: DeclSyntax(node), trivia: node.leadingTrivia)
-        return .visitChildren
-    }
-
-    override func visit(_ node: MacroDeclSyntax) -> SyntaxVisitorContinueKind {
-        addEntry(name: node.name.text, decl: DeclSyntax(node), trivia: node.leadingTrivia)
-        return .visitChildren
-    }
-
-    override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
-        guard let markdown = Self.markdown(from: node.leadingTrivia) else { return .visitChildren }
-        let signature = Self.signature(from: DeclSyntax(node))
-        for binding in node.bindings {
-            guard let pattern = binding.pattern.as(IdentifierPatternSyntax.self) else { continue }
-            entries.append(
+    /// An entry for each of `declarations` that carries a doc comment, in their order.
+    static func entries(of declarations: [SyntaxDeclaration], uri: String) -> [DocEntry] {
+        declarations.compactMap { declaration in
+            declaration.documentation.map { markdown in
                 DocEntry(
-                    name: Self.stripBackticks(pattern.identifier.text), signature: signature, markdown: markdown,
-                    uri: uri))
-        }
-        return .visitChildren
-    }
-
-    override func visit(_ node: EnumCaseDeclSyntax) -> SyntaxVisitorContinueKind {
-        guard let markdown = Self.markdown(from: node.leadingTrivia) else { return .visitChildren }
-        let signature = Self.signature(from: DeclSyntax(node))
-        for element in node.elements {
-            entries.append(
-                DocEntry(
-                    name: Self.stripBackticks(element.name.text), signature: signature, markdown: markdown, uri: uri))
-        }
-        return .visitChildren
-    }
-
-    private func addEntry(name: String, decl: DeclSyntax, trivia: Trivia) {
-        guard let markdown = Self.markdown(from: trivia) else { return }
-        entries.append(
-            DocEntry(
-                name: Self.stripBackticks(name), signature: Self.signature(from: decl), markdown: markdown, uri: uri))
-    }
-
-    private static func stripBackticks(_ text: String) -> String {
-        guard text.hasPrefix("`"), text.hasSuffix("`"), text.count > 1 else { return text }
-        return String(text.dropFirst().dropLast())
-    }
-
-    /// The declaration up to its first `{`, whitespace collapsed; a closure default value ahead of the body cuts it
-    /// short.
-    private static func signature(from decl: DeclSyntax) -> String {
-        let text = decl.trimmedDescription
-        let head = text.firstIndex(of: "{").map { text[text.startIndex ..< $0] } ?? text[...]
-        return head.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-    }
-
-    /// The doc comment above a declaration, as markdown, or nil when there is none.
-    private static func markdown(from trivia: Trivia) -> String? {
-        var lines: [String] = []
-        for piece in trivia.pieces {
-            switch piece {
-                case .docLineComment(let text):
-                    lines.append(stripLineDoc(text))
-                case .docBlockComment(let text):
-                    lines.append(contentsOf: stripBlockDoc(text))
-                default:
-                    break
+                    name: declaration.name, signature: declaration.signature ?? "", markdown: markdown, uri: uri)
             }
         }
-        while lines.first == "" { lines.removeFirst() }
-        while lines.last == "" { lines.removeLast() }
-        guard !lines.isEmpty else { return nil }
-        return lines.joined(separator: "\n")
-    }
-
-    private static func stripLineDoc(_ text: String) -> String {
-        var line = text
-        if line.hasPrefix("///") { line.removeFirst(3) }
-        if line.hasPrefix(" ") { line.removeFirst() }
-        return line
-    }
-
-    private static func stripBlockDoc(_ text: String) -> [String] {
-        var body = text
-        if body.hasPrefix("/**") { body.removeFirst(3) }
-        if body.hasSuffix("*/") { body.removeLast(2) }
-        let rawLines = body.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        return rawLines.enumerated()
-            .map { index, rawLine in
-                if index == 0 {
-                    return rawLine.hasPrefix(" ") ? String(rawLine.dropFirst()) : rawLine
-                }
-                var line = Substring(rawLine.drop { $0 == " " || $0 == "\t" })
-                if line.hasPrefix("*") {
-                    line = line.dropFirst()
-                    if line.hasPrefix(" ") { line = line.dropFirst() }
-                }
-                return String(line)
-            }
     }
 }
