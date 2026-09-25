@@ -13,17 +13,71 @@ struct HTMLScanner {
     func scan<Output: ScannerToken>(_ units: Span<UInt8>, as: Output.Type) -> [Output] {
         var tokens: [Output] = []
         tokens.reserveCapacity(units.count / 16 + 16)
+        _ = scan(units, from: .initial, into: &tokens)
+        return tokens
+    }
+
+    /// Appends the tokens of `units`, scanned from `state`, ascending and disjoint, with byte offsets.
+    /// - Parameters:
+    ///   - units: A whole text, or one line without its terminator.
+    ///   - state: The state `units` starts in: ``LexState/initial`` for a text, the last line's for a line.
+    ///   - tokens: Where the tokens go.
+    /// - Returns: The state at the end of `units`: inside a comment, a declaration, a tag, an attribute value or a
+    ///   `script` or `style` body, or in text.
+    /// - Complexity: O(`units.count`), times a pattern's length where one is searched for.
+    func scan<Output: ScannerToken>(
+        _ units: Span<UInt8>, from state: LexState, into tokens: inout [Output]
+    ) -> LexState {
         var index = 0
+        switch state.mode {
+            case .markupComment:
+                guard let end = find(Self.commentEnd, in: units, from: 0) else {
+                    if !units.isEmpty { tokens.append(Output(kind: .comment, range: 0 ..< units.count)) }
+                    return state
+                }
+                tokens.append(Output(kind: .comment, range: 0 ..< end + 3))
+                index = end + 3
+            case .declaration:
+                guard let end = find(Self.declarationEnd, in: units, from: 0) else {
+                    if !units.isEmpty { tokens.append(Output(kind: .keyword, range: 0 ..< units.count)) }
+                    return state
+                }
+                tokens.append(Output(kind: .keyword, range: 0 ..< end + 1))
+                index = end + 1
+            case .tag:
+                let (end, open) = scanAttributes(units, from: 0, kind: state.kind, tokens: &tokens)
+                if let open { return open }
+                index = end
+            case .attributeValue:
+                let (valueEnd, valueOpen) = scanValue(
+                    units, from: 0, quote: state.quote, kind: state.kind, tokens: &tokens)
+                if let valueOpen { return valueOpen }
+                let (end, open) = scanAttributes(units, from: valueEnd, kind: state.kind, tokens: &tokens)
+                if let open { return open }
+                index = end
+            case .rawText:
+                guard let end = find(Self.rawTextEnd(state.kind), in: units, from: 0) else { return state }
+                index = end
+            default:
+                break
+        }
         while index < units.count {
             if units[index] == ASCII.lessThan {
-                index = scanAngle(units, from: index, tokens: &tokens)
+                let (end, open) = scanAngle(units, from: index, tokens: &tokens)
+                if let open { return open }
+                index = end
             } else if units[index] == ASCII.ampersand {
                 index = scanEntity(units, from: index, tokens: &tokens)
             } else {
                 index += 1
             }
         }
-        return tokens
+        return .initial
+    }
+
+    /// The pattern that ends the body of an element of `kind`.
+    private static func rawTextEnd(_ kind: LexState.ElementKind) -> [UInt8] {
+        kind == .style ? styleEnd : scriptEnd
     }
 
     /// Whether `pattern` starts at `index`. A byte also matches its pattern byte minus 32, which lets an uppercase
@@ -46,23 +100,31 @@ struct HTMLScanner {
         return nil
     }
 
+    /// Scans what the `<` at `start` opens; returns where scanning resumes and, when what it opens runs on past the end
+    /// of `units`, the state there.
     private func scanAngle<Output: ScannerToken>(
         _ units: Span<UInt8>, from start: Int, tokens: inout [Output]
-    ) -> Int {
+    ) -> (Int, LexState?) {
         if matches(Self.commentStart, in: units, at: start) {
-            let end = find(Self.commentEnd, in: units, from: start + 4).map { $0 + 3 } ?? units.count
-            tokens.append(Output(kind: .comment, range: start ..< end))
-            return end
+            guard let end = find(Self.commentEnd, in: units, from: start + 4) else {
+                tokens.append(Output(kind: .comment, range: start ..< units.count))
+                return (units.count, LexState(mode: .markupComment))
+            }
+            tokens.append(Output(kind: .comment, range: start ..< end + 3))
+            return (end + 3, nil)
         }
         if matches(Self.declarationStart, in: units, at: start) {
-            let end = find(Self.declarationEnd, in: units, from: start).map { $0 + 1 } ?? units.count
-            tokens.append(Output(kind: .keyword, range: start ..< end))
-            return end
+            guard let end = find(Self.declarationEnd, in: units, from: start) else {
+                tokens.append(Output(kind: .keyword, range: start ..< units.count))
+                return (units.count, LexState(mode: .declaration))
+            }
+            tokens.append(Output(kind: .keyword, range: start ..< end + 1))
+            return (end + 1, nil)
         }
         var index = start + 1
         let isClosing = index < units.count && units[index] == ASCII.slash
         if isClosing { index += 1 }
-        guard index < units.count, ASCII.isAlpha(units[index]) else { return start + 1 }
+        guard index < units.count, ASCII.isAlpha(units[index]) else { return (start + 1, nil) }
 
         let nameStart = index
         while index < units.count,
@@ -71,16 +133,18 @@ struct HTMLScanner {
             index += 1
         }
         tokens.append(Output(kind: .tag, range: start ..< index))
-        let nameEnd = index
-        index = scanAttributes(units, from: index, tokens: &tokens)
-        guard !isClosing else { return index }
-        if isName(Self.script, in: units, nameStart ..< nameEnd) {
-            return find(Self.scriptEnd, in: units, from: index) ?? units.count
-        }
-        if isName(Self.style, in: units, nameStart ..< nameEnd) {
-            return find(Self.styleEnd, in: units, from: index) ?? units.count
-        }
-        return index
+        let name = nameStart ..< index
+        let kind: LexState.ElementKind =
+            if isClosing {
+                .other
+            } else if isName(Self.script, in: units, name) {
+                .script
+            } else if isName(Self.style, in: units, name) {
+                .style
+            } else {
+                .other
+            }
+        return scanAttributes(units, from: index, kind: kind, tokens: &tokens)
     }
 
     /// Whether the tag name in `range` is `name`, in any case.
@@ -90,26 +154,27 @@ struct HTMLScanner {
         return true
     }
 
+    /// Scans a tag's attributes from `start` to the `>` or `/>` that closes it, then skips the body of a `script` or
+    /// `style` element; returns where scanning resumes and, when the tag or the body runs on past the end of `units`,
+    /// the state there.
     private func scanAttributes<Output: ScannerToken>(
-        _ units: Span<UInt8>, from start: Int, tokens: inout [Output]
-    ) -> Int {
+        _ units: Span<UInt8>, from start: Int, kind: LexState.ElementKind, tokens: inout [Output]
+    ) -> (Int, LexState?) {
         var index = start
         while index < units.count {
             let unit = units[index]
             if unit == ASCII.greaterThan {
                 tokens.append(Output(kind: .tag, range: index ..< (index + 1)))
-                return index + 1
+                return skipBody(units, from: index + 1, kind: kind)
             }
             if unit == ASCII.slash, index + 1 < units.count, units[index + 1] == ASCII.greaterThan {
                 tokens.append(Output(kind: .tag, range: index ..< (index + 2)))
-                return index + 2
+                return skipBody(units, from: index + 2, kind: kind)
             }
             if unit == ASCII.quote || unit == ASCII.apostrophe {
-                let valueStart = index
-                index += 1
-                while index < units.count, units[index] != unit { index += 1 }
-                index = min(index + 1, units.count)
-                tokens.append(Output(kind: .string, range: valueStart ..< index))
+                let (end, open) = scanValue(units, from: index + 1, quote: unit, kind: kind, tokens: &tokens)
+                if open != nil { return (end, open) }
+                index = end
             } else if ASCII.isIdentifierStart(unit) {
                 let nameStart = index
                 while index < units.count,
@@ -122,7 +187,34 @@ struct HTMLScanner {
                 index += 1
             }
         }
-        return index
+        return (index, LexState(mode: .tag, kind: kind))
+    }
+
+    /// Scans an attribute value whose body resumes at `start`, its token taking the opening quote just before `start`
+    /// when there is one in `units`; returns where its tag's attributes resume and, when the value runs on past the end
+    /// of `units`, the state there.
+    private func scanValue<Output: ScannerToken>(
+        _ units: Span<UInt8>, from start: Int, quote: UInt8, kind: LexState.ElementKind, tokens: inout [Output]
+    ) -> (Int, LexState?) {
+        var index = start
+        while index < units.count, units[index] != quote { index += 1 }
+        let valueStart = max(start - 1, 0)
+        guard index < units.count else {
+            if units.count > valueStart { tokens.append(Output(kind: .string, range: valueStart ..< units.count)) }
+            return (units.count, LexState(mode: .attributeValue, quote: quote, kind: kind))
+        }
+        tokens.append(Output(kind: .string, range: valueStart ..< index + 1))
+        return (index + 1, nil)
+    }
+
+    /// Where scanning resumes after a tag closes at `start`: past the body of a `script` or `style` element, at the
+    /// tag that closes it, or at `start` for any other element.
+    private func skipBody(_ units: Span<UInt8>, from start: Int, kind: LexState.ElementKind) -> (Int, LexState?) {
+        guard kind != .other else { return (start, nil) }
+        guard let end = find(Self.rawTextEnd(kind), in: units, from: start) else {
+            return (units.count, LexState(mode: .rawText, kind: kind))
+        }
+        return (end, nil)
     }
 
     private func scanEntity<Output: ScannerToken>(
