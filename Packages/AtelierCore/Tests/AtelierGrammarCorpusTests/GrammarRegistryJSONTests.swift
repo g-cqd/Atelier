@@ -2,8 +2,8 @@ import Foundation
 import Testing
 
 @testable import AtelierGrammar
+@testable import AtelierGrammarCorpus
 @testable import AtelierParser
-@testable import KittySyntax
 
 /// How the registry reads a `languages.json` manifest, and how its compiled-table cache stays readable by, and from,
 /// Foundation's JSON coders.
@@ -124,7 +124,7 @@ struct GrammarRegistryJSONTests {
     }
 
     private func compiledJSONGrammar() throws -> ParseTableCompiler.CompilationResult {
-        let resourcePath = try #require(KittySyntaxResources.bundle.resourcePath)
+        let resourcePath = try #require(GrammarCorpus.bundle.resourcePath)
         return try ParseTableCompiler.compile(GrammarLoader.load(from: "\(resourcePath)/Grammars/json/grammar.json"))
     }
 

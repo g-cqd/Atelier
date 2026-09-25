@@ -1,3 +1,4 @@
+import AtelierGrammarCorpus
 public import AtelierSyntaxModel
 
 /// How a language detects its files.

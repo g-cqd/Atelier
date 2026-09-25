@@ -24,7 +24,7 @@ enum BundledJSONFixture {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appending(path: "Apps/KittyCode/Sources/KittySyntax/Grammars/json")
+            .appending(path: "Packages/AtelierCore/Sources/AtelierGrammarCorpus/Grammars/json")
         let grammar = try GrammarLoader.parse(Data(contentsOf: directory.appending(path: "grammar.json")))
         let query = try QueryParser.parse(
             String(contentsOf: directory.appending(path: "highlights.scm"), encoding: .utf8))
