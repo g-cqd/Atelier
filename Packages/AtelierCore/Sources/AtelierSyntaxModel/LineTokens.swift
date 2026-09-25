@@ -1,8 +1,9 @@
-/// Tokens cut at line boundaries and rebased on their line, with every line's tokens in one flat buffer.
+/// Tokens cut at line boundaries and rebased on their line, with every line's tokens in one flat buffer of 12-byte
+/// ``LineToken``s.
 ///
 /// Line `i`'s tokens are `tokens[offsets[i] ..< offsets[i + 1]]`, each range relative to the line's start, so a whole
 /// document costs two allocations rather than one array per line. As a collection it holds one slice of tokens per
-/// line, and reads as `[[HighlightToken]]` did: `lineTokens[i]`, `lineTokens.count`.
+/// line: `lineTokens[i]`, `lineTokens.count`.
 ///
 /// A second per-token buffer can share `offsets`: for token `k` of line `i`, `k` indexes both buffers.
 ///
@@ -10,7 +11,7 @@
 /// UTF-16.
 public struct LineTokens: Sendable, Equatable, RandomAccessCollection {
     /// Every line's tokens, line after line, each range relative to its line's start.
-    public private(set) var tokens: [HighlightToken]
+    public private(set) var tokens: [LineToken]
     /// Where each line's tokens start in `tokens`, plus the end of the last line's: one more entry than lines.
     public private(set) var offsets: [UInt32]
 
@@ -18,7 +19,7 @@ public struct LineTokens: Sendable, Equatable, RandomAccessCollection {
     public var endIndex: Int { offsets.count - 1 }
 
     /// Line `line`'s tokens, ascending and disjoint, each range relative to the line's start.
-    public subscript(line: Int) -> ArraySlice<HighlightToken> {
+    public subscript(line: Int) -> ArraySlice<LineToken> {
         tokens[tokenIndices(ofLine: line)]
     }
 
@@ -33,10 +34,38 @@ public struct LineTokens: Sendable, Equatable, RandomAccessCollection {
         offsets = [UInt32](repeating: 0, count: lineCount + 1)
     }
 
+    /// Lines whose tokens are already cut: line `i`'s are `tokens[offsets[i] ..< offsets[i + 1]]`.
+    /// - Precondition: `offsets` starts at 0, never decreases, and ends at `tokens.count`.
+    public init(tokens: [LineToken], offsets: [UInt32]) {
+        precondition(offsets.first == 0, "the first line's tokens start the buffer")
+        precondition(offsets.last.map(Int.init) == tokens.count, "the last line's tokens end the buffer")
+        precondition(zip(offsets, offsets.dropFirst()).allSatisfy { $0 <= $1 }, "each line's tokens follow the last's")
+        self.tokens = tokens
+        self.offsets = offsets
+    }
+
+    /// The lines of `range`, their tokens copied into a buffer of their own.
+    /// - Complexity: O(tokens and lines of `range`)
+    public func lines(_ range: Range<Int>) -> LineTokens {
+        let first = offsets[range.lowerBound]
+        return LineTokens(
+            tokens: Array(tokens[Int(first) ..< Int(offsets[range.upperBound])]),
+            offsets: offsets[range.lowerBound ... range.upperBound].map { $0 - first })
+    }
+
+    /// Adds `other`'s lines after these.
+    /// - Complexity: O(tokens and lines of `other`)
+    public mutating func append(contentsOf other: LineTokens) {
+        let base = UInt32(tokens.count)
+        tokens.append(contentsOf: other.tokens)
+        offsets.reserveCapacity(offsets.count + other.offsets.count - 1)
+        for offset in other.offsets.dropFirst() { offsets.append(base + offset) }
+    }
+
     /// Cuts `tokens` at the lines that `lineStarts` and `textLength` bound, into the lines
-    /// ``HighlightToken/byLine(_:lineStarts:textLength:)`` returns.
+    /// ``HighlightToken/byLine(_:lineStarts:textLength:)`` returns, less their layers and priorities.
     /// - Parameters:
-    ///   - tokens: Tokens over the whole text, ascending and disjoint.
+    ///   - tokens: Tokens over the whole text, ascending and disjoint: one tier's, its overlaps resolved.
     ///   - lineStarts: Offset of each line's first unit, ascending, in the unit the tokens are measured in. A line ends
     ///     one unit before the next line starts, at its line break.
     ///   - textLength: Length of the whole text in that unit, which ends the last line.
@@ -47,7 +76,7 @@ public struct LineTokens: Sendable, Equatable, RandomAccessCollection {
 
     /// Cuts `tokens` at the lines `lineRanges` gives, each line ending where its own text does, before any line break.
     /// - Parameters:
-    ///   - tokens: Tokens over the whole text, ascending and disjoint.
+    ///   - tokens: Tokens over the whole text, ascending and disjoint: one tier's, its overlaps resolved.
     ///   - lineRanges: Each line's text within the whole text, ascending and disjoint, in the tokens' unit.
     /// - Complexity: O(tokens + lines), in two allocations.
     public init(_ tokens: [HighlightToken], lineRanges: [Range<Int>]) {
@@ -72,13 +101,12 @@ public struct LineTokens: Sendable, Equatable, RandomAccessCollection {
             guard first < past else { continue }
             let start = lineRanges[line].lowerBound
             if nonASCII < start { nonASCII = UTF16Offsets.firstNonASCII(in: text, from: start) }
-            guard nonASCII < start + tokens[past - 1].byteRange.upperBound else { continue }
+            guard nonASCII < start + tokens[past - 1].range.upperBound else { continue }
             let prefix = nonASCII - start
             var byte = nonASCII
             var unit = prefix
             for index in first ..< past {
-                let token = tokens[index]
-                let range = token.byteRange
+                let range = tokens[index].range
                 guard range.upperBound > prefix else { continue }
                 var lower = range.lowerBound
                 if lower > prefix {
@@ -86,9 +114,8 @@ public struct LineTokens: Sendable, Equatable, RandomAccessCollection {
                     lower = unit
                 }
                 UTF16Offsets.advance(&byte, to: start + range.upperBound, in: text, counting: &unit)
-                tokens[index] = HighlightToken(
-                    byteRange: lower ..< unit, role: token.role, modifiers: token.modifiers, layer: token.layer,
-                    priority: token.priority)
+                tokens[index].start = UInt32(lower)
+                tokens[index].length = UInt32(unit - lower)
             }
         }
     }
@@ -98,7 +125,7 @@ public struct LineTokens: Sendable, Equatable, RandomAccessCollection {
     /// Generic rather than over a closure, so each kind of bounds is specialized and inlined.
     private init<Bounds: LineBounds>(_ tokens: [HighlightToken], bounds: Bounds) {
         let lineCount = bounds.count
-        var flat: [HighlightToken] = []
+        var flat: [LineToken] = []
         flat.reserveCapacity(tokens.count)
         var offsets: [UInt32] = []
         offsets.reserveCapacity(lineCount + 1)
@@ -119,9 +146,9 @@ public struct LineTokens: Sendable, Equatable, RandomAccessCollection {
                 if end > start {
                     while offsets.count <= current { offsets.append(UInt32(flat.count)) }
                     flat.append(
-                        HighlightToken(
-                            byteRange: (start - lineStart) ..< (end - lineStart), role: token.role,
-                            modifiers: token.modifiers, layer: token.layer, priority: token.priority))
+                        LineToken(
+                            range: (start - lineStart) ..< (end - lineStart), role: token.role,
+                            modifiers: token.modifiers))
                 }
                 current += 1
             }

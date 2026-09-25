@@ -121,13 +121,11 @@ struct LexerOffsetRegressionTests {
                 let bytes = Array(line.utf8)
                 let expected = byteLines[index]
                     .map { token in
-                        let range = token.byteRange
+                        let range = token.range
                         let units =
                             Self.utf16Count(bytes[..<range.lowerBound])
                             ..< Self.utf16Count(bytes[..<range.upperBound])
-                        return HighlightToken(
-                            byteRange: units, role: token.role, modifiers: token.modifiers, layer: token.layer,
-                            priority: token.priority)
+                        return LineToken(range: units, role: token.role, modifiers: token.modifiers)
                     }
                 #expect(Array(byLine[index]) == expected, "line \(index) of \(text.debugDescription)")
             }
