@@ -71,6 +71,67 @@ struct FileTabScrollRangeTests {
         try Self.expectFirstChange(of: model, in: content, "explorers above, inline, opened by a click")
     }
 
+    /// A tab shown again after the file list comes back where its panes were, not to its first change (book TAB-10,
+    /// DIFF-08): side by side with the explorers in the sidebar, then inline with them above.
+    @Test
+    func `a file tab shown again comes back where it was scrolled, not to its first change`() async throws {
+        let long = (1 ... 200).map { "let value\($0) = \($0)" }
+        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry("long.swift", "3")]
+        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry("long.swift", "4")]
+        harness.reader.blobContents["3"] = Self.text(long)
+        harness.reader.blobContents["4"] = Self.text(long, changing: 120)
+        let model = harness.makeSUT()
+        model.settings.explorerPlacement = .sidebar
+        model.settings.mode = .split
+        let window = Self.window(showing: model)
+        defer { window.close() }
+        let content = try #require(window.contentView)
+        try await harness.load(model)
+        try await settle(window)
+
+        for (placement, mode) in [(ExplorerPlacement.sidebar, ViewMode.split), (.top, .inline)] {
+            let comment: Comment = "explorers \(placement.rawValue), \(mode.rawValue)"
+            model.settings.explorerPlacement = placement
+            model.settings.mode = mode
+            model.pin("long.swift")
+            try await settle(window)
+            try Self.expectFirstChange(of: model, in: content, comment)
+            for pane in try Self.panes(in: content) { Self.scroll(pane, to: 555) }
+            try await settle(window)
+            let before = try Self.panes(in: content).map { try Self.topRow(of: $0) }
+
+            model.showFileList()
+            try await settle(window)
+            model.activateTab(try #require(model.tabs.active?.id ?? model.tabs.tabs.first?.id))
+            try await settle(window)
+
+            #expect(model.scrollRequest == nil, comment)
+            let after = try Self.panes(in: content).map { try Self.topRow(of: $0) }
+            #expect(after.map(\.row) == before.map(\.row), comment)
+            for (was, now) in zip(before, after) { #expect(abs(was.offset - now.offset) < 1, comment) }
+            model.closeTab(try #require(model.tabs.active).id)
+            try await settle(window)
+        }
+    }
+
+    private static func scroll(_ pane: ShownPane, to y: CGFloat) {
+        pane.clip.scroll(to: NSPoint(x: 0, y: y))
+        pane.clip.enclosingScrollView?.reflectScrolledClipView(pane.clip)
+    }
+
+    /// The row at the top of `pane`, and how far into its line the pane is scrolled.
+    private static func topRow(of pane: ShownPane) throws -> (row: Int, offset: CGFloat) {
+        let layoutManager = try #require(pane.textView.textLayoutManager)
+        let content = try #require(layoutManager.textContentManager)
+        let origin = pane.textView.textContainerOrigin.y
+        let fragment = try #require(
+            layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: pane.clip.bounds.minY - origin)))
+        let row = pane.rendered.rowIndex(
+            containing: content.offset(from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
+        )
+        return (row, pane.clip.bounds.minY - origin - fragment.layoutFragmentFrame.minY)
+    }
+
     private static func text(_ lines: [String], changing changed: Int? = nil) -> String {
         var lines = lines
         if let changed { lines[changed] = "let changed = true" }
