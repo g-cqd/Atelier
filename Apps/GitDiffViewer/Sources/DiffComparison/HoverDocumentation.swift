@@ -14,7 +14,8 @@ package enum HoverQuerySide: Sendable, Equatable {
 
 /// The window's hover-documentation state: keeps a doc-comment index fed with both sides of every prepared Swift
 /// file and with the right side's other Swift files, the corpus, and answers hover hits from it, tiered behind a
-/// language server when one is available for the file under the pointer.
+/// language server when one is available for the file under the pointer; a TypeScript, JavaScript or Go file asks its
+/// language server alone.
 ///
 /// A feed indexes only what changed. A feed identical to the last does nothing; a changeset file keeps its entries
 /// while its blob id stays the same; the corpus pass reads only the files not indexed at their blob id. The index
@@ -62,6 +63,8 @@ package final class HoverDocumentationModel {
     private let oldSideDocs: DocIndexHoverProvider
     private let newSideDocs: DocIndexHoverProvider
     private let lspRegistry: LanguageServerRegistry?
+    /// The servers hovers ask, each for its own languages.
+    private let languageServers: [LanguageServerDescriptor]
     private let taskProvider: any TaskProvider
 
     private var filesByIndex: [Int: FileEntry] = [:]
@@ -105,13 +108,16 @@ package final class HoverDocumentationModel {
 
     /// - Parameters:
     ///   - lspRegistry: The language servers of on-disk roots; nil leaves hovers to the index and the SDK tier.
+    ///   - languageServers: The servers hovers ask through `lspRegistry`, each for its own languages.
     ///   - taskProvider: Spawns the feeds' passes.
     ///   - index: The doc-comment index the feeds fill, such as one whose parses a test counts.
     package init(
-        lspRegistry: LanguageServerRegistry?, taskProvider: any TaskProvider = .default,
-        index: DocCommentIndex = DocCommentIndex()
+        lspRegistry: LanguageServerRegistry?,
+        languageServers: [LanguageServerDescriptor] = LanguageServerDescriptor.all,
+        taskProvider: any TaskProvider = .default, index: DocCommentIndex = DocCommentIndex()
     ) {
         self.lspRegistry = lspRegistry
+        self.languageServers = languageServers
         self.taskProvider = taskProvider
         self.index = index
         oldSideDocs = DocIndexHoverProvider(index: index, side: .old)
@@ -197,16 +203,19 @@ package final class HoverDocumentationModel {
         return corpus.filter { !indexed.contains($0.uri) }
     }
 
-    /// Answers a hover hit, in ``DiffTextKit/HoverHit``'s coordinates, through ``AtelierLSP/TieredHoverProviders``:
-    /// the language server (new side of an on-disk file only), the doc-comment index of the hovered side, then the SDK
-    /// tier. Only a Swift file has a hover.
+    /// Answers a hover hit, in ``DiffTextKit/HoverHit``'s coordinates, through ``AtelierLSP/TieredHoverProviders``.
+    /// A Swift file asks the language server (new side of an on-disk file only), the doc-comment index of the hovered
+    /// side, then the SDK tier; a file another of ``languageServers`` serves asks that server alone, on the same
+    /// terms. Any other file has no hover.
     package func hover(fileIndex: Int, side: HoverQuerySide, line: Int, utf16Column: Int) async -> HoverContent? {
         guard let file = filesByIndex[fileIndex] else { return nil }
         let path = side == .new ? (file.rightPath ?? file.leftPath) : file.leftPath
-        // Every tier reads Swift: the language server and the SDK tier ask sourcekit-lsp, and the doc-comment index
-        // parses with swift-syntax, to which another language's comments and strings are code whose brackets never
-        // close. Another language gets no hover rather than a wrong one, and is never parsed.
-        guard Language(fileExtension: URL(filePath: path).pathExtension) == .swift else { return nil }
+        // The doc-comment index parses with swift-syntax, to which another language's comments and strings are code
+        // whose brackets never close, and the SDK tier asks sourcekit-lsp: another language gets its own server's
+        // answer or none, rather than a wrong one, and is never parsed.
+        let language = Language(fileExtension: URL(filePath: path).pathExtension)
+        let isSwift = language == .swift
+        guard isSwift || LanguageServerDescriptor.serving(language, among: languageServers) != nil else { return nil }
         let content = side == .new ? file.newText : file.oldText
         guard !content.isEmpty else { return nil }
         let blobID = side == .new ? file.newBlobID : file.oldBlobID
@@ -216,15 +225,16 @@ package final class HoverDocumentationModel {
 
         let primary = primaryProvider(side: side, onDiskRoot: onDiskRoot)
         let docs = side == .new ? newSideDocs : oldSideDocs
-        let tiers = [primary, docs, sdkProvider].compactMap { $0 }
+        let tiers = isSwift ? [primary, docs, sdkProvider].compactMap { $0 } : [primary].compactMap { $0 }
+        guard !tiers.isEmpty else { return nil }
         return try? await TieredHoverProviders(tiers).hover(query)
     }
 
-    /// The language server tier, for the new side of an on-disk file only: a side read from git history has no
-    /// on-disk document for a server to read.
+    /// The language server tier, for the new side of an on-disk file only: a side read from git history, as a
+    /// commit's own change is, has no on-disk document for a server to read.
     private func primaryProvider(side: HoverQuerySide, onDiskRoot: URL?) -> (any HoverProvider)? {
         guard side == .new, let onDiskRoot, let lspRegistry else { return nil }
-        return LanguageServerHoverProvider(registry: lspRegistry, servers: [.sourceKitLSP], workspaceRoot: onDiskRoot)
+        return LanguageServerHoverProvider(registry: lspRegistry, servers: languageServers, workspaceRoot: onDiskRoot)
     }
 
     /// A `file://` URI under `onDiskRoot` when given, or a synthetic `atelier-blob://<oid>/<path>` URI otherwise,

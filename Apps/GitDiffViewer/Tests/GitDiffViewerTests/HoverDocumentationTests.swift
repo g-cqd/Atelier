@@ -497,6 +497,67 @@ extension HoverDocumentationModelTests {
         _ = await model.hover(fileIndex: 0, side: .new, line: 1, utf16Column: 6)
         #expect(callCount.withLock { $0 } == 1)
     }
+
+    /// The servers a registry was asked to configure, in order.
+    private final class ServerLog: Sendable {
+        private let ids = Mutex<[String]>([])
+
+        var all: [String] { ids.withLock { $0 } }
+
+        /// A registry that records here the server of every configuration it is asked for, and resolves none, so no
+        /// server runs.
+        func registry() -> LanguageServerRegistry {
+            LanguageServerRegistry(
+                admits: { _, _ in true },
+                makeConfiguration: { _, server in
+                    self.ids.withLock { $0.append(server.id) }
+                    return nil
+                })
+        }
+    }
+
+    @Test
+    func `a TypeScript or Go file on disk asks its own language server, on the new side only`() async throws {
+        let servers = ServerLog()
+        let model = makeSUT(lspRegistry: servers.registry())
+        let root = try makeScratchRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let sources = [("web/app.ts", "export const a = 1\n"), ("cmd/main.go", "package main\n")]
+        let files = sources.enumerated()
+            .map { index, source in
+                HoverDocumentationModel.FileEntry(
+                    index: index, leftPath: source.0, rightPath: source.0, oldText: source.1, newText: source.1,
+                    oldBlobID: "old\(index)", newBlobID: "new\(index)")
+            }
+        model.comparisonChanged(root: root, files: files)
+
+        _ = await model.hover(fileIndex: 0, side: .old, line: 0, utf16Column: 13)
+        _ = await model.hover(fileIndex: 1, side: .old, line: 0, utf16Column: 8)
+        #expect(servers.all.isEmpty)
+
+        _ = await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 13)
+        _ = await model.hover(fileIndex: 1, side: .new, line: 0, utf16Column: 8)
+        #expect(servers.all == ["typescript-language-server", "gopls"])
+    }
+
+    @Test
+    func `a file no language server serves gets no hover and starts nothing`() async throws {
+        let servers = ServerLog()
+        let model = makeSUT(lspRegistry: servers.registry())
+        let root = try makeScratchRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let script = "def f():\n    pass\n"
+        model.comparisonChanged(
+            root: root,
+            files: [
+                HoverDocumentationModel.FileEntry(
+                    index: 0, leftPath: "tool.py", rightPath: "tool.py", oldText: script, newText: script,
+                    oldBlobID: "old", newBlobID: "new")
+            ])
+
+        #expect(await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 4) == nil)
+        #expect(servers.all.isEmpty)
+    }
 }
 
 /// A hover tier that records every query and answers each one, so a test sees whether a hover reached it.
