@@ -43,7 +43,8 @@ struct DiagnosticDiffTextView: View {
             hoverResolver: hoverResolver,
             diagnosticOverlay: model.settings.diagnosticsEnabled ? overlay : nil, diagnosticsVersion: version,
             onDiagnosticClick: showDiagnosticPopover,
-            scrollMemory: model.scrollMemory, scrollMemoryPath: scrollMemoryPath
+            scrollMemory: model.scrollMemory, scrollMemoryPath: scrollMemoryPath,
+            scrollsPastEnd: model.settings.scrollsPastEnd, bouncesAtEdges: model.settings.bouncesAtEdges
         )
         .onAppear { recompute() }
         .onChange(of: rendered.id) { recompute() }
