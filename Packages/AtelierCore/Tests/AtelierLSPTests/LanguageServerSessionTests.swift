@@ -214,7 +214,7 @@ struct LanguageServerSessionTests {
         let factory = ScriptedConnectionFactory()
         var configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
-        configuration.requestTimeout = .milliseconds(10)
+        configuration.initializeTimeout = .milliseconds(10)
         configuration.maximumRestarts = 2
         // Zero, so idle-shutdown sleeps resolve at once and are never mistaken for the timeouts below.
         configuration.idleShutdown = .zero
@@ -287,7 +287,7 @@ struct LanguageServerSessionTests {
         let factory = ScriptedConnectionFactory()
         var configuration = LanguageServerSession.Configuration(
             serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
-        configuration.requestTimeout = .milliseconds(10)
+        configuration.initializeTimeout = .milliseconds(10)
         configuration.maximumRestarts = 0
         configuration.idleShutdown = .zero
         let clock = TestClock()
@@ -303,6 +303,36 @@ struct LanguageServerSessionTests {
         // running behind a session that gave up on it.
         let transport = await factory.transport(at: 0)
         #expect(await transport.closeCount.count == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func `the handshake waits out the initialize timeout, not the request timeout`() async throws {
+        let factory = ScriptedConnectionFactory()
+        var configuration = LanguageServerSession.Configuration(
+            serverExecutable: URL(fileURLWithPath: "/usr/bin/true"), workspaceRoot: URL(fileURLWithPath: "/tmp"))
+        configuration.initializeTimeout = .seconds(30)
+        configuration.requestTimeout = .seconds(1)
+        configuration.maximumRestarts = 0
+        let clock = TestClock()
+        let service = LanguageServerSession(configuration: configuration, clock: clock) { _ in await factory.make() }
+
+        async let hover = service.hover(
+            uri: "file:///a.go", languageID: "go", content: "a", line: 0, utf16Column: 0)
+        await factory.waitForGeneration(1)
+        let transport = await factory.transport(at: 0)
+        await transport.sink.waitForCount(1)
+        // A slow server: a request's timeout passes before it answers `initialize`, well within the handshake's.
+        try await clock.waitForSleepers(atLeast: 1)
+        clock.advance(by: configuration.requestTimeout)
+        try respond(transport, id: try #require(try await decodeSent(transport, at: 0).id), result: .object([:]))
+
+        await transport.sink.waitForCount(4)
+        try respond(
+            transport, id: try #require(try await decodeSent(transport, at: 3).id), result: hoverResult(markdown: "a"))
+        #expect(await hover.content?.markdown == "a")
+        #expect(await transport.closeCount.count == 0)
+        transport.answer("shutdown", with: .null)
+        await service.shutdown()
     }
 
     @Test
