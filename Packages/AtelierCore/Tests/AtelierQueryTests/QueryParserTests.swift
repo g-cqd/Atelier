@@ -25,9 +25,15 @@ struct QueryParserTests {
 
     @Test
     func `Parse wildcard`() throws {
-        let query = try QueryParser.parse("(_) @any")
+        let query = try QueryParser.parse("_ @any")
         #expect(query.patterns.count == 1)
         #expect(try requireWildcard(query.patterns[0]) == "any")
+    }
+
+    @Test
+    func `A parenthesized wildcard is a named wildcard node`() throws {
+        let query = try QueryParser.parse("(_) @named")
+        #expect(query.patterns == [.nodeMatch(type: QueryPattern.namedWildcardType, children: [], capture: "named")])
     }
 
     @Test
