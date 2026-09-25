@@ -56,12 +56,15 @@ public struct LanguageServerDescriptor: Sendable, Equatable, Identifiable {
     /// Whether the server answers sourcekit-lsp's `textDocument/symbolInfo`, from which a system symbol's page in
     /// Apple's developer documentation is found.
     public let resolvesDocumentationPages: Bool
+    /// The runtime the server's executable starts through its `#!/usr/bin/env` line, as `node`; nil for a native one.
+    public let runtimeExecutableName: String?
 
     public init(
         id: String, displayName: String, executableNames: [String], arguments: [String] = [],
         languages: Set<Language>, rootMarkers: [String] = [], initializationOptions: JSONValue? = nil,
         environmentName: String, searchesToolchain: Bool = false, homeRelativeDirectories: [String] = [],
-        tuning: SessionTuning = SessionTuning(), resolvesDocumentationPages: Bool = false
+        tuning: SessionTuning = SessionTuning(), resolvesDocumentationPages: Bool = false,
+        runtimeExecutableName: String? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -75,6 +78,7 @@ public struct LanguageServerDescriptor: Sendable, Equatable, Identifiable {
         self.homeRelativeDirectories = homeRelativeDirectories
         self.tuning = tuning
         self.resolvesDocumentationPages = resolvesDocumentationPages
+        self.runtimeExecutableName = runtimeExecutableName
     }
 
     /// The query that finds the server's executable: `customPath` first, after the environment variable
@@ -92,6 +96,34 @@ public struct LanguageServerDescriptor: Sendable, Equatable, Identifiable {
         using locator: any ExecutableLocating, customPath: String?, overridePrefix: String?
     ) async -> URL? {
         await locator.locateExecutable(executableQuery(customPath: customPath, overridePrefix: overridePrefix))
+    }
+
+    /// The environment a session of the server runs with: nil, the app's own, for a server without a runtime;
+    /// otherwise `base` with the runtime's directory first on its `PATH`, so that `#!/usr/bin/env node` finds it in an
+    /// app launched from the Finder, whose `PATH` holds only the system's directories. The runtime is looked for
+    /// next to `serverExecutable` first, where a version manager installs both, then as `locator` finds it; nil when
+    /// neither finds it.
+    public func sessionEnvironment(
+        serverExecutable: URL, locator: any ExecutableLocating, base: [String: String]
+    ) async -> [String: String]? {
+        guard let runtimeExecutableName else { return nil }
+        let sibling = serverExecutable.deletingLastPathComponent().appending(path: runtimeExecutableName)
+        let runtime: URL
+        if FileManager.default.isExecutableFile(atPath: sibling.path(percentEncoded: false)) {
+            runtime = sibling
+        } else if let located = await locator.locateExecutable(
+            ExecutableQuery(names: [runtimeExecutableName], homeRelativeDirectories: homeRelativeDirectories))
+        {
+            runtime = located
+        } else {
+            return nil
+        }
+        let directory = runtime.deletingLastPathComponent().path(percentEncoded: false)
+        let trimmed = directory.count > 1 && directory.hasSuffix("/") ? String(directory.dropLast()) : directory
+        let rest = (base["PATH"] ?? "").split(separator: ":").map(String.init).filter { $0 != trimmed }
+        var environment = base
+        environment["PATH"] = ([trimmed] + rest).joined(separator: ":")
+        return environment
     }
 
     /// The language ID a document at `url` carries to the server: the React dialects' own IDs for `.tsx` and `.jsx`,
@@ -126,7 +158,8 @@ extension LanguageServerDescriptor {
         id: "typescript-language-server", displayName: "typescript-language-server",
         executableNames: ["typescript-language-server"], arguments: ["--stdio"], languages: [.typescript, .javascript],
         rootMarkers: ["tsconfig.json", "jsconfig.json", "package.json"], environmentName: "TYPESCRIPT_LANGUAGE_SERVER",
-        homeRelativeDirectories: userInstallDirectories, tuning: SessionTuning(initializeTimeout: .seconds(10)))
+        homeRelativeDirectories: userInstallDirectories, tuning: SessionTuning(initializeTimeout: .seconds(10)),
+        runtimeExecutableName: "node")
 
     /// gopls, for Go; a `go.work` anywhere above wins over a nearer `go.mod`.
     public static let gopls = LanguageServerDescriptor(
@@ -148,13 +181,17 @@ extension LanguageServerDescriptor {
 // MARK: - Sessions
 
 extension LanguageServerSession.Configuration {
-    /// A session of `descriptor`'s server, run from `serverExecutable`, with its arguments, options and tuning.
-    public init(descriptor: LanguageServerDescriptor, serverExecutable: URL, workspaceRoot: URL) {
+    /// A session of `descriptor`'s server, run from `serverExecutable` with `environment`, nil for the app's own, and
+    /// with the server's arguments, options and tuning.
+    public init(
+        descriptor: LanguageServerDescriptor, serverExecutable: URL, workspaceRoot: URL,
+        environment: [String: String]? = nil
+    ) {
         self.init(
             serverExecutable: serverExecutable, serverArguments: descriptor.arguments, workspaceRoot: workspaceRoot,
             idleShutdown: descriptor.tuning.idleShutdown, initializeTimeout: descriptor.tuning.initializeTimeout,
             requestTimeout: descriptor.tuning.requestTimeout, maximumRestarts: descriptor.tuning.maximumRestarts,
             openDocumentLimit: descriptor.tuning.openDocumentLimit,
-            initializationOptions: descriptor.initializationOptions)
+            initializationOptions: descriptor.initializationOptions, environment: environment)
     }
 }
