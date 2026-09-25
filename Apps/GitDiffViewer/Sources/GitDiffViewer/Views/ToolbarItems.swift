@@ -68,15 +68,15 @@ struct SelectedFileLabel: View {
     let model: DiffViewerModel
 
     var body: some View {
-        let path = model.selectedPath.flatMap { model.comparison.isFile($0) ? $0 : nil }
+        let path = model.selectedPath.flatMap(model.filePath(forSelection:))
         let summary = path.map { model.changeSummary(for: $0, rendered: model.rendered) }
         HStack(spacing: 6) {
             if let path, let summary {
                 ChangeGlyphBadge(
                     glyph: ChangeGlyph(summary.kind), scheme: model.settings.badgeScheme,
-                    state: model.badgeState(ofPath: path))
+                    state: model.shownBadgeState(ofPath: path))
             }
-            Text(path.map { (model.displayPath(for: $0) as NSString).lastPathComponent } ?? "No file")
+            Text(path.map { (model.shownDisplayPath(for: $0) as NSString).lastPathComponent } ?? "No file")
                 .font(.callout)
                 .foregroundStyle(path == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
                 .lineLimit(1)
@@ -85,7 +85,7 @@ struct SelectedFileLabel: View {
         .frame(maxWidth: 220)
         .toolbarItemMetrics()
         .accessibilityLabel("Current file")
-        .help(path.map { model.displayPath(for: $0) } ?? "The file on screen")
+        .help(path.map { model.shownDisplayPath(for: $0) } ?? "The file on screen")
     }
 }
 

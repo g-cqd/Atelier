@@ -40,6 +40,9 @@ package final class DiffViewerModel {
     package internal(set) var folding = CardFolding()
     /// The merged sidebar's grouping by commit, when the setting asks for it (GIT-06).
     package internal(set) var commitGroups = CommitGroupsState.off
+    /// The change the selection shows when it is a commit group's own, or a file's under one, rather than the
+    /// comparison's (D39); nil for every other selection.
+    package internal(set) var commitScope: CommitScope?
     package internal(set) var scrollRequest: ScrollRequest?
     /// The palette for the selected Xcode theme, or the system one when none is selected or it cannot be read.
     /// Read once per theme change: it comes from a property list on disk.
@@ -74,9 +77,9 @@ package final class DiffViewerModel {
     /// The commits the last grouping load listed, reused by the next load of the same range.
     @ObservationIgnored var commitListing: CommitListing?
     @ObservationIgnored var diagnosticsGeneration = 0
-    /// ``diagnosticFilePathMaps`` of the pipeline's target at a ``RenderPipeline/targetVersion``, which a pane per card
-    /// reads on every findings change.
-    @ObservationIgnored var diagnosticFilePathCache: (targetVersion: Int, paths: DiagnosticFilePaths)?
+    /// ``diagnosticFilePathMaps`` of the pipeline's target at a ``RenderPipeline/targetVersion`` and under a
+    /// ``commitScope``'s key, which a pane per card reads on every findings change.
+    @ObservationIgnored var diagnosticFilePathCache: (targetVersion: Int, scope: String?, paths: DiagnosticFilePaths)?
     /// How many times ``diagnosticFilePathMaps`` built its maps rather than reading them from its cache.
     @ObservationIgnored package internal(set) var diagnosticFilePathBuilds = 0
     /// Sides whose last listing failed. While one has, the comparison keeps what is published, and
@@ -190,6 +193,8 @@ package final class DiffViewerModel {
     /// Whether the selection names a directory or nothing, in which case every changed file underneath is shown.
     package var isShowingCombinedFiles: Bool {
         guard let selectedPath else { return true }
+        // A file under a commit group shows on its own, whether or not the comparison lists its path.
+        if ExplorerSection.path(inSelection: selectedPath) != nil { return false }
         return !comparison.isFile(selectedPath)
     }
 
@@ -416,9 +421,11 @@ package final class DiffViewerModel {
     }
 
     /// The badge for a file, from its status and its rendered line counts when they are known.
+    /// A file a commit group's own change shows reads that change's kind.
     package func changeSummary(for leftPath: String, rendered: RenderedDiff?) -> FileChangeSummary {
         FileChangeSummary(
-            kind: comparison.summaryKind(for: leftPath, directoryStatus: trees.statuses[leftPath]),
+            kind: commitScope?.file(atPath: leftPath)?.summaryKind
+                ?? comparison.summaryKind(for: leftPath, directoryStatus: trees.statuses[leftPath]),
             addedLines: rendered?.addedLines ?? 0, removedLines: rendered?.removedLines ?? 0
         )
     }
@@ -428,7 +435,8 @@ package final class DiffViewerModel {
     /// Whether `path`'s card folds. A file renamed without changes has no content to fold: its card is its header
     /// alone and never unfolds (DIFF-07).
     package func isFoldable(_ path: String) -> Bool {
-        !comparison.isRenamedWithoutChanges(path)
+        if let file = commitScope?.file(atPath: path) { return !file.isRenameWithoutChanges }
+        return !comparison.isRenamedWithoutChanges(path)
     }
 
     /// The cards of the list that fold, in list order.
@@ -487,15 +495,20 @@ package final class DiffViewerModel {
     func render(keepingPublished: Bool = true) {
         configurePipeline()
         guard let leftSource = left.source, let rightSource = right.source else {
+            setCommitScope(nil)
             pipeline.clear()
             return
         }
+        let scope = selectedPath.flatMap(selectionScope(for:))
+        setCommitScope(scope)
         // A side still loading, or failed, renders the selection once a load lands; what is published stays until
         // then, marked when the user asked for something else meanwhile.
         guard !left.isLoading, !right.isLoading, failedLoads.isEmpty else {
             if !keepingPublished { showsPreviousSelection = true }
             return
         }
+        // A commit's own change, or the working tree's, reads sides of its own (D39).
+        if let scope { return render(scope, keepingPublished: keepingPublished) }
         let target: RenderPipeline.Target
         if isShowingCombinedFiles {
             let paths =
@@ -511,7 +524,8 @@ package final class DiffViewerModel {
             }
             target = .cards(paths.map(comparison.pair(for:)))
         } else if let selectedPath {
-            target = .file(comparison.pair(for: selectedPath))
+            // A file under Earlier Changes is the comparison's own pair: no listed commit touched it.
+            target = .file(comparison.pair(for: ExplorerSection.path(inSelection: selectedPath) ?? selectedPath))
         } else {
             showsPreviousSelection = false
             pipeline.clear()
@@ -551,7 +565,7 @@ package final class DiffViewerModel {
                     showsPreviousSelection = false
                 }
                 if isShowingCombinedFiles {
-                    folding.applyDefaults(to: renderedFiles.map(\.path), status: status(ofPath:))
+                    folding.applyDefaults(to: renderedFiles.map(\.path), status: shownStatus(ofPath:))
                     // With the scroll to the first change off, the file opens at its top (DIFF-08).
                 } else if isFirst, settings.scrollsToFirstChange, let rendered, rendered.changeCount > 0,
                     !rendered.keepsScrollPosition, !returnsToRememberedPosition

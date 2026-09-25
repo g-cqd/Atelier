@@ -18,7 +18,7 @@ ancestry, it can only work in flat sidebar, for repos".
 | Uncommitted changes | One **Uncommitted Changes** section first, when the right side is the working tree; staged or not shows on the badge (CARD-09) |
 | Ancestry | Only **left is an ancestor of right** (`git merge-base --is-ancestor`); a diverged left offers "Compare from the merge base" instead |
 | Section header | Subject and file count on the row; short id, author, date and full message in the tooltip; no line counts |
-| Selecting a section | Opens the commit's files in the temporary tab, as selecting a folder does, with the **net** diff; "Compare This Commit" opens the per-commit diff |
+| Selecting a section or a file under it | Shows **that commit's own change**, first parent to commit; Uncommitted Changes shows `HEAD` against the working tree (D39, replacing D31's net diff) |
 | Cap | **1,000** commits, loaded in pages of **200**, newest first; the rest in a trailing **Earlier Changes** section |
 | Where it applies | The flat style in the merged sidebar ("One merged tree in a sidebar"), for two states of one repository |
 | The setting | "Group changed files by commit", off by default, General ▸ File Explorers and the View options menu |
@@ -223,11 +223,40 @@ Changes on top, so the list reads from the right side's state backwards to the l
   Cons: a second pair of sides inside one comparison; every card, badge, rename and GIT-04 cache assumes one left and
   one right.
 
-**Recommendation: B**, plus a context menu on the section: **Compare This Commit** opens a comparison of the commit's
-first parent against the commit (two `.gitRef` sides the app already supports), which gives C's view without a new
-kind of card, and **Copy Commit ID**. Choosing a file row keeps today's behaviour: the file's net card. A file that sits
-in several sections is the same selection (one left path); the outline highlights the row that was clicked, or the
-newest one when the model selects it.
+D31 chose B. In use it read as "a weird sum": the same file under two commits showed the same diff twice, the whole
+range's. **D39 replaces it with C**, for sections and for the files under them (GIT-06 criterion 5):
+
+- **A file under a commit** shows that commit's own change to it, from the commit's first parent to the commit: a
+  rename inside the commit reads its old path at the parent and its new path at the commit, an addition has an empty
+  left side, a deletion an empty right side. The change is the one the listing already recorded
+  (`GitCommitChanges`), with its paths and both blob ids.
+- **A selected commit section** shows each of its files that way, as cards in its temporary tab; a double click pins
+  the tab. The cards are the section's rows, the files the net diff holds, so the tab lists what the sidebar lists.
+- **Uncommitted Changes** shows `HEAD` against the working tree, for its files and for the section.
+- **Earlier Changes** stands for the range from the left side to the oldest listed commit's first parent. No listed
+  commit touched its files, so for them that range and the comparison agree: they show the comparison's own pairs.
+- **Everything else** (grouping off, the plain list, a folder, the file list's tab) shows the comparison, left against
+  right, as before. "Compare This Commit" and "Copy Commit ID" stay on the section's context menu.
+
+How it is built, with no second comparison model:
+
+- **Selection keys.** A section is selected under `\0section:<id>`; a file under it under
+  `\0section:<id>\0<path>`, so the same file under two commits is two selections: two tabs, two scroll positions, two
+  highlighted rows. The outline keys each row by its section and path and selects that key; a plain path from the
+  model still lands on the clicked row, or the newest section's.
+- **A scope on the selection.** `CommitScope` (`DiffComparison/CommitScope.swift`) is what a commit or Uncommitted
+  Changes key shows: two sources of its own, `.gitRef(parent)` and `.gitRef(commit)`, or `.gitRef(HEAD)` and the
+  working tree, and one `FilePair` per file built from the change's own paths and blob ids (a working-tree file takes
+  the blob its side's listing hashed). The model derives it from the selection on every render and hands its target
+  and sources to the same `RenderPipeline`. The blobs are read by id through `cat-file --batch` in the preparer's
+  off-main load, and a newer selection bumps the pipeline's generation, so a late result for the previous one is
+  dropped.
+- **What names it.** A tab reads the file's name and the commit's subject and short id (`name · subject · abc1234`), a
+  section's tab the subject and short id; its tooltip adds the header's. The status bar names the file by the change's
+  own path and says which section it comes from, and its `+N −M` counts are the shown diff's. A card's header, badge
+  letter and fold read the change's own paths and kind; its badge reads committed under a commit.
+- **Diagnostics** apply only to a side the change shares with the comparison, the only sides analyzed: the working
+  tree's under Uncommitted Changes, none under a commit.
 
 A section row therefore stops being an AppKit group row (those cannot be selected): it becomes an expandable row
 drawn as a header. The Ignored Files section keeps its group row.
@@ -479,8 +508,9 @@ criterion 2: git operations reusable by the terminal editor).
    Files: `GitDiffViewer/Views/FileOutlineView.swift`, `GitDiffViewer/Views/FileExplorerView.swift`,
    `DiffComparison/ExplorerUIState.swift`; then `Apps/GitDiffViewer/scripts/main-actor-budget.sh` alone at weight 8.
 8. **Selecting a section.** A tab target for a commit's files (`DiffTab` gains a target: a path or a commit group),
-   rendering their net cards in list order, titled by the subject; context menu Compare This Commit and Copy Commit
-   ID; Compare This Range for Earlier Changes.
+   rendering their cards in list order, titled by the subject; context menu Compare This Commit and Copy Commit
+   ID; Compare This Range for Earlier Changes. D39 then made a section and each file under it show the commit's own
+   change (question 8).
    Files: `DiffTabs.swift`, `DiffViewerModel+Selection.swift`, `DiffViewerModel+Presentation.swift`,
    `GitDiffViewer/Views/TabBarView.swift`, `FileOutlineView.swift`; tests in `DiffTabsTests.swift` and
    `DiffViewerModelSelectionTests.swift`.

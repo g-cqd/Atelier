@@ -62,11 +62,11 @@ private struct CardTitle: Equatable {
     let badgeState: BadgeChangeState
 
     init(file: RenderedFile, model: DiffViewerModel) {
-        label = model.comparison.cardLabel(for: file.path)
+        label = model.cardLabel(for: file.path)
         summary = model.changeSummary(for: file.path, rendered: file.rendered)
         diagnostics = model.settings.diagnosticsEnabled ? model.diagnosticSeverityCounts(for: file.path) : nil
         badgeScheme = model.settings.badgeScheme
-        badgeState = model.badgeState(ofPath: file.path)
+        badgeState = model.shownBadgeState(ofPath: file.path)
     }
 }
 

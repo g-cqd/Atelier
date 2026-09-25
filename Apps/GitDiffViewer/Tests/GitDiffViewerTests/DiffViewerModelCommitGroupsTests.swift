@@ -290,7 +290,7 @@ struct DiffViewerModelCommitGroupsTests {
     // MARK: Selecting a section (step 8)
 
     @Test
-    func `selecting a commit section opens its files' net diff in the temporary tab, titled by its subject`()
+    func `selecting a commit section opens its own change in the temporary tab, titled by its subject and id`()
         async throws
     {
         let history = ScriptedHistory(length: 3)
@@ -305,8 +305,13 @@ struct DiffViewerModelCommitGroupsTests {
         #expect(sut.tabs.activePath == key)
         #expect(sut.isShowingCombinedFiles)
         #expect(sut.combinedFiles == ["a.swift", "file2.swift"])
-        #expect(sut.selectionTitle(key) == "Commit 2")
-        #expect(sut.selectionLabel(key) == "Commit 2")
+        #expect(
+            sut.pipeline.publishedSources
+                == RenderPipeline.Sources(
+                    left: .gitRef(repository: Self.repository, ref: "c1"),
+                    right: .gitRef(repository: Self.repository, ref: "c2")))
+        #expect(sut.selectionTitle(key) == "Commit 2 · c2")
+        #expect(sut.selectionLabel(key) == "Commit 2 · c2")
         #expect(sut.selectionDetail(key).contains("Tess"))
     }
 

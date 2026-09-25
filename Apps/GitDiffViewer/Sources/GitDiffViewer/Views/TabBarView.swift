@@ -41,10 +41,10 @@ struct TabBarView: View {
                         TabItem(
                             tab: tab, title: model.selectionTitle(tab.path), detail: model.selectionDetail(tab.path),
                             isActive: tab.id == model.tabs.activeID,
-                            isFolder: !model.comparison.isFile(tab.path),
-                            glyph: model.status(ofPath: tab.path).flatMap(ChangeGlyph.init),
+                            isFolder: !model.selectionIsFile(tab.path),
+                            glyph: model.selectionStatus(tab.path).flatMap(ChangeGlyph.init),
                             badgeScheme: model.settings.badgeScheme,
-                            badgeState: model.badgeState(ofPath: tab.path)
+                            badgeState: model.selectionBadgeState(tab.path)
                         ) {
                             model.activateTab(tab.id)
                         } pin: {

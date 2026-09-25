@@ -54,10 +54,15 @@ package struct CommitGrouping: Sendable, Equatable {
         /// The file's path in this section's change when it differs from the one the list shows, for the tooltip's
         /// "Named … in this commit"; nil otherwise.
         package let pathInChange: String?
+        /// The section's own change to the file, which a selection of the row shows (D39): a commit's against its
+        /// first parent, or the working tree's against `HEAD`; nil under Earlier Changes, which no listed change
+        /// touched.
+        package let change: GitFileChange?
 
-        package init(path: String, pathInChange: String? = nil) {
+        package init(path: String, pathInChange: String? = nil, change: GitFileChange? = nil) {
             self.path = path
             self.pathInChange = pathInChange
+            self.change = change
         }
     }
 
@@ -145,7 +150,9 @@ package struct CommitGrouping: Sendable, Equatable {
                 if keys.isEmpty { changedBack += 1 }
                 for key in keys where rows[key] == nil {
                     let shown = comparison.displayPath(for: key)
-                    rows[key] = Row(path: key, pathInChange: touch.path == shown ? nil : touch.path)
+                    rows[key] = Row(
+                        path: key, pathInChange: touch.change.path == shown ? nil : touch.change.path,
+                        change: touch.change)
                 }
             }
             attributed.formUnion(rows.keys)
@@ -206,10 +213,10 @@ package struct CommitGrouping: Sendable, Equatable {
     }
 }
 
-/// One file a step changed: which identity, under which path in that step.
+/// One file a step changed: which identity, and the step's own change to it.
 private struct Touch {
     let identity: Int
-    let path: String
+    let change: GitFileChange
 }
 
 /// Follows files through a sequence of changes, oldest first, giving each file one identity across its renames.
@@ -239,7 +246,7 @@ private struct IdentityTracker {
                 identity = identities.count
                 identities.append(Identity(origin: change.status == .added ? nil : before, current: before))
             }
-            touches.append(Touch(identity: identity, path: change.path))
+            touches.append(Touch(identity: identity, change: change))
             switch change.status {
                 case .deleted:
                     moves.append((identity, before))
@@ -255,7 +262,7 @@ private struct IdentityTracker {
             byPath[move.from] = nil
         }
         for touch in touches {
-            let destination = destinations[touch.identity] ?? touch.path
+            let destination = destinations[touch.identity] ?? touch.change.path
             identities[touch.identity].current = destination
             if let destination { byPath[destination] = touch.identity }
         }
