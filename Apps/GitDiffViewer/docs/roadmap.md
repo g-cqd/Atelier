@@ -142,7 +142,7 @@ they show, are in `xcode-reference.md`.
    ribbon: highlight the enclosing block on hover, and disclose or collapse a block. It takes little or no extra
    width: the gutter's spacing is reworked into layers, with line numbers, diagnostics tint, change markers and scope
    controls on separate sides and z levels. Scope comes from the syntax model (SwiftSyntax for Swift, the lexer's
-   brackets elsewhere).
+   brackets elsewhere). Designed, with D18's Xcode diff colours, in `scope-ribbon-design.md`.
 4. **Compact inline view (a setting).** An inline mode that shows only the newest file's final content. The gutter,
    in the same visual language as the scope ribbon, marks each place with a change: an addition, a removal or a
    modification. Clicking a marker discloses that change in place, above the resulting lines. Compatible with the
