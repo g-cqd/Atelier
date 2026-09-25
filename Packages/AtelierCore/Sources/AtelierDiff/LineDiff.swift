@@ -8,6 +8,28 @@ public enum DiffEdit: Equatable, Sendable {
 /// Produces an edit script between two interned line sequences.
 public protocol LineDiffing: Sendable {
     func diff(_ old: [Int], _ new: [Int]) -> [DiffEdit]
+    /// The edit script within `limits`, and whether the search found the script it looks for rather than settling at
+    /// the cost limit or stopping for a cancellation.
+    func diff(_ old: [Int], _ new: [Int], limits: DiffLimits) -> LineDiffResult
+}
+
+extension LineDiffing {
+    /// A differ that knows no limits: its script, taken as the one it looks for.
+    public func diff(_ old: [Int], _ new: [Int], limits: DiffLimits) -> LineDiffResult {
+        LineDiffResult(edits: diff(old, new), isMinimal: true)
+    }
+}
+
+/// An edit script, and whether it is the one its search looks for: false when a search settled for a heuristic split
+/// at the cost limit, or stopped for a cancellation, which leaves a valid script that may not be the shortest.
+public struct LineDiffResult: Sendable, Equatable {
+    public var edits: [DiffEdit]
+    public var isMinimal: Bool
+
+    public init(edits: [DiffEdit], isMinimal: Bool) {
+        self.edits = edits
+        self.isMinimal = isMinimal
+    }
 }
 
 /// Adjusts an edit script without changing what it reconstructs, using the line text for its judgement.
@@ -41,6 +63,10 @@ public struct MyersLineDiff: LineDiffing {
     public func diff(_ old: [Int], _ new: [Int]) -> [DiffEdit] {
         LineDiff.diff(old, new, anchoringRareLines: false)
     }
+
+    public func diff(_ old: [Int], _ new: [Int], limits: DiffLimits) -> LineDiffResult {
+        LineDiff.diff(old, new, anchoringRareLines: false, limits: limits)
+    }
 }
 
 /// Git's `histogram` algorithm: the rarest lines common to both sides are matched first and anchor the alignment,
@@ -51,6 +77,10 @@ public struct HistogramLineDiff: LineDiffing {
 
     public func diff(_ old: [Int], _ new: [Int]) -> [DiffEdit] {
         LineDiff.diff(old, new, anchoringRareLines: true)
+    }
+
+    public func diff(_ old: [Int], _ new: [Int], limits: DiffLimits) -> LineDiffResult {
+        LineDiff.diff(old, new, anchoringRareLines: true, limits: limits)
     }
 }
 
@@ -74,19 +104,52 @@ public enum LineDiff {
     static func diff<Element: Hashable>(
         _ old: [Element], _ new: [Element], anchoringRareLines: Bool, costLimit: Int?
     ) -> [DiffEdit] {
+        diff(old, new, anchoringRareLines: anchoringRareLines, limits: DiffLimits(costLimit: costLimit)).edits
+    }
+
+    /// ``diff(_:_:anchoringRareLines:)`` within `limits`: their cost limit in place of every search's own, and the
+    /// lines on one side only set aside before Myers when they say so.
+    static func diff<Element: Hashable>(
+        _ old: [Element], _ new: [Element], anchoringRareLines: Bool, limits: DiffLimits
+    ) -> LineDiffResult {
         var edits: [DiffEdit] = []
         edits.reserveCapacity(max(old.count, new.count))
         let middle = matchEnds(old, new, into: &edits)
+        var search = SearchOutcome()
         if anchoringRareLines {
-            var histogram = HistogramSolver(old: old, new: new, costLimit: costLimit)
+            let (oldIdentifiers, newIdentifiers, bound) = denseIdentifiers(old, new)
+            var histogram = HistogramSolver(old: oldIdentifiers, new: newIdentifiers, bound: bound, limits: limits)
             histogram.solve(old: middle.old, new: middle.new, into: &edits)
+            search = histogram.outcome
         } else {
-            _ = solveMatched(old, middle.old, new, middle.new, costLimit: costLimit, into: &edits)
+            search = solveMatched(old, middle.old, new, middle.new, limits: limits, into: &edits)
         }
         for offset in 0 ..< (old.count - middle.old.upperBound) {
             edits.append(.equal(old: middle.old.upperBound + offset, new: middle.new.upperBound + offset))
         }
-        return edits
+        return LineDiffResult(edits: edits, isMinimal: !search.wasCancelled && !search.reachedCostLimit)
+    }
+
+    /// `old` and `new` as identifiers in `0 ..< bound`, equal where the elements are: the identifiers themselves
+    /// when they already are small non-negative integers, as interned lines are, else numbered in first-seen order.
+    /// - Complexity: O(`old.count` + `new.count`)
+    static func denseIdentifiers<Element: Hashable>(_ old: [Element], _ new: [Element]) -> ([Int], [Int], Int) {
+        let cap = 4 * (old.count + new.count) + 1_024
+        if let oldIdentifiers = old as? [Int], let newIdentifiers = new as? [Int] {
+            let low = min(oldIdentifiers.min() ?? 0, newIdentifiers.min() ?? 0)
+            let high = max(oldIdentifiers.max() ?? 0, newIdentifiers.max() ?? 0)
+            if low >= 0, high < cap { return (oldIdentifiers, newIdentifiers, high + 1) }
+        }
+        var numbers: [Element: Int] = [:]
+        numbers.reserveCapacity(old.count)
+        let number = { (element: Element) -> Int in
+            if let known = numbers[element] { return known }
+            numbers[element] = numbers.count
+            return numbers.count - 1
+        }
+        let oldIdentifiers = old.map(number)
+        let newIdentifiers = new.map(number)
+        return (oldIdentifiers, newIdentifiers, numbers.count)
     }
 
     /// The shortest edit script when it holds at most `maximumEdits` edits, else nil, as it is when the task is
@@ -157,15 +220,23 @@ public enum LineDiff {
     /// Myers over the lines of the two ranges that occur on both sides, the others put back as deletions and
     /// insertions where they fall. A line found on one side only can never be matched, so setting it aside leaves the
     /// shortest script as short as it was while the search runs on a smaller problem; git's `xdl_cleanup_records`.
-    /// - Returns: Whether a cancellation stopped the search.
+    /// With `limits.discardsUnmatchedLines` off, Myers runs over the ranges whole.
+    /// - Returns: Whether a cancellation stopped the search, or the cost limit cut it short.
     static func solveMatched<Element: Hashable>(
-        _ old: [Element], _ oldRange: Range<Int>, _ new: [Element], _ newRange: Range<Int>, costLimit: Int?,
+        _ old: [Element], _ oldRange: Range<Int>, _ new: [Element], _ newRange: Range<Int>, limits: DiffLimits,
         into edits: inout [DiffEdit]
-    ) -> Bool {
+    ) -> SearchOutcome {
+        guard limits.discardsUnmatchedLines else {
+            var solver = MyersSolver(
+                old: old, new: new,
+                costLimit: limits.costLimit ?? Self.costLimit(lines: oldRange.count + newRange.count))
+            solver.solve(old: oldRange, new: newRange, into: &edits)
+            return SearchOutcome(wasCancelled: solver.wasCancelled, reachedCostLimit: solver.reachedCostLimit)
+        }
         let (keptOld, keptNew) = matchedPositions(old, oldRange, new, newRange)
         var solver = MyersSolver(
             old: keptOld.map { old[$0] }, new: keptNew.map { new[$0] },
-            costLimit: costLimit ?? Self.costLimit(lines: keptOld.count + keptNew.count))
+            costLimit: limits.costLimit ?? Self.costLimit(lines: keptOld.count + keptNew.count))
         var kept: [DiffEdit] = []
         kept.reserveCapacity(keptOld.count + keptNew.count)
         solver.solve(old: 0 ..< keptOld.count, new: 0 ..< keptNew.count, into: &kept)
@@ -201,7 +272,7 @@ public enum LineDiff {
         }
         for index in oldIndex ..< oldRange.upperBound { edits.append(.delete(old: index)) }
         for index in newIndex ..< newRange.upperBound { edits.append(.insert(new: index)) }
-        return solver.wasCancelled
+        return SearchOutcome(wasCancelled: solver.wasCancelled, reachedCostLimit: solver.reachedCostLimit)
     }
 
     /// The positions in `oldRange` whose line also occurs in `newRange`, and the other way round.
@@ -250,17 +321,7 @@ public enum LineDiff {
     public static func diffLines(old: some DiffSource, new: some DiffSource, pipeline: DiffPipeline = DiffPipeline())
         -> [DiffEdit]
     {
-        var interner = LineInterner(whitespace: pipeline.whitespace)
-        let oldLines = interner.intern(old)
-        let newLines = interner.intern(new)
-        let context = LineDiffContext(
-            old: oldLines.identifiers, new: newLines.identifiers, oldIndents: oldLines.indents,
-            newIndents: newLines.indents)
-        var edits = pipeline.lineDiff.diff(context.old, context.new)
-        for refiner in pipeline.refiners {
-            edits = refiner.refine(edits, lines: context)
-        }
-        return edits
+        makeStructure(old: old, new: new, pipeline: pipeline, limits: DiffLimits()).edits
     }
 
     /// Leading whitespace width with tabs to the next multiple of eight, or nil for a blank line; git's `get_indent`.
