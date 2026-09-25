@@ -42,7 +42,9 @@ public enum HoverOutcome: Sendable, Equatable {
     }
 }
 
-/// A long-lived sourcekit-lsp session, kept warm across hovers and shut down when idle.
+/// A long-lived language server session, kept warm across hovers and shut down when idle. Nothing in it is one
+/// server's: the executable, its arguments and its options come in through the ``Configuration``, which
+/// ``LanguageServerDescriptor`` builds for each server.
 ///
 /// The server is spawned and initialized on first use, keeps at most ``Configuration/openDocumentLimit`` documents
 /// open, and is shut down after ``Configuration/idleShutdown`` without a hover. A hover after any shutdown
@@ -69,10 +71,6 @@ public actor LanguageServerSession {
         /// The server's options for the session, sent as `initialize`'s `initializationOptions`; nil sends none.
         public var initializationOptions: JSONValue?
 
-        /// The options a sourcekit-lsp hover session starts with: no background indexing, since a hover needs no index
-        /// of the workspace and indexing builds the project.
-        public static let hoverInitializationOptions: JSONValue = .object(["backgroundIndexing": .bool(false)])
-
         public init(
             serverExecutable: URL,
             serverArguments: [String] = [],
@@ -82,7 +80,7 @@ public actor LanguageServerSession {
             requestTimeout: Duration = .seconds(2),
             maximumRestarts: Int = 2,
             openDocumentLimit: Int = 32,
-            initializationOptions: JSONValue? = Configuration.hoverInitializationOptions
+            initializationOptions: JSONValue? = nil
         ) {
             self.serverExecutable = serverExecutable
             self.serverArguments = serverArguments
@@ -135,6 +133,9 @@ public actor LanguageServerSession {
         self.connectionFactory = connectionFactory ?? Self.defaultConnectionFactory
     }
 
+    /// The server's executable name, which the log names it by.
+    private nonisolated var serverName: String { configuration.serverExecutable.lastPathComponent }
+
     /// The directory the server runs in and takes as its workspace (`rootUri`).
     public nonisolated var workspaceRoot: URL { configuration.workspaceRoot }
 
@@ -161,7 +162,8 @@ public actor LanguageServerSession {
             return .answered(HoverContent(markdown: hover.markdown, source: .languageServer))
         } catch LSPConnectionError.transportClosed(let reason) {
             // A dead connection is dropped so the next hover reconnects.
-            Self.logger.error("sourcekit-lsp went away during a hover: \(reason, privacy: .public)")
+            let server = serverName
+            Self.logger.error("\(server, privacy: .public) went away during a hover: \(reason, privacy: .public)")
             await abruptTeardown()
             return .unavailable
         } catch is CancellationError {
@@ -223,7 +225,8 @@ public actor LanguageServerSession {
             resumeEstablishingWaiters(with: created)
             return created
         } catch {
-            Self.logger.error("sourcekit-lsp did not start: \(String(describing: error), privacy: .public)")
+            let reason = String(describing: error)
+            Self.logger.error("\(self.serverName, privacy: .public) did not start: \(reason, privacy: .public)")
             // A created connection has a running process behind it even when `initialize` failed.
             if let newConnection {
                 await newConnection.stop()
@@ -231,7 +234,9 @@ public actor LanguageServerSession {
             restartsUsed += 1
             if restartsUsed > configuration.maximumRestarts {
                 let attempts = restartsUsed
-                Self.logger.error("sourcekit-lsp failed to start \(attempts, privacy: .public) times; no more restarts")
+                let server = serverName
+                Self.logger.error(
+                    "\(server, privacy: .public) failed to start \(attempts, privacy: .public) times; no more restarts")
                 permanentlyUnavailable = true
             } else {
                 do {
@@ -285,8 +290,9 @@ public actor LanguageServerSession {
             }
         } catch {
             // Stopping the connection below ends the server all the same.
-            Self.logger.info(
-                "sourcekit-lsp did not acknowledge shutdown: \(String(describing: error), privacy: .public)")
+            let reason = String(describing: error)
+            let server = serverName
+            Self.logger.info("\(server, privacy: .public) did not acknowledge shutdown: \(reason, privacy: .public)")
         }
         await send("exit", JSONValue.null, on: connection)
         await connection.stop()

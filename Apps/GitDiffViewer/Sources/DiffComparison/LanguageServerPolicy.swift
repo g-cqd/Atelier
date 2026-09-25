@@ -12,7 +12,7 @@ package final class LanguageServerPolicy {
     package typealias Locate = @Sendable (ToolLocation?) async -> URL?
 
     /// The id sourcekit-lsp's location is stored under in ``ViewerSettings/lspServerLocations``.
-    static let serverID = "sourcekit-lsp"
+    static let serverID = LanguageServerDescriptor.sourceKitLSP.id
 
     private let trust: RepositoryTrust
     private let defaults: UserDefaults
@@ -48,10 +48,8 @@ package final class LanguageServerPolicy {
     /// location's custom path, then the toolchain and the usual directories.
     package static func locate(with discovery: ToolDiscovery) -> Locate {
         { location in
-            await discovery.locate(
-                executableName: serverID, overrideVariable: "GDV_SOURCEKIT_LSP", customPath: location?.customPath,
-                searchesToolchain: true)?
-                .url
+            await LanguageServerDescriptor.sourceKitLSP.locate(
+                using: discovery, customPath: location?.customPath, overridePrefix: "GDV_")
         }
     }
 
@@ -78,7 +76,8 @@ package final class LanguageServerPolicy {
         guard trust.isTrusted(root) else { return nil }
         let location = sourceKitLSPLocation(forRoot: root)
         guard sourceKitLSPDiscoveryEnabled(location), let executable = await locate(location) else { return nil }
-        return LanguageServerSession.Configuration(serverExecutable: executable, workspaceRoot: root)
+        return LanguageServerSession.Configuration(
+            descriptor: .sourceKitLSP, serverExecutable: executable, workspaceRoot: root)
     }
 
     /// The executable of the SDK tier's scratch session, found from the app-wide location alone; nil when the app-wide

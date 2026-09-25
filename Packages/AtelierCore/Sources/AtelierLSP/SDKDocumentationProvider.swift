@@ -453,7 +453,7 @@ extension SDKDocumentationProvider {
         idleShutdown: Duration = .seconds(180), requestTimeout: Duration = .seconds(2)
     ) -> LanguageServerSession.Configuration {
         var options: [String: JSONValue] = [:]
-        if case .object(let hoverOptions) = LanguageServerSession.Configuration.hoverInitializationOptions {
+        if case .object(let hoverOptions) = LanguageServerDescriptor.sourceKitLSP.initializationOptions {
             options = hoverOptions
         }
         if let sdk, let target = platform.targetTriple(sdkVersion: sdk.version) {
