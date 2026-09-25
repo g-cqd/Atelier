@@ -36,10 +36,9 @@ public enum LanguageHighlighter: Sendable {
     /// The grammar tier over KittyCode's grammars, for the tier job: the session's parse, gate and query, with the
     /// tier's deadline, failure record, throughput predictor and breaker (PERF-11 step 4).
     public static func grammarTier(
-        record: GrammarTierRecord = GrammarTierRecord(), deadline: Duration = GrammarTier.defaultDeadline,
-        clock: any Clock<Duration> = ContinuousClock()
+        record: GrammarTierRecord = GrammarTierRecord(), deadline: Duration = GrammarTier.defaultDeadline
     ) -> GrammarTier {
-        GrammarTier(artifacts: .shared, record: record, deadline: deadline, clock: clock)
+        GrammarTier(artifacts: .shared, record: record, deadline: deadline)
     }
 
     public final class Session {

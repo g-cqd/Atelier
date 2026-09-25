@@ -1,15 +1,24 @@
+public import AemiRuntime
 public import AtelierHighlighting
 import AtelierParser
 public import AtelierSyntaxModel
+import Darwin
 import Synchronization
 
-/// A tree-sitter grammar as a tier of the tier job (PERF-11 step 4): the structural layer, complete over the lines it
-/// covers once its parse passes the quality gate.
+/// A tree-sitter grammar as a tier of the tier job (PERF-11 steps 4 and 5): the structural layer, complete over the
+/// lines it covers once its parse passes the quality gate.
 ///
-/// A run waits for its language's tables, which ``SyntaxArtifactsCache`` loads one grammar at a time, then parses the
-/// whole text against its own deadline, measured on the tier's clock from the parse's start, so a slow table load
-/// never counts against a parse. It queries the tree for the visible lines first, then the rest. What each grammar
-/// did is kept in a ``GrammarTierRecord``, which decides before any parse whether one starts at all:
+/// A run pins its language's tables, which ``SyntaxArtifactsCache`` loads one grammar at a time and may unload once
+/// no run pins them, then parses the whole text against its own deadline and queries the tree for the visible lines
+/// first, then the rest.
+///
+/// The deadline counts the CPU time of the thread that parses, which the parser checks every 256 tokens, so a loaded
+/// machine, where a parse waits for a core, does not fail a grammar that would have met it; the throughput the record
+/// keeps is CPU time too. With a pool, parses run on its threads, at most as many at once as it has; without one,
+/// on the caller's.
+///
+/// What each grammar did is kept in a ``GrammarTierRecord``, which decides before any parse whether one starts at
+/// all:
 /// - a text whose content already failed with this grammar is not parsed again;
 /// - a text the grammar's last observed throughput predicts past the deadline is not parsed; the first text of a
 ///   grammar always is;
@@ -18,46 +27,52 @@ import Synchronization
 ///
 /// The lines of a text the tier gives up on keep the tiers below it.
 public struct GrammarTier: AtelierHighlighting.HighlightTier {
-    /// How long a parse may take (design note, section 4.7; review §7.4).
+    /// How much CPU time a parse may take (design note, section 4.7; review §7.4).
     public static let defaultDeadline: Duration = .milliseconds(250)
 
-    /// Parses a text with an engine; the tier's seam for tests.
-    typealias Parse = @Sendable (GrammarEngine, String) async throws -> SyntaxTree
+    /// Parses a text with an engine, stopping where the check answers true; the tier's seam for tests.
+    typealias Parse = @Sendable (GrammarEngine, String, _ isCancelled: () -> Bool) throws -> SyntaxTree
+    /// The CPU time of the calling thread; the tier's seam for tests.
+    typealias ThreadCPUTime = @Sendable () -> Duration
 
     private let artifacts: SyntaxArtifactsCache
     private let record: GrammarTierRecord
     private let parseDeadline: Duration
-    private let clock: any Clock<Duration>
+    private let pool: BlockingOffloadPool?
+    private let cpuTime: ThreadCPUTime
     private let parse: Parse
 
     /// - Parameters:
     ///   - artifacts: Where each language's tables and query load from, one grammar at a time.
     ///   - record: What each grammar did, shared by every tier of an app that highlights with the same grammars.
-    ///   - deadline: How long a parse may take.
-    ///   - clock: The clock the deadline is measured on.
+    ///   - deadline: How much CPU time a parse may take.
+    ///   - pool: The threads parses run on, which bounds how many run at once; nil parses on the caller's thread.
     public init(
         artifacts: SyntaxArtifactsCache, record: GrammarTierRecord = GrammarTierRecord(),
-        deadline: Duration = GrammarTier.defaultDeadline, clock: any Clock<Duration> = ContinuousClock()
+        deadline: Duration = GrammarTier.defaultDeadline, pool: BlockingOffloadPool? = nil
     ) {
-        self.init(artifacts: artifacts, record: record, deadline: deadline, clock: clock) { engine, text in
-            try engine.parse(text, externalScanner: engine.makeScanner())
+        self.init(
+            artifacts: artifacts, record: record, deadline: deadline, pool: pool, cpuTime: Self.threadCPUTime
+        ) { engine, text, isCancelled in
+            try engine.parse(text, externalScanner: engine.makeScanner(), isCancelled: isCancelled)
         }
     }
 
     init(
-        artifacts: SyntaxArtifactsCache, record: GrammarTierRecord, deadline: Duration, clock: any Clock<Duration>,
-        parse: @escaping Parse
+        artifacts: SyntaxArtifactsCache, record: GrammarTierRecord, deadline: Duration, pool: BlockingOffloadPool?,
+        cpuTime: @escaping ThreadCPUTime, parse: @escaping Parse
     ) {
         self.artifacts = artifacts
         self.record = record
         parseDeadline = deadline
-        self.clock = clock
+        self.pool = pool
+        self.cpuTime = cpuTime
         self.parse = parse
     }
 
     public var layer: HighlightLayer { .structural }
     public var coverage: TierCoverage { .complete }
-    /// None for the job: the tier times its parse itself, from the moment its tables are loaded.
+    /// None for the job: the tier times its parse itself, in CPU time, from the moment its tables are loaded.
     public var deadline: Duration? { nil }
 
     public func supports(_ language: Language) -> Bool {
@@ -65,16 +80,21 @@ public struct GrammarTier: AtelierHighlighting.HighlightTier {
     }
 
     /// - Throws: `CancellationError` once cancelled; a ``TierFailure``: `.deadline` when the parse passes its
-    ///   deadline, `.gate` when the parse fails the quality gate, `.failed` when the grammar does not load, the text
-    ///   is too large, the parser throws, or the record declines the parse.
+    ///   deadline, `.gate` when the parse fails the quality gate, `.failed` when the grammar does not load or is too
+    ///   large to, the text is too large, the parser throws, or the record declines the parse.
     public func run(_ request: TierRequest, emit: (TierUpdate) async -> Void) async throws {
         guard let name = GrammarEngine.grammarName(of: request.revision.language) else {
             throw TierFailure.failed("no grammar for \(request.revision.language.name)")
         }
-        await artifacts.loadIfNeeded(for: name)
+        guard let loaded = await artifacts.pin(name) else {
+            throw TierFailure.failed(
+                artifacts.isOversized(name)
+                    ? "the \(name) grammar's tables are past the loading limit" : "the \(name) grammar does not load")
+        }
+        defer { artifacts.unpin(name) }
         try Task.checkCancellation()
-        guard let loaded = artifacts.artifacts(for: name), let engine = GrammarEngine(loaded) else {
-            throw TierFailure.failed("the \(name) grammar does not load")
+        guard let engine = GrammarEngine(loaded) else {
+            throw TierFailure.failed("the \(name) grammar needs an external scanner that is not bundled")
         }
         let bytes = request.text.utf8.count
         guard bytes <= GrammarEngine.maxSourceBytes else {
@@ -99,55 +119,71 @@ public struct GrammarTier: AtelierHighlighting.HighlightTier {
         }
     }
 
-    /// What racing a parse against its deadline gave.
+    /// Why a parse stopped before its end.
+    private final class Stop: Sendable {
+        private let state = Mutex((cancelled: false, pastDeadline: false))
+
+        var isCancelled: Bool { state.withLock { $0.cancelled } }
+        var isPastDeadline: Bool { state.withLock { $0.pastDeadline } }
+
+        func cancel() {
+            state.withLock { $0.cancelled = true }
+        }
+
+        func passDeadline() {
+            state.withLock { $0.pastDeadline = true }
+        }
+    }
+
+    /// What a parse gave: its tree and the CPU time it took, or its failure.
     private enum Outcome: Sendable {
         case parsed(SyntaxTree, Duration)
         case threw(String)
-        case deadline
+        case pastDeadline
+        case cancelled
     }
 
-    /// `text`'s tree, parsed while its deadline runs, and recorded: its throughput, and its failure with the grammar
-    /// and the content when it passes the deadline, throws or fails the gate.
+    /// `text`'s tree, parsed within its deadline, and recorded: its throughput, and its failure with the grammar and
+    /// the content when it passes the deadline, throws or fails the gate.
     private func parseWithinDeadline(
         _ text: String, engine: GrammarEngine, content: GrammarTierRecord.ContentKey, bytes: Int
     ) async throws -> SyntaxTree {
-        let (parse, clock, deadline) = (parse, clock, parseDeadline)
-        let outcome = await withTaskGroup(of: Outcome?.self) { group -> Outcome? in
-            group.addTask {
-                let started = ContinuousClock.now
-                do {
-                    let tree = try await parse(engine, text)
-                    return .parsed(tree, started.duration(to: .now))
-                } catch ParseError.cancelled {
-                    return nil
-                } catch is CancellationError {
-                    return nil
-                } catch {
-                    return .threw(String(describing: error))
+        let (parse, cpuTime, deadline) = (parse, cpuTime, parseDeadline)
+        let stop = Stop()
+        // Runs on one thread from start to end, the pool's or the caller's, whose CPU time it counts.
+        let work: @Sendable () -> Outcome = {
+            let start = cpuTime()
+            do {
+                let tree = try parse(engine, text) {
+                    if stop.isCancelled { return true }
+                    guard cpuTime() - start >= deadline else { return false }
+                    stop.passDeadline()
+                    return true
                 }
+                return .parsed(tree, cpuTime() - start)
+            } catch {
+                if stop.isPastDeadline { return .pastDeadline }
+                if stop.isCancelled { return .cancelled }
+                return .threw(String(describing: error))
             }
-            group.addTask {
-                do {
-                    try await clock.sleep(for: deadline)
-                } catch {
-                    return nil
-                }
-                return .deadline
+        }
+        let outcome: Outcome = await withTaskCancellationHandler {
+            guard let pool else { return work() }
+            do {
+                return try await pool.run(work)
+            } catch is CancellationError {
+                return .cancelled
+            } catch {
+                return .threw("the parse could not start: \(error)")
             }
-            // The first child with an outcome ends the other: a parse that ends stops the deadline, and a deadline
-            // that passes cancels the parse, which stops at its next check.
-            for await outcome in group {
-                guard let outcome else { continue }
-                group.cancelAll()
-                return outcome
-            }
-            return nil
+        } onCancel: {
+            stop.cancel()
         }
         let grammar = engine.grammarKey
         switch outcome {
-            case nil:
+            case .cancelled:
                 throw CancellationError()
-            case .deadline:
+            case .pastDeadline:
                 let failure = TierFailure.deadline(deadline)
                 record.fail(grammar: grammar, content: content, failure, bytes: bytes, took: .atLeast(deadline))
                 throw failure
@@ -165,6 +201,11 @@ public struct GrammarTier: AtelierHighlighting.HighlightTier {
                 record.succeed(grammar: grammar, bytes: bytes, elapsed: elapsed)
                 return tree
         }
+    }
+
+    /// The CPU time the calling thread has used.
+    static let threadCPUTime: ThreadCPUTime = {
+        .nanoseconds(Int64(clamping: clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)))
     }
 }
 
