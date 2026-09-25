@@ -44,43 +44,38 @@ extension GLRParser {
         while !active.isEmpty {
             var next: [ParseStack] = []
             while var stack = active.popLast() {
+                let token: ParseToken
                 do throws(ParseError) {
-                    if readCount.isMultiple(of: Self.cancellationCheckInterval), isCancelled() {
-                        throw ParseError.cancelled(atToken: readCount)
+                    switch try readToken(
+                        for: &stack, utf8: utf8, scanner: scanner, externalScanner: &scannerValue,
+                        readCount: &readCount, isCancelled: isCancelled)
+                    {
+                        case .end:
+                            finished.append(stack)
+                            continue
+                        case .extra:
+                            next.append(stack)
+                            continue
+                        case .token(let read):
+                            token = read
                     }
-                    guard readCount < Self.maxTokens * Self.maxScanningStacks else {
-                        throw ParseError.tooManyTokens(limit: Self.maxTokens)
-                    }
-                    let start = stack.cursor
-                    guard
-                        let token = try nextToken(
-                            for: &stack, utf8: utf8, scanner: scanner, externalScanner: &scannerValue)
-                    else {
-                        finished.append(stack)
-                        continue
-                    }
-                    readCount += 1
-                    stack.zeroWidthCount = stack.cursor.offset == start.offset ? stack.zeroWidthCount + 1 : 0
-                    guard stack.zeroWidthCount <= max(parseTable.stateCount * 2, 32) else {
-                        throw ParseError.parsingFailed("External scanner produced too many zero-width tokens")
-                    }
-                    // An extra the stack can take as a symbol is one, as tree-sitter reads an extra as such only
-                    // where its state has no other action for it: Swift's block comment between class members.
-                    if token.isExtra, !(token.terminal.map { canShift($0, on: stack) } ?? false) {
-                        stack.extras.append(token)
-                        next.append(stack)
-                        continue
-                    }
-                    guard stack.tokenIndex < Self.maxTokens else {
-                        throw ParseError.tooManyTokens(limit: Self.maxTokens)
-                    }
-                    let shifted = try advance([stack], past: token, at: stack.tokenIndex)
-                    for var branch in shifted {
+                } catch {
+                    stack.releaseNodes()
+                    ParseStack.releaseAll(&active)
+                    ParseStack.releaseAll(&next)
+                    ParseStack.releaseAll(&finished)
+                    throw error
+                }
+                // The stack moves into `advance`, so its arrays have one owner and each push and reduction writes
+                // them in place: a copy left here would copy the whole stack on every token. `advance` releases
+                // the stacks it holds when it throws.
+                let tokenIndex = stack.tokenIndex
+                do throws(ParseError) {
+                    for var branch in try advance([consume stack], past: token, at: tokenIndex) {
                         branch.tokenIndex += 1
                         next.append(branch)
                     }
                 } catch {
-                    stack.releaseNodes()
                     ParseStack.releaseAll(&active)
                     ParseStack.releaseAll(&next)
                     ParseStack.releaseAll(&finished)
@@ -115,6 +110,52 @@ extension GLRParser {
         let root = try buildRootNode(from: consume best, byteCount: utf8.count, endPoint: end)
         return SyntaxTree(
             root: attachingExtras(extras, to: consume root), source: source, errorByteCount: errorByteCount)
+    }
+
+    /// What ``readToken(for:utf8:scanner:externalScanner:readCount:isCancelled:)`` read for a stack.
+    enum ScannedRead {
+        /// The stack is at the end of the input.
+        case end
+        /// An extra the stack keeps among its own, as a comment; it takes no token this round.
+        case extra
+        /// A token for the stack to take.
+        case token(ParseToken)
+    }
+
+    /// Reads `stack`'s next token, counting it in `readCount`, after checking cancellation and the token limits.
+    ///
+    /// An extra the stack can take as a symbol is one, as tree-sitter reads an extra as such only where its state has
+    /// no other action for it: Swift's block comment between class members. Any other extra joins the stack's own.
+    private func readToken(
+        for stack: inout ParseStack,
+        utf8: UnsafeBufferPointer<UInt8>,
+        scanner: TokenScanner,
+        externalScanner: inout any GrammarExternalScanner,
+        readCount: inout Int,
+        isCancelled: () -> Bool
+    ) throws(ParseError) -> ScannedRead {
+        if readCount.isMultiple(of: Self.cancellationCheckInterval), isCancelled() {
+            throw ParseError.cancelled(atToken: readCount)
+        }
+        guard readCount < Self.maxTokens * Self.maxScanningStacks else {
+            throw ParseError.tooManyTokens(limit: Self.maxTokens)
+        }
+        let start = stack.cursor
+        guard let token = try nextToken(for: &stack, utf8: utf8, scanner: scanner, externalScanner: &externalScanner)
+        else { return .end }
+        readCount += 1
+        stack.zeroWidthCount = stack.cursor.offset == start.offset ? stack.zeroWidthCount + 1 : 0
+        guard stack.zeroWidthCount <= max(parseTable.stateCount * 2, 32) else {
+            throw ParseError.parsingFailed("External scanner produced too many zero-width tokens")
+        }
+        if token.isExtra, !(token.terminal.map { canShift($0, on: stack) } ?? false) {
+            stack.extras.append(token)
+            return .extra
+        }
+        guard stack.tokenIndex < Self.maxTokens else {
+            throw ParseError.tooManyTokens(limit: Self.maxTokens)
+        }
+        return .token(token)
     }
 
     /// `scanned`, which `mode` read, when `stack` can take it or it is an extra; otherwise the token a mode reading only
