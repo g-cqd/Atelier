@@ -1,4 +1,5 @@
 package import AppKit
+package import AtelierDiagnostics
 import DiffCore
 package import DiffRendering
 package import Foundation
@@ -23,12 +24,23 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     /// Whether the pane rubber-bands past its edges sideways; otherwise it stops at them. It never scrolls down or
     /// up: the card list does, with its own bounce.
     package var bouncesAtEdges = false
+    /// Diagnostics drawn over this pane's rows, the same as ``DiffTextView``'s: a squiggle in the text, and a tinted
+    /// line number in the gutter.
+    package var diagnosticOverlay: DiagnosticOverlay?
+    /// Bumped by the caller whenever `diagnosticOverlay`'s content changes in place.
+    package var diagnosticsVersion = 0
+    /// Called with a row's findings and the clicked line number's frame, in the gutter's coordinates.
+    package var onDiagnosticClick:
+        ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)?
 
     package init(
         layouts: CardLayouts, side: RenderedSide, gutter: GutterStyle, width: CGFloat, wrapMode: WrapMode = .viewport,
         onGapDrag: ((GapDragEvent) -> Void)? = nil,
         onDisplayed: (() -> Void)? = nil, hoverEnabled: Bool = false,
-        hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil, bouncesAtEdges: Bool = false
+        hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? = nil, bouncesAtEdges: Bool = false,
+        diagnosticOverlay: DiagnosticOverlay? = nil, diagnosticsVersion: Int = 0,
+        onDiagnosticClick: ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)? =
+            nil
     ) {
         self.bouncesAtEdges = bouncesAtEdges
         self.layouts = layouts
@@ -40,6 +52,9 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         self.onDisplayed = onDisplayed
         self.hoverEnabled = hoverEnabled
         self.hoverResolver = hoverResolver
+        self.diagnosticOverlay = diagnosticOverlay
+        self.diagnosticsVersion = diagnosticsVersion
+        self.onDiagnosticClick = onDiagnosticClick
     }
 
     private var layout: StaticTextLayout? {
@@ -86,11 +101,13 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         let gutterView = DiffGutterView(clipView: nil)
         gutterView.source = textView
         gutterView.style = gutter
+        gutterView.overlay = context.coordinator.diagnostics.overlay
         let minimapView = MinimapView()
         minimapView.isHidden = true
         let pane = DiffPaneView(
             gutterView: gutterView, scrollView: nil, contentView: scrollView, minimapView: minimapView)
         context.coordinator.textView = textView
+        context.coordinator.gutterView = gutterView
         context.coordinator.hoverController.attach(to: textView) { [weak coordinator = context.coordinator] in
             coordinator?.layout?.rendered
         }
@@ -111,6 +128,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     /// first, the text view never lays the text out for a stale frame.
     private func update(_ pane: DiffPaneView, context: Context) {
         pane.gutterView.onGapDrag = onGapDrag
+        pane.gutterView.onDiagnosticClick = onDiagnosticClick
         let elasticity: NSScrollView.Elasticity = bouncesAtEdges ? .automatic : .none
         if let scrollView = pane.contentView as? NSScrollView, scrollView.horizontalScrollElasticity != elasticity {
             scrollView.horizontalScrollElasticity = elasticity
@@ -129,6 +147,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         }
         coordinator.hoverController.isEnabled = hoverEnabled
         coordinator.hoverController.resolve = hoverResolver
+        coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
     }
 
     /// Sizes the text view to the layout. Lines that fit take the clip view's width exactly and follow it: the width
@@ -176,16 +195,21 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     @MainActor
     package final class Coordinator {
         package weak var textView: NSTextView?
+        package weak var gutterView: DiffGutterView?
         package private(set) var layout: StaticTextLayout?
         package var appliedSize: NSSize?
         package var appliedMode: WrapMode?
         package let hoverController = DocHoverController()
+        /// The diagnostics this pane draws, which its gutter and every fragment its text view lays out hold.
+        package let diagnostics = PaneDiagnosticsDisplay()
 
         /// Moves the text view's layout manager onto the layout's content storage, leaving whichever storage it
         /// was on, so the view shows the measured text and its row spacing rather than a copy.
         package func attach(_ layout: StaticTextLayout) {
             guard let textView, let layoutManager = textView.textLayoutManager else { return }
             layoutManager.textContentManager?.removeTextLayoutManager(layoutManager)
+            // Before the view lays anything out, so each fragment it makes draws this pane's diagnostics.
+            layout.fragmentProvider.overlay = diagnostics.overlay
             layout.contentStorage.addTextLayoutManager(layoutManager)
             layoutManager.delegate = layout.fragmentProvider
             // The layout's space above its first row, the band of a gap at the top of the file among it.
@@ -200,6 +224,16 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
             if textView.window != nil { layoutManager.textViewportLayoutController.layoutViewport() }
             textView.needsLayout = true
             textView.needsDisplay = true
+        }
+
+        /// Shows `overlay`'s rows, `nil` showing none, and redraws the rows whose diagnostics changed; nothing is laid
+        /// out again. A no-op unless the overlay or its version changed since the last call.
+        package func updateDiagnostics(_ overlay: DiagnosticOverlay?, version: Int) {
+            let changed = diagnostics.update(from: overlay, version: version)
+            guard !changed.isEmpty else { return }
+            gutterView?.redrawDiagnostics(ofRows: changed)
+            guard let layout else { return }
+            textView?.redrawDiagnostics(ofRows: changed, in: layout.rendered)
         }
 
         /// Leaves the shared storage, which would otherwise keep a dismantled pane's layout manager alive and

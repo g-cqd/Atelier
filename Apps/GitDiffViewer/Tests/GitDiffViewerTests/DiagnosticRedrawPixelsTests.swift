@@ -23,9 +23,13 @@ struct DiagnosticRedrawPixelsTests {
     /// The row that carries the diagnostics; an odd row, so that its neighbours on both sides have none.
     private static let row = 5
 
-    private static func rendered() throws -> RenderedText {
+    private static func diff() -> RenderedDiff {
         let text = (0 ..< rowCount).map { "let value\($0) = compute(\($0))" }.joined(separator: "\n") + "\n"
-        return try #require(DiffRenderer.render(oldText: text, newText: text, language: .plain).new)
+        return DiffRenderer.render(oldText: text, newText: text, language: .plain)
+    }
+
+    private static func rendered() throws -> RenderedText {
+        try #require(diff().new)
     }
 
     private static func overlay(_ severity: Finding.Severity) -> DiagnosticOverlay {
@@ -125,6 +129,121 @@ struct DiagnosticRedrawPixelsTests {
 
         #expect(zip(fragments, lines).allSatisfy { $0.textLineFragments.elementsEqual($1, by: ===) })
     }
+    // MARK: Card panes
+
+    /// A finding with a column, underlined across its range (book DIAG-03).
+    private static func ranged(_ severity: Finding.Severity) -> DiagnosticOverlay {
+        let squiggle = DiagnosticOverlay.SquiggleRange(start: 4, end: 9, severity: severity)
+        return DiagnosticOverlay(
+            rows: [row: .init(severity: severity, count: 1, findings: [], squiggles: [squiggle])])
+    }
+
+    @Test
+    func `a card pane underlines a row's finding and marks its line number`() throws {
+        let diff = Self.diff()
+        let bare = try HostedCardPane(diff: diff, overlay: nil).pixels()
+
+        let pane = try HostedCardPane(diff: diff, overlay: Self.ranged(.error))
+
+        let drawn = try pane.pixels()
+        #expect(drawn.differing(from: bare, in: try pane.textBand(ofRow: Self.row)) > 0)
+        #expect(drawn.differing(from: bare, in: try pane.gutterBand(ofRow: Self.row)) > 0)
+        for row in 0 ..< Self.rowCount where row != Self.row {
+            #expect(drawn.differing(from: bare, in: try pane.textBand(ofRow: row)) == 0, "row \(row)")
+        }
+    }
+
+    @Test
+    func `a diagnostics bump in a card pane draws what a fresh card pane draws`() throws {
+        let diff = Self.diff()
+        let overlay = Self.ranged(.error)
+        let pane = try HostedCardPane(diff: diff, overlay: overlay)
+        let before = try pane.pixels()
+
+        overlay.replace(Self.ranged(.warning).snapshot())
+        pane.update(overlay: overlay, version: 1)
+
+        let after = try pane.pixels()
+        let fresh = try HostedCardPane(diff: diff, overlay: Self.ranged(.warning)).pixels()
+        #expect(after.differing(from: before, in: try pane.textBand(ofRow: Self.row)) > 0)
+        #expect(after.differing(from: fresh, in: pane.bounds) == 0)
+    }
+}
+
+/// An ``EmbeddedDiffTextView`` hosted as a card's body hosts it, at the height it measures, in a borderless window
+/// that is never ordered in.
+@MainActor
+private final class HostedCardPane {
+    private static let width: CGFloat = 600
+    let window: NSWindow
+    private let host: NSHostingView<EmbeddedDiffTextView>
+    private let layouts: CardLayouts
+    private let rendered: RenderedText
+
+    init(diff: RenderedDiff, overlay: DiagnosticOverlay?) throws {
+        rendered = try #require(diff.new)
+        layouts = CardLayouts(rendered: diff)
+        host = NSHostingView(rootView: Self.pane(layouts, overlay: overlay, version: 0))
+        let height = host.fittingSize.height
+        window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: Self.width, height: max(height, 1)), styleMask: [.borderless],
+            backing: .buffered, defer: false)
+        window.contentView = host
+        settle()
+        try #require(host.layer != nil)
+    }
+
+    private static func pane(_ layouts: CardLayouts, overlay: DiagnosticOverlay?, version: Int) -> EmbeddedDiffTextView
+    {
+        EmbeddedDiffTextView(
+            layouts: layouts, side: .new, gutter: .new, width: width, wrapMode: .none, diagnosticOverlay: overlay,
+            diagnosticsVersion: version)
+    }
+
+    var bounds: NSRect { host.bounds }
+
+    /// Hands the pane its diagnostics as SwiftUI does, then lets the change reach the screen.
+    func update(overlay: DiagnosticOverlay?, version: Int) {
+        host.rootView = Self.pane(layouts, overlay: overlay, version: version)
+        settle()
+    }
+
+    func settle() {
+        host.layoutSubtreeIfNeeded()
+        window.displayIfNeeded()
+        CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 0, true)
+    }
+
+    func textBand(ofRow row: Int) throws -> NSRect {
+        let band = try rowBand(row)
+        let gutter = try #require(HostedPane.first(DiffGutterView.self, in: host))
+        let textStart = gutter.convert(gutter.bounds, to: nil).maxX
+        return NSRect(x: textStart, y: band.minY, width: bounds.width - textStart, height: band.height)
+    }
+
+    func gutterBand(ofRow row: Int) throws -> NSRect {
+        let band = try rowBand(row)
+        let gutter = try #require(HostedPane.first(DiffGutterView.self, in: host))
+        let frame = gutter.convert(gutter.bounds, to: nil)
+        return NSRect(x: frame.minX, y: band.minY, width: frame.width - 1, height: band.height)
+    }
+
+    /// Where `row` lies in the window.
+    private func rowBand(_ row: Int) throws -> NSRect {
+        let textView = try #require(HostedPane.first(NSTextView.self, in: host))
+        let layoutManager = try #require(textView.textLayoutManager)
+        let contentManager = try #require(layoutManager.textContentManager)
+        let location = try #require(
+            contentManager.location(layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row]))
+        let fragment = try #require(layoutManager.textLayoutFragment(for: location))
+        var frame = fragment.layoutFragmentFrame
+        frame.origin.y += textView.textContainerOrigin.y
+        return textView.convert(frame, to: nil)
+    }
+
+    func pixels() throws -> LayerPixels {
+        try LayerPixels.composite(try #require(host.layer))
+    }
 }
 
 /// A ``DiffTextView`` hosted as the app hosts it, in a borderless window that is never ordered in.
@@ -193,33 +312,10 @@ private final class HostedPane {
     /// The window's pixels as its layers hold them: Core Animation composites the layer tree into a texture, and no
     /// view is asked to draw.
     func pixels() throws -> LayerPixels {
-        let root = try #require(host.layer)
-        let width = Int(root.bounds.width)
-        let height = Int(root.bounds.height)
-        let compositor = try Compositor.shared(width: width, height: height)
-        let renderer = compositor.renderer
-        let region = MTLRegionMake2D(0, 0, width, height)
-        var bytes = [UInt8](repeating: 0, count: width * height * 4)
-        // The texture starts each frame empty, so that nothing an earlier pane left in it shows through.
-        compositor.texture.replace(region: region, mipmapLevel: 0, withBytes: bytes, bytesPerRow: width * 4)
-        renderer.layer = root
-        renderer.bounds = CGRect(x: 0, y: 0, width: width, height: height)
-        // The renderer draws what was committed.
-        CATransaction.flush()
-        renderer.beginFrame(atTime: CACurrentMediaTime(), timeStamp: nil)
-        renderer.addUpdate(renderer.bounds)
-        renderer.render()
-        renderer.endFrame()
-        // The renderer encodes on the compositor's queue, so a buffer committed after its work completes after it.
-        let fence = try #require(compositor.queue.makeCommandBuffer())
-        fence.commit()
-        fence.waitUntilCompleted()
-        renderer.layer = nil
-        compositor.texture.getBytes(&bytes, bytesPerRow: width * 4, from: region, mipmapLevel: 0)
-        return LayerPixels(width: width, height: height, bytes: bytes)
+        try LayerPixels.composite(try #require(host.layer))
     }
 
-    private static func first<View: NSView>(_ type: View.Type, in view: NSView) -> View? {
+    static func first<View: NSView>(_ type: View.Type, in view: NSView) -> View? {
         if let match = view as? View { return match }
         return view.subviews.lazy.compactMap { first(type, in: $0) }.first
     }
@@ -257,6 +353,37 @@ private final class Compositor {
         let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
         renderer = CARenderer(
             mtlTexture: texture, options: [kCARendererColorSpace: colorSpace, kCARendererMetalCommandQueue: queue])
+    }
+}
+
+extension LayerPixels {
+    /// `root`'s pixels as its layers hold them: Core Animation composites the layer tree into a texture, and no view
+    /// is asked to draw.
+    @MainActor
+    static func composite(_ root: CALayer) throws -> LayerPixels {
+        let width = Int(root.bounds.width)
+        let height = Int(root.bounds.height)
+        let compositor = try Compositor.shared(width: width, height: height)
+        let renderer = compositor.renderer
+        let region = MTLRegionMake2D(0, 0, width, height)
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        // The texture starts each frame empty, so that nothing an earlier pane left in it shows through.
+        compositor.texture.replace(region: region, mipmapLevel: 0, withBytes: bytes, bytesPerRow: width * 4)
+        renderer.layer = root
+        renderer.bounds = CGRect(x: 0, y: 0, width: width, height: height)
+        // The renderer draws what was committed.
+        CATransaction.flush()
+        renderer.beginFrame(atTime: CACurrentMediaTime(), timeStamp: nil)
+        renderer.addUpdate(renderer.bounds)
+        renderer.render()
+        renderer.endFrame()
+        // The renderer encodes on the compositor's queue, so a buffer committed after its work completes after it.
+        let fence = try #require(compositor.queue.makeCommandBuffer())
+        fence.commit()
+        fence.waitUntilCompleted()
+        renderer.layer = nil
+        compositor.texture.getBytes(&bytes, bytesPerRow: width * 4, from: region, mipmapLevel: 0)
+        return LayerPixels(width: width, height: height, bytes: bytes)
     }
 }
 
