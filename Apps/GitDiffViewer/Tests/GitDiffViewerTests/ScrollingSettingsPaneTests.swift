@@ -57,10 +57,11 @@ struct ScrollingSettingsPaneTests {
     @Test
     func `the scrolling settings reach the open file panes at once`() async throws {
         let model = try await showing(short: false)
+        // Open before the window is made, which then never lays out the file list's card: only the pane is read.
+        model.pin("long.swift")
         let window = Self.window(showing: model)
         defer { window.close() }
         let content = try #require(window.contentView)
-        model.pin("long.swift")
         try await settle(window)
 
         for bounces in [true, false] {
@@ -90,7 +91,8 @@ struct ScrollingSettingsPaneTests {
     /// on or off (D25).
     @Test
     func `bouncing reaches the cards' panes and leaves the card list's own bounce as it is`() async throws {
-        let model = try await showing(short: true)
+        // The short file's card alone: a 200-line card laid out again on each change of setting says nothing more.
+        let model = try await showing(long: false, short: true)
         let window = Self.window(showing: model)
         defer { window.close() }
         let content = try #require(window.contentView)
@@ -113,15 +115,17 @@ struct ScrollingSettingsPaneTests {
         }
     }
 
-    /// A model over `long.swift`, 200 lines changed at the 121st, and, when `short`, `short.swift`, which fits a pane,
-    /// shown inline, its comparison loaded.
-    private func showing(short: Bool) async throws -> DiffViewerModel {
+    /// A model over `long.swift`, 200 lines changed at the 121st, unless not `long`, and, when `short`, `short.swift`,
+    /// which fits a pane, shown inline, its comparison loaded.
+    private func showing(long includesLong: Bool = true, short: Bool) async throws -> DiffViewerModel {
         let long = (1 ... 200).map { "let value\($0) = \($0)" }
         let shortLines = (1 ... 10).map { "let value\($0) = \($0)" }
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] =
-            [harness.entry("long.swift", "3")] + (short ? [harness.entry("short.swift", "1")] : [])
+            (includesLong ? [harness.entry("long.swift", "3")] : [])
+            + (short ? [harness.entry("short.swift", "1")] : [])
         harness.reader.entries[.directory(ModelTestHarness.rightURL)] =
-            [harness.entry("long.swift", "4")] + (short ? [harness.entry("short.swift", "2")] : [])
+            (includesLong ? [harness.entry("long.swift", "4")] : [])
+            + (short ? [harness.entry("short.swift", "2")] : [])
         harness.reader.blobContents["1"] = FileTabScrollRangeTests.text(shortLines)
         harness.reader.blobContents["2"] = FileTabScrollRangeTests.text(shortLines, changing: 9)
         harness.reader.blobContents["3"] = FileTabScrollRangeTests.text(long)
