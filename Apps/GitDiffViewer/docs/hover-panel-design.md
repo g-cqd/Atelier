@@ -2,8 +2,13 @@
 
 Verdict: replace NSPopover with an arrow-less anchored NSPanel child window (Xcode Quick Help
 style). NSPopover's chrome is a hard ceiling (hasFullSizeContent only extends into the arrow
-region; verified). Panel: [.borderless, .nonactivatingPanel], floating, clear/soft-shadow,
-NSVisualEffectView .popover material, 8pt continuous corners, appearance matched to the pane.
+region; verified). Panel: [.borderless, .nonactivatingPanel], floating, clear/soft-shadow, 8pt
+corners, appearance matched to the pane. Background (HOVER-08): regular NSGlassEffectView with
+cornerRadius 8 by default (the HIG's variant for text-heavy components such as popovers), or the
+NSVisualEffectView .popover material, masked by a rounded maskImage, when Settings ▸ Tools ▸ Hover
+panel material says Popover. The window stays non-opaque and clear, so its shadow follows the
+rounded shape and no square corner shows; the material travels with each HoverDocument, so the
+next panel shown follows a change.
 Content stack (HOVER-20, Quick Help's order): the symbol's name as a title (HoverDeclarationName,
 from the declaration) · the abstract · token-colored declaration chip · divider · doc body, a
 flipped document view holding one view per markdown block under an "Overview" heading
