@@ -278,6 +278,19 @@ public struct GitClient: Sendable {
             gate: gate)
     }
 
+    /// Runs git once the repository's configuration has been approved, and returns how it exited, for a command
+    /// whose exit status is part of its answer (`merge-base --is-ancestor` answers "no" with 1).
+    /// - Throws: ``GitError/refusedConfiguration(_:)`` before git runs when the configuration is refused; a
+    ///   ``GitError`` naming a runner failure; a cancellation when the task is cancelled. A non-zero exit is returned,
+    ///   not thrown.
+    func runReadingStatus(_ arguments: [String]) async throws -> ProcessOutput {
+        let verdict = try await Self.approvedConfiguration(
+            in: repository, runner: runner, timeout: timeout, isolation: isolation, gate: gate)
+        return try await Self.execute(
+            arguments, in: repository, runner: runner, timeout: timeout, isolation: isolation,
+            extraConfiguration: Self.mitigationFlags(for: verdict, isolation: isolation))
+    }
+
     /// Where git lives: `GDV_GIT` when it names an executable, else the first `git` on `PATH` or in the usual
     /// toolchain locations, `/usr/bin/git` last because that one is a shim that re-resolves the developer directory
     /// on every launch.
