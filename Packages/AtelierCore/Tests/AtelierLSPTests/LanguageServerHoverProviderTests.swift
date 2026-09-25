@@ -132,6 +132,78 @@ struct LanguageServerHoverProviderTests {
         await registry.shutdownAll()
     }
 
+    /// Hovers the document at `path` under `root` through a provider over every server, and answers the server and
+    /// root of the one session it started, with the language ID its document was opened with.
+    private func hoverOnce(
+        _ path: String, content: String, in root: URL
+    ) async throws -> (server: String?, root: URL?, languageID: String?) {
+        let servers = ScriptedServers(hover: "`x`")
+        let registry = servers.registry()
+        let provider = LanguageServerHoverProvider(registry: registry, workspaceRoot: root)
+
+        let answer = try await provider.hover(
+            HoverQuery(
+                documentURI: root.appending(path: path).absoluteString, content: content, line: 0, utf16Column: 0))
+
+        #expect(answer?.markdown == "`x`")
+        let opened = try await servers.sentFrames().first { $0.method == "textDocument/didOpen" }
+        await registry.shutdownAll()
+        #expect(servers.sessions.count == 1)
+        return (servers.sessions.first?.server, servers.sessions.first?.root, opened?.params?.textDocument.languageId)
+    }
+
+    @Test
+    func `a header goes to clangd as its content's language, at the repository without a compilation database`()
+        async throws
+    {
+        let (directory, root) = try workspace(["include/Widget.h"])
+        defer { directory.cleanup() }
+
+        let opened = try await hoverOnce(
+            "include/Widget.h", content: "#import <Foundation/Foundation.h>\n@interface Widget : NSObject\n@end",
+            in: root)
+
+        #expect(opened.server == "clangd")
+        #expect(opened.root == root)
+        #expect(opened.languageID == "objective-c")
+    }
+
+    @Test
+    func `a C++ file goes to clangd at its compilation database's directory`() async throws {
+        let (directory, root) = try workspace(["native/compile_commands.json", "native/src/shape.cpp"])
+        defer { directory.cleanup() }
+
+        let opened = try await hoverOnce("native/src/shape.cpp", content: "class Shape {};", in: root)
+
+        #expect(opened.server == "clangd")
+        #expect(opened.root == root.appending(path: "native", directoryHint: .isDirectory))
+        #expect(opened.languageID == "cpp")
+    }
+
+    @Test
+    func `a Rust file goes to rust-analyzer at its crate`() async throws {
+        let (directory, root) = try workspace(["crates/core/Cargo.toml", "crates/core/src/lib.rs"])
+        defer { directory.cleanup() }
+
+        let opened = try await hoverOnce("crates/core/src/lib.rs", content: "pub fn run() {}", in: root)
+
+        #expect(opened.server == "rust-analyzer")
+        #expect(opened.root == root.appending(path: "crates/core", directoryHint: .isDirectory))
+        #expect(opened.languageID == "rust")
+    }
+
+    @Test
+    func `a Python file goes to basedpyright at its pyrightconfig.json over a nearer pyproject.toml`() async throws {
+        let (directory, root) = try workspace(["pyrightconfig.json", "tools/pyproject.toml", "tools/lint/run.py"])
+        defer { directory.cleanup() }
+
+        let opened = try await hoverOnce("tools/lint/run.py", content: "def run(): pass", in: root)
+
+        #expect(opened.server == "basedpyright")
+        #expect(opened.root == root)
+        #expect(opened.languageID == "python")
+    }
+
     @Test
     func `a blob, or a language none of its servers serves, starts no server`() async throws {
         let (directory, root) = try workspace(["main.go", "tool.py"])
