@@ -168,6 +168,28 @@ struct QueryMatcherTests {
     }
 
     @Test
+    func `eq? and not-eq? between two captures compare their texts`() throws {
+        // `x=x y=z`
+        let left = SyntaxNode(type: "identifier", byteRange: 0 ..< 1)
+        let right = SyntaxNode(type: "identifier", byteRange: 2 ..< 3)
+        let same = SyntaxNode(type: "assignment", children: [left, right], byteRange: 0 ..< 3)
+        let otherLeft = SyntaxNode(type: "identifier", byteRange: 4 ..< 5)
+        let otherRight = SyntaxNode(type: "identifier", byteRange: 6 ..< 7)
+        let different = SyntaxNode(type: "assignment", children: [otherLeft, otherRight], byteRange: 4 ..< 7)
+        let root = SyntaxNode(type: "program", children: [same, different], byteRange: 0 ..< 7)
+        let tree = SyntaxTree(root: root, source: "x=x y=z")
+
+        let equal = try QueryParser.parse("((assignment (identifier) @left (identifier) @right) (#eq? @left @right))")
+        let unequal = try QueryParser.parse(
+            "((assignment (identifier) @left (identifier) @right) (#not-eq? @left @right))")
+
+        #expect(QueryMatcher.execute(query: equal, tree: tree).map { $0.captures.map(\.node) } == [[left, right]])
+        #expect(
+            QueryMatcher.execute(query: unequal, tree: tree).map { $0.captures.map(\.node) }
+                == [[otherLeft, otherRight]])
+    }
+
+    @Test
     func `Positional child matching respects order`() {
         let identifier = SyntaxNode(type: "identifier", byteRange: 0 ..< 1)
         let number = SyntaxNode(type: "number", byteRange: 1 ..< 2)

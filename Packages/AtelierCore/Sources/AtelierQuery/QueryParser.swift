@@ -392,10 +392,14 @@ extension QueryParser {
         switch name {
             case "#eq?":
                 guard args.count >= 2 else { throw position.syntaxError("eq? requires 2 arguments") }
-                return .eq(capture: try captureArgument(of: "eq?", args, at: position), value: args[1].text)
+                let capture = try captureArgument(of: "eq?", args, at: position)
+                if case .capture = args[1] { return .eqCapture(capture: capture, other: args[1].text) }
+                return .eq(capture: capture, value: args[1].text)
             case "#not-eq?":
                 guard args.count >= 2 else { throw position.syntaxError("not-eq? requires 2 arguments") }
-                return .notEq(capture: try captureArgument(of: "not-eq?", args, at: position), value: args[1].text)
+                let capture = try captureArgument(of: "not-eq?", args, at: position)
+                if case .capture = args[1] { return .notEqCapture(capture: capture, other: args[1].text) }
+                return .notEq(capture: capture, value: args[1].text)
             case "#match?":
                 guard args.count >= 2 else { throw position.syntaxError("match? requires 2 arguments") }
                 return .match(capture: try captureArgument(of: "match?", args, at: position), pattern: args[1].text)
