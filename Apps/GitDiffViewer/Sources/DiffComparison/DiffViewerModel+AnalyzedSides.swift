@@ -44,9 +44,7 @@ extension DiffViewerModel {
 
     /// Maps each rendered row's `fileIndex` to the left-side path its left-side findings are keyed under, from the
     /// pairs behind the current render target; a file the left side lacks has none.
-    package var diagnosticLeftFilePaths: [Int: String] {
-        DiagnosticFileIndex.leftPaths(for: pipeline.target?.pairs ?? [])
-    }
+    package var diagnosticLeftFilePaths: [Int: String] { diagnosticFilePathMaps.left }
 
     /// Where a source's content lives for the analyzers; nil for a file or a patch, which they cannot read.
     private static func diagnosticsContent(_ source: ComparisonSource) -> DiagnosticsSideTarget.Content? {
