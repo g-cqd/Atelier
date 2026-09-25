@@ -317,33 +317,16 @@ private struct PaneContent {
     let background: NSColor
     let drag: (GapDragEvent) -> Void
     let displayed: () -> Void
-    let hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)?
+    /// Where each pane reads its findings, its hover documentation and their settings.
+    let model: DiffViewerModel
 
     init(layouts: CardLayouts, rendered: RenderedDiff, model: DiffViewerModel) {
         let id = rendered.id
         self.layouts = layouts
+        self.model = model
         background = model.palette.background
         drag = { model.handleGapDrag($0) }
         displayed = { model.noteDisplayed(id) }
-        hoverResolver = Self.hoverResolver(docs: model.hoverDocs, palette: model.palette, settings: model.settings)
-    }
-
-    /// Resolves a hover hit and colors its documentation for the panel. Each row carries the comparison's global
-    /// `fileIndex`, so the hit needs no translation from this card's path. The panel's material is read as the hit
-    /// resolves, so a change of setting reaches the next panel without rebuilding the card's panes.
-    private static func hoverResolver(docs: HoverDocumentationModel?, palette: DiffPalette, settings: ViewerSettings)
-        -> (@Sendable (HoverHit) async -> HoverDocument?)?
-    {
-        guard let docs else { return nil }
-        return { hit in
-            let side: HoverQuerySide = hit.side == .new ? .new : .old
-            guard
-                let content = await docs.hover(
-                    fileIndex: hit.fileIndex, side: side, line: hit.line, utf16Column: hit.utf16Column)
-            else { return nil }
-            return await HoverDocument.build(from: content, palette: palette)
-                .presented(on: settings.hoverPanelMaterial)
-        }
     }
 }
 
@@ -441,14 +424,49 @@ private struct FileCardBody: View {
         }
     }
 
-    private func pane(_ content: PaneContent, side: RenderedSide, gutter: GutterStyle, width: CGFloat)
-        -> EmbeddedDiffTextView
-    {
-        EmbeddedDiffTextView(
+    private func pane(_ content: PaneContent, side: RenderedSide, gutter: GutterStyle, width: CGFloat) -> CardPane {
+        CardPane(content: content, side: side, gutter: gutter, width: width, options: options)
+    }
+}
+
+/// One pane of a card with its own findings on its rows, opened from its gutter and joined to its hover, as the
+/// single-file view shows them (book DIAG-03, DUI-03, HOVER-14).
+private struct CardPane: View {
+    let content: PaneContent
+    let side: RenderedSide
+    let gutter: GutterStyle
+    let width: CGFloat
+    let options: PaneOptions
+
+    /// This pane's findings, since its rows are its own.
+    @State private var diagnostics = PaneDiagnostics()
+
+    var body: some View {
+        let model = content.model
+        let pane = EmbeddedDiffTextView(
             layouts: content.layouts, side: side, gutter: gutter, width: width, wrapMode: options.wrapMode,
             onGapDrag: content.drag, onDisplayed: content.displayed,
-            hoverEnabled: options.showsHover, hoverResolver: content.hoverResolver,
-            bouncesAtEdges: options.bouncesAtEdges)
+            hoverEnabled: options.showsHover,
+            // The panel's material is read as the hit resolves, so a change of setting reaches the next panel without
+            // rebuilding the card's panes.
+            hoverResolver: diagnostics.hoverResolver(
+                docs: model.hoverDocs, palette: model.palette, settings: model.settings),
+            bouncesAtEdges: options.bouncesAtEdges,
+            diagnosticOverlay: model.settings.diagnosticsEnabled ? diagnostics.overlay : nil,
+            diagnosticsVersion: diagnostics.version, onDiagnosticClick: diagnostics.showFindings)
+        if let rendered = layout?.rendered {
+            pane.followingDiagnostics(of: rendered, in: model, into: diagnostics)
+        } else {
+            pane
+        }
+    }
+
+    private var layout: StaticTextLayout? {
+        switch side {
+            case .unified: content.layouts.unified
+            case .old: content.layouts.old
+            case .new: content.layouts.new
+        }
     }
 }
 
