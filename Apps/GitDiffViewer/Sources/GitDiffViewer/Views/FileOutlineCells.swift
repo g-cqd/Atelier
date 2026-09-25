@@ -82,7 +82,9 @@ final class FileCellView: NSTableCellView {
         fatalError("init(coder:) is not supported")
     }
 
-    func configure(node: PathNode, glyph: ChangeGlyph?, scheme: BadgeScheme, state: BadgeChangeState) {
+    func configure(
+        node: PathNode, glyph: ChangeGlyph?, scheme: BadgeScheme, state: BadgeChangeState, detail: String? = nil
+    ) {
         imageView?.image = NSImage(
             systemSymbolName: node.isDirectory ? "folder" : "doc.text",
             accessibilityDescription: node.isDirectory ? "Folder" : "File")
@@ -91,7 +93,80 @@ final class FileCellView: NSTableCellView {
         badge.isDimmed = node.isDirectory
         badge.scheme = scheme
         badge.state = state
-        toolTip = glyph?.title
-        setAccessibilityHelp(glyph?.title)
+        let help = [glyph?.title, detail].compactMap(\.self).joined(separator: "\n")
+        toolTip = help.isEmpty ? nil : help
+        setAccessibilityHelp(toolTip)
+    }
+}
+
+/// A commit section's header: its subject, tail-truncated, and the number of files it lists, trailing in secondary
+/// text; everything else about the commit is in the tooltip, which the accessibility label reads too (GIT-06).
+final class CommitSectionCellView: NSTableCellView {
+    static let identifier = NSUserInterfaceItemIdentifier("CommitSectionCellView")
+
+    private let count = NSTextField(labelWithString: "")
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        identifier = Self.identifier
+        let title = NSTextField(labelWithString: "")
+        title.lineBreakMode = .byTruncatingTail
+        title.font = .boldSystemFont(ofSize: NSFont.systemFontSize(for: .small))
+        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        count.textColor = .secondaryLabelColor
+        count.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize(for: .small), weight: .regular)
+        count.setContentCompressionResistancePriority(.required, for: .horizontal)
+        for view in [title, count] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(view)
+        }
+        textField = title
+        NSLayoutConstraint.activate([
+            title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            title.centerYAnchor.constraint(equalTo: centerYAnchor),
+            title.trailingAnchor.constraint(lessThanOrEqualTo: count.leadingAnchor, constant: -6),
+            count.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            count.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    func configure(title: String, count files: Int, tooltip: String?) {
+        textField?.stringValue = title
+        count.stringValue = files > 0 ? "\(files)" : ""
+        toolTip = tooltip
+        setAccessibilityLabel(
+            [title, files == 1 ? "1 file" : "\(files) files", tooltip].compactMap(\.self).joined(separator: ", "))
+    }
+}
+
+/// An inert line under a section, in secondary text: why it lists no file, or how many older commits it stands for.
+final class NoteCellView: NSTableCellView {
+    static let identifier = NSUserInterfaceItemIdentifier("NoteCellView")
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        identifier = Self.identifier
+        let text = NSTextField(labelWithString: "")
+        text.lineBreakMode = .byTruncatingTail
+        text.textColor = .secondaryLabelColor
+        text.font = .systemFont(ofSize: NSFont.systemFontSize(for: .small))
+        text.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(text)
+        textField = text
+        NSLayoutConstraint.activate([
+            text.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            text.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
+            text.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
     }
 }
