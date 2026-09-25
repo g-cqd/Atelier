@@ -114,7 +114,8 @@ package final class DiffViewerModel {
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider)
         self.preparer = preparer
         let pipeline = RenderPipeline(
-            preparer: preparer, taskProvider: taskProvider, options: Self.options(settings, palette: palette))
+            preparer: preparer, taskProvider: taskProvider, options: Self.options(settings, palette: palette),
+            refinement: SwiftColorRefinement(clock: clock))
         self.pipeline = pipeline
         gapDrags = GapDragController(
             taskProvider: taskProvider, clock: clock, expansion: { pipeline.expansion(of: $0) },
