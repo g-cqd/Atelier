@@ -446,7 +446,7 @@ private struct CardPane: View {
         let model = content.model
         let pane = EmbeddedDiffTextView(
             layouts: content.layouts, side: side, gutter: gutter, width: width, wrapMode: options.wrapMode,
-            onGapDrag: content.drag, onDisplayed: content.displayed,
+            onGapDrag: content.drag, onChangeToggle: { model.toggleChange($0) }, onDisplayed: content.displayed,
             hoverEnabled: options.showsHover,
             hoverResolver: diagnostics.hoverResolver(docs: model.hoverDocs, palette: model.palette),
             hoverPanelMaterial: options.hoverPanelMaterial, bouncesAtEdges: options.bouncesAtEdges,

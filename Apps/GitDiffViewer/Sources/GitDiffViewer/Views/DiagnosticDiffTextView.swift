@@ -34,7 +34,7 @@ struct DiagnosticDiffTextView: View {
             rendered: rendered, gutter: gutter, keepsScrollPosition: keepsScrollPosition, wrapsLines: wrapsLines,
             wrapColumn: wrapColumn, showsMinimap: showsMinimap, syncsScrolling: syncsScrolling,
             scrollRequest: scrollRequest, splitController: splitController, onGapDrag: onGapDrag,
-            onDisplayed: onDisplayed,
+            onChangeToggle: { model.toggleChange($0) }, onDisplayed: onDisplayed,
             hoverEnabled: model.settings.showsHoverDocumentation && model.hoverDocs != nil,
             hoverResolver: diagnostics.hoverResolver(docs: model.hoverDocs, palette: rendered.palette),
             hoverPanelMaterial: model.settings.hoverPanelMaterial,
