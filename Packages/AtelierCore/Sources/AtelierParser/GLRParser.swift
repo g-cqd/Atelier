@@ -379,8 +379,8 @@ extension GLRParser {
                 children[steps[step]].type = alias.type
                 children[steps[step]].isNamed = alias.isNamed
             }
-            for (step, fieldName) in productions[rule].fields where step < steps.count {
-                nodeFields[fieldName, default: []].append(children[steps[step]])
+            for field in productions[rule].fields where field.step < steps.count {
+                nodeFields[field.name, default: []].append(children[steps[field.step]])
             }
             dynamicPrecedence = productions[rule].dynamicPrecedence
         }

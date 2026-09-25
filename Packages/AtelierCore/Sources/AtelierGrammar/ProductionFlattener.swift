@@ -28,12 +28,9 @@ struct FlatProduction: Sendable, Equatable {
 
     var symbols: [String] { steps.map(\.symbol) }
 
-    var fields: [Int: String] {
-        var fields: [Int: String] = [:]
-        for (index, step) in steps.enumerated() {
-            if let field = step.field { fields[index] = field }
-        }
-        return fields
+    /// The fields of the steps, in step order.
+    var fields: [ProductionField] {
+        steps.indices.compactMap { index in steps[index].field.map { ProductionField(step: index, name: $0) } }
     }
 
     var aliases: [Int: SymbolAlias] {
