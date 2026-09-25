@@ -220,7 +220,8 @@ public final class GLRParser: Sendable {
     /// is, and the shift phase takes the lookahead as an error for it.
     ///
     /// Stacks are popped off the worklist, so each is the only owner of its arrays and a reduction rewrites them in
-    /// place; only a fork copies them.
+    /// place; only a fork copies them. The stack being reduced stays out of the worklist until it forks, so a token
+    /// that forks nothing allocates no worklist.
     ///
     /// A reduction that would build a node taller than ``maxTreeDepth`` sets `exceededDepth` and stops all reducing:
     /// every stack comes out as it is, for the caller to release.
@@ -233,14 +234,17 @@ public final class GLRParser: Sendable {
         origins.reverse()
         var ready: [ParseStack] = []
         ready.reserveCapacity(origins.count)
+        // The forks still to reduce, the next on top, and the stacks that can shift the lookahead once their forks
+        // are done reducing; both empty between two origins.
+        var pending: [ParseStack] = []
+        var waiting: [ParseStack] = []
         while let origin = origins.popLast() {
             var budget = parseTable.stateCount + origin.nodes.count
-            var pending = [consume origin]
-            // Stacks that can shift the lookahead after their forks are done reducing.
-            var waiting: [ParseStack] = []
-            while var stack = pending.popLast() {
+            // The stack on top of the worklist, kept out of `pending`.
+            var current: ParseStack? = consume origin
+            while var stack = current.take() ?? pending.popLast() {
                 guard !exceededDepth else {
-                    ready.append(stack)
+                    ready.append(consume stack)
                     continue
                 }
                 switch parseTable.actions[stack.state][lookahead] {
@@ -248,15 +252,15 @@ public final class GLRParser: Sendable {
                     where lostShift(of: lookahead, in: stack.state) != nil
                         && !reductionShifts(lookahead, on: stack, count: count, nonTerminal: nonTerminal):
                         // Merged lookaheads made this reduction: the shift phase takes the shift it won against.
-                        ready.append(stack)
+                        ready.append(consume stack)
                     case .reduce(let rule, let count, let nonTerminal) where budget > 0:
                         budget -= 1
                         switch reduce(&stack, rule: rule, count: count, nonTerminal: nonTerminal) {
-                            case .reduced: pending.append(stack)
-                            case .missingGoto: ready.append(stack)
+                            case .reduced: current = consume stack
+                            case .missingGoto: ready.append(consume stack)
                             case .tooDeep:
                                 exceededDepth = true
-                                ready.append(stack)
+                                ready.append(consume stack)
                         }
 
                     case .conflict(let actions) where budget > 0:
@@ -265,22 +269,23 @@ public final class GLRParser: Sendable {
                             budget -= 1
                             var fork = stack
                             switch reduce(&fork, rule: rule, count: count, nonTerminal: nonTerminal) {
-                                case .reduced: forks.append(fork)
+                                case .reduced: forks.append(consume fork)
                                 case .missingGoto: break
                                 case .tooDeep: exceededDepth = true
                             }
                         }
                         let canShift = actions.contains { if case .shift = $0 { true } else { false } }
                         if canShift || forks.isEmpty {
-                            waiting.append(stack)
+                            waiting.append(consume stack)
                         }
                         pending.append(contentsOf: forks.reversed())
 
                     default:
-                        ready.append(stack)
+                        ready.append(consume stack)
                 }
             }
             ready.append(contentsOf: waiting.reversed())
+            waiting.removeAll(keepingCapacity: true)
         }
         return ready
     }
@@ -305,10 +310,10 @@ public final class GLRParser: Sendable {
                     stack.pushNode(leaf)
                     stack.state = nextState
                     stack.isRecovering = false
-                    shifted.append(stack)
+                    shifted.append(consume stack)
                     continue
                 case .accept:
-                    shifted.append(stack)
+                    shifted.append(consume stack)
                     continue
                 case .conflict(let actions):
                     shiftTargets = actions.compactMap { action -> Int? in
@@ -325,7 +330,7 @@ public final class GLRParser: Sendable {
                 stack.pushNode(
                     SyntaxNode(type: "ERROR", byteRange: token.byteRange, pointRange: token.pointRange, isError: true))
                 stack.isRecovering = true
-                shifted.append(stack)
+                shifted.append(consume stack)
                 continue
             }
             // Forks copy the stack; the last shift takes it over.
@@ -334,12 +339,12 @@ public final class GLRParser: Sendable {
                 fork.pushNode(leaf)
                 fork.state = nextState
                 fork.isRecovering = false
-                shifted.append(fork)
+                shifted.append(consume fork)
             }
             stack.pushNode(leaf)
             stack.state = lastTarget
             stack.isRecovering = false
-            shifted.append(stack)
+            shifted.append(consume stack)
         }
         return shifted
     }

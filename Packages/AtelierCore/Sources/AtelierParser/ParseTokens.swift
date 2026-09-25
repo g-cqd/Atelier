@@ -83,7 +83,8 @@ struct ScannedTokenSource: ParseTokenSource {
 
     /// The mode of the preferred stack's state.
     private func preferredMode(for stacks: [ParseStack]) -> Int? {
-        guard stacks.count > 1 else { return stacks.first.flatMap { scanner.mode(ofState: $0.state) } }
+        // The state alone: `stacks.first` would copy the whole stack, a retain and a release per array.
+        guard stacks.count > 1 else { return stacks.isEmpty ? nil : scanner.mode(ofState: stacks[0].state) }
         return stacks.indices.min { stacks[$0].isPreferred(over: stacks[$1]) }
             .flatMap { scanner.mode(ofState: stacks[$0].state) }
     }
