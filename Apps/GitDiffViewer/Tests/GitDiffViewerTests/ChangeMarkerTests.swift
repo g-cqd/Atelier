@@ -155,6 +155,19 @@ struct DiffGutterChangeMarkerTests {
     }
 
     @Test
+    func `the minimap marks a folded change's rows, and the row after a folded removal, as changed`() throws {
+        let rendered = try #require(Self.layout(context: 30)).rendered
+        let kinds = MinimapView.kinds(of: rendered)
+        let modified = try #require(rendered.changes.first { $0.kind == .modified })
+        let removal = try #require(rendered.changes.first { $0.kind == .removed })
+
+        #expect(rendered.rows.allSatisfy { $0.kind == .context })
+        #expect(modified.rows.allSatisfy { kinds[$0] == .added })
+        #expect(kinds[removal.rows.lowerBound] == .removed)
+        #expect(kinds.count { $0 != .context } == modified.rows.count + 1)
+    }
+
+    @Test
     func `hovering a marker draws it stronger and tells its change in the tooltip`() throws {
         let fixture = Fixture(try #require(Self.layout()))
         let (change, shape) = try #require(fixture.markers().first)
