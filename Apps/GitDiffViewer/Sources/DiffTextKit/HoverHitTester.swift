@@ -30,6 +30,54 @@ package enum HoverHitTester {
     /// `nil` over headers, padding, whitespace or any character that is not part of an identifier.
     @MainActor
     package static func hit(at point: NSPoint, textView: NSTextView, rendered: RenderedText) -> HoverHit? {
+        guard let location = locate(point, textView: textView, rendered: rendered) else { return nil }
+        let meta = rendered.rows[location.row]
+
+        let side: HoverSide
+        let number: Int
+        if let newNumber = meta.newNumber {
+            side = .new
+            number = newNumber
+        } else if let oldNumber = meta.oldNumber {
+            side = .old
+            number = oldNumber
+        } else {
+            return nil
+        }
+
+        let string = rendered.attributed.string as NSString
+        guard
+            let identifierRange = identifierRange(
+                in: string, at: location.offset, rowStart: location.rowStart, rowEnd: location.rowEnd)
+        else { return nil }
+
+        let anchorRect = Self.rect(
+            forIdentifierRange: identifierRange, fragmentOrigin: location.fragmentOrigin,
+            fragmentStart: location.fragmentStart, line: location.line, inset: textView.textContainerInset)
+
+        return HoverHit(
+            fileIndex: meta.fileIndex, side: side, line: number - 1, utf16Column: location.offset - location.rowStart,
+            row: location.row, anchorRect: anchorRect, identifierRange: identifierRange)
+    }
+
+    /// Where a point falls in the text: the character under it, its content row, and the laid-out line holding it.
+    private struct Location {
+        /// The character's document-absolute UTF-16 offset.
+        let offset: Int
+        let row: Int
+        /// The row's first offset, and the offset of its line break or the document's end.
+        let rowStart: Int
+        let rowEnd: Int
+        let fragmentOrigin: NSPoint
+        /// The laid-out fragment's first offset.
+        let fragmentStart: Int
+        let line: NSTextLineFragment
+    }
+
+    /// The character under `point`, in text-view coordinates; nil over headers, filler rows, padding, and past a
+    /// row's end.
+    @MainActor
+    private static func locate(_ point: NSPoint, textView: NSTextView, rendered: RenderedText) -> Location? {
         guard let layoutManager = textView.textLayoutManager,
             let contentManager = layoutManager.textContentManager
         else { return nil }
@@ -54,37 +102,14 @@ package enum HoverHitTester {
 
         let rowIndex = rendered.rowIndex(containing: offset)
         guard offset < rendered.attributed.length, isContentRow(rendered.rows[safe: rowIndex]) else { return nil }
-        let meta = rendered.rows[rowIndex]
-
-        let side: HoverSide
-        let number: Int
-        if let newNumber = meta.newNumber {
-            side = .new
-            number = newNumber
-        } else if let oldNumber = meta.oldNumber {
-            side = .old
-            number = oldNumber
-        } else {
-            return nil
-        }
-
         let rowStart = rendered.lineStarts[rowIndex]
         let rowEnd =
             rowIndex + 1 < rendered.lineStarts.count
             ? rendered.lineStarts[rowIndex + 1] - 1 : rendered.attributed.length
         guard offset < rowEnd else { return nil }
-        let string = rendered.attributed.string as NSString
-        guard let identifierRange = identifierRange(in: string, at: offset, rowStart: rowStart, rowEnd: rowEnd) else {
-            return nil
-        }
-
-        let anchorRect = Self.rect(
-            forIdentifierRange: identifierRange, fragmentOrigin: fragmentOrigin, fragmentStart: fragmentStart,
-            line: line, inset: inset)
-
-        return HoverHit(
-            fileIndex: meta.fileIndex, side: side, line: number - 1, utf16Column: offset - rowStart, row: rowIndex,
-            anchorRect: anchorRect, identifierRange: identifierRange)
+        return Location(
+            offset: offset, row: rowIndex, rowStart: rowStart, rowEnd: rowEnd, fragmentOrigin: fragmentOrigin,
+            fragmentStart: fragmentStart, line: line)
     }
 
     /// The current bounds of `identifierRange`, laid out and measured the way ``hit(at:textView:rendered:)``
