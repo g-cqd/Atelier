@@ -65,7 +65,10 @@ public actor LanguageServerSession {
         public var workspaceRoot: URL
         /// How long the session stays connected with no hover requests before it shuts down.
         public var idleShutdown: Duration
-        /// The cap on how long any single request (including the `initialize` handshake) is allowed to take.
+        /// The cap on how long the `initialize` handshake is allowed to take. A server that loads a whole runtime or
+        /// project model before it answers, as a JVM server does, needs far longer here than for any request after.
+        public var initializeTimeout: Duration
+        /// The cap on how long any single request after the `initialize` handshake is allowed to take.
         public var requestTimeout: Duration
         /// How many times a failed connection attempt is retried before the service gives up for good.
         public var maximumRestarts: Int
@@ -83,6 +86,7 @@ public actor LanguageServerSession {
             serverArguments: [String] = [],
             workspaceRoot: URL,
             idleShutdown: Duration = .seconds(180),
+            initializeTimeout: Duration = .seconds(2),
             requestTimeout: Duration = .seconds(2),
             maximumRestarts: Int = 2,
             openDocumentLimit: Int = 32,
@@ -92,6 +96,7 @@ public actor LanguageServerSession {
             self.serverArguments = serverArguments
             self.workspaceRoot = workspaceRoot
             self.idleShutdown = idleShutdown
+            self.initializeTimeout = initializeTimeout
             self.requestTimeout = requestTimeout
             self.maximumRestarts = maximumRestarts
             self.openDocumentLimit = openDocumentLimit
@@ -263,7 +268,7 @@ public actor LanguageServerSession {
             processId: Int(ProcessInfo.processInfo.processIdentifier),
             rootUri: configuration.workspaceRoot.absoluteString, capabilities: ClientCapabilities(),
             initializationOptions: configuration.initializationOptions)
-        _ = try await raceAgainstTimeout(clock: clock, timeout: configuration.requestTimeout) {
+        _ = try await raceAgainstTimeout(clock: clock, timeout: configuration.initializeTimeout) {
             try await connection.request("initialize", params, as: DiscardedResult.self)
         }
         try await connection.notify("initialized", InitializedParams())
