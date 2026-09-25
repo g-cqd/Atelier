@@ -27,6 +27,23 @@ package final class DiagnosticOverlay: Sendable {
             self.findings = findings
             self.squiggles = squiggles
         }
+
+        /// The findings whose underline covers `column`, a zero-based UTF-16 column within the row's text: one with a
+        /// column from it to its end column on the same line, or to the row's end; one without, the whole line. The
+        /// ranges are ``DiagnosticRowMapper``'s, before it clamps them to the row.
+        package func findings(underColumn column: Int) -> [Finding] {
+            findings.filter { finding in
+                guard let first = finding.column else { return true }
+                let start = first - 1
+                let end =
+                    if let endColumn = finding.endColumn, finding.endLine == nil || finding.endLine == finding.line {
+                        endColumn - 1
+                    } else {
+                        Int.max
+                    }
+                return start <= column && column < end
+            }
+        }
     }
 
     /// A span to underline, zero-based UTF-16 columns within the row's own text. `end` is `nil` when the finding's
