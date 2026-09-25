@@ -229,35 +229,6 @@ public enum QueryParser: Sendable {
         return .anchor
     }
 
-    private static func parsePredicatePattern(_ scanner: inout Scanner) throws(QueryError)
-        -> QueryPattern
-    {
-        guard scanner.peek() == "#" else {
-            throw .syntaxError("Expected #")
-        }
-
-        let predName = scanner.readUntil { $0 == " " || $0 == "\t" || $0 == "\n" || $0 == ")" }
-        scanner.skipWhitespaceAndComments()
-
-        // Parse arguments
-        var args: [String] = []
-        while let ch = scanner.peek(), ch != ")" && ch != "#" && ch != "\n" {
-            if ch == "@" {
-                scanner.advance()
-                args.append("@" + scanner.readIdentifier())
-            } else if ch == "\"" {
-                let str = try scanner.readString()
-                args.append(str)
-            } else {
-                args.append(scanner.readIdentifier())
-            }
-            scanner.skipWhitespaceAndComments()
-        }
-
-        let predicate = try buildPredicate(name: predName, args: args)
-        return .predicate(predicate)
-    }
-
     private static func parsePredicates(_ scanner: inout Scanner) throws(QueryError)
         -> [QueryPattern]
     {
@@ -289,40 +260,6 @@ public enum QueryParser: Sendable {
             throw .invalidCapture("Empty capture name")
         }
         return QueryPattern.Capture(name)
-    }
-
-    // swiftlint:disable:next cyclomatic_complexity
-    private static func buildPredicate(name: String, args: [String]) throws(QueryError) -> Predicate {
-        switch name {
-            case "#eq?":
-                guard args.count >= 2 else { throw .syntaxError("eq? requires 2 arguments") }
-                return .eq(capture: args[0], value: args[1])
-            case "#not-eq?":
-                guard args.count >= 2 else { throw .syntaxError("not-eq? requires 2 arguments") }
-                return .notEq(capture: args[0], value: args[1])
-            case "#match?":
-                guard args.count >= 2 else { throw .syntaxError("match? requires 2 arguments") }
-                return .match(capture: args[0], pattern: args[1])
-            case "#not-match?":
-                guard args.count >= 2 else { throw .syntaxError("not-match? requires 2 arguments") }
-                return .notMatch(capture: args[0], pattern: args[1])
-            case "#any-of?":
-                guard args.count >= 2 else {
-                    throw .syntaxError("any-of? requires at least 2 arguments")
-                }
-                return .anyOf(capture: args[0], values: Array(args.dropFirst()))
-            case "#contains?":
-                guard args.count >= 2 else { throw .syntaxError("contains? requires 2 arguments") }
-                return .contains(capture: args[0], value: args[1])
-            case "#is?":
-                guard args.count >= 2 else { throw .syntaxError("is? requires 2 arguments") }
-                return .is(capture: args[0], property: args[1])
-            case "#is-not?":
-                guard args.count >= 2 else { throw .syntaxError("is-not? requires 2 arguments") }
-                return .isNot(capture: args[0], property: args[1])
-            default:
-                return .directive(name: name, arguments: args)
-        }
     }
 
     private static func wrap(_ pattern: QueryPattern, with predicates: [QueryPattern])
@@ -358,6 +295,73 @@ public enum QueryParser: Sendable {
                 return .wildcard(capture: nil)
             default:
                 return pattern
+        }
+    }
+}
+
+// MARK: - Predicates
+
+extension QueryParser {
+    private static func parsePredicatePattern(_ scanner: inout Scanner) throws(QueryError)
+        -> QueryPattern
+    {
+        guard scanner.peek() == "#" else {
+            throw .syntaxError("Expected #")
+        }
+
+        let predName = scanner.readUntil { $0 == " " || $0 == "\t" || $0 == "\n" || $0 == ")" }
+        scanner.skipWhitespaceAndComments()
+
+        // Parse arguments
+        var args: [String] = []
+        while let ch = scanner.peek(), ch != ")" && ch != "#" && ch != "\n" {
+            if ch == "@" {
+                scanner.advance()
+                args.append("@" + scanner.readIdentifier())
+            } else if ch == "\"" {
+                let str = try scanner.readString()
+                args.append(str)
+            } else {
+                args.append(scanner.readIdentifier())
+            }
+            scanner.skipWhitespaceAndComments()
+        }
+
+        let predicate = try buildPredicate(name: predName, args: args)
+        return .predicate(predicate)
+    }
+
+    // swiftlint:disable:next cyclomatic_complexity
+    private static func buildPredicate(name: String, args: [String]) throws(QueryError) -> Predicate {
+        switch name {
+            case "#eq?":
+                guard args.count >= 2 else { throw .syntaxError("eq? requires 2 arguments") }
+                return .eq(capture: args[0], value: args[1])
+            case "#not-eq?":
+                guard args.count >= 2 else { throw .syntaxError("not-eq? requires 2 arguments") }
+                return .notEq(capture: args[0], value: args[1])
+            case "#match?":
+                guard args.count >= 2 else { throw .syntaxError("match? requires 2 arguments") }
+                return .match(capture: args[0], pattern: args[1])
+            case "#not-match?":
+                guard args.count >= 2 else { throw .syntaxError("not-match? requires 2 arguments") }
+                return .notMatch(capture: args[0], pattern: args[1])
+            case "#any-of?":
+                guard args.count >= 2 else {
+                    throw .syntaxError("any-of? requires at least 2 arguments")
+                }
+                return .anyOf(capture: args[0], values: Array(args.dropFirst()))
+            case "#contains?":
+                guard args.count >= 2 else { throw .syntaxError("contains? requires 2 arguments") }
+                return .contains(capture: args[0], value: args[1])
+            case "#is?":
+                guard args.count >= 2 else { throw .syntaxError("is? requires 2 arguments") }
+                return .is(capture: args[0], property: args[1])
+            case "#is-not?":
+                guard args.count >= 2 else { throw .syntaxError("is-not? requires 2 arguments") }
+                return .isNot(capture: args[0], property: args[1])
+            default:
+                return .directive(name: name, arguments: args)
         }
     }
 }
