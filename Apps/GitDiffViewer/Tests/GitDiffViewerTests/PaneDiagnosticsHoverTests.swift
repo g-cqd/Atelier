@@ -17,7 +17,7 @@ struct PaneDiagnosticsHoverTests {
 
         var testDescription: String { self == .singleFile ? "the single-file view" : "a card" }
 
-        /// The text `line` shows in: a file of its own, or the third file of a card list, whose rows carry file
+        /// The text the hover is over: a file of its own, or the third file of a card list, whose rows carry file
         /// index 2.
         func rendered(_ text: String) throws -> RenderedText {
             switch self {
