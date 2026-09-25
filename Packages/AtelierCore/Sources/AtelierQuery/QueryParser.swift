@@ -30,13 +30,13 @@ public enum QueryParser: Sendable {
         scanner.depth += 1
         defer { scanner.depth -= 1 }
         guard scanner.depth <= maxRecursionDepth else {
-            throw .syntaxError("Query exceeds maximum nesting depth (\(maxRecursionDepth))")
+            throw scanner.syntaxError("Query exceeds maximum nesting depth (\(maxRecursionDepth))")
         }
 
         scanner.skipWhitespaceAndComments()
 
         guard let ch = scanner.peek() else {
-            throw .syntaxError("Unexpected end of input")
+            throw scanner.syntaxError("Unexpected end of input")
         }
 
         var pattern: QueryPattern
@@ -54,7 +54,7 @@ public enum QueryParser: Sendable {
             case "#":
                 pattern = try parsePredicatePattern(&scanner)
             default:
-                throw .syntaxError("Unexpected character: \(ch)")
+                throw scanner.syntaxError("Unexpected character: \(ch)")
         }
 
         // Suffixes in any order and number, as tree-sitter reads them (ts_query__parse_pattern in lib/src/query.c):
@@ -128,7 +128,7 @@ public enum QueryParser: Sendable {
             let predicate = try parsePredicatePattern(&scanner)
             scanner.skipWhitespaceAndComments()
             guard scanner.peek() == ")" else {
-                throw .syntaxError("Expected )")
+                throw scanner.syntaxError("Expected )")
             }
             scanner.advance()
             return predicate
@@ -141,7 +141,7 @@ public enum QueryParser: Sendable {
                 scanner.skipWhitespaceAndComments()
             }
             guard scanner.peek() == ")" else {
-                throw .syntaxError("Expected )")
+                throw scanner.syntaxError("Expected )")
             }
             scanner.advance()
             return patterns.count == 1 ? patterns[0] : .sequence(patterns)
@@ -160,7 +160,7 @@ public enum QueryParser: Sendable {
             let capture = try parseCapture(&scanner)
             let predicates = try parsePredicates(&scanner)
             guard scanner.peek() == ")" else {
-                throw .syntaxError("Expected )")
+                throw scanner.syntaxError("Expected )")
             }
             scanner.advance()
             let node = QueryPattern.nodeMatch(type: QueryPattern.namedWildcardType, children: [], capture: capture)
@@ -170,7 +170,7 @@ public enum QueryParser: Sendable {
         // Node type
         let type = scanner.readIdentifier()
         guard !type.isEmpty else {
-            throw .syntaxError("Expected node type")
+            throw scanner.syntaxError("Expected node type")
         }
 
         scanner.skipWhitespaceAndComments()
@@ -196,7 +196,7 @@ public enum QueryParser: Sendable {
                 let fieldName = scanner.readIdentifier()
                 guard !fieldName.isEmpty else { throw fieldStart.syntaxError("Expected a field name before :") }
                 guard scanner.peek() == ":" else {
-                    throw .syntaxError("Expected : after field name")
+                    throw scanner.syntaxError("Expected : after field name")
                 }
                 scanner.advance()
                 scanner.skipWhitespaceAndComments()
@@ -213,7 +213,7 @@ public enum QueryParser: Sendable {
         children.append(contentsOf: try parsePredicates(&scanner))
 
         guard scanner.peek() == ")" else {
-            throw .syntaxError("Expected )")
+            throw scanner.syntaxError("Expected )")
         }
         scanner.advance()
         return children
@@ -246,7 +246,7 @@ public enum QueryParser: Sendable {
             scanner.skipWhitespaceAndComments()
         }
         guard scanner.peek() == "]" else {
-            throw .syntaxError("Expected ]")
+            throw scanner.syntaxError("Expected ]")
         }
         scanner.advance()
         return .alternation(alternatives)
