@@ -7,8 +7,7 @@ import Synchronization
 /// A class so `deinit` can take the tree apart without recursion: freeing nested `SyntaxNode` arrays recursively
 /// overflows a 512 KiB thread stack between 2,000 and 3,000 levels.
 public final class SyntaxTree: Sendable {
-    /// The root node, a copy sharing the tree's storage. Only the tree frees nodes without recursion: the last holder
-    /// of a copy of a deep node frees that node recursively, so keep the tree alive longer than such copies.
+    /// The root node, a copy sharing the tree's storage; it may outlive the tree (see ``SyntaxNode``).
     public var root: SyntaxNode { storedRoot.withLock { $0 } }
     public let source: String
     /// How many bytes of `source` lie under error nodes, each byte counted once: how much of the source the parse
