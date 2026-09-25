@@ -334,16 +334,40 @@ public struct SequenceRouter: Sendable {
     /// Feed a chunk of bytes and collect all emitted events.
     public mutating func feedAll(_ bytes: [UInt8]) -> [InputEvent] {
         var events: [InputEvent] = []
-        feedSequence(bytes, into: &events)
+        feedAll(bytes.span, into: &events)
         return events
     }
 
-    /// Replaces `events` with the events that `bytes` completes.
+    /// Replaces `events` with the events that `bytes` completes. Inside a paste, the bytes up to the next ESC, the only
+    /// byte that can start its end marker, are taken as one run rather than one call per byte.
     mutating func feedAll(_ bytes: Span<UInt8>, into events: inout [InputEvent]) {
         events.removeAll(keepingCapacity: true)
         events.reserveCapacity(max(1, bytes.count))
-        for index in bytes.indices {
+        var index = 0
+        while index < bytes.count {
+            if terminatorProgress == 0, routeState == .paste || routeState == .pasteOverflow {
+                index = takePasteRun(bytes, from: index)
+                guard index < bytes.count else { break }
+            }
             feed(bytes[index], into: &events)
+            index += 1
+        }
+    }
+
+    /// Takes the bytes of a paste from `start` up to the next ESC as `feed` takes them one at a time while no byte of
+    /// the end marker is matched: a kept paste appends them, up to its cap, and an overflowed one drops them.
+    /// - Returns: The index of the first byte not taken: an ESC, the byte that would pass the cap, or the end.
+    private mutating func takePasteRun(_ bytes: Span<UInt8>, from start: Int) -> Int {
+        let keeps = routeState == .paste
+        // A kept paste takes bytes while it stays within its cap; `feed` handles the byte that passes it.
+        let limit = keeps ? min(bytes.count, start + max(0, Self.maxPasteSize - buffer.count)) : bytes.count
+        guard start < limit else { return start }
+        return bytes.withUnsafeBufferPointer { pointer in
+            let run = UnsafeBufferPointer(rebasing: pointer[start ..< limit])
+            let escape = memchr(run.baseAddress, Int32(Self.pasteEndMarker[0]), run.count)
+            let end = escape.map { start + (UnsafeRawPointer($0) - UnsafeRawPointer(run.baseAddress!)) } ?? limit
+            if keeps { buffer.append(contentsOf: UnsafeBufferPointer(rebasing: pointer[start ..< end])) }
+            return end
         }
     }
 
@@ -359,16 +383,6 @@ public struct SequenceRouter: Sendable {
         guard routeState == .escape else { return }
         events.append(.key(KeyEvent(keyCode: 0x1b)))
         resetRouting()
-    }
-
-    private mutating func feedSequence<S: Sequence>(
-        _ bytes: S, into events: inout [InputEvent]
-    ) where S.Element == UInt8 {
-        events.removeAll(keepingCapacity: true)
-        events.reserveCapacity(max(1, bytes.underestimatedCount))
-        for byte in bytes {
-            feed(byte, into: &events)
-        }
     }
 
     private mutating func decodeKeyboardSequence<S: Sequence>(_ bytes: S) -> [InputEvent]

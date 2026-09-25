@@ -59,6 +59,30 @@ struct SequenceRouterOverflowTests {
         expectOnlyKeyB(in: router.feedAll(bytes))
     }
 
+    /// The cap counts the end marker but its last byte, which completes the paste before any check of the cap: a body
+    /// five bytes short of the cap arrives whole, one byte longer overflows. Read in 4 KiB chunks, as the terminal
+    /// hands them over, and in one read.
+    @Test(arguments: [4_096, 2_097_152])
+    func `A paste whose end marker reaches the cap arrives whole, and one byte more overflows`(readSize: Int) {
+        for extra in [0, 1] {
+            var router = SequenceRouter()
+            let body = [UInt8](repeating: 0x61, count: SequenceRouter.maxPasteSize - 5 + extra)
+            let input = Array("\u{1B}[200~".utf8) + body + Array("\u{1B}[201~b".utf8)
+            var events: [InputEvent] = []
+            for start in stride(from: 0, to: input.count, by: readSize) {
+                events += router.feedAll(Array(input[start ..< min(input.count, start + readSize)]))
+            }
+
+            let pastes = events.compactMap { event -> Int? in
+                guard case .paste(let text) = event else { return nil }
+                return text.utf8.count
+            }
+            #expect(pastes == (extra == 0 ? [body.count] : []), "body \(body.count)")
+            #expect(overflows(events) == (extra == 0 ? [] : [.paste]), "body \(body.count)")
+            expectOnlyKeyB(in: events)
+        }
+    }
+
     @Test
     func `A paste over the cap types none of its tail, and the key after its end marker arrives`() {
         var router = SequenceRouter()
