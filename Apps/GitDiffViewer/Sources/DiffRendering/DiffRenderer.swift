@@ -185,7 +185,11 @@ package enum DiffRenderer {
                         text.append(contentsOf: spans.placeholders.reveal(shown.line, at: offset))
                         length = shown.line.utf16.count
                         for unit in shown.line.utf16 where unit == 9 { tabs += 1 }
-                        appendTokens(shown.tokens, of: shown.line, at: offset, to: &spans.tokens)
+                        for token in shown.tokens {
+                            let range = token.byteRange
+                            spans.tokens.append(
+                                (NSRange(location: offset + range.lowerBound, length: range.count), token.role))
+                        }
                         for range in shown.ref.emphasis {
                             spans.emphasis.append(
                                 (NSRange(location: offset + range.lowerBound, length: range.count), kind))
@@ -301,6 +305,7 @@ package enum DiffRenderer {
     private struct ShownLine {
         let ref: DiffLineRef
         let line: Substring
+        /// In UTF-16 offsets from the line's start.
         let tokens: ArraySlice<HighlightToken>
     }
 
@@ -329,14 +334,15 @@ package enum DiffRenderer {
 }
 
 extension DiffRenderer {
-    /// The lexical tokens of `text`, per line of `lines`, in UTF-8 offsets from the line's start; the render converts
-    /// them to UTF-16 when it styles a row. A plain-text file is not scanned.
+    /// The lexical tokens of `text`, per line of `lines`, in UTF-16 offsets from the line's start: the units a row is
+    /// styled in, converted here once, so a render only adds the row's offset. A plain-text file is not scanned.
     /// - Parameters:
     ///   - text: One side of the diff.
     ///   - lines: `text`'s lines in order, as `DiffModel.lines(of:)` cuts them, which drops a CRLF line's `\r`.
     ///   - language: The language whose lexer scans `text`.
     /// - Returns: One entry per line, each range relative to the line's start and within its length, all in one flat
-    ///   buffer.
+    ///   buffer. The ranges are the source line's UTF-16 offsets, which the shown row keeps: a bidi placeholder takes
+    ///   the one unit of the control it stands for.
     /// - Complexity: O(bytes of `text` + lines + tokens), in a handful of allocations.
     package static func tokensByLine(text: String, lines: [Substring], language: Language) -> LineTokens {
         guard language != .plain else { return LineTokens(emptyLines: lines.count) }
@@ -344,7 +350,8 @@ extension DiffRenderer {
         // steps over it; a sum of the lines' lengths alone would put every later line one byte early. A line ends where
         // its own text does: a token that runs into the `\r` or the newline after it, such as a comment or an
         // unterminated string, stops at the line's last character.
-        let bytes = text.utf8Span.span
+        let utf8 = text.utf8Span
+        let bytes = utf8.span
         var lineRanges: [Range<Int>] = []
         lineRanges.reserveCapacity(lines.count)
         var start = 0
@@ -356,35 +363,10 @@ extension DiffRenderer {
             start += 1
         }
         let tokens = LexicalHighlightEngine().highlight(utf8: bytes, language: language)
-        return LineTokens(tokens, lineRanges: lineRanges)
-    }
-
-    /// Appends `tokens`, in UTF-8 offsets from the start of `line`, to `ranges` as UTF-16 ranges of the assembled text,
-    /// in which the line starts at `offset`. These are the source line's UTF-16 offsets, which the shown row keeps: a
-    /// bidi placeholder takes the one unit of the control it stands for.
-    /// - Complexity: O(tokens) for an ASCII line; otherwise O(tokens + bytes up to the last token's end).
-    fileprivate static func appendTokens(
-        _ tokens: ArraySlice<HighlightToken>, of line: Substring, at offset: Int,
-        to ranges: inout [(NSRange, HighlightRole)]
-    ) {
-        guard !tokens.isEmpty else { return }
-        var utf8 = line.utf8Span
-        if utf8.checkForASCII() {
-            for token in tokens {
-                ranges.append(
-                    (NSRange(location: offset + token.byteRange.lowerBound, length: token.byteRange.count), token.role))
-            }
-            return
-        }
-        let bytes = utf8.span
-        var byte = 0
-        var unit = 0
-        for token in tokens {
-            UTF16Offsets.advance(&byte, to: min(token.byteRange.lowerBound, bytes.count), in: bytes, counting: &unit)
-            let start = unit
-            UTF16Offsets.advance(&byte, to: min(token.byteRange.upperBound, bytes.count), in: bytes, counting: &unit)
-            ranges.append((NSRange(location: offset + start, length: unit - start), token.role))
-        }
+        var byLine = LineTokens(tokens, lineRanges: lineRanges)
+        // An ASCII text's byte offsets are already its UTF-16 ones.
+        if !utf8.isKnownASCII { byLine.moveToUTF16(over: bytes, lineRanges: lineRanges) }
+        return byLine
     }
 }
 
