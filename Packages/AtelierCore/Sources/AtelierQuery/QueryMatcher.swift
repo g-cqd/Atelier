@@ -48,29 +48,6 @@ public enum QueryMatcher: Sendable {
 
     // MARK: - Private
 
-    /// The captures and predicates of the way being matched, pushed as the way goes deeper into its pattern and popped
-    /// as it backs out, so every way of a walk shares the two buffers.
-    private struct MatchState {
-        var captures: [QueryMatch.Capture] = []
-        var predicates: [Predicate] = []
-
-        /// Calls `body` with `capture` of `node` pushed, when there is one, and pops it after.
-        mutating func with(
-            _ capture: QueryPattern.Capture?, of node: SyntaxNode, _ body: (inout MatchState) -> Bool
-        ) -> Bool {
-            guard let capture else { return body(&self) }
-            captures.append(QueryMatch.Capture(node: node, name: capture.name, index: capture.index))
-            defer { captures.removeLast() }
-            return body(&self)
-        }
-    }
-
-    /// One way a pattern matched a node: its captures, and the predicates they must pass.
-    private struct Way {
-        var captures: [QueryMatch.Capture]
-        var predicates: [Predicate]
-    }
-
     private static func collectMatches(
         of query: Query,
         in tree: SyntaxTree,
@@ -298,6 +275,50 @@ public enum QueryMatcher: Sendable {
         return first
     }
 
+    /// Whether `node`'s bytes in the source are `value`'s UTF-8, compared in place, byte for byte, as tree-sitter
+    /// compares a token's text: no string is built for the node, and a node that reaches outside the source matches
+    /// nothing.
+    /// - Complexity: O(1) when the lengths differ; O(`value`'s UTF-8 length) otherwise.
+    private static func bytes(of node: SyntaxNode, in source: Span<UInt8>, equal value: String) -> Bool {
+        let range = node.byteRange
+        guard range.lowerBound >= 0, range.upperBound <= source.count, range.count == value.utf8.count else {
+            return false
+        }
+        var offset = range.lowerBound
+        for byte in value.utf8 {
+            guard source[offset] == byte else { return false }
+            offset += 1
+        }
+        return true
+    }
+}
+
+// MARK: - Ways
+
+extension QueryMatcher {
+    /// The captures and predicates of the way being matched, pushed as the way goes deeper into its pattern and popped
+    /// as it backs out, so every way of a walk shares the two buffers.
+    private struct MatchState {
+        var captures: [QueryMatch.Capture] = []
+        var predicates: [Predicate] = []
+
+        /// Calls `body` with `capture` of `node` pushed, when there is one, and pops it after.
+        mutating func with(
+            _ capture: QueryPattern.Capture?, of node: SyntaxNode, _ body: (inout MatchState) -> Bool
+        ) -> Bool {
+            guard let capture else { return body(&self) }
+            captures.append(QueryMatch.Capture(node: node, name: capture.name, index: capture.index))
+            defer { captures.removeLast() }
+            return body(&self)
+        }
+    }
+
+    /// One way a pattern matched a node: its captures, and the predicates they must pass.
+    private struct Way {
+        var captures: [QueryMatch.Capture]
+        var predicates: [Predicate]
+    }
+
     /// Keeps, of the ways one pattern matched one node, those tree-sitter's cursor keeps: it drops a way that captures
     /// the same nodes as an earlier one, or only some of the nodes another way captures, the "longest-match criteria"
     /// of ts_query_cursor__advance, which compares ways with ts_query_cursor__compare_captures (lib/src/query.c). The
@@ -360,23 +381,6 @@ public enum QueryMatcher: Sendable {
                 })
             else { return false }
             used[match] = true
-        }
-        return true
-    }
-
-    /// Whether `node`'s bytes in the source are `value`'s UTF-8, compared in place, byte for byte, as tree-sitter
-    /// compares a token's text: no string is built for the node, and a node that reaches outside the source matches
-    /// nothing.
-    /// - Complexity: O(1) when the lengths differ; O(`value`'s UTF-8 length) otherwise.
-    private static func bytes(of node: SyntaxNode, in source: Span<UInt8>, equal value: String) -> Bool {
-        let range = node.byteRange
-        guard range.lowerBound >= 0, range.upperBound <= source.count, range.count == value.utf8.count else {
-            return false
-        }
-        var offset = range.lowerBound
-        for byte in value.utf8 {
-            guard source[offset] == byte else { return false }
-            offset += 1
         }
         return true
     }
