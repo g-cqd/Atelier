@@ -147,8 +147,9 @@ struct LanguageServerSessionDocumentationPageTests {
         let service = makeService(factory)
         let query = HoverQuery(documentURI: "file:///a.swift", content: "let b: Bool", line: 0, utf16Column: 8)
 
-        let plain = try await LSPHoverProvider(service: service).hover(query)
-        let paged = try await LSPHoverProvider(service: service, resolvesDocumentationPages: true).hover(query)
+        let plain = try await LanguageServerHoverProvider(service: service).hover(query)
+        let paged = try await LanguageServerHoverProvider(service: service, resolvesDocumentationPages: true)
+            .hover(query)
 
         #expect(plain?.documentationPage == nil)
         #expect(paged?.documentationPage == HoverContent.DocumentationPage(module: "Swift", path: ["Bool"]))
