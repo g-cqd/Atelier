@@ -23,13 +23,9 @@ struct DiagnosticRedrawPixelsTests {
     /// The row that carries the diagnostics; an odd row, so that its neighbours on both sides have none.
     private static let row = 5
 
-    private static func diff() -> RenderedDiff {
-        let text = (0 ..< rowCount).map { "let value\($0) = compute(\($0))" }.joined(separator: "\n") + "\n"
-        return DiffRenderer.render(oldText: text, newText: text, language: .plain)
-    }
-
     private static func rendered() throws -> RenderedText {
-        try #require(diff().new)
+        let text = (0 ..< rowCount).map { "let value\($0) = compute(\($0))" }.joined(separator: "\n") + "\n"
+        return try #require(DiffRenderer.render(oldText: text, newText: text, language: .plain).new)
     }
 
     private static func overlay(_ severity: Finding.Severity) -> DiagnosticOverlay {
@@ -129,9 +125,23 @@ struct DiagnosticRedrawPixelsTests {
 
         #expect(zip(fragments, lines).allSatisfy { $0.textLineFragments.elementsEqual($1, by: ===) })
     }
-    // MARK: Card panes
+}
 
-    /// A finding with a column, underlined across its range (book DIAG-03).
+/// What a card pane shows of its diagnostics, read as ``DiagnosticRedrawPixelsTests`` reads a scrolling pane's (book
+/// DIAG-03). A suite of its own, so each keeps within the main thread's budget.
+@MainActor
+@Suite(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "Core Animation's renderer draws into a Metal texture"))
+struct CardPaneDiagnosticPixelsTests {
+    private static let rowCount = 12
+    /// The row that carries the diagnostics; an odd row, so that its neighbours on both sides have none.
+    private static let row = 5
+
+    private static func diff() -> RenderedDiff {
+        let text = (0 ..< rowCount).map { "let value\($0) = compute(\($0))" }.joined(separator: "\n") + "\n"
+        return DiffRenderer.render(oldText: text, newText: text, language: .plain)
+    }
+
+    /// A finding with a column, underlined across its range.
     private static func ranged(_ severity: Finding.Severity) -> DiagnosticOverlay {
         let squiggle = DiagnosticOverlay.SquiggleRange(start: 4, end: 9, severity: severity)
         return DiagnosticOverlay(
@@ -170,8 +180,7 @@ struct DiagnosticRedrawPixelsTests {
     }
 }
 
-/// An ``EmbeddedDiffTextView`` hosted as a card's body hosts it, at the height it measures, in a borderless window
-/// that is never ordered in.
+/// An ``EmbeddedDiffTextView`` hosted as a card's body hosts it, in a borderless window that is never ordered in.
 @MainActor
 private final class HostedCardPane {
     private static let width: CGFloat = 600
@@ -184,9 +193,9 @@ private final class HostedCardPane {
         rendered = try #require(diff.new)
         layouts = CardLayouts(rendered: diff)
         host = NSHostingView(rootView: Self.pane(layouts, overlay: overlay, version: 0))
-        let height = host.fittingSize.height
+        // The scrolling pane's window size, so that both suites composite with one renderer; the card is shorter.
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: Self.width, height: max(height, 1)), styleMask: [.borderless],
+            contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 400), styleMask: [.borderless],
             backing: .buffered, defer: false)
         window.contentView = host
         settle()
