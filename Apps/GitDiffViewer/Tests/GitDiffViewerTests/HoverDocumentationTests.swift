@@ -603,12 +603,12 @@ extension HoverDocumentationModelTests {
         let model = makeSUT(lspRegistry: servers.registry())
         let root = try makeScratchRoot()
         defer { try? FileManager.default.removeItem(at: root) }
-        let script = "def f():\n    pass\n"
+        let script = "def f\n  nil\nend\n"
         model.comparisonChanged(
             root: root,
             files: [
                 HoverDocumentationModel.FileEntry(
-                    index: 0, leftPath: "tool.py", rightPath: "tool.py", oldText: script, newText: script,
+                    index: 0, leftPath: "tool.rb", rightPath: "tool.rb", oldText: script, newText: script,
                     oldBlobID: "old", newBlobID: "new")
             ])
 

@@ -127,15 +127,89 @@ public struct LanguageServerDescriptor: Sendable, Equatable, Identifiable {
     }
 
     /// The language ID a document at `url` carries to the server: the React dialects' own IDs for `.tsx` and `.jsx`,
-    /// which typescript-language-server parses as JSX, and ``Language/lspLanguageID`` otherwise.
-    public static func languageID(forDocumentAt url: URL) -> String {
+    /// which typescript-language-server parses as JSX; Objective-C++'s for `.mm`; for a `.h` header, which C, C++ and
+    /// Objective-C all use, the one its `content` reads as (``headerLanguageID(content:)``); and
+    /// ``Language/lspLanguageID`` otherwise.
+    public static func languageID(forDocumentAt url: URL, content: String = "") -> String {
         let fileExtension = url.pathExtension.lowercased()
         switch fileExtension {
             case "tsx": return "typescriptreact"
             case "jsx": return "javascriptreact"
+            case "mm": return objectiveCppLanguageID
+            case "h": return headerLanguageID(content: content)
             default: return Language(fileExtension: fileExtension).lspLanguageID
         }
     }
+
+    /// The specification's language ID for Objective-C++, which ``Language`` counts as Objective-C.
+    static let objectiveCppLanguageID = "objective-cpp"
+
+    /// The language a `.h` header's `content` is written in, as its language ID: Objective-C when a line starts with
+    /// one of its directives (`@interface`, `@protocol`, `#import`, …), Objective-C++ when C++ shows too, C++ when a
+    /// line starts with `namespace`, `template`, `class` or an access label, or uses `std::`, and C otherwise, which an
+    /// empty header is. Comment lines, and lines inside a `#if` on `__cplusplus`, where a C header wraps its
+    /// `extern "C"`, count for nothing.
+    /// - Complexity: O(n) in the length of `content`, one pass over its lines.
+    public static func headerLanguageID(content: String) -> String {
+        var isObjectiveC = false
+        var isCpp = false
+        var inBlockComment = false
+        // The depth of the conditional blocks from the first `#if` on `__cplusplus`; zero outside one.
+        var cplusplusDepth = 0
+        for rawLine in content.split(separator: "\n", omittingEmptySubsequences: true) {
+            var line = rawLine.drop { $0 == " " || $0 == "\t" }
+            if inBlockComment {
+                guard let end = line.firstRange(of: "*/") else { continue }
+                inBlockComment = false
+                line = line[end.upperBound...].drop { $0 == " " || $0 == "\t" }
+            }
+            if line.hasPrefix("//") { continue }
+            if line.hasPrefix("/*"), line.firstRange(of: "*/") == nil {
+                inBlockComment = true
+                continue
+            }
+            if line.hasPrefix("#") {
+                let directive = line.dropFirst().drop { $0 == " " || $0 == "\t" }
+                if cplusplusDepth > 0 {
+                    if directive.hasPrefix("if") {
+                        cplusplusDepth += 1
+                    } else if directive.hasPrefix("endif") {
+                        cplusplusDepth -= 1
+                    }
+                    continue
+                }
+                if directive.hasPrefix("if"), directive.contains("__cplusplus") {
+                    cplusplusDepth = 1
+                    continue
+                }
+                if directive.hasPrefix("import") { isObjectiveC = true }
+                continue
+            }
+            guard cplusplusDepth == 0 else { continue }
+            if objectiveCLinePrefixes.contains(where: { line.hasPrefix($0) }) {
+                isObjectiveC = true
+            } else if cppLinePrefixes.contains(where: { line.hasPrefix($0) }) || line.contains("std::") {
+                isCpp = true
+            }
+        }
+        switch (isObjectiveC, isCpp) {
+            case (true, true): return objectiveCppLanguageID
+            case (true, false): return Language.objectiveC.lspLanguageID
+            case (false, true): return Language.cpp.lspLanguageID
+            case (false, false): return Language.c.lspLanguageID
+        }
+    }
+
+    /// The starts of lines only Objective-C writes.
+    private static let objectiveCLinePrefixes = [
+        "@interface", "@protocol", "@implementation", "@class", "@property", "@end", "@import ",
+        "NS_ASSUME_NONNULL_BEGIN"
+    ]
+    /// The starts of lines only C++ writes.
+    private static let cppLinePrefixes = [
+        "namespace ", "namespace{", "template <", "template<", "class ", "enum class ", "public:", "private:",
+        "protected:", "using namespace "
+    ]
 }
 
 // MARK: - The servers
@@ -167,8 +241,42 @@ extension LanguageServerDescriptor {
         rootMarkers: ["go.work", "go.mod"], environmentName: "GOPLS", homeRelativeDirectories: userInstallDirectories,
         tuning: SessionTuning(initializeTimeout: .seconds(10)))
 
+    /// clangd, for C, C++ and Objective-C, from the toolchain; its hover sessions skip background indexing, which
+    /// indexes the whole project. The nearest `compile_commands.json` wins over a nearer `.clangd`; without either, the
+    /// root is the one the caller starts from, and clangd answers from its fallback flags, without the project's
+    /// include paths and definitions.
+    public static let clangd = LanguageServerDescriptor(
+        id: "clangd", displayName: "clangd", executableNames: ["clangd"], arguments: ["--background-index=false"],
+        languages: [.c, .cpp, .objectiveC], rootMarkers: ["compile_commands.json", ".clangd"],
+        environmentName: "CLANGD", searchesToolchain: true, tuning: SessionTuning(initializeTimeout: .seconds(10)))
+
+    /// rust-analyzer, for Rust, from rustup's `~/.cargo/bin`, rooted at the nearest `Cargo.toml`. Its hover sessions
+    /// neither build the project's build scripts and procedural macros nor prime the caches of every crate, which
+    /// compile and index the project and its dependencies; `cargo check` never runs, since a hover saves nothing.
+    public static let rustAnalyzer = LanguageServerDescriptor(
+        id: "rust-analyzer", displayName: "rust-analyzer", executableNames: ["rust-analyzer"], languages: [.rust],
+        rootMarkers: ["Cargo.toml"],
+        initializationOptions: .object([
+            "cargo": .object(["buildScripts": .object(["enable": .bool(false)])]),
+            "procMacro": .object(["enable": .bool(false)]),
+            "cachePriming": .object(["enable": .bool(false)]),
+            "checkOnSave": .bool(false)
+        ]),
+        environmentName: "RUST_ANALYZER", homeRelativeDirectories: userInstallDirectories,
+        tuning: SessionTuning(initializeTimeout: .seconds(10)))
+
+    /// basedpyright's language server over stdio, for Python; a `pyrightconfig.json` anywhere above wins over a
+    /// nearer `pyproject.toml`. pip, pipx and uv install it in `~/.local/bin`, with the Node.js it runs on.
+    public static let basedPyright = LanguageServerDescriptor(
+        id: "basedpyright", displayName: "basedpyright", executableNames: ["basedpyright-langserver"],
+        arguments: ["--stdio"], languages: [.python], rootMarkers: ["pyrightconfig.json", "pyproject.toml"],
+        environmentName: "BASEDPYRIGHT", homeRelativeDirectories: userInstallDirectories + [".local/bin"],
+        tuning: SessionTuning(initializeTimeout: .seconds(10)))
+
     /// Every server hover knows, in no particular order: each language has one server at most.
-    public static let all: [LanguageServerDescriptor] = [sourceKitLSP, typeScriptLanguageServer, gopls]
+    public static let all: [LanguageServerDescriptor] = [
+        sourceKitLSP, typeScriptLanguageServer, gopls, clangd, rustAnalyzer, basedPyright
+    ]
 
     /// The server among `servers` that answers for `language`; nil when none does.
     public static func serving(
