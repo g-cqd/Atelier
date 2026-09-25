@@ -346,6 +346,20 @@ extension DiffRenderer {
     /// - Complexity: O(bytes of `text` + lines + tokens), in a handful of allocations.
     package static func tokensByLine(text: String, lines: [Substring], language: Language) -> LineTokens {
         guard language != .plain else { return LineTokens(emptyLines: lines.count) }
+        let utf8 = text.utf8Span
+        let tokens = LexicalHighlightEngine().highlight(utf8: utf8.span, language: language)
+        return tokensByLine(tokens, text: text, lines: lines)
+    }
+
+    /// `tokens`, found over the whole of `text`, cut into `lines` in UTF-16 offsets from each line's start, as
+    /// ``tokensByLine(text:lines:language:)`` cuts the lexer's: the units a row is styled in.
+    /// - Parameters:
+    ///   - tokens: Tokens over the whole of `text` in UTF-8 byte offsets, ascending and disjoint.
+    ///   - text: One side of the diff.
+    ///   - lines: `text`'s lines in order, as `DiffModel.lines(of:)` cuts them, which drops a CRLF line's `\r`.
+    /// - Returns: One entry per line, as ``tokensByLine(text:lines:language:)`` returns them.
+    /// - Complexity: O(bytes of `text` + lines + tokens), in a handful of allocations.
+    package static func tokensByLine(_ tokens: [HighlightToken], text: String, lines: [Substring]) -> LineTokens {
         // Each line starts where it sits in the text. A CRLF line's `\r` is in the text but not in the line, so the walk
         // steps over it; a sum of the lines' lengths alone would put every later line one byte early. A line ends where
         // its own text does: a token that runs into the `\r` or the newline after it, such as a comment or an
@@ -362,7 +376,6 @@ extension DiffRenderer {
             if start < bytes.count, bytes[start] == UInt8(ascii: "\r") { start += 1 }
             start += 1
         }
-        let tokens = LexicalHighlightEngine().highlight(utf8: bytes, language: language)
         var byLine = LineTokens(tokens, lineRanges: lineRanges)
         // An ASCII text's byte offsets are already its UTF-16 ones.
         if !utf8.isKnownASCII { byLine.moveToUTF16(over: bytes, lineRanges: lineRanges) }
