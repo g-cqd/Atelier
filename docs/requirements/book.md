@@ -168,6 +168,10 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
 | D26 | 09-24 | Keep Fable 5.1 for the security-auditor and orchestrator agents (2.5 times Opus 5.5's price)? | "keep" | PROC (agent roster) |
 | D27 | 09-24 | The order of the remaining work | "reassess and reorder, maybe use work to prioritize even": the backlog is loaded into the shared work queue and ordered by value per effort, correctness first | PROC-13 |
 | D28 | 09-24 | A card for a file without a changed line (DIFF-07): a "Renamed without changes" note, the whole content, or the header alone? | "header only in the file list": the card keeps its header alone; only the single-file view shows such a file whole | DIFF-07 |
+| D29 | 09-25 | GIT-06: where does a file changed by several commits appear? | "Under each commit (Recommended)": a section means what that commit did | GIT-06 |
+| D30 | 09-25 | GIT-06: which sidebar gets the grouping? | "Merged sidebar, flat style (Recommended)" | GIT-06 |
+| D31 | 09-25 | GIT-06: what does selecting a commit's section show? | "Its files' net diff (Recommended)": a context menu adds Compare This Commit | GIT-06 |
+| D32 | 09-25 | GIT-06: diverged histories? | "Offer to compare from the merge base (Recommended)": the list stays ungrouped and says why | GIT-06 |
 
 ## Answered questions (09-23 09:37)
 
@@ -1154,7 +1158,8 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
      says why it does not apply.
   3. Each section can be disclosed and collapsed, and remembers that state through a reload.
   4. Building the groups never blocks the interface, and a range of many commits stays responsive.
-- **Priority:** Should (criterion 1 first). **Related:** CARD-09, GIT-03.
+  Criterion 1 is settled by `Apps/GitDiffViewer/docs/commit-grouping-design.md` and decisions D29 to D32.
+- **Priority:** Should. **Related:** CARD-09, GIT-03.
 
 ### WIN: Window chrome and stability
 
