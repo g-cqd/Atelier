@@ -92,7 +92,7 @@ private struct GeneralSettings: View {
 }
 
 /// Diff: what's compared and how it's matched: isolation and context, then granularity, whitespace and the
-/// advanced matching heuristics.
+/// advanced matching heuristics; then how the code panes scroll.
 private struct DiffSettings: View {
     @Bindable var settings: ViewerSettings
     let scope: SettingsScope
@@ -153,6 +153,21 @@ private struct DiffSettings: View {
                         }
                         .padding(.top, 4)
                     }
+                }
+                Section("Scrolling") {
+                    Toggle(SettingLabel.bouncesAtEdges, isOn: $settings.bouncesAtEdges)
+                    Text(
+                        "The file's panes and the cards' panes rubber-band past their edges. The card list always does."
+                    )
+                    .settingsCaption()
+                    Toggle(SettingLabel.scrollsPastEnd, isOn: $settings.scrollsPastEnd)
+                    Text("A file scrolls on until its last line reaches the top, rather than stopping at the bottom.")
+                        .settingsCaption()
+                    Toggle(SettingLabel.scrollsToFirstChange, isOn: $settings.scrollsToFirstChange)
+                    Text(
+                        "Off, a file opens at its top. A tab you come back to keeps its place, and a file that fits shows whole."
+                    )
+                    .settingsCaption()
                 }
             }
             .formStyle(.grouped)

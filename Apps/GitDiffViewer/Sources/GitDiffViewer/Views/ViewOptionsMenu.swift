@@ -48,6 +48,9 @@ struct ViewOptionsMenu: NSViewRepresentable {
         let treeStyle: FileTreeStyle
         let explorerPlacement: ExplorerPlacement
         let heuristics: DiffHeuristics
+        let bouncesAtEdges: Bool
+        let scrollsPastEnd: Bool
+        let scrollsToFirstChange: Bool
 
         init(_ settings: ViewerSettings) {
             wrapsLines = settings.wrapsLines
@@ -62,6 +65,9 @@ struct ViewOptionsMenu: NSViewRepresentable {
             treeStyle = settings.treeStyle
             explorerPlacement = settings.explorerPlacement
             heuristics = settings.diffHeuristics
+            bouncesAtEdges = settings.bouncesAtEdges
+            scrollsPastEnd = settings.scrollsPastEnd
+            scrollsToFirstChange = settings.scrollsToFirstChange
         }
     }
 
@@ -77,6 +83,8 @@ struct ViewOptionsMenu: NSViewRepresentable {
             let menu = NSMenu()
             menu.addItem(NSMenuItem(title: "View options", action: nil, keyEquivalent: ""))
             for item in topItems(for: snapshot) { menu.addItem(item) }
+            menu.addItem(.separator())
+            for item in scrollingItems(for: snapshot) { menu.addItem(item) }
             menu.addItem(.separator())
             for item in matchingItems(for: snapshot) { menu.addItem(item) }
             menu.addItem(.separator())
@@ -95,6 +103,16 @@ struct ViewOptionsMenu: NSViewRepresentable {
                     SettingLabel.showsHoverDocumentation, snapshot.showsHoverDocumentation,
                     #selector(toggleHoverDocumentation)),
                 toggle(SettingLabel.isolatesChanges, snapshot.isolatesChanges, #selector(toggleIsolate), key: "4")
+            ]
+        }
+
+        /// How the code panes scroll, together as in the Settings window's Diff tab.
+        private func scrollingItems(for snapshot: Snapshot) -> [NSMenuItem] {
+            [
+                toggle(SettingLabel.bouncesAtEdges, snapshot.bouncesAtEdges, #selector(toggleBounce)),
+                toggle(SettingLabel.scrollsPastEnd, snapshot.scrollsPastEnd, #selector(toggleScrollPastEnd)),
+                toggle(
+                    SettingLabel.scrollsToFirstChange, snapshot.scrollsToFirstChange, #selector(toggleScrollToChange))
             ]
         }
 
@@ -198,6 +216,9 @@ struct ViewOptionsMenu: NSViewRepresentable {
         @objc func toggleStatusBar() { settings.showsStatusBar.toggle() }
         @objc func toggleHoverDocumentation() { settings.showsHoverDocumentation.toggle() }
         @objc func toggleIsolate() { settings.isolatesChanges.toggle() }
+        @objc func toggleBounce() { settings.bouncesAtEdges.toggle() }
+        @objc func toggleScrollPastEnd() { settings.scrollsPastEnd.toggle() }
+        @objc func toggleScrollToChange() { settings.scrollsToFirstChange.toggle() }
         @objc func toggleChangesOnly() { settings.showsChangesOnly.toggle() }
         @objc func toggleIgnoredFiles() { settings.showsIgnoredFiles.toggle() }
         @objc func toggleAnchors() { settings.diffHeuristics.anchorsRareLines.toggle() }
