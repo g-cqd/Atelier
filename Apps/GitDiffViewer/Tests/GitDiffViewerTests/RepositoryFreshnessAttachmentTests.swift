@@ -10,7 +10,7 @@ import Testing
 /// keeps its stream and its pending debounces across reloads (GDV B4), while a disabled watcher, a teardown or a moved
 /// git dir attaches afresh. Linked worktrees and symlinked folders are watched where FSEvents reports them (GDV B5).
 @MainActor
-@Suite(.mainActorLane, .timeLimit(.minutes(1)))
+@Suite(.mainActorLane(timeLimit: .seconds(60)))
 struct RepositoryFreshnessAttachmentTests {
     private let harness = WatcherHarness()
 
