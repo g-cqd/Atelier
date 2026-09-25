@@ -36,11 +36,13 @@ One `BlockingOffloadPool` per app, created in the composition root and injected;
   and under load their bounded waits fail together. A GitDiffViewer suite takes at most 1 s of it on an idle
   machine: compare pixels by their bytes before making colours, put pure sweeps in a suite that is not a main-actor
   one, and read the file system off the main actor. After adding a test that draws, lays out, sweeps or reads files
-  on the main actor, run `Apps/GitDiffViewer/scripts/main-actor-budget.sh` alone on the machine; it ranks the suites
-  by their main-thread time and fails past the budget. Run it through `~/.agent-harness/bin/work run --weight 8`,
-  the machine's core count, so that it holds the whole capacity and runs with no other job beside it: at weight 2,
-  under load, unrelated suites pass the 1 s budget, as seen repeatedly on 2026-09-25. It exits 2 with "no usable
-  sample" when `sample` fails to attach to the test process; that says nothing of the suites, so run it again.
+  on the main actor, say so in your report: `Apps/GitDiffViewer/scripts/main-actor-budget.sh` ranks the suites by
+  their main-thread time and fails past the budget, and the coordinator runs it once per landing, alone on the
+  machine (`work run --weight 8`). Agents do not run it themselves: at weight 2, under load, unrelated suites pass
+  the 1 s budget, and at weight 8 every run drains the machine for every other agent (on 2026-09-25 such runs were
+  half of all exclusive jobs, and exclusive jobs caused three quarters of the queue's waiting). It exits 2 with
+  "no usable sample" when `sample` fails to attach to the test process; that says nothing of the suites, so run it
+  again.
 
 ## Moving code between packages
 
