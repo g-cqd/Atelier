@@ -183,11 +183,15 @@ public enum QueryParser: Sendable {
         while let ch = scanner.peek(), ch != ")" && ch != "@" && ch != "#" {
             if ch == "!" {
                 // Negated field
+                let fieldStart = scanner.position
                 scanner.advance()
                 let fieldName = scanner.readIdentifier()
+                guard !fieldName.isEmpty else { throw fieldStart.syntaxError("Expected a field name after !") }
                 children.append(.negatedField(fieldName))
             } else if scanner.isFieldPrefix() {
+                let fieldStart = scanner.position
                 let fieldName = scanner.readIdentifier()
+                guard !fieldName.isEmpty else { throw fieldStart.syntaxError("Expected a field name before :") }
                 guard scanner.peek() == ":" else {
                     throw .syntaxError("Expected : after field name")
                 }
@@ -336,23 +340,41 @@ extension QueryParser {
         -> QueryPattern
     {
         guard scanner.peek() == "#" else {
-            throw .syntaxError("Expected #")
+            throw scanner.syntaxError("Expected #")
         }
 
-        let predName = scanner.readUntil { $0 == " " || $0 == "\t" || $0 == "\n" || $0 == ")" }
+        // `#`, an identifier and `?` or `!`, as tree-sitter reads a predicate's name (ts_query__parse_predicate in
+        // lib/src/query.c).
+        let nameStart = scanner.position
+        scanner.advance()
+        let identifier = scanner.readIdentifier()
+        guard !identifier.isEmpty, let suffix = scanner.peek(), suffix == "?" || suffix == "!" else {
+            throw nameStart.syntaxError("Expected a predicate name ending in ? or ! after #")
+        }
+        scanner.advance()
+        let predName = "#" + identifier + String(suffix)
         scanner.skipWhitespaceAndComments()
 
-        // Parse arguments
+        // Arguments: captures, strings and bare symbols. Each one read advances the scanner, and anything else is an
+        // error, so the loop ends.
         var args: [String] = []
-        while let ch = scanner.peek(), ch != ")" && ch != "#" && ch != "\n" {
+        while let ch = scanner.peek(), ch != ")" && ch != "#" {
             if ch == "@" {
+                let captureStart = scanner.position
                 scanner.advance()
-                args.append("@" + scanner.readIdentifier())
+                let name = scanner.readCaptureName()
+                guard !name.isEmpty else { throw captureStart.syntaxError("Expected a capture name after @") }
+                args.append("@" + name)
             } else if ch == "\"" {
                 let str = try scanner.readString()
                 args.append(str)
             } else {
-                args.append(scanner.readIdentifier())
+                let symbolStart = scanner.position
+                let symbol = scanner.readIdentifier()
+                guard !symbol.isEmpty else {
+                    throw symbolStart.syntaxError("Unexpected character \(ch.debugDescription) in a predicate")
+                }
+                args.append(symbol)
             }
             scanner.skipWhitespaceAndComments()
         }
@@ -434,6 +456,14 @@ private struct Scanner: Sendable {
 
     var isAtEnd: Bool { index >= source.endIndex }
 
+    /// Where the scanner stands, to name in an error.
+    var position: Position { Position(source: source, index: index) }
+
+    /// A syntax error at the scanner's position.
+    func syntaxError(_ message: String) -> QueryError {
+        position.syntaxError(message)
+    }
+
     func peek() -> Character? {
         guard !isAtEnd else { return nil }
         return source[index]
@@ -478,7 +508,8 @@ private struct Scanner: Sendable {
     }
 
     mutating func readString() throws(QueryError) -> String {
-        guard peek() == "\"" else { throw .syntaxError("Expected string") }
+        guard peek() == "\"" else { throw syntaxError("Expected a string") }
+        let start = position
         advance()
         var result = ""
         while let ch = peek(), ch != "\"" {
@@ -493,17 +524,8 @@ private struct Scanner: Sendable {
                 advance()
             }
         }
-        guard peek() == "\"" else { throw .syntaxError("Unterminated string") }
+        guard peek() == "\"" else { throw start.syntaxError("Unterminated string") }
         advance()
-        return result
-    }
-
-    mutating func readUntil(_ stop: (Character) -> Bool) -> String {
-        var result = ""
-        while let ch = peek(), !stop(ch) {
-            result.append(ch)
-            advance()
-        }
         return result
     }
 
@@ -551,5 +573,26 @@ private struct Scanner: Sendable {
     func isGroupStart() -> Bool {
         guard let next = peek() else { return false }
         return next == "(" || next == "[" || next == "\"" || next == "."
+    }
+}
+
+/// A place in a query's text, which an error names by line and column; both count from 1, the column in characters.
+private struct Position: Sendable {
+    var source: String
+    var index: String.Index
+
+    /// A syntax error at this position.
+    func syntaxError(_ message: String) -> QueryError {
+        var line = 1
+        var column = 1
+        for character in source[..<index] {
+            if character == "\n" || character == "\r\n" {
+                line += 1
+                column = 1
+            } else {
+                column += 1
+            }
+        }
+        return .syntaxError("\(message) at line \(line), column \(column)")
     }
 }
