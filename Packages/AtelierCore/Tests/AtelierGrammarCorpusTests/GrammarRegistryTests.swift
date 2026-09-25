@@ -72,8 +72,7 @@ struct GrammarRegistryTests {
 
     @Test
     func `loadManifest registers all 19 languages from bundled languages json`() async throws {
-        let grammarsPath = try #require(GrammarCorpus.bundle.resourcePath)
-        let manifestPath = "\(grammarsPath)/Grammars/languages.json"
+        let manifestPath = try GrammarCorpus.bundled().manifestURL.path
         let registry = GrammarRegistry.scratch()
         try registry.loadManifest(from: manifestPath)
         let names = registry.languageNames
@@ -82,13 +81,11 @@ struct GrammarRegistryTests {
 
     @Test
     func `Bundled manifest entries ship grammar and highlight resources`() throws {
-        let resourcePath = try #require(GrammarCorpus.bundle.resourcePath)
-        let manifest = try GrammarManifest.decode(
-            Data(contentsOf: URL(filePath: "\(resourcePath)/Grammars/languages.json")))
+        let corpus = try GrammarCorpus.bundled()
 
-        for entry in manifest.entries {
-            let grammarPath = "\(resourcePath)/Grammars/\(entry.path)/grammar.json"
-            let highlightsPath = "\(resourcePath)/Grammars/\(entry.path)/highlights.scm"
+        for entry in try corpus.manifest().entries {
+            let grammarPath = corpus.grammarURL(for: entry).path
+            let highlightsPath = corpus.highlightsURL(for: entry).path
 
             #expect(
                 FileManager.default.fileExists(atPath: grammarPath),
@@ -118,7 +115,7 @@ struct GrammarRegistryTests {
         #expect(registry.entry(forLanguage: "elvish") == nil)
     }
 
-    /// The lookup KittyCode's language detection makes before the bundled manifest.
+    /// The lookup a language detection makes before the bundled manifest.
     @Test
     func `entry forFilename extracts extension and looks up`() {
         let registry = GrammarRegistry.scratch()

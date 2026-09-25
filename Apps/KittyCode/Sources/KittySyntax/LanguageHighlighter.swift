@@ -506,7 +506,7 @@ public enum LanguageHighlighter: Sendable {
     }
 
     /// Whether `language` has a grammar and a highlight query: trusted for a runtime registration, checked in the
-    /// bundle otherwise.
+    /// bundled corpus otherwise.
     public static func hasBundledResources(for language: String) -> Bool {
         if let entry = GrammarRegistry.shared.entry(forLanguage: language) {
             _ = entry
@@ -516,12 +516,8 @@ public enum LanguageHighlighter: Sendable {
             return false
         }
 
-        let bundle = KittySyntaxResources.bundle
-        let subdirectory = "Grammars/\(entry.path)"
-        return bundle.url(forResource: "grammar", withExtension: "json", subdirectory: subdirectory)
-            != nil
-            && bundle.url(
-                forResource: "highlights", withExtension: "scm", subdirectory: subdirectory) != nil
+        return KittySyntaxResources.hasResource("grammar.json", for: entry)
+            && KittySyntaxResources.hasResource("highlights.scm", for: entry)
     }
 
     /// Ensures grammar artifacts are loaded for a language, compiling off the main thread.

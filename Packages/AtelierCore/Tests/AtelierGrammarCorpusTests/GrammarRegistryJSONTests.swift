@@ -38,35 +38,37 @@ struct GrammarRegistryJSONTests {
     }
 
     @Test
-    func `a key repeated in a manifest entry keeps its first value`() throws {
+    func `a key repeated in a manifest entry keeps its last value`() throws {
         let manifest = #"[{"name": "first", "extensions": [".f"], "path": "first", "name": "second"}]"#
         let registry = GrammarRegistry.scratch()
 
         try registry.loadManifest(from: writeManifest(Data(manifest.utf8)))
 
-        #expect(registry.languageNames == ["first"])
+        #expect(registry.languageNames == ["second"])
     }
 
     @Test(arguments: [
         #"{"name": "json", "extensions": [".json"], "path": "json"}"#,
         #"[{"name": "json", "extensions": [".json"], "path": "json"}, 1]"#
     ])
-    func `a manifest that is not an array of entries is invalid JSON`(manifest: String) throws {
+    func `a manifest that is not an array of entries is rejected as such`(manifest: String) throws {
         let path = try writeManifest(Data(manifest.utf8))
 
-        #expect(throws: GrammarError.invalidJSON("Expected array of language entries")) {
+        #expect(throws: GrammarManifestError.notAnArrayOfEntries) {
             try GrammarRegistry.scratch().loadManifest(from: path)
         }
     }
 
     @Test
-    func `a manifest that is not JSON is invalid JSON and a missing one is not found`() throws {
+    func `a manifest that is not JSON is invalid JSON and a missing one is unreadable`() throws {
         let path = try writeManifest(Data("[{".utf8))
         let missing = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString).path
 
-        let error = #expect(throws: GrammarError.self) { try GrammarRegistry.scratch().loadManifest(from: path) }
+        let error = #expect(throws: GrammarManifestError.self) {
+            try GrammarRegistry.scratch().loadManifest(from: path)
+        }
         #expect(error?.isInvalidJSON == true)
-        #expect(throws: GrammarError.fileNotFound(missing)) {
+        #expect(throws: GrammarManifestError.unreadable(path: missing)) {
             try GrammarRegistry.scratch().loadManifest(from: missing)
         }
     }
@@ -124,8 +126,9 @@ struct GrammarRegistryJSONTests {
     }
 
     private func compiledJSONGrammar() throws -> ParseTableCompiler.CompilationResult {
-        let resourcePath = try #require(GrammarCorpus.bundle.resourcePath)
-        return try ParseTableCompiler.compile(GrammarLoader.load(from: "\(resourcePath)/Grammars/json/grammar.json"))
+        let grammars = try GrammarCorpus.bundled().grammarsDirectory
+        return try ParseTableCompiler.compile(
+            GrammarLoader.load(from: grammars.appending(path: "json/grammar.json").path))
     }
 
     private func writeManifest(_ contents: Data) throws -> String {
@@ -135,7 +138,7 @@ struct GrammarRegistryJSONTests {
     }
 }
 
-extension GrammarError {
+extension GrammarManifestError {
     fileprivate var isInvalidJSON: Bool {
         guard case .invalidJSON = self else { return false }
         return true

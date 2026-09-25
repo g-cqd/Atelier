@@ -11,7 +11,7 @@ import Testing
 struct IndexedJSONMatchingTests {
     @Test
     func `indexed matching gives identical matches over a json document`() throws {
-        let resources = try #require(KittySyntaxResources.bundle.resourcePath)
+        let resources = try #require(KittySyntaxResources.resourcePath)
         let grammar = try GrammarLoader.load(from: "\(resources)/Grammars/json/grammar.json")
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GrammarParser(

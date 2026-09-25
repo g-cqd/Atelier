@@ -24,7 +24,7 @@ struct BundledGrammarMeasurements {
             if: environment["GDV_BENCH"] != nil && environment["ATELIER_GRAMMAR_MEASURE_NAME"] != nil))
     func `measures a bundled grammar against its upstream corpus and large samples`() async throws {
         let name = try #require(Self.environment["ATELIER_GRAMMAR_MEASURE_NAME"])
-        let resources = try #require(KittySyntaxResources.bundle.resourcePath)
+        let resources = try #require(KittySyntaxResources.resourcePath)
         let grammar = try GrammarLoader.load(from: "\(resources)/Grammars/\(name)/grammar.json")
         let clock = ContinuousClock()
         let footprintBefore = Self.footprint()
