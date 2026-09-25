@@ -49,9 +49,12 @@ extension GLRParser {
         parseTable.lostShifts[state]?[terminal]
     }
 
-    /// Runs the reductions from `start` until one of them shifts `terminal`. A conflict's branches wait on a worklist,
-    /// tried in the table's order, each to its end: tried recursively, a stack of nested conflicts overflows a
-    /// 512 KiB thread stack a few thousand levels down.
+    /// Runs the reductions from `start` until one of them shifts `terminal`.
+    ///
+    /// A conflict that shifts the token ends the search: tried in the table's order, each of its reductions would find
+    /// a shift or fall back to the conflict's own. The reductions of a conflict without a shift wait on a worklist and
+    /// are tried in the table's order, each followed to its end: tried recursively, a stack of nested conflicts
+    /// overflows a 512 KiB thread stack a few thousand levels down.
     private func canShift(_ terminal: Int, from start: VirtualStates, budget: inout Int) -> Bool {
         // The branches of the conflicts met so far still to try, the next on top.
         var alternatives: [Alternative] = []
@@ -70,26 +73,16 @@ extension GLRParser {
                         case .reduce(_, let count, let nonTerminal):
                             guard states.reduce(count: count, to: nonTerminal, in: self) else { break explore }
                         case .conflict(let actions):
-                            for action in actions.reversed() {
-                                switch action {
-                                    case .shift, .accept: alternatives.append(.shift)
-                                    case .reduce(_, let count, let nonTerminal):
-                                        alternatives.append(.reduce(states, count: count, nonTerminal: nonTerminal))
-                                    case .error, .conflict: continue
-                                }
+                            if actions.contains(where: \.takesToken) { return true }
+                            for case .reduce(_, let count, let nonTerminal) in actions.reversed() {
+                                alternatives.append(Alternative(states: states, count: count, nonTerminal: nonTerminal))
                             }
                             break explore
                     }
                 }
             }
-            switch alternatives.popLast() {
-                case nil:
-                    return false
-                case .shift:
-                    return true
-                case .reduce(var states, let count, let nonTerminal):
-                    if states.reduce(count: count, to: nonTerminal, in: self) { branch = states }
-            }
+            guard var next = alternatives.popLast() else { return false }
+            if next.states.reduce(count: next.count, to: next.nonTerminal, in: self) { branch = next.states }
         }
     }
 
@@ -99,12 +92,22 @@ extension GLRParser {
     }
 }
 
-/// A branch of a conflict ``GLRParser/canShift(_:on:)`` has yet to try.
-private enum Alternative {
-    /// The conflict shifts the token.
-    case shift
-    /// The reduction of `count` symbols to `nonTerminal` from `states`, run when the branch's turn comes.
-    case reduce(VirtualStates, count: Int, nonTerminal: String)
+/// A reduction of a conflict ``GLRParser/canShift(_:on:)`` has yet to try: `count` symbols to `nonTerminal` from
+/// `states`, run when its turn comes.
+private struct Alternative {
+    var states: VirtualStates
+    let count: Int
+    let nonTerminal: String
+}
+
+extension Action {
+    /// Whether the action shifts its lookahead or accepts the input: either way the stack takes the token.
+    fileprivate var takesToken: Bool {
+        switch self {
+            case .shift, .accept: true
+            case .reduce, .conflict, .error: false
+        }
+    }
 }
 
 /// A stack's states as reductions change them, the stack's own arrays untouched: the nodes still standing from it, and
