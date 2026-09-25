@@ -643,6 +643,70 @@ Each question has a recommendation. None blocks step 1, which assumes Q1's recom
 - **Q8. What memory bound should the facts store have?**
   - **Recommendation:** decide from step 3's measurement; 64 MB shared with the token cache is a starting point.
 
+## 10. Remaining P1 and P2 after PERF-11 (09-25)
+
+PERF-11 steps 1 to 3 (`d28b7d3` to `f884256`) took part of the plan's P1 and P2 (section 6). This is what each item
+still needs, read in the code at `e7509975`, and the PERF-09 step that builds it. "Step" below means a hand-back of the
+PERF-09 lane, not a step of section 7.
+
+**P1a, text and lexer APIs (AtelierText, AtelierLexers).** PERF-09 step 1.
+- `LineSource`, `TextLines` and the rope's conformance: none exists. AtelierDiff has its own `DiffSource`, with
+  `SubstringLines` and `ByteLines`, and the lexers read a whole side's bytes.
+- `LexState`, `LineLexer` and `LexStates`: the scanners scan a whole text only and keep no state, so no line can be
+  scanned alone; a viewport lexed on its own is wrong inside a block comment or a multi-line string (perf-core L7).
+- `ProgressiveHighlighting` as tier 0: `LexicalTier` scans the whole side before it emits the visible lines, then emits
+  the rest from the tokens it already has. It keeps no states between runs.
+- `lexAll`: none exists.
+- Not in P1a: `LexStates.apply(_:)`, the re-lex after an edit, serves KittyCode's keystroke path only. It goes with P3
+  and section 7's step 6, which D37 defers.
+
+**P1b, phased diff (AtelierDiff).** PERF-09 step 2.
+- Landed before PERF-11: D1's discard pass (`solveMatched`), D2's cost limit and Myers' cancellation (2H), and a D
+  bound on the intraline Myers (`LineDiff.diff(_:_:maximumEdits:)`).
+- `DiffLimits`: none. The limits live apart: `IntralineDiff.maximumLineLength`, `maximumChangedShare` and
+  `maximumRangesPerSide`, `LinePairing.maximumPairs`, and `LineDiff`'s `costLimit` parameter.
+- `DiffStructure`: none. `DiffModel.init` builds everything at once: the edit script, the pairing, every paired line's
+  emphasis and the moved blocks.
+- `IntralineEmphasis`: none; the emphasis is computed for every paired line inside `DiffModel.init`. PERF-11 step 3
+  already gives the syntax granularity Swift's token boundaries from the facts store, so the new phase takes them
+  from there, and only visible changes are emphasized first.
+- `MovedBlocks` as a phase: `MovedBlocks.detect(removed:added:)` exists, but `markMovedBlocks` interns every changed
+  line a second time through a `[Substring: Int]` table (Core S14), runs of candidates are uncapped, and the result is
+  two `Set<Int>`s. D6 (reuse the interned ids, bitmaps, a candidate cap) is open.
+- D3: `DiffModel.lines(of:)` still splits with `utf8.split` and maps each line to a `Substring`; `TextLines` (step 1)
+  is its memchr replacement.
+- D4: `LineInterner` hashes with XXH64 into `[UInt64: Int]` plus a collision map and a byte arena; one flat seeded
+  table is open.
+- D5: the D bound exists; running on UTF-16 units without the token arrays, and the range-based cleanup, are open.
+- D8: `HistogramSolver` is generic over `Hashable` elements; the dense arrays over interned ids are open.
+- Core S13: `LinePairing` compares bigrams of every removed and added pair up to 40,000 pairs, whatever their lengths;
+  the length gate is open.
+- `DiffSource` becomes an alias of `LineSource`, which moves AtelierDiff onto AtelierText.
+
+**P1c, tokens and merging (AtelierSyntaxModel).** PERF-09 step 1.
+- Landed with PERF-11 step 2: the flat per-line buffer (`LineTokens`, perf-core M1, from 3G) and the per-line merge
+  with the coverage rule (`LayeredLineTokens`).
+- Remaining: the 12-byte token that section 6 settled. `LineTokens` holds 32-byte `HighlightToken`s, with a layer and a
+  priority per token, and `LayeredLineTokens.merged(line:)` runs `HighlightMerger`'s per-byte map on each line it
+  merges. With 12-byte `LineToken`s (start, length, role, modifiers), each tier resolves its own overlaps before it
+  cuts its tokens into lines, and the merge lays each layer over the one below in one pass.
+
+**P2, GitDiffViewer adoption.** PERF-09 step 3, after steps 1 and 2.
+- Stage 0, plain text first: not yet. `PreparedDiff.init` lexes both whole sides, and `DiffRenderer.attributed` writes
+  the lexer's colours into the storage before the first paint, so colour is on the path to the first text.
+- Stage 1, colour through `renderingAttributesValidator`: in place for the tiers after the lexer (`RefinedColors`,
+  PERF-11 step 1). The lexer's colour joins it once the storage is plain.
+- Stage 2, emphasis and moved blocks into a side table the layout fragment draws: not yet; both are baked into the
+  attributed text (`.diffEmphasis`) and the row metadata when the text is built.
+- Stage 3, the diagnostics overlay: it follows the rendered text today; step 3 checks that it redraws without new
+  layout once the stages split.
+- `DiffStructure` and decorations in place of `PreparedDiff`: waits for step 2.
+- `DecorationStore`: none; `RefinedColors` holds the tiers' colours per pane and becomes the store's colour part.
+- `.decorated(textID, layer)`: none; `RenderPipeline` emits `.published` and `.finished` only.
+- The viewport (`perf11-viewport`): the tier job colours about 80 lines around a side's first change first, since the
+  panes do not report the rows they show.
+- Budgets and guards: stage deadlines on the injected clock, and a benchmark per stage.
+
 ## Appendix: rerunning the measurements
 
 Every run goes through `~/.agent-harness/bin/work run --agent tiers --weight 2 -- …`, with
