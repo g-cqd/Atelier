@@ -1,4 +1,5 @@
 public import AtelierSyntaxModel
+import AtelierText
 
 /// A syntax token provider that can return ranges for only the lines paired by a diff.
 public protocol SelectedSyntaxTokenRanging: SyntaxTokenRanging {
@@ -52,13 +53,21 @@ public struct DiffRow: Sendable, Equatable {
 }
 
 /// A diff between two texts, laid out both as a unified sequence and as aligned split rows.
+///
+/// It is the composition of the diff's phases (review §7.4, P1b): ``init(structure:pairs:oldText:newText:)`` lays the
+/// rows out from the structure and the pairs, then `applying(_:)` adds the intraline emphasis of some changes, or marks
+/// the moved lines. The text initializer runs them all.
 public struct DiffModel: Sendable {
     public let oldText: String
     public let newText: String
     public let oldLines: [Substring]
     public let newLines: [Substring]
-    public let unifiedRows: [DiffRow]
-    public let splitRows: [DiffRow]
+    /// The structure the rows are laid out from.
+    public let structure: DiffStructure
+    /// Each change's pairs, by change index: which removed line each added line of the change replaces.
+    public let changePairs: [[LinePair]]
+    public internal(set) var unifiedRows: [DiffRow]
+    public internal(set) var splitRows: [DiffRow]
     /// Indices of the first row of each change, per layout.
     public let unifiedChangeStarts: [Int]
     public let splitChangeStarts: [Int]
@@ -73,237 +82,152 @@ public struct DiffModel: Sendable {
     ///   - language: Drives the syntax tier's tokenizer; ignored by the other tiers.
     ///   - pipeline: The stages the diff goes through; the default wires every heuristic in.
     ///   - tokenRanges: Token boundaries for the syntax tier; ``CodeTokenRanges`` when no parser is wanted.
+    ///   - limits: The bounds every phase keeps to.
     public init(
         oldText: String,
         newText: String,
         granularity: IntralineGranularity = .character,
         language: Language = .plain,
         pipeline: DiffPipeline = DiffPipeline(),
-        tokenRanges: any SyntaxTokenRanging
+        tokenRanges: any SyntaxTokenRanging,
+        limits: DiffLimits = DiffLimits()
+    ) {
+        let old = TextLines(oldText)
+        let new = TextLines(newText)
+        let structure = LineDiff.makeStructure(old: old, new: new, pipeline: pipeline, limits: limits)
+        let oldLines = Self.substrings(of: old)
+        let newLines = Self.substrings(of: new)
+        let pairs = structure.changes.map { change in
+            Self.pairs(
+                removed: Array(oldLines[change.old]), added: Array(newLines[change.new]), pairing: pipeline.pairing,
+                limits: limits)
+        }
+        self.init(
+            structure: structure, pairs: pairs, oldText: old.text, newText: new.text, oldLines: oldLines,
+            newLines: newLines)
+        let tokens = SyntaxTokenSource(provider: tokenRanges, language: language, oldText: oldText, newText: newText)
+        let options = IntralineEmphasis.Options(
+            granularity: granularity, refiners: pipeline.intralineRefiners, tokens: tokens, limits: limits)
+        let emphasis = IntralineEmphasis.emphasize(
+            Array(structure.changes.indices), of: structure.changes, pairs: pairs, options: options,
+            isCancelled: { false }, units: { isOld, index in Array((isOld ? oldLines[index] : newLines[index]).utf16) })
+        if let emphasis { self = applying(emphasis) }
+        if pipeline.detectsMovedBlocks { self = applying(MovedBlocks.detect(in: structure, limits: limits)) }
+    }
+
+    /// The rows of `structure`, with each change's pairs in the split layout and no emphasis yet: what a text needs to
+    /// be drawn.
+    /// - Parameters:
+    ///   - structure: The diff of `oldText` and `newText`.
+    ///   - pairs: Each change's pairs, by change index, as ``IntralineEmphasis/pairs(of:old:new:pairing:limits:)``
+    ///     gives them.
+    ///   - oldText: The left side.
+    ///   - newText: The right side.
+    public init(structure: DiffStructure, pairs: [[LinePair]], oldText: String, newText: String) {
+        self.init(
+            structure: structure, pairs: pairs, oldText: oldText, newText: newText, oldLines: Self.lines(of: oldText),
+            newLines: Self.lines(of: newText))
+    }
+
+    private init(
+        structure: DiffStructure, pairs: [[LinePair]], oldText: String, newText: String, oldLines: [Substring],
+        newLines: [Substring]
     ) {
         self.oldText = oldText
         self.newText = newText
-        let oldLines = Self.lines(of: oldText)
-        let newLines = Self.lines(of: newText)
         self.oldLines = oldLines
         self.newLines = newLines
-
-        var layout = Layout(oldLines: oldLines, newLines: newLines, granularity: granularity, pipeline: pipeline)
-        let edits = LineDiff.diffLines(oldLines, newLines, pipeline: pipeline)
-        for edit in edits {
-            layout.append(edit)
-        }
-        layout.flushChange()
-        if granularity == .syntax {
-            layout.applySyntaxEmphasis(oldText: oldText, newText: newText, language: language, tokenRanges: tokenRanges)
-        }
-        if pipeline.detectsMovedBlocks {
-            layout.markMovedBlocks(edits)
-        }
-
-        unifiedRows = layout.unified
-        splitRows = layout.split
-        unifiedChangeStarts = layout.unifiedStarts
-        splitChangeStarts = layout.splitStarts
-        unifiedChangeRanges = layout.unifiedRanges
-        splitChangeRanges = layout.splitRanges
-    }
-
-    private struct Layout {
-        let oldLines: [Substring]
-        let newLines: [Substring]
-        let granularity: IntralineGranularity
-        let pipeline: DiffPipeline
+        self.structure = structure
+        changePairs = pairs
         var unified: [DiffRow] = []
         var split: [DiffRow] = []
-        var unifiedStarts: [Int] = []
-        var splitStarts: [Int] = []
+        unified.reserveCapacity(max(oldLines.count, newLines.count))
+        split.reserveCapacity(max(oldLines.count, newLines.count))
         var unifiedRanges: [Range<Int>] = []
         var splitRanges: [Range<Int>] = []
-        private var pendingOld: [Int] = []
-        private var pendingNew: [Int] = []
-        private var syntaxPairs: [SyntaxPair] = []
-
-        private struct SyntaxPair {
-            let oldIndex: Int
-            let newIndex: Int
-            let oldUnifiedRow: Int
-            let newUnifiedRow: Int
-            let splitRow: Int
-        }
-
-        init(oldLines: [Substring], newLines: [Substring], granularity: IntralineGranularity, pipeline: DiffPipeline) {
-            self.oldLines = oldLines
-            self.newLines = newLines
-            self.granularity = granularity
-            self.pipeline = pipeline
-            unified.reserveCapacity(max(oldLines.count, newLines.count))
-            split.reserveCapacity(max(oldLines.count, newLines.count))
-        }
-
-        mutating func append(_ edit: DiffEdit) {
-            switch edit {
-                case .equal(let old, let new):
-                    flushChange()
-                    let row = DiffRow(kind: .context, old: DiffLineRef(index: old), new: DiffLineRef(index: new))
-                    unified.append(row)
-                    split.append(row)
-                case .delete(let old):
-                    pendingOld.append(old)
-                case .insert(let new):
-                    pendingNew.append(new)
-            }
-        }
-
-        mutating func flushChange() {
-            guard !pendingOld.isEmpty || !pendingNew.isEmpty else { return }
-            unifiedStarts.append(unified.count)
-            splitStarts.append(split.count)
-
-            let pairs = pipeline.pairing.pairs(
-                removed: pendingOld.map { oldLines[$0] }, added: pendingNew.map { newLines[$0] })
-            var oldRefs = pendingOld.map { DiffLineRef(index: $0) }
-            var newRefs = pendingNew.map { DiffLineRef(index: $0) }
-            if granularity != .syntax {
-                for pair in pairs {
-                    guard let oldOffset = pair.old, let newOffset = pair.new else { continue }
-                    let oldIndex = pendingOld[oldOffset]
-                    let newIndex = pendingNew[newOffset]
-                    let emphasis = IntralineDiff.emphasis(
-                        old: oldLines[oldIndex], new: newLines[newIndex], granularity: granularity,
-                        refiners: pipeline.intralineRefiners)
-                    guard let emphasis else { continue }
-                    oldRefs[oldOffset] = DiffLineRef(index: oldIndex, emphasis: emphasis.old)
-                    newRefs[newOffset] = DiffLineRef(index: newIndex, emphasis: emphasis.new)
+        var next = 0
+        var inChange = false
+        for edit in structure.edits {
+            guard case .equal(let old, let new) = edit else {
+                if !inChange, next < structure.changes.count {
+                    inChange = true
+                    let ranges = Self.appendRows(
+                        of: structure.changes[next], pairs: next < pairs.count ? pairs[next] : [], unified: &unified,
+                        split: &split)
+                    unifiedRanges.append(ranges.unified)
+                    splitRanges.append(ranges.split)
+                    next += 1
                 }
+                continue
             }
-
-            let unifiedStart = unified.count
-            for ref in oldRefs { unified.append(DiffRow(kind: .removed, old: ref, new: nil)) }
-            for ref in newRefs { unified.append(DiffRow(kind: .added, old: nil, new: ref)) }
-
-            for pair in pairs {
-                if granularity == .syntax, let oldOffset = pair.old, let newOffset = pair.new {
-                    let oldIndex = pendingOld[oldOffset]
-                    let newIndex = pendingNew[newOffset]
-                    if oldLines[oldIndex].utf16.count <= IntralineDiff.maximumLineLength,
-                        newLines[newIndex].utf16.count <= IntralineDiff.maximumLineLength
-                    {
-                        syntaxPairs.append(
-                            SyntaxPair(
-                                oldIndex: oldIndex, newIndex: newIndex,
-                                oldUnifiedRow: unifiedStart + oldOffset,
-                                newUnifiedRow: unifiedStart + oldRefs.count + newOffset,
-                                splitRow: split.count))
-                    }
-                }
-                let old = pair.old.map { oldRefs[$0] }
-                let new = pair.new.map { newRefs[$0] }
-                let kind: RowKind =
-                    switch (old, new) {
-                        case (.some, .some): .modified
-                        case (.some, .none): .removed
-                        default: .added
-                    }
-                split.append(DiffRow(kind: kind, old: old, new: new))
-            }
-            unifiedRanges.append(unifiedStarts[unifiedStarts.count - 1] ..< unified.count)
-            splitRanges.append(splitStarts[splitStarts.count - 1] ..< split.count)
-            pendingOld.removeAll(keepingCapacity: true)
-            pendingNew.removeAll(keepingCapacity: true)
+            inChange = false
+            let row = DiffRow(kind: .context, old: DiffLineRef(index: old), new: DiffLineRef(index: new))
+            unified.append(row)
+            split.append(row)
         }
+        unifiedRows = unified
+        splitRows = split
+        unifiedChangeRanges = unifiedRanges
+        splitChangeRanges = splitRanges
+        unifiedChangeStarts = unifiedRanges.map(\.lowerBound)
+        splitChangeStarts = splitRanges.map(\.lowerBound)
+    }
 
-        mutating func applySyntaxEmphasis(
-            oldText: String, newText: String, language: Language, tokenRanges: any SyntaxTokenRanging
-        ) {
-            guard !syntaxPairs.isEmpty else { return }
-            let oldTokens = selectedTokens(
-                text: oldText, indices: syntaxPairs.map(\.oldIndex), language: language, provider: tokenRanges)
-            let newTokens = selectedTokens(
-                text: newText, indices: syntaxPairs.map(\.newIndex), language: language, provider: tokenRanges)
-            for pair in syntaxPairs {
-                guard
-                    let emphasis = IntralineDiff.emphasis(
-                        old: oldLines[pair.oldIndex], new: newLines[pair.newIndex], granularity: .syntax,
-                        oldTokens: oldTokens[pair.oldIndex], newTokens: newTokens[pair.newIndex],
-                        refiners: pipeline.intralineRefiners)
-                else { continue }
-                let oldRef = DiffLineRef(index: pair.oldIndex, emphasis: emphasis.old)
-                let newRef = DiffLineRef(index: pair.newIndex, emphasis: emphasis.new)
-                unified[pair.oldUnifiedRow] = DiffRow(kind: .removed, old: oldRef, new: nil)
-                unified[pair.newUnifiedRow] = DiffRow(kind: .added, old: nil, new: newRef)
-                split[pair.splitRow] = DiffRow(kind: .modified, old: oldRef, new: newRef)
-            }
+    /// Appends one change's rows: in the unified layout its removed lines then its added ones, in the split layout one
+    /// row per pair. Returns the rows it took in each.
+    private static func appendRows(
+        of change: DiffChange, pairs: [LinePair], unified: inout [DiffRow], split: inout [DiffRow]
+    ) -> (unified: Range<Int>, split: Range<Int>) {
+        let unifiedStart = unified.count
+        let splitStart = split.count
+        for index in change.old { unified.append(DiffRow(kind: .removed, old: DiffLineRef(index: index), new: nil)) }
+        for index in change.new { unified.append(DiffRow(kind: .added, old: nil, new: DiffLineRef(index: index))) }
+        for pair in pairs {
+            let old = pair.old.map { DiffLineRef(index: change.old.lowerBound + $0) }
+            let new = pair.new.map { DiffLineRef(index: change.new.lowerBound + $0) }
+            let kind: RowKind =
+                switch (old, new) {
+                    case (.some, .some): .modified
+                    case (.some, .none): .removed
+                    default: .added
+                }
+            split.append(DiffRow(kind: kind, old: old, new: new))
         }
+        return (unifiedStart ..< unified.count, splitStart ..< split.count)
+    }
 
-        private func selectedTokens(
-            text: String, indices: [Int], language: Language, provider: any SyntaxTokenRanging
-        ) -> [Int: [Range<Int>]] {
-            if let provider = provider as? any SelectedSyntaxTokenRanging {
-                return provider.tokenRangesByLine(text: text, language: language, lineIndices: indices)
-            }
-            let byLine = provider.tokenRangesByLine(text: text, language: language)
-            var selected: [Int: [Range<Int>]] = [:]
-            selected.reserveCapacity(indices.count)
-            for index in indices where index < byLine.count {
-                selected[index] = byLine[index]
-            }
-            return selected
+    /// The pairs of one change's `removed` and `added` lines under `pairing`, positional past `limits.maximumPairs`.
+    static func pairs(removed: [Substring], added: [Substring], pairing: any LinePairing, limits: DiffLimits)
+        -> [LinePair]
+    {
+        guard !removed.isEmpty, !added.isEmpty, removed.count * added.count <= limits.maximumPairs else {
+            return PositionalPairing.pairs(removed: removed.count, added: added.count)
         }
-
-        /// Flags rows whose lines only moved, comparing lines by their normalized text.
-        mutating func markMovedBlocks(_ edits: [DiffEdit]) {
-            var identifiers: [Substring: Int] = [:]
-            func id(_ line: Substring) -> Int {
-                let key = pipeline.whitespace.normalized(line)
-                if let known = identifiers[key] { return known }
-                identifiers[key] = identifiers.count
-                return identifiers.count - 1
-            }
-            var removed: [(index: Int, id: Int)] = []
-            var added: [(index: Int, id: Int)] = []
-            for edit in edits {
-                switch edit {
-                    case .delete(let index): removed.append((index, id(oldLines[index])))
-                    case .insert(let index): added.append((index, id(newLines[index])))
-                    case .equal: break
-                }
-            }
-            let moved = MovedBlocks.detect(removed: removed, added: added)
-            guard !moved.old.isEmpty else { return }
-            for index in unified.indices {
-                let row = unified[index]
-                if let old = row.old, row.kind == .removed, moved.old.contains(old.index) {
-                    unified[index].isMoved = true
-                }
-                if let new = row.new, row.kind == .added, moved.new.contains(new.index) {
-                    unified[index].isMoved = true
-                }
-            }
-            for index in split.indices {
-                let row = split[index]
-                let oldMoved = row.old.map { moved.old.contains($0.index) } ?? false
-                let newMoved = row.new.map { moved.new.contains($0.index) } ?? false
-                if row.kind != .context, oldMoved || newMoved, row.kind != .modified || (oldMoved && newMoved) {
-                    split[index].isMoved = true
-                }
-            }
-        }
+        return pairing.pairs(removed: removed, added: added, limits: limits)
     }
 
     /// Splits on "\n" bytes, since Swift folds "\r\n" into one Character, drops a trailing "\r" per line so CRLF files
-    /// align, and ignores the empty tail after a final newline.
+    /// align, and ignores the empty tail after a final newline. The line breaks are found with `memchr` (perf-core
+    /// D3), as ``TextLines`` finds them.
     public static func lines(of text: String) -> [Substring] {
-        var lines = text.utf8.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false)
-            .map { line in
-                line.last == UInt8(ascii: "\r") ? Substring(line.dropLast()) : Substring(line)
-            }
-        if lines.count > 1, lines[lines.count - 1].isEmpty {
-            lines.removeLast()
+        substrings(of: TextLines(text))
+    }
+
+    /// Each line of `lines` as a substring of its text.
+    /// - Complexity: O(lines), stepping through the text's UTF-8 from one line to the next.
+    static func substrings(of lines: TextLines) -> [Substring] {
+        let utf8 = lines.text.utf8
+        var result: [Substring] = []
+        result.reserveCapacity(lines.lineCount)
+        var cursor = utf8.startIndex
+        var offset = 0
+        for range in lines.lineRanges {
+            let start = utf8.index(cursor, offsetBy: range.lowerBound - offset)
+            let end = utf8.index(start, offsetBy: range.count)
+            result.append(Substring(utf8[start ..< end]))
+            cursor = end
+            offset = range.upperBound
         }
-        if lines.count == 1, lines[0].isEmpty {
-            return []
-        }
-        return lines
+        return result
     }
 }
