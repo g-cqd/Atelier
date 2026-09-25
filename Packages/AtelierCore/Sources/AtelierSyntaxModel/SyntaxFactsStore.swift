@@ -1,3 +1,4 @@
+import Dispatch
 import Synchronization
 
 /// What one parse of each text learned, kept per revision and bounded in bytes, the least recently used going first
@@ -6,8 +7,9 @@ import Synchronization
 /// Whoever needs a text's facts first, the colour tier, the intraline diff or the hover index, parses the text and
 /// stores them; the others read them. A content key names the same text in every document, so a revision keyed by
 /// content is looked up by its language and key alone. A lock rather than an actor guards the entries: the intraline
-/// diff asks from synchronous code. Two callers that miss the same revision at the same moment both parse it; the
-/// store keeps one result.
+/// diff asks from synchronous code. A caller that misses a revision another caller is extracting waits for that
+/// extraction rather than parsing the text again, so stages that run side by side, the colour tier and the intraline
+/// diff, parse a side once between them.
 public final class SyntaxFactsStore: Sendable {
     /// The byte budget of a store made without one, 48 MB.
     ///
@@ -38,6 +40,19 @@ public final class SyntaxFactsStore: Sendable {
         var bytes = 0
         var clock: UInt64 = 0
         var extractions = 0
+        /// The extractions under way, which a caller missing the same revision waits for.
+        var extracting: [Key: Extraction] = [:]
+    }
+
+    /// An extraction under way: callers that miss its revision wait until it ends, whatever it found.
+    private final class Extraction: Sendable {
+        private let group = DispatchGroup()
+
+        init() { group.enter() }
+
+        func end() { group.leave() }
+
+        func wait() { group.wait() }
     }
 
     /// The most bytes the entries may hold; one entry larger than this is kept alone.
@@ -67,14 +82,41 @@ public final class SyntaxFactsStore: Sendable {
     }
 
     /// The facts kept for `revision`, or those `extract` finds, which are kept; nil when `extract` gives none, as when
-    /// it was cancelled. `extract` runs outside the lock.
+    /// it was cancelled. `extract` runs outside the lock. While another caller extracts the same revision, this one
+    /// waits for it, and extracts only if that found nothing.
     /// - Complexity: O(1) on a hit; `extract`'s cost, plus O(entries) when the store evicts, on a miss.
     public func facts(for revision: SourceRevision, extract: () -> SyntaxFacts?) -> SyntaxFacts? {
-        if let facts = facts(for: revision) { return facts }
-        state.withLock { $0.extractions += 1 }
-        guard let facts = extract() else { return nil }
-        insert(facts, for: revision)
-        return facts
+        let key = Key(revision)
+        enum Step {
+            case found(SyntaxFacts)
+            case wait(Extraction)
+            case extract(Extraction)
+        }
+        let step = state.withLock { state -> Step in
+            if let entry = state.entries[key] {
+                state.clock += 1
+                state.entries[key]?.use = state.clock
+                return .found(entry.facts)
+            }
+            if let under = state.extracting[key] { return .wait(under) }
+            let extraction = Extraction()
+            state.extracting[key] = extraction
+            state.extractions += 1
+            return .extract(extraction)
+        }
+        switch step {
+            case .found(let facts):
+                return facts
+            case .wait(let extraction):
+                extraction.wait()
+                return facts(for: revision) ?? facts(for: revision, extract: extract)
+            case .extract(let extraction):
+                let facts = extract()
+                if let facts { insert(facts, for: revision) }
+                state.withLock { $0.extracting[key] = nil }
+                extraction.end()
+                return facts
+        }
     }
 
     /// Keeps `facts` for `revision`, then evicts the least recently used entries until the store is within its limit.

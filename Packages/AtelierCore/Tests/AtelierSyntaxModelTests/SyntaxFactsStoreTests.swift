@@ -1,4 +1,6 @@
 import AtelierSyntaxModel
+import Dispatch
+import Synchronization
 import Testing
 
 /// The facts store keeps one parse's facts per revision within a byte budget (PERF-11 step 3).
@@ -12,6 +14,35 @@ struct SyntaxFactsStoreTests {
 
     private static func revision(_ blob: String, document: String = "a.swift") -> SourceRevision {
         SourceRevision(documentID: document, language: .swift, key: .content(blob))
+    }
+
+    @Test
+    func `a caller that misses a revision under extraction takes that extraction's facts`() {
+        let store = SyntaxFactsStore()
+        let started = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        let done = DispatchGroup()
+        let results = Mutex([SyntaxFacts?]())
+        DispatchQueue.global()
+            .async(group: done) {
+                let facts = store.facts(for: Self.revision("a")) {
+                    started.signal()
+                    release.wait()
+                    return Self.facts(lines: 3)
+                }
+                results.withLock { $0.append(facts) }
+            }
+        started.wait()
+        DispatchQueue.global()
+            .async(group: done) {
+                let facts = store.facts(for: Self.revision("a")) { Self.facts(lines: 7) }
+                results.withLock { $0.append(facts) }
+            }
+        release.signal()
+        done.wait()
+
+        #expect(store.extractions == 1)
+        #expect(results.withLock { $0 }.map { $0?.tokenBoundaries.count } == [3, 3])
     }
 
     @Test
