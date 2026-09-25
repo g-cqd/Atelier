@@ -268,6 +268,49 @@ function that runs one child task per supported tier in a task group and returns
 The disk cache itself needs a look: Swift loads slower than it compiles. That is queue item 8's work, and section 8
 lists it as a risk.
 
+**As built in step 5 (09-25).** Measuring every bundled grammar changed the plan above: warming a changeset's
+grammars when a comparison opens costs too much memory while the table format stays as it is. Each figure below is
+one release process on the 6.4.0 toolchain: the tables' disk cache file, the CPU time of a load from it and of a cold
+compile, and the footprint the loaded tables keep.
+
+| Grammar | Table file | Warm load | Cold compile | Loaded |
+|---|---|---|---|---|
+| JSON, TOML, HTML | ≤ 0.3 MB | ≤ 6 ms | ≤ 10 ms | ≤ 2.2 MB |
+| Lua, CSS, YAML | 1.0–3.8 MB | 15–44 ms | 39–71 ms | 5.6–22.5 MB |
+| Ruby | 8.0 MB | 0.11–0.16 s | 0.31–0.39 s | 51–53 MB |
+| JavaScript | 9.6 MB | 0.14 s | 0.40 s | 53 MB |
+| Go | 11.4 MB | 0.17 s | 0.36 s | 53 MB |
+| Markdown | 14.9 MB | 0.18 s | 0.47 s | 76 MB |
+| Python | 16.7 MB | 0.23–0.31 s | 0.59–0.69 s | 78–81 MB |
+| Java | 30.2 MB | 0.43 s | 0.78 s | 136 MB |
+| Bash, C | 44.6–44.8 MB | 0.62–0.67 s | 1.1–3.5 s | 207–289 MB |
+| TypeScript | 49.2 MB | 0.67–0.72 s | 2.0 s | 319–322 MB |
+| Rust, Kotlin | 59.2–61.2 MB | 0.78–0.80 s | 1.7 s | 268–329 MB |
+| Swift, C++ | 106.6–107.2 MB | 1.5–1.9 s | 2.6–4.0 s | 457–495 MB |
+
+A table holds 4.3 to 6.5 times its file once loaded, so the file's size, which one `stat(2)` reads before anything is
+decoded, is the measure of a table:
+- **Lazily, one at a time.** A grammar tier loads its language's tables only when a side of that language shows,
+  through `SyntaxArtifactsCache`, which loads one grammar at a time.
+- **At most 20 MB of table.** GitDiffViewer loads no table past 20 MB (`GrammarColorServices.limits`): JSON, TOML,
+  HTML, Lua, CSS, YAML, Ruby, JavaScript, Go and Python qualify; Java, Bash, C, TypeScript, Rust, Kotlin and C++ keep
+  the lexer's colour until the format work makes their tables smaller, when they qualify with no code change. A
+  grammar that was never compiled is compiled once to be measured, and dropped if too large; its cached file keeps it
+  undecoded from then on.
+- **A 32 MB budget.** The loaded tables are held to 32 MB of table, 150 to 210 MB once loaded, which fits any two of
+  those that qualify; past it, the least recently used table unloads, from the registry's memory too, unless a parse
+  is using it.
+- **The deadline counts CPU time.** The grammar tier's 250 ms deadline counts the parsing thread's CPU time, which the
+  parser checks every 256 tokens, so a machine under load does not fail a grammar that would have met it, and the
+  predictor's throughput is CPU time too.
+- **Two parses at once on this machine.** Parses run on a pool of `max(1, cores / 4)` threads at utility priority
+  (section 4.6).
+- **Go is decided per side** by the deadline and the predictor. Go's own `net/http/request.go` took 35 s of CPU in
+  the grammar assessment, so a side like it stops at 250 ms of CPU, which sets Go's throughput past the budget for
+  any larger side, and three such failures in a row stop the grammar for the session; 50 KB of plain Go, small
+  functions one after another, parses in time (in a debug build) and takes its grammar's colour. Java stays on the
+  lexer through the table limit.
+
 ### 4.3 Visible lines first
 
 - **Lexer:** P1a's `ProgressiveHighlighting` lexes the viewport, then chunks outward.
