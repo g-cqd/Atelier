@@ -3,6 +3,30 @@
 Insights gathered while landing the diagnostics/hover feature, ordered by intended execution.
 See `multi-language-hover-design.md` for the full multi-language design.
 
+## Order of work (09-25, book D37)
+Core shared code and GitDiffViewer come first; work that only improves KittyCode is deferred. The work queue's values
+follow this order.
+
+- **Running:**
+  - PERF-11 steps 1 to 3 (`docs/design/highlighting-tiers.md`): swift-syntax color after the lexer's first paint, the
+    core tier job, and one Swift parse per side for color, intraline and hover;
+  - 4A: the grammar corpus and its loading in the core;
+  - GIT-06: commits as sections in the flat sidebar (`commit-grouping-design.md`);
+  - CARD-12: a card's scroll step and a reveal's re-render;
+  - the parser's recursion risks, node storage and hot paths.
+- **Next:**
+  - PERF-11 step 4, the grammar tier in the core (after 4A and step 2), then step 5, grammar color for GitDiffViewer's
+    other languages;
+  - the parser follow-ups: hidden helper nodes, query anchors, the grammar tables' cache format and compile cost
+    (queue item 8);
+  - HOVER-16, hover for other languages (phases M1 to M3 below), after 4A;
+  - P1a to P1c, then P2: the text-first pipeline in GitDiffViewer (PERF-09);
+  - PERF-11 steps 7 and 8 for GitDiffViewer: semantic tokens in AtelierLSP, then the semantic tier.
+- **Then:** DIFF-01, DIFF-03 and DIFF-04 (below), the renderer seam (3L) and the time-boxed M1 renderer, 4B to 4F,
+  TAB-09's panes, and synced split panes by row.
+- **Deferred (KittyCode only):** PERF-11 step 6 and P3 (KittyCode on the tier job), the chunked highlight pass (queue
+  item 4), the viewport query, the reparse left pending on a tab switch, and the grammar breaker's retry.
+
 ## In flight (current feature)
 - Track A chrome/glue: status-bar counts, toolbar readout, card badges, overlay pipeline.
 - Track B: LSPConnection + SourceKitLSPService; then TieredHoverProvider, app wiring, polish.
