@@ -18,6 +18,16 @@ public final class GrammarParser: Sendable {
     ) throws(ParseError) -> SyntaxTree {
         try parser.parse(source, externalScanner: externalScanner)
     }
+
+    /// ``parse(_:externalScanner:)``, stopping with `ParseError.cancelled` at the first of the parser's checks, every
+    /// 256 tokens, where `isCancelled` answers true, in place of the task's cancellation.
+    public func parse(
+        _ source: String,
+        externalScanner: (any GrammarExternalScanner)?,
+        isCancelled: () -> Bool
+    ) throws(ParseError) -> SyntaxTree {
+        try parser.parse(source, externalScanner: externalScanner, isCancelled: isCancelled)
+    }
 }
 
 // MARK: - Tree Edit Operations

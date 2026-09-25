@@ -53,6 +53,14 @@ public struct GrammarEngine: Sendable {
         try parser.parse(source, externalScanner: externalScanner)
     }
 
+    /// Parses `source` whole, stopping at the first of the parser's checks where `isCancelled` answers true.
+    /// - Throws: The parser's `ParseError`, `.cancelled` when `isCancelled` stopped it.
+    public func parse(
+        _ source: String, externalScanner: (any GrammarExternalScanner)?, isCancelled: () -> Bool
+    ) throws(ParseError) -> SyntaxTree {
+        try parser.parse(source, externalScanner: externalScanner, isCancelled: isCancelled)
+    }
+
     /// Whether `tree`'s colour is used: the parse reduced to the grammar's start rule, and less than
     /// ``maxErrorBytePercent`` percent of its bytes lie under ERROR nodes.
     /// - Complexity: O(1): the parse counted its ERROR bytes as it built the tree.
