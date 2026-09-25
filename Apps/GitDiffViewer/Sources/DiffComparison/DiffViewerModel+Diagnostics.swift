@@ -53,8 +53,10 @@ extension DiffViewerModel {
     /// `lspRegistry` for on-disk files on the new side. It indexes only while the setting shows hover
     /// documentation, and indexes the comparison on screen when the setting turns it on.
     package func attachHoverDocs(lspRegistry: LanguageServerRegistry?) {
+        semanticColor.registry = lspRegistry
         let hoverDocs = HoverDocumentationModel(
-            lspRegistry: lspRegistry, taskProvider: taskProvider, index: DocCommentIndex(store: syntaxFacts))
+            lspRegistry: lspRegistry, taskProvider: taskProvider, index: DocCommentIndex(store: syntaxFacts),
+            symbolKinds: syntaxFacts)
         hoverDocs.isEnabled = settings.showsHoverDocumentation
         self.hoverDocs = hoverDocs
         // The setting is an appearance change, which the model's own observer passes over.

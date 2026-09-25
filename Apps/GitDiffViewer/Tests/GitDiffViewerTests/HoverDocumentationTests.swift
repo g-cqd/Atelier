@@ -569,6 +569,35 @@ extension HoverDocumentationModelTests {
     }
 
     @Test
+    func `a hover over a keyword, a literal or a comment does not ask the language server`() async throws {
+        let servers = ServerLog()
+        let store = SyntaxFactsStore()
+        let model = HoverDocumentationModel(
+            lspRegistry: servers.registry(), taskProvider: taskProvider, symbolKinds: store)
+        let root = try makeScratchRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = "let value = compute() // note\n"
+        store.insert(
+            SymbolKinds(tokens: [
+                HighlightToken(byteRange: 0 ..< 3, role: .keyword), HighlightToken(byteRange: 4 ..< 9, role: .variable),
+                HighlightToken(byteRange: 12 ..< 19, role: .function),
+                HighlightToken(byteRange: 22 ..< 29, role: .comment)
+            ]),
+            for: SourceRevision(documentID: "Sources/Foo.swift", language: .swift, key: .content("new")))
+        let entry = HoverDocumentationModel.FileEntry(
+            index: 0, leftPath: "Sources/Foo.swift", rightPath: "Sources/Foo.swift", oldText: source, newText: source,
+            oldBlobID: "old", newBlobID: "new")
+        try await feed(model, [entry], root: root)
+
+        _ = await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 1)
+        _ = await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 25)
+        #expect(servers.all.isEmpty)
+
+        _ = await model.hover(fileIndex: 0, side: .new, line: 0, utf16Column: 14)
+        #expect(servers.all == ["sourcekit-lsp"])
+    }
+
+    @Test
     func `a file no language server serves gets no hover and starts nothing`() async throws {
         let servers = ServerLog()
         let model = makeSUT(lspRegistry: servers.registry())

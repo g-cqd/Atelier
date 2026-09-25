@@ -80,6 +80,7 @@ extension ViewerSettings {
             diffColors = .standard
             matchesThemeAppearance = false
             refinesSwiftColor = true
+            semanticColor = true
             compactsInlineView = false
         }
         mode = restoredValue(Key.mode, appDefault: ViewMode.split) {
@@ -179,7 +180,8 @@ extension ViewerSettings {
                 return [
                     themePath != nil, lineHeightMultiple != 0, mode != .split, wrapsLines != true, wrapColumn != 0,
                     appearanceScheme != .system, badgeScheme != .classic, matchesThemeAppearance != false,
-                    refinesSwiftColor != true, compactsInlineView != false, diffColors != .standard
+                    refinesSwiftColor != true, semanticColor != true, compactsInlineView != false,
+                    diffColors != .standard
                 ]
                 .count { $0 }
             case .tools:
