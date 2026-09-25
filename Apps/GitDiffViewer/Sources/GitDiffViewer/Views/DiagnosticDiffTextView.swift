@@ -7,7 +7,7 @@ import DiffTextKit
 import SwiftUI
 
 /// ``DiffTextView`` plus the diagnostics of its own rendered text: squiggles, tinted gutter line numbers, and the
-/// findings popover a click on one opens. Each pane owns its ``DiagnosticOverlay``, since its rows are its own.
+/// findings popover a click on one opens, all kept in the pane's own ``PaneDiagnostics``.
 struct DiagnosticDiffTextView: View {
     let model: DiffViewerModel
     let rendered: RenderedText
@@ -26,12 +26,8 @@ struct DiagnosticDiffTextView: View {
     /// tab is open; nil keeps none.
     var scrollMemoryPath: String?
 
-    @State private var overlay = DiagnosticOverlay()
-    @State private var version = 0
-    /// Retains the transient findings popover, which `NSPopover.show` does not.
-    @State private var diagnosticPopover: NSPopover?
-    /// Bumped by every ``recompute()``; a mapping that lands after a newer one started is dropped.
-    @State private var recomputeGeneration = 0
+    /// This pane's findings, since its rows are its own.
+    @State private var diagnostics = PaneDiagnostics()
 
     var body: some View {
         DiffTextView(
@@ -40,89 +36,30 @@ struct DiagnosticDiffTextView: View {
             scrollRequest: scrollRequest, splitController: splitController, onGapDrag: onGapDrag,
             onDisplayed: onDisplayed,
             hoverEnabled: model.settings.showsHoverDocumentation && model.hoverDocs != nil,
-            hoverResolver: hoverResolver,
-            diagnosticOverlay: model.settings.diagnosticsEnabled ? overlay : nil, diagnosticsVersion: version,
-            onDiagnosticClick: showDiagnosticPopover,
+            hoverResolver: diagnostics.hoverResolver(
+                docs: model.hoverDocs, palette: rendered.palette, settings: model.settings),
+            diagnosticOverlay: model.settings.diagnosticsEnabled ? diagnostics.overlay : nil,
+            diagnosticsVersion: diagnostics.version,
+            onDiagnosticClick: diagnostics.showFindings,
             scrollMemory: model.scrollMemory, scrollMemoryPath: scrollMemoryPath,
             scrollsPastEnd: model.settings.scrollsPastEnd, bouncesAtEdges: model.settings.bouncesAtEdges
         )
-        .onAppear { recompute() }
-        .onChange(of: rendered.id) { recompute() }
-        .onChange(of: model.diagnosticsVersion) { recompute() }
-        .onChange(of: model.settings.diagnosticsEnabled) { recompute() }
-        .onChange(of: model.settings.analyzedSides) { recompute() }
-    }
-
-    /// Maps this pane's findings off the main actor and applies the result unless a newer mapping started.
-    private func recompute() {
-        recomputeGeneration &+= 1
-        let generation = recomputeGeneration
-        guard model.settings.diagnosticsEnabled, let diagnostics = model.diagnostics else {
-            overlay.replace([:])
-            version += 1
-            return
-        }
-        let right = SideFindings(paths: model.diagnosticFilePaths, findings: diagnostics.findingsByFile)
-        let left = SideFindings(paths: model.diagnosticLeftFilePaths, findings: diagnostics.leftFindingsByFile)
-        let rendered = rendered
-        Task {
-            let rows = await DiagnosticRowMapper.rowsOffMain(for: rendered, left: left, right: right)
-            guard generation == recomputeGeneration else { return }
-            overlay.replace(rows)
-            version += 1
-        }
-    }
-
-    /// Resolves a hover hit into a document styled with this pane's palette and joined by the hovered row's
-    /// diagnostics; nil while no hover documentation model is attached.
-    private var hoverResolver: (@Sendable (HoverHit) async -> HoverDocument?)? {
-        guard let hoverDocs = model.hoverDocs else { return nil }
-        let palette = rendered.palette
-        let overlay = overlay
-        let settings = model.settings
-        return { hit in
-            // Read as the hit resolves, so a change of setting reaches the next panel shown.
-            let material = await settings.hoverPanelMaterial
-            let side: HoverQuerySide = hit.side == .new ? .new : .old
-            let rowDiagnostics = overlay.row(hit.row)?.findings.map { HoverDocument.DiagnosticEntry($0) } ?? []
-            guard
-                let content = await hoverDocs.hover(
-                    fileIndex: hit.fileIndex, side: side, line: hit.line, utf16Column: hit.utf16Column)
-            else {
-                guard !rowDiagnostics.isEmpty else { return nil }
-                return HoverDocument(diagnostics: rowDiagnostics).presented(on: material)
-            }
-            return HoverDocument.build(from: content, palette: palette).adding(diagnostics: rowDiagnostics)
-                .presented(on: material)
-        }
-    }
-
-    /// Presents ``DiagnosticFindingsList`` in an `NSPopover` anchored on the clicked row, which SwiftUI's `.popover`
-    /// cannot anchor to.
-    private func showDiagnosticPopover(rowIndex: Int, findings: [Finding], anchorRect: NSRect, in view: NSView) {
-        let popover = NSPopover()
-        popover.behavior = .transient
-        popover.contentViewController = NSHostingController(rootView: DiagnosticFindingsList(findings: findings))
-        diagnosticPopover = popover
-        popover.show(relativeTo: anchorRect, of: view, preferredEdge: .minY)
+        .followingDiagnostics(of: rendered, in: model, into: diagnostics)
     }
 }
 
-extension HoverDocument.DiagnosticEntry {
-    fileprivate nonisolated init(_ finding: Finding) {
-        self.init(
-            severity: .init(finding.severity), message: "\(finding.ruleID): \(finding.message)",
-            tool: finding.tool.displayName)
-    }
-}
-
-extension HoverDocument.DiagnosticEntry.Severity {
-    fileprivate nonisolated init(_ severity: Finding.Severity) {
-        switch severity {
-            case .error: self = .error
-            case .warning: self = .warning
-            case .note: self = .note
-        }
+extension View {
+    /// Maps `model`'s findings to `rendered`'s rows into `diagnostics` as the pane appears, and again whenever the text,
+    /// the findings, or the diagnostics settings change.
+    func followingDiagnostics(of rendered: RenderedText, in model: DiffViewerModel, into diagnostics: PaneDiagnostics)
+        -> some View
+    {
+        let recompute = { diagnostics.recompute(for: rendered, model: model) }
+        return onAppear(perform: recompute)
+            .onChange(of: rendered.id, recompute)
+            .onChange(of: model.diagnosticsVersion, recompute)
+            .onChange(of: model.settings.diagnosticsEnabled, recompute)
+            .onChange(of: model.settings.analyzedSides, recompute)
     }
 }
 
