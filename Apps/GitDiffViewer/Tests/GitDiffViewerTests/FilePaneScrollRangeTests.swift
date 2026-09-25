@@ -229,7 +229,10 @@ final class HostedPanes {
     /// The row the model asked the panes to show, if any.
     private(set) var requestedRow: Int?
 
-    init(showing text: PaneText, layout: PaneLayout, wrapsLines: Bool, scrollsPastEnd: Bool = false) {
+    init(
+        showing text: PaneText, layout: PaneLayout, wrapsLines: Bool, scrollsPastEnd: Bool = false,
+        size: NSSize = NSSize(width: 900, height: HostedPanes.paneHeight)
+    ) {
         let controller = SplitPaneController(clock: clock, taskProvider: taskProvider)
         // As the split view sets it when it appears.
         controller.wrapsLines = wrapsLines
@@ -243,7 +246,7 @@ final class HostedPanes {
                 text: text, request: requestedRow.map(ScrollRequest.init(row:)), layout: layout,
                 wrapsLines: wrapsLines, scrollsPastEnd: scrollsPastEnd, controller: controller))
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: Self.paneHeight), styleMask: [.borderless],
+            contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
             backing: .buffered, defer: false)
         window.contentView = host
         settle()
@@ -274,6 +277,29 @@ final class HostedPanes {
                 textView: textView, clip: try #require(textView.enclosingScrollView?.contentView),
                 rendered: try #require(gutter.rendered))
         }
+    }
+
+    /// Each pane's gutter and text view with the text it shows, the old side's first.
+    func shownPanes() throws -> [AlignedPane] {
+        try subviews(of: DiffPaneTextView.self, in: host)
+            .map { textView in
+                let gutter = try #require(subviews(of: DiffGutterView.self, in: host).first { $0.source === textView })
+                return AlignedPane(gutter: gutter, textView: textView, rendered: try #require(gutter.rendered))
+            }
+    }
+
+    var bounds: NSRect { host.bounds }
+
+    /// The window's pixels as its layers hold them, which no view is asked to draw for.
+    func pixels() throws -> LayerPixels {
+        try LayerPixels.composite(try #require(host.layer))
+    }
+
+    /// The pixels once every view has drawn again.
+    func redrawnPixels() throws -> LayerPixels {
+        redrawAll(in: host)
+        window.displayIfNeeded()
+        return try pixels()
     }
 
     /// Scrolls each pane to its end as the End key does, again as long as laying out what shows there moves its end.
