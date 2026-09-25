@@ -559,7 +559,8 @@ package final class DiffViewerModel {
             granularity: settings.granularity,
             palette: palette,
             lineHeightMultiple: settings.lineHeightMultiple,
-            sides: settings.mode == .inline ? [.unified] : [.old, .new]
+            sides: settings.mode == .inline ? [.unified] : [.old, .new],
+            compactsInline: settings.mode == .inline && settings.compactsInlineView
         )
     }
 

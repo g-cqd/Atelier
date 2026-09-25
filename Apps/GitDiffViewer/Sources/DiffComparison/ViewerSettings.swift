@@ -247,6 +247,14 @@ package final class ViewerSettings {
     }
     /// Path of the Xcode theme file to derive colors and font from; nil keeps the system look.
     package var themePath: String? { didSet { if themePath != oldValue { store(themePath, Key.themePath, .palette) } } }
+    /// Whether the inline layout shows the new file alone, with a gutter marker at each change that discloses it in
+    /// place (book DIFF-04). Off by default; nothing changes in the other layouts.
+    package var compactsInlineView: Bool {
+        didSet {
+            guard compactsInlineView != oldValue else { return }
+            store(compactsInlineView, Key.compactsInlineView, mode == .inline ? .layout : .appearance)
+        }
+    }
     /// Show only the changed regions with context, in every layout.
     package var isolatesChanges: Bool {
         didSet { if isolatesChanges != oldValue { store(isolatesChanges, Key.isolatesChanges, .layout) } }
@@ -425,6 +433,7 @@ package final class ViewerSettings {
         lineHeightMultiple = defaults.double(forKey: Key.lineHeightMultiple)
         contextLines = defaults.object(forKey: Key.contextLines) as? Int ?? 3
         isolatesChanges = defaults.bool(forKey: Key.isolatesChanges)
+        compactsInlineView = defaults.bool(forKey: Key.compactsInlineView)
         diagnosticsEnabled = defaults.bool(forKey: Key.diagnosticsEnabled)
         showsHoverDocumentation = defaults.object(forKey: Key.showsHoverDocumentation) as? Bool ?? true
         hoverPanelMaterial =
@@ -492,6 +501,7 @@ extension ViewerSettings {
         static let lineHeightMultiple = "lineHeightMultiple"
         static let contextLines = "contextLines"
         static let isolatesChanges = "isolatesChanges"
+        static let compactsInlineView = "compactsInlineView"
         static let diagnosticsEnabled = "diagnosticsEnabled"
         static let showsHoverDocumentation = "hoverDocumentation"
         static let hoverPanelMaterial = "hoverPanelMaterial"
