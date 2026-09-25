@@ -383,11 +383,24 @@ public struct SymbolAlias: Sendable, Equatable, Codable {
     }
 }
 
+/// A field of a production: the step whose node it names, and its name.
+public struct ProductionField: Sendable, Equatable {
+    public var step: Int
+    public var name: String
+
+    public init(step: Int, name: String) {
+        self.step = step
+        self.name = name
+    }
+}
+
 public struct ProductionRule: Sendable, Equatable, Codable {
     public var name: String
     public var symbolCount: Int
     public var symbols: [String]
-    public var fields: [Int: String]
+    /// The production's fields in step order, the order the grammar writes them: a field over several steps holds
+    /// their nodes in that order, and its first node is the one a query's field pattern matches.
+    public var fields: [ProductionField]
     /// The aliases of the production's steps, by step index.
     public var aliases: [Int: SymbolAlias]
     /// The production's `prec.dynamic` value: of two parses that tie on errors, the one whose reductions add up to
@@ -398,7 +411,7 @@ public struct ProductionRule: Sendable, Equatable, Codable {
         name: String,
         symbolCount: Int,
         symbols: [String] = [],
-        fields: [Int: String] = [:],
+        fields: [ProductionField] = [],
         aliases: [Int: SymbolAlias] = [:],
         dynamicPrecedence: Int = 0
     ) {
@@ -433,18 +446,16 @@ public struct ProductionRule: Sendable, Equatable, Codable {
         self.symbolCount = try container.decode(Int.self, forKey: .symbolCount)
         self.symbols = try container.decode([String].self, forKey: .symbols)
         let pairs = try container.decode([[String]].self, forKey: .fields)
-        var decoded: [Int: String] = [:]
-        for pair in pairs {
-            guard pair.count == 2, let index = Int(pair[0]) else {
+        self.fields = try pairs.map { pair in
+            guard pair.count == 2, let step = Int(pair[0]) else {
                 throw DecodingError.dataCorruptedError(
                     forKey: .fields,
                     in: container,
                     debugDescription: "Expected [index, name] pair"
                 )
             }
-            decoded[index] = pair[1]
+            return ProductionField(step: step, name: pair[1])
         }
-        self.fields = decoded
         let aliases = try container.decodeIfPresent([IndexedAlias].self, forKey: .aliases) ?? []
         self.aliases = Dictionary(aliases.map { ($0.index, $0.alias) }, uniquingKeysWith: { first, _ in first })
         self.dynamicPrecedence = try container.decodeIfPresent(Int.self, forKey: .dynamicPrecedence) ?? 0
@@ -455,7 +466,7 @@ public struct ProductionRule: Sendable, Equatable, Codable {
         try container.encode(name, forKey: .name)
         try container.encode(symbolCount, forKey: .symbolCount)
         try container.encode(symbols, forKey: .symbols)
-        let pairs = fields.sorted(by: { $0.key < $1.key }).map { [String($0.key), $0.value] }
+        let pairs = fields.map { [String($0.step), $0.name] }
         try container.encode(pairs, forKey: .fields)
         let aliases = self.aliases.sorted(by: { $0.key < $1.key }).map { IndexedAlias(index: $0.key, alias: $0.value) }
         try container.encode(aliases, forKey: .aliases)
