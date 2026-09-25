@@ -112,6 +112,26 @@ struct GapDragTests {
         #expect(sut.revealed == 0)
     }
 
+    /// A handle pressed in the edge zone and pulled back against its direction stays in the zone: it holds nothing.
+    @Test
+    func `a pointer in the edge zone behind where the drag began reveals nothing`() {
+        var sut = drag(.extendsChangeAbove)
+        sut.move(offset: -3, edgeOvershoot: 5)
+        #expect(sut.holdInterval == nil)
+        sut.hold()
+        #expect(sut.revealed == 0)
+    }
+
+    @Test
+    func `coming back behind where the drag began hides the rows a hold revealed`() {
+        var sut = drag(.extendsChangeBelow)
+        sut.move(offset: -10, edgeOvershoot: 5)
+        for _ in 0 ..< 5 { sut.hold() }
+        #expect(sut.revealed == 6)
+        sut.move(offset: 4, edgeOvershoot: 0)
+        #expect(sut.expansion == GapExpansion())
+    }
+
     @Test
     func `revealing all opens the whole gap from the handle's side`() {
         var sut = drag(.extendsChangeBelow, hiding: 12, from: GapExpansion(below: 2, above: 0))
