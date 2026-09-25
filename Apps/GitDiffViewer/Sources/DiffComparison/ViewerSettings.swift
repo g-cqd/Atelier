@@ -213,6 +213,11 @@ package final class ViewerSettings {
     package var showsIgnoredFiles: Bool {
         didSet { if showsIgnoredFiles != oldValue { store(showsIgnoredFiles, Key.showsIgnoredFiles, .trees) } }
     }
+    /// Splits the merged sidebar's flat list into a section per commit when the left side is an ancestor of the right
+    /// in one repository (GIT-06); ``CommitGroupingEligibility`` says when it applies.
+    package var groupsByCommit: Bool {
+        didSet { if groupsByCommit != oldValue { store(groupsByCommit, Key.groupsByCommit, .trees) } }
+    }
     /// Whether the window watches the working tree and the repository's `.git` metadata for external changes and
     /// reloads on its own.
     package var autoRefresh: Bool {
@@ -401,6 +406,7 @@ package final class ViewerSettings {
         syncsScrolling = defaults.object(forKey: Key.syncsScrolling) as? Bool ?? true
         showsChangesOnly = defaults.bool(forKey: Key.showsChangesOnly)
         showsIgnoredFiles = defaults.bool(forKey: Key.showsIgnoredFiles)
+        groupsByCommit = defaults.bool(forKey: Key.groupsByCommit)
         autoRefresh = defaults.object(forKey: Key.autoRefresh) as? Bool ?? true
         granularity = defaults.string(forKey: Key.granularity).flatMap(IntralineGranularity.init(rawValue:)) ?? .word
         diffHeuristics =
@@ -467,6 +473,7 @@ extension ViewerSettings {
         static let syncsScrolling = "syncsScrolling"
         static let showsChangesOnly = "showsChangesOnly"
         static let showsIgnoredFiles = "showsIgnoredFiles"
+        static let groupsByCommit = "groupsByCommit"
         static let autoRefresh = "autoRefresh"
         static let granularity = "intralineGranularity"
         static let diffHeuristics = "diffHeuristics"

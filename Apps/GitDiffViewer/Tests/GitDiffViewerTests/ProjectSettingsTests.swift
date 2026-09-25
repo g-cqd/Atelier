@@ -72,6 +72,28 @@ struct ProjectSettingsTests {
     }
 
     @Test
+    func `grouping by commit can differ per project and is listed among its overrides`() throws {
+        let sut = ViewerSettings(defaults: scratchDefaults.defaults)
+        let projectA = ProjectIdentity(root: URL(filePath: "/repos/a", directoryHint: .isDirectory))
+        let projectB = ProjectIdentity(root: URL(filePath: "/repos/b", directoryHint: .isDirectory))
+
+        sut.adoptProject(projectA)
+        sut.groupsByCommit = true
+        sut.adoptProject(projectB)
+
+        #expect(ViewerSettings.isProjectScoped(\.groupsByCommit))
+        #expect(!sut.groupsByCommit)
+        #expect(
+            SettingOverride.list(for: projectA, over: sut) == [
+                SettingOverride(
+                    key: ViewerSettings.Key.groupsByCommit, label: SettingLabel.groupsByCommit, value: "On",
+                    defaultValue: "Off")
+            ])
+        sut.adoptProject(projectA)
+        #expect(sut.groupsByCommit)
+    }
+
+    @Test
     func `a non-scoped key stays global across adoption`() throws {
         let defaults = scratchDefaults.defaults
         let sut = ViewerSettings(defaults: defaults)

@@ -20,6 +20,7 @@ struct ViewerSettingsTests {
         #expect(sut.syncsScrolling)
         #expect(!sut.showsChangesOnly)
         #expect(!sut.showsIgnoredFiles)
+        #expect(!sut.groupsByCommit)
         #expect(sut.granularity == .word)
         #expect(sut.showsMinimap)
         #expect(sut.treeStyle == .hierarchy)
@@ -46,6 +47,7 @@ struct ViewerSettingsTests {
         sut.syncsScrolling = false
         sut.showsChangesOnly = true
         sut.showsIgnoredFiles = true
+        sut.groupsByCommit = true
         sut.granularity = .syntax
         sut.showsMinimap = false
         sut.treeStyle = .flat
@@ -68,6 +70,7 @@ struct ViewerSettingsTests {
         #expect(!reloaded.syncsScrolling)
         #expect(reloaded.showsChangesOnly)
         #expect(reloaded.showsIgnoredFiles)
+        #expect(reloaded.groupsByCommit)
         #expect(reloaded.granularity == .syntax)
         #expect(!reloaded.showsMinimap)
         #expect(reloaded.treeStyle == .flat)
@@ -223,10 +226,11 @@ struct ViewerSettingsTests {
         sut.treeStyle = .flat
         sut.showsChangesOnly = true
         sut.showsIgnoredFiles = true
+        sut.groupsByCommit = true
         sut.syncsScrolling = false
         sut.showsMinimap = false
         sut.showsStatusBar = false
-        #expect(sut.settingsDiffCount(.general) == 7)
+        #expect(sut.settingsDiffCount(.general) == 8)
 
         final class Owner {}
         let owner = Owner()
@@ -239,6 +243,7 @@ struct ViewerSettingsTests {
         #expect(sut.treeStyle == .hierarchy)
         #expect(!sut.showsChangesOnly)
         #expect(!sut.showsIgnoredFiles)
+        #expect(!sut.groupsByCommit)
         #expect(sut.syncsScrolling)
         #expect(sut.showsMinimap)
         #expect(sut.showsStatusBar)
