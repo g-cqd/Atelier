@@ -367,7 +367,6 @@ package final class DiffGutterView: NSView {
 
         let metrics = metrics
         forEachFragment(in: dirtyRect) { fragment, row, rowIndex, y in
-            let frame = fragment.layoutFragmentFrame
             let diagnostics = overlay?.row(rowIndex)
             let attributes: [NSAttributedString.Key: Any] =
                 if let diagnostics {
@@ -382,14 +381,7 @@ package final class DiffGutterView: NSView {
                     case .old: [row.oldNumber]
                     case .new: [row.newNumber]
                 }
-            // Numbers sit on the same baseline as the row's first line of text, whatever the line height is, so
-            // they follow the text up when a taller line centres it: TextKit reports the baseline it laid out,
-            // which is not where a baseline offset then drew the glyphs.
-            let firstLine = fragment.textLineFragments.first
-            let baseline =
-                y + (firstLine.map { $0.typographicBounds.minY + $0.glyphOrigin.y } ?? frame.height * 0.75)
-                - (rendered?.baselineOffset ?? 0)
-            let top = baseline - metrics.font.ascender
+            let top = numberTop(of: fragment, at: y)
             for (column, number) in numbers.enumerated() {
                 guard let number else { continue }
                 let label = String(number) as NSString
@@ -419,6 +411,35 @@ package final class DiffGutterView: NSView {
             case .warning: .systemYellow
             case .note: .systemGray
         }
+    }
+}
+
+// MARK: Line numbers
+
+extension DiffGutterView {
+    /// The top of the line number of the row `fragment` lays out, whose top is `y` in this view.
+    ///
+    /// Numbers sit on the same baseline as the row's first line of text, whatever the line height is, so they follow
+    /// the text up when a taller line centres it: TextKit reports the baseline it laid out, which is not where a
+    /// baseline offset then drew the glyphs.
+    fileprivate func numberTop(of fragment: NSTextLayoutFragment, at y: CGFloat) -> CGFloat {
+        let firstBaseline =
+            fragment.textLineFragments.first.map { $0.typographicBounds.minY + $0.glyphOrigin.y }
+            ?? fragment.layoutFragmentFrame.height * 0.75
+        return y + firstBaseline - (rendered?.baselineOffset ?? 0) - metrics.font.ascender
+    }
+
+    /// Where the gutter draws the line number of each row intersecting `rect` of this view: across the gutter, from
+    /// the number's ascender down to its descender, on its row's baseline (book DIFF-06).
+    /// - Complexity: O(rows in `rect`), plus a lookup of the first fragment.
+    func lineNumberFrames(in rect: NSRect) -> [Int: NSRect] {
+        let font = metrics.font
+        var frames: [Int: NSRect] = [:]
+        forEachFragment(in: rect) { fragment, _, rowIndex, y in
+            frames[rowIndex] = NSRect(
+                x: 0, y: numberTop(of: fragment, at: y), width: bounds.width, height: font.ascender - font.descender)
+        }
+        return frames
     }
 }
 
