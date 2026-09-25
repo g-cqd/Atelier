@@ -118,6 +118,19 @@ struct DiffPhasesTests {
     }
 
     @Test
+    func `the structure alone lays the rows out as the whole model does, with neither emphasis nor moved lines`() {
+        let full = DiffModel(oldText: Self.old, newText: Self.new, granularity: .word, tokenRanges: CodeTokenRanges())
+
+        let structural = DiffModel(structureOf: Self.old, newText: Self.new)
+
+        #expect(structural.structure.edits == full.structure.edits)
+        #expect(structural.changePairs == full.changePairs)
+        #expect(structural.splitRows.map(\.kind) == full.splitRows.map(\.kind))
+        #expect(structural.splitRows.allSatisfy { !$0.isMoved && ($0.new?.emphasis ?? []).isEmpty })
+        #expect(full.splitRows.contains { $0.isMoved })
+    }
+
+    @Test
     func `emphasis for one change leaves the others' rows plain`() async throws {
         let old = TextLines(Self.old)
         let new = TextLines(Self.new)
