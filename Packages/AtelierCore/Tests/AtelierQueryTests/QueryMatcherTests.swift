@@ -168,6 +168,62 @@ struct QueryMatcherTests {
     }
 
     @Test
+    func `A child pattern matches each child it can, and the predicate filters each match`() throws {
+        // bash's flag pattern over `ls -la b --x`; tree-sitter's cursor gives one match per argument that passes.
+        let name = SyntaxNode(type: "command_name", byteRange: 0 ..< 2)
+        let flag = SyntaxNode(type: "word", byteRange: 3 ..< 6)
+        let file = SyntaxNode(type: "word", byteRange: 7 ..< 8)
+        let long = SyntaxNode(type: "word", byteRange: 9 ..< 12)
+        let command = SyntaxNode(type: "command", children: [name, flag, file, long], byteRange: 0 ..< 12)
+        let tree = SyntaxTree(root: command, source: "ls -la b --x")
+
+        let query = try QueryParser.parse(#"((command (_) @constant) (#match? @constant "^-"))"#)
+
+        #expect(QueryMatcher.execute(query: query, tree: tree).map { $0.captures.map(\.node) } == [[flag], [long]])
+    }
+
+    @Test
+    func `Child patterns match every ordered choice of children, and ways that capture the same nodes merge`() throws {
+        let first = SyntaxNode(type: "item", byteRange: 0 ..< 1)
+        let second = SyntaxNode(type: "item", byteRange: 1 ..< 2)
+        let third = SyntaxNode(type: "item", byteRange: 2 ..< 3)
+        let list = SyntaxNode(type: "list", children: [first, second, third], byteRange: 0 ..< 3)
+        let tree = SyntaxTree(root: list, source: "abc")
+
+        let pairs = QueryMatcher.execute(query: try QueryParser.parse("(list (item) @a (item) @b)"), tree: tree)
+        let uncaptured = QueryMatcher.execute(query: try QueryParser.parse("(list (item)) @list"), tree: tree)
+
+        #expect(pairs.map { $0.captures.map(\.node) } == [[first, second], [first, third], [second, third]])
+        #expect(uncaptured.map { $0.captures.map(\.node) } == [[list]])
+    }
+
+    @Test
+    func `A field pattern matches each node of its field`() throws {
+        let name = SyntaxNode(type: "command_name", byteRange: 0 ..< 2)
+        let first = SyntaxNode(type: "word", byteRange: 3 ..< 4)
+        let second = SyntaxNode(type: "word", byteRange: 5 ..< 6)
+        let command = SyntaxNode(
+            type: "command", children: [name, first, second], byteRange: 0 ..< 6,
+            fields: ["argument": [first, second]])
+        let tree = SyntaxTree(root: command, source: "ls a b")
+
+        let matches = QueryMatcher.execute(
+            query: try QueryParser.parse("(command argument: (word) @argument)"), tree: tree)
+
+        #expect(matches.map { $0.captures.map(\.node) } == [[first], [second]])
+    }
+
+    @Test
+    func `Each alternative that matches a node gives its own match`() throws {
+        let identifier = SyntaxNode(type: "identifier", byteRange: 0 ..< 1)
+        let tree = SyntaxTree(root: identifier, source: "a")
+
+        let matches = QueryMatcher.execute(query: try QueryParser.parse("[(identifier) @a (_) @b]"), tree: tree)
+
+        #expect(Set(matches.map { $0.captures.map(\.name) }) == [["a"], ["b"]])
+    }
+
+    @Test
     func `eq? and not-eq? between two captures compare their texts`() throws {
         // `x=x y=z`
         let left = SyntaxNode(type: "identifier", byteRange: 0 ..< 1)
