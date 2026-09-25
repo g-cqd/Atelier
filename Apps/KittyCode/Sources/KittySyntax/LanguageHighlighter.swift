@@ -153,35 +153,29 @@ public enum LanguageHighlighter: Sendable {
         public func highlightDocument(source: String) -> [[StyledSpan]] {
             let interval = highlighterSignposter.beginInterval("highlightDocument")
             defer { highlighterSignposter.endInterval("highlightDocument", interval) }
-            switch strategy {
-                case .grammar(let grammarSession):
-                    guard source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes else {
-                        return lexicalLines(source: source)
-                    }
-                    do {
-                        let tree = try grammarSession.parseTree(for: source)
-                        guard grammarSession.passesQualityGate else {
-                            return lexicalLines(source: source)
-                        }
-                        let spans = grammarSession.highlighter.highlight(
-                            source: source,
-                            tree: tree,
-                            query: grammarSession.query,
-                            scratch: grammarSession.scratch
-                        )
-                        return splitDocumentSpans(
-                            spans,
-                            source: source,
-                            defaultStyle: theme.defaultStyle,
-                            scratch: &splitScratch
-                        )
-                    } catch {
-                        return lexicalLines(source: source)
-                    }
+            return grammarHighlightedDocument(source: source) ?? lexicalLines(source: source)
+        }
 
-                case .fallback:
-                    return lexicalLines(source: source)
-            }
+        /// The lines of `source` highlighted from the grammar alone; nil without a grammar, past
+        /// `maxGrammarSourceBytes`, or when the parse throws, is cancelled, or does not pass the quality gate.
+        public func grammarHighlightedDocument(source: String) -> [[StyledSpan]]? {
+            guard case .grammar(let grammarSession) = strategy,
+                source.utf8.count <= LanguageHighlighter.maxGrammarSourceBytes,
+                let tree = try? grammarSession.parseTree(for: source),
+                grammarSession.passesQualityGate
+            else { return nil }
+            let spans = grammarSession.highlighter.highlight(
+                source: source,
+                tree: tree,
+                query: grammarSession.query,
+                scratch: grammarSession.scratch
+            )
+            return splitDocumentSpans(
+                spans,
+                source: source,
+                defaultStyle: theme.defaultStyle,
+                scratch: &splitScratch
+            )
         }
 
         /// The grammar's unresolved structural tokens for `source`; empty without a grammar, past
