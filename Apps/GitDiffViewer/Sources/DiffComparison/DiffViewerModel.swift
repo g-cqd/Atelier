@@ -639,16 +639,4 @@ package final class DiffViewerModel {
             timer.record(firstDisplay: elapsed)
         }
     }
-
-    /// Records that a pane put the text with `id`, one side of the current render, on screen: a side-by-side pane
-    /// shows a side and knows nothing of the render it belongs to. A text of another render records nothing.
-    package func noteDisplayed(text id: UUID) {
-        taskProvider.task {
-            guard let rendered, [rendered.unified?.id, rendered.old?.id, rendered.new?.id].contains(id),
-                let elapsed = timer.displayed(rendered.id)
-            else { return }
-            PhaseTrace.log("displayed")
-            timer.record(firstDisplay: elapsed)
-        }
-    }
 }
