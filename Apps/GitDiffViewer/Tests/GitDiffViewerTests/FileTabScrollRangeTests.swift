@@ -20,10 +20,10 @@ import Testing
 struct FileTabScrollRangeTests {
     private let harness = ModelTestHarness()
 
-    @Test(arguments: [ExplorerPlacement.top, .sidebar], [ViewMode.inline, .split])
-    func `a file opened from the list shows whole when it fits, else from its first change`(
-        placement: ExplorerPlacement, mode: ViewMode
-    ) async throws {
+    /// One window, as the app keeps one while its explorers move and its layout changes, which a window each would
+    /// cost four times over.
+    @Test
+    func `a file opened from the list shows whole when it fits, else from its first change`() async throws {
         let short = (1 ... 10).map { "let value\($0) = \($0)" }
         let long = (1 ... 200).map { "let value\($0) = \($0)" }
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [
@@ -37,8 +37,8 @@ struct FileTabScrollRangeTests {
         harness.reader.blobContents["3"] = Self.text(long)
         harness.reader.blobContents["4"] = Self.text(long, changing: 120)
         let model = harness.makeSUT()
-        model.settings.explorerPlacement = placement
-        model.settings.mode = mode
+        model.settings.explorerPlacement = .sidebar
+        model.settings.mode = .inline
         let window = Self.window(showing: model)
         defer { window.close() }
         let content = try #require(window.contentView)
@@ -48,22 +48,27 @@ struct FileTabScrollRangeTests {
 
         model.select("short.swift")
         try await settle(window)
-        try Self.expectWhole(in: content, "opened by a click")
+        try Self.expectWhole(in: content, "explorers in the sidebar, inline, opened by a click")
 
+        model.settings.mode = .split
+        model.pin("long.swift")
+        try await settle(window)
+        try Self.expectFirstChange(
+            of: model, in: content, "explorers in the sidebar, side by side, opened by a double click")
+
+        model.settings.explorerPlacement = .top
+        model.closeTab(try #require(model.tabs.active).id)
+        try await settle(window)
         model.closeTab(try #require(model.tabs.active).id)
         try await settle(window)
         model.pin("short.swift")
         try await settle(window)
-        try Self.expectWhole(in: content, "opened by a double click")
+        try Self.expectWhole(in: content, "explorers above, side by side, opened by a double click")
 
+        model.settings.mode = .inline
         model.select("long.swift")
         try await settle(window)
-        let row = try #require(model.scrollRequest?.row)
-        for pane in try Self.panes(in: content) {
-            #expect(pane.textView.frame.height >= pane.rowsHeight)
-            let below = try pane.top(ofRow: row) - pane.clip.bounds.minY
-            #expect(abs(below - 3 * pane.lineHeight) < 1, "the row is \(below) below the pane's top")
-        }
+        try Self.expectFirstChange(of: model, in: content, "explorers above, inline, opened by a click")
     }
 
     private static func text(_ lines: [String], changing changed: Int? = nil) -> String {
@@ -72,10 +77,21 @@ struct FileTabScrollRangeTests {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    /// Each file pane shows its text whole, from its top.
+    /// Each file pane shows the row the model asked for three lines below its top, and covers its text.
+    private static func expectFirstChange(of model: DiffViewerModel, in content: NSView, _ comment: Comment) throws {
+        let row = try #require(model.scrollRequest?.row, comment)
+        for pane in try panes(in: content) {
+            #expect(pane.textView.frame.height >= pane.rowsHeight, comment)
+            let below = try pane.top(ofRow: row) - pane.clip.bounds.minY
+            #expect(abs(below - 3 * pane.lineHeight) < 1, "\(comment): the row is \(below) below the pane's top")
+        }
+    }
+
+    /// Each file pane shows its text whole, from its top, its text view filling the pane.
     private static func expectWhole(in content: NSView, _ comment: Comment) throws {
         for pane in try panes(in: content) {
             #expect(pane.clip.bounds.minY == 0, comment)
+            #expect(pane.textView.frame.height >= pane.clip.bounds.height, comment)
             #expect(pane.textView.frame.height >= pane.rowsHeight, comment)
             #expect(try pane.bottom(ofRow: pane.lastRow) + pane.below <= pane.clip.bounds.height, comment)
         }
