@@ -1,5 +1,6 @@
 package import AtelierDiagnostics
 import DiffCore
+import DiffRendering
 import Foundation
 
 /// Restoring defaults and counting deviations, per Settings tab.
@@ -91,6 +92,9 @@ extension ViewerSettings {
         showsHoverDocumentation = restoredValue(Key.showsHoverDocumentation, appDefault: true) {
             defaults.object(forKey: Key.showsHoverDocumentation) as? Bool ?? true
         }
+        hoverPanelMaterial = restoredValue(Key.hoverPanelMaterial, appDefault: HoverPanelMaterial.liquidGlass) {
+            defaults.string(forKey: Key.hoverPanelMaterial).flatMap(HoverPanelMaterial.init(rawValue:)) ?? .liquidGlass
+        }
         analyzedSides = restoredValue(Key.analyzedSides, appDefault: AnalyzedSides.rightOnly) {
             defaults.string(forKey: Key.analyzedSides).flatMap(AnalyzedSides.init(storedValue:)) ?? .rightOnly
         }
@@ -173,8 +177,9 @@ extension ViewerSettings {
                 .count { $0 }
             case .tools:
                 return [
-                    diagnosticsEnabled != false, showsHoverDocumentation != true, analyzedSides != .rightOnly,
-                    toolLocations != Self.defaultToolLocations, lspServerLocations != Self.defaultLSPServerLocations
+                    diagnosticsEnabled != false, showsHoverDocumentation != true, hoverPanelMaterial != .liquidGlass,
+                    analyzedSides != .rightOnly, toolLocations != Self.defaultToolLocations,
+                    lspServerLocations != Self.defaultLSPServerLocations
                 ]
                 .count { $0 }
         }

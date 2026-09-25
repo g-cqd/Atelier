@@ -44,6 +44,7 @@ package enum SettingLabel {
 
     package static let diagnosticsEnabled = "Analyze changed Swift files"
     package static let showsHoverDocumentation = "Show documentation on hover"
+    package static let hoverPanelMaterial = "Hover panel material"
     package static let analyzedSides = "Analyze"
     package static let tools = "Tools"
     package static let languageServers = "Language servers"
