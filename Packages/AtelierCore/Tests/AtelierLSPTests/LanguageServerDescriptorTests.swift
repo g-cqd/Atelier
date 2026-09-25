@@ -55,12 +55,68 @@ struct LanguageServerDescriptorTests {
     }
 
     @Test
+    func `clangd comes from the toolchain and skips background indexing`() {
+        let server = LanguageServerDescriptor.clangd
+        let configuration = LanguageServerSession.Configuration(
+            descriptor: server, serverExecutable: URL(filePath: "/usr/bin/clangd"),
+            workspaceRoot: URL(filePath: "/repo", directoryHint: .isDirectory))
+
+        #expect(configuration.serverArguments == ["--background-index=false"])
+        #expect(server.rootMarkers == ["compile_commands.json", ".clangd"])
+        #expect(
+            server.executableQuery(customPath: nil, overridePrefix: "GDV_")
+                == ExecutableQuery(names: ["clangd"], overrideVariable: "GDV_CLANGD", searchesToolchain: true))
+        #expect(server.runtimeExecutableName == nil)
+    }
+
+    @Test
+    func `rust-analyzer is found in cargo's directory, rooted at Cargo.toml, and builds nothing`() {
+        let server = LanguageServerDescriptor.rustAnalyzer
+        let options =
+            LanguageServerSession.Configuration(
+                descriptor: server, serverExecutable: URL(filePath: "/home/.cargo/bin/rust-analyzer"),
+                workspaceRoot: URL(filePath: "/repo", directoryHint: .isDirectory)
+            )
+            .initializationOptions
+
+        #expect(server.rootMarkers == ["Cargo.toml"])
+        #expect(server.homeRelativeDirectories.contains(".cargo/bin"))
+        #expect(server.executableQuery(customPath: nil, overridePrefix: "GDV_").overrideVariable == "GDV_RUST_ANALYZER")
+        #expect(
+            options
+                == .object([
+                    "cargo": .object(["buildScripts": .object(["enable": .bool(false)])]),
+                    "procMacro": .object(["enable": .bool(false)]),
+                    "cachePriming": .object(["enable": .bool(false)]), "checkOnSave": .bool(false)
+                ]))
+    }
+
+    @Test
+    func `basedpyright runs over stdio, rooted at pyrightconfig.json before pyproject.toml`() {
+        let server = LanguageServerDescriptor.basedPyright
+        let configuration = LanguageServerSession.Configuration(
+            descriptor: server, serverExecutable: URL(filePath: "/home/.local/bin/basedpyright-langserver"),
+            workspaceRoot: URL(filePath: "/repo", directoryHint: .isDirectory))
+
+        #expect(configuration.serverArguments == ["--stdio"])
+        #expect(server.executableNames == ["basedpyright-langserver"])
+        #expect(server.rootMarkers == ["pyrightconfig.json", "pyproject.toml"])
+        #expect(server.homeRelativeDirectories.contains(".local/bin"))
+        #expect(server.executableQuery(customPath: nil, overridePrefix: "GDV_").overrideVariable == "GDV_BASEDPYRIGHT")
+    }
+
+    @Test
     func `each language hover asks has one server at most`() {
         #expect(LanguageServerDescriptor.serving(.swift) == .sourceKitLSP)
         #expect(LanguageServerDescriptor.serving(.typescript) == .typeScriptLanguageServer)
         #expect(LanguageServerDescriptor.serving(.javascript) == .typeScriptLanguageServer)
         #expect(LanguageServerDescriptor.serving(.go) == .gopls)
-        #expect(LanguageServerDescriptor.serving(.python) == nil)
+        for language in [Language.c, .cpp, .objectiveC] {
+            #expect(LanguageServerDescriptor.serving(language) == .clangd)
+        }
+        #expect(LanguageServerDescriptor.serving(.rust) == .rustAnalyzer)
+        #expect(LanguageServerDescriptor.serving(.python) == .basedPyright)
+        #expect(LanguageServerDescriptor.serving(.kotlin) == nil)
         #expect(LanguageServerDescriptor.serving(.go, among: [.sourceKitLSP]) == nil)
         for language in Language.allCases {
             #expect(LanguageServerDescriptor.all.count { $0.languages.contains(language) } <= 1)
@@ -94,10 +150,38 @@ struct LanguageServerDescriptorTests {
 
     @Test(arguments: [
         ("a.ts", "typescript"), ("a.tsx", "typescriptreact"), ("a.mts", "typescript"), ("a.js", "javascript"),
-        ("a.JSX", "javascriptreact"), ("a.go", "go"), ("a.swift", "swift"), ("a.sh", "shellscript")
+        ("a.JSX", "javascriptreact"), ("a.go", "go"), ("a.swift", "swift"), ("a.sh", "shellscript"), ("a.c", "c"),
+        ("a.cpp", "cpp"), ("a.hpp", "cpp"), ("a.m", "objective-c"), ("a.mm", "objective-cpp"), ("a.rs", "rust"),
+        ("a.py", "python")
     ])
     func `a document's language ID follows its extension`(name: String, languageID: String) {
         #expect(LanguageServerDescriptor.languageID(forDocumentAt: URL(filePath: "/repo/" + name)) == languageID)
+    }
+
+    @Test(arguments: [
+        ("", "c"),
+        ("#include <stddef.h>\nsize_t count(const char *text);\n", "c"),
+        (
+            "#ifdef __cplusplus\nextern \"C\" {\n#endif\nint add(int a, int b);\n#ifdef __cplusplus\n}\n#endif\n",
+            "c"
+        ),
+        ("// Wraps std::vector for C callers.\n/*\n class Hidden;\n */\nvoid *make(void);\n", "c"),
+        ("#import <Foundation/Foundation.h>\nvoid log(void);\n", "objective-c"),
+        ("NS_ASSUME_NONNULL_BEGIN\n@interface Widget : NSObject\n@end\n", "objective-c"),
+        ("@import Foundation;\n@protocol Drawing\n@end\n", "objective-c"),
+        ("#pragma once\nnamespace geometry {\nstruct Point { int x; };\n}\n", "cpp"),
+        ("template <typename T>\nT twice(T value);\n", "cpp"),
+        ("class Shape {\npublic:\n  virtual ~Shape();\n};\n", "cpp"),
+        ("#include <string>\nstd::string name();\n", "cpp"),
+        (
+            "#import <Foundation/Foundation.h>\n#include <vector>\nclass Buffer;\n@interface Box : NSObject\n@end\n",
+            "objective-cpp"
+        )
+    ])
+    func `a header is sent as the language its content reads as`(content: String, languageID: String) {
+        let header = URL(filePath: "/repo/include/header.h")
+
+        #expect(LanguageServerDescriptor.languageID(forDocumentAt: header, content: content) == languageID)
     }
 
     // MARK: - Runtimes

@@ -4,8 +4,9 @@ public import Foundation
 /// A ``HoverProvider`` backed by language server sessions: one given session, or, per document, the session of the
 /// server that serves the document's language, at the document's root.
 ///
-/// The document's language and its language ID come from its path. A registry-backed provider answers nothing, and
-/// starts no server, for a language none of its servers serves, and for a document not on disk, such as a git blob's.
+/// The document's language and its language ID come from its path, and a `.h` header's from its content too. A
+/// registry-backed provider answers nothing, and starts no server, for a language none of its servers serves, and for
+/// a document not on disk, such as a git blob's.
 public struct LanguageServerHoverProvider: HoverProvider {
     private enum Sessions: Sendable {
         case fixed(LanguageServerSession, resolvesDocumentationPages: Bool)
@@ -54,7 +55,8 @@ public struct LanguageServerHoverProvider: HoverProvider {
                 resolvesDocumentationPages = server.resolvesDocumentationPages
         }
         let languageID =
-            document.map(LanguageServerDescriptor.languageID(forDocumentAt:)) ?? Language.plain.lspLanguageID
+            document.map { LanguageServerDescriptor.languageID(forDocumentAt: $0, content: query.content) }
+            ?? Language.plain.lspLanguageID
         guard
             let content =
                 await session.hover(
