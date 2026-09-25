@@ -56,7 +56,7 @@ package final class RenderPipeline {
     /// anything. The model compares them with the sides' own to tell a previous comparison kept on screen.
     package private(set) var publishedSources: Sources?
     /// Rows revealed around the gaps of what is published, keyed per file and gap.
-    package private(set) var gapExpansions: [GapKey: GapExpansion] = [:]
+    package internal(set) var gapExpansions: [GapKey: GapExpansion] = [:]
     package private(set) var error: String?
     /// Diffs of what is published, kept so layout changes and gap drags re-render without reloading or re-diffing.
     @ObservationIgnored package private(set) var prepared: [PreparedDiff] = []
@@ -185,26 +185,6 @@ package final class RenderPipeline {
         refresh(keepingScroll: keepingScroll)
     }
 
-    /// Reveals `expansion` around one gap and renders only the file it belongs to, at once on the main actor: one
-    /// file's cost per drag step, and no `.finished`, since nothing else changed.
-    package func setExpansion(_ expansion: GapExpansion, for key: GapKey) {
-        guard self.expansion(of: key) != expansion else { return }
-        gapExpansions[key] = expansion == GapExpansion() ? nil : expansion
-        guard let target, prepared.indices.contains(key.fileIndex) else { return }
-        rerender([key.fileIndex], of: target, keepingScroll: true)
-    }
-
-    /// Folds every revealed gap back to the context lines, keeping the scroll position.
-    package func resetGaps() {
-        guard !gapExpansions.isEmpty else { return }
-        gapExpansions = [:]
-        refresh(keepingScroll: true)
-    }
-
-    package func expansion(of key: GapKey) -> GapExpansion {
-        gapExpansions[key] ?? GapExpansion()
-    }
-
     /// Shelves what is published, the card list `published`, as the latest list, dropping the oldest past capacity.
     private func shelve(_ published: Target) {
         shelvedLists.removeAll { $0.target.showsSameFiles(as: published) }
@@ -274,7 +254,7 @@ package final class RenderPipeline {
     }
 
     /// Renders the published files at `indices` again, inline, under the current stamp.
-    private func rerender(_ indices: [Int], of target: Target, keepingScroll: Bool) {
+    func rerender(_ indices: [Int], of target: Target, keepingScroll: Bool) {
         let layout = renderLayout(for: target)
         let files = indices.filter { prepared.indices.contains($0) }
             .map { index -> (Int, Stamped) in
@@ -288,7 +268,7 @@ package final class RenderPipeline {
     /// Renders again, off the main actor, every published file whose stamp is out of date, and puts each back unless
     /// something newer took its place meanwhile: a render that replaced what is published, a newer relayout, or a gap
     /// drag on that file. Sends `.finished` once it lands, unless a render is in flight, which will.
-    private func refresh(keepingScroll: Bool) {
+    func refresh(keepingScroll: Bool) {
         relayoutTask?.cancel()
         relayoutGeneration += 1
         guard let target else { return }
