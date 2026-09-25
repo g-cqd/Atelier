@@ -98,13 +98,15 @@ struct HoverDocPanelLayoutTests {
         return broken
     }
 
-    @Test
-    func `every document shape lays the panel out with no conflict and no ambiguity`() throws {
+    @Test(arguments: HoverPanelMaterial.allCases)
+    func `every document shape lays the panel out with no conflict and no ambiguity`(
+        material: HoverPanelMaterial
+    ) throws {
         let panel = HoverDocPanel(ordersWindowIn: false)
         let appearance = try #require(NSAppearance(named: .aqua))
 
         for (name, document) in Self.shapes {
-            panel.prepareOffscreenForTests(document: document, appearance: appearance)
+            panel.prepareOffscreenForTests(document: document.presented(on: material), appearance: appearance)
             let root = try #require(panel.contentViewForTests)
             root.layoutSubtreeIfNeeded()
             var views: [NSView] = []
