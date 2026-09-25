@@ -58,20 +58,20 @@ struct QueryParserTests {
 
     @Test
     func `Parse parenthesized eq predicate`() throws {
-        let query = try QueryParser.parse("(#eq? @var \"self\")")
+        let query = try QueryParser.parse("((identifier) @var (#eq? @var \"self\"))")
         #expect(query.patterns.count == 1)
 
-        let (capture, value) = try requireEqPredicate(query.patterns[0])
+        let (capture, value) = try requireEqPredicate(try #require(try requireSequence(query.patterns[0]).last))
         #expect(capture == "@var")
         #expect(value == "self")
     }
 
     @Test
     func `Parse parenthesized match predicate`() throws {
-        let query = try QueryParser.parse("(#match? @comment \"NOTE\")")
+        let query = try QueryParser.parse("((comment) @comment (#match? @comment \"NOTE\"))")
         #expect(query.patterns.count == 1)
 
-        let (capture, pattern) = try requireMatchPredicate(query.patterns[0])
+        let (capture, pattern) = try requireMatchPredicate(try #require(try requireSequence(query.patterns[0]).last))
         #expect(capture == "@comment")
         #expect(pattern == "NOTE")
     }
@@ -130,6 +130,24 @@ struct QueryParserTests {
     func `A text predicate whose first argument is a quoted string is an error`() {
         #expect(throws: QueryError.self) { try QueryParser.parse(#"((identifier) @id (#eq? "@id" "self"))"#) }
         #expect(throws: QueryError.self) { try QueryParser.parse(#"((identifier) @id (#match? "@id" "^s"))"#) }
+    }
+
+    @Test
+    func `A predicate that names a capture no pattern has defined yet is an error at the capture`() {
+        #expect(throws: QueryError.invalidCapture("Unknown capture @other at line 2, column 24")) {
+            try QueryParser.parse("(pair\n  key: (_) @a (#eq? @a @other))")
+        }
+        #expect(throws: QueryError.invalidCapture("Unknown capture @late at line 1, column 12")) {
+            try QueryParser.parse("(foo (#eq? @late \"x\")) @late")
+        }
+    }
+
+    @Test
+    func `A predicate may name a capture an earlier pattern defined, as tree-sitter's query-wide captures allow`()
+        throws
+    {
+        let query = try QueryParser.parse("(string) @text\n((number) @n (#eq? @n @text))")
+        #expect(query.patterns.count == 2)
     }
 
     @Test

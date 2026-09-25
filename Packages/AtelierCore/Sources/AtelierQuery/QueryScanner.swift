@@ -3,6 +3,9 @@ struct QueryScanner: Sendable {
     var source: String
     var index: String.Index
     var depth: Int = 0
+    /// The capture names the text has defined so far, which a predicate may name: tree-sitter's query-wide capture
+    /// table, which grows as ts_query__parse_pattern reads each `@name` (lib/src/query.c).
+    var definedCaptures: Set<String> = []
 
     init(source: String) {
         self.source = source
@@ -138,6 +141,16 @@ struct QueryPosition: Sendable {
 
     /// A syntax error at this position.
     func syntaxError(_ message: String) -> QueryError {
+        .syntaxError("\(message) at \(lineAndColumn)")
+    }
+
+    /// A capture error at this position.
+    func invalidCapture(_ message: String) -> QueryError {
+        .invalidCapture("\(message) at \(lineAndColumn)")
+    }
+
+    /// "line L, column C".
+    private var lineAndColumn: String {
         var line = 1
         var column = 1
         for character in source[..<index] {
@@ -148,6 +161,6 @@ struct QueryPosition: Sendable {
                 column += 1
             }
         }
-        return .syntaxError("\(message) at line \(line), column \(column)")
+        return "line \(line), column \(column)"
     }
 }
