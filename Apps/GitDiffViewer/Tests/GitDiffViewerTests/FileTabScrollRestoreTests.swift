@@ -15,6 +15,15 @@ struct FileTabScrollRestoreTests {
         return try #require(DiffRenderer.render(oldText: lines, newText: lines, language: .plain).unified)
     }
 
+    /// `count` lines, every seventh wide enough to wrap in the pane, and to wrap onto more lines as it narrows.
+    private static func wrappingText(_ count: Int = 300) throws -> RenderedText {
+        let tail = String(repeating: "long ", count: 40)
+        let lines =
+            (1 ... count).map { $0.isMultiple(of: 7) ? "let value\($0) = \(tail)" : "let value\($0) = \($0)" }
+            .joined(separator: "\n") + "\n"
+        return try #require(DiffRenderer.render(oldText: lines, newText: lines, language: .plain).unified)
+    }
+
     private func makeMemory(retaining paths: Set<String> = ["a.swift"]) -> PaneScrollMemory {
         let memory = PaneScrollMemory()
         memory.retain(paths: paths)
@@ -53,6 +62,61 @@ struct FileTabScrollRestoreTests {
         #expect(sut.top()?.row == before.row)
     }
 
+    /// A file that fits its pane opens at its top, whole (book DIFF-08), unless it comes back to a position: in a pane
+    /// that scrolls past its end, a file that fits still scrolls.
+    @Test
+    func `a file that fits its pane comes back where it was scrolled, not to its top`() throws {
+        let memory = makeMemory()
+        let sut = HostedTabPane(memory: memory)
+        sut.show(try Self.text(12), path: "a.swift", scrollsPastEnd: true)
+        sut.scroll(to: 60)
+        let before = try #require(sut.top())
+        #expect(sut.scrollOffset == 60)
+
+        sut.showList()
+        sut.show(try Self.text(12), path: "a.swift", scrollsPastEnd: true)
+
+        #expect(abs(sut.scrollOffset - 60) < 1)
+        #expect(sut.top()?.row == before.row)
+    }
+
+    /// A pane made while the detail area has no size yet comes back to its position once it has one.
+    @Test
+    func `a file pane made before it has a size comes back where it was once it has one`() throws {
+        let memory = makeMemory()
+        let sut = HostedTabPane(memory: memory)
+        sut.show(try Self.text(), path: "a.swift")
+        sut.scroll(to: 2_005)
+        let before = try #require(sut.top())
+
+        sut.showList()
+        sut.show(try Self.text(), path: "a.swift", height: 0)
+        sut.resize(height: 300)
+
+        let after = try #require(sut.top())
+        #expect(after.row == before.row)
+        #expect(abs(after.offset - before.offset) < 1)
+    }
+
+    /// A narrower pane wraps the lines anew, and TextKit lays out what shows from estimates of the rows above it: the
+    /// row the pane came back to stays at its top, as long as nothing scrolled the pane since.
+    @Test
+    func `a file pane that came back to its row keeps it at its top as the pane narrows`() throws {
+        let memory = makeMemory()
+        let sut = HostedTabPane(memory: memory)
+        sut.show(try Self.wrappingText(), path: "a.swift", wrapsLines: true)
+        sut.scroll(to: 4_005)
+        let before = try #require(sut.top())
+
+        sut.showList()
+        sut.show(try Self.wrappingText(), path: "a.swift", wrapsLines: true)
+        sut.resize(width: 420, height: 300)
+
+        let after = try #require(sut.top())
+        #expect(after.row == before.row)
+        #expect(abs(after.offset - before.offset) < 1)
+    }
+
     @Test
     func `a file whose tab closed shows from its top again`() throws {
         let memory = makeMemory()
@@ -79,9 +143,14 @@ private final class HostedTabPane {
     /// The file pane, or nothing, as the detail area swaps a file for the card list.
     struct Slot: View {
         var pane: DiffTextView?
+        var width: CGFloat?
+        var height: CGFloat = 300
 
         var body: some View {
-            if let pane { pane } else { Color.clear }
+            VStack(alignment: .leading, spacing: 0) {
+                if let pane { pane.frame(width: width, height: height) } else { Color.clear }
+                Spacer(minLength: 0)
+            }
         }
     }
 
@@ -100,12 +169,23 @@ private final class HostedTabPane {
 
     var scrollOffset: CGFloat { clipView?.bounds.minY ?? -1 }
 
-    /// Shows a new render of the file at `path`, as opening its tab does.
-    func show(_ rendered: RenderedText, path: String, wrapsLines: Bool = false) {
+    /// Shows a new render of the file at `path`, as opening its tab does, in a detail area `height` points tall.
+    func show(
+        _ rendered: RenderedText, path: String, wrapsLines: Bool = false, scrollsPastEnd: Bool = false,
+        height: CGFloat = 300
+    ) {
         host.rootView = Slot(
             pane: DiffTextView(
                 rendered: rendered, gutter: .dual, wrapsLines: wrapsLines, scrollMemory: memory,
-                scrollMemoryPath: path))
+                scrollMemoryPath: path, scrollsPastEnd: scrollsPastEnd),
+            height: height)
+        settle()
+    }
+
+    /// Gives the detail area a new size, as the split view does once it lays the window out.
+    func resize(width: CGFloat? = nil, height: CGFloat) {
+        host.rootView.width = width
+        host.rootView.height = height
         settle()
     }
 
@@ -136,13 +216,18 @@ private final class HostedTabPane {
         return (row, offset)
     }
 
-    /// Lays out and displays what needs it, and lets the run loop turn once, as it does between two events.
+    /// Lays out and displays what needs it, and lets the run loop turn once, as it does between two events; then
+    /// lays out again as long as the text view asks for it, as the display cycles that follow do: a row the pane
+    /// places is checked in the pass after it.
     private func settle() {
         host.layoutSubtreeIfNeeded()
         window.displayIfNeeded()
         CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 0, true)
-        host.layoutSubtreeIfNeeded()
-        window.displayIfNeeded()
+        for _ in 0 ..< 4 {
+            host.layoutSubtreeIfNeeded()
+            window.displayIfNeeded()
+            guard textView?.needsLayout == true else { break }
+        }
     }
 
     private static func first<View: NSView>(_ type: View.Type, in view: NSView) -> View? {

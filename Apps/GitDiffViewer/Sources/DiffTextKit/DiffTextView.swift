@@ -244,8 +244,6 @@ package final class DiffTextViewCoordinator: NSObject {
     package var scrollMemory: PaneScrollMemory?
     /// The key the text on show is remembered under.
     var memoryKey: PaneScrollMemory.Key?
-    /// A remembered position waiting for the pane to be given a size to scroll in.
-    var pendingPosition: PaneScrollPosition?
     /// The diagnostics this pane draws: one overlay for the pane's lifetime, which every fragment and the gutter
     /// hold, and into which ``updateDiagnostics(_:version:)`` copies the caller's rows. A fragment keeps the overlay
     /// it was laid out with, so an overlay passed in place of another would reach new fragments only.
@@ -261,11 +259,10 @@ package final class DiffTextViewCoordinator: NSObject {
     /// Whether the pane scrolls past the end of its text until the last line reaches the top; otherwise it stops with
     /// the last line at the bottom. See ``updateOverscroll(in:)``.
     package var scrollsPastEnd = false
-    /// The row ``scroll(toRow:in:centered:)`` asked for, placed at the end of the text view's layout passes until it
-    /// stays where it was placed.
+    /// The row asked for, or the position a file comes back to, placed at the end of the text view's next layout pass.
     var pendingScroll: RowPlacement?
-    /// The row placed last, and where the pane was scrolled for it, until the split view's alignment of the rows moves
-    /// it; see ``rowsDidAlign()``.
+    /// The row placed last, and where the pane was scrolled for it, placed again when the split view aligns the rows or
+    /// the pane takes a new size, unless it has been scrolled since; see ``placeAgainUnlessScrolled()``.
     var placedRow: (placement: RowPlacement, y: CGFloat)?
 
     package override init() {
@@ -471,8 +468,7 @@ package final class DiffTextViewCoordinator: NSObject {
         guard let clipView = notification.object as? NSClipView else { return }
         metrics.width = max(clipView.bounds.width, textView?.frame.width ?? 0)
         updateOverscroll(in: clipView)
-        if let pendingPosition { restore(pendingPosition) }
-        if pendingScroll != nil { textView?.needsLayout = true }
+        if pendingScroll != nil { textView?.needsLayout = true } else { placeAgainUnlessScrolled() }
         splitController?.scheduleAlignment()
     }
 
