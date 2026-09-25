@@ -2,6 +2,7 @@ import AemiCore
 import AemiTesting
 import AtelierText
 import Foundation
+import KittyFileTree
 import KittyRenderer
 import KittyStyle
 import KittySyntax
@@ -230,6 +231,52 @@ struct EditorLargeFileBenchmark {
         print("BENCH reload a changed file, main actor, 1M lines: \(Self.summary(samples))")
     }
 
+    /// The main actor's share of the file watcher reloading a changed million-line tab whose undo history holds the
+    /// text an earlier reload replaced: the reload installs the new text and clears that history, a whole rope of its
+    /// own. The watcher's read returns the new text at once, so the time is the main actor's.
+    @Test func `a watcher reload of a million-line tab with undo history`() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "watcher-bench-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let path = directory.appending(path: "large.swift").path
+        try Data(Self.text.utf8).write(to: URL(fileURLWithPath: path))
+        let loadedFile = try WorkspaceFileLoading.decode(Data(Self.text.utf8))
+        let reloaded = try WorkspaceFileLoading.decode(Data((Self.text + "\n// reloaded").utf8))
+        let changed = try WorkspaceFileLoading.decode(Data((Self.text + "\n// changed on disk").utf8))
+        let clock = ContinuousClock()
+        var samples: [Duration] = []
+        for _ in 0 ..< 11 {
+            let tasks = TaskProviderSpy(defaultTimeout: .seconds(600))
+            let state = EditorState(
+                rootPath: directory.path, config: KittyConfig(), taskProvider: tasks,
+                searchPool: EditorTestPool.shared)
+            state.lastRenderRows = 60
+            state.finishOpeningFile(
+                requestID: state.nextOpenRequestID(), path: path, name: "large.swift", loadedFile: loadedFile,
+                language: "swift", modificationDate: nil)
+            try await tasks.waitForAllTasks()
+            let buffer = try #require(state.bufferManager.activeBuffer)
+            // An earlier reload, whose undo step holds the text it replaced.
+            let earlier = try await buffer.reloadFromDisk(
+                offloadFileRead: { _ in reloaded }, syncLiveState: { state.saveStateToActiveBuffer() })
+            let (file, replaced) = try #require(consume earlier)
+            state.fileWatcherDidReloadActiveBuffer(buffer: buffer, content: file.content, replaced: consume replaced)
+            try await tasks.waitForAllTasks()
+            #expect(buffer.editHistory.hasUndo)
+            // The file changed on disk since the buffer read it.
+            buffer.lastModifiedDate = .distantPast
+            let integration = FileWatcherIntegration(
+                watcher: IdleFileWatcher(), workspace: state.workspace, delegate: state,
+                offloadFileRead: { _ in changed }, taskProvider: tasks)
+            samples.append(await clock.measure { await integration.reconcileWithDisk(buffer) })
+            #expect(!buffer.editHistory.hasUndo)
+            // The post-load pass lands before the next sample.
+            try await tasks.waitForAllTasks()
+            state.shutdown()
+        }
+        print("BENCH watcher reload of a tab with undo history, main actor, 1M lines: \(Self.summary(samples))")
+    }
+
     /// A short Swift file opened through the open path once its read has finished, as a click in the tree does: the
     /// open saves the active buffer's state first, then installs the file.
     private func openSmallFile(in state: EditorState, tasks: TaskProviderSpy) async throws {
@@ -317,4 +364,14 @@ struct EditorLargeFileBenchmark {
         }
         print("BENCH reload a changed file in an inactive tab, main actor, 1M lines: \(Self.summary(samples))")
     }
+}
+
+/// A watcher that reports nothing, for a benchmark that calls the integration's reconcile itself.
+private struct IdleFileWatcher: FileWatching {
+    var events: AsyncStream<FileWatcher.FileWatchEvent> { AsyncStream { $0.finish() } }
+    func watchDirectory(_ path: String) async {}
+    func watchFile(_ path: String) async {}
+    func unwatchFile(_ path: String) async {}
+    func suppressNotifications(for path: String) {}
+    func stop() async {}
 }
