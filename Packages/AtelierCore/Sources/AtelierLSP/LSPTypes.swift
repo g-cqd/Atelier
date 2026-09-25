@@ -209,3 +209,27 @@ public struct CancelParams: Sendable, Encodable {
         self.id = id
     }
 }
+
+/// One symbol of sourcekit-lsp's `textDocument/symbolInfo` answer, which the LSP extension clangd started: the
+/// fields a documentation page needs.
+public struct SymbolDetails: Sendable, Decodable, Equatable {
+    /// Where a system symbol is declared; sourcekit-lsp names a submodule after its module, as
+    /// `Foundation.NSFileManager`.
+    public struct SystemModule: Sendable, Decodable, Equatable {
+        public let moduleName: String
+
+        public init(moduleName: String) {
+            self.moduleName = moduleName
+        }
+    }
+
+    /// The symbol's name, a function's with its argument labels, as `contents(atPath:)`.
+    public let name: String?
+    /// Set only for a symbol a module without sources declares, such as the SDK's.
+    public let systemModule: SystemModule?
+
+    public init(name: String?, systemModule: SystemModule?) {
+        self.name = name
+        self.systemModule = systemModule
+    }
+}

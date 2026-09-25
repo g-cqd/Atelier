@@ -38,6 +38,8 @@ public actor SDKDocumentationProvider: HoverProvider {
 
     private let makeSession: SessionFactory
     private let cacheCapacity: Int
+    /// Whether an answer carries the symbol's page in Apple's developer documentation.
+    private let resolvesDocumentationPages: Bool
 
     private var sessions: [SDKPlatform: Session] = [:]
     /// Set by ``shutdown()``: no session is made afterwards.
@@ -59,14 +61,25 @@ public actor SDKDocumentationProvider: HoverProvider {
     }
 
     /// A provider over the sessions `makeSession` makes, one per platform, each on the platform's first hover.
-    public init(sessions makeSession: @escaping SessionFactory, cacheCapacity: Int = 256) {
+    /// - Parameters:
+    ///   - makeSession: Makes a platform's session, or nil when the platform has none.
+    ///   - cacheCapacity: How many answers, misses included, the provider keeps.
+    ///   - resolvesDocumentationPages: Whether an answer carries the symbol's page in Apple's developer documentation,
+    ///     which takes the probe's session one or two more requests after its hover.
+    public init(
+        sessions makeSession: @escaping SessionFactory, cacheCapacity: Int = 256,
+        resolvesDocumentationPages: Bool = false
+    ) {
         self.makeSession = makeSession
         self.cacheCapacity = cacheCapacity
+        self.resolvesDocumentationPages = resolvesDocumentationPages
     }
 
     /// A provider that resolves every platform's probes through `service`.
-    public init(service: SourceKitLSPService, cacheCapacity: Int = 256) {
-        self.init(sessions: { _ in service }, cacheCapacity: cacheCapacity)
+    public init(service: SourceKitLSPService, cacheCapacity: Int = 256, resolvesDocumentationPages: Bool = false) {
+        self.init(
+            sessions: { _ in service }, cacheCapacity: cacheCapacity,
+            resolvesDocumentationPages: resolvesDocumentationPages)
     }
 
     public func hover(_ query: HoverQuery) async throws -> HoverContent? {
@@ -225,7 +238,11 @@ public actor SDKDocumentationProvider: HoverProvider {
         let outcome = await service.hover(
             uri: uri, languageID: "swift", content: content, line: probeLineIndex, utf16Column: column)
         guard case .answered(let hover?) = outcome else { return outcome }
-        return .answered(HoverContent(markdown: hover.markdown, source: .sdk))
+        let page =
+            resolvesDocumentationPages
+            ? await service.documentationPage(
+                uri: uri, languageID: "swift", content: content, line: probeLineIndex, utf16Column: column) : nil
+        return .answered(HoverContent(markdown: hover.markdown, source: .sdk, documentationPage: page))
     }
 
     /// The UTF-16 offset, within `chain`, of its last dot-separated segment's first character; `0` when `chain`
@@ -407,22 +424,25 @@ extension SDKDocumentationProvider {
     /// empty directory serves as sourcekit-lsp's `rootUri`. The caller owns the directory, and removes it once
     /// ``shutdown()`` has returned. `locateSDK` finds a platform's SDK when its session is first needed, for every
     /// platform but the Mac, whose SDK the server finds itself; a platform whose SDK it does not find has no session.
+    /// `resolvesDocumentationPages` makes each answer carry its symbol's page in Apple's developer documentation.
     public static func scratch(
         serverExecutable: URL, probeDirectory: URL,
         locateSDK: @escaping @Sendable (SDKPlatform) async -> SDKLocation?,
-        idleShutdown: Duration = .seconds(180), requestTimeout: Duration = .seconds(2)
+        idleShutdown: Duration = .seconds(180), requestTimeout: Duration = .seconds(2),
+        resolvesDocumentationPages: Bool = false
     ) -> SDKDocumentationProvider {
-        SDKDocumentationProvider(sessions: { platform in
-            var sdk: SDKLocation?
-            if platform != .macOS {
-                guard let located = await locateSDK(platform) else { return nil }
-                sdk = located
-            }
-            return SourceKitLSPService(
-                configuration: scratchConfiguration(
-                    for: platform, sdk: sdk, serverExecutable: serverExecutable, probeDirectory: probeDirectory,
-                    idleShutdown: idleShutdown, requestTimeout: requestTimeout))
-        })
+        SDKDocumentationProvider(
+            sessions: { platform in
+                var sdk: SDKLocation?
+                if platform != .macOS {
+                    guard let located = await locateSDK(platform) else { return nil }
+                    sdk = located
+                }
+                return SourceKitLSPService(
+                    configuration: scratchConfiguration(
+                        for: platform, sdk: sdk, serverExecutable: serverExecutable, probeDirectory: probeDirectory,
+                        idleShutdown: idleShutdown, requestTimeout: requestTimeout))
+            }, resolvesDocumentationPages: resolvesDocumentationPages)
     }
 
     /// The configuration of `platform`'s scratch session: background indexing off, as for every hover session, and,

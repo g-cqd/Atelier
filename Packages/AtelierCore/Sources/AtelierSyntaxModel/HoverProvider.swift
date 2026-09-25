@@ -29,13 +29,30 @@ public struct HoverContent: Sendable, Equatable {
         case sdk
     }
 
+    /// A system symbol's page in Apple's developer documentation: the module that documents it, and the symbol's
+    /// path in that module, each type it is nested in first, as `Foundation` and `["FileManager", "default"]`.
+    public struct DocumentationPage: Sendable, Equatable {
+        public let module: String
+        /// The symbol's name last, with its argument labels, as `contents(atPath:)`.
+        public let path: [String]
+
+        public init(module: String, path: [String]) {
+            self.module = module
+            self.path = path
+        }
+    }
+
     /// Markdown, possibly with fenced code blocks.
     public let markdown: String
     public let source: Source
+    /// The symbol's page in Apple's developer documentation, when the tier knows it is a system symbol and where
+    /// the documentation puts it; nil otherwise.
+    public let documentationPage: DocumentationPage?
 
-    public init(markdown: String, source: Source) {
+    public init(markdown: String, source: Source, documentationPage: DocumentationPage? = nil) {
         self.markdown = markdown
         self.source = source
+        self.documentationPage = documentationPage
     }
 }
 

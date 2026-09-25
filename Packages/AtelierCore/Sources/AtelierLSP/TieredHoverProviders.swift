@@ -45,7 +45,9 @@ public struct TieredHoverProviders: HoverProvider {
             guard let baseDeclaration = HoverContentQuality.leadingFencedBlock(existingBase.markdown) else {
                 return content
             }
-            return HoverContent(markdown: baseDeclaration + "\n\n" + content.markdown, source: content.source)
+            return HoverContent(
+                markdown: baseDeclaration + "\n\n" + content.markdown, source: content.source,
+                documentationPage: content.documentationPage ?? existingBase.documentationPage)
         }
         return base
     }
