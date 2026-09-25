@@ -63,6 +63,11 @@ package final class DiffViewerModel {
     @ObservationIgnored private var treesGeneration = 0
     @ObservationIgnored var diagnosticsTask: Task<Void, Never>?
     @ObservationIgnored var diagnosticsGeneration = 0
+    /// ``diagnosticFilePathMaps`` of the pipeline's target at a ``RenderPipeline/targetVersion``, which a pane per card
+    /// reads on every findings change.
+    @ObservationIgnored var diagnosticFilePathCache: (targetVersion: Int, paths: DiagnosticFilePaths)?
+    /// How many times ``diagnosticFilePathMaps`` built its maps rather than reading them from its cache.
+    @ObservationIgnored package internal(set) var diagnosticFilePathBuilds = 0
     /// Sides whose last listing failed. While one has, the comparison keeps what is published, and
     /// ``shownComparison`` marks it with the failure.
     var failedLoads: Set<Side> = []

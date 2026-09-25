@@ -19,3 +19,20 @@ package enum DiagnosticFileIndex {
                 })
     }
 }
+
+/// Both sides' maps of one render target, which ``DiffViewerModel/diagnosticFilePathMaps`` builds once per target.
+package struct DiagnosticFilePaths: Equatable, Sendable {
+    /// Each file index's right-side path; see ``DiagnosticFileIndex/paths(for:)``.
+    package let right: [Int: String]
+    /// Each file index's left-side path; see ``DiagnosticFileIndex/leftPaths(for:)``.
+    package let left: [Int: String]
+
+    package init(right: [Int: String], left: [Int: String]) {
+        self.right = right
+        self.left = left
+    }
+
+    package init(for pairs: [FilePair]) {
+        self.init(right: DiagnosticFileIndex.paths(for: pairs), left: DiagnosticFileIndex.leftPaths(for: pairs))
+    }
+}

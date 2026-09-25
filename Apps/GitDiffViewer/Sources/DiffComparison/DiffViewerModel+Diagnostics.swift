@@ -21,8 +21,17 @@ extension DiffViewerModel {
 
     /// Maps each rendered row's `fileIndex` to the path its findings are keyed under, from the pairs behind the
     /// current render target.
-    package var diagnosticFilePaths: [Int: String] {
-        DiagnosticFileIndex.paths(for: pipeline.target?.pairs ?? [])
+    package var diagnosticFilePaths: [Int: String] { diagnosticFilePathMaps.right }
+
+    /// Both sides' file-index-to-path maps of the current render target, built once per target: every pane reads
+    /// them on every findings change, so building them per read costs a card list the square of its card count.
+    /// - Complexity: O(1) while the target is unchanged, O(files) after it changes.
+    package var diagnosticFilePathMaps: DiagnosticFilePaths {
+        if let cache = diagnosticFilePathCache, cache.targetVersion == pipeline.targetVersion { return cache.paths }
+        let paths = DiagnosticFilePaths(for: pipeline.target?.pairs ?? [])
+        diagnosticFilePathCache = (pipeline.targetVersion, paths)
+        diagnosticFilePathBuilds += 1
+        return paths
     }
 
     // MARK: Hover documentation

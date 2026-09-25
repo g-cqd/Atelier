@@ -31,6 +31,24 @@ struct DiffViewerModelDiagnosticsTests {
     }
 
     @Test
+    func `diagnosticFilePaths follows the render target from the card list to one of its files`() async throws {
+        let sut = harness.makeSUT()
+        harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [
+            harness.entry("a.swift", "1"), harness.entry("b.swift", "1")
+        ]
+        harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [
+            harness.entry("a.swift", "2"), harness.entry("b.swift", "2")
+        ]
+        try await harness.load(sut)
+        try #require(sut.diagnosticFilePaths == [0: "a.swift", 1: "b.swift"])
+
+        sut.select("b.swift")
+
+        #expect(sut.diagnosticFilePaths == [0: "b.swift"])
+        #expect(sut.diagnosticLeftFilePaths == [0: "b.swift"])
+    }
+
+    @Test
     func `diagnosticFilePaths is empty with nothing rendered`() {
         let sut = harness.makeSUT()
 
