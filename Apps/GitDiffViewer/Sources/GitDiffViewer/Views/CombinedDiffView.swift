@@ -75,6 +75,7 @@ private struct PaneOptions: Equatable {
     let layout: CardLayout
     let wrapMode: WrapMode
     let showsHover: Bool
+    let bouncesAtEdges: Bool
 }
 
 /// A card's fold state and pane options, read apart from its title so a fold never recomputes the title.
@@ -95,7 +96,8 @@ private struct FileCardFrame: View {
                 options: PaneOptions(
                     layout: settings.mode.cardLayout,
                     wrapMode: WrapMode(wrapsLines: settings.wrapsLines, column: settings.wrapColumn),
-                    showsHover: settings.showsHoverDocumentation && model.hoverDocs != nil),
+                    showsHover: settings.showsHoverDocumentation && model.hoverDocs != nil,
+                    bouncesAtEdges: settings.bouncesAtEdges),
                 model: model)
         )
         // Set here, in the list's own graph, so a fold animates wherever it starts: an animation begun in the
@@ -443,7 +445,8 @@ private struct FileCardBody: View {
         EmbeddedDiffTextView(
             layouts: content.layouts, side: side, gutter: gutter, width: width, wrapMode: options.wrapMode,
             onGapDrag: content.drag, onDisplayed: content.displayed,
-            hoverEnabled: options.showsHover, hoverResolver: content.hoverResolver)
+            hoverEnabled: options.showsHover, hoverResolver: content.hoverResolver,
+            bouncesAtEdges: options.bouncesAtEdges)
     }
 }
 
