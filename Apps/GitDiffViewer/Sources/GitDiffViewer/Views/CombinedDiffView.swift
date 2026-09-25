@@ -453,7 +453,7 @@ private struct CardPane: View {
             diagnosticOverlay: model.settings.diagnosticsEnabled ? diagnostics.overlay : nil,
             diagnosticsVersion: diagnostics.version, onDiagnosticClick: diagnostics.showFindings
         )
-        .refined(with: model.refinedSides(for: layout?.rendered))
+        .decorated(with: model.decorations(for: layout?.rendered), viewport: model.decorationViewport)
         if let rendered = layout?.rendered {
             pane.followingDiagnostics(of: rendered, in: model, into: diagnostics)
         } else {

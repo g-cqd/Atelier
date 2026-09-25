@@ -36,8 +36,10 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     /// Called with a row's findings and the clicked line number's frame, in the gutter's coordinates.
     package var onDiagnosticClick:
         ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)?
-    /// Colours a tier after the lexer found for the text's sides, drawn over the lexer's (``refined(with:)``).
-    package var refinedSides: RefinedSides?
+    /// What the stages after the text found for its sides, drawn over it as they land (``decorated(with:viewport:)``).
+    package var decorations: DiffDecorations?
+    /// Where the pane reports the rows it shows, so they are decorated first.
+    package var viewport: DecorationViewport?
 
     package init(
         layouts: CardLayouts, side: RenderedSide, gutter: GutterStyle, width: CGFloat, wrapMode: WrapMode = .viewport,
@@ -123,7 +125,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         context.coordinator.textView = textView
         context.coordinator.gutterView = gutterView
         if let layoutManager = textView.textLayoutManager {
-            context.coordinator.refinedColors.install(on: layoutManager, retainsLayout: true)
+            context.coordinator.decorationStore.install(on: layoutManager, retainsLayout: true)
         }
         context.coordinator.hoverController.attach(to: textView) { [weak coordinator = context.coordinator] in
             coordinator?.layout?.rendered
@@ -138,6 +140,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
 
     package static func dismantleNSView(_ pane: DiffPaneView, coordinator: Coordinator) {
         coordinator.hoverController.detach()
+        coordinator.report(to: nil)
         coordinator.detach()
     }
 
@@ -167,7 +170,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         coordinator.hoverController.resolve = hoverResolver
         coordinator.hoverController.panelMaterial = hoverPanelMaterial
         coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
-        coordinator.refinedColors.update(rendered: layout.rendered, sides: refinedSides, view: textView)
+        coordinator.decorationStore.update(rendered: layout.rendered, decorations: decorations, view: textView)
+        coordinator.report(to: viewport)
     }
 
     /// Sizes the text view to the layout. Lines that fit take the clip view's width exactly and follow it: the width
@@ -222,8 +226,10 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         package let hoverController = DocHoverController()
         /// The storage the text view shows until it shows a layout's.
         let emptyStorage = NSTextContentStorage()
-        /// The colours drawn over the lexer's once a later tier lands (PERF-11).
-        package let refinedColors = RefinedColors()
+        /// The decorations drawn over the plain text as the stages after it land (PERF-09).
+        package let decorationStore = DecorationStore()
+        /// Where the pane reports its visible rows, and the text it reported them for.
+        private var reported: (viewport: DecorationViewport, textID: UUID)?
         /// The diagnostics this pane draws, which its gutter and every fragment its text view lays out hold.
         package let diagnostics = PaneDiagnosticsDisplay()
 
@@ -232,8 +238,9 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         package func attach(_ layout: StaticTextLayout) {
             guard let textView, let layoutManager = textView.textLayoutManager else { return }
             layoutManager.textContentManager?.removeTextLayoutManager(layoutManager)
-            // Before the view lays anything out, so each fragment it makes draws this pane's diagnostics.
+            // Before the view lays anything out, so each fragment it makes draws this pane's diagnostics and decorations.
             layout.fragmentProvider.overlay = diagnostics.overlay
+            layout.fragmentProvider.decorations = decorationStore.snapshot
             layout.contentStorage.addTextLayoutManager(layoutManager)
             layoutManager.delegate = layout.fragmentProvider
             // The layout's space above its first row, the band of a gap at the top of the file among it.
@@ -258,6 +265,31 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
             gutterView?.redrawDiagnostics(ofRows: changed)
             guard let layout else { return }
             textView?.redrawDiagnostics(ofRows: changed, in: layout.rendered)
+        }
+
+        /// Reports the rows the pane shows to `viewport`, read when asked, for the text on show; nil stops reporting.
+        package func report(to viewport: DecorationViewport?) {
+            let textID = layout?.rendered.id
+            guard reported?.viewport !== viewport || reported?.textID != textID else { return }
+            if let reported { reported.viewport.unregister(reported.textID) }
+            reported = nil
+            guard let viewport, let textID else { return }
+            viewport.register(textID) { [weak self] in self?.visibleRows() }
+            reported = (viewport, textID)
+        }
+
+        /// The rows of the card the window shows, estimated from the part of the text view visible through every
+        /// scroll view around it, one line a row: enough to decorate what shows first. Nil off-window or unseen.
+        func visibleRows() -> Range<Int>? {
+            guard let textView, textView.window != nil, let layout, !layout.rendered.rows.isEmpty else { return nil }
+            let rect = textView.visibleRect
+            guard !rect.isEmpty else { return nil }
+            let rendered = layout.rendered
+            let lastRow = rendered.rows.count - 1
+            let height = max(rendered.lineHeight, 1)
+            let first = min(Int(max(rect.minY - layout.inset, 0) / height), lastRow)
+            let last = min(max(Int(max(rect.maxY - layout.inset, 0) / height), first), lastRow)
+            return first ..< last + 1
         }
 
         /// Leaves the shared storage, which would otherwise keep a dismantled pane's layout manager alive and

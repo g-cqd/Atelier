@@ -251,12 +251,13 @@ struct BidiControlTests {
             oldText: "abc\(Self.rlo)def\(Self.pdf)ghi\n", newText: "abc\(Self.rlo)Xef\(Self.pdf)ghi\n",
             language: .plain, granularity: .character)
         let new = try #require(diff.new)
-        var emphasis: [NSRange] = []
-        let whole = NSRange(location: 0, length: new.attributed.length)
-        new.attributed.enumerateAttribute(.diffEmphasis, in: whole) { value, range, _ in
-            if value != nil { emphasis.append(range) }
-        }
-        try #require(emphasis == [NSRange(location: 4, length: 1)])
+        // The emphasis the diff's phases find, which the row's fragment draws from its decorations (PERF-09).
+        let model = DiffModel(
+            oldText: "abc\(Self.rlo)def\(Self.pdf)ghi\n", newText: "abc\(Self.rlo)Xef\(Self.pdf)ghi\n",
+            granularity: .character, tokenRanges: CodeTokenRanges())
+        let emphasis = try #require(model.splitRows.first?.new?.emphasis)
+        let decorations = DiffDecorations(new: .init(emphasis: [0: emphasis]), markVersion: 1)
+        try #require(decorations.emphasis(of: try #require(new.rows.first), on: .new) == [4 ..< 5])
         let textView = try paneTextView(showing: new)
         let line = try firstLine(in: #require(textView.textLayoutManager))
 

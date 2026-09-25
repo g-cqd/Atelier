@@ -78,8 +78,12 @@ struct PipelineBenchmark {
             }
             _ = timings.time("highlight tokens", name) {
                 (
-                    DiffRenderer.tokensByLine(text: old, lines: model.oldLines, language: language),
-                    DiffRenderer.tokensByLine(text: new, lines: model.newLines, language: language)
+                    DecorationFixtures.byLine(
+                        LexicalHighlightEngine().highlight(utf8: Array(old.utf8), language: language), text: old,
+                        lines: model.oldLines),
+                    DecorationFixtures.byLine(
+                        LexicalHighlightEngine().highlight(utf8: Array(new.utf8), language: language), text: new,
+                        lines: model.newLines)
                 )
             }
             prepared.append(

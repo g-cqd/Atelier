@@ -25,7 +25,7 @@ struct SyntaxFactsSharingTests {
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider, store: store)
         sut = RenderPipeline(
             preparer: preparer, taskProvider: taskProvider, options: DiffRenderer.Options(sides: [.old, .new]),
-            refinement: SwiftColorRefinement(tiers: RefinedSides.tiers(store: store), clock: TestClock()))
+            decorator: DiffDecorator(tiers: DiffDecorations.tiers(store: store), clock: TestClock()))
         reader.blobContents["old"] = Self.old
         reader.blobContents["new"] = Self.new
     }
@@ -44,9 +44,10 @@ struct SyntaxFactsSharingTests {
             granularity: .syntax, heuristics: DiffHeuristics(), keepingPublished: false)
         try await taskProvider.waitForAllTasks()
         let file = try #require(sut.file)
-        #expect(store.extractions == 2)
+        // Nothing is parsed before the text is drawn: the syntax granularity's emphasis comes after it (PERF-09).
+        #expect(store.extractions == 0)
 
-        sut.refineDisplayed(file.id)
+        sut.decorateDisplayed(file.id)
         try await taskProvider.waitForAllTasks()
         let index = DocCommentIndex(store: store)
         try await index.upsert([
@@ -56,12 +57,12 @@ struct SyntaxFactsSharingTests {
 
         let new = try #require(file.new)
         #expect(store.extractions == 2)
-        #expect(sut.refinedSides(forText: new.id) != nil)
+        #expect(sut.decorations(forText: new.id)?.new.emphasis.isEmpty == false)
         #expect(await index.documentation(forIdentifier: "greet", preferringURI: nil, side: .new).count == 1)
     }
 
     @Test
-    func `the intraline emphasis read from the facts is the one the side's own parse gives`() {
+    func `the intraline emphasis read from the facts is the one the side's own parse gives`() async throws {
         let stored = PreparedDiff(
             FileDiffInput(
                 title: "a.swift", oldText: Self.old, newText: Self.new, language: .swift,
@@ -71,9 +72,18 @@ struct SyntaxFactsSharingTests {
             FileDiffInput(title: "a.swift", oldText: Self.old, newText: Self.new, language: .swift),
             granularity: .syntax)
 
-        let emphasis = { (diff: PreparedDiff) in diff.model.splitRows.map { [$0.old?.emphasis, $0.new?.emphasis] } }
-        #expect(emphasis(stored) == emphasis(parsed))
-        #expect(emphasis(stored).joined().contains { !($0 ?? []).isEmpty })
+        /// Every change's emphasis at the syntax granularity, as the pipeline finds it once the text is drawn.
+        func emphasis(_ diff: PreparedDiff) async throws -> [Int: ChangeEmphasis] {
+            let structure = diff.model.structure
+            return try await IntralineEmphasis.emphasis(
+                for: Array(structure.changes.indices), in: structure, pairs: diff.model.changePairs,
+                old: SubstringLines(diff.model.oldLines), new: SubstringLines(diff.model.newLines),
+                granularity: .syntax,
+                tokens: diff.tokenSource)
+        }
+        let fromStore = try await emphasis(stored)
+        #expect(try await emphasis(parsed) == fromStore)
+        #expect(fromStore.values.contains { $0.lines.contains { !($0?.new ?? []).isEmpty } })
         #expect(store.extractions == 2)
     }
 }

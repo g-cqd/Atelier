@@ -239,13 +239,13 @@ struct LanguageServerTrustGateTests {
         let harness = ModelTestHarness()
         let sut = try await showSwiftFile(in: gate, harness: harness)
         #expect(gate.factory.roots.isEmpty)
-        let asked = sut.pipeline.refinement.started
+        let asked = sut.pipeline.decorator.started
 
         gate.trust.answer(try #require(gate.trust.claimNextRequest()), trusts: true)
         try await harness.taskProvider.waitForAllTasks()
 
         #expect(gate.factory.roots == [try #require(gate.canonicalRoot)])
-        #expect(sut.pipeline.refinement.started > asked)
+        #expect(sut.pipeline.decorator.started > asked)
     }
 
     @Test
@@ -254,12 +254,12 @@ struct LanguageServerTrustGateTests {
         defer { gate.removeRoot() }
         let harness = ModelTestHarness()
         let sut = try await showSwiftFile(in: gate, harness: harness)
-        let asked = sut.pipeline.refinement.started
+        let asked = sut.pipeline.decorator.started
 
         try gate.trustAnotherRepository()
         try await harness.taskProvider.waitForAllTasks()
 
-        #expect(sut.pipeline.refinement.started == asked)
+        #expect(sut.pipeline.decorator.started == asked)
         #expect(gate.factory.roots.isEmpty)
     }
 }
