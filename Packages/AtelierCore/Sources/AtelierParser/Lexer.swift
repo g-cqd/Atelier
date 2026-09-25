@@ -5,6 +5,10 @@ import Foundation
 public struct Lexer: Sendable {
     private let lexTable: LexTable
     private let extras: Set<String>
+    /// The table's comment patterns as bytes, in the table's order, so matching one allocates nothing.
+    private let comments: [CommentBytes]
+    /// Each keyword's token type, the keyword in quotes, by keyword.
+    private let keywordTypes: [String: String]
 
     public init(
         lexTable: LexTable,
@@ -12,6 +16,39 @@ public struct Lexer: Sendable {
     ) {
         self.lexTable = lexTable
         self.extras = extras
+        self.comments = lexTable.commentPatterns.map { pattern in
+            switch pattern {
+                case .line(let prefix): .line(prefix: Array(prefix.utf8))
+                case .block(let open, let close): .block(open: Array(open.utf8), close: Array(close.utf8))
+            }
+        }
+        var keywordTypes = [String: String](minimumCapacity: lexTable.keywords.count)
+        for keyword in lexTable.keywords.keys {
+            keywordTypes[keyword] = "\"" + keyword + "\""
+        }
+        self.keywordTypes = keywordTypes
+    }
+
+    /// A comment pattern's delimiters as bytes.
+    private enum CommentBytes {
+        case line(prefix: [UInt8])
+        case block(open: [UInt8], close: [UInt8])
+    }
+
+    /// The text of each single byte, `?` for a byte that is no UTF-8 on its own, as the fallback token takes it.
+    private static let singleByteTexts: [String] = (0 ... 255)
+        .map { byte in
+            String(bytes: [UInt8(byte)], encoding: .utf8) ?? "?"
+        }
+
+    /// `bytes` decoded as `String(bytes:encoding: .utf8)` decodes them, nil when they are no UTF-8. That initializer
+    /// drops a leading byte order mark, so only bytes that start with one take it; the others are validated by the
+    /// standard library, without Foundation's generic path.
+    private static func text(of bytes: UnsafeBufferPointer<UInt8>) -> String? {
+        guard bytes.count < 3 || bytes[0] != 0xEF || bytes[1] != 0xBB || bytes[2] != 0xBF else {
+            return String(bytes: bytes, encoding: .utf8)
+        }
+        return String(validating: bytes, as: UTF8.self)
     }
 
     /// A token produced by the lexer.
@@ -99,7 +136,7 @@ public struct Lexer: Sendable {
             // Single character token (fallback)
             let startPoint = point
             let char = utf8[pos]
-            let text = String(bytes: [char], encoding: .utf8) ?? "?"
+            let text = Self.singleByteTexts[Int(char)]
             if char == 0x0a {
                 point = Point(row: point.row + 1, column: 0)
             } else {
@@ -119,10 +156,9 @@ public struct Lexer: Sendable {
     }
 
     private func matchComment(utf8: UnsafeBufferPointer<UInt8>, pos: Int, point: Point) -> Token? {
-        for pattern in lexTable.commentPatterns {
+        for pattern in comments {
             switch pattern {
-                case .line(let prefix):
-                    let prefixBytes = Array(prefix.utf8)
+                case .line(let prefixBytes):
                     guard pos + prefixBytes.count <= utf8.count else { continue }
                     var matches = true
                     for (j, b) in prefixBytes.enumerated() where utf8[pos + j] != b {
@@ -133,16 +169,13 @@ public struct Lexer: Sendable {
                     // Scan to end of line
                     var end = pos + prefixBytes.count
                     while end < utf8.count && utf8[end] != 0x0a { end += 1 }
-                    let textBuf = UnsafeBufferPointer(rebasing: utf8[pos ..< end])
-                    let text = String(bytes: textBuf, encoding: .utf8) ?? ""
+                    let text = Self.text(of: UnsafeBufferPointer(rebasing: utf8[pos ..< end])) ?? ""
                     let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
                     return Token(
                         type: "comment", byteRange: pos ..< end, pointRange: point ..< endPoint, text: text,
                         isExtra: true)
 
-                case .block(let open, let close):
-                    let openBytes = Array(open.utf8)
-                    let closeBytes = Array(close.utf8)
+                case .block(let openBytes, let closeBytes):
                     guard pos + openBytes.count <= utf8.count else { continue }
                     var matches = true
                     for (j, b) in openBytes.enumerated() where utf8[pos + j] != b {
@@ -165,8 +198,7 @@ public struct Lexer: Sendable {
                         end += 1
                     }
                     if end > utf8.count { end = utf8.count }
-                    let textBuf2 = UnsafeBufferPointer(rebasing: utf8[pos ..< end])
-                    let text = String(bytes: textBuf2, encoding: .utf8) ?? ""
+                    let text = Self.text(of: UnsafeBufferPointer(rebasing: utf8[pos ..< end])) ?? ""
                     let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
                     return Token(
                         type: "comment", byteRange: pos ..< end, pointRange: point ..< endPoint, text: text,
@@ -206,16 +238,9 @@ public struct Lexer: Sendable {
         }
 
         guard let (_, end) = lastAccepting, end > pos else { return nil }
-        let textBuf = UnsafeBufferPointer(rebasing: utf8[pos ..< end])
-        let text = String(bytes: textBuf, encoding: .utf8) ?? ""
-
-        // Find the keyword string that matched
-        let tokenType: String
-        if let kw = lexTable.keywords.first(where: { $0.key == text }) {
-            tokenType = "\"" + kw.key + "\""
-        } else {
-            tokenType = text
-        }
+        let text = Self.text(of: UnsafeBufferPointer(rebasing: utf8[pos ..< end])) ?? ""
+        // A keyword's type is the keyword in quotes; any other match is its own type.
+        let tokenType = keywordTypes[text] ?? text
 
         let endPoint = advancePoint(point, over: utf8, from: pos, to: end)
         return Token(
