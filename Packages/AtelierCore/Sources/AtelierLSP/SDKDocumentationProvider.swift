@@ -447,7 +447,7 @@ extension SDKDocumentationProvider {
 
     /// The configuration of `platform`'s scratch session: background indexing off, as for every hover session, and,
     /// given an `sdk`, sourcekit-lsp's fallback build settings, which a probe document gets since it belongs to no
-    /// build system: that SDK, and a `-target` for it.
+    /// build system: that SDK, and a `-target` for it. `requestTimeout` caps the `initialize` handshake too.
     public static func scratchConfiguration(
         for platform: SDKPlatform, sdk: SDKLocation?, serverExecutable: URL, probeDirectory: URL,
         idleShutdown: Duration = .seconds(180), requestTimeout: Duration = .seconds(2)
@@ -463,7 +463,7 @@ extension SDKDocumentationProvider {
         }
         return LanguageServerSession.Configuration(
             serverExecutable: serverExecutable, workspaceRoot: probeDirectory, idleShutdown: idleShutdown,
-            requestTimeout: requestTimeout, initializationOptions: .object(options))
+            initializeTimeout: requestTimeout, requestTimeout: requestTimeout, initializationOptions: .object(options))
     }
 
     /// Creates a new directory under `parent` with `mkdtemp(3)`: its name is unique, and only the current user can
