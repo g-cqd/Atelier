@@ -13,7 +13,8 @@ struct LineTokensTests {
         ]
         let lineStarts = [0, 5, 12, 13]
         let lines = LineTokens(tokens, lineStarts: lineStarts, textLength: 17)
-        #expect(lines.map(Array.init) == HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: 17))
+        let expected = Self.lineTokens(HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: 17))
+        #expect(lines.map(Array.init) == expected)
         #expect(lines.count == 4)
         #expect(lines[2].isEmpty)
     }
@@ -23,7 +24,8 @@ struct LineTokensTests {
         var random = SplitMix64(seed: 0x3A6)
         for _ in 0 ..< 500 {
             let (tokens, lineStarts, textLength) = Self.generated(&random)
-            let expected = HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: textLength)
+            let expected = Self.lineTokens(
+                HighlightToken.byLine(tokens, lineStarts: lineStarts, textLength: textLength))
             let lines = LineTokens(tokens, lineStarts: lineStarts, textLength: textLength)
             #expect(lines.map(Array.init) == expected)
             #expect(lines.tokens == expected.flatMap(\.self))
@@ -45,8 +47,8 @@ struct LineTokensTests {
             HighlightToken(byteRange: 4 ..< 6, role: .number)
         ]
         let lines = LineTokens([tokens[0], tokens[2]], lineRanges: [0 ..< 2, 4 ..< 6])
-        #expect(lines[0] == [HighlightToken(byteRange: 0 ..< 2, role: .comment)])
-        #expect(lines[1] == [HighlightToken(byteRange: 0 ..< 2, role: .number)])
+        #expect(lines[0] == [LineToken(range: 0 ..< 2, role: .comment)])
+        #expect(lines[1] == [LineToken(range: 0 ..< 2, role: .number)])
         let dropped = LineTokens([tokens[1], tokens[2]], lineRanges: [0 ..< 2, 4 ..< 6])
         #expect(dropped[0].isEmpty)
         #expect(dropped.tokenIndices(ofLine: 1) == 0 ..< 1)
@@ -70,8 +72,8 @@ struct LineTokensTests {
         lines.moveToUTF16(over: text.span, lineRanges: lineRanges)
         #expect(
             lines[0] == [
-                HighlightToken(byteRange: 0 ..< 1, role: .string, modifiers: [.readonly], layer: .lexical, priority: 1),
-                HighlightToken(byteRange: 1 ..< 4, role: .comment), HighlightToken(byteRange: 5 ..< 6, role: .keyword)
+                LineToken(range: 0 ..< 1, role: .string, modifiers: [.readonly]),
+                LineToken(range: 1 ..< 4, role: .comment), LineToken(range: 5 ..< 6, role: .keyword)
             ])
         #expect(Array(lines[1]) == ascii)
         #expect(Array(lines[2]) == beforeMultibyte)
@@ -117,9 +119,39 @@ struct LineTokensTests {
                     .map {
                         Self.utf16Count(lineBytes[..<$0.lowerBound]) ..< Self.utf16Count(lineBytes[..<$0.upperBound])
                     }
-                #expect(lines[line].map(\.byteRange) == expected, "line \(line) of \(text.debugDescription)")
+                #expect(lines[line].map(\.range) == expected, "line \(line) of \(text.debugDescription)")
             }
         }
+    }
+
+    @Test
+    func `a line token takes twelve bytes, and a bound past four gigabytes is clamped`() {
+        #expect(MemoryLayout<LineToken>.stride == 12)
+        let token = LineToken(range: 3 ..< Int(UInt32.max) + 10, role: .comment, modifiers: [.deprecated])
+        #expect(token.range == 3 ..< Int(UInt32.max))
+        #expect(token.modifiers == [.deprecated])
+    }
+
+    @Test
+    func `lines built from their cut tokens, and appended, equal the lines cut from the whole text`() {
+        let tokens = [
+            HighlightToken(byteRange: 0 ..< 3, role: .keyword), HighlightToken(byteRange: 4 ..< 9, role: .comment),
+            HighlightToken(byteRange: 10 ..< 11, role: .number)
+        ]
+        let lineRanges = [0 ..< 3, 4 ..< 6, 7 ..< 9, 10 ..< 12]
+        let whole = LineTokens(tokens, lineRanges: lineRanges)
+
+        var appended = LineTokens(tokens: Array(whole.tokens[0 ..< 2]), offsets: [0, 1, 2])
+        appended.append(contentsOf: LineTokens(tokens: Array(whole.tokens[2...]), offsets: [0, 1, 2]))
+
+        #expect(appended == whole)
+        #expect(appended.count == 4)
+        #expect(appended[3] == [LineToken(range: 0 ..< 1, role: .number)])
+    }
+
+    /// `HighlightToken.byLine`'s lines as line tokens, which keep no layer and no priority.
+    private static func lineTokens(_ lines: [[HighlightToken]]) -> [[LineToken]] {
+        lines.map { line in line.map { LineToken(range: $0.byteRange, role: $0.role, modifiers: $0.modifiers) } }
     }
 
     private static func utf16Count(_ bytes: ArraySlice<UInt8>) -> Int {

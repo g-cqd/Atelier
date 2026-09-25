@@ -26,6 +26,32 @@ extension HighlightMerger {
         resolver: RoleBasedThemeResolver,
         defaultStyle: Style
     ) -> [StyledSpan] {
+        resolveSpans(
+            tokens.lazy.map { (byteRange: $0.byteRange, role: $0.role, modifiers: $0.modifiers) }, utf8: utf8,
+            resolver: resolver,
+            defaultStyle: defaultStyle)
+    }
+
+    /// Resolve one line's tokens, as ``LineTokens`` holds them, to styled spans over that line's bytes.
+    /// - Complexity: O(bytes + tokens)
+    public static func resolveToSpans(
+        tokens: some Collection<LineToken>,
+        utf8: ArraySlice<UInt8>,
+        resolver: RoleBasedThemeResolver,
+        defaultStyle: Style
+    ) -> [StyledSpan] {
+        resolveSpans(
+            tokens.lazy.map { (byteRange: $0.range, role: $0.role, modifiers: $0.modifiers) }, utf8: utf8,
+            resolver: resolver,
+            defaultStyle: defaultStyle)
+    }
+
+    private static func resolveSpans(
+        _ tokens: some Collection<(byteRange: Range<Int>, role: HighlightRole, modifiers: HighlightModifierSet)>,
+        utf8: ArraySlice<UInt8>,
+        resolver: RoleBasedThemeResolver,
+        defaultStyle: Style
+    ) -> [StyledSpan] {
         let base = utf8.startIndex
         let count = utf8.count
         var spans: [StyledSpan] = []

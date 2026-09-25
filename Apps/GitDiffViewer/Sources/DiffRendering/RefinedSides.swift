@@ -20,7 +20,7 @@ package struct RefinedSides: Sendable {
     /// The tokens of the source line `row` shows on a pane of `side`; nil for a row that shows no source line, or one
     /// no tier has reached.
     /// - Complexity: O(the line's tokens and covered length), the per-line merge.
-    package func tokens(of row: RowMeta, on side: RenderedSide) -> [HighlightToken]? {
+    package func tokens(of row: RowMeta, on side: RenderedSide) -> [LineToken]? {
         let line: (tokens: LayeredLineTokens?, number: Int?) =
             switch side {
                 case .old: (old, row.oldNumber)

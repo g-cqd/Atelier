@@ -107,7 +107,7 @@ package final class RefinedColors {
     /// and most of a row agrees with the lexer. A bidi control's placeholder keeps the colour the renderer gave it.
     /// - Complexity: O(the row's length + its tokens), plus one rendering attribute per stretch that changes colour.
     private func paint(
-        _ tokens: [HighlightToken], from lineStart: Int, to lineEnd: Int, storage: NSTextStorage?,
+        _ tokens: [LineToken], from lineStart: Int, to lineEnd: Int, storage: NSTextStorage?,
         in layoutManager: NSTextLayoutManager, anchor: (location: any NSTextLocation, offset: Int)
     ) {
         guard let rendered, let storage, let contentManager = layoutManager.textContentManager else { return }
@@ -122,8 +122,8 @@ package final class RefinedColors {
         // Each unit's colour, as an index into `colors`: the refined one, and the one the storage draws.
         var wanted = [UInt8](repeating: 0, count: length)
         for token in tokens {
-            let lower = max(token.byteRange.lowerBound, 0)
-            let upper = min(token.byteRange.upperBound, length)
+            let lower = token.range.lowerBound
+            let upper = min(token.range.upperBound, length)
             guard upper > lower else { continue }
             let color = index(of: rendered.palette.color(for: token.role))
             for unit in lower ..< upper { wanted[unit] = color }

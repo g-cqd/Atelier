@@ -49,7 +49,13 @@ struct TokenPipelineBenchmark {
             let elapsed = Self.milliseconds {
                 lines = LineTokens(tokens, lineStarts: lineStarts, textLength: bytes.count)
             }
-            if iteration == 0 { flatChecksum = Self.checksum(of: lines.map(Array.init)) }
+            // The lexer's tokens all have priority 0, which a line token leaves out.
+            if iteration == 0 {
+                flatChecksum = Self.checksum(
+                    of: lines.map { line in
+                        line.map { HighlightToken(byteRange: $0.range, role: $0.role, modifiers: $0.modifiers) }
+                    })
+            }
             if iteration >= Self.warmUps { flatSamples.append(elapsed) }
         }
         #expect(flatChecksum == checksum)

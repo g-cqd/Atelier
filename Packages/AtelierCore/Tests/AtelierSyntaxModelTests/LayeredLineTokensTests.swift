@@ -26,9 +26,8 @@ struct LayeredLineTokensTests {
         layered.apply(
             Self.update(.syntactic, .complete, [.init(byteRange: 0 ..< 3, role: .keyword, layer: .syntactic)]))
 
-        #expect(layered.merged(line: 0)?.map(\.byteRange) == [0 ..< 3])
-        #expect(layered.merged(line: 0)?.map(\.layer) == [.syntactic])
-        #expect(layered.merged(line: 1) == [keyword])
+        #expect(layered.merged(line: 0) == [LineToken(range: 0 ..< 3, role: .keyword)])
+        #expect(layered.merged(line: 1) == [LineToken(range: 0 ..< 3, role: .keyword)])
         #expect(layered.layers(onLine: 0) == [.lexical, .syntactic])
     }
 
@@ -59,17 +58,63 @@ struct LayeredLineTokensTests {
     }
 
     @Test
-    func `a lexical-only merge equals HighlightMerger's`() {
-        // Overlapping tokens of one layer, as a grammar's query makes them: the narrower wins.
-        let tokens = [
-            HighlightToken(byteRange: 0 ..< 20, role: .string, layer: .lexical),
-            HighlightToken(byteRange: 5 ..< 7, role: .escape, layer: .lexical),
-            HighlightToken(byteRange: 25 ..< 30, role: .comment, layer: .lexical, priority: 1),
-            HighlightToken(byteRange: 25 ..< 30, role: .keyword, layer: .lexical, priority: 0)
-        ]
-        var layered = LayeredLineTokens(lineCount: 1)
-        layered.apply(Self.update(.lexical, .complete, tokens))
+    func `the merge equals HighlightMerger's over the layers the coverage rule shows, on generated lines`() {
+        var random = SplitMix64(seed: 0x9E)
+        let allLayers: [HighlightLayer] = [.lexical, .structural, .syntactic, .semantic]
+        for _ in 0 ..< 500 {
+            var layered = LayeredLineTokens(lineCount: 1)
+            var landed: [(layer: HighlightLayer, coverage: TierCoverage, tokens: [HighlightToken])] = []
+            for layer in allLayers where random.next() % 3 != 0 {
+                let coverage: TierCoverage = random.next() % 2 == 0 ? .complete : .sparse
+                let tokens = Self.generatedTokens(layer: layer, &random)
+                landed.append((layer, coverage, tokens))
+                layered.apply(Self.update(layer, coverage, tokens))
+            }
+            guard !landed.isEmpty else {
+                #expect(layered.merged(line: 0) == nil)
+                continue
+            }
+            let base = landed.lastIndex { $0.coverage == .complete } ?? 0
+            let shown = [landed[base]] + landed[(base + 1)...].filter { $0.coverage == .sparse }
+            let all = shown.flatMap(\.tokens)
+            let expected = HighlightMerger.merge(all, sourceByteCount: all.map(\.byteRange.upperBound).max() ?? 0)
+                .map { LineToken(range: $0.byteRange, role: $0.role, modifiers: $0.modifiers) }
 
-        #expect(layered.merged(line: 0) == HighlightMerger.merge(tokens, sourceByteCount: 30))
+            #expect(layered.merged(line: 0) == expected, "\(landed)")
+        }
+    }
+
+    @Test
+    func `overlapping tokens of one layer come out disjoint, the earlier keeping the bytes they share`() {
+        var layered = LayeredLineTokens(lineCount: 1)
+        layered.apply(
+            Self.update(
+                .lexical, .complete,
+                [
+                    HighlightToken(byteRange: 0 ..< 6, role: .string),
+                    HighlightToken(byteRange: 4 ..< 9, role: .comment),
+                    HighlightToken(byteRange: 9 ..< 9, role: .number)
+                ]))
+
+        #expect(
+            layered.merged(line: 0) == [
+                LineToken(range: 0 ..< 6, role: .string), LineToken(range: 6 ..< 9, role: .comment)
+            ])
+    }
+
+    /// Ascending, disjoint tokens of `layer` somewhere in the first 60 bytes of a line.
+    private static func generatedTokens(layer: HighlightLayer, _ random: inout SplitMix64) -> [HighlightToken] {
+        var tokens: [HighlightToken] = []
+        var cursor = Int(random.next() % 4)
+        while cursor < 60 {
+            let length = Int(random.next() % 8) + 1
+            let role = HighlightRole.allCases[Int(random.next() % UInt64(HighlightRole.allCases.count))]
+            tokens.append(
+                HighlightToken(
+                    byteRange: cursor ..< cursor + length, role: role,
+                    modifiers: HighlightModifierSet(rawValue: UInt16(random.next() % 4)), layer: layer))
+            cursor += length + Int(random.next() % 6)
+        }
+        return tokens
     }
 }

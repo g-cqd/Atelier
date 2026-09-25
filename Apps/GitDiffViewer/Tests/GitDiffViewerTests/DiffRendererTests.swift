@@ -295,8 +295,8 @@ struct DiffRendererTests {
         let lines: [Substring] = ["let s = \"\"\"", "}"]
         let byLine = DiffRenderer.tokensByLine(text: text, lines: lines, language: .swift)
         #expect(byLine.count == 2)
-        #expect(byLine[1].map(\.byteRange) == [0 ..< 1])
+        #expect(byLine[1].map(\.range) == [0 ..< 1])
         #expect(byLine[1].map(\.role) == [.string])
-        #expect(byLine[0].allSatisfy { $0.byteRange.upperBound <= 11 })
+        #expect(byLine[0].allSatisfy { $0.range.upperBound <= 11 })
     }
 }
