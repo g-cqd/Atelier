@@ -8,10 +8,12 @@ below it. The samples in which dyld waits for the sampler to acknowledge a libra
 only while `sample` is attached.
 
 Usage: main_actor_budget.py SAMPLE RUN_SECONDS [BUDGET_SECONDS] [TOP_TESTS]
+       main_actor_budget.py --self-test
   SAMPLE          the report of `sample PID ... -file SAMPLE` over the whole test process
   RUN_SECONDS     how long the run lasted, which the main thread's samples span
   BUDGET_SECONDS  the main-thread time a suite may take (default 1.0); exits 1 when a suite takes more
   TOP_TESTS       how many of the heaviest tests to list (default 10)
+Exits 2 when the report holds no usable sample: it is missing, or has no main thread.
 """
 
 import collections
@@ -26,8 +28,13 @@ SAMPLER_WAIT = "RemoteNotificationResponder::blockOnSynchronousEvent"
 
 
 def main_thread(lines):
-    """The main thread's call tree: (depth, samples, symbol) for each node, in the report's order."""
-    start = next(i for i, line in enumerate(lines) if "Thread_" in line and "Main Thread" in line)
+    """The main thread's call tree: (depth, samples, symbol) for each node, in the report's order.
+
+    A report without a main thread, such as one whose sampler stopped before its first sample, yields nothing.
+    """
+    start = next((i for i, line in enumerate(lines) if "Thread_" in line and "Main Thread" in line), None)
+    if start is None:
+        return
     for index, line in enumerate(lines[start:]):
         match = NODE.match(line)
         # The tree ends at a blank line or at the next thread's root.
@@ -76,11 +83,17 @@ def main(argv):
     run = float(argv[2])
     budget = float(argv[3]) if len(argv) > 3 else 1.0
     top_tests = int(argv[4]) if len(argv) > 4 else 10
-    with open(argv[1], errors="replace") as report:
-        lines = report.read().splitlines()
+    try:
+        with open(argv[1], errors="replace") as report:
+            lines = report.read().splitlines()
+    except OSError as error:
+        print(f"error: no usable sample: the sampler wrote no report ({error.strerror}: {argv[1]})", file=sys.stderr)
+        return 2
     suites, tests, total = attribute(main_thread(lines))
     if not total:
-        sys.exit("no main thread in the report")
+        print(f"error: no usable sample: {argv[1]} has no main-thread samples; the sampler did not attach to the "
+              "test process or stopped before sampling it. Run the script again.", file=sys.stderr)
+        return 2
     per_sample = run / total
     in_tests = sum(suites.values())
     print(f"main thread: {total} samples over {run:.2f} s; tests hold it for {in_tests * per_sample:.2f} s "
@@ -103,5 +116,59 @@ def main(argv):
     return 0
 
 
+HEADER = "Analysis of sampling swiftpm-testing-helper (pid 1) every 1 millisecond\n----\n\n"
+# A report of a sampler that attached but stopped before it took a sample: the call graph is empty.
+NO_SAMPLES = HEADER + "Call graph:\n\nTotal number in stack (recursive counted multiple, when >=5):\n"
+# A report whose threads include none labelled the main thread.
+NO_MAIN_THREAD = HEADER + (
+    "Call graph:\n"
+    "    47 Thread_2   DispatchQueue_1: com.apple.main-thread  (serial)\n"
+    "    + 47 start  (in dyld) + 6992  [0x1]\n"
+    "    47 Thread_3: com.apple.NSEventThread\n"
+    "    + 47 thread_start  (in libsystem_pthread.dylib) + 8  [0x2]\n"
+    "\nTotal number in stack (recursive counted multiple, when >=5):\n")
+WITH_MAIN_THREAD = HEADER + (
+    "Call graph:\n"
+    "    10 Thread_1: Main Thread   DispatchQueue_<multiple>\n"
+    "    + 10 start  (in dyld) + 6992  [0x1]\n"
+    "    + ! 6 closure in FooTests.`draws the panel`()  (in GitDiffViewerTests) + 8  [0x2]\n"
+    "    + ! 4 CFRunLoopRun  (in CoreFoundation) + 64  [0x3]\n"
+    "    47 Thread_3: com.apple.NSEventThread\n"
+    "    + 47 thread_start  (in libsystem_pthread.dylib) + 8  [0x2]\n"
+    "\nTotal number in stack (recursive counted multiple, when >=5):\n")
+
+
+def self_test():
+    """Checks the parser on reports without a usable sample, and on one with a main thread."""
+    import contextlib
+    import io
+    import os
+    import tempfile
+
+    def run(report):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "main-thread.txt")
+            if report is not None:
+                with open(path, "w") as file:
+                    file.write(report)
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                status = main(["main_actor_budget.py", path, "5.0", "1.0"])
+            return status, err.getvalue()
+
+    failures = []
+    for name, report in [("no samples", NO_SAMPLES), ("no main thread", NO_MAIN_THREAD), ("no report", None)]:
+        status, err = run(report)
+        if status != 2 or "no usable sample" not in err:
+            failures.append(f"{name}: expected status 2 and 'no usable sample', got {status}: {err.strip()!r}")
+    suites, tests, total = attribute(main_thread(WITH_MAIN_THREAD.splitlines()))
+    if (dict(suites), dict(tests), total) != ({"FooTests": 6}, {("FooTests", "draws the panel"): 6}, 10):
+        failures.append(f"with a main thread: got {dict(suites)}, {dict(tests)}, {total}")
+    for failure in failures:
+        print(f"FAIL {failure}", file=sys.stderr)
+    print(f"self-test: {3 + 1 - len(failures)} passed, {len(failures)} failed")
+    return 1 if failures else 0
+
+
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(self_test() if sys.argv[1:] == ["--self-test"] else main(sys.argv))
