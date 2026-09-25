@@ -173,6 +173,9 @@ final class AppServices {
     let lspRegistry: LanguageServerRegistry
     /// The on-device Apple SDK documentation tier, resolved once and shared by every comparison window.
     let sdkHoverTier: SDKHoverTier
+    /// The grammars' tables, their record and the threads parses run on, which every window's grammar colour shares;
+    /// nil when the corpus is missing from the app.
+    let grammarColor = GrammarColorServices.bundled(cacheDirectory: GrammarColorServices.defaultCacheDirectory)
 
     init() {
         runner = InterruptibleProcessRunner(base: HardenedProcessRunner(pool: pool))
@@ -209,7 +212,7 @@ final class AppServices {
     /// down, all within two seconds.
     func shutdownSequence() -> ShutdownSequence {
         let (runner, diagnosticsRunner, pool, diagnosticsPool) = (runner, diagnosticsRunner, pool, diagnosticsPool)
-        let (registry, sdkHoverTier) = (lspRegistry, sdkHoverTier)
+        let (registry, sdkHoverTier, grammarColor) = (lspRegistry, sdkHoverTier, grammarColor)
         return ShutdownSequence(
             interruptDiagnostics: { diagnosticsRunner.interruptAll() },
             interruptGitWork: { runner.interruptAll() },
@@ -218,6 +221,7 @@ final class AppServices {
                 await sdkHoverTier.shutdown()
             },
             shutdownPools: {
+                grammarColor?.shutdown()
                 diagnosticsPool.shutdown()
                 pool.shutdown()
             })
