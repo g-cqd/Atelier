@@ -369,8 +369,6 @@ extension GLRParser {
         let height = stack.height(ofTopSymbols: count) + 1
         guard height <= Self.maxTreeDepth else { return .tooDeep }
         var (children, skippedAbove) = stack.popSymbols(count)
-        // The production's steps are its symbols; a skipped token's ERROR node between them takes no step.
-        let steps = children.indices.filter { !children[$0].isError }
 
         let byteRange: Range<Int>
         let pointRange: Range<Point>
@@ -386,6 +384,11 @@ extension GLRParser {
         var nodeFields: [String: [SyntaxNode]] = [:]
         var dynamicPrecedence = 0
         if productions.indices.contains(rule) {
+            // The production's steps are its symbols; a skipped token's ERROR node between them takes no step. Only
+            // a production with aliases or fields reads them, so the others build no index.
+            let steps =
+                productions[rule].aliases.isEmpty && productions[rule].fields.isEmpty
+                ? [] : children.indices.filter { !children[$0].isError }
             for (step, alias) in productions[rule].aliases where step < steps.count {
                 children[steps[step]].type = alias.type
                 children[steps[step]].isNamed = alias.isNamed
