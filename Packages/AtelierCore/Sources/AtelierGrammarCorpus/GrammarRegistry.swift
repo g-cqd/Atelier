@@ -14,11 +14,14 @@ public final class GrammarRegistry: Sendable {
         /// Each language's grammar, read once per registration.
         var loadedGrammars: [String: LoadedGrammar] = [:]
         /// What compiling each grammar file gave, tables or the compiler's error: the same bytes compile the same way.
-        var compileOutcomes: [CompiledTableCache.Key: Result<ParseTableCompiler.CompilationResult, GrammarError>] = [:]
-        /// One task per file and compiler version while a compile or disk read is in progress.
-        var compilesInFlight:
-            [CompiledTableCache.Key: Task<Result<ParseTableCompiler.CompilationResult, GrammarError>, Never>] = [:]
+        var compileOutcomes: [CompiledTableCache.Key: CompileOutcome] = [:]
+        /// The callers waiting on each compile or disk read in progress, one per file and compiler version; the caller
+        /// running it resumes them.
+        var compilesInFlight: [CompiledTableCache.Key: [CheckedContinuation<CompileOutcome, Never>]] = [:]
     }
+
+    /// What compiling a grammar gives: its tables, or the compiler's error.
+    private typealias CompileOutcome = Result<ParseTableCompiler.CompilationResult, GrammarError>
 
     /// A language's grammar and the cache key of the bytes it was parsed from, so tables compiled from it are never
     /// stored under the key of another version of its file.
@@ -146,39 +149,69 @@ public final class GrammarRegistry: Sendable {
     /// grammar or a newer compiler compiles again. A compile that fails is remembered under the same key, in memory
     /// and on disk, and later calls, in this process or the next, throw its error at once: the same grammar fails
     /// the same way, some only after many seconds.
+    ///
+    /// The first caller for a grammar reads the disk cache or compiles in its own task; callers that come while it
+    /// does wait for its outcome rather than compiling again. The compile runs to its end even when that caller is
+    /// cancelled, since the waiting callers and the disk cache need it.
     /// - Throws: The error of loading the grammar, or of compiling it, whether now or when first tried.
     public func compiledResult(
         for languageName: String,
         grammarsPath: String
     ) async throws(GrammarError) -> ParseTableCompiler.CompilationResult {
         let grammar = try loadedGrammar(for: languageName, grammarsPath: grammarsPath)
-        if let outcome = state.withLock({ $0.compileOutcomes[grammar.key] }) {
-            return try outcome.get()
+        let turn = state.withLock { state -> CompileTurn in
+            if let outcome = state.compileOutcomes[grammar.key] { return .done(outcome) }
+            if state.compilesInFlight[grammar.key] != nil { return .wait }
+            state.compilesInFlight[grammar.key] = []
+            return .run
         }
-        let task = state.withLock { state in
-            if let existing = state.compilesInFlight[grammar.key] { return existing }
-            let task = Task.detached(priority: .utility) { [compile, diskCache] in
-                if let stored = diskCache.outcome(for: grammar.key) { return stored }
-                let outcome: Result<ParseTableCompiler.CompilationResult, GrammarError>
-                do {
-                    outcome = .success(try await compile(grammar.definition))
-                } catch let error as GrammarError {
-                    outcome = .failure(error)
-                } catch {
-                    outcome = .failure(.invalidRuleType("Unexpected compiler failure: \(error)"))
+        switch turn {
+            case .done(let outcome):
+                return try outcome.get()
+            case .wait:
+                return try await outcomeOfCompileInFlight(for: grammar.key).get()
+            case .run:
+                let outcome = await storedOrCompiledOutcome(of: grammar)
+                let waiting = state.withLock { state in
+                    state.compileOutcomes[grammar.key] = outcome
+                    return state.compilesInFlight.removeValue(forKey: grammar.key) ?? []
                 }
-                diskCache.store(outcome, for: grammar.key)
-                return outcome
+                for continuation in waiting { continuation.resume(returning: outcome) }
+                return try outcome.get()
+        }
+    }
+
+    /// What a call to ``compiledResult(for:grammarsPath:)`` does: return a known outcome, wait for the compile in
+    /// progress, or run the compile.
+    private enum CompileTurn {
+        case done(CompileOutcome)
+        case wait
+        case run
+    }
+
+    /// The outcome of the compile in progress for `key`, or of the one that just finished.
+    private func outcomeOfCompileInFlight(for key: CompiledTableCache.Key) async -> CompileOutcome {
+        await withCheckedContinuation { continuation in
+            let finished = state.withLock { state -> CompileOutcome? in
+                if let outcome = state.compileOutcomes[key] { return outcome }
+                state.compilesInFlight[key, default: []].append(continuation)
+                return nil
             }
-            state.compilesInFlight[grammar.key] = task
-            return task
+            if let finished { continuation.resume(returning: finished) }
         }
-        let outcome = await task.value
-        state.withLock { state in
-            state.compileOutcomes[grammar.key] = outcome
-            state.compilesInFlight[grammar.key] = nil
+    }
+
+    /// `grammar`'s outcome from the disk cache, else compiled now and stored there.
+    private func storedOrCompiledOutcome(of grammar: LoadedGrammar) async -> CompileOutcome {
+        if let stored = diskCache.outcome(for: grammar.key) { return stored }
+        let outcome: CompileOutcome
+        do {
+            outcome = .success(try await compile(grammar.definition))
+        } catch {
+            outcome = .failure(error)
         }
-        return try outcome.get()
+        diskCache.store(outcome, for: grammar.key)
+        return outcome
     }
 
     /// Reads a compiled table only when it is already cached; prewarming never starts a compile.
