@@ -177,8 +177,11 @@ public enum Predicate: Sendable, Equatable {
     case notMatch(capture: String, pattern: String)
     case anyOf(capture: String, values: [String])
     case contains(capture: String, value: String)
-    case `is`(capture: String, property: String)
-    case isNot(capture: String, property: String)
+    /// `(#is? [@capture] property [value])`: the capture, or the match when none is named, has `property`. As in
+    /// tree-sitter, the capture may stand anywhere among the arguments and the value is optional.
+    case `is`(capture: String?, property: String, value: String?)
+    /// `(#is-not? [@capture] property [value])`: the negation of ``is(capture:property:value:)``.
+    case isNot(capture: String?, property: String, value: String?)
     case directive(name: String, arguments: [String])
 }
 

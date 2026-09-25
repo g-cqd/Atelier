@@ -49,11 +49,11 @@ public enum Predicates: Sendable {
                 }
                 return text.contains(value)
 
-            case .is(let capture, let property):
-                return checkProperty(capture, property: property, expected: true, captures: captures)
+            case .is(let capture, let property, let value):
+                return hasProperty(property, value: value, capture: capture, captures: captures)
 
-            case .isNot(let capture, let property):
-                return checkProperty(capture, property: property, expected: false, captures: captures)
+            case .isNot(let capture, let property, let value):
+                return !hasProperty(property, value: value, capture: capture, captures: captures)
 
             case .directive:
                 return true
@@ -78,24 +78,32 @@ public enum Predicates: Sendable {
         return regex.firstMatch(in: text, range: range) != nil
     }
 
-    private static func checkProperty(
-        _ captureName: String,
-        property: String,
-        expected: Bool,
+    /// Whether the captured node has `property`, for `#is?` and `#is-not?`.
+    ///
+    /// A node has `named`, `error` and `extra` as its flags say; a property with a value is none of them. `local`
+    /// asks whether the node is a local variable, which tree-sitter's highlighter learns from a locals query
+    /// (`non_local_variable_patterns` in tree-sitter-highlight): with none, no node is one, so `#is-not? local`
+    /// always holds and `#is? local` never does. This evaluator reads no locals query, as KittyCode ships none. Any
+    /// other property, or a missing capture, is not had.
+    private static func hasProperty(
+        _ property: String,
+        value: String?,
+        capture captureName: String?,
         captures: [QueryMatch.Capture]
     ) -> Bool {
+        guard value == nil, let captureName else { return false }
         let name = captureName.hasPrefix("@") ? String(captureName.dropFirst()) : captureName
-        guard let capture = captures.first(where: { $0.name == name }) else { return !expected }
+        guard let capture = captures.first(where: { $0.name == name }) else { return false }
 
         switch property {
             case "named":
-                return capture.node.isNamed == expected
+                return capture.node.isNamed
             case "error":
-                return capture.node.isError == expected
+                return capture.node.isError
             case "extra":
-                return capture.node.isExtra == expected
+                return capture.node.isExtra
             default:
-                return !expected
+                return false
         }
     }
 }

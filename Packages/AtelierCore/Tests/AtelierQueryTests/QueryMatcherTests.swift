@@ -68,6 +68,20 @@ struct QueryMatcherTests {
     }
 
     @Test
+    func `is-not? local holds for every node without a locals query`() throws {
+        let require = SyntaxNode(type: "identifier", byteRange: 0 ..< 7)
+        let root = SyntaxNode(type: "program", children: [require], byteRange: 0 ..< 7)
+        let tree = SyntaxTree(root: root, source: "require")
+
+        let unlessLocal = try QueryParser.parse(
+            "((identifier) @function.builtin (#eq? @function.builtin \"require\") (#is-not? local))")
+        let onlyLocal = try QueryParser.parse("((identifier) @variable (#is? @variable local))")
+
+        #expect(QueryMatcher.execute(query: unlessLocal, tree: tree).map(\.captures.first?.node) == [require])
+        #expect(QueryMatcher.execute(query: onlyLocal, tree: tree).isEmpty)
+    }
+
+    @Test
     func `Positional child matching respects order`() {
         let identifier = SyntaxNode(type: "identifier", byteRange: 0 ..< 1)
         let number = SyntaxNode(type: "number", byteRange: 1 ..< 2)
