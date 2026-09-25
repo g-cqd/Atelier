@@ -504,12 +504,12 @@ extension EditorState {
         buffer.postOpenProcessingTask = taskProvider.task(role: .work) { [weak self, weak buffer] in
             enum PostLoadResult {
                 case maxLineWidth(Int)
-                case highlightedLines([[StyledSpan]])
+                case highlightedLines([[StyledSpan]], fromGrammar: Bool)
             }
 
-            let (maxLineWidth, highlightedLines) = await withTaskGroup(
+            let (maxLineWidth, highlightedLines, fromGrammar) = await withTaskGroup(
                 of: PostLoadResult.self,
-                returning: (Int, [[StyledSpan]]?).self
+                returning: (Int, [[StyledSpan]]?, Bool).self
             ) { group in
                 group.addTask(priority: .utility) {
                     .maxLineWidth(
@@ -522,29 +522,33 @@ extension EditorState {
                             _ = await LanguageHighlighter.ensureArtifacts(
                                 for: language, taskProvider: taskProvider)
                         }
+                        if let grammarLines = LanguageHighlighter.makeSession(language: language, theme: theme)
+                            .grammarHighlightedDocument(source: content)
+                        {
+                            return .highlightedLines(grammarLines, fromGrammar: true)
+                        }
                         return .highlightedLines(
-                            LanguageHighlighter.highlightDocument(
-                                source: content,
-                                language: language,
-                                theme: theme
-                            )
-                        )
+                            LanguageHighlighter.makeSession(language: language, theme: theme, preferGrammar: false)
+                                .highlightDocument(source: content),
+                            fromGrammar: false)
                     }
                 }
 
                 var resolvedMaxLineWidth = 0
                 var resolvedHighlightedLines: [[StyledSpan]]?
+                var resolvedFromGrammar = false
 
                 for await result in group {
                     switch result {
                         case .maxLineWidth(let width):
                             resolvedMaxLineWidth = width
-                        case .highlightedLines(let lines):
+                        case .highlightedLines(let lines, let fromGrammar):
                             resolvedHighlightedLines = lines
+                            resolvedFromGrammar = fromGrammar
                     }
                 }
 
-                return (resolvedMaxLineWidth, resolvedHighlightedLines)
+                return (resolvedMaxLineWidth, resolvedHighlightedLines, resolvedFromGrammar)
             }
 
             // A cancelled pass was replaced, and whoever cancelled it cleared the handle.
@@ -562,6 +566,11 @@ extension EditorState {
             if let highlightedLines {
                 buffer.highlightedLines = LineHighlights(highlightedLines)
                 buffer.highlightSession = nil
+                // A grammar that colored the file whole qualifies it: later passes keep coloring from it (book D36).
+                buffer.qualifiedGrammarLanguage = fromGrammar ? language : nil
+                buffer.grammarHighlightedText =
+                    fromGrammar
+                    ? HighlightedText(documentVersion: version, contentHash: textBuffer.contentHash) : nil
             }
 
             if self.bufferManager.activeBuffer === buffer {

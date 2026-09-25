@@ -597,10 +597,16 @@ public final class EditorState {
 
     /// Highlights the lines on screen from the rope, reading no other line, and hands the rest of the document to the
     /// background full pass. Until that pass lands, every other line holds no spans, which the editor draws as plain
-    /// text, so the text itself never waits for highlighting.
+    /// text, so the text itself never waits for highlighting. Lines in a qualified grammar's color for the text as it
+    /// is stay as they are until the full pass restyles them, so a refresh never trades them for the lexer's.
     /// - Complexity: O(bytes on screen); the lines off screen are not stored.
     public func refreshHighlights() {
         highlightGeneration &+= 1
+        if showsGrammarHighlightsOfCurrentText {
+            requestFullHighlight()
+            return
+        }
+        bufferManager.activeBuffer?.grammarHighlightedText = nil
         let lineCount = fileLineCount
         let viewport = highlightViewportRange(lineCount: lineCount)
         var lines = LineHighlights(unhighlightedLineCount: lineCount)
@@ -635,6 +641,24 @@ public final class EditorState {
             (document as? any JoinedLineText)?.joinedText(ofLines: viewport)
             ?? document.lines(in: viewport).joined(separator: "\n")
         return currentHighlightSession().highlightJoinedLines(text)
+    }
+
+    /// The language whose grammar colors the active buffer: the one that qualified when the buffer opened, while it is
+    /// still the buffer's language and syntax highlighting is on for it.
+    private var qualifiedGrammarLanguage: String? {
+        guard syntaxHighlightingEnabled, let qualified = bufferManager.activeBuffer?.qualifiedGrammarLanguage,
+            qualified == currentLanguage
+        else { return nil }
+        return qualified
+    }
+
+    /// Whether every line holds the qualified grammar's color for the text as it is now.
+    /// - Complexity: O(1).
+    private var showsGrammarHighlightsOfCurrentText: Bool {
+        guard qualifiedGrammarLanguage != nil, let buffer = bufferManager.activeBuffer else { return false }
+        return buffer.grammarHighlightedText
+            == HighlightedText(documentVersion: buffer.documentVersion, contentHash: textBuffer.contentHash)
+            && highlightedLines.count == fileLineCount
     }
 
     private func currentHighlightSession() -> LanguageHighlighter.Session {
@@ -672,6 +696,13 @@ public final class EditorState {
         let updatedHighlights = session.highlightLines(textBuffer.lines(in: mutation.updatedLineRange))
         highlightedLines.replaceSubrange(mutation.originalLineRange, with: updatedHighlights)
 
+        // Under a qualified grammar the other lines keep its color, and the reparse after a pause replaces the edited
+        // lines' lexer color and restyles whatever a comment or string the edit opened reaches (book D36).
+        if qualifiedGrammarLanguage != nil {
+            scheduleGrammarReparse()
+            return
+        }
+
         // A comment or string the edit opened or closed restyles what follows it: re-scan the visible window with
         // some lookback so the screen is right at once, and hand the rest of the document to the full pass when the
         // window's last line changed style, which is the sign of a construct running past it.
@@ -683,6 +714,21 @@ public final class EditorState {
         highlightedLines.replaceSubrange(window, with: windowHighlights)
         if windowHighlights[windowHighlights.count - 1] != before, window.upperBound < lineCount {
             requestFullHighlight()
+        }
+    }
+
+    /// Asks for a full pass, which reparses with the qualified grammar, once no keystroke has come for
+    /// `grammarReparseDelay`; each keystroke cancels the pause before it.
+    private func scheduleGrammarReparse() {
+        grammarReparseTask?.cancel()
+        let clock = clock
+        grammarReparseTask = taskProvider.task(role: .work) { @MainActor [weak self] in
+            do {
+                try await clock.sleep(for: EditorState.grammarReparseDelay)
+            } catch {
+                return
+            }
+            self?.requestFullHighlight()
         }
     }
 
@@ -1264,6 +1310,12 @@ public final class EditorState {
     @ObservationIgnored public let fullHighlightContinuation: AsyncStream<Void>.Continuation
     /// The detached task running the current full pass; `shutdown()` cancels it.
     @ObservationIgnored private var fullHighlightWorkTask: Task<Void, Never>?
+    /// The pause before a qualified grammar reparses the document after an edit, which the next keystroke cancels.
+    @ObservationIgnored private var grammarReparseTask: Task<Void, Never>?
+    /// How long after the last keystroke a qualified grammar reparses the document: the gutter's debounce.
+    nonisolated static let grammarReparseDelay: Duration = .milliseconds(150)
+    /// How long a full pass waits for the grammar before it cancels the parse and keeps the lexer's color.
+    nonisolated static let grammarPassDeadline: Duration = .milliseconds(250)
     /// Advanced by every `refreshHighlights()`: a pass that read the document before it may style it with a theme, a
     /// language or a setting that no longer holds.
     @ObservationIgnored private(set) var highlightGeneration: UInt64 = 0
@@ -1273,7 +1325,7 @@ public final class EditorState {
     @ObservationIgnored private let retiredStorage: AsyncStream<RetiredStorage>.Continuation
     /// The full pass itself, run on a detached task; a test substitutes it to see where and when a pass runs.
     @ObservationIgnored var fullHighlightCompute: @Sendable (FullHighlightInput) async -> FullHighlightResult = {
-        EditorState.computeFullHighlight($0)
+        await EditorState.computeFullHighlight($0)
     }
     public var fileTreeHistory = FileTreeOperationHistory()
 
@@ -1388,6 +1440,8 @@ public final class EditorState {
         fullHighlightTask?.cancel()
         fullHighlightWorkTask?.cancel()
         fullHighlightWorkTask = nil
+        grammarReparseTask?.cancel()
+        grammarReparseTask = nil
         retiredStorage.finish()
         workspaceSearchDebounceContinuation.finish()
         workspaceSearchDebounceTask?.cancel()
@@ -1407,8 +1461,8 @@ public final class EditorState {
         else { return }
         let request = currentHighlightRequest
         let input = FullHighlightInput(
-            textBuffer: textBuffer, language: currentLanguage, theme: syntaxTheme, highlightsSyntax: highlightsSyntax,
-            tabSize: config.editor.tabSize)
+            textBuffer: textBuffer, language: currentLanguage, grammarLanguage: qualifiedGrammarLanguage,
+            theme: syntaxTheme, highlightsSyntax: highlightsSyntax, tabSize: config.editor.tabSize, clock: clock)
         let compute = fullHighlightCompute
         let work = taskProvider.detachedTask(role: .work) { [weak self] in
             let result = await compute(input)
@@ -1430,6 +1484,9 @@ public final class EditorState {
         }
         if let highlightedLines = result.highlightedLines {
             replaceHighlightedLines(with: LineHighlights(highlightedLines))
+            bufferManager.activeBuffer?.grammarHighlightedText =
+                result.isFromGrammar
+                ? HighlightedText(documentVersion: request.documentVersion, contentHash: request.contentHash) : nil
         }
         cachedMaxLineWidth = result.maxLineWidth
         markContentAllDirty()
@@ -1646,16 +1703,22 @@ extension EditorState {
     struct FullHighlightInput: Sendable {
         let textBuffer: TextBuffer
         let language: String?
+        /// The language whose grammar the pass tries first, when the buffer's grammar qualified (book D36).
+        let grammarLanguage: String?
         let theme: Theme
         /// False when syntax highlighting is off: the pass then only measures, as a line without spans draws plain.
         let highlightsSyntax: Bool
         let tabSize: Int
+        /// The clock `grammarPassDeadline` runs on.
+        let clock: any Clock<Duration>
     }
 
     /// A full pass's product: the spans of every line, unless it only measured, and the widest line's display width.
     struct FullHighlightResult: Sendable {
         let highlightedLines: [[StyledSpan]]?
         let maxLineWidth: Int
+        /// Whether `highlightedLines` hold the grammar's color, not the lexer's.
+        var isFromGrammar = false
     }
 
     /// Storage the state has let go of, which the consumer `init` starts frees off the main actor. A large document's
@@ -1684,20 +1747,47 @@ extension EditorState {
         let generation: UInt64
     }
 
-    /// The widest line of the document, and the document highlighted lexically in one scan, so that a comment or
-    /// string spanning lines is styled as one. Reads the rope's bytes without caching its text, since the live buffer
-    /// and the undo history share the storage.
-    /// - Complexity: O(document bytes).
-    nonisolated private static func computeFullHighlight(_ input: FullHighlightInput) -> FullHighlightResult {
+    /// The widest line of the document, and the document highlighted in one scan, so that a comment or string spanning
+    /// lines is styled as one: from the qualified grammar when the input names one and its parse passes the quality gate
+    /// within `grammarPassDeadline`, lexically otherwise. Reads the rope's bytes without caching its text, since the
+    /// live buffer and the undo history share the storage.
+    /// - Complexity: O(document bytes), plus the grammar's parse.
+    nonisolated private static func computeFullHighlight(_ input: FullHighlightInput) async -> FullHighlightResult {
         let maxLineWidth = TextDocument.computeMaxLineWidth(in: input.textBuffer, tabSize: input.tabSize)
         guard input.highlightsSyntax else {
             return FullHighlightResult(highlightedLines: nil, maxLineWidth: maxLineWidth)
         }
         let rope = input.textBuffer.ropeSnapshot
         let source = String(decoding: rope.bytes(in: 0 ..< rope.byteCount), as: UTF8.self)
+        if let grammarLanguage = input.grammarLanguage,
+            let lines = await grammarHighlight(
+                of: source, language: grammarLanguage, theme: input.theme, clock: input.clock)
+        {
+            return FullHighlightResult(highlightedLines: lines, maxLineWidth: maxLineWidth, isFromGrammar: true)
+        }
         let session = LanguageHighlighter.makeSession(
             language: input.language, theme: input.theme, preferGrammar: false)
         return FullHighlightResult(
             highlightedLines: session.highlightDocument(source: source), maxLineWidth: maxLineWidth)
+    }
+
+    /// `source` highlighted from `language`'s grammar; nil when the parse fails the quality gate, or when it outlasts
+    /// `grammarPassDeadline` on `clock`, which cancels it.
+    nonisolated private static func grammarHighlight(
+        of source: String, language: String, theme: Theme, clock: any Clock<Duration>
+    ) async -> [[StyledSpan]]? {
+        await withTaskGroup(of: [[StyledSpan]]?.self) { group in
+            group.addTask {
+                LanguageHighlighter.makeSession(language: language, theme: theme)
+                    .grammarHighlightedDocument(source: source)
+            }
+            group.addTask {
+                try? await clock.sleep(for: grammarPassDeadline)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
     }
 }
