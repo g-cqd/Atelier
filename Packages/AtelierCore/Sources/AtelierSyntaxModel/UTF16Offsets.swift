@@ -12,4 +12,21 @@ public enum UTF16Offsets {
             byte += 1
         }
     }
+
+    /// The offset of the first byte of `bytes` at or after `start` that is not ASCII, or `bytes.count` when none is.
+    /// Reads eight bytes at a time.
+    /// - Complexity: O(the offset returned - `start`)
+    static func firstNonASCII(in bytes: Span<UInt8>, from start: Int) -> Int {
+        var index = start
+        let raw = bytes.bytes
+        while index + 8 <= bytes.count {
+            let high =
+                UInt64(littleEndian: raw.unsafeLoadUnaligned(fromByteOffset: index, as: UInt64.self))
+                & 0x8080_8080_8080_8080
+            if high != 0 { return index + high.trailingZeroBitCount / 8 }
+            index += 8
+        }
+        while index < bytes.count, bytes[index] < 0x80 { index += 1 }
+        return index
+    }
 }
