@@ -23,6 +23,7 @@ let package = Package(
     ],
     products: [
         .library(name: "AtelierSyntaxModel", targets: ["AtelierSyntaxModel"]),
+        .library(name: "AtelierHighlighting", targets: ["AtelierHighlighting"]),
         .library(name: "AtelierDiff", targets: ["AtelierDiff"]),
         .library(name: "AtelierLexers", targets: ["AtelierLexers"]),
         .library(name: "AtelierSwiftSyntax", targets: ["AtelierSwiftSyntax"]),
@@ -55,6 +56,9 @@ let package = Package(
     targets: [
         // The vocabulary highlighting is expressed in: languages, and later roles and tokens.
         .target(name: "AtelierSyntaxModel", swiftSettings: strict),
+        // The tier job (PERF-11): the highlight tier protocol, and every tier of a text run at once, each on its own,
+        // caller-driven. Each tier lives with its engine; the apps compose them.
+        .target(name: "AtelierHighlighting", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
         // Line and intraline diffing, moved blocks, hunk layout and unified patches. Pure value code.
         .target(
             name: "AtelierDiff",
@@ -62,13 +66,14 @@ let package = Package(
             swiftSettings: strict
         ),
         // Hand-written scanners over borrowed UTF-8 bytes for the lexical tier; a scan allocates only its token array.
-        .target(name: "AtelierLexers", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
+        .target(
+            name: "AtelierLexers", dependencies: ["AtelierHighlighting", "AtelierSyntaxModel"], swiftSettings: strict),
         // swift-syntax support: the syntax tier's token provider, the syntactic colour tier over SwiftIDEUtils'
         // classification, and the deep stack every swift-syntax parse and tree walk runs on.
         .target(
             name: "AtelierSwiftSyntax",
             dependencies: [
-                "AtelierDiff", "AtelierLexers", "AtelierSyntaxModel",
+                "AtelierDiff", "AtelierHighlighting", "AtelierLexers", "AtelierSyntaxModel",
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "SwiftIDEUtils", package: "swift-syntax")
@@ -186,6 +191,13 @@ let package = Package(
             name: "AtelierDiffTests", dependencies: ["AtelierDiff", .product(name: "AemiTestKit", package: "aemi")],
             swiftSettings: strict),
         .testTarget(name: "AtelierSyntaxModelTests", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
+        .testTarget(
+            name: "AtelierHighlightingTests",
+            dependencies: [
+                "AtelierHighlighting", "AtelierLexers", "AtelierSwiftSyntax", "AtelierSyntaxModel",
+                .product(name: "AemiTestKit", package: "aemi")
+            ],
+            swiftSettings: strict),
         .testTarget(
             name: "AtelierFileTreeTests",
             dependencies: [
