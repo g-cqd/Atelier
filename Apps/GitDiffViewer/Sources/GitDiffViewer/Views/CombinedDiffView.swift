@@ -325,14 +325,15 @@ private struct PaneContent {
         background = model.palette.background
         drag = { model.handleGapDrag($0) }
         displayed = { model.noteDisplayed(id) }
-        hoverResolver = Self.hoverResolver(docs: model.hoverDocs, palette: model.palette)
+        hoverResolver = Self.hoverResolver(docs: model.hoverDocs, palette: model.palette, settings: model.settings)
     }
 
     /// Resolves a hover hit and colors its documentation for the panel. Each row carries the comparison's global
-    /// `fileIndex`, so the hit needs no translation from this card's path.
-    private static func hoverResolver(docs: HoverDocumentationModel?, palette: DiffPalette) -> (
-        @Sendable (HoverHit) async -> HoverDocument?
-    )? {
+    /// `fileIndex`, so the hit needs no translation from this card's path. The panel's material is read as the hit
+    /// resolves, so a change of setting reaches the next panel without rebuilding the card's panes.
+    private static func hoverResolver(docs: HoverDocumentationModel?, palette: DiffPalette, settings: ViewerSettings)
+        -> (@Sendable (HoverHit) async -> HoverDocument?)?
+    {
         guard let docs else { return nil }
         return { hit in
             let side: HoverQuerySide = hit.side == .new ? .new : .old
@@ -340,7 +341,8 @@ private struct PaneContent {
                 let content = await docs.hover(
                     fileIndex: hit.fileIndex, side: side, line: hit.line, utf16Column: hit.utf16Column)
             else { return nil }
-            return HoverDocument.build(from: content, palette: palette)
+            return await HoverDocument.build(from: content, palette: palette)
+                .presented(on: settings.hoverPanelMaterial)
         }
     }
 }
