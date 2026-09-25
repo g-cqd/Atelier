@@ -62,9 +62,10 @@ private struct RepositoryTrustPrompt: ViewModifier {
     private static func message(for request: RepositoryTrust.Request) -> String {
         let path = (request.root.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath
         return """
-            Hover documentation can start sourcekit-lsp in \(path). sourcekit-lsp builds and indexes the project, \
-            which runs code the repository controls: its package manifest and build plugins, its macros, and any \
-            build server it names. Trust it only if you trust its authors.
+            Hover documentation can start a language server in \(path). Each loads the project, which runs code \
+            the repository controls: sourcekit-lsp its package manifest, build plugins, macros and any build server \
+            it names; gopls the go command and its tools; typescript-language-server the TypeScript plugins the \
+            project configures. Trust it only if you trust its authors.
 
             Until you do, hovers show doc comments and Apple SDK documentation, and Fetch stays off; Trust \
             Repository… in the source menu asks again. Settings ▸ Tools lists the repositories you trust.

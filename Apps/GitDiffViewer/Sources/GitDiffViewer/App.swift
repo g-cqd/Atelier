@@ -165,11 +165,11 @@ final class AppServices {
     let diagnosticsRunner: InterruptibleProcessRunner
     let toolDiscovery: ToolDiscovery
     let diagnosticsEngine: DiagnosticsEngine
-    /// The user's trust decision per repository, which gates sourcekit-lsp there.
+    /// The user's trust decision per repository, which gates every language server there.
     let repositoryTrust = RepositoryTrust()
-    /// Whether and how sourcekit-lsp launches, per repository and for the SDK tier.
+    /// Whether and how each language server launches, per repository, and sourcekit-lsp for the SDK tier.
     let languageServerPolicy: LanguageServerPolicy
-    /// One sourcekit-lsp session per trusted workspace root, shared by every comparison window.
+    /// One session per trusted workspace root and language server, shared by every comparison window.
     let lspRegistry: LanguageServerRegistry
     /// The on-device Apple SDK documentation tier, resolved once and shared by every comparison window.
     let sdkHoverTier: SDKHoverTier
@@ -186,17 +186,12 @@ final class AppServices {
         diagnosticsEngine = DiagnosticsEngine(runner: diagnosticsRunner, discovery: toolDiscovery)
 
         let policy = LanguageServerPolicy(
-            trust: repositoryTrust, locate: LanguageServerPolicy.locate(with: toolDiscovery))
+            trust: repositoryTrust, locate: LanguageServerPolicy.locate(with: toolDiscovery),
+            environment: LanguageServerPolicy.environment(with: toolDiscovery))
         languageServerPolicy = policy
         let registry = LanguageServerRegistry(
-            admits: { root, server in
-                guard server == .sourceKitLSP else { return false }
-                return await policy.admitsSession(at: root)
-            },
-            makeConfiguration: { root, server in
-                guard server == .sourceKitLSP else { return nil }
-                return await policy.configuration(forRoot: root)
-            })
+            admits: { root, server in await policy.admitsSession(at: root, server: server) },
+            makeConfiguration: { root, server in await policy.configuration(forRoot: root, server: server) })
         lspRegistry = registry
         policy.stopSessionsOnRevocation(in: registry)
         let sdkRunner = diagnosticsRunner
