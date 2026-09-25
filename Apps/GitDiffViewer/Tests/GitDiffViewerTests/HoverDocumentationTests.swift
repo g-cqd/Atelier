@@ -91,7 +91,7 @@ private final class ParseCounter: Sendable {
     private let parses = ParseCounter()
 
     private func makeSUT(
-        lspRegistry: SourceKitLSPRegistry? = nil, index: DocCommentIndex = DocCommentIndex()
+        lspRegistry: LanguageServerRegistry? = nil, index: DocCommentIndex = DocCommentIndex()
     ) -> HoverDocumentationModel {
         HoverDocumentationModel(lspRegistry: lspRegistry, taskProvider: taskProvider, index: index)
     }
@@ -461,7 +461,7 @@ extension HoverDocumentationModelTests {
     @Test
     func `the old side never consults the language server`() async throws {
         let callCount = Mutex(0)
-        let registry = SourceKitLSPRegistry(
+        let registry = LanguageServerRegistry(
             admits: { _ in true },
             makeConfiguration: { _ in
                 callCount.withLock { $0 += 1 }
@@ -481,7 +481,7 @@ extension HoverDocumentationModelTests {
     @Test
     func `the new side on disk consults the language server registry`() async throws {
         let callCount = Mutex(0)
-        let registry = SourceKitLSPRegistry(
+        let registry = LanguageServerRegistry(
             admits: { _ in true },
             makeConfiguration: { _ in
                 callCount.withLock { $0 += 1 }

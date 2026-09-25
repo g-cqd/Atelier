@@ -61,7 +61,7 @@ package final class HoverDocumentationModel {
     /// document it parsed last.
     private let oldSideDocs: DocIndexHoverProvider
     private let newSideDocs: DocIndexHoverProvider
-    private let lspRegistry: SourceKitLSPRegistry?
+    private let lspRegistry: LanguageServerRegistry?
     private let taskProvider: any TaskProvider
 
     private var filesByIndex: [Int: FileEntry] = [:]
@@ -108,7 +108,7 @@ package final class HoverDocumentationModel {
     ///   - taskProvider: Spawns the feeds' passes.
     ///   - index: The doc-comment index the feeds fill, such as one whose parses a test counts.
     package init(
-        lspRegistry: SourceKitLSPRegistry?, taskProvider: any TaskProvider = .default,
+        lspRegistry: LanguageServerRegistry?, taskProvider: any TaskProvider = .default,
         index: DocCommentIndex = DocCommentIndex()
     ) {
         self.lspRegistry = lspRegistry
@@ -133,7 +133,7 @@ package final class HoverDocumentationModel {
         guard !files.isEmpty else { return }
         if givenRoot != lastGivenRoot || repositoryRoot == nil {
             lastGivenRoot = givenRoot
-            repositoryRoot = givenRoot.flatMap(SourceKitLSPRegistry.canonicalRoot)
+            repositoryRoot = givenRoot.flatMap(LanguageServerRegistry.canonicalRoot)
         }
         let corpus = corpusReader.flatMap { reader in corpusSource.map { (reader: reader, source: $0) } }
         let identity = HoverFeed.Identity(
