@@ -1,5 +1,6 @@
 package import AemiCore
 package import AtelierFileTree
+import AtelierLSP
 package import DiffCore
 package import DiffGit
 package import DiffRendering
@@ -60,6 +61,8 @@ package final class DiffViewerModel {
     /// What one parse of each Swift side learned, shared by the intraline diff, the colour tier and hover, so a side
     /// is parsed once for all three (PERF-11 step 3).
     let syntaxFacts = SyntaxFactsStore()
+    /// Which displayed Swift sides take sourcekit-lsp's semantic colour.
+    let semanticColor = SemanticColorSource()
     let reader: any SourceReading
     /// Spawns the model's work, and its views' work on its behalf, so a test settles on one provider.
     package let taskProvider: any TaskProvider
@@ -118,7 +121,8 @@ package final class DiffViewerModel {
         self.preparer = preparer
         let pipeline = RenderPipeline(
             preparer: preparer, taskProvider: taskProvider, options: Self.options(settings, palette: palette),
-            refinement: SwiftColorRefinement(tiers: RefinedSides.tiers(store: syntaxFacts), clock: clock))
+            refinement: SwiftColorRefinement(
+                tiers: RefinedSides.tiers(store: syntaxFacts) + [semanticColor.tier(store: syntaxFacts)], clock: clock))
         self.pipeline = pipeline
         gapDrags = GapDragController(
             taskProvider: taskProvider, clock: clock, expansion: { pipeline.expansion(of: $0) },
@@ -138,6 +142,11 @@ package final class DiffViewerModel {
             isolatesChanges: settings.isolatesChanges)
         pipeline.onEvent = { [weak self] event in self?.handle(event) }
         pipeline.refinesSwiftColor = settings.refinesSwiftColor
+        semanticColor.isEnabled = settings.semanticColor
+        semanticColor.readShownRight { [weak self] in
+            guard let self else { return (nil, []) }
+            return (commitScope?.right ?? right.source, right.entries)
+        }
         settings.addObserver(self) { [weak self] change in self?.settingsChanged(change) }
     }
 
@@ -626,6 +635,7 @@ package final class DiffViewerModel {
             // The explorers' placement is an appearance setting, and grouping applies to the merged sidebar only.
             case .appearance:
                 refreshCommitGroups(force: false)
+                followSemanticColorSetting()
                 pipeline.refinesSwiftColor = settings.refinesSwiftColor
             // DiagnosticsModel observes ViewerSettings on its own; nothing for this model to do here.
             case .diagnostics: break
