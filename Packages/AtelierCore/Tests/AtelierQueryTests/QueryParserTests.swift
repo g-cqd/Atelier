@@ -99,6 +99,27 @@ struct QueryParserTests {
     }
 
     @Test
+    func `is-not? reads a lone property name as tree-sitter does`() throws {
+        let query = try QueryParser.parse("((identifier) @function.builtin (#is-not? local))")
+        let parts = try requireSequence(try #require(query.patterns.first))
+        #expect(parts.last == .predicate(.isNot(capture: nil, property: "local", value: nil)))
+    }
+
+    @Test
+    func `is? reads a capture in any position and a value`() throws {
+        let query = try QueryParser.parse("((identifier) @id (#is? named @id) (#is-not? @id key value))")
+        let parts = try requireSequence(try #require(query.patterns.first))
+        #expect(parts[1] == .predicate(.is(capture: "@id", property: "named", value: nil)))
+        #expect(parts[2] == .predicate(.isNot(capture: "@id", property: "key", value: "value")))
+    }
+
+    @Test
+    func `is-not? without a property name or with four arguments is an error`() {
+        #expect(throws: QueryError.self) { try QueryParser.parse("((identifier) @id (#is-not? @id))") }
+        #expect(throws: QueryError.self) { try QueryParser.parse("((identifier) @id (#is-not? @id a b c))") }
+    }
+
+    @Test
     func `Capture after alternation is applied to each alternative`() throws {
         let query = try QueryParser.parse("[(true) (false) (null)] @constant.builtin")
         #expect(query.patterns.count == 1)
