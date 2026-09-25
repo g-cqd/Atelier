@@ -309,6 +309,24 @@ package final class ViewerSettings {
         }
     }
 
+    /// Whether the code panes, the single file's and the cards', rubber-band past their edges; the card list keeps its
+    /// own bounce either way (book SET-09, D25).
+    package var bouncesAtEdges: Bool {
+        didSet { if bouncesAtEdges != oldValue { store(bouncesAtEdges, Key.bouncesAtEdges, .appearance) } }
+    }
+    /// Whether a file pane scrolls on past its last line until that line reaches its top, rather than stopping with
+    /// it at its bottom (book CARD-19).
+    package var scrollsPastEnd: Bool {
+        didSet { if scrollsPastEnd != oldValue { store(scrollsPastEnd, Key.scrollsPastEnd, .appearance) } }
+    }
+    /// Whether a file opens scrolled to its first change rather than at its top (book DIFF-08). A file tab that comes
+    /// back to where it was left, and a file that fits its pane, are not scrolled to it either way.
+    package var scrollsToFirstChange: Bool {
+        didSet {
+            if scrollsToFirstChange != oldValue { store(scrollsToFirstChange, Key.scrollsToFirstChange, .appearance) }
+        }
+    }
+
     let defaults: UserDefaults
 
     /// Set while scoped properties are reassigned their base value after their override was removed, so `store`
@@ -402,6 +420,9 @@ package final class ViewerSettings {
             defaults.string(forKey: Key.appearanceScheme).flatMap(AppearanceScheme.init(rawValue:)) ?? .system
         badgeScheme = defaults.string(forKey: Key.badgeScheme).flatMap(BadgeScheme.init(rawValue:)) ?? .classic
         matchesThemeAppearance = defaults.object(forKey: Key.matchesThemeAppearance) as? Bool ?? false
+        bouncesAtEdges = defaults.bool(forKey: Key.bouncesAtEdges)
+        scrollsPastEnd = defaults.bool(forKey: Key.scrollsPastEnd)
+        scrollsToFirstChange = defaults.object(forKey: Key.scrollsToFirstChange) as? Bool ?? true
         settingObserver = NotificationCenter.default.addObserver(
             forName: Self.settingChangedNotification, object: nil, queue: .main
         ) { [weak self] notification in
@@ -456,5 +477,8 @@ extension ViewerSettings {
         static let appearanceScheme = "appearanceScheme"
         static let badgeScheme = "badgeScheme"
         static let matchesThemeAppearance = "matchesThemeAppearance"
+        static let bouncesAtEdges = "bouncesAtEdges"
+        static let scrollsPastEnd = "scrollsPastEnd"
+        static let scrollsToFirstChange = "scrollsToFirstChange"
     }
 }

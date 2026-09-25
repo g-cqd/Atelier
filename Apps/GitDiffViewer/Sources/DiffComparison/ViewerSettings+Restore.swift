@@ -56,6 +56,15 @@ extension ViewerSettings {
             defaults.data(forKey: Key.diffHeuristics)
                 .flatMap { try? DefaultsJSON.decode(DiffHeuristics.self, from: $0) } ?? DiffHeuristics()
         }
+        bouncesAtEdges = restoredValue(Key.bouncesAtEdges, appDefault: false) {
+            defaults.bool(forKey: Key.bouncesAtEdges)
+        }
+        scrollsPastEnd = restoredValue(Key.scrollsPastEnd, appDefault: false) {
+            defaults.bool(forKey: Key.scrollsPastEnd)
+        }
+        scrollsToFirstChange = restoredValue(Key.scrollsToFirstChange, appDefault: true) {
+            defaults.object(forKey: Key.scrollsToFirstChange) as? Bool ?? true
+        }
     }
 
     private func restoreAppearance() {
@@ -152,7 +161,8 @@ extension ViewerSettings {
             case .diff:
                 return [
                     isolatesChanges != false, contextLines != 3, granularity != .word,
-                    diffHeuristics != DiffHeuristics()
+                    diffHeuristics != DiffHeuristics(), bouncesAtEdges != false, scrollsPastEnd != false,
+                    scrollsToFirstChange != true
                 ]
                 .count { $0 }
             case .appearance:
