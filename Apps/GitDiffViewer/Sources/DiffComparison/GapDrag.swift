@@ -7,7 +7,8 @@ package import DiffRendering
 ///
 /// Travel along the handle's direction reveals rows, one per row height; travel back hides them again, down to the
 /// state the drag began from and never past it, so a drag against the handle's direction discloses nothing. Held in
-/// the edge zone of the viewport or the card, the handle keeps revealing, one row per ``holdInterval``.
+/// the edge zone of the viewport or the card, the handle keeps revealing, one row per ``holdInterval``, as long as the
+/// pointer has not come back past where the drag began: a pointer behind its start reveals nothing, edge or not.
 package struct GapDrag: Equatable, Sendable {
     package let key: GapKey
     package let handle: GapHandle
@@ -23,6 +24,8 @@ package struct GapDrag: Equatable, Sendable {
     private var held = 0
     /// How far the pointer sits into the edge zone in the handle's direction, in points; zero or less when clear.
     private var edgeOvershoot: CGFloat = 0
+    /// Whether the pointer sits behind where the drag began, against the handle's direction.
+    private var isBehindStart = false
 
     /// The pointer's depth into the edge zone at which the hold reaches its fastest rate.
     package static let rampDepth: CGFloat = 60
@@ -53,22 +56,27 @@ package struct GapDrag: Equatable, Sendable {
     }
 
     /// How long to wait before the next row while the pointer stays where it is: nil unless it sits in an edge zone
-    /// in the handle's direction and the gap still hides rows.
+    /// in the handle's direction, not behind where the drag began, and the gap still hides rows.
     package var holdInterval: Duration? {
-        guard revealed < limit else { return nil }
+        guard revealed < limit, !isBehindStart else { return nil }
         return Self.holdInterval(overshoot: edgeOvershoot)
     }
 
     /// Follows the pointer, `offset` points below where the drag began (negative above) and `edgeOvershoot` points
     /// into the edge zone in the handle's direction.
     package mutating func move(offset: CGFloat, edgeOvershoot: CGFloat) {
-        travelled = Int((offset * handle.revealDirection / lineHeight).rounded())
+        let along = offset * handle.revealDirection
+        travelled = Int((along / lineHeight).rounded())
         self.edgeOvershoot = edgeOvershoot
+        isBehindStart = along < 0
+        // Back behind its start, the pointer returns the gap to where the drag began, rows it held open included.
+        if isBehindStart { held = 0 }
     }
 
-    /// Reveals one more row for a pointer held in an edge zone; nothing once the gap is open.
+    /// Reveals one more row for a pointer held in an edge zone; nothing once the gap is open, nor while the pointer
+    /// sits behind where the drag began.
     package mutating func hold() {
-        guard travelled + held < limit else { return }
+        guard !isBehindStart, travelled + held < limit else { return }
         held += 1
     }
 
