@@ -34,7 +34,9 @@ struct ComparisonWindow: View {
         self.services = services
         let windowSettings = ViewerSettings()
         _settings = State(initialValue: windowSettings)
-        _model = State(initialValue: DiffViewerModel(settings: windowSettings, reader: reader))
+        _model = State(
+            initialValue: DiffViewerModel(
+                settings: windowSettings, reader: reader, history: CommitHistory(runner: services.runner)))
     }
 
     var body: some View {
