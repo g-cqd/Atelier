@@ -12,10 +12,10 @@ package enum HoverQuerySide: Sendable, Equatable {
     case new
 }
 
-/// The window's hover-documentation state: keeps a doc-comment index fed with both sides of every prepared Swift
-/// file and with the right side's other Swift files, the corpus, and answers hover hits from it, tiered behind a
-/// language server when one is available for the file under the pointer; a TypeScript, JavaScript or Go file asks its
-/// language server alone.
+/// The window's hover-documentation state: keeps a doc-comment index fed with both sides of every prepared file of a
+/// language it reads (Swift, TypeScript, JavaScript and Go) and with the right side's other such files, the corpus,
+/// and answers hover hits from it, tiered behind a language server when one is available for the file under the
+/// pointer.
 ///
 /// A feed indexes only what changed. A feed identical to the last does nothing; a changeset file keeps its entries
 /// while its blob id stays the same; the corpus pass reads only the files not indexed at their blob id. The index
@@ -47,8 +47,6 @@ package final class HoverDocumentationModel {
             self.oldBlobID = oldBlobID
             self.newBlobID = newBlobID
         }
-
-        var isSwift: Bool { leftPath.hasSuffix(".swift") || (rightPath?.hasSuffix(".swift") ?? false) }
 
         /// Whether a side has text but no blob id, as a working-tree file too large to hash: its text can change
         /// while nothing else about the feed does. A side with no text is a missing side.
@@ -124,9 +122,9 @@ package final class HoverDocumentationModel {
         newSideDocs = DocIndexHoverProvider(index: index, side: .new)
     }
 
-    /// Feeds the doc-comment index both sides of every changed Swift file, and remembers `root`'s canonical form for
-    /// the language server tier; a root that names no existing directory counts as not on disk. Given a corpus
-    /// reader, source and entries, a background pass then adds the right side's other Swift files, within
+    /// Feeds the doc-comment index both sides of every changed file it reads, and remembers `root`'s canonical form
+    /// for the language server tier; a root that names no existing directory counts as not on disk. Given a corpus
+    /// reader, source and entries, a background pass then adds the right side's other files it reads, within
     /// ``maxCorpusFileSize`` and ``maxCorpusFiles``, ``corpusChunkSize`` at a time. A newer feed stops the one in
     /// flight; one identical to the last does nothing. With no files, hovers answer nothing and the index keeps what
     /// it holds for the next feed, which a reload makes with the same files.
@@ -148,8 +146,10 @@ package final class HoverDocumentationModel {
         if let identity, identity == lastFeed { return }
         lastFeed = identity
         stopFeeding()
-        let feed = HoverFeed(root: repositoryRoot, files: files, corpusEntries: corpus == nil ? [] : corpusEntries)
         let index = index
+        let feed = HoverFeed(
+            root: repositoryRoot, files: files, corpusEntries: corpus == nil ? [] : corpusEntries,
+            indexes: { path in index.indexes(Language(fileExtension: URL(filePath: path).pathExtension)) })
         let changesetTask = taskProvider.task(priority: .utility) { () async throws in
             try await index.keepOnly(feed.scope)
             try await index.upsert(feed.changeset)
@@ -204,9 +204,9 @@ package final class HoverDocumentationModel {
     }
 
     /// Answers a hover hit, in ``DiffTextKit/HoverHit``'s coordinates, through ``AtelierLSP/TieredHoverProviders``.
-    /// A Swift file asks the language server (new side of an on-disk file only), the doc-comment index of the hovered
-    /// side, then the SDK tier; a file another of ``languageServers`` serves asks that server alone, on the same
-    /// terms. Any other file has no hover.
+    /// A file asks its language server (new side of an on-disk file only), then the doc-comment index of the hovered
+    /// side when the index reads its language, and a Swift file the SDK tier last. A file neither a server nor the
+    /// index reads has no hover. A side from history, which no server asks, gets the doc-comment index alone.
     package func hover(fileIndex: Int, side: HoverQuerySide, line: Int, utf16Column: Int) async -> HoverContent? {
         guard let file = filesByIndex[fileIndex] else { return nil }
         let path = side == .new ? (file.rightPath ?? file.leftPath) : file.leftPath
@@ -215,7 +215,10 @@ package final class HoverDocumentationModel {
         // answer or none, rather than a wrong one, and is never parsed.
         let language = Language(fileExtension: URL(filePath: path).pathExtension)
         let isSwift = language == .swift
-        guard isSwift || LanguageServerDescriptor.serving(language, among: languageServers) != nil else { return nil }
+        let isIndexed = index.indexes(language)
+        guard isIndexed || LanguageServerDescriptor.serving(language, among: languageServers) != nil else {
+            return nil
+        }
         let content = side == .new ? file.newText : file.oldText
         guard !content.isEmpty else { return nil }
         let blobID = side == .new ? file.newBlobID : file.oldBlobID
@@ -225,7 +228,7 @@ package final class HoverDocumentationModel {
 
         let primary = primaryProvider(side: side, onDiskRoot: onDiskRoot)
         let docs = side == .new ? newSideDocs : oldSideDocs
-        let tiers = isSwift ? [primary, docs, sdkProvider].compactMap { $0 } : [primary].compactMap { $0 }
+        let tiers = [primary, isIndexed ? docs : nil, isSwift ? sdkProvider : nil].compactMap { $0 }
         guard !tiers.isEmpty else { return nil }
         return try? await TieredHoverProviders(tiers).hover(query)
     }
@@ -247,8 +250,8 @@ package final class HoverDocumentationModel {
     }
 }
 
-/// The documents one feed indexes: both sides of the changeset's Swift files, each answering for its own side, and
-/// the corpus, the right side's other Swift files, which answer for both.
+/// The documents one feed indexes: both sides of the changeset's files the index reads, each answering for its own
+/// side, and the corpus, the right side's other such files, which answer for both.
 private struct HoverFeed: Sendable {
     /// A corpus file to read, and the URI it is indexed under.
     struct CorpusFile: Sendable {
@@ -297,15 +300,20 @@ private struct HoverFeed: Sendable {
     /// Every document of the feed with the sides it answers for; the index keeps nothing else.
     let scope: [String: DocIndexSides]
 
-    init(root: URL?, files: [HoverDocumentationModel.FileEntry], corpusEntries: [GitTreeEntry]) {
+    /// The documents of `files` and `corpusEntries` whose path `indexes` accepts, which the index reads by language;
+    /// the new side's files under `root` when it is on disk.
+    init(
+        root: URL?, files: [HoverDocumentationModel.FileEntry], corpusEntries: [GitTreeEntry],
+        indexes: (String) -> Bool
+    ) {
         var changeset: [String: DocIndexFile] = [:]
         func add(path: String, blobID: String?, text: String, onDiskRoot: URL?, side: DocIndexSides) {
-            guard !text.isEmpty else { return }
+            guard !text.isEmpty, indexes(path) else { return }
             let uri = HoverDocumentationModel.uri(path: path, blobID: blobID, onDiskRoot: onDiskRoot)
             let sides = side.union(changeset[uri]?.sides ?? [])
             changeset[uri] = DocIndexFile(uri: uri, content: text, blobID: blobID, sides: sides)
         }
-        for file in files where file.isSwift {
+        for file in files {
             add(path: file.leftPath, blobID: file.oldBlobID, text: file.oldText, onDiskRoot: nil, side: .old)
             add(
                 path: file.rightPath ?? file.leftPath, blobID: file.newBlobID, text: file.newText, onDiskRoot: root,
@@ -314,7 +322,7 @@ private struct HoverFeed: Sendable {
         var scope = changeset.mapValues(\.sides)
         var corpus: [CorpusFile] = []
         let changed = Set(files.map { $0.rightPath ?? $0.leftPath })
-        for entry in Self.corpusCandidates(entries: corpusEntries, excluding: changed) {
+        for entry in Self.corpusCandidates(entries: corpusEntries, excluding: changed, indexes: indexes) {
             let uri = HoverDocumentationModel.uri(path: entry.relativePath, blobID: entry.blobID, onDiskRoot: root)
             scope[uri] = .both
             // A document the changeset already holds is not read again.
@@ -325,14 +333,19 @@ private struct HoverFeed: Sendable {
         self.scope = scope
     }
 
-    /// The Swift files outside the changeset within the corpus size cap, at most the corpus count cap of them.
-    private static func corpusCandidates(entries: [GitTreeEntry], excluding changed: Set<String>) -> [GitTreeEntry] {
-        Array(
-            entries.lazy
-                .filter {
-                    $0.relativePath.hasSuffix(".swift") && !changed.contains($0.relativePath)
-                        && $0.size <= HoverDocumentationModel.maxCorpusFileSize
-                }
-                .prefix(HoverDocumentationModel.maxCorpusFiles))
+    /// The files the index reads outside the changeset within the corpus size cap, at most the corpus count cap of
+    /// them.
+    private static func corpusCandidates(
+        entries: [GitTreeEntry], excluding changed: Set<String>, indexes: (String) -> Bool
+    ) -> [GitTreeEntry] {
+        var candidates: [GitTreeEntry] = []
+        for entry in entries where candidates.count < HoverDocumentationModel.maxCorpusFiles {
+            if indexes(entry.relativePath), !changed.contains(entry.relativePath),
+                entry.size <= HoverDocumentationModel.maxCorpusFileSize
+            {
+                candidates.append(entry)
+            }
+        }
+        return candidates
     }
 }
