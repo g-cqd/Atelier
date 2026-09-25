@@ -35,6 +35,9 @@ struct MyersSolver<Element: Equatable> {
     private(set) var wasCancelled = false
     /// Set when the script proved longer than `maximumEdits`; the edits appended so far are then incomplete.
     private(set) var exceededBudget = false
+    /// Set once a search reached the cost limit and split its problem heuristically: the script may not be the
+    /// shortest.
+    private(set) var reachedCostLimit = false
 
     init(old: [Element], new: [Element], costLimit: Int, maximumEdits: Int = .max) {
         self.old = old
@@ -141,6 +144,7 @@ struct MyersSolver<Element: Equatable> {
             // No round before this one met the other search, so the script holds at least 2d - 1 edits.
             if 2 * d - 1 > maximumEdits { return .overBudget }
             if d >= costLimit {
+                reachedCostLimit = true
                 let split = LineDiff.costLimitedSplit(round: d, n: n, m: m) { forward[offset + $0] }
                 return .found(Snake(x: split.x, y: split.y, u: split.x, v: split.y, edits: 2 * d))
             }
@@ -199,5 +203,17 @@ struct MyersSolver<Element: Equatable> {
         }
 
         preconditionFailure("Myers middle snake search must terminate within (N + M + 1) / 2 + 1 iterations")
+    }
+}
+
+/// How the searches of one line diff ended: whether a cancellation stopped one, and whether one settled at the cost
+/// limit, either of which leaves a valid script that may not be the shortest.
+struct SearchOutcome: Equatable {
+    var wasCancelled = false
+    var reachedCostLimit = false
+
+    mutating func merge(_ other: SearchOutcome) {
+        wasCancelled = wasCancelled || other.wasCancelled
+        reachedCostLimit = reachedCostLimit || other.reachedCostLimit
     }
 }
