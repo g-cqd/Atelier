@@ -214,16 +214,17 @@ package final class HoverDocumentationModel {
         let uri = Self.uri(path: path, blobID: blobID, onDiskRoot: onDiskRoot)
         let query = HoverQuery(documentURI: uri, content: content, line: line, utf16Column: utf16Column)
 
-        let primary = await primaryProvider(side: side, onDiskRoot: onDiskRoot)
+        let primary = primaryProvider(side: side, onDiskRoot: onDiskRoot)
         let docs = side == .new ? newSideDocs : oldSideDocs
         let tiers = [primary, docs, sdkProvider].compactMap { $0 }
         return try? await TieredHoverProviders(tiers).hover(query)
     }
 
-    private func primaryProvider(side: HoverQuerySide, onDiskRoot: URL?) async -> (any HoverProvider)? {
+    /// The language server tier, for the new side of an on-disk file only: a side read from git history has no
+    /// on-disk document for a server to read.
+    private func primaryProvider(side: HoverQuerySide, onDiskRoot: URL?) -> (any HoverProvider)? {
         guard side == .new, let onDiskRoot, let lspRegistry else { return nil }
-        guard let service = await lspRegistry.session(forRoot: onDiskRoot, server: .sourceKitLSP) else { return nil }
-        return LanguageServerHoverProvider(service: service, resolvesDocumentationPages: true)
+        return LanguageServerHoverProvider(registry: lspRegistry, servers: [.sourceKitLSP], workspaceRoot: onDiskRoot)
     }
 
     /// A `file://` URI under `onDiskRoot` when given, or a synthetic `atelier-blob://<oid>/<path>` URI otherwise,
