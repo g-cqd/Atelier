@@ -7,6 +7,7 @@ package enum SettingLabel {
     package static let treeStyle = "Arrange files as"
     package static let showsChangesOnly = "Show changed files only"
     package static let showsIgnoredFiles = "Show ignored files"
+    package static let groupsByCommit = "Group changed files by commit"
     package static let syncScrolling = "Keep panes scrolled together"
     package static let showsMinimap = "Show minimap"
     package static let showsStatusBar = "Show status bar"

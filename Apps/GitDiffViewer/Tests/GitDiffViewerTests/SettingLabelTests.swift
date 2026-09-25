@@ -9,7 +9,8 @@ struct SettingLabelTests {
     func `every canonical label is non-empty and stable`() {
         let labels = [
             SettingLabel.explorerPlacement, SettingLabel.treeStyle, SettingLabel.showsChangesOnly,
-            SettingLabel.showsIgnoredFiles, SettingLabel.syncScrolling, SettingLabel.showsMinimap,
+            SettingLabel.showsIgnoredFiles, SettingLabel.groupsByCommit, SettingLabel.syncScrolling,
+            SettingLabel.showsMinimap,
             SettingLabel.showsStatusBar, SettingLabel.isolatesChanges, SettingLabel.contextLines,
             SettingLabel.granularity, SettingLabel.whitespace, SettingLabel.advancedMatching,
             SettingLabel.anchorsRareLines, SettingLabel.slidesToIndentation, SettingLabel.pairsSimilarLines,

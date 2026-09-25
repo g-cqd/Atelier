@@ -35,6 +35,9 @@ extension ViewerSettings {
         showsIgnoredFiles = restoredValue(Key.showsIgnoredFiles, appDefault: false) {
             defaults.bool(forKey: Key.showsIgnoredFiles)
         }
+        groupsByCommit = restoredValue(Key.groupsByCommit, appDefault: false) {
+            defaults.bool(forKey: Key.groupsByCommit)
+        }
         showsMinimap = restoredValue(Key.showsMinimap, appDefault: true) {
             defaults.object(forKey: Key.showsMinimap) as? Bool ?? true
         }
@@ -158,8 +161,8 @@ extension ViewerSettings {
             case .general:
                 return [
                     explorerPlacement != .top, treeStyle != .hierarchy, showsChangesOnly != false,
-                    showsIgnoredFiles != false, syncsScrolling != true, showsMinimap != true,
-                    showsStatusBar != true, autoRefresh != true
+                    showsIgnoredFiles != false, groupsByCommit != false, syncsScrolling != true,
+                    showsMinimap != true, showsStatusBar != true, autoRefresh != true
                 ]
                 .count { $0 }
             case .diff:

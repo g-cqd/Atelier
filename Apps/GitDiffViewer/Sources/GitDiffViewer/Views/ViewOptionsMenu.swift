@@ -11,6 +11,9 @@ import SwiftUI
 /// with every other toolbar item whenever one of their check marks changes.
 struct ViewOptionsMenu: NSViewRepresentable {
     let settings: ViewerSettings
+    /// Why grouping by commit does not apply to this window, shown under its item; nil when it applies or is off.
+    /// The item stays enabled whatever it says, since it is still the preference (GIT-06).
+    var commitGroupingUnavailableReason: String?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(settings: settings)
@@ -26,7 +29,7 @@ struct ViewOptionsMenu: NSViewRepresentable {
     }
 
     func updateNSView(_ button: NSPopUpButton, context: Context) {
-        let snapshot = Snapshot(settings)
+        let snapshot = Snapshot(settings, commitGroupingUnavailableReason: commitGroupingUnavailableReason)
         guard context.coordinator.snapshot != snapshot else { return }
         context.coordinator.snapshot = snapshot
         button.menu = context.coordinator.menu(for: snapshot)
@@ -46,13 +49,15 @@ struct ViewOptionsMenu: NSViewRepresentable {
         let showsChangesOnly: Bool
         let showsIgnoredFiles: Bool
         let treeStyle: FileTreeStyle
+        let groupsByCommit: Bool
+        let commitGroupingUnavailableReason: String?
         let explorerPlacement: ExplorerPlacement
         let heuristics: DiffHeuristics
         let bouncesAtEdges: Bool
         let scrollsPastEnd: Bool
         let scrollsToFirstChange: Bool
 
-        init(_ settings: ViewerSettings) {
+        init(_ settings: ViewerSettings, commitGroupingUnavailableReason: String? = nil) {
             wrapsLines = settings.wrapsLines
             syncsScrolling = settings.syncsScrolling
             showsMinimap = settings.showsMinimap
@@ -63,6 +68,8 @@ struct ViewOptionsMenu: NSViewRepresentable {
             showsChangesOnly = settings.showsChangesOnly
             showsIgnoredFiles = settings.showsIgnoredFiles
             treeStyle = settings.treeStyle
+            groupsByCommit = settings.groupsByCommit
+            self.commitGroupingUnavailableReason = commitGroupingUnavailableReason
             explorerPlacement = settings.explorerPlacement
             heuristics = settings.diffHeuristics
             bouncesAtEdges = settings.bouncesAtEdges
@@ -179,6 +186,7 @@ struct ViewOptionsMenu: NSViewRepresentable {
                         ("Tree with compact folders", snapshot.treeStyle == .compact, #selector(treeCompact)),
                         ("Flat list of paths", snapshot.treeStyle == .flat, #selector(treeFlat))
                     ]),
+                commitGroupingToggle(for: snapshot),
                 submenu(
                     SettingLabel.explorerPlacement,
                     [
@@ -202,6 +210,13 @@ struct ViewOptionsMenu: NSViewRepresentable {
             return item
         }
 
+        /// "Group changed files by commit", carrying the reason it does not apply to this window as its subtitle.
+        private func commitGroupingToggle(for snapshot: Snapshot) -> NSMenuItem {
+            let item = toggle(SettingLabel.groupsByCommit, snapshot.groupsByCommit, #selector(toggleGroupsByCommit))
+            item.subtitle = snapshot.commitGroupingUnavailableReason
+            return item
+        }
+
         private func submenu(_ title: String, _ choices: [(String, Bool, Selector)]) -> NSMenuItem {
             let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
             let menu = NSMenu(title: title)
@@ -221,6 +236,7 @@ struct ViewOptionsMenu: NSViewRepresentable {
         @objc func toggleScrollToChange() { settings.scrollsToFirstChange.toggle() }
         @objc func toggleChangesOnly() { settings.showsChangesOnly.toggle() }
         @objc func toggleIgnoredFiles() { settings.showsIgnoredFiles.toggle() }
+        @objc func toggleGroupsByCommit() { settings.groupsByCommit.toggle() }
         @objc func toggleAnchors() { settings.diffHeuristics.anchorsRareLines.toggle() }
         @objc func toggleSlides() { settings.diffHeuristics.slidesToIndentation.toggle() }
         @objc func togglePairs() { settings.diffHeuristics.pairsSimilarLines.toggle() }

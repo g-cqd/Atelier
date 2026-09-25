@@ -153,6 +153,7 @@ extension SettingOverride {
             case Key.showsChangesOnly: SettingLabel.showsChangesOnly
             case Key.showsIgnoredFiles: SettingLabel.showsIgnoredFiles
             case Key.treeStyle: SettingLabel.treeStyle
+            case Key.groupsByCommit: SettingLabel.groupsByCommit
             default: key
         }
     }
@@ -184,6 +185,7 @@ extension SettingOverride {
             case Key.showsChangesOnly: onOff(settings.showsChangesOnly)
             case Key.showsIgnoredFiles: onOff(settings.showsIgnoredFiles)
             case Key.treeStyle: settings.treeStyle.displayName
+            case Key.groupsByCommit: onOff(settings.groupsByCommit)
             default: ""
         }
     }

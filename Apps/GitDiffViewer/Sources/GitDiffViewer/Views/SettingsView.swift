@@ -64,6 +64,14 @@ private struct GeneralSettings: View {
                     Picker(SettingLabel.treeStyle, selection: $settings.treeStyle) {
                         ForEach(FileTreeStyle.allCases) { Text($0.displayName).tag($0) }
                     }
+                    Toggle(SettingLabel.groupsByCommit, isOn: $settings.groupsByCommit)
+                    Text(
+                        """
+                        Lists the files each commit changed under a section of its own. Applies to the flat list in \
+                        the merged sidebar, when the left side is an ancestor of the right in one repository.
+                        """
+                    )
+                    .settingsCaption()
                     Toggle(SettingLabel.showsChangesOnly, isOn: $settings.showsChangesOnly)
                     Toggle(SettingLabel.showsIgnoredFiles, isOn: $settings.showsIgnoredFiles)
                     Text(

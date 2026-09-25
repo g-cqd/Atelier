@@ -12,7 +12,10 @@ extension ViewerSettings {
     static func scopedKeys(for category: SettingsCategory) -> Set<String> {
         switch category {
             case .general:
-                [Key.showsChangesOnly, Key.showsIgnoredFiles, Key.treeStyle, Key.showsMinimap, Key.autoRefresh]
+                [
+                    Key.showsChangesOnly, Key.showsIgnoredFiles, Key.treeStyle, Key.groupsByCommit, Key.showsMinimap,
+                    Key.autoRefresh
+                ]
             case .diff:
                 [
                     Key.isolatesChanges, Key.contextLines, Key.granularity, Key.diffHeuristics, Key.bouncesAtEdges,
@@ -31,7 +34,8 @@ extension ViewerSettings {
     private static let keysByProperty: [PartialKeyPath<ViewerSettings>: String] = [
         \.mode: Key.mode, \.explorerPlacement: Key.explorerPlacement, \.wrapsLines: Key.wrapsLines,
         \.syncsScrolling: Key.syncsScrolling, \.showsChangesOnly: Key.showsChangesOnly,
-        \.showsIgnoredFiles: Key.showsIgnoredFiles, \.autoRefresh: Key.autoRefresh, \.granularity: Key.granularity,
+        \.showsIgnoredFiles: Key.showsIgnoredFiles, \.groupsByCommit: Key.groupsByCommit,
+        \.autoRefresh: Key.autoRefresh, \.granularity: Key.granularity,
         \.diffHeuristics: Key.diffHeuristics, \.showsMinimap: Key.showsMinimap, \.showsStatusBar: Key.showsStatusBar,
         \.treeStyle: Key.treeStyle, \.wrapColumn: Key.wrapColumn, \.themePath: Key.themePath,
         \.lineHeightMultiple: Key.lineHeightMultiple, \.contextLines: Key.contextLines,
@@ -142,6 +146,9 @@ extension ViewerSettings {
             case Key.showsIgnoredFiles:
                 let value = defaults.bool(forKey: effectiveKey(key))
                 if value != showsIgnoredFiles { showsIgnoredFiles = value }
+            case Key.groupsByCommit:
+                let value = defaults.bool(forKey: effectiveKey(key))
+                if value != groupsByCommit { groupsByCommit = value }
             case Key.granularity:
                 let value =
                     defaults.string(forKey: effectiveKey(key)).flatMap(IntralineGranularity.init(rawValue:))
