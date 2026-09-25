@@ -35,6 +35,63 @@ package struct RenderedGap: Sendable, Hashable {
     package var hasSeparator: Bool { marker.handles.count == 2 }
 }
 
+/// Identifies a change of one file in a rendered document: its place among the file's changes in the inline layout
+/// (book DIFF-04). A reload keeps it for the change at the same place.
+package struct ChangeKey: Hashable, Sendable {
+    package let fileIndex: Int
+    package let changeIndex: Int
+
+    package init(fileIndex: Int, changeIndex: Int) {
+        self.fileIndex = fileIndex
+        self.changeIndex = changeIndex
+    }
+}
+
+/// A change where the compact inline view shows it (book DIFF-04): folded into the new file's lines, or disclosed as
+/// the inline view shows it, with the gutter marker that switches between the two.
+package struct RenderedChange: Sendable, Hashable {
+    package enum Kind: Sendable, Hashable {
+        /// Adds lines and removes none.
+        case added
+        /// Removes lines and adds none.
+        case removed
+        /// Removes lines and adds others.
+        case modified
+    }
+
+    package let key: ChangeKey
+    package let kind: Kind
+    /// The rows it takes: its added rows while folded, its removed and added rows while disclosed. A folded removal
+    /// takes none, and lies on the boundary above `rows.lowerBound`, which is `rows.count` below the last row.
+    package let rows: Range<Int>
+    package let isDisclosed: Bool
+    package let removedLines: Int
+    package let addedLines: Int
+
+    package init(
+        key: ChangeKey, kind: Kind, rows: Range<Int>, isDisclosed: Bool, removedLines: Int, addedLines: Int
+    ) {
+        self.key = key
+        self.kind = kind
+        self.rows = rows
+        self.isDisclosed = isDisclosed
+        self.removedLines = removedLines
+        self.addedLines = addedLines
+    }
+
+    /// What its marker's tooltip says: the change, and what a click does.
+    package var help: String {
+        func lines(_ count: Int) -> String { "\(count) \(count == 1 ? "line" : "lines")" }
+        let change =
+            switch kind {
+                case .added: "Added: \(lines(addedLines))"
+                case .removed: "Removed: \(lines(removedLines))"
+                case .modified: "Modified: \(lines(removedLines)) removed, \(addedLines) added"
+            }
+        return "\(change). Click to \(isDisclosed ? "hide" : "show") the change (⌥⌘↩)"
+    }
+}
+
 package struct RowMeta: Sendable {
     package let kind: RowKind
     package let oldNumber: Int?
@@ -141,14 +198,17 @@ package final class RenderedText: @unchecked Sendable {
     package let baselineOffset: CGFloat
     /// The height of one row, the font's own line height once the chosen multiple is applied.
     package let lineHeight: CGFloat
+    /// The changes the compact inline view marks, in row order; none in any other view (book DIFF-04).
+    package let changes: [RenderedChange]
     /// The bands between two rows, which the text holds as paragraph spacing.
     private let bandsBetweenRows: Int
 
     package init(
         side: RenderedSide, palette: DiffPalette, attributed: NSAttributedString, rows: [RowMeta],
         gaps: [RenderedGap], lineStarts: [Int], longestLine: Int, baselineOffset: CGFloat = 0,
-        lineHeight: CGFloat? = nil
+        lineHeight: CGFloat? = nil, changes: [RenderedChange] = []
     ) {
+        self.changes = changes
         self.side = side
         self.palette = palette
         self.attributed = attributed
@@ -228,6 +288,21 @@ package final class RenderedText: @unchecked Sendable {
             if lineStarts[middle] <= offset { low = middle + 1 } else { high = middle }
         }
         return max(low - 1, 0)
+    }
+
+    /// The changes whose rows, or whose boundary for a folded removal, lie within `boundaries`, in order: a change
+    /// over rows `a ..< b` spans the boundaries `a ... b`.
+    /// - Complexity: O(log changes + changes returned)
+    package func changes(on boundaries: ClosedRange<Int>) -> ArraySlice<RenderedChange> {
+        var low = 0
+        var high = changes.count
+        while low < high {
+            let middle = (low + high) / 2
+            if changes[middle].rows.upperBound < boundaries.lowerBound { low = middle + 1 } else { high = middle }
+        }
+        var end = low
+        while end < changes.count, changes[end].rows.lowerBound <= boundaries.upperBound { end += 1 }
+        return changes[low ..< end]
     }
 
     /// The gaps on the boundaries in `boundaries`, in order.
