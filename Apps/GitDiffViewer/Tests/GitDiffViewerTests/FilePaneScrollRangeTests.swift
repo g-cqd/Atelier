@@ -107,6 +107,45 @@ struct FilePaneScrollToRowTests {
         #expect(try pane.bottom(ofRow: pane.lastRow) + pane.below <= pane.clip.bounds.height)
     }
 
+    /// Past the text a placement lays out above its row, TextKit places the row after its estimates of the rows above
+    /// it, which the placement follows as the rows around the row are laid out; scrolled to its end, the pane ends at
+    /// the last line wherever TextKit then puts it.
+    @Test(arguments: [true, false])
+    func `a change near the end of a long file opens three lines below the pane's top, the rows above not laid out`(
+        wrapsLines: Bool
+    ) throws {
+        let sut = HostedPanes(showing: .longLines(1_000, changedAt: 900), layout: .inline, wrapsLines: wrapsLines)
+
+        let row = try #require(sut.requestedRow)
+        let pane = try #require(try sut.panes().first)
+        #expect(pane.rendered.lineStarts[row] > RowPlacement.textLaidOutAbove)
+        let below = try pane.top(ofRow: row) - pane.clip.bounds.minY
+        #expect(abs(below - 3 * pane.lineHeight) < 1, "the row is \(below) below the pane's top")
+
+        sut.scrollToEnd()
+
+        let end = try #require(try sut.panes().first)
+        let bottom = try end.bottom(ofRow: end.lastRow)
+        #expect(abs(end.textView.frame.height - (bottom + end.below)) < 1)
+        #expect(bottom <= end.clip.bounds.maxY)
+    }
+
+    @Test
+    func `a long file opened at a change near its end scrolls past its end until its last line reaches the top`()
+        throws
+    {
+        let sut = HostedPanes(
+            showing: .longLines(1_000, changedAt: 900), layout: .inline, wrapsLines: true, scrollsPastEnd: true)
+
+        sut.scrollToBottom()
+
+        let pane = try #require(try sut.panes().first)
+        let lastLineTop = try pane.bottom(ofRow: pane.lastRow) - pane.lineHeight
+        #expect(
+            abs(lastLineTop - pane.clip.bounds.minY) < 1,
+            "the last line is \(lastLineTop - pane.clip.bounds.minY) below the pane's top")
+    }
+
     @Test
     func `a file a line taller than its pane opens scrolled to its change at its end`() throws {
         // Inline, the changed line takes two rows: with the insets, the text runs a line and a half past the pane.
@@ -243,6 +282,18 @@ final class HostedPanes {
             for textView in subviews(of: DiffPaneTextView.self, in: host) { textView.scrollToEndOfDocument(nil) }
             settle()
         }
+    }
+
+    /// Scrolls each pane as far down as it goes, past the end of its text when it scrolls past it, which scrolling to
+    /// the end of the document does not.
+    func scrollToBottom() {
+        scrollToEnd()
+        for textView in subviews(of: DiffPaneTextView.self, in: host) {
+            guard let clip = textView.enclosingScrollView?.contentView else { continue }
+            clip.scroll(to: NSPoint(x: clip.bounds.minX, y: textView.frame.height - clip.bounds.height))
+            clip.enclosingScrollView?.reflectScrolledClipView(clip)
+        }
+        settle()
     }
 
     /// Lets the split view's alignment of the two sides' rows run, as it does once layout settles.
