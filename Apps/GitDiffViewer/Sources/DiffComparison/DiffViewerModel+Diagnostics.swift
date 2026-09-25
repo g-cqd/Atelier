@@ -51,9 +51,16 @@ extension DiffViewerModel {
 
     /// Builds this window's hover documentation: a doc-comment index shared by every pane, tiered behind
     /// `lspRegistry` for on-disk files on the new side. It indexes only while the setting shows hover
-    /// documentation, and indexes the comparison on screen when the setting turns it on.
-    package func attachHoverDocs(lspRegistry: LanguageServerRegistry?) {
+    /// documentation, and indexes the comparison on screen when the setting turns it on. Once the user trusts the
+    /// repository shown on the right in `trust`, the displayed sides ask for semantic colour again
+    /// (``retrySemanticColor(afterTrusting:)``); hovers ask its language servers from then on by themselves.
+    package func attachHoverDocs(lspRegistry: LanguageServerRegistry?, trust: RepositoryTrust? = nil) {
         semanticColor.registry = lspRegistry
+        trust?
+            .addDecisionObserver(self) { [weak self] root, decision in
+                guard decision == .trusted else { return }
+                self?.retrySemanticColor(afterTrusting: root)
+            }
         let hoverDocs = HoverDocumentationModel(
             lspRegistry: lspRegistry, taskProvider: taskProvider, index: DocCommentIndex(store: syntaxFacts),
             symbolKinds: syntaxFacts)
