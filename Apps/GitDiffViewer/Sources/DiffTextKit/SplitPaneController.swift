@@ -123,7 +123,6 @@ package final class SplitPaneController: NSObject {
         if appliedSpacing[key]?.rendered === rendered, appliedSpacing[key]?.spacing == spacing { return false }
         RowSpacing.apply(spacing, to: contentStorage, rendered: rendered)
         appliedSpacing[key] = (rendered, spacing)
-        textView.enclosingScrollView?.superview?.needsDisplay = true
         return true
     }
 
