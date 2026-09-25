@@ -64,6 +64,31 @@ struct SequenceRouterTests {
         _ = try requireFocusOut(focusOut)
     }
 
+    /// The paste bodies each chunk split below is tried on: plain text, and text holding starts of the end marker
+    /// that a later byte breaks off.
+    private static let pasteBodies = ["hello", "a\u{1B}[20x", "\u{1B}[2\u{1B}[201", "\u{1B}\u{1B}[201]"]
+
+    @Test(arguments: pasteBodies)
+    func `A paste ends at its end marker wherever the reads split it`(body: String) throws {
+        let input = Array("\u{1B}[200~\(body)\u{1B}[201~b".utf8)
+        for split in 1 ..< input.count {
+            var router = makeSUT()
+
+            let events = router.feedAll(Array(input[..<split])) + router.feedAll(Array(input[split...]))
+
+            let pastes = events.compactMap { event -> String? in
+                guard case .paste(let text) = event else { return nil }
+                return text
+            }
+            #expect(pastes == [body], "split at \(split)")
+            guard case .key(let key) = events.last else {
+                Issue.record("split at \(split): the byte after the marker is not a key")
+                continue
+            }
+            #expect(key.keyCode == 0x62, "split at \(split)")
+        }
+    }
+
     @Test
     func `Routes bracketed paste sequence`() throws {
         var router = makeSUT()
