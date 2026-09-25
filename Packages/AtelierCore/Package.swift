@@ -176,12 +176,13 @@ let package = Package(
         .target(name: "AtelierQuery", dependencies: ["AtelierParser"], swiftSettings: strict),
         // External scanners ported from each grammar's tree-sitter scanner.c, one file per language.
         .target(name: "AtelierScanners", dependencies: ["AtelierParser"], swiftSettings: strict),
-        // The bundled tree-sitter grammars and `languages.json`, and the loading of their artifacts: the grammar
-        // registry, the compiled-table disk cache and the per-language artifacts cache.
+        // The bundled tree-sitter grammars and `languages.json`, the loading of their artifacts (the grammar
+        // registry, the compiled-table disk cache and the per-language artifacts cache), and the grammar tier.
         .target(
             name: "AtelierGrammarCorpus",
             dependencies: [
-                "AtelierGrammar", "AtelierParser", "AtelierQuery", "AtelierScanners", "AtelierSyntaxModel",
+                "AtelierGrammar", "AtelierHighlighting", "AtelierParser", "AtelierQuery", "AtelierScanners",
+                "AtelierSyntaxModel",
                 .product(name: "AemiJSON", package: "AemiJSON"), .product(name: "AemiKernel", package: "aemi")
             ],
             resources: [.copy("Grammars")],
@@ -190,7 +191,7 @@ let package = Package(
         .testTarget(
             name: "AtelierGrammarCorpusTests",
             dependencies: [
-                "AtelierGrammarCorpus", "AtelierGrammar", "AtelierParser",
+                "AtelierGrammarCorpus", "AtelierGrammar", "AtelierHighlighting", "AtelierParser", "AtelierSyntaxModel",
                 .product(name: "AemiTestKit", package: "aemi")
             ],
             swiftSettings: strict
