@@ -189,6 +189,8 @@ public enum Predicate: Sendable, Equatable {
     case `is`(capture: String?, property: String, value: String?)
     /// `(#is-not? [@capture] property [value])`: the negation of ``is(capture:property:value:)``.
     case isNot(capture: String?, property: String, value: String?)
+    /// A directive such as `#set!`, or a predicate this evaluator does not know: it always holds. Its arguments are
+    /// kept as text, a capture with its `@`, so a quoted "@name" reads like the capture; nothing evaluates them.
     case directive(name: String, arguments: [String])
 }
 

@@ -120,6 +120,19 @@ struct QueryParserTests {
     }
 
     @Test
+    func `A quoted argument that starts with @ is a string, not a capture`() throws {
+        let query = try QueryParser.parse(#"((identifier) @id (#is-not? "@id" local))"#)
+        let parts = try requireSequence(try #require(query.patterns.first))
+        #expect(parts.last == .predicate(.isNot(capture: nil, property: "@id", value: "local")))
+    }
+
+    @Test
+    func `A text predicate whose first argument is a quoted string is an error`() {
+        #expect(throws: QueryError.self) { try QueryParser.parse(#"((identifier) @id (#eq? "@id" "self"))"#) }
+        #expect(throws: QueryError.self) { try QueryParser.parse(#"((identifier) @id (#match? "@id" "^s"))"#) }
+    }
+
+    @Test
     func `is-not? without a property name or with four arguments is an error`() {
         #expect(throws: QueryError.self) { try QueryParser.parse("((identifier) @id (#is-not? @id))") }
         #expect(throws: QueryError.self) { try QueryParser.parse("((identifier) @id (#is-not? @id a b c))") }
