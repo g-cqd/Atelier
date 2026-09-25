@@ -42,17 +42,21 @@ struct UnifiedExplorerView: View {
     let uiState: ExplorerUIState
 
     var body: some View {
-        FileOutlineView(
-            sections: model.unifiedSections,
-            selectedPath: model.selectedPath,
-            isSidebar: true,
-            status: { model.status(ofPath: $0) },
-            onSelect: { model.select($0, from: .left) },
-            onPin: { model.pin($0, from: .left) },
-            uiState: uiState,
-            badgeScheme: model.settings.badgeScheme,
-            badgeStates: model.unifiedBadgeStates
-        )
+        VStack(spacing: 0) {
+            CommitGroupingStatusLine(state: model.commitGroups)
+            FileOutlineView(
+                sections: model.unifiedSections,
+                selectedPath: model.selectedPath,
+                isSidebar: true,
+                status: { model.status(ofPath: $0) },
+                onSelect: { model.select($0, from: .left) },
+                onPin: { model.pin($0, from: .left) },
+                uiState: uiState,
+                badgeScheme: model.settings.badgeScheme,
+                badgeStates: model.unifiedBadgeStates,
+                includesMergedBranches: model.commitGroups.includesMergedBranches
+            )
+        }
         .overlay {
             if model.left.source == nil, model.right.source == nil {
                 ContentUnavailableView(
@@ -60,5 +64,32 @@ struct UnifiedExplorerView: View {
                     description: Text("Pick the two sides above."))
             }
         }
+    }
+}
+
+/// The line above the merged sidebar's list while grouping by commit is on: why it does not apply, or that the
+/// history is being read. Nothing while grouping is off, or on and settled (GIT-06).
+struct CommitGroupingStatusLine: View {
+    let state: CommitGroupsState
+
+    var body: some View {
+        if let reason = state.unavailableReason {
+            line { Text(reason) }
+        } else if state.isUpdating {
+            line {
+                ProgressView().controlSize(.mini)
+                Text(state.grouping == nil ? "Reading the history…" : "Updating the history…")
+            }
+        }
+    }
+
+    private func line(@ViewBuilder _ content: () -> some View) -> some View {
+        HStack(spacing: 6) { content() }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
     }
 }
