@@ -183,7 +183,8 @@ let package = Package(
             dependencies: [
                 "AtelierGrammar", "AtelierHighlighting", "AtelierParser", "AtelierQuery", "AtelierScanners",
                 "AtelierSyntaxModel",
-                .product(name: "AemiJSON", package: "AemiJSON"), .product(name: "AemiKernel", package: "aemi")
+                .product(name: "AemiJSON", package: "AemiJSON"), .product(name: "AemiKernel", package: "aemi"),
+                .product(name: "AemiRuntime", package: "aemi")
             ],
             resources: [.copy("Grammars")],
             swiftSettings: strict
@@ -192,7 +193,7 @@ let package = Package(
             name: "AtelierGrammarCorpusTests",
             dependencies: [
                 "AtelierGrammarCorpus", "AtelierGrammar", "AtelierHighlighting", "AtelierParser", "AtelierSyntaxModel",
-                .product(name: "AemiTestKit", package: "aemi")
+                .product(name: "AemiRuntime", package: "aemi"), .product(name: "AemiTestKit", package: "aemi")
             ],
             swiftSettings: strict
         ),

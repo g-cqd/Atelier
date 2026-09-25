@@ -1,3 +1,4 @@
+import AemiRuntime
 import AemiTestKit
 import AtelierHighlighting
 import AtelierParser
@@ -72,37 +73,57 @@ struct GrammarTierTests {
     }
 
     @Test
-    func `a parse past its deadline is cancelled, and the tier fails by its deadline`() async throws {
+    func `a parse past its deadline in CPU time is stopped, and the tier fails by its deadline`() async throws {
         let fixture = try TierFixture()
         defer { fixture.remove() }
-        let clock = TestClock()
-        let cancelled = Mutex(false)
-        let tier = GrammarTier(
-            artifacts: fixture.artifacts(), record: GrammarTierRecord(), deadline: .milliseconds(250), clock: clock
-        ) { _, _ in
-            do {
-                // A parse that never ends by itself.
-                try await AsyncLatch().wait()
-            } catch {
-                cancelled.withLock { $0 = true }
-                throw error
+        // Each reading of the thread's CPU time finds 100 ms more used.
+        let readings = Mutex(0)
+        let stopped = Mutex(false)
+        let cpuTime: GrammarTier.ThreadCPUTime = {
+            let reading = readings.withLock {
+                $0 += 1
+                return $0
             }
-            throw CancellationError()
+            return .milliseconds(100 * reading)
         }
-
-        async let outcome: Void = tier.run(Self.request("hello")) { _ in }
-        try await clock.waitForSleepers(atLeast: 1)
-        clock.advance(by: .milliseconds(250))
-
-        let failure: TierFailure?
-        do {
-            try await outcome
-            failure = nil
-        } catch {
-            failure = error as? TierFailure
+        let parse: GrammarTier.Parse = { _, _, isCancelled in
+            // A parse that never ends by itself, checking as the parser does.
+            while !isCancelled() {}
+            stopped.withLock { $0 = true }
+            throw ParseError.cancelled(atToken: 0)
         }
+        let tier = GrammarTier(
+            artifacts: fixture.artifacts(), record: GrammarTierRecord(), deadline: .milliseconds(250), pool: nil,
+            cpuTime: cpuTime, parse: parse)
+
+        let failure = await Self.failure { _ = try await Self.run(tier, Self.request("hello")) }
+
         #expect(failure == .deadline(.milliseconds(250)))
-        #expect(cancelled.withLock { $0 })
+        #expect(stopped.withLock { $0 })
+        #expect(readings.withLock { $0 } == 4)
+    }
+
+    @Test
+    func `with a pool, the parse runs on the pool's threads`() async throws {
+        let fixture = try TierFixture()
+        defer { fixture.remove() }
+        let pool = BlockingOffloadPool(width: 1, qualityOfService: .utility)
+        defer { pool.shutdown() }
+        let threadName = Mutex("")
+        let tier = GrammarTier(
+            artifacts: fixture.artifacts(), record: GrammarTierRecord(), deadline: .milliseconds(250), pool: pool,
+            cpuTime: GrammarTier.threadCPUTime
+        ) { engine, text, isCancelled in
+            var name = [CChar](repeating: 0, count: 64)
+            pthread_getname_np(pthread_self(), &name, name.count)
+            threadName.withLock {
+                $0 = String(decoding: name.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+            }
+            return try engine.parse(text, externalScanner: nil, isCancelled: isCancelled)
+        }
+
+        #expect(try await Self.run(tier, Self.request("hello")).count == 1)
+        #expect(threadName.withLock { $0 }.hasPrefix("BlockingOffloadPool"))
     }
 
     @Test
@@ -134,10 +155,11 @@ struct GrammarTierTests {
         let record = GrammarTierRecord()
         let parses = Mutex(0)
         let tier = GrammarTier(
-            artifacts: artifacts, record: record, deadline: .milliseconds(250), clock: ContinuousClock()
-        ) { engine, text in
+            artifacts: artifacts, record: record, deadline: .milliseconds(250), pool: nil,
+            cpuTime: GrammarTier.threadCPUTime
+        ) { engine, text, isCancelled in
             parses.withLock { $0 += 1 }
-            return try engine.parse(text, externalScanner: nil)
+            return try engine.parse(text, externalScanner: nil, isCancelled: isCancelled)
         }
         // The first text of a grammar always parses; this one says the grammar reads 1 KB in a second.
         _ = try await Self.run(tier, Self.request("hello"))
