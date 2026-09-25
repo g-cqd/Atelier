@@ -125,21 +125,7 @@ package struct DiffTextView: NSViewRepresentable {
         gutterView.overlay = context.coordinator.diagnostics
         gutterView.onDiagnosticClick = onDiagnosticClick
         context.coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
-        let minimapView = MinimapView()
-        minimapView.scrollView = scrollView
-        minimapView.isHidden = !showsMinimap
-        minimapView.visibleRows = { [weak coordinator = context.coordinator] in coordinator?.visibleRows() ?? 0 ..< 0 }
-        minimapView.onSelectRow = { [weak coordinator = context.coordinator, weak scrollView] row in
-            guard let scrollView else { return }
-            coordinator?.scroll(toRow: row, in: scrollView, centered: true)
-        }
-        scrollView.contentView.postsBoundsChangedNotifications = true
-        NotificationCenter.default.addObserver(
-            minimapView,
-            selector: #selector(MinimapView.setNeedsDisplayOnScroll(_:)),
-            name: NSView.boundsDidChangeNotification,
-            object: scrollView.contentView
-        )
+        let minimapView = makeMinimap(following: scrollView, coordinator: context.coordinator)
 
         context.coordinator.textView = textView
         context.coordinator.followLayout()
@@ -178,6 +164,27 @@ package struct DiffTextView: NSViewRepresentable {
         }
         return DiffPaneView(
             gutterView: gutterView, scrollView: scrollView, contentView: scrollView, minimapView: minimapView)
+    }
+
+    /// The pane's minimap: it shows the rows `scrollView` shows, redraws as it scrolls, and scrolls it to a row
+    /// clicked, centred.
+    private func makeMinimap(following scrollView: NSScrollView, coordinator: Coordinator) -> MinimapView {
+        let minimapView = MinimapView()
+        minimapView.scrollView = scrollView
+        minimapView.isHidden = !showsMinimap
+        minimapView.visibleRows = { [weak coordinator] in coordinator?.visibleRows() ?? 0 ..< 0 }
+        minimapView.onSelectRow = { [weak coordinator, weak scrollView] row in
+            guard let scrollView else { return }
+            coordinator?.scroll(toRow: row, in: scrollView, centered: true)
+        }
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            minimapView,
+            selector: #selector(MinimapView.setNeedsDisplayOnScroll(_:)),
+            name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView
+        )
+        return minimapView
     }
 
     package func updateNSView(_ pane: DiffPaneView, context: Context) {
