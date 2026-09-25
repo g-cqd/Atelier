@@ -134,10 +134,15 @@ public enum QueryParser: Sendable {
             return patterns.count == 1 ? patterns[0] : .sequence(patterns)
         }
 
-        // Check for wildcard (_)
+        // A wildcard node, `(_)`, or one with children, `(_ key: (flow_node))`, which matches a named node of any
+        // type as tree-sitter's WILDCARD_SYMBOL step does (lib/src/query.c).
         if scanner.peek() == "_" {
             scanner.advance()
             scanner.skipWhitespaceAndComments()
+            if let next = scanner.peek(), next != ")" && next != "@" && next != "#" {
+                let children = try parseChildren(&scanner)
+                return .nodeMatch(type: QueryPattern.namedWildcardType, children: children, capture: nil)
+            }
             let capture = try parseCapture(&scanner)
             let predicates = try parsePredicates(&scanner)
             guard scanner.peek() == ")" else {
@@ -524,6 +529,6 @@ private struct Scanner: Sendable {
 
     func isGroupStart() -> Bool {
         guard let next = peek() else { return false }
-        return next == "(" || next == "[" || next == "\"" || next == "_" || next == "."
+        return next == "(" || next == "[" || next == "\"" || next == "."
     }
 }

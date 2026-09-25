@@ -41,6 +41,7 @@ struct PatternIndexTests {
             ";" @end
             (call !body) @bodiless
             [(string) "x"] @mixed
+            (_ function: (identifier) @callee) @caller
             """)
         let indexed = QueryMatcher.execute(query: query, tree: Self.tree)
         #expect(indexed == QueryMatcher.executeTryingEveryPattern(query: query, tree: Self.tree))
