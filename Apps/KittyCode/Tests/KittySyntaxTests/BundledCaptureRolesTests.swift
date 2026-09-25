@@ -13,7 +13,7 @@ struct BundledCaptureRolesTests {
     func `roles by capture index equal the roles mapped from every capture name of a bundled query`(
         language: String
     ) throws {
-        let resourcePath = try #require(KittySyntaxResources.bundle.resourcePath)
+        let resourcePath = try #require(KittySyntaxResources.resourcePath)
         let source = try String(contentsOfFile: "\(resourcePath)/Grammars/\(language)/highlights.scm", encoding: .utf8)
         // The queries `QueryParser` does not read yet (BundledHighlightQueryTests) have no captures to resolve.
         guard let query = try? QueryParser.parse(source) else { return }

@@ -46,13 +46,11 @@ struct MemoryLeakRegressionTests {
     @Test
     func `bash grammar, scanner and highlight query load`() throws {
         let entry = try #require(BundledLanguageManifest.entry(forLanguage: "bash"))
-        let bundle = KittySyntaxResources.bundle
-        let resourcePath = try #require(bundle.resourcePath)
-        let grammar = try GrammarRegistry.shared.grammar(for: entry.name, grammarsPath: "\(resourcePath)/Grammars")
+        let corpus = try #require(KittySyntaxResources.corpus)
+        let grammar = try GrammarRegistry.shared.grammar(for: entry.name, grammarsPath: corpus.grammarsDirectory.path)
         #expect(!grammar.externals.isEmpty)
         #expect(GrammarRegistry.shared.scannerType(forGrammar: grammar.name) != nil, "bash has no external scanner")
-        let queryURL = try #require(
-            bundle.url(forResource: "highlights", withExtension: "scm", subdirectory: "Grammars/\(entry.path)"))
+        let queryURL = corpus.highlightsURL(for: entry)
         _ = try QueryParser.parse(String(contentsOf: queryURL, encoding: .utf8))
     }
 

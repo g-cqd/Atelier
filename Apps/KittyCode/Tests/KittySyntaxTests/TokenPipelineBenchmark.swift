@@ -61,7 +61,7 @@ struct TokenPipelineBenchmark {
     /// spans the highlighter builds from the matches.
     @Test
     func `matches the json query and resolves its capture roles`() throws {
-        let resources = try #require(KittySyntaxResources.bundle.resourcePath)
+        let resources = try #require(KittySyntaxResources.resourcePath)
         let grammar = try GrammarLoader.load(from: "\(resources)/Grammars/json/grammar.json")
         let compiled = try ParseTableCompiler.compile(grammar)
         let parser = GrammarParser(
@@ -153,7 +153,7 @@ struct TokenPipelineBenchmark {
     /// names of all the languages, most of them dotted, rather than JSON's few.
     @Test
     func `resolves the capture roles of every bundled query`() throws {
-        let resources = try #require(KittySyntaxResources.bundle.resourcePath)
+        let resources = try #require(KittySyntaxResources.resourcePath)
         var names: [String] = []
         // Each query's roles, and its captures' indices in the order `names` lists their names.
         var queries: [(roles: CaptureRoles, indices: [Int])] = []

@@ -18,10 +18,19 @@ enum SyntaxJSON {
     /// - Throws: `JSONError` when `data` is not JSON or nests deeper than ``maxDepth``; `DecodingError` when it does
     ///   not hold a `Value`.
     static func decode<Value: Decodable>(_ type: Value.Type, from data: Data) throws -> Value {
+        try decoder.decode(type, from: bytesSkippingByteOrderMark(data))
+    }
+
+    /// - Throws: `DecodingError` when `node`, a node of a document ``parse(_:)`` read, does not hold a `Value`.
+    static func decode<Value: Decodable>(_ type: Value.Type, from node: JSON) throws -> Value {
+        try decoder.decode(type, from: node)
+    }
+
+    private static var decoder: AemiJSON.JSONDecoder {
         var decoder = AemiJSON.JSONDecoder()
         decoder.maxDecodingDepth = maxDepth
         decoder.options.maxDepth = maxDepth
-        return try decoder.decode(type, from: bytesSkippingByteOrderMark(data))
+        return decoder
     }
 
     static func encode<Value: Encodable>(_ value: Value) throws -> Data {

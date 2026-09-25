@@ -31,15 +31,8 @@ public enum CapabilityReporter: Sendable {
             )
         }
 
-        let bundle = KittySyntaxResources.bundle
-        let subdirectory = "Grammars/\(entry.path)"
-
-        let hasGrammar =
-            bundle.url(
-                forResource: "grammar", withExtension: "json", subdirectory: subdirectory) != nil
-        let hasQuery =
-            bundle.url(
-                forResource: "highlights", withExtension: "scm", subdirectory: subdirectory) != nil
+        let hasGrammar = KittySyntaxResources.hasResource("grammar.json", for: entry)
+        let hasQuery = KittySyntaxResources.hasResource("highlights.scm", for: entry)
 
         guard hasGrammar, hasQuery else {
             let fallback: HighlightTier = hasFallback(for: language) ? .lexical : .plain
@@ -52,7 +45,7 @@ public enum CapabilityReporter: Sendable {
         }
 
         // Analyze grammar metadata (cheap: just loads JSON, does NOT compile)
-        let analysis = analyzeLanguageMetadata(at: subdirectory)
+        let analysis = analyzeLanguageMetadata(of: entry)
         var blockers: [String] = []
 
         let needsExternals = analysis.requirements.needsExternalScanner
@@ -116,14 +109,13 @@ public enum CapabilityReporter: Sendable {
     }
 
     /// Analyze grammar and query metadata WITHOUT triggering compilation.
-    private static func analyzeLanguageMetadata(at subdirectory: String) -> LanguageMetadata {
-        let bundle = KittySyntaxResources.bundle
+    private static func analyzeLanguageMetadata(of entry: GrammarRegistry.LanguageEntry) -> LanguageMetadata {
+        let corpus = KittySyntaxResources.corpus
 
         // Analyze grammar externals
         var needsExternals = false
         var externalCount = 0
-        if let grammarURL = bundle.url(
-            forResource: "grammar", withExtension: "json", subdirectory: subdirectory),
+        if let grammarURL = corpus?.grammarURL(for: entry),
             let grammar = try? GrammarLoader.load(from: grammarURL.path)
         {
             needsExternals = !grammar.externals.isEmpty
@@ -132,8 +124,7 @@ public enum CapabilityReporter: Sendable {
 
         // Analyze query features
         var queryFeatures = Set<QueryFeature>()
-        if let queryURL = bundle.url(
-            forResource: "highlights", withExtension: "scm", subdirectory: subdirectory),
+        if let queryURL = corpus?.highlightsURL(for: entry),
             let querySource = try? String(contentsOf: queryURL, encoding: .utf8)
         {
             queryFeatures = analyzeQueryFeatures(querySource)
