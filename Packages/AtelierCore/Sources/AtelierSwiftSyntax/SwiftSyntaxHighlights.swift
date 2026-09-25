@@ -59,39 +59,60 @@ public enum SwiftSyntaxHighlights {
 
     /// Parses `source` and classifies it; runs on the caller's stack, which must be deep enough.
     static func classify(_ source: String, isCancelled: () -> Bool) throws(Failure) -> [HighlightToken] {
-        let tree = Parser.parse(source: source)
-        if isCancelled() { throw .cancelled }
-        return try tokens(of: tree, byteCount: source.utf8.count, isCancelled: isCancelled)
+        try Parsed(source, isCancelled: isCancelled).tokens(in: nil, isCancelled: isCancelled)
     }
 
-    /// The syntactic tokens of a parsed tree of `byteCount` bytes.
-    /// - Complexity: O(nodes of `tree`): one walk for the declarations and unexpected bytes, one for the
-    ///   classification.
-    static func tokens(of tree: SourceFileSyntax, byteCount: Int, isCancelled: () -> Bool) throws(Failure)
-        -> [HighlightToken]
-    {
-        let facts = TreeFacts(viewMode: .sourceAccurate)
-        facts.walk(tree)
-        if byteCount > 0 {
-            let share = Double(facts.unexpectedBytes) / Double(byteCount)
-            if share > maximumUnexpectedShare { throw .tooManyUnexpectedBytes(share: share) }
-        }
-        if isCancelled() { throw .cancelled }
-        var tokens: [HighlightToken] = []
-        tokens.reserveCapacity(byteCount / 8)
-        var seen = 0
-        for classified in tree.classifications {
-            seen += 1
-            if seen & 0x3FF == 0, isCancelled() { throw .cancelled }
-            let range = classified.range.lowerBound.utf8Offset ..< classified.range.upperBound.utf8Offset
-            guard !range.isEmpty else { continue }
-            if classified.kind == .identifier, let role = facts.declarationNames[range.lowerBound] {
-                tokens.append(HighlightToken(byteRange: range, role: role, modifiers: .declaration, layer: .syntactic))
-            } else if let role = role(of: classified.kind) {
-                tokens.append(HighlightToken(byteRange: range, role: role, layer: .syntactic))
+    /// A text parsed once, with what one walk over its tree found, classified a range at a time: the tier colours the
+    /// visible lines first, then the rest, from one parse.
+    struct Parsed: Sendable {
+        let tree: SourceFileSyntax
+        /// The role of each declaration's name, by the UTF-8 offset of its first byte.
+        let declarationNames: [Int: HighlightRole]
+
+        /// Parses `source` and walks its tree once, on the caller's stack, which must be deep enough.
+        /// - Throws: ``Failure/cancelled`` when asked to stop after the parse; ``Failure/tooManyUnexpectedBytes(share:)``
+        ///   past the gate.
+        init(_ source: String, isCancelled: () -> Bool) throws(Failure) {
+            let tree = Parser.parse(source: source)
+            if isCancelled() { throw .cancelled }
+            let facts = TreeFacts(viewMode: .sourceAccurate)
+            facts.walk(tree)
+            let byteCount = source.utf8.count
+            if byteCount > 0 {
+                let share = Double(facts.unexpectedBytes) / Double(byteCount)
+                if share > SwiftSyntaxHighlights.maximumUnexpectedShare { throw .tooManyUnexpectedBytes(share: share) }
             }
+            self.tree = tree
+            declarationNames = facts.declarationNames
         }
-        return tokens
+
+        /// The syntactic tokens that meet `bytes`, a UTF-8 range of the text, or every token for nil; a token that
+        /// crosses the range's edge comes whole. Runs on the caller's stack, which must be deep enough.
+        /// - Complexity: O(nodes that meet `bytes`)
+        func tokens(in bytes: Range<Int>?, isCancelled: () -> Bool) throws(Failure) -> [HighlightToken] {
+            if isCancelled() { throw .cancelled }
+            let classifications =
+                bytes.map {
+                    tree.classifications(
+                        in: AbsolutePosition(utf8Offset: $0.lowerBound) ..< AbsolutePosition(utf8Offset: $0.upperBound))
+                } ?? tree.classifications
+            var tokens: [HighlightToken] = []
+            tokens.reserveCapacity((bytes?.count ?? tree.totalLength.utf8Length) / 8)
+            var seen = 0
+            for classified in classifications {
+                seen += 1
+                if seen & 0x3FF == 0, isCancelled() { throw .cancelled }
+                let range = classified.range.lowerBound.utf8Offset ..< classified.range.upperBound.utf8Offset
+                guard !range.isEmpty else { continue }
+                if classified.kind == .identifier, let role = declarationNames[range.lowerBound] {
+                    tokens.append(
+                        HighlightToken(byteRange: range, role: role, modifiers: .declaration, layer: .syntactic))
+                } else if let role = SwiftSyntaxHighlights.role(of: classified.kind) {
+                    tokens.append(HighlightToken(byteRange: range, role: role, layer: .syntactic))
+                }
+            }
+            return tokens
+        }
     }
 
     /// The role a classification colours as; nil for what reads as plain text.
