@@ -8,11 +8,14 @@ extension DiffViewerModel {
     /// How what the detail area shows relates to what the window now asks for. After Swap, another ref or another
     /// folder, the previous comparison stays on screen until the new one replaces it in one step, and this says it
     /// is the previous one; a load or a render that fails leaves it there with the failure. A reload of the same
-    /// sources marks nothing: what is shown is still their comparison while it refreshes.
+    /// sources marks nothing: what is shown is still their comparison while it refreshes. A commit group's own change
+    /// is rendered from sides of its own, which are then the ones asked for (D39).
     package var shownComparison: ShownComparison {
         guard let shown = pipeline.publishedSources else { return .current }
         if let failure = loadFailure ?? renderError { return .previousAfterFailure(failure) }
-        if isSwitching || showsPreviousSelection || shown.left != left.source || shown.right != right.source {
+        let askedLeft = commitScope?.left ?? left.source
+        let askedRight = commitScope?.right ?? right.source
+        if isSwitching || showsPreviousSelection || shown.left != askedLeft || shown.right != askedRight {
             return .previous
         }
         return .current

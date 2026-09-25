@@ -108,7 +108,8 @@ struct FileOutlineView: NSViewRepresentable {
 
     /// Data source and delegate. Items are reused across rebuilds through `itemsByKey`, so the outline view's own
     /// expansion and selection bookkeeping keeps matching them. A file listed under several commit sections has a row,
-    /// and a key, in each; a selection of its path lands on the row last clicked, else on the newest section's.
+    /// and a selection key, in each (D39); a selection of its plain path lands on the row last clicked, else on the
+    /// newest section's.
     /// Main-actor by the target's default isolation.
     final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
         /// Section rows take ids no path can have, so they never collide with a file in `itemsByKey`; a commit
@@ -130,7 +131,8 @@ struct FileOutlineView: NSViewRepresentable {
 
         private var roots: [OutlineItem] = []
         private var itemsByKey: [String: OutlineItem] = [:]
-        /// Every row of a path, in outline order: one, or one per commit section that lists it.
+        /// Every row of a path, in outline order: one, or one per commit section that lists it; and each row under a
+        /// commit section by its own selection key.
         private var itemsByPath: [String: [OutlineItem]] = [:]
         /// The sections that start folded when the user never folded or unfolded them.
         private var collapsedByDefault: Set<String> = []
@@ -173,7 +175,9 @@ struct FileOutlineView: NSViewRepresentable {
                 let item = itemsByKey[key] ?? OutlineItem(key: key, node: node)
                 item.node = node
                 item.parent = parent
+                item.selectionKey = scope.map { ExplorerSection.selectionKey(forGroup: $0, path: node.id) } ?? node.id
                 byPath[node.id, default: []].append(item)
+                if item.selectionKey != node.id { byPath[item.selectionKey, default: []].append(item) }
                 // The head of a chain is keyed by the whole chain, so a fold survives a switch to the compact style,
                 // where the chain is one row. The links below it have no row there, so they take a key of their own;
                 // the bare id would not do, since the deepest link's id is the head's chain key.
@@ -193,6 +197,7 @@ struct FileOutlineView: NSViewRepresentable {
                     let item = itemsByKey[node.id] ?? OutlineItem(key: node.id, node: node)
                     item.node = node
                     item.parent = nil
+                    item.selectionKey = node.id
                     item.chainKey = node.id
                     item.isSection = true
                     item.section = section
@@ -304,9 +309,9 @@ struct FileOutlineView: NSViewRepresentable {
                 isApplyingModelSelection = false
                 return
             }
-            guard item.path != lastAppliedSelection else { return }
-            lastAppliedSelection = item.path
-            onSelect(item.path)
+            guard item.selectionKey != lastAppliedSelection else { return }
+            lastAppliedSelection = item.selectionKey
+            onSelect(item.selectionKey)
         }
 
         @objc func doubleClicked(_ sender: NSOutlineView) {
@@ -315,18 +320,18 @@ struct FileOutlineView: NSViewRepresentable {
             // A double action replaces the native toggle on folders; return pins them. A commit section is a
             // selection of its own, so a double click pins it too; its triangle folds it.
             if item.section?.commitGroup != nil {
-                onPin(item.path)
+                onPin(item.selectionKey)
             } else if item.node.isDirectory {
                 if sender.isItemExpanded(item) { sender.collapseItem(item) } else { sender.expandItem(item) }
             } else if !item.isNote {
-                onPin(item.path)
+                onPin(item.selectionKey)
             }
         }
 
         func pinSelection() {
             guard let outline = outlineView, let item = selectedItem(in: outline) else { return }
-            lastAppliedSelection = item.path
-            onPin(item.path)
+            lastAppliedSelection = item.selectionKey
+            onPin(item.selectionKey)
         }
 
         /// Whether a folder was selected to toggle; otherwise the key goes to type-select.
@@ -416,7 +421,7 @@ extension FileOutlineView.Coordinator {
         guard let outline = outlineView, let item = outline.item(atRow: row) as? OutlineItem,
             item.section?.commitGroup != nil
         else { return nil }
-        let items = sectionMenu(item.path)
+        let items = sectionMenu(item.selectionKey)
         guard !items.isEmpty else { return nil }
         let menu = NSMenu()
         for entry in items {
@@ -434,10 +439,13 @@ extension FileOutlineView.Coordinator {
         return menu
     }
 
-    /// The row that shows `path`: the selected one when it already does, as after a click on one of a file's
-    /// rows, else the first in outline order, which is the newest commit section's.
+    /// The row that shows `path`, a selection key: the row of a file under one commit section when it names one;
+    /// for a plain path, the selected row when it already shows it, as after a click on one of a file's rows, else
+    /// the first in outline order, which is the newest commit section's.
     private func row(for path: String, in outline: NSOutlineView) -> OutlineItem? {
-        if let selected = selectedItem(in: outline), selected.path == path { return selected }
+        if let selected = selectedItem(in: outline), selected.selectionKey == path || selected.path == path {
+            return selected
+        }
         return itemsByPath[path]?.first
     }
 
@@ -521,11 +529,15 @@ final class OutlineItem: NSObject {
 
     /// The model's path for the row: the file or folder it shows.
     var path: String { node.id }
+    /// What selecting the row selects: its path, or under a commit section the section and the path, so the row
+    /// shows that commit's own change to the file (D39).
+    var selectionKey: String
 
     init(key: String, node: PathNode) {
         self.key = key
         self.node = node
         chainKey = node.id
+        selectionKey = node.id
     }
 }
 
