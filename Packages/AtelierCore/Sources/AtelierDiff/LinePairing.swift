@@ -3,6 +3,18 @@ public protocol LinePairing: Sendable {
     /// Pairs for one block of removed and added lines, in order; a pair has at least one side. Indices are into
     /// the arrays given.
     func pairs(removed: [Substring], added: [Substring]) -> [LinePair]
+    /// ``pairs(removed:added:)`` within `limits`: a block of more than `limits.maximumPairs` removed × added lines
+    /// pairs by position.
+    func pairs(removed: [Substring], added: [Substring], limits: DiffLimits) -> [LinePair]
+}
+
+extension LinePairing {
+    public func pairs(removed: [Substring], added: [Substring], limits: DiffLimits) -> [LinePair] {
+        guard removed.count * added.count <= limits.maximumPairs else {
+            return PositionalPairing().pairs(removed: removed, added: added)
+        }
+        return pairs(removed: removed, added: added)
+    }
 }
 
 public struct LinePair: Sendable, Equatable {
@@ -30,23 +42,47 @@ public struct PositionalPairing: LinePairing {
 /// Pairs lines by how much text they share, keeping order: the maximum-weight matching over similarities above
 /// a threshold, so a line inserted in the middle of a rewritten block no longer shifts every pairing below it.
 /// Falls back to positional pairing when the block is too large for the quadratic matching.
+///
+/// A line longer than intraline emphasis compares is nobody's counterpart by similarity (Core S13): its bigrams would
+/// cost the most of all, for an emphasis it never gets. It still pairs by position between matched lines.
 public struct SimilarityPairing: LinePairing {
     /// Below this share of common character bigrams two lines are not counterparts; git's rename threshold.
     public var threshold = 0.5
     /// Blocks with more removed × added lines than this pair positionally.
     public var maximumPairs = 40_000
+    /// Lines longer than this, in UTF-16 units, are not compared.
+    public var maximumLineLength = IntralineDiff.maximumLineLength
 
-    public init(threshold: Double = 0.5, maximumPairs: Int = 40_000) {
+    public init(
+        threshold: Double = 0.5, maximumPairs: Int = 40_000, maximumLineLength: Int = IntralineDiff.maximumLineLength
+    ) {
         self.threshold = threshold
         self.maximumPairs = maximumPairs
+        self.maximumLineLength = maximumLineLength
     }
 
     public func pairs(removed: [Substring], added: [Substring]) -> [LinePair] {
+        pairs(removed: removed, added: added, maximumPairs: maximumPairs, maximumLineLength: maximumLineLength)
+    }
+
+    public func pairs(removed: [Substring], added: [Substring], limits: DiffLimits) -> [LinePair] {
+        pairs(
+            removed: removed, added: added, maximumPairs: min(maximumPairs, limits.maximumPairs),
+            maximumLineLength: min(maximumLineLength, limits.maximumIntralineUnits))
+    }
+
+    private func pairs(removed: [Substring], added: [Substring], maximumPairs: Int, maximumLineLength: Int)
+        -> [LinePair]
+    {
         guard !removed.isEmpty, !added.isEmpty, removed.count * added.count <= maximumPairs else {
             return PositionalPairing().pairs(removed: removed, added: added)
         }
-        let removedGrams = removed.map(Self.bigrams)
-        let addedGrams = added.map(Self.bigrams)
+        let isShort = { (line: Substring) in
+            line.utf8.count <= maximumLineLength || line.utf16.count <= maximumLineLength
+        }
+        // A long line has no bigrams; nil keeps it apart from a short line that has none either.
+        let removedGrams = removed.map { isShort($0) ? Self.bigrams($0) : nil }
+        let addedGrams = added.map { isShort($0) ? Self.bigrams($0) : nil }
         // Longest-common-subsequence style dynamic programme over pair weights.
         let rows = removed.count + 1
         let columns = added.count + 1
@@ -101,6 +137,12 @@ public struct SimilarityPairing: LinePairing {
             grams.append(UInt32(units[index]) << 16 | UInt32(units[index + 1]))
         }
         return grams.sorted()
+    }
+
+    /// ``similarity(_:_:)``, and 0 when either line was too long to compare.
+    private static func similarity(_ a: [UInt32]?, _ b: [UInt32]?) -> Double {
+        guard let a, let b else { return 0 }
+        return similarity(a, b)
     }
 
     /// Sørensen–Dice coefficient of two sorted bigram multisets.
