@@ -17,6 +17,7 @@ public enum IntralineDiff {
     ///   - oldTokens: Token ranges of `old` for the syntax tier; words are used when absent.
     ///   - newTokens: Token ranges of `new` for the syntax tier; words are used when absent.
     ///   - refiners: Cleanup stages applied to the token-level edit script, in order.
+    ///   - maximumUnits: The longest line, in UTF-16 units, worth comparing.
     /// - Returns: nil when the lines are too long or too different for the emphasis to help.
     public static func emphasis(
         old: Substring,
@@ -24,12 +25,21 @@ public enum IntralineDiff {
         granularity: IntralineGranularity = .character,
         oldTokens: [Range<Int>]? = nil,
         newTokens: [Range<Int>]? = nil,
-        refiners: [any IntralineRefining] = []
+        refiners: [any IntralineRefining] = [],
+        maximumUnits: Int = maximumLineLength
     ) -> (old: [Range<Int>], new: [Range<Int>])? {
-        guard old.utf16.count <= maximumLineLength, new.utf16.count <= maximumLineLength else { return nil }
-        let oldUnits = Array(old.utf16)
-        let newUnits = Array(new.utf16)
+        guard old.utf16.count <= maximumUnits, new.utf16.count <= maximumUnits else { return nil }
+        return emphasis(
+            oldUnits: Array(old.utf16), newUnits: Array(new.utf16), granularity: granularity, oldTokens: oldTokens,
+            newTokens: newTokens, refiners: refiners)
+    }
 
+    /// ``emphasis(old:new:granularity:oldTokens:newTokens:refiners:maximumUnits:)`` over the lines' UTF-16 units,
+    /// whose length the caller has checked.
+    static func emphasis(
+        oldUnits: [UInt16], newUnits: [UInt16], granularity: IntralineGranularity, oldTokens: [Range<Int>]?,
+        newTokens: [Range<Int>]?, refiners: [any IntralineRefining]
+    ) -> (old: [Range<Int>], new: [Range<Int>])? {
         // Indentation is never the change worth pointing at: compare past it and shift the ranges back.
         let oldLead = oldUnits.prefix { $0 == 32 || $0 == 9 }.count
         let newLead = newUnits.prefix { $0 == 32 || $0 == 9 }.count
@@ -40,11 +50,14 @@ public enum IntralineDiff {
         let total = max(oldUnits.count + newUnits.count, 1)
         // Every token holds a unit or more, so any script over them changes at least as many units as the shortest
         // one has edits: once that passes the share, the pair can only read as replaced, and the search stops there.
-        guard
-            var edits = LineDiff.diff(
-                oldRanges.map { oldUnits[$0] }, newRanges.map { newUnits[$0] },
-                maximumEdits: Int(Double(total) * maximumChangedShare))
-        else { return nil }
+        let budget = Int(Double(total) * maximumChangedShare)
+        // A character is its own token: the units themselves are compared, rather than a slice per unit (perf-core
+        // D5); token `i` is unit `lead + i` either way.
+        let script =
+            granularity == .character
+            ? LineDiff.diff(Array(oldUnits[oldLead...]), Array(newUnits[newLead...]), maximumEdits: budget)
+            : LineDiff.diff(oldRanges.map { oldUnits[$0] }, newRanges.map { newUnits[$0] }, maximumEdits: budget)
+        guard var edits = script else { return nil }
         for refiner in refiners {
             edits = refiner.refine(edits, oldRanges: oldRanges, newRanges: newRanges)
         }
