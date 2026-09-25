@@ -266,4 +266,47 @@ struct GitClientHistoryTests {
         #expect(pages.map(\.isComplete) == [false, false, true])
         #expect(pages.first?.continuation == whole.commits[2].id)
     }
+
+    // MARK: uncommittedChanges
+
+    @Test
+    func `real git lists staged, unstaged and renamed files, then untracked ones as additions`() async throws {
+        let repository = try GitHistoryRepository()
+        defer { repository.remove() }
+        try repository.write(".gitignore", "build/\n")
+        try repository.write("staged.txt", "1\n")
+        try repository.write("unstaged.txt", "1\n")
+        try repository.write("moved.txt", "a file long enough to be recognized after a move\n")
+        try repository.commit("base")
+        try repository.write("staged.txt", "2\n")
+        try repository.git("add", "staged.txt")
+        try repository.write("unstaged.txt", "2\n")
+        try repository.git("mv", "moved.txt", "renamed.txt")
+        try repository.write("new file.txt", "new\n")
+        try repository.write("build/out.o", "ignored\n")
+
+        let changes = try await repository.client().uncommittedChanges()
+
+        let byPath = Dictionary(uniqueKeysWithValues: changes.map { ($0.path, $0) })
+        #expect(Set(byPath.keys) == ["staged.txt", "unstaged.txt", "renamed.txt", "new file.txt"])
+        #expect(byPath["staged.txt"]?.status == .modified)
+        #expect(byPath["unstaged.txt"]?.status == .modified)
+        #expect(byPath["renamed.txt"]?.status == .renamed)
+        #expect(byPath["renamed.txt"]?.oldPath == "moved.txt")
+        #expect(byPath["new file.txt"]?.status == .added)
+        #expect(changes.last?.path == "new file.txt")
+    }
+
+    @Test
+    func `uncommitted changes read the working tree against HEAD and the untracked files`() async throws {
+        let runner = FakeProcessRunner.gated(ordinaryRepositoryLines) { spec in
+            spec.arguments.contains("ls-files") ? .success("u.txt\u{0}") : .success("")
+        }
+        let client = GitClient(repository: Self.repository, runner: runner, gate: GitConfigGate())
+
+        #expect(try await client.uncommittedChanges() == [GitFileChange(status: .added, path: "u.txt")])
+        let diff = try #require(runner.commandSpecs.first { $0.arguments.contains("diff") })
+        #expect(diff.arguments.suffix(4) == ["-z", "--end-of-options", "HEAD", "--"])
+        #expect(diff.arguments.contains("diff.autoRefreshIndex=false"))
+    }
 }
