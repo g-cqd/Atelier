@@ -139,28 +139,6 @@ package enum DiffRenderer {
         return rows
     }
 
-    /// Output indices of the first row of each run of changed rows.
-    private static func changeStarts(in rows: [RenderRow]) -> [Int] {
-        var starts: [Int] = []
-        var inChange = false
-        var index = 0
-        for row in rows {
-            let isChange: Bool
-            switch row {
-                case .diff(let diff, _, _): isChange = diff.kind != .context
-                case .header: isChange = false
-                case .gap:
-                    // A gap takes no row, but the changes on either side of it are still two.
-                    inChange = false
-                    continue
-            }
-            if isChange, !inChange { starts.append(index) }
-            inChange = isChange
-            index += 1
-        }
-        return starts
-    }
-
     // MARK: Attributed text
 
     private static func render(rows: [RenderRow], side: RenderedSide, options: Options) -> RenderedText {
@@ -330,6 +308,30 @@ package enum DiffRenderer {
             case (.modified, .new): return .added
             default: return row.kind
         }
+    }
+}
+
+extension DiffRenderer {
+    /// Output indices of the first row of each run of changed rows.
+    private static func changeStarts(in rows: [RenderRow]) -> [Int] {
+        var starts: [Int] = []
+        var inChange = false
+        var index = 0
+        for row in rows {
+            let isChange: Bool
+            switch row {
+                case .diff(let diff, _, _): isChange = diff.kind != .context
+                case .header: isChange = false
+                case .gap:
+                    // A gap takes no row, but the changes on either side of it are still two.
+                    inChange = false
+                    continue
+            }
+            if isChange, !inChange { starts.append(index) }
+            inChange = isChange
+            index += 1
+        }
+        return starts
     }
 }
 
