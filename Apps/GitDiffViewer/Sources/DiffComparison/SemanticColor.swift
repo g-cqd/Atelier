@@ -76,7 +76,7 @@ extension DiffViewerModel {
     /// semantic colour, and its content, refined already, would not ask again until it changed. The refinement's own
     /// reset runs it, as the setting does; nothing happens while semantic colour or the refinement is off.
     func retrySemanticColor(afterTrusting root: URL) {
-        guard semanticColor.isEnabled, pipeline.refinesSwiftColor,
+        guard semanticColor.isEnabled, settings.refinesSwiftColor, pipeline.refinesSwiftColor,
             case .directory(let directory)? = commitScope?.right ?? right.source,
             let shown = LanguageServerRegistry.canonicalRoot(directory),
             Self.nests(shown, root)

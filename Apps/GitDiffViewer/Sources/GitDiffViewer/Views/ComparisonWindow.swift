@@ -64,6 +64,7 @@ struct ComparisonWindow: View {
                 model.attachDiagnostics(engine: services.diagnosticsEngine, settings: settings)
                 model.attachSideAnalysis(trust: services.repositoryTrust, runner: services.runner)
                 model.attachHoverDocs(lspRegistry: services.lspRegistry, trust: services.repositoryTrust)
+                model.attachGrammarColor(services.grammarColor)
                 model.attachFreshness()
                 model.start(configuration)
                 recents.record(configuration)

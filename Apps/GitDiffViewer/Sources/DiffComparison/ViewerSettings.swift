@@ -364,6 +364,15 @@ package final class ViewerSettings {
         didSet { if semanticColor != oldValue { store(semanticColor, Key.semanticColor, .appearance) } }
     }
 
+    /// The languages, by ``Language/name``, whose sides keep the lexer's colour rather than their grammar's
+    /// (PERF-11 step 5, D34): grammar colour is on for every language whose grammar qualifies, and each can be
+    /// turned off; empty by default.
+    package var grammarColorOff: Set<String> {
+        didSet {
+            if grammarColorOff != oldValue { store(grammarColorOff.sorted(), Key.grammarColorOff, .appearance) }
+        }
+    }
+
     let defaults: UserDefaults
 
     /// Set while scoped properties are reassigned their base value after their override was removed, so `store`
@@ -467,6 +476,7 @@ package final class ViewerSettings {
         scrollsToFirstChange = defaults.object(forKey: Key.scrollsToFirstChange) as? Bool ?? true
         refinesSwiftColor = defaults.object(forKey: Key.refinesSwiftColor) as? Bool ?? true
         semanticColor = defaults.object(forKey: Key.semanticColor) as? Bool ?? true
+        grammarColorOff = Set(defaults.stringArray(forKey: Key.grammarColorOff) ?? [])
         settingObserver = NotificationCenter.default.addObserver(
             forName: Self.settingChangedNotification, object: nil, queue: .main
         ) { [weak self] notification in
@@ -530,5 +540,6 @@ extension ViewerSettings {
         static let scrollsToFirstChange = "scrollsToFirstChange"
         static let refinesSwiftColor = "refinesSwiftColor"
         static let semanticColor = "semanticColor"
+        static let grammarColorOff = "grammarColorOff"
     }
 }

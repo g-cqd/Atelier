@@ -71,12 +71,13 @@ let package = Package(
             swiftSettings: strict
         ),
         // App-tier models spawn through AemiCore's task provider; fan-out and the clock seam come from AemiRuntime.
-        // Settings and recents persist as JSON through AemiJSON.
+        // Settings and recents persist as JSON through AemiJSON. Grammar colour runs the core's grammar tier.
         .target(
             name: "DiffComparison",
             dependencies: [
                 "DiffCore", "DiffGit", "DiffRendering", .product(name: "AtelierFileTree", package: "AtelierCore"),
                 .product(name: "AtelierHighlighting", package: "AtelierCore"),
+                .product(name: "AtelierGrammarCorpus", package: "AtelierCore"),
                 .product(name: "AtelierDiagnostics", package: "AtelierCore"),
                 .product(name: "AtelierLSP", package: "AtelierCore"),
                 .product(name: "AtelierDocIndex", package: "AtelierCore"),
@@ -99,6 +100,8 @@ let package = Package(
             dependencies: [
                 "DiffComparison", "DiffGit", "DiffRendering", "DiffTextKit", "GitDiffViewer",
                 .product(name: "AtelierDiagnostics", package: "AtelierCore"),
+                .product(name: "AtelierGrammar", package: "AtelierCore"),
+                .product(name: "AtelierGrammarCorpus", package: "AtelierCore"),
                 .product(name: "AtelierHighlighting", package: "AtelierCore"),
                 .product(name: "AtelierSources", package: "AtelierCore"),
                 .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),

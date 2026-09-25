@@ -47,7 +47,8 @@ extension ViewerSettings {
         \.appearanceScheme: Key.appearanceScheme, \.badgeScheme: Key.badgeScheme, \.diffColors: Key.diffColors,
         \.matchesThemeAppearance: Key.matchesThemeAppearance, \.bouncesAtEdges: Key.bouncesAtEdges,
         \.scrollsPastEnd: Key.scrollsPastEnd, \.scrollsToFirstChange: Key.scrollsToFirstChange,
-        \.refinesSwiftColor: Key.refinesSwiftColor, \.semanticColor: Key.semanticColor
+        \.refinesSwiftColor: Key.refinesSwiftColor, \.semanticColor: Key.semanticColor,
+        \.grammarColorOff: Key.grammarColorOff
     ]
 
     /// Whether the setting behind `property` can differ per project; the Settings window greys out the others while
@@ -77,6 +78,10 @@ extension ViewerSettings {
         if reloadDiffSetting(key) { return }
         if reloadDiagnosticsSetting(key) { return }
         if reloadScrollingSetting(key) { return }
+        if key == Key.grammarColorOff {
+            let value = Set(defaults.stringArray(forKey: effectiveKey(key)) ?? [])
+            if value != grammarColorOff { grammarColorOff = value }
+        }
     }
 
     private func reloadScrollingSetting(_ key: String) -> Bool {

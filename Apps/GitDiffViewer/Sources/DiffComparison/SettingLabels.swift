@@ -44,6 +44,7 @@ package enum SettingLabel {
     package static let matchesThemeAppearance = "Match window appearance to theme"
     package static let refinesSwiftColor = "Refine Swift color with swift-syntax"
     package static let semanticColor = "Semantic color from sourcekit-lsp"
+    package static let grammarColor = "Grammar color"
 
     // MARK: Tools / Diagnostics
 
