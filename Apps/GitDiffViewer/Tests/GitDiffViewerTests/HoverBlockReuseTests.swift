@@ -64,8 +64,7 @@ struct HoverBlockReuseTests {
         try Self.prepare(panel, with: Self.document(Self.paragraphs(2, saying: "Short")))
 
         #expect(panel.shownBlockViews.count == 3)
-        panel.bodyStack.layoutSubtreeIfNeeded()
-        #expect(abs(panel.bodyDocument.frame.height - panel.bodyStack.fittingSize.height) < 1)
+        #expect(panel.bodyEndsWithItsLastBlock)
         let texts = panel.shownBlockViews.dropFirst().compactMap { ($0 as? NSTextView)?.string }
         #expect(texts == ["Short paragraph 0 of the discussion.", "Short paragraph 1 of the discussion."])
     }
@@ -81,8 +80,7 @@ struct HoverBlockReuseTests {
         panel.scrollThroughDiscussion()
 
         #expect(panel.shownBlockViews.count == 121)
-        panel.bodyStack.layoutSubtreeIfNeeded()
-        #expect(abs(panel.bodyDocument.frame.height - panel.bodyStack.fittingSize.height) < 1)
+        #expect(panel.bodyEndsWithItsLastBlock)
         #expect((panel.shownBlockViews.last as? NSTextView)?.string == "Again paragraph 119 of the discussion.")
     }
 }
@@ -91,6 +89,12 @@ extension HoverDocPanel {
     /// The body's block views the discussion shows, top to bottom, the Overview heading first; hidden ones wait to be
     /// reused.
     var shownBlockViews: [NSView] {
-        bodyStack.arrangedSubviews.filter { !$0.isHidden }
+        bodyDocument.layoutSubtreeIfNeeded()
+        return bodyDocument.subviews.filter { !$0.isHidden }.sorted { $0.frame.minY < $1.frame.minY }
+    }
+
+    /// Whether the body's document ends where its last block shown does, once laid out.
+    var bodyEndsWithItsLastBlock: Bool {
+        abs(bodyDocument.frame.height - (shownBlockViews.last?.frame.maxY ?? 0)) < 1
     }
 }

@@ -78,8 +78,6 @@ package final class HoverDocPanel {
     private let declarationChip = HoverDocPanel.makeChip()
     /// Sets the head (title, abstract, declaration) apart from what follows it.
     private let headDivider = HoverDocPanel.makeDivider()
-    /// The discussion's blocks, top to bottom, in the body's scrolling document view.
-    let bodyStack = HoverDocPanel.makeBlockStack()
     /// The discussion's blocks not built yet: a long discussion builds what the panel shows, and the rest as the body
     /// scrolls towards it.
     var pendingDiscussion: PendingDiscussion?
@@ -313,14 +311,8 @@ package final class HoverDocPanel {
         return panel
     }
 
-    /// The discussion's scrolling body: the block stack in a flipped document, which builds the blocks it scrolls to.
+    /// The discussion's scrolling body: a flipped document holding the blocks, which builds the blocks it scrolls to.
     private func configureBody() {
-        bodyDocument.addSubview(bodyStack)
-        NSLayoutConstraint.activate([
-            bodyStack.topAnchor.constraint(equalTo: bodyDocument.topAnchor),
-            bodyStack.leadingAnchor.constraint(equalTo: bodyDocument.leadingAnchor),
-            bodyStack.widthAnchor.constraint(equalToConstant: HoverPanelSizing.width - 2 * HoverPanelMetrics.edgeInset)
-        ])
         bodyScrollView.documentView = bodyDocument
         bodyScrollView.contentView.postsBoundsChangedNotifications = true
         bodyScrollObserver = NotificationCenter.default.addObserver(
@@ -382,8 +374,7 @@ package final class HoverDocPanel {
 
         renderDiscussion(document.discussion, chipBackground: document.chipBackground, width: innerWidth)
         bodyScrollView.isHidden = !hasDiscussion
-        bodyStack.layoutSubtreeIfNeeded()
-        let bodyFullHeight = bodyScrollView.isHidden ? 0 : bodyStack.fittingSize.height
+        let bodyFullHeight = bodyScrollView.isHidden ? 0 : blockSlots.contentHeight
         // The scroll view keeps its zero-size document view unless we give it the blocks' measured bounds.
         bodyDocument.setFrameSize(NSSize(width: innerWidth, height: bodyFullHeight))
         bodyScrollView.contentView.scroll(to: .zero)

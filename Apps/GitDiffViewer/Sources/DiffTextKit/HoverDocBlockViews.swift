@@ -24,7 +24,7 @@ enum HoverBlockMetrics {
 
 // MARK: - The discussion's blocks
 
-/// The last block a stack holds, which sets the spacing above the next.
+/// The last block shown, which sets the spacing above the next.
 typealias HoverBuiltBlock = (view: NSView, isHeading: Bool)
 
 /// A discussion's blocks still to build, with what building them takes.
@@ -109,18 +109,28 @@ struct HoverBlockSlot {
     let textView: NSTextView?
     /// Sets the view's height to its text's; nil for the kinds whose height follows their content.
     let height: NSLayoutConstraint?
+    /// Places the view's top in the body's document; nil until the view is in the body.
+    var top: NSLayoutConstraint?
+
+    /// The view's height as shown: its text's, or what its content lays out to.
+    var shownHeight: CGFloat { height?.constant ?? view.fittingSize.height }
 }
 
-/// The body's top-level block views, in the stack's order: the first ``shown`` show the discussion, and the rest,
-/// hidden, wait for a later block of their kind. A hidden view leaves the stack's layout, and hiding it costs a
-/// fraction of removing it: taking a few hundred views out of the stack took 60 to 360 ms.
+/// The body's top-level block views, top to bottom: the first ``shown`` show the discussion, and the rest, hidden,
+/// wait for a later block of their kind.
+///
+/// Each view is pinned to the document by its own top, not arranged in a stack view: a stack of a few hundred views
+/// took 60 to 360 ms to remove them from, and as long to lay out once they were hidden, which detaches them from it.
+/// Pinned apart, a view is hidden, moved or removed without touching the others.
 struct HoverBlockSlots {
     var slots: [HoverBlockSlot] = []
     var shown = 0
+    /// Where the last view shown ends, and the document with it.
+    var contentHeight: CGFloat = 0
 }
 
 extension HoverDocPanel {
-    /// Shows `blocks` in ``bodyStack``, under an Overview heading, each block its own view `width` wide. Only the
+    /// Shows `blocks` in ``bodyDocument``, under an Overview heading, each block its own view `width` wide. Only the
     /// blocks the panel can show at once are built: every block is a view measured and laid out, and a discussion of
     /// a few hundred of them took seconds (`HoverBuildBenchmark`). The rest are built as the body scrolls towards
     /// them, in ``bodyDidScroll()``. Each block takes the view the last discussion had at its place when its kind
@@ -131,6 +141,7 @@ extension HoverDocPanel {
         bodyScrollView.contentView.scroll(to: .zero)
         let shownBefore = blockSlots.shown
         blockSlots.shown = 0
+        blockSlots.contentHeight = 0
         if !blocks.isEmpty {
             let overview = NSAttributedString(
                 string: "Overview",
@@ -148,14 +159,14 @@ extension HoverDocPanel {
     }
 
     /// Builds the next blocks once the body's visible end comes within a panel's height of the built ones' end, and
-    /// grows the scrolling document by their height. The stack is neither laid out nor measured whole here: with every
-    /// block built so far in it, each scroll would cost more than the last.
+    /// grows the scrolling document to their end. Nothing is laid out or measured whole here: with every block built so
+    /// far in it, each scroll would cost more than the last.
     func bodyDidScroll() {
         guard pendingDiscussion != nil,
             bodyScrollView.contentView.bounds.maxY >= bodyDocument.frame.height - HoverPanelSizing.maxHeight
         else { return }
-        let added = buildPendingBlocks()
-        bodyDocument.setFrameSize(NSSize(width: bodyDocument.frame.width, height: bodyDocument.frame.height + added))
+        buildPendingBlocks()
+        bodyDocument.setFrameSize(NSSize(width: bodyDocument.frame.width, height: blockSlots.contentHeight))
         bodyScrollView.reflectScrolledClipView(bodyScrollView.contentView)
     }
 
@@ -173,23 +184,26 @@ extension HoverDocPanel {
                 continue
             }
             guard let block = pending.blocks.popFirst() else { break }
-            let (view, open) = showNext(block, width: pending.width, chipBackground: pending.chipBackground)
             let isHeading = if case .heading = block { true } else { false }
             let spacing = pending.last.map { Self.spacing(after: $0, beforeHeading: isHeading) } ?? 0
-            if let last = pending.last { bodyStack.setCustomSpacing(spacing, after: last.view) }
-            filled += spacing + view.fittingSize.height
-            pending.last = (view, isHeading)
+            let top = blockSlots.contentHeight + spacing
+            let (slot, open) = showNext(block, at: top, width: pending.width, chipBackground: pending.chipBackground)
+            let height = slot.shownHeight
+            blockSlots.contentHeight = top + height
+            filled += spacing + height
+            pending.last = (slot.view, isHeading)
             pending.openCode = open
         }
         pendingDiscussion = pending.blocks.isEmpty && pending.openCode == nil ? nil : pending
         return filled
     }
 
-    /// Shows `block` at the body's next place: in the view already there when it is of the block's kind and width,
-    /// and otherwise in a new view that takes its place. Returns the view, and a long code block's lines still to show.
+    /// Shows `block` at the body's next place, `top` points down the document: in the view already there when it is
+    /// of the block's kind and width, and otherwise in a new view that takes its place. Returns the view's slot, and a
+    /// long code block's lines still to show.
     private func showNext(
-        _ block: HoverDocument.Block, width: CGFloat, chipBackground: NSColor?
-    ) -> (view: NSView, openCode: OpenCodeBlock?) {
+        _ block: HoverDocument.Block, at top: CGFloat, width: CGFloat, chipBackground: NSColor?
+    ) -> (slot: HoverBlockSlot, openCode: OpenCodeBlock?) {
         let index = blockSlots.shown
         blockSlots.shown += 1
         let kind = HoverBlockSlot.Kind(block)
@@ -197,19 +211,20 @@ extension HoverDocPanel {
             let existing = blockSlots.slots[index]
             if existing.kind == kind, kind.isReusable, existing.width == width {
                 let open = configure(existing, with: block, chipBackground: chipBackground, lazily: true)
+                existing.top?.constant = top
                 existing.view.isHidden = false
-                return (existing.view, open)
+                return (existing, open)
             }
-            let (slot, open) = makeSlot(for: block, width: width, chipBackground: chipBackground, lazily: true)
-            bodyStack.insertArrangedSubview(slot.view, at: index)
             existing.view.removeFromSuperview()
-            blockSlots.slots[index] = slot
-            return (slot.view, open)
         }
-        let (slot, open) = makeSlot(for: block, width: width, chipBackground: chipBackground, lazily: true)
-        bodyStack.addArrangedSubview(slot.view)
-        blockSlots.slots.append(slot)
-        return (slot.view, open)
+        let made = makeSlot(for: block, width: width, chipBackground: chipBackground, lazily: true)
+        var slot = made.slot
+        bodyDocument.addSubview(slot.view)
+        let pin = slot.view.topAnchor.constraint(equalTo: bodyDocument.topAnchor, constant: top)
+        NSLayoutConstraint.activate([pin, slot.view.leadingAnchor.constraint(equalTo: bodyDocument.leadingAnchor)])
+        slot.top = pin
+        if index < blockSlots.slots.count { blockSlots.slots[index] = slot } else { blockSlots.slots.append(slot) }
+        return (slot, made.openCode)
     }
 
     /// Shows the next chunk of `open`'s lines under those it shows, and returns the height they add.
@@ -224,6 +239,7 @@ extension HoverDocPanel {
         open.slot.textView?.textStorage?.append(added)
         open.slot.height?.constant += height
         open.shownEnd = end
+        blockSlots.contentHeight += height
         return height
     }
 
