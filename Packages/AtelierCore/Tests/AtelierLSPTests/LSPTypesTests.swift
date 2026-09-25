@@ -65,5 +65,22 @@ struct LSPTypesTests {
         #expect(contentFormat == ["markdown", "plaintext"])
         #expect(json["processId"] as? Int == 123)
         #expect(json["rootUri"] as? String == "file:///repo")
+        #expect(json["initializationOptions"] == nil)
+        #expect(json["workspaceFolders"] == nil)
+    }
+
+    @Test
+    func `InitializeParams encodes its options and workspace folders when given`() throws {
+        let params = InitializeParams(
+            processId: nil, rootUri: "file:///repo/", initializationOptions: .object(["a": .bool(true)]),
+            workspaceFolders: [WorkspaceFolder(uri: "file:///repo/", name: "repo")])
+        let data = try JSONEncoder().encode(params)
+        let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect((json["initializationOptions"] as? [String: Any])?["a"] as? Bool == true)
+        let folders = try #require(json["workspaceFolders"] as? [[String: Any]])
+        #expect(folders.count == 1)
+        #expect(folders.first?["uri"] as? String == "file:///repo/")
+        #expect(folders.first?["name"] as? String == "repo")
     }
 }

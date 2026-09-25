@@ -42,14 +42,6 @@ public enum HoverOutcome: Sendable, Equatable {
     }
 }
 
-/// `initialize`'s parameters with sourcekit-lsp's `initializationOptions`, which ``InitializeParams`` does not carry.
-private struct SessionInitializeParams: Encodable, Sendable {
-    let processId: Int?
-    let rootUri: String?
-    let capabilities: ClientCapabilities
-    let initializationOptions: JSONValue?
-}
-
 /// A long-lived sourcekit-lsp session, kept warm across hovers and shut down when idle.
 ///
 /// The server is spawned and initialized on first use, keeps at most ``Configuration/openDocumentLimit`` documents
@@ -74,11 +66,11 @@ public actor LanguageServerSession {
         public var maximumRestarts: Int
         /// How many documents stay open on the server at once; the least-recently-used is closed past this.
         public var openDocumentLimit: Int
-        /// sourcekit-lsp's options for the session, sent as `initialize`'s `initializationOptions`; nil sends none.
+        /// The server's options for the session, sent as `initialize`'s `initializationOptions`; nil sends none.
         public var initializationOptions: JSONValue?
 
-        /// The options a hover session starts with: no background indexing, since a hover needs no index of the
-        /// workspace and indexing builds the project.
+        /// The options a sourcekit-lsp hover session starts with: no background indexing, since a hover needs no index
+        /// of the workspace and indexing builds the project.
         public static let hoverInitializationOptions: JSONValue = .object(["backgroundIndexing": .bool(false)])
 
         public init(
@@ -264,10 +256,11 @@ public actor LanguageServerSession {
 
     private func performHandshake(_ connection: LSPConnection) async throws {
         await connection.start()
-        let params = SessionInitializeParams(
-            processId: Int(ProcessInfo.processInfo.processIdentifier),
-            rootUri: configuration.workspaceRoot.absoluteString, capabilities: ClientCapabilities(),
-            initializationOptions: configuration.initializationOptions)
+        let root = configuration.workspaceRoot
+        let params = InitializeParams(
+            processId: Int(ProcessInfo.processInfo.processIdentifier), rootUri: root.absoluteString,
+            initializationOptions: configuration.initializationOptions,
+            workspaceFolders: [WorkspaceFolder(uri: root.absoluteString, name: root.lastPathComponent)])
         _ = try await raceAgainstTimeout(clock: clock, timeout: configuration.initializeTimeout) {
             try await connection.request("initialize", params, as: DiscardedResult.self)
         }

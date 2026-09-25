@@ -9,6 +9,7 @@ private struct InitializeEnvelope: Decodable {
     struct Params: Decodable {
         let rootUri: String?
         let initializationOptions: JSONValue?
+        let workspaceFolders: [WorkspaceFolder]?
     }
 
     let method: String
@@ -58,6 +59,17 @@ struct LanguageServerSessionInitializationTests {
         #expect(envelope.method == "initialize")
         #expect(envelope.params.initializationOptions == .object(["backgroundIndexing": .bool(false)]))
         #expect(envelope.params.rootUri == "file:///workspace/")
+    }
+
+    @Test
+    func `the initialize request lists the workspace root as the session's one folder`() async throws {
+        let configuration = LanguageServerSession.Configuration(
+            serverExecutable: URL(filePath: "/usr/bin/true"),
+            workspaceRoot: URL(filePath: "/workspace", directoryHint: .isDirectory))
+
+        let envelope = try await capturedInitialize(configuration: configuration)
+
+        #expect(envelope.params.workspaceFolders == [WorkspaceFolder(uri: "file:///workspace/", name: "workspace")])
     }
 
     @Test

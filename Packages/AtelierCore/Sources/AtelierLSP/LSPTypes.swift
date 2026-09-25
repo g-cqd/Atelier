@@ -1,16 +1,37 @@
 // Hand-rolled Codable types for exactly the LSP requests the apps make: initialize, document
 // sync for open/close, and hover. Not a general-purpose LSP model.
 
-/// Parameters for the `initialize` request.
+/// Parameters for the `initialize` request. A nil field is left out of the request.
 public struct InitializeParams: Sendable, Encodable {
     public let processId: Int?
     public let rootUri: String?
     public let capabilities: ClientCapabilities
+    /// The server's own options, whose shape each server defines.
+    public let initializationOptions: JSONValue?
+    /// The folders the session covers, which the specification prefers to the deprecated `rootUri`.
+    public let workspaceFolders: [WorkspaceFolder]?
 
-    public init(processId: Int?, rootUri: String?, capabilities: ClientCapabilities = ClientCapabilities()) {
+    public init(
+        processId: Int?, rootUri: String?, capabilities: ClientCapabilities = ClientCapabilities(),
+        initializationOptions: JSONValue? = nil, workspaceFolders: [WorkspaceFolder]? = nil
+    ) {
         self.processId = processId
         self.rootUri = rootUri
         self.capabilities = capabilities
+        self.initializationOptions = initializationOptions
+        self.workspaceFolders = workspaceFolders
+    }
+}
+
+/// A workspace folder, as `initialize` lists them.
+public struct WorkspaceFolder: Sendable, Codable, Equatable {
+    public let uri: String
+    /// The folder's name in the client's user interface.
+    public let name: String
+
+    public init(uri: String, name: String) {
+        self.uri = uri
+        self.name = name
     }
 }
 
