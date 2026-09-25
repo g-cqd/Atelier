@@ -70,6 +70,8 @@ public actor LanguageServerSession {
         public var openDocumentLimit: Int
         /// The server's options for the session, sent as `initialize`'s `initializationOptions`; nil sends none.
         public var initializationOptions: JSONValue?
+        /// The server process's whole environment; nil inherits the app's.
+        public var environment: [String: String]?
 
         public init(
             serverExecutable: URL,
@@ -80,7 +82,8 @@ public actor LanguageServerSession {
             requestTimeout: Duration = .seconds(2),
             maximumRestarts: Int = 2,
             openDocumentLimit: Int = 32,
-            initializationOptions: JSONValue? = nil
+            initializationOptions: JSONValue? = nil,
+            environment: [String: String]? = nil
         ) {
             self.serverExecutable = serverExecutable
             self.serverArguments = serverArguments
@@ -91,6 +94,7 @@ public actor LanguageServerSession {
             self.maximumRestarts = maximumRestarts
             self.openDocumentLimit = openDocumentLimit
             self.initializationOptions = initializationOptions
+            self.environment = environment
         }
     }
 
@@ -392,11 +396,16 @@ public actor LanguageServerSession {
 
     // MARK: - The real-world factory
 
+    /// The server process `configuration` describes, not yet started: its executable, arguments and environment, run
+    /// in the workspace root.
+    static func processSession(for configuration: Configuration) -> ProcessSession {
+        ProcessSession(
+            executable: configuration.serverExecutable, arguments: configuration.serverArguments,
+            environment: configuration.environment, workingDirectory: configuration.workspaceRoot)
+    }
+
     private static func defaultConnectionFactory(_ configuration: Configuration) async throws -> LSPConnection {
-        let session = ProcessSession(
-            executable: configuration.serverExecutable,
-            arguments: configuration.serverArguments,
-            workingDirectory: configuration.workspaceRoot)
+        let session = processSession(for: configuration)
         try await session.start()
         let transport = ProcessSessionTransport(session: session)
         return LSPConnection(transport: transport)
