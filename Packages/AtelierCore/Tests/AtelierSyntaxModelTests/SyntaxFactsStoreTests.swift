@@ -53,4 +53,35 @@ struct SyntaxFactsStoreTests {
         #expect(store.extractions == 2)
         #expect(store.facts(for: Self.revision("a"))?.tokenBoundaries.count == 2)
     }
+
+    @Test
+    func `symbol kinds share the byte budget, the least recently used entry of either leaving first`() {
+        let size = Self.facts(lines: 100).estimatedBytes
+        let kinds = SymbolKinds(
+            tokens: (0 ..< 200).map { HighlightToken(byteRange: $0 * 4 ..< $0 * 4 + 3, role: .variable) })
+        let store = SyntaxFactsStore(byteLimit: size + kinds.estimatedBytes + size / 2)
+        store.insert(kinds, for: Self.revision("a"))
+        store.insert(Self.facts(lines: 100), for: Self.revision("b"))
+
+        store.insert(Self.facts(lines: 100), for: Self.revision("c"))
+
+        #expect(store.symbolKinds(for: Self.revision("a")) == nil)
+        #expect(store.facts(for: Self.revision("b")) != nil)
+        #expect(store.facts(for: Self.revision("c")) != nil)
+        #expect(store.byteCount <= store.byteLimit)
+    }
+
+    @Test
+    func `a symbol kind is found by the byte it covers`() {
+        let kinds = SymbolKinds(tokens: [
+            HighlightToken(byteRange: 0 ..< 3, role: .keyword), HighlightToken(byteRange: 3 ..< 4, role: .operator),
+            HighlightToken(byteRange: 4 ..< 9, role: .variable), HighlightToken(byteRange: 12 ..< 14, role: .string),
+            HighlightToken(byteRange: 15 ..< 20, role: .comment)
+        ])
+
+        #expect(
+            [0, 2, 3, 4, 8, 10, 12, 16, 20].map(kinds.kind(atUTF8:)) == [
+                .keyword, .keyword, nil, .symbol, .symbol, nil, .literal, .comment, nil
+            ])
+    }
 }
