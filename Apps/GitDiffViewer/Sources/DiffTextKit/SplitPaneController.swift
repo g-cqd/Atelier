@@ -82,11 +82,13 @@ package final class SplitPaneController: NSObject {
         guard syncsScrolling, !isSyncing, let clipView = notification.object as? NSClipView else { return }
         isSyncing = true
         defer { isSyncing = false }
-        let y = clipView.bounds.origin.y
+        // The panes show the same row at their tops below whatever bars lie over each: stacked, only the upper one
+        // runs beneath the tab bar (book TAB-09).
+        let top = clipView.bounds.origin.y + clipView.contentInsets.top
         for member in members {
-            guard let scrollView = member.scrollView, scrollView.contentView !== clipView,
-                scrollView.contentView.bounds.origin.y != y
-            else { continue }
+            guard let scrollView = member.scrollView, scrollView.contentView !== clipView else { continue }
+            let y = top - scrollView.contentView.contentInsets.top
+            guard scrollView.contentView.bounds.origin.y != y else { continue }
             scrollView.contentView.scroll(to: NSPoint(x: scrollView.contentView.bounds.origin.x, y: y))
             scrollView.reflectScrolledClipView(scrollView.contentView)
         }

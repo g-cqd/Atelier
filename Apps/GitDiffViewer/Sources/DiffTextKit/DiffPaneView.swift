@@ -39,6 +39,11 @@ package final class DiffPaneView: NSView {
         gutterView.frame = NSRect(x: 0, y: 0, width: thickness, height: bounds.height)
         contentView.frame = NSRect(
             x: thickness, y: 0, width: max(bounds.width - thickness - minimapWidth, 0), height: bounds.height)
-        minimapView.frame = NSRect(x: bounds.width - minimapWidth, y: 0, width: minimapWidth, height: bounds.height)
+        // The minimap maps what shows of the text, below the bars the text runs beneath (book TAB-09).
+        // The scroll view's safe area, which its content insets follow once it has laid itself out.
+        let obscured = scrollView?.safeAreaInsets.top ?? 0
+        // The pane is not flipped: the minimap keeps its bottom and gives up its top.
+        minimapView.frame = NSRect(
+            x: bounds.width - minimapWidth, y: 0, width: minimapWidth, height: max(bounds.height - obscured, 0))
     }
 }

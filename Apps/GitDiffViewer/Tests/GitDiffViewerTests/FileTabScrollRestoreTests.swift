@@ -139,6 +139,23 @@ struct FileTabScrollRestoreTests {
         #expect(abs(after.offset - before.offset) < 1)
     }
 
+    /// Beneath the tab bar the pane's top lies below it, and the row that was there comes back there (book TAB-09).
+    @Test
+    func `a file pane beneath the tab bar comes back at the row it was scrolled to`() throws {
+        let memory = makeMemory()
+        let sut = HostedTabPane(memory: memory)
+        sut.show(try Self.text(), path: "a.swift", underBars: 40)
+        sut.scroll(to: 2_005)
+        let before = try #require(sut.top())
+
+        sut.showList()
+        sut.show(try Self.text(), path: "a.swift", underBars: 40)
+
+        let after = try #require(sut.top())
+        #expect(after.row == before.row)
+        #expect(abs(after.offset - before.offset) < 1)
+    }
+
     @Test
     func `a file whose tab closed shows from its top again`() throws {
         let memory = makeMemory()
@@ -194,12 +211,12 @@ private final class HostedTabPane {
     /// Shows a new render of the file at `path`, as opening its tab does, in a detail area `height` points tall.
     func show(
         _ rendered: RenderedText, path: String, wrapsLines: Bool = false, scrollsPastEnd: Bool = false,
-        height: CGFloat = 300
+        height: CGFloat = 300, underBars: CGFloat = 0
     ) {
         host.rootView = Slot(
             pane: DiffTextView(
                 rendered: rendered, gutter: .dual, wrapsLines: wrapsLines, scrollMemory: memory,
-                scrollMemoryPath: path, scrollsPastEnd: scrollsPastEnd),
+                scrollMemoryPath: path, scrollsPastEnd: scrollsPastEnd, underBars: underBars),
             height: height)
         settle()
     }

@@ -186,6 +186,8 @@ package final class DiffGutterView: NSView {
     /// Highlights the half of a gap's handle or the change marker under `point`, if any, and tells its help in the
     /// tooltip.
     private func updateHover(at point: NSPoint?) {
+        // Nothing beneath the bars over a pane takes the pointer.
+        let point = point.flatMap { $0.y >= obscuredTop ? $0 : nil }
         let handle = point.flatMap(gapHalf(at:))
         let change = handle == nil ? point.flatMap(changeMarker(at:)) : nil
         // A drag changes the count under a pointer that stays on the same half: the next move tells the new one.
@@ -211,7 +213,7 @@ package final class DiffGutterView: NSView {
 
     /// Each half of a gap's handle shows the one direction it drags in, over its own hit area only.
     package override func resetCursorRects() {
-        forEachGap(in: visibleRect) { gap, band in
+        forEachGap(in: unobscuredRect(of: visibleRect)) { gap, band in
             for half in handle(of: gap.marker, in: band).halves {
                 addCursorRect(
                     half.hitArea, cursor: .rowResize(directions: half.handle == .extendsChangeAbove ? .down : .up))
@@ -243,6 +245,7 @@ package final class DiffGutterView: NSView {
 
     package override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        guard point.y >= obscuredTop else { return super.mouseDown(with: event) }
         // A press in a gap's band belongs to its handle; the rows around it keep their own clicks.
         if let hit = gapHalf(at: point) {
             if event.clickCount == 2 {
@@ -271,7 +274,7 @@ package final class DiffGutterView: NSView {
     package override func mouseDragged(with event: NSEvent) {
         guard var drag = handleDrag else { return }
         let overshoot = GapHandleLayout.edgeOvershoot(
-            pointerY: convert(event.locationInWindow, from: nil).y, visible: visibleRect,
+            pointerY: convert(event.locationInWindow, from: nil).y, visible: unobscuredRect(of: visibleRect),
             direction: drag.id.handle.revealDirection)
         drag.isHeldAtEdge = overshoot > 0
         handleDrag = drag
@@ -359,6 +362,11 @@ package final class DiffGutterView: NSView {
         dirtyRect.fill()
         NSColor.separatorColor.setFill()
         NSRect(x: bounds.maxX - 1, y: dirtyRect.minY, width: 1, height: dirtyRect.height).fill()
+        // Beneath the bars over a pane, the gutter keeps its background alone: the text's rows scroll there under the
+        // system's edge effect, which the gutter, beside the scroll view, has none of (book TAB-09).
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        unobscuredRect(of: bounds).clip()
 
         let metrics = metrics
         forEachFragment(in: dirtyRect) { fragment, row, rowIndex, y in
@@ -408,6 +416,22 @@ package final class DiffGutterView: NSView {
             case .warning: .systemYellow
             case .note: .systemGray
         }
+    }
+}
+
+// MARK: Beneath the bars
+
+extension DiffGutterView {
+    /// How far down the bars over a pane reach, the toolbar's and the tab bar's, which its text runs beneath and the
+    /// gutter draws nothing under (book TAB-09); none for a card's gutter, whose list scrolls on its own.
+    var obscuredTop: CGFloat {
+        clipView?.contentInsets.top ?? 0
+    }
+
+    /// `rect` less what the bars over the pane cover.
+    func unobscuredRect(of rect: NSRect) -> NSRect {
+        let top = max(rect.minY, obscuredTop)
+        return NSRect(x: rect.minX, y: top, width: rect.width, height: max(rect.maxY - top, 0))
     }
 }
 
@@ -599,7 +623,7 @@ extension DiffGutterView {
     /// Scrolls whatever shows the gutter, the pane's clip view or the list around a card, so the band of the gap held
     /// open at an edge stays in view, with its handle, as rows open above it.
     private func keepInView(_ id: HandleID) {
-        let visible = visibleRect
+        let visible = unobscuredRect(of: visibleRect)
         guard !visible.isEmpty else { return }
         let reach = 4 * (rendered?.lineHeight ?? DiffPalette.system.defaultLineHeight)
         var target: NSRect?
@@ -615,8 +639,9 @@ extension DiffGutterView {
         // The pane's gutter stays put beside its scroll view: the text scrolls under it instead, never past its end,
         // where no text is drawn.
         let delta = target.maxY > visible.maxY ? target.maxY - visible.maxY : target.minY - visible.minY
-        let end = max((clipView.documentView?.frame.height ?? 0) - clipView.bounds.height, 0)
-        let y = min(max(clipView.bounds.origin.y + delta, 0), end)
+        let highest = -obscuredTop
+        let end = max((clipView.documentView?.frame.height ?? 0) - clipView.bounds.height, highest)
+        let y = min(max(clipView.bounds.origin.y + delta, highest), end)
         clipView.scroll(to: NSPoint(x: clipView.bounds.origin.x, y: y))
         clipView.enclosingScrollView?.reflectScrolledClipView(clipView)
     }

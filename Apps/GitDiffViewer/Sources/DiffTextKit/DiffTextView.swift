@@ -46,6 +46,10 @@ package struct DiffTextView: NSViewRepresentable {
     package var scrollsPastEnd = false
     /// Whether the pane rubber-bands past its edges, down, up and sideways; otherwise it stops at them.
     package var bouncesAtEdges = false
+    /// The height of bars laid over the pane's top that AppKit does not know of, the tab bar, a SwiftUI bar: the pane
+    /// takes it as safe area of its own, so its text starts below the bar, scrolls beneath it, and the system's scroll
+    /// edge effect covers it as it covers the toolbar (book TAB-09).
+    package var underBars: CGFloat = 0
     /// Colours a tier after the lexer found for the text's sides, drawn over the lexer's (``refined(with:)``).
     package var refinedSides: RefinedSides?
 
@@ -62,9 +66,10 @@ package struct DiffTextView: NSViewRepresentable {
         onDiagnosticClick: ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)? =
             nil,
         scrollMemory: PaneScrollMemory? = nil, scrollMemoryPath: String? = nil,
-        scrollsPastEnd: Bool = false, bouncesAtEdges: Bool = false
+        scrollsPastEnd: Bool = false, bouncesAtEdges: Bool = false, underBars: CGFloat = 0
     ) {
         self.bouncesAtEdges = bouncesAtEdges
+        self.underBars = underBars
         self.scrollMemory = scrollMemory
         self.scrollMemoryPath = scrollMemoryPath
         self.scrollsPastEnd = scrollsPastEnd
@@ -98,7 +103,9 @@ package struct DiffTextView: NSViewRepresentable {
         scrollView.hasHorizontalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
-        scrollView.automaticallyAdjustsContentInsets = false
+        // The safe area, the toolbar's and the bars' above the pane, insets the text, and sizes the edge effect.
+        scrollView.automaticallyAdjustsContentInsets = true
+        scrollView.additionalSafeAreaInsets = Self.insets(underBars: underBars)
         Self.setElasticity(of: scrollView, bouncing: bouncesAtEdges)
 
         let textView = scrollView.documentView as? NSTextView ?? DiffPaneTextView(usingTextLayoutManager: true)
@@ -202,6 +209,12 @@ package struct DiffTextView: NSViewRepresentable {
             splitController?.wrapsLines = wrapsLines
         }
         Self.setElasticity(of: scrollView, bouncing: bouncesAtEdges)
+        if scrollView.additionalSafeAreaInsets.top != underBars {
+            scrollView.additionalSafeAreaInsets = Self.insets(underBars: underBars)
+            coordinator.updateOverscroll(in: scrollView.contentView)
+            // The minimap gives up what the bars cover.
+            pane.needsLayout = true
+        }
         if coordinator.scrollsPastEnd != scrollsPastEnd {
             coordinator.scrollsPastEnd = scrollsPastEnd
             coordinator.updateOverscroll(in: scrollView.contentView)
@@ -236,6 +249,11 @@ package struct DiffTextView: NSViewRepresentable {
         coordinator.hoverController.detach()
         coordinator.usageObservation = nil
         NotificationCenter.default.removeObserver(coordinator)
+    }
+
+    /// The safe area a pane beneath bars `underBars` tall that AppKit does not know of takes on top of its own.
+    static func insets(underBars: CGFloat) -> NSEdgeInsets {
+        NSEdgeInsets(top: underBars, left: 0, bottom: 0, right: 0)
     }
 
     /// Lets `scrollView` rubber-band past its edges as AppKit does by default, or stops it at them, on both axes.
@@ -348,7 +366,8 @@ package final class DiffTextViewCoordinator: NSObject {
         gutterView?.superview?.needsLayout = true
         if let scrollView = textView.enclosingScrollView {
             updateOverscroll(in: scrollView.contentView)
-            scroll(scrollView.contentView, to: keepingScroll ? previousOrigin : .zero)
+            let top = NSPoint(x: 0, y: -scrollView.contentView.contentInsets.top)
+            scroll(scrollView.contentView, to: keepingScroll ? previousOrigin : top)
             splitController?.update(rendered, for: textView)
         }
         // Replacing the whole storage in one transaction does not always redraw the visible viewport until it
@@ -427,7 +446,8 @@ package final class DiffTextViewCoordinator: NSObject {
             for: CGRect(
                 x: 0, y: clipView.bounds.minY - inset, width: clipView.bounds.width, height: clipView.bounds.height)
         )
-        let first = min(row(at: max(clipView.bounds.minY, 0)), lastRow)
+        // What the bars above the pane cover does not show.
+        let first = min(row(at: max(clipView.bounds.minY + clipView.contentInsets.top, 0)), lastRow)
         let last = min(max(row(at: clipView.bounds.maxY), first), lastRow)
         return first ..< (last + 1)
     }
@@ -479,6 +499,8 @@ package final class DiffTextViewCoordinator: NSObject {
     /// changed.
     package func updateOverscroll(in clipView: NSClipView) {
         guard let textView else { return }
+        // What shows of the pane: less what the bars above it cover, which the text starts below.
+        let shown = clipView.bounds.height - clipView.contentInsets.top
         let height: CGFloat
         if scrollsPastEnd {
             // The row's own height, not the font's: a taller line height would otherwise leave the last row short of
@@ -486,9 +508,9 @@ package final class DiffTextViewCoordinator: NSObject {
             // the last line would otherwise scroll past the top by.
             let lineHeight = rendered?.lineHeight ?? DiffPalette.system.defaultLineHeight
             let below = (rendered?.bandBelow ?? 0) + DiffPaneMetrics.containerInset
-            height = contentHeight() + max(clipView.bounds.height - lineHeight - below, 0)
+            height = contentHeight() + max(shown - lineHeight - below, 0)
         } else {
-            height = max(contentHeight(), clipView.bounds.height)
+            height = max(contentHeight(), shown)
         }
         let width: CGFloat =
             if !wrapsLines, let rendered {
