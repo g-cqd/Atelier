@@ -462,8 +462,8 @@ extension HoverDocumentationModelTests {
     func `the old side never consults the language server`() async throws {
         let callCount = Mutex(0)
         let registry = LanguageServerRegistry(
-            admits: { _ in true },
-            makeConfiguration: { _ in
+            admits: { _, _ in true },
+            makeConfiguration: { _, _ in
                 callCount.withLock { $0 += 1 }
                 return nil
             })
@@ -482,8 +482,8 @@ extension HoverDocumentationModelTests {
     func `the new side on disk consults the language server registry`() async throws {
         let callCount = Mutex(0)
         let registry = LanguageServerRegistry(
-            admits: { _ in true },
-            makeConfiguration: { _ in
+            admits: { _, _ in true },
+            makeConfiguration: { _, _ in
                 callCount.withLock { $0 += 1 }
                 return nil
             })
