@@ -31,6 +31,10 @@ struct FileOutlineView: NSViewRepresentable {
     var badgeStates: BadgeChangeStates = .uniform(.staged)
     /// Whether the grouped list's history was read with every parent, which its commit headers say on hover.
     var includesMergedBranches = false
+    /// What a commit section's context menu offers, by the section's selection key.
+    var sectionMenu: (String) -> [CommitGroupMenuItem] = { _ in [] }
+    /// Opens a comparison a context menu item names, in a window of its own.
+    var onOpenComparison: (LaunchConfiguration) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(uiState: uiState)
@@ -60,6 +64,7 @@ struct FileOutlineView: NSViewRepresentable {
         outline.doubleAction = #selector(Coordinator.doubleClicked(_:))
         outline.onReturn = { [weak coordinator] in coordinator?.pinSelection() }
         outline.onSpace = { [weak coordinator] in coordinator?.toggleSelectedDisclosure() ?? false }
+        outline.menuProvider = { [weak coordinator] row in coordinator?.contextMenu(forRow: row) }
         coordinator.outlineView = outline
         coordinator.applyPlacement(isSidebar: isSidebar, to: outline)
 
@@ -87,6 +92,8 @@ struct FileOutlineView: NSViewRepresentable {
         coordinator.badgeScheme = badgeScheme
         coordinator.badgeStates = badgeStates
         coordinator.includesMergedBranches = includesMergedBranches
+        coordinator.sectionMenu = sectionMenu
+        coordinator.onOpenComparison = onOpenComparison
         if coordinator.isSidebar != isSidebar {
             coordinator.applyPlacement(isSidebar: isSidebar, to: outline)
         }
@@ -104,8 +111,9 @@ struct FileOutlineView: NSViewRepresentable {
     /// and a key, in each; a selection of its path lands on the row last clicked, else on the newest section's.
     /// Main-actor by the target's default isolation.
     final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate {
-        /// Section rows take ids no path can have, so they never collide with a file in `itemsByKey`.
-        private static let sectionPrefix = "\u{0}section:"
+        /// Section rows take ids no path can have, so they never collide with a file in `itemsByKey`; a commit
+        /// section's id is also the key the model selects it under.
+        private static let sectionPrefix = ExplorerSection.selectionPrefix
 
         var sections: [ExplorerSection] = []
         var isSidebar = false
@@ -116,6 +124,8 @@ struct FileOutlineView: NSViewRepresentable {
         var badgeScheme: BadgeScheme = .classic
         var badgeStates: BadgeChangeStates = .uniform(.staged)
         var includesMergedBranches = false
+        var sectionMenu: (String) -> [CommitGroupMenuItem] = { _ in [] }
+        var onOpenComparison: (LaunchConfiguration) -> Void = { _ in }
         weak var outlineView: NSOutlineView?
 
         private var roots: [OutlineItem] = []
@@ -186,6 +196,7 @@ struct FileOutlineView: NSViewRepresentable {
                     item.chainKey = node.id
                     item.isSection = true
                     item.section = section
+                    if section.commitGroup != nil { byPath[node.id, default: []].append(item) }
                     let scope = section.commitGroup.map { _ in section.id }
                     let details = section.pathsInChange
                     let files = section.nodes.map { child in
@@ -301,8 +312,11 @@ struct FileOutlineView: NSViewRepresentable {
         @objc func doubleClicked(_ sender: NSOutlineView) {
             let row = sender.clickedRow
             guard row >= 0, let item = sender.item(atRow: row) as? OutlineItem else { return }
-            // A double action replaces the native toggle on folders; return pins them.
-            if item.node.isDirectory {
+            // A double action replaces the native toggle on folders; return pins them. A commit section is a
+            // selection of its own, so a double click pins it too; its triangle folds it.
+            if item.section?.commitGroup != nil {
+                onPin(item.path)
+            } else if item.node.isDirectory {
                 if sender.isItemExpanded(item) { sender.collapseItem(item) } else { sender.expandItem(item) }
             } else if !item.isNote {
                 onPin(item.path)
@@ -397,6 +411,29 @@ extension FileOutlineView.Coordinator {
             }
     }
 
+    /// A commit section's context menu, from what the model offers for it; nil for every other row.
+    func contextMenu(forRow row: Int) -> NSMenu? {
+        guard let outline = outlineView, let item = outline.item(atRow: row) as? OutlineItem,
+            item.section?.commitGroup != nil
+        else { return nil }
+        let items = sectionMenu(item.path)
+        guard !items.isEmpty else { return nil }
+        let menu = NSMenu()
+        for entry in items {
+            menu.addItem(
+                MenuAction.item(entry.title, isEnabled: entry.action != nil) { [weak self] in
+                    switch entry.action {
+                        case .compare(let configuration): self?.onOpenComparison(configuration)
+                        case .copy(let text):
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(text, forType: .string)
+                        case nil: break
+                    }
+                })
+        }
+        return menu
+    }
+
     /// The row that shows `path`: the selected one when it already does, as after a click on one of a file's
     /// rows, else the first in outline order, which is the newest commit section's.
     private func row(for path: String, in outline: NSOutlineView) -> OutlineItem? {
@@ -446,8 +483,8 @@ extension FileOutlineView.Coordinator {
     }
 
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
-        guard let item = item as? OutlineItem else { return false }
-        return !item.isSection && !item.isNote
+        guard let item = item as? OutlineItem, !item.isNote else { return false }
+        return !item.isSection || item.section?.commitGroup != nil
     }
 
     func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any)
@@ -495,6 +532,8 @@ final class OutlineItem: NSObject {
 /// Return pins the selection and space toggles the selected folder; clicks on empty space keep the selection.
 final class KeyboardOutlineView: NSOutlineView {
     var onReturn: (() -> Void)?
+    /// The context menu of the row under a right click; nil shows none.
+    var menuProvider: ((Int) -> NSMenu?)?
     /// Returns whether the key was used; a space over a file belongs to type-select.
     var onSpace: (() -> Bool)?
 
@@ -507,6 +546,11 @@ final class KeyboardOutlineView: NSOutlineView {
             default:
                 super.keyDown(with: event)
         }
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let row = row(at: convert(event.locationInWindow, from: nil))
+        return row >= 0 ? menuProvider?(row) : nil
     }
 
     /// A click in an inactive window selects, as the SwiftUI rows did.

@@ -286,4 +286,94 @@ struct DiffViewerModelCommitGroupsTests {
 
         #expect(runner.commandSpecs.count == before)
     }
+
+    // MARK: Selecting a section (step 8)
+
+    @Test
+    func `selecting a commit section opens its files' net diff in the temporary tab, titled by its subject`()
+        async throws
+    {
+        let history = ScriptedHistory(length: 3)
+        let (sut, _) = makeSUT(history)
+        serve(history)
+        try await load(sut)
+        let key = ExplorerSection.selectionKey(forGroup: "commit:c2")
+
+        sut.select(key)
+        try await harness.taskProvider.waitForAllTasks()
+
+        #expect(sut.tabs.activePath == key)
+        #expect(sut.isShowingCombinedFiles)
+        #expect(sut.combinedFiles == ["a.swift", "file2.swift"])
+        #expect(sut.selectionTitle(key) == "Commit 2")
+        #expect(sut.selectionLabel(key) == "Commit 2")
+        #expect(sut.selectionDetail(key).contains("Tess"))
+    }
+
+    @Test
+    func `a double click pins a commit section's tab`() async throws {
+        let history = ScriptedHistory(length: 2)
+        let (sut, _) = makeSUT(history)
+        serve(history)
+        try await load(sut)
+
+        sut.pin(ExplorerSection.selectionKey(forGroup: "commit:c1"))
+        sut.select("a.swift")
+        try await harness.taskProvider.waitForAllTasks()
+
+        #expect(sut.tabs.tabs.map(\.path) == [ExplorerSection.selectionKey(forGroup: "commit:c1"), "a.swift"])
+        #expect(sut.tabs.tabs.first?.isPinned == true)
+    }
+
+    @Test
+    func `a commit section's tab closes once grouping stops`() async throws {
+        let history = ScriptedHistory(length: 2)
+        let (sut, _) = makeSUT(history)
+        serve(history)
+        try await load(sut)
+        sut.select(ExplorerSection.selectionKey(forGroup: "commit:c2"))
+        try await harness.taskProvider.waitForAllTasks()
+
+        sut.settings.groupsByCommit = false
+        try await harness.taskProvider.waitForAllTasks()
+
+        #expect(sut.tabs.tabs.isEmpty)
+        #expect(sut.selectedPath == nil)
+    }
+
+    @Test
+    func `a commit's menu compares its first parent with it and copies its id`() async throws {
+        let history = ScriptedHistory(length: 2)
+        let (sut, _) = makeSUT(history)
+        serve(history)
+        try await load(sut)
+
+        let menu = sut.commitGroupMenu(forSelection: ExplorerSection.selectionKey(forGroup: "commit:c2"))
+
+        #expect(
+            menu == [
+                CommitGroupMenuItem(
+                    title: "Compare This Commit",
+                    action: .compare(.repository(Self.repository, leftRef: "c1", rightRef: "c2"))),
+                CommitGroupMenuItem(title: "Copy Commit ID", action: .copy("c2"))
+            ])
+        #expect(sut.commitGroupMenu(forSelection: "a.swift").isEmpty)
+    }
+
+    @Test
+    func `Earlier Changes compares the left side with the oldest listed commit's first parent`() async throws {
+        let history = ScriptedHistory(length: 1_300)
+        let (sut, _) = makeSUT(history)
+        serve(history)
+        try await load(sut)
+
+        let menu = sut.commitGroupMenu(forSelection: ExplorerSection.selectionKey(forGroup: "earlier"))
+
+        #expect(
+            menu == [
+                CommitGroupMenuItem(
+                    title: "Compare This Range",
+                    action: .compare(.repository(Self.repository, leftRef: "main", rightRef: "c300")))
+            ])
+    }
 }

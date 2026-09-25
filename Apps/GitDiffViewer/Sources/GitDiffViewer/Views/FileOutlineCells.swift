@@ -170,3 +170,26 @@ final class NoteCellView: NSTableCellView {
         fatalError("init(coder:) is not supported")
     }
 }
+
+/// The target of a menu item that runs a closure, for menus built from values rather than from a responder's
+/// selectors. The item holds it as its represented object, since a menu item's target is weak.
+final class MenuAction: NSObject {
+    private let perform: () -> Void
+
+    init(_ perform: @escaping () -> Void) {
+        self.perform = perform
+    }
+
+    @objc func run() {
+        perform()
+    }
+
+    /// An item titled `title` that runs `perform`, or a disabled one.
+    static func item(_ title: String, isEnabled: Bool, _ perform: @escaping () -> Void) -> NSMenuItem {
+        let action = MenuAction(perform)
+        let item = NSMenuItem(title: title, action: isEnabled ? #selector(run) : nil, keyEquivalent: "")
+        item.target = action
+        item.representedObject = action
+        return item
+    }
+}
