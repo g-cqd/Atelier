@@ -24,7 +24,7 @@ enum BundledGrammarFixture {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appending(path: "Apps/KittyCode/Sources/KittySyntax/Grammars/\(language)/grammar.json")
+            .appending(path: "Packages/AtelierCore/Sources/AtelierGrammarCorpus/Grammars/\(language)/grammar.json")
     }
 
     private static func compile(language: String) throws -> ParseTableCompiler.CompilationResult {

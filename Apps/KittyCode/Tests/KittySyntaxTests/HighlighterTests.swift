@@ -1,3 +1,4 @@
+import AtelierGrammarCorpus
 import AtelierSyntaxModel
 import Foundation
 import Testing

@@ -110,11 +110,9 @@ let package = Package(
                 .product(name: "AtelierSyntaxModel", package: "AtelierCore"),
                 .product(name: "AtelierLexers", package: "AtelierCore"),
                 .product(name: "AtelierTheme", package: "AtelierCore"),
-                .product(name: "AemiCore", package: "aemi"),
-                .product(name: "AemiKernel", package: "aemi"),
-                .product(name: "AemiJSON", package: "AemiJSON")
+                .product(name: "AtelierGrammarCorpus", package: "AtelierCore"),
+                .product(name: "AemiCore", package: "aemi")
             ],
-            resources: [.copy("Grammars")],
             swiftSettings: strict
         ),
 
@@ -191,6 +189,7 @@ let package = Package(
             name: "KittySyntaxTests",
             dependencies: [
                 "KittySyntax", "KittyCodecs", .product(name: "AtelierSyntaxModel", package: "AtelierCore"),
+                .product(name: "AtelierGrammarCorpus", package: "AtelierCore"),
                 .product(name: "AemiTestKit", package: "aemi")
             ],
             swiftSettings: strict),

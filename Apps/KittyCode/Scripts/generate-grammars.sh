@@ -2,7 +2,7 @@
 # generate-grammars.sh
 #
 # Clones tree-sitter-{language} repositories and extracts grammar.json and
-# highlights.scm into the KittySyntax bundle resource directory.
+# highlights.scm into AtelierCore's grammar corpus (AtelierGrammarCorpus/Grammars).
 #
 # Usage:
 #   ./Scripts/generate-grammars.sh <language>
@@ -19,11 +19,11 @@
 #
 # Requirements:
 #   - git must be on PATH
-#   - Run from the package root (the directory containing Package.swift)
+#   - Run from KittyCode's package root (the directory containing its Package.swift)
 
 set -euo pipefail
 
-GRAMMARS_DIR="Sources/KittySyntax/Grammars"
+GRAMMARS_DIR="../../Packages/AtelierCore/Sources/AtelierGrammarCorpus/Grammars"
 
 # All languages listed in languages.json
 ALL_LANGUAGES=(

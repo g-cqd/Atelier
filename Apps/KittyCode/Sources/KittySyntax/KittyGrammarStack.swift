@@ -1,3 +1,4 @@
+public import AtelierGrammarCorpus
 import AtelierParser
 import AtelierScanners
 import Foundation
