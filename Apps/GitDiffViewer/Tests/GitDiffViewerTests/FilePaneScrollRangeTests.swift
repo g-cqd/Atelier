@@ -225,6 +225,8 @@ final class HostedPanes {
     private let layout: PaneLayout
     private let wrapsLines: Bool
     private let scrollsPastEnd: Bool
+    /// The height of the tab bar over the panes (book TAB-09).
+    private let underBars: CGFloat
     /// Keeps the two sides in step, on a clock ``alignSides()`` moves.
     private let controller: SplitPaneController
     private let clock = TestClock()
@@ -234,8 +236,9 @@ final class HostedPanes {
 
     init(
         showing text: PaneText, layout: PaneLayout, wrapsLines: Bool, scrollsPastEnd: Bool = false,
-        size: NSSize = NSSize(width: 600, height: HostedPanes.paneHeight)
+        size: NSSize = NSSize(width: 600, height: HostedPanes.paneHeight), underBars: CGFloat = 0
     ) {
+        self.underBars = underBars
         let controller = SplitPaneController(clock: clock, taskProvider: taskProvider)
         // As the split view sets it when it appears.
         controller.wrapsLines = wrapsLines
@@ -247,7 +250,7 @@ final class HostedPanes {
         host = NSHostingView(
             rootView: Panes(
                 text: text, request: requestedRow.map(ScrollRequest.init(row:)), layout: layout,
-                wrapsLines: wrapsLines, scrollsPastEnd: scrollsPastEnd, controller: controller))
+                wrapsLines: wrapsLines, scrollsPastEnd: scrollsPastEnd, controller: controller, underBars: underBars))
         window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
             backing: .buffered, defer: false)
@@ -266,7 +269,17 @@ final class HostedPanes {
         requestedRow = Self.firstChange(of: text, in: layout)
         host.rootView = Panes(
             text: text, request: requestedRow.map(ScrollRequest.init(row:)), layout: layout,
-            wrapsLines: wrapsLines, scrollsPastEnd: scrollsPastEnd, controller: controller)
+            wrapsLines: wrapsLines, scrollsPastEnd: scrollsPastEnd, controller: controller, underBars: underBars)
+        settle()
+    }
+
+    /// Each pane's gutter, text view and minimap, the old side's first.
+    func paneViews() -> [DiffPaneView] {
+        subviews(of: DiffPaneView.self, in: host)
+    }
+
+    /// Lays out and displays what needs it, as the run loop does between two events.
+    func settleNow() {
         settle()
     }
 
@@ -367,6 +380,10 @@ struct ShownPane {
 
     var lineHeight: CGFloat { rendered.lineHeight }
     var lastRow: Int { rendered.rows.count - 1 }
+    /// Where the pane's top shows in its text view: below the bars over it, which cover what lies above (TAB-09).
+    var shownTop: CGFloat { clip.bounds.minY + clip.contentInsets.top }
+    /// How tall what shows of the pane is, less what the bars over it cover.
+    var shownHeight: CGFloat { clip.bounds.height - clip.contentInsets.top }
     /// Below the last row: any band of a gap at the end of the file, then the pane's inset.
     var below: CGFloat { rendered.bandBelow + DiffPaneMetrics.containerInset }
     /// The rows at one line each, with the insets and bands around them: the height of the text, never wrapped.
@@ -401,28 +418,35 @@ struct Panes: View {
     let wrapsLines: Bool
     let scrollsPastEnd: Bool
     let controller: SplitPaneController
+    /// The tab bar's height over the panes: both run beneath it side by side, the old one alone stacked, as the
+    /// detail area lays them out.
+    var underBars: CGFloat = 0
 
     var body: some View {
         switch layout {
             case .inline:
-                if let unified = text.rendered.unified { pane(unified, gutter: .dual, controller: nil) }
+                if let unified = text.rendered.unified {
+                    pane(unified, gutter: .dual, controller: nil, underBars: underBars)
+                }
             case .sideBySide, .stacked:
                 if let old = text.rendered.old, let new = text.rendered.new {
                     let stack =
                         layout == .stacked
                         ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
                     stack {
-                        pane(old, gutter: .old, controller: controller)
-                        pane(new, gutter: .new, controller: controller)
+                        pane(old, gutter: .old, controller: controller, underBars: underBars)
+                        pane(new, gutter: .new, controller: controller, underBars: layout == .stacked ? 0 : underBars)
                     }
                 }
         }
     }
 
-    private func pane(_ rendered: RenderedText, gutter: GutterStyle, controller: SplitPaneController?) -> DiffTextView {
+    private func pane(
+        _ rendered: RenderedText, gutter: GutterStyle, controller: SplitPaneController?, underBars: CGFloat
+    ) -> DiffTextView {
         DiffTextView(
             rendered: rendered, gutter: gutter, wrapsLines: wrapsLines, scrollRequest: request,
-            splitController: controller, scrollsPastEnd: scrollsPastEnd)
+            splitController: controller, scrollsPastEnd: scrollsPastEnd, underBars: underBars)
     }
 }
 

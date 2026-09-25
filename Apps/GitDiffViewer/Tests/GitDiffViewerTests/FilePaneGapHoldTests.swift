@@ -49,6 +49,36 @@ struct FilePaneGapHoldTests {
     }
 }
 
+extension FilePaneGapHoldTests {
+    /// Beneath the tab bar, the pane's top edge lies below the bar, and the edge zone with it (book TAB-09).
+    @Test
+    func `a half held just below the bars over a file pane keeps revealing`() async throws {
+        let bars: CGFloat = 40
+        let sut = try HeldFilePane(underBars: bars)
+        // Shorter than the text, so it scrolls.
+        sut.fit(height: 140)
+        let gap = try #require(sut.middleGap())
+        // The gap's band lies just below the bars.
+        sut.scroll(by: gap.band.minY - (bars + 2))
+        let placed = try #require(sut.middleGap())
+        let lower = try #require(GapHandleLayout.handle(placed.marker.handles, in: placed.band).halves.last)
+        let start = NSPoint(x: lower.rect.midX, y: lower.rect.midY)
+        // Two points up: in the edge zone below the bars, short of the half row that would reveal a row by itself.
+        let held = NSPoint(x: start.x, y: start.y - 2)
+
+        sut.mouse(.leftMouseDown, at: start)
+        let hold = sut.clock.registrationMark()
+        sut.mouse(.leftMouseDragged, at: held)
+        try await sut.clock.expectSleepers(1, after: hold)
+        sut.clock.advance(by: GapDrag.slowestHold)
+        let revealed = try #require(try await sut.applied.expectNext())
+        sut.mouse(.leftMouseUp, at: held)
+        try await sut.taskProvider.waitForAllTasks()
+
+        #expect(revealed.above == 1)
+    }
+}
+
 /// A single-file pane in a borderless window that is never ordered in, whose gutter's drags run through a
 /// ``GapDragController`` that renders the file again with each expansion, as the window's model does.
 @MainActor
@@ -62,9 +92,13 @@ private final class HeldFilePane {
     private var expansions: [GapKey: GapExpansion] = [:]
     private var controller: GapDragController?
 
-    init() throws {
+    /// The height of the tab bar over the pane.
+    private let underBars: CGFloat
+
+    init(underBars: CGFloat = 0) throws {
+        self.underBars = underBars
         let rendered = try #require(Self.render([:]))
-        host = NSHostingView(rootView: Self.pane(rendered, onGapDrag: nil))
+        host = NSHostingView(rootView: Self.pane(rendered, onGapDrag: nil, underBars: underBars))
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.borderless], backing: .buffered,
             defer: false)
@@ -73,7 +107,7 @@ private final class HeldFilePane {
             taskProvider: taskProvider, clock: clock,
             expansion: { [weak self] key in self?.expansions[key] ?? GapExpansion() },
             apply: { [weak self] expansion, key in self?.reveal(expansion, for: key) })
-        host.rootView = Self.pane(rendered, onGapDrag: drag)
+        host.rootView = Self.pane(rendered, onGapDrag: drag, underBars: underBars)
         settle()
     }
 
@@ -89,10 +123,12 @@ private final class HeldFilePane {
         return diff.unified
     }
 
-    private static func pane(_ rendered: RenderedText, onGapDrag: ((GapDragEvent) -> Void)?) -> DiffTextView {
+    private static func pane(
+        _ rendered: RenderedText, onGapDrag: ((GapDragEvent) -> Void)?, underBars: CGFloat
+    ) -> DiffTextView {
         DiffTextView(
             rendered: rendered, gutter: .dual, keepsScrollPosition: true, wrapsLines: false, showsMinimap: false,
-            onGapDrag: onGapDrag)
+            onGapDrag: onGapDrag, underBars: underBars)
     }
 
     private var drag: (GapDragEvent) -> Void {
@@ -103,7 +139,7 @@ private final class HeldFilePane {
     private func reveal(_ expansion: GapExpansion, for key: GapKey) {
         expansions[key] = expansion
         guard let rendered = Self.render(expansions) else { return }
-        host.rootView = Self.pane(rendered, onGapDrag: drag)
+        host.rootView = Self.pane(rendered, onGapDrag: drag, underBars: underBars)
         settle()
         applied.send(expansion)
     }
@@ -124,6 +160,14 @@ private final class HeldFilePane {
             if gap.hasSeparator { found = (gap.marker, band) }
         }
         return found
+    }
+
+    /// Scrolls the pane's text `delta` points further down.
+    func scroll(by delta: CGFloat) {
+        guard let clip = (gutter.source as? NSTextView)?.enclosingScrollView?.contentView else { return }
+        clip.scroll(to: NSPoint(x: clip.bounds.minX, y: clip.bounds.minY + delta))
+        clip.enclosingScrollView?.reflectScrolledClipView(clip)
+        settle()
     }
 
     /// Makes the pane `height` points tall.
