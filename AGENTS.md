@@ -36,13 +36,27 @@ One `BlockingOffloadPool` per app, created in the composition root and injected;
   and under load their bounded waits fail together. A GitDiffViewer suite takes at most 1 s of it on an idle
   machine: compare pixels by their bytes before making colours, put pure sweeps in a suite that is not a main-actor
   one, and read the file system off the main actor. After adding a test that draws, lays out, sweeps or reads files
-  on the main actor, say so in your report: `Apps/GitDiffViewer/scripts/main-actor-budget.sh` ranks the suites by
-  their main-thread time and fails past the budget, and the coordinator runs it once per landing, alone on the
-  machine (`work run --weight 8`). Agents do not run it themselves: at weight 2, under load, unrelated suites pass
-  the 1 s budget, and at weight 8 every run drains the machine for every other agent (on 2026-09-25 such runs were
-  half of all exclusive jobs, and exclusive jobs caused three quarters of the queue's waiting). It exits 2 with
-  "no usable sample" when `sample` fails to attach to the test process; that says nothing of the suites, so run it
-  again.
+  on the main actor, make your final GitDiffViewer suite run the budget run:
+  `Apps/GitDiffViewer/scripts/main-actor-budget.sh` runs the whole suite with the main thread sampled, ranks the
+  suites by their main-thread time and fails past the budget. Run it once, after rebasing onto `main`, with
+  `work run --weight 4`; the coordinator does not run it again. Under load an unrelated suite can pass the 1 s
+  budget: rerun once, and report both runs if a suite is over twice. It exits 2 with "no usable sample" when
+  `sample` fails to attach to the test process; that says nothing of the suites, so run it again.
+
+## Builds, hand-back and worktrees
+
+The global rules apply (`engineering-practices` §5, `planner` Orchestration Mode): build once per completed step,
+in one configuration, and never check a change against a matrix of configurations; build release once per task.
+Here that means:
+- **While you work,** build the debug tests of the one package you changed (`swift build --build-tests` in
+  `Packages/AtelierCore`, `Apps/GitDiffViewer` or `Apps/KittyCode`), and run filtered tests with `--skip-build`.
+- **Before handing back,** rebase onto `main`, build once, and run the full suite of each package you changed. If
+  you changed a core target's API, also run the suite of each app whose `Package.swift` links that target. The
+  coordinator lands your branch on that run without rebuilding, and asks you to run again, from your warm build,
+  only when `main` has since changed the same packages.
+- **Worktrees:** at most three, one per lane (GitDiffViewer, core highlighting, parser and grammar), long-lived
+  and reused from task to task. Work in the worktree you are given and never create one. Read-only agents
+  work in the main checkout without writing to it.
 
 ## Moving code between packages
 
