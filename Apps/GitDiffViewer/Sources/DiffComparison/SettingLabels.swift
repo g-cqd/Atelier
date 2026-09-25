@@ -35,6 +35,7 @@ package enum SettingLabel {
     // MARK: Appearance
 
     package static let diffLayout = "Diff layout"
+    package static let compactsInlineView = "Compact inline view"
     package static let wrapsLines = "Wrap long lines"
     package static let wrapColumn = "Wrap column"
     package static let appearanceScheme = "Appearance"

@@ -79,6 +79,7 @@ extension ViewerSettings {
             badgeScheme = .classic
             matchesThemeAppearance = false
             refinesSwiftColor = true
+            compactsInlineView = false
         }
         mode = restoredValue(Key.mode, appDefault: ViewMode.split) {
             defaults.string(forKey: Key.mode).flatMap(ViewMode.init(rawValue:)) ?? .split
@@ -177,7 +178,7 @@ extension ViewerSettings {
                 return [
                     themePath != nil, lineHeightMultiple != 0, mode != .split, wrapsLines != true, wrapColumn != 0,
                     appearanceScheme != .system, badgeScheme != .classic, matchesThemeAppearance != false,
-                    refinesSwiftColor != true
+                    refinesSwiftColor != true, compactsInlineView != false
                 ]
                 .count { $0 }
             case .tools:

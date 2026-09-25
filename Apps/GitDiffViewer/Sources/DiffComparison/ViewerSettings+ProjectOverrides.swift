@@ -100,6 +100,9 @@ extension ViewerSettings {
             case Key.mode:
                 let value = defaults.string(forKey: effectiveKey(key)).flatMap(ViewMode.init(rawValue:)) ?? .split
                 if value != mode { mode = value }
+            case Key.compactsInlineView:
+                let value = defaults.bool(forKey: effectiveKey(key))
+                if value != compactsInlineView { compactsInlineView = value }
             case Key.explorerPlacement:
                 let value =
                     defaults.string(forKey: effectiveKey(key)).flatMap(ExplorerPlacement.init(rawValue:)) ?? .top

@@ -41,6 +41,8 @@ package final class RenderPipeline {
         let configuration: Int
         let showsChangesOnly: Bool
         let expansions: [Int: GapExpansion]
+        /// The changes the compact inline view shows disclosed, by change index (book DIFF-04).
+        let disclosed: Set<Int>
     }
 
     /// A rendered file with the stamp it was rendered under.
@@ -57,6 +59,8 @@ package final class RenderPipeline {
     package private(set) var publishedSources: Sources?
     /// Rows revealed around the gaps of what is published, keyed per file and gap.
     package internal(set) var gapExpansions: [GapKey: GapExpansion] = [:]
+    /// The changes of what is published that the compact inline view shows disclosed (book DIFF-04).
+    package internal(set) var disclosedChanges: Set<ChangeKey> = []
     package private(set) var error: String?
     /// Diffs of what is published, kept so layout changes and gap drags re-render without reloading or re-diffing.
     @ObservationIgnored package private(set) var prepared: [PreparedDiff] = []
@@ -72,7 +76,7 @@ package final class RenderPipeline {
     /// It stays true until the replacement of what is kept on screen has landed, so kept content never reads as final.
     package private(set) var isRendering = false
     @ObservationIgnored private var task: Task<Void, Never>?
-    @ObservationIgnored private var options: DiffRenderer.Options
+    @ObservationIgnored private(set) var options: DiffRenderer.Options
     @ObservationIgnored private var layout: (context: Int, isolates: Bool) = (3, false)
     /// Bumped whenever `configure` changes how diffs render, which leaves every stamp before it stale.
     @ObservationIgnored private var configuration = 0
@@ -162,6 +166,7 @@ package final class RenderPipeline {
         let lendsFiles = loan.rendered.contains { $0.value.stamp == currentStamp(forIndex: $0.key, in: target) }
         if !keeps {
             gapExpansions = carriedExpansions(into: target)
+            disclosedChanges = carriedDisclosures(into: target)
             unpublish()
             self.target = target
             targetVersion &+= 1
@@ -181,7 +186,10 @@ package final class RenderPipeline {
     /// Renders everything published again, off the main actor, with the current configuration; without
     /// `keepingScroll`, every gap folds back too. A render in flight renders its own files again when it lands.
     package func relayout(keepingScroll: Bool) {
-        if !keepingScroll { gapExpansions = [:] }
+        if !keepingScroll {
+            gapExpansions = [:]
+            disclosedChanges = []
+        }
         refresh(keepingScroll: keepingScroll)
     }
 
@@ -232,6 +240,7 @@ package final class RenderPipeline {
         guard job.generation == generation, let first = files.first else { return }
         PhaseTrace.log("publish \(files.count) whole")
         gapExpansions = carriedExpansions(into: job.target)
+        disclosedChanges = carriedDisclosures(into: job.target)
         target = job.target
         targetVersion &+= 1
         prepared = diffs
@@ -259,7 +268,8 @@ package final class RenderPipeline {
         let files = indices.filter { prepared.indices.contains($0) }
             .map { index -> (Int, Stamped) in
                 let file = PaneRenderer.renderInline(
-                    PaneRenderer.Job(index: index, diff: prepared[index]), options: options, layout: layout)
+                    PaneRenderer.Job(index: index, diff: prepared[index]), options: renderOptions(for: target),
+                    layout: layout)
                 return (index, (file, currentStamp(forIndex: index, in: target)))
             }
         install(files, of: target, keepingScroll: keepingScroll)
@@ -281,7 +291,7 @@ package final class RenderPipeline {
         let content = contentVersion
         let jobs = stale.map { PaneRenderer.Job(index: $0, diff: prepared[$0]) }
         let expected = stale.map { currentStamp(forIndex: $0, in: target) }
-        let options = options
+        let options = renderOptions(for: target)
         let layout = renderLayout(for: target)
         relayoutTask = taskProvider.task {
             do {
@@ -341,6 +351,7 @@ package final class RenderPipeline {
     private static func rendersAlike(_ lhs: DiffRenderer.Options, _ rhs: DiffRenderer.Options) -> Bool {
         lhs.granularity == rhs.granularity && lhs.palette == rhs.palette
             && lhs.lineHeightMultiple == rhs.lineHeightMultiple && lhs.sides == rhs.sides
+            && lhs.compactsInline == rhs.compactsInline
     }
 
     /// Whether `target` renders its changes only, between gaps, rather than whole files.
@@ -365,7 +376,11 @@ package final class RenderPipeline {
         if changesOnly, carries(index, into: target) {
             for (key, expansion) in gapExpansions where key.fileIndex == index { expansions[key.gapIndex] = expansion }
         }
-        return Stamp(configuration: configuration, showsChangesOnly: changesOnly, expansions: expansions)
+        let disclosed =
+            carries(index, into: target)
+            ? Set(disclosedChanges.filter { $0.fileIndex == index }.map(\.changeIndex)) : []
+        return Stamp(
+            configuration: configuration, showsChangesOnly: changesOnly, expansions: expansions, disclosed: disclosed)
     }
 
     /// The gap expansions `target` keeps: those of every file that stays at its index under the same path, even when
@@ -376,7 +391,7 @@ package final class RenderPipeline {
     }
 
     /// Whether the file at `index` of `target` is, by path, the one published at that index.
-    private func carries(_ index: Int, into target: Target) -> Bool {
+    func carries(_ index: Int, into target: Target) -> Bool {
         guard let published = self.target, published.pairs.indices.contains(index),
             target.pairs.indices.contains(index)
         else { return false }
@@ -510,7 +525,8 @@ extension RenderPipeline {
         {
             let stamp = currentStamp(forIndex: 0, in: job.target)
             let file = PaneRenderer.renderInline(
-                PaneRenderer.Job(index: 0, diff: diff), options: options, layout: renderLayout(for: job.target))
+                PaneRenderer.Job(index: 0, diff: diff), options: renderOptions(for: job.target),
+                layout: renderLayout(for: job.target))
             append([diff], [(file, stamp)], for: job)
             headLanded = true
             if pairs.count == 1 {
@@ -609,7 +625,8 @@ extension RenderPipeline {
     /// with the stamp it was rendered under.
     private func renderStep(_ jobs: [PaneRenderer.Job], for job: RenderJob) async throws -> [(Int, Stamped)] {
         let stamps = jobs.map { currentStamp(forIndex: $0.index, in: job.target) }
-        let files = try await renderer.render(jobs, options: options, layout: renderLayout(for: job.target))
+        let files = try await renderer.render(
+            jobs, options: renderOptions(for: job.target), layout: renderLayout(for: job.target))
         guard job.generation == generation else { throw CancellationError() }
         guard files.count == jobs.count else { throw IncompleteRender() }
         return zip(jobs, zip(files, stamps)).map { ($0.index, ($1.0, $1.1)) }
