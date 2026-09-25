@@ -10,7 +10,7 @@ import Testing
 /// debounce, and the tree's writes through the filter that judges whether a reload can show them. A synthetic
 /// ``WatchEventSource`` and a virtual clock drive it; the time limit bounds a callback that never comes.
 @MainActor
-@Suite(.mainActorLane, .timeLimit(.minutes(1)))
+@Suite(.mainActorLane(timeLimit: .seconds(60)))
 struct RepositoryFreshnessTests {
     private let harness = WatcherHarness()
 
