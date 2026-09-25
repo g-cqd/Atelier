@@ -30,14 +30,14 @@ package final class DiffViewerModel {
     /// Injected after init by ``attachFreshness()``; nil leaves freshness watching off entirely.
     package var freshness: RepositoryFreshness?
 
-    package private(set) var selectedPath: String?
-    package private(set) var tabs = DiffTabs()
+    package internal(set) var selectedPath: String?
+    package internal(set) var tabs = DiffTabs()
     package private(set) var comparison = Comparison.empty
     package private(set) var trees = ExplorerTrees.empty
     /// Where every path of the unified explorer and the tabs stands against the index, by left-side path: both
     /// sides' ``SideState/badgeStates`` merged, a right-side file under its left-side counterpart.
     package internal(set) var unifiedBadgeStates = BadgeChangeStates.uniform(.staged)
-    package private(set) var folding = CardFolding()
+    package internal(set) var folding = CardFolding()
     package internal(set) var scrollRequest: ScrollRequest?
     /// The palette for the selected Xcode theme, or the system one when none is selected or it cannot be read.
     /// Read once per theme change: it comes from a property list on disk.
@@ -45,7 +45,7 @@ package final class DiffViewerModel {
     /// Where each open file tab's panes were scrolled, which the panes record as they leave the screen and read back
     /// when their file shows again.
     package let scrollMemory = PaneScrollMemory()
-    private var timer: OperationTimer
+    var timer: OperationTimer
     var navigator = ChangeNavigator()
 
     let pipeline: RenderPipeline
@@ -393,68 +393,6 @@ package final class DiffViewerModel {
         )
     }
 
-    // MARK: Selection
-
-    /// A single click: shows the file or folder in the temporary tab. Nil closes every tab and shows the whole list.
-    package func select(_ path: String?, from side: Side = .left) {
-        timer.begin()
-        let leftPath = path.map { side == .left ? $0 : comparison.counterpartPath(of: $0, in: .right) }
-        if let leftPath { tabs.open(leftPath) } else { tabs.closeAll() }
-        retainScrollPositions()
-        applySelection(leftPath, keepingPublished: false)
-    }
-
-    /// A double click: shows the file or folder in a pinned tab of its own.
-    package func pin(_ path: String, from side: Side = .left) {
-        timer.begin()
-        let leftPath = side == .left ? path : comparison.counterpartPath(of: path, in: .right)
-        tabs.pin(leftPath)
-        retainScrollPositions()
-        applySelection(leftPath, keepingPublished: false)
-    }
-
-    /// Shows every changed file in the file list's fixed tab; every tab stays open, and shows as it was when it is
-    /// shown again (book TAB-10).
-    package func showFileList() {
-        tabs.activateFileList()
-        guard selectedPath != nil else { return }
-        timer.begin()
-        applySelection(nil, keepingPublished: false)
-    }
-
-    package func activateTab(_ id: DiffTab.ID) {
-        tabs.activate(id)
-        guard tabs.activePath != selectedPath else { return }
-        timer.begin()
-        applySelection(tabs.activePath, keepingPublished: false)
-    }
-
-    package func pinTab(_ id: DiffTab.ID) {
-        tabs.pin(id)
-        guard tabs.activePath != selectedPath else { return }
-        timer.begin()
-        applySelection(tabs.activePath, keepingPublished: false)
-    }
-
-    package func closeTab(_ id: DiffTab.ID) {
-        tabs.close(id)
-        retainScrollPositions()
-        guard tabs.activePath != selectedPath else { return }
-        timer.begin()
-        applySelection(tabs.activePath, keepingPublished: false)
-    }
-
-    /// Shows `leftPath`. A selection the user makes takes what is published away at once and streams the new one in;
-    /// one a re-comparison makes, because the selected path went away, keeps what is published until it lands.
-    private func applySelection(_ leftPath: String?, keepingPublished: Bool) {
-        selectedPath = leftPath
-        // A request made for what showed before means nothing to what shows next, and a pane made anew would act on it.
-        scrollRequest = nil
-        navigator.reset()
-        folding.reset()
-        render(keepingPublished: keepingPublished)
-    }
-
     // MARK: Cards
 
     /// Whether `path`'s card folds. A file renamed without changes has no content to fold: its card is its header
@@ -516,7 +454,7 @@ package final class DiffViewerModel {
 
     /// Renders the selection. Only a selection the user makes passes `keepingPublished: false`; everything else
     /// (a reload, a re-comparison, a new diff option) keeps what is published on screen until its replacement lands.
-    private func render(keepingPublished: Bool = true) {
+    func render(keepingPublished: Bool = true) {
         configurePipeline()
         guard let leftSource = left.source, let rightSource = right.source else {
             pipeline.clear()
