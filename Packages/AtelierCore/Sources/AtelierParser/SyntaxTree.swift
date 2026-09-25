@@ -1,21 +1,13 @@
-import Synchronization
-
 // MARK: - Syntax Tree
 
-/// An immutable syntax tree produced by parsing.
-///
-/// A class so `deinit` can take the tree apart without recursion: freeing nested `SyntaxNode` arrays recursively
-/// overflows a 512 KiB thread stack between 2,000 and 3,000 levels.
+/// An immutable syntax tree produced by parsing. Its nodes free their subtrees without recursion, whatever holds
+/// them last (see ``SyntaxNode``).
 public final class SyntaxTree: Sendable {
-    /// The root node, a copy sharing the tree's storage; it may outlive the tree (see ``SyntaxNode``).
-    public var root: SyntaxNode { storedRoot.withLock { $0 } }
+    public let root: SyntaxNode
     public let source: String
     /// How many bytes of `source` lie under error nodes, each byte counted once: how much of the source the parse
     /// could not make sense of.
     public let errorByteCount: Int
-    /// Behind a lock only so `deinit` can take the nodes apart while the class stays checked `Sendable`; nothing else
-    /// writes it, so the lock is never contended.
-    private let storedRoot: Mutex<SyntaxNode>
 
     /// A tree over `root`, which may be built by hand; its ``errorByteCount`` comes from a walk of `root`.
     /// - Complexity: O(n + e log e) for n nodes, e of them outermost error nodes.
@@ -27,7 +19,7 @@ public final class SyntaxTree: Sendable {
 
     /// A tree whose error bytes are already known, as a parse knows them: it counts each error token it pushes.
     init(root: SyntaxNode, source: String, errorByteCount: Int) {
-        self.storedRoot = Mutex(root)
+        self.root = root
         self.source = source
         self.errorByteCount = errorByteCount
     }
@@ -52,65 +44,6 @@ public final class SyntaxTree: Sendable {
             coveredEnd = range.upperBound
         }
         return count
-    }
-
-    deinit {
-        Self.releaseIteratively(
-            storedRoot.withLock { root in
-                let taken = root
-                root = SyntaxNode(type: taken.type)
-                return [taken]
-            })
-    }
-
-    /// Frees `nodes` and every node below them in a loop, so no depth of tree can overflow the stack.
-    ///
-    /// A list of children held elsewhere as well, as a parse stack's nodes share subtrees with the stacks it forked
-    /// from, is not walked: dropping it frees none of its nodes, whose other holder keeps them. A field node that is a
-    /// copy of one of its parent's children, as the parser records fields, is freed through that child.
-    ///
-    /// - Complexity: O(n) in the nodes reachable from `nodes` through lists no one else holds, a node counting once
-    ///   per path to it, plus, per node, its field nodes times its children.
-    static func releaseIteratively(_ nodes: consuming [SyntaxNode]) {
-        // Sibling lists this loop alone holds, each emptied from its end. A node hands its subtrees to `lists` before
-        // it is dropped, so freeing one of its buffers only drops references `lists` still holds.
-        var lists = [consume nodes]
-        while let last = lists.indices.last {
-            guard var node = lists[last].popLast() else {
-                lists.removeLast()
-                continue
-            }
-            if !node.fields.isEmpty {
-                let fields = node.fields
-                node.fields = [:]
-                for fieldNodes in fields.values {
-                    for fieldNode in fieldNodes
-                    where !fieldNode.children.isEmpty
-                        && !node.children.contains(where: { $0.children.isTriviallyIdentical(to: fieldNode.children) })
-                    {
-                        lists.append([fieldNode])
-                    }
-                }
-            }
-            if !node.children.isEmpty {
-                lists.append(node.children)
-                node.children = []
-                if !holdsAlone(&lists[lists.count - 1]) { lists.removeLast() }
-            }
-        }
-    }
-
-    /// Whether `list` held the only reference to its buffer. A shared buffer is copied on the way, so `list` holds a
-    /// copy whose nodes the buffer's other holders keep alive: dropping it frees none of them.
-    ///
-    /// Emptying a shared list one node at a time would copy it at the first pop, and every shared list below it in
-    /// turn: the whole subtree, for each stack a parse drops that shares it. The buffer's address is only compared,
-    /// never read through.
-    /// - Complexity: O(1) for a list held alone, O(`list.count`) for a shared one.
-    private static func holdsAlone(_ list: inout [SyntaxNode]) -> Bool {
-        let shared = list.withUnsafeBufferPointer { $0.baseAddress }
-        let owned = list.withUnsafeMutableBufferPointer { UnsafePointer($0.baseAddress) }
-        return shared == owned
     }
 
     /// Walk the tree depth-first, calling the visitor for each node.
