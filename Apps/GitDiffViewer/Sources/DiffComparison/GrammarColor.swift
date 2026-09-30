@@ -216,12 +216,14 @@ package struct SwiftColorTier: AtelierHighlighting.HighlightTier {
 }
 
 extension DiffViewerModel {
-    /// The tiers a window's refinement runs: swift-syntax's and the language server's on Swift sides while the gate
-    /// refines Swift, and the grammar's on the languages the gate has grammar colour on for.
+    /// The tiers a window's refinement runs: the lexer's on every language it knows, swift-syntax's and the language
+    /// server's on Swift sides while the gate refines Swift, and the grammar's on the languages the gate has grammar
+    /// colour on for.
     static func tiers(
         store: SyntaxFactsStore, semantic: SemanticColorSource, gate: ColorTierGate
     ) -> [any AtelierHighlighting.HighlightTier] {
-        DiffDecorations.tiers(store: store).map { SwiftColorTier($0, gate: gate) }
+        // The lexer colours every language it knows whatever the settings: only the tiers above it are Swift's to gate.
+        DiffDecorations.tiers(store: store).map { $0.layer == .lexical ? $0 : SwiftColorTier($0, gate: gate) }
             + [SwiftColorTier(semantic.tier(store: store), gate: gate), GrammarColorTier(gate: gate)]
     }
 
