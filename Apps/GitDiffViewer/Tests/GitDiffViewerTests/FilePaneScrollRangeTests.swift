@@ -374,7 +374,9 @@ final class HostedPanes {
         let textViews = subviews(of: DiffPaneTextView.self, in: host)
         try #require(textViews.count == (layout == .inline ? 1 : 2))
         return try textViews.map { textView in
-            let gutter = try #require(subviews(of: DiffGutterView.self, in: host).first { $0.source === textView })
+            let gutter = try #require(
+                subviews(of: DiffGutterView.self, in: host)
+                    .first { ($0.source as? TextKit2RowGeometry)?.textView === textView })
             return ShownPane(
                 textView: textView, clip: try #require(textView.enclosingScrollView?.contentView),
                 rendered: try #require(gutter.rendered))
@@ -385,7 +387,9 @@ final class HostedPanes {
     func shownPanes() throws -> [AlignedPane] {
         try subviews(of: DiffPaneTextView.self, in: host)
             .map { textView in
-                let gutter = try #require(subviews(of: DiffGutterView.self, in: host).first { $0.source === textView })
+                let gutter = try #require(
+                    subviews(of: DiffGutterView.self, in: host)
+                        .first { ($0.source as? TextKit2RowGeometry)?.textView === textView })
                 return AlignedPane(gutter: gutter, textView: textView, rendered: try #require(gutter.rendered))
             }
     }

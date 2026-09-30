@@ -330,7 +330,8 @@ final class HostedCardBody {
     func panes() throws -> [AlignedPane] {
         try subviews(of: DiffPaneTextView.self, in: host)
             .map { textView in
-                let gutter = try #require(subviews(of: DiffGutterView.self, in: host).first { $0.source === textView })
+                let gutter = try #require(
+                    subviews(of: DiffGutterView.self, in: host).first { ($0.source as? NSTextView) === textView })
                 return AlignedPane(gutter: gutter, textView: textView, rendered: try #require(gutter.rendered))
             }
     }
