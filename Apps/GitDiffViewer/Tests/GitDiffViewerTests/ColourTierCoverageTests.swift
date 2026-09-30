@@ -30,13 +30,14 @@ struct ColourTierCoverageTests {
     }
 
     /// The colour layers the new side's first line took once `path`, changed from `old` to `new`, showed and every
-    /// stage ended.
+    /// stage ended, on a window with `services`, or the bundled ones when `grammar` holds.
     private func layers(
-        _ path: String, old: String, new: String, refinesSwift: Bool, grammar: Bool
+        _ path: String, old: String, new: String, refinesSwift: Bool, grammar: Bool,
+        services: GrammarColorServices? = nil
     ) async throws -> [HighlightLayer] {
         let sut = harness.makeSUT()
         sut.settings.refinesSwiftColor = refinesSwift
-        sut.attachGrammarColor(grammar ? try Self.services() : nil)
+        sut.attachGrammarColor(try services ?? (grammar ? Self.services() : nil))
         harness.reader.entries[.directory(ModelTestHarness.leftURL)] = [harness.entry(path, "old-\(path)")]
         harness.reader.entries[.directory(ModelTestHarness.rightURL)] = [harness.entry(path, "new-\(path)")]
         harness.reader.blobContents["old-\(path)"] = old
@@ -77,5 +78,36 @@ struct ColourTierCoverageTests {
 
         #expect(layers.contains(.lexical))
         #expect(layers.contains(.structural))
+    }
+
+    @Test
+    func `a language whose table is known too large starts no grammar job and keeps the lexer's colour`()
+        async throws
+    {
+        let cache = FileManager.default.temporaryDirectory.appending(path: "gdv-grammar-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: cache) }
+        let corpus = try GrammarCorpus.bundled()
+        let registry = GrammarRegistry(cacheDirectory: cache, bundledManifest: try corpus.manifest())
+        // Every table is too large under a limit of one byte, as TypeScript's is under the app's.
+        let services = GrammarColorServices(
+            artifacts: SyntaxArtifactsCache(
+                registry: registry, grammarsDirectory: corpus.grammarsDirectory,
+                limits: SyntaxArtifactsCache.Limits(maxTableBytes: 1, budgetBytes: 1 << 20)),
+            pool: nil)
+        // The first side compiles JSON's table once, which tells its size.
+        _ = try await layers(
+            "a.json", old: "{\"a\": 1}\n", new: "{\"a\": 2}\n", refinesSwift: true, grammar: true, services: services)
+        let parses = services.record.parsesStarted
+
+        let layers = try await layers(
+            "b.json", old: "{\"b\": 1}\n", new: "{\"b\": 2}\n", refinesSwift: true, grammar: true, services: services)
+
+        #expect(layers == [.lexical])
+        #expect(services.record.parsesStarted == parses)
+        // The gate leaves the grammar tier out of JSON's tiers, so no job starts for it.
+        let gate = ColorTierGate()
+        _ = gate.update(services: services, grammarOff: [], refinesSwift: true)
+        #expect(!gate.grammarColors(.json))
+        #expect(gate.grammarColors(.python))
     }
 }
