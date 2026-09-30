@@ -249,8 +249,8 @@ private struct AppearanceSettings: View {
                     }
                     Text(
                         "Files in these languages show quick colors at once, then their grammar's. A grammar whose "
-                            + "compiled tables are larger than 20 MB, such as TypeScript's or C++'s, keeps the quick "
-                            + "colors, and so does a file its grammar cannot read within a quarter of a second."
+                            + "compiled tables are larger than 20 MB keeps the quick colors, and so does a file its "
+                            + "grammar cannot read within a quarter of a second."
                     )
                     .settingsCaption()
                 } header: {
