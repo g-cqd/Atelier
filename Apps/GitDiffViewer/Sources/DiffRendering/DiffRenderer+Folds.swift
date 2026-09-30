@@ -15,6 +15,8 @@ extension DiffRenderer {
         /// The scope's last line, less its leading whitespace, on the fold's side; nil when it is out of the file.
         let closing: Substring?
         var holdsChange = false
+        /// How many rows it hides, which the rows' change starts step over.
+        var hiddenRows = 0
 
         /// The band's text on `side`, and where its `•••` lies in it, in UTF-16 offsets: the closing line follows it
         /// on the fold's side and inline, and the other side of a split shows the capsule alone.
@@ -61,6 +63,7 @@ extension DiffRenderer {
                     finish()
                 } else {
                     if holdsChange(row) { active.band.holdsChange = true }
+                    if lines(of: row) != nil { active.band.hiddenRows += 1 }
                     hiding = active
                     if number == active.band.lastLine { finish() }
                     continue
@@ -92,6 +95,28 @@ extension DiffRenderer {
                 key: key, lastLine: last, indent: first.prefix { $0 == " " || $0 == "\t" }, closing: closing)
         }
         return nil
+    }
+
+    /// `starts`, the change starts of rows before any scope folds, in the rows `rows` leaves: a change a fold hides
+    /// starts on the fold's band, so every change keeps its place in the count, and navigation can open its fold.
+    /// - Complexity: O(rows)
+    static func foldedStarts(_ starts: [Int], through rows: [RenderRow]) -> [Int] {
+        guard rows.contains(where: { if case .scopeFold = $0 { true } else { false } }) else { return starts }
+        var position: [Int] = []
+        var row = 0
+        for entry in rows {
+            switch entry {
+                case .diff, .folded, .header:
+                    position.append(row)
+                    row += 1
+                case .scopeFold(let band, _):
+                    position += repeatElement(row, count: band.hiddenRows)
+                    row += 1
+                case .gap, .change:
+                    continue
+            }
+        }
+        return starts.map { position.indices.contains($0) ? position[$0] : row }
     }
 
     /// The source lines, from zero, a row shows on each side; nil for a row that shows none.
