@@ -79,6 +79,30 @@ struct SyntaxArtifactsCacheTests {
     }
 
     @Test
+    func `a table stored too large is refused before any load, and one not known yet is not`() async throws {
+        let fixture = try TierFixture()
+        defer { fixture.remove() }
+        let compiles = Counter()
+        let limits = SyntaxArtifactsCache.Limits(maxTableBytes: 1, budgetBytes: 1 << 20)
+        let first = SyntaxArtifactsCache(
+            registry: fixture.registry(counting: compiles), grammarsDirectory: fixture.grammarsDirectory,
+            limits: limits)
+        // Nothing stored yet: only a compile can tell.
+        #expect(first.admits("json"))
+        #expect(await first.pin("json") == nil)
+        #expect(!first.admits("json"))
+
+        let later = SyntaxArtifactsCache(
+            registry: fixture.registry(counting: compiles), grammarsDirectory: fixture.grammarsDirectory,
+            limits: limits)
+
+        #expect(!later.admits("json"))
+        #expect(later.isOversized("json"))
+        #expect(compiles.value == 1)
+        #expect(later.loadedTableBytes == 0)
+    }
+
+    @Test
     func `past its budget the cache unloads the least recently used table, never a pinned one`() async throws {
         let fixture = try TierFixture()
         defer { fixture.remove() }

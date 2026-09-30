@@ -148,6 +148,32 @@ public final class SyntaxArtifactsCache: Sendable {
         }
     }
 
+    /// Whether `language`'s tables can load under the limits, as far as the cache knows without compiling them: false
+    /// once a load found them unavailable or larger than ``Limits/maxTableBytes``, or when the disk cache holds them
+    /// that large, which it records then; true otherwise, and always without limits. A table the disk cache does not
+    /// hold yet is known only once compiled, which happens once per grammar version: its stored size answers every
+    /// later ask. A grammar tier asks before it starts a job, so a language over the limit starts none.
+    /// - Complexity: O(1) once answered for `language`; a file's size and the grammar's key otherwise.
+    public func admits(_ language: String) -> Bool {
+        guard let limits else { return true }
+        let known: Bool? = state.withLock { state in
+            switch state.entries[language] {
+                case .loaded?: true
+                case .oversized?, .unavailable?: false
+                case nil: nil
+            }
+        }
+        if let known { return known }
+        guard let entry = registry.resolvedEntry(forLanguage: language), let grammarsDirectory,
+            let stored = try? registry.cachedTableBytes(for: entry.name, grammarsPath: grammarsDirectory.path),
+            stored > limits.maxTableBytes
+        else { return true }
+        state.withLock { state in
+            if state.entries[language] == nil { state.entries[language] = .oversized(tableBytes: stored) }
+        }
+        return false
+    }
+
     /// The languages whose tables are loaded.
     public var loadedLanguages: Set<String> {
         state.withLock { state in
