@@ -88,10 +88,12 @@ extension DiffTextViewCoordinator {
         place(RowPlacement(row: placedRow.placement.row, anchor: placedRow.placement.anchor))
     }
 
-    /// Sizes the pane to what TextKit laid out in the pass that ended, then places a row asked for.
+    /// Sizes the pane to what TextKit laid out in the pass that ended, then places a row asked for, and keeps the other
+    /// side on the row the two show, which the pass may have moved.
     func layoutDidEnd() {
         if let clipView = textView?.enclosingScrollView?.contentView { updateOverscroll(in: clipView) }
         placePendingScroll()
+        if let textView { splitController?.paneDidLayout(textView) }
     }
 
     /// Places the row of ``scroll(toRow:in:centered:)``, if any, once the pane has a size, and checks it again until it
@@ -138,9 +140,10 @@ extension DiffTextViewCoordinator {
 
     /// The top of `row`'s line in the text view, laid out.
     ///
-    /// The text is laid out from its start down to the row when that costs little, or when the pane scrolls in step
-    /// with the other side, whose estimates differ from this one's while one scroll offset has to show the row at the
-    /// same place in both. Otherwise the row alone is laid out, and TextKit places it after its estimates of the rows
+    /// The text is laid out from its start down to the row when that costs little, or when the pane shares one scroll
+    /// offset with the other side (``SplitPaneController/needsRowsAboveLaidOut``), whose estimates differ from this
+    /// one's while that offset has to show the row at the same place in both; panes that follow each other by row
+    /// need no such thing. Otherwise the row alone is laid out, and TextKit places it after its estimates of the rows
     /// above it: laying out every row above a change near the end of a long file took hundreds of milliseconds, many
     /// times what the rest of opening it takes (`FirstChangePlacementBenchmark`). The text's height follows the same
     /// estimates until the rows above are laid out.
@@ -150,7 +153,7 @@ extension DiffTextViewCoordinator {
             let location = contentManager.location(
                 layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row])
         else { return nil }
-        if rendered.lineStarts[row] <= RowPlacement.textLaidOutAbove || splitController?.syncsScrolling == true,
+        if rendered.lineStarts[row] <= RowPlacement.textLaidOutAbove || splitController?.needsRowsAboveLaidOut == true,
             let above = NSTextRange(location: layoutManager.documentRange.location, end: location)
         {
             layoutManager.ensureLayout(for: above)
