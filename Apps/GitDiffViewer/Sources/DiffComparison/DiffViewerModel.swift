@@ -642,10 +642,7 @@ package final class DiffViewerModel {
                 palette = Self.palette(for: settings)
                 relayout()
             // The explorers' placement is an appearance setting, and grouping applies to the merged sidebar only.
-            case .appearance:
-                refreshCommitGroups(force: false)
-                followSemanticColorSetting()
-                followColorSettings()
+            case .appearance: followAppearanceSettingsChange()
             // DiagnosticsModel observes ViewerSettings on its own; nothing for this model to do here.
             case .diagnostics: break
             case .freshness: freshness?.setEnabled(settings.autoRefresh)

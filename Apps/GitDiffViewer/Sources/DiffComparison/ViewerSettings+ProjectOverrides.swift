@@ -21,7 +21,7 @@ extension ViewerSettings {
                     Key.isolatesChanges, Key.contextLines, Key.granularity, Key.diffHeuristics, Key.bouncesAtEdges,
                     Key.scrollsPastEnd, Key.scrollsToFirstChange
                 ]
-            case .appearance: [Key.mode, Key.wrapsLines, Key.wrapColumn]
+            case .appearance: [Key.mode, Key.wrapsLines, Key.wrapColumn, Key.showsScopeRibbon]
             case .tools:
                 [
                     Key.diagnosticsEnabled, Key.showsHoverDocumentation, Key.hoverPanelMaterial, Key.analyzedSides,
@@ -37,6 +37,7 @@ extension ViewerSettings {
         \.showsIgnoredFiles: Key.showsIgnoredFiles, \.groupsByCommit: Key.groupsByCommit,
         \.autoRefresh: Key.autoRefresh, \.granularity: Key.granularity,
         \.diffHeuristics: Key.diffHeuristics, \.showsMinimap: Key.showsMinimap, \.showsStatusBar: Key.showsStatusBar,
+        \.showsScopeRibbon: Key.showsScopeRibbon,
         \.treeStyle: Key.treeStyle, \.wrapColumn: Key.wrapColumn, \.themePath: Key.themePath,
         \.lineHeightMultiple: Key.lineHeightMultiple, \.contextLines: Key.contextLines,
         \.isolatesChanges: Key.isolatesChanges, \.compactsInlineView: Key.compactsInlineView,
@@ -196,6 +197,9 @@ extension ViewerSettings {
             case Key.isolatesChanges:
                 let value = defaults.bool(forKey: effectiveKey(key))
                 if value != isolatesChanges { isolatesChanges = value }
+            case Key.showsScopeRibbon:
+                let value = defaults.object(forKey: effectiveKey(key)) as? Bool ?? true
+                if value != showsScopeRibbon { showsScopeRibbon = value }
             default:
                 return false
         }

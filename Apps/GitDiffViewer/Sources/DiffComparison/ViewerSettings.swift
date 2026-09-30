@@ -251,6 +251,11 @@ package final class ViewerSettings {
     package var wrapColumn: Int {
         didSet { if wrapColumn != oldValue { store(wrapColumn, Key.wrapColumn, .appearance) } }
     }
+    /// Shows the gutter's scope ribbon and its hover (DIFF-03), and lets the folding keys and a click on it fold and
+    /// unfold scopes. Off, the gutter keeps the width the ribbon takes, so turning it back on never shifts the text.
+    package var showsScopeRibbon: Bool {
+        didSet { if showsScopeRibbon != oldValue { store(showsScopeRibbon, Key.showsScopeRibbon, .appearance) } }
+    }
     /// Path of the Xcode theme file to derive colors and font from; nil keeps the system look.
     package var themePath: String? { didSet { if themePath != oldValue { store(themePath, Key.themePath, .palette) } } }
     /// Whether the inline layout shows the new file alone, with a gutter marker at each change that discloses it in
@@ -455,6 +460,7 @@ package final class ViewerSettings {
         showsStatusBar = defaults.object(forKey: Key.showsStatusBar) as? Bool ?? true
         treeStyle = Self.storedTreeStyle(defaults, key: Key.treeStyle)
         wrapColumn = defaults.integer(forKey: Key.wrapColumn)
+        showsScopeRibbon = defaults.object(forKey: Key.showsScopeRibbon) as? Bool ?? true
         themePath = defaults.string(forKey: Key.themePath)
         lineHeightMultiple = defaults.double(forKey: Key.lineHeightMultiple)
         contextLines = defaults.object(forKey: Key.contextLines) as? Int ?? 3
@@ -533,6 +539,7 @@ extension ViewerSettings {
         static let compactsFolders = "compactsFolders"
         static let treeStyle = "fileTreeStyle"
         static let wrapColumn = "wrapColumn"
+        static let showsScopeRibbon = "showsScopeRibbon"
         static let themePath = "themePath"
         static let lineHeightMultiple = "lineHeightMultiple"
         static let contextLines = "contextLines"
