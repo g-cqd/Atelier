@@ -40,6 +40,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     package var decorations: DiffDecorations?
     /// Called when the ribbon or a folding command folds or unfolds scopes (DIFF-03); nil folds nothing.
     package var onScopeFold: ((ScopeFoldRequest) -> Void)?
+    /// Whether the gutter's scope ribbon draws and takes the pointer's hover, and the folding keys work (DIFF-03).
+    package var showsScopeRibbon = true
     /// Where the pane reports the rows it shows, so they are decorated first.
     package var viewport: DecorationViewport?
 
@@ -124,7 +126,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         gutterView.decorations = context.coordinator.decorationStore.snapshot
         gutterView.decorationStore = context.coordinator.decorationStore
         context.coordinator.decorationStore.gutter = gutterView
-        context.coordinator.scopeHover.attach(to: textView, gutter: gutterView)
+        gutterView.showsScopeRibbon = showsScopeRibbon
+        if showsScopeRibbon { context.coordinator.scopeHover.attach(to: textView, gutter: gutterView) }
         let minimapView = MinimapView()
         minimapView.isHidden = true
         let pane = DiffPaneView(
@@ -159,6 +162,14 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         pane.gutterView.onChangeToggle = onChangeToggle
         pane.gutterView.onDiagnosticClick = onDiagnosticClick
         pane.gutterView.onScopeFold = onScopeFold
+        if pane.gutterView.showsScopeRibbon != showsScopeRibbon {
+            pane.gutterView.showsScopeRibbon = showsScopeRibbon
+            if showsScopeRibbon, let textView = context.coordinator.textView {
+                context.coordinator.scopeHover.attach(to: textView, gutter: pane.gutterView)
+            } else {
+                context.coordinator.scopeHover.detach()
+            }
+        }
         let elasticity: NSScrollView.Elasticity = bouncesAtEdges ? .automatic : .none
         if let scrollView = pane.contentView as? NSScrollView, scrollView.horizontalScrollElasticity != elasticity {
             scrollView.horizontalScrollElasticity = elasticity

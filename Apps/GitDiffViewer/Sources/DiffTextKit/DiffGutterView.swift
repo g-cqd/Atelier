@@ -53,6 +53,9 @@ package final class DiffGutterView: NSView {
     var hoveredScope: HoveredScope?
     /// Called when the ribbon, or a folding command in the pane, folds or unfolds scopes (DIFF-03).
     package var onScopeFold: ((ScopeFoldRequest) -> Void)?
+    /// Whether the ribbon draws and takes the pointer's hover; the gutter keeps the width it takes either way, so
+    /// turning it back on never shifts the text.
+    package var showsScopeRibbon = true { didSet { needsDisplay = true } }
 
     package var style: GutterStyle = .dual {
         didSet { invalidateIntrinsicContentSize() }
@@ -200,7 +203,7 @@ package final class DiffGutterView: NSView {
             }
         }
         addChangeMarkerCursorRects()
-        addFoldCursorRects()
+        if showsScopeRibbon { addFoldCursorRects() }
     }
 
     /// Marks for display the line numbers of `rows`, whose diagnostics changed. A gutter beside a clip view draws what
@@ -353,7 +356,7 @@ package final class DiffGutterView: NSView {
         defer { NSGraphicsContext.restoreGraphicsState() }
         unobscuredRect(of: bounds).clip()
 
-        drawRibbon(in: dirtyRect)
+        if showsScopeRibbon { drawRibbon(in: dirtyRect) }
         let metrics = metrics
         forEachFragment(in: dirtyRect) { fragment, row, rowIndex, y in
             let diagnostics = overlay?.row(rowIndex)

@@ -40,6 +40,7 @@ struct ViewOptionsMenu: NSViewRepresentable {
     /// The settings the menu shows, so it is rebuilt only when one of them changes.
     struct Snapshot: Equatable {
         let wrapsLines: Bool
+        let showsScopeRibbon: Bool
         let syncsScrolling: Bool
         let showsMinimap: Bool
         let showsStatusBar: Bool
@@ -60,6 +61,7 @@ struct ViewOptionsMenu: NSViewRepresentable {
 
         init(_ settings: ViewerSettings, commitGroupingUnavailableReason: String? = nil) {
             wrapsLines = settings.wrapsLines
+            showsScopeRibbon = settings.showsScopeRibbon
             syncsScrolling = settings.syncsScrolling
             showsMinimap = settings.showsMinimap
             showsStatusBar = settings.showsStatusBar
@@ -105,6 +107,7 @@ struct ViewOptionsMenu: NSViewRepresentable {
         private func topItems(for snapshot: Snapshot) -> [NSMenuItem] {
             [
                 toggle(SettingLabel.wrapsLines, snapshot.wrapsLines, #selector(toggleWrap)),
+                toggle(SettingLabel.showsScopeRibbon, snapshot.showsScopeRibbon, #selector(toggleScopeRibbon)),
                 toggle(SettingLabel.syncScrolling, snapshot.syncsScrolling, #selector(toggleSync)),
                 toggle(SettingLabel.showsMinimap, snapshot.showsMinimap, #selector(toggleMinimap)),
                 toggle(SettingLabel.showsStatusBar, snapshot.showsStatusBar, #selector(toggleStatusBar)),
@@ -229,6 +232,7 @@ struct ViewOptionsMenu: NSViewRepresentable {
         }
 
         @objc func toggleWrap() { settings.wrapsLines.toggle() }
+        @objc func toggleScopeRibbon() { settings.showsScopeRibbon.toggle() }
         @objc func toggleSync() { settings.syncsScrolling.toggle() }
         @objc func toggleMinimap() { settings.showsMinimap.toggle() }
         @objc func toggleStatusBar() { settings.showsStatusBar.toggle() }

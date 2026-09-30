@@ -454,7 +454,7 @@ private struct CardPane: View {
             diagnosticsVersion: diagnostics.version, onDiagnosticClick: diagnostics.showFindings
         )
         .decorated(with: model.decorations(for: layout?.rendered), viewport: model.decorationViewport)
-        .folding { model.changeFolds($0) }
+        .folding(showsRibbon: model.settings.showsScopeRibbon) { model.changeFolds($0) }
         if let rendered = layout?.rendered {
             pane.followingDiagnostics(of: rendered, in: model, into: diagnostics)
         } else {

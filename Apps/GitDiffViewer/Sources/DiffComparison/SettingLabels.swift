@@ -37,6 +37,7 @@ package enum SettingLabel {
     package static let diffLayout = "Diff layout"
     package static let compactsInlineView = "Compact inline view"
     package static let wrapsLines = "Wrap long lines"
+    package static let showsScopeRibbon = "Show scope ribbon"
     package static let wrapColumn = "Wrap column"
     package static let appearanceScheme = "Appearance"
     package static let badgeScheme = "Badge colors"

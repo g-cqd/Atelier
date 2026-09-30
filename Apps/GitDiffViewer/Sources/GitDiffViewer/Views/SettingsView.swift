@@ -300,6 +300,12 @@ private struct AppearanceSettings: View {
                     }
                     Text("In the side-by-side layout, paired rows keep the same height on both sides when lines wrap.")
                         .settingsCaption()
+                    Toggle(SettingLabel.showsScopeRibbon, isOn: $settings.showsScopeRibbon)
+                    Text(
+                        "Shades the gutter by how deeply a row nests, and lets a click or the folding keys collapse a "
+                            + "function or a type. Off, the gutter keeps the same width."
+                    )
+                    .settingsCaption()
                 }
             }
             .formStyle(.grouped)

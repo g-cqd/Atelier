@@ -24,6 +24,7 @@ struct ViewerSettingsTests {
         #expect(!sut.groupsByCommit)
         #expect(sut.granularity == .word)
         #expect(sut.showsMinimap)
+        #expect(sut.showsScopeRibbon)
         #expect(sut.treeStyle == .hierarchy)
         #expect(sut.explorerPlacement == .top)
         #expect(sut.sidebarVisibility == .all)
@@ -51,6 +52,7 @@ struct ViewerSettingsTests {
         sut.groupsByCommit = true
         sut.granularity = .syntax
         sut.showsMinimap = false
+        sut.showsScopeRibbon = false
         sut.treeStyle = .flat
         sut.explorerPlacement = .unifiedSidebar
         sut.sidebarVisibility = .detailOnly
@@ -74,6 +76,7 @@ struct ViewerSettingsTests {
         #expect(reloaded.groupsByCommit)
         #expect(reloaded.granularity == .syntax)
         #expect(!reloaded.showsMinimap)
+        #expect(!reloaded.showsScopeRibbon)
         #expect(reloaded.treeStyle == .flat)
         #expect(reloaded.explorerPlacement == .unifiedSidebar)
         #expect(reloaded.sidebarVisibility == .detailOnly)
@@ -279,7 +282,8 @@ struct ViewerSettingsTests {
         sut.wrapsLines = false
         sut.wrapColumn = 100
         sut.appearanceScheme = .dark
-        #expect(sut.settingsDiffCount(.appearance) == 6)
+        sut.showsScopeRibbon = false
+        #expect(sut.settingsDiffCount(.appearance) == 7)
 
         sut.restoreDefaults(.appearance)
 
@@ -289,6 +293,7 @@ struct ViewerSettingsTests {
         #expect(sut.wrapsLines)
         #expect(sut.wrapColumn == 0)
         #expect(sut.appearanceScheme == .system)
+        #expect(sut.showsScopeRibbon)
         #expect(sut.settingsDiffCount(.appearance) == 0)
     }
 

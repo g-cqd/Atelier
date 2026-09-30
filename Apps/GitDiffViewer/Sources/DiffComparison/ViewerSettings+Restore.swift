@@ -91,6 +91,9 @@ extension ViewerSettings {
             defaults.object(forKey: Key.wrapsLines) as? Bool ?? true
         }
         wrapColumn = restoredValue(Key.wrapColumn, appDefault: 0) { defaults.integer(forKey: Key.wrapColumn) }
+        showsScopeRibbon = restoredValue(Key.showsScopeRibbon, appDefault: true) {
+            defaults.object(forKey: Key.showsScopeRibbon) as? Bool ?? true
+        }
     }
 
     private func restoreTools() {
@@ -182,7 +185,7 @@ extension ViewerSettings {
                     themePath != nil, lineHeightMultiple != 0, mode != .split, wrapsLines != true, wrapColumn != 0,
                     appearanceScheme != .system, badgeScheme != .classic, matchesThemeAppearance != false,
                     refinesSwiftColor != true, semanticColor != true, !grammarColorOff.isEmpty,
-                    compactsInlineView != false,
+                    compactsInlineView != false, showsScopeRibbon != true,
                     diffColors != .standard
                 ]
                 .count { $0 }

@@ -19,6 +19,8 @@ package final class TextKit2Pane: DiffTextPane {
         /// The height of bars laid over the pane's top that AppKit does not know of (see ``DiffTextView/underBars``).
         package var underBars: CGFloat = 0
         package var showsMinimap = true
+        /// Whether the gutter's scope ribbon draws and takes the pointer's hover (DIFF-03).
+        package var showsScopeRibbon = true
         /// The split view the pane scrolls and aligns its rows with, if any.
         package var splitController: SplitPaneController?
 
@@ -71,7 +73,8 @@ package final class TextKit2Pane: DiffTextPane {
         gutterView.decorations = coordinator.decorationStore.snapshot
         gutterView.decorationStore = coordinator.decorationStore
         coordinator.decorationStore.gutter = gutterView
-        coordinator.scopeHover.attach(to: textView, gutter: gutterView)
+        gutterView.showsScopeRibbon = options.showsScopeRibbon
+        if options.showsScopeRibbon { coordinator.scopeHover.attach(to: textView, gutter: gutterView) }
         let minimapView = Self.makeMinimap(
             following: scrollView, coordinator: coordinator, showing: options.showsMinimap)
 

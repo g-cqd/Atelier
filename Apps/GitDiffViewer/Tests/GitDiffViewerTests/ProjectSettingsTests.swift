@@ -132,7 +132,8 @@ struct ProjectSettingsTests {
     @Test
     func `every setting decision D11 lists can differ per project`() {
         let perProject: [PartialKeyPath<ViewerSettings>] = [
-            \.diffHeuristics, \.mode, \.wrapsLines, \.wrapColumn, \.showsMinimap, \.isolatesChanges, \.contextLines,
+            \.diffHeuristics, \.mode, \.wrapsLines, \.wrapColumn, \.showsScopeRibbon, \.showsMinimap,
+            \.isolatesChanges, \.contextLines,
             \.granularity, \.showsHoverDocumentation, \.diagnosticsEnabled, \.analyzedSides, \.autoRefresh,
             \.toolLocations, \.lspServerLocations
         ]
