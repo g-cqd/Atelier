@@ -31,16 +31,28 @@ public struct LexAutomaton: Sendable, RandomAccessCollection {
         groupStarts.reserveCapacity(states.count + 1)
         for state in states {
             accepts.append(state.accept)
-            // The groups in the order of their first move, each move in its group in the state's order.
-            var order: [GroupKey] = []
-            var members: [GroupKey: [UInt32]] = [:]
+            // The groups in the order of their first move, each move in its group in the state's order. Moves come
+            // in runs to one target, so only a move that leaves the last move's group looks its group up.
+            var keys: [GroupKey] = []
+            var members: [[UInt32]] = []
+            var groupOfKey: [GroupKey: Int] = [:]
+            var last = 0
             for move in state.transitions {
                 let key = GroupKey(target: move.target, skips: move.skips)
-                if members[key] == nil { order.append(key) }
-                members[key, default: []].append(contentsOf: [move.lower, move.upper])
+                if last >= keys.count || keys[last] != key {
+                    if let found = groupOfKey[key] {
+                        last = found
+                    } else {
+                        last = keys.count
+                        groupOfKey[key] = last
+                        keys.append(key)
+                        members.append([])
+                    }
+                }
+                members[last].append(move.lower)
+                members[last].append(move.upper)
             }
-            for key in order {
-                let ranges = members[key] ?? []
+            for (key, ranges) in zip(keys, members) {
                 let set: UInt32
                 if let existing = setIndex[ranges] {
                     set = existing
