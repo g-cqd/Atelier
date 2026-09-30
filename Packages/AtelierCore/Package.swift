@@ -43,6 +43,7 @@ let package = Package(
         .library(name: "AtelierDiagnostics", targets: ["AtelierDiagnostics"]),
         .library(name: "AtelierLSP", targets: ["AtelierLSP"]),
         .library(name: "AtelierDocIndex", targets: ["AtelierDocIndex"]),
+        .library(name: "AtelierTextRendering", targets: ["AtelierTextRendering"]),
         .library(name: "AtelierDocComment", targets: ["AtelierDocComment"])
     ],
     dependencies: [
@@ -299,6 +300,12 @@ let package = Package(
             swiftSettings: strict),
         .testTarget(
             name: "AtelierDocCommentTests", dependencies: ["AtelierDocComment", "AtelierSyntaxModel"],
-            swiftSettings: strict)
+            swiftSettings: strict),
+        // The CoreText renderer's model, style sheets, height index, typesetting and tile rasterization
+        // (text-renderer.md §3): pure value types and CoreText/CoreGraphics; no AppKit, no tasks of its own.
+        .target(
+            name: "AtelierTextRendering", dependencies: [], swiftSettings: strict),
+        .testTarget(
+            name: "AtelierTextRenderingTests", dependencies: ["AtelierTextRendering"], swiftSettings: strict)
     ]
 )
