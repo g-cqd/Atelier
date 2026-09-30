@@ -132,6 +132,45 @@ struct DecorationStorePixelsTests {
         #expect(try pane.pixels().differing(from: before, in: pane.bounds) == 0)
     }
 
+    /// Eighty rows of ``text``'s first line, three times what the viewport shows: TextKit lays out more of them than it
+    /// shows, and keeps them.
+    static let longText = String(repeating: "let set = [1]\n", count: 80)
+
+    /// The lexer's colour of both sides of ``longText``, then swift-syntax's over it when `refined`.
+    static func longDecorations(refined: Bool) throws -> DiffDecorations {
+        let lexical = DecorationFixtures.layers(
+            LexicalHighlightEngine().highlight(utf8: Array(longText.utf8), language: .swift), text: longText,
+            layer: .lexical)
+        guard refined else { return DecorationFixtures.colors(old: lexical, new: lexical, version: 1) }
+        let layers = DecorationFixtures.layers(
+            try SwiftSyntaxHighlights.tokens(in: longText), text: longText, over: lexical)
+        return DecorationFixtures.colors(old: layers, new: layers, version: 2)
+    }
+
+    /// TextKit validates a row's rendering attributes only when it lays the row out: the rows it keeps laid out past the
+    /// viewport, as it keeps the last ones, were validated before the colours landed, and are not asked about again.
+    @Test(arguments: [false, true])
+    func `rows laid out before the colours landed take them when scrolled to`(refined: Bool) throws {
+        let rendered = try #require(
+            DiffRenderer.render(oldText: Self.longText, newText: Self.longText, language: .swift).new)
+        let pane = try HostedDecoratedPane(rendered: rendered, decorations: nil)
+        pane.update(decorations: try Self.longDecorations(refined: false))
+        if refined { pane.update(decorations: try Self.longDecorations(refined: true)) }
+
+        try pane.textView.scrollToEndOfDocument(nil)
+        pane.settle()
+
+        let lastRow = rendered.rows.count - 1
+        let keyword = rendered.palette.color(for: .keyword)
+        // `let`, a keyword to both tiers; `set`, a keyword to the lexer and plain to swift-syntax.
+        #expect(try pane.renderingColor(at: rendered.lineStarts[lastRow]) == keyword)
+        #expect(try pane.renderingColor(at: rendered.lineStarts[lastRow] + 4) == (refined ? nil : keyword))
+        let fresh = try HostedDecoratedPane(rendered: rendered, decorations: try Self.longDecorations(refined: refined))
+        try fresh.textView.scrollToEndOfDocument(nil)
+        fresh.settle()
+        #expect(try pane.pixels().differing(from: try fresh.pixels(), in: pane.bounds) == 0)
+    }
+
     @Test
     func `a card pane draws the decorations when they land`() throws {
         let diff = Self.diff()

@@ -94,6 +94,7 @@ extension DiffTextViewCoordinator {
         if let clipView = textView?.enclosingScrollView?.contentView { updateOverscroll(in: clipView) }
         placePendingScroll()
         if let textView { splitController?.paneDidLayout(textView) }
+        decorationStore.viewportDidLayout()
     }
 
     /// Places the row of ``scroll(toRow:in:centered:)``, if any, once the pane has a size, and checks it again until it

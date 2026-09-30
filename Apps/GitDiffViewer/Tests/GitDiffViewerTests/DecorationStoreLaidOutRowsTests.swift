@@ -9,8 +9,8 @@ import Testing
 
 /// When colours land, a card pane, whose layout manager keeps every row it laid out, colours all of them: TextKit asks
 /// the validator for a row only when it lays the row out, so a kept row left out would stay plain when it scrolls
-/// back in. A file pane lays out again whatever scrolls in, and colours its viewport alone. Lays a text out
-/// on the main actor, without drawing it.
+/// back in. A file pane colours its viewport alone, and each other row it kept laid out once the row shows
+/// (`DecorationStore.viewportDidLayout()`). Lays a text out on the main actor, without drawing it.
 @MainActor
 @Suite(.mainActorLane)
 struct DecorationStoreLaidOutRowsTests {
