@@ -25,7 +25,7 @@ struct SyntaxFactsSharingTests {
         let preparer = DiffPreparer(reader: reader, taskProvider: taskProvider, store: store)
         sut = RenderPipeline(
             preparer: preparer, taskProvider: taskProvider, options: DiffRenderer.Options(sides: [.old, .new]),
-            decorator: DiffDecorator(tiers: DiffDecorations.tiers(store: store), clock: TestClock()))
+            decorator: DiffDecorator(tiers: DiffDecorations.tiers(store: store), clock: TestClock(), store: store))
         reader.blobContents["old"] = Self.old
         reader.blobContents["new"] = Self.new
     }
@@ -59,6 +59,30 @@ struct SyntaxFactsSharingTests {
         #expect(store.extractions == 2)
         #expect(sut.decorations(forText: new.id)?.new.emphasis.isEmpty == false)
         #expect(await index.documentation(forIdentifier: "greet", preferringURI: nil, side: .new).count == 1)
+    }
+
+    @Test
+    func `a Swift side's scopes come from the parse that colours it`() async throws {
+        let text = "struct S {\n    func f() {\n    }\n}\n"
+        reader.blobContents["old"] = text
+        reader.blobContents["new"] = text + "let a = 1\n"
+        let pair = FilePair(
+            path: "a.swift", old: SourceEntry(relativePath: "a.swift", blobID: "old", size: 1),
+            new: SourceEntry(relativePath: "a.swift", blobID: "new", size: 1))
+        sut.render(
+            .file(pair), left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
+            granularity: .word, heuristics: DiffHeuristics(), keepingPublished: false)
+        try await taskProvider.waitForAllTasks()
+        let file = try #require(sut.file)
+
+        sut.decorateDisplayed(file.id)
+        try await taskProvider.waitForAllTasks()
+
+        let new = try #require(file.new)
+        let decorations = try #require(sut.decorations(forText: new.id))
+        #expect(store.extractions == 2)
+        #expect(decorations.old.scopes?.scopes.map(\.lines) == [0 ... 3, 1 ... 2])
+        #expect(decorations.new.scopes?.scopes.map(\.kind) == [.type, .function])
     }
 
     @Test

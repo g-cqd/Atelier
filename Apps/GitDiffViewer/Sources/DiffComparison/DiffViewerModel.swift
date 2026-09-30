@@ -128,7 +128,7 @@ package final class DiffViewerModel {
             preparer: preparer, taskProvider: taskProvider, options: Self.options(settings, palette: palette),
             decorator: DiffDecorator(
                 tiers: Self.tiers(store: syntaxFacts, semantic: semanticColor, gate: colorGate),
-                clock: decorationClock))
+                clock: decorationClock, store: syntaxFacts))
         self.pipeline = pipeline
         gapDrags = GapDragController(
             taskProvider: taskProvider, clock: clock, expansion: { pipeline.expansion(of: $0) },

@@ -4,7 +4,8 @@ package import DiffCore
 import Foundation
 
 /// What is drawn over one rendered file's plain text once the stages after the text land (PERF-09 stages 1 and 2):
-/// each side's syntax colour, in layers, each side's intraline emphasis, and the lines that only moved. Everything is
+/// each side's syntax colour, in layers, each side's intraline emphasis, the lines that only moved, and each side's
+/// scopes, which the gutter's ribbon draws (DIFF-03). Everything is
 /// kept by source line, so a file rendered again, relaid out or with a gap revealed, keeps it.
 ///
 /// A pane draws it without laying anything out again: colour through TextKit's rendering attributes, emphasis and the
@@ -16,10 +17,13 @@ package struct DiffDecorations: Sendable {
         package var colors: LayeredLineTokens?
         /// The emphasis of each compared source line, in UTF-16 offsets from the line's start.
         package var emphasis: [Int: [Range<Int>]] = [:]
+        /// The scopes the side's braces open, by source line; nil until they land.
+        package var scopes: ScopeLines?
 
-        package init(colors: LayeredLineTokens? = nil, emphasis: [Int: [Range<Int>]] = [:]) {
+        package init(colors: LayeredLineTokens? = nil, emphasis: [Int: [Range<Int>]] = [:], scopes: ScopeLines? = nil) {
             self.colors = colors
             self.emphasis = emphasis
+            self.scopes = scopes
         }
     }
 
@@ -29,7 +33,8 @@ package struct DiffDecorations: Sendable {
     package var moved: MovedLines?
     /// Changes whenever either side's colour changes, so a pane knows at once whether to colour its rows again.
     package var colorVersion = 0
-    /// Changes whenever the emphasis or the moved lines change, so a pane knows whether to redraw its rows.
+    /// Changes whenever the emphasis, the moved lines or the scopes change, so a pane knows whether to redraw its rows
+    /// and its gutter.
     package var markVersion = 0
 
     package init(
@@ -53,6 +58,19 @@ package struct DiffDecorations: Sendable {
                 case .unified: row.newNumber != nil ? (false, row.newNumber) : (true, row.oldNumber)
             }
         return number.number.map { (number.isOld ? old : new, $0 - 1) }
+    }
+
+    /// The source line `row` shows on a pane of `side`, from zero, whether it is the old side's, and that side's scopes;
+    /// nil for a row that shows no source line, or whose side has no scopes yet.
+    package func scopeLine(of row: RowMeta, on side: RenderedSide) -> (line: Int, isOld: Bool, scopes: ScopeLines)? {
+        guard let line = line(of: row, on: side), let scopes = line.side.scopes else { return nil }
+        let isOld =
+            switch side {
+                case .old: true
+                case .new: false
+                case .unified: row.newNumber == nil
+            }
+        return (line.index, isOld, scopes)
     }
 
     /// The colour tokens of the source line `row` shows on a pane of `side`; nil for a row that shows no source line, or
@@ -98,5 +116,31 @@ extension DiffDecorations {
     /// not parsed again.
     package static func tiers(store: SyntaxFactsStore? = nil) -> [any AtelierHighlighting.HighlightTier] {
         [LexicalTier(), SwiftSyntaxTier(store: store)]
+    }
+}
+
+extension DiffDecorations {
+    /// One side's scopes (DIFF-03), off the calling actor: a Swift side's from the one parse `store` keeps for
+    /// `revision`, the colour tier's, which it waits for rather than parse again; any other side's, or a Swift side's
+    /// without a store, from its braces, those in the lexer's strings and comments left out. Nil when the task is
+    /// cancelled.
+    /// - Complexity: O(bytes), and the parse when no tier made it yet.
+    @concurrent
+    package static func scopes(
+        of text: String, lineRanges: [Range<Int>], language: Language, revision: SourceRevision,
+        store: SyntaxFactsStore?
+    ) async -> ScopeLines? {
+        let found: [SyntaxScope]
+        if language == .swift, let store {
+            guard let facts = await SwiftSyntaxFacts.facts(for: revision, text: text, in: store) else { return nil }
+            found = facts.scopes
+        } else {
+            let utf8 = text.utf8Span
+            let span = utf8.span
+            found = SyntaxScope.braces(
+                in: span, skipping: LexicalHighlightEngine().highlight(utf8: span, language: language))
+        }
+        guard !Task.isCancelled else { return nil }
+        return ScopeLines(found, text: text, lineRanges: lineRanges)
     }
 }

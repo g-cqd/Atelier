@@ -16,6 +16,8 @@ extension RenderPipeline {
         case color(HighlightLayer)
         /// Intraline emphasis, and the moved lines.
         case marks
+        /// A side's scopes, which the gutter's ribbon draws (DIFF-03).
+        case scopes
     }
 
     /// How long finding a file's emphasis and moved lines may take (review §7.4: emphasis within 250 ms for an L file);
@@ -56,7 +58,10 @@ extension RenderPipeline {
             keepingColors: Set(files.flatMap { [$0.composition.old, $0.composition.new] }.compactMap(\.self)),
             marks: Set(files.map(\.diff.id)))
         if let file = files.first(where: { $0.rendered.id == id }) {
-            for side in [RenderedSide.old, .new] { startColors(side, of: file) }
+            for side in [RenderedSide.old, .new] {
+                startColors(side, of: file)
+                startScopes(side, of: file)
+            }
             startMarks(of: file)
         }
         decorator.publish(files.map { ($0.rendered, $0.composition) })
@@ -150,6 +155,41 @@ extension RenderPipeline {
         decorator.land(update, lineCount: lineCount, for: key)
         decorator.publish(files.map { ($0.rendered, $0.composition) })
         sendDecorated(.color(update.layer), where: shows)
+    }
+
+    // MARK: Scopes
+
+    /// Finds one side's scopes (DIFF-03), unless they are found or being found: a Swift side's from the parse its colour
+    /// tier makes, while swift-syntax colours, and any other's from its braces. They land on the main actor at once.
+    private func startScopes(_ side: RenderedSide, of file: PublishedFile) {
+        guard let key = side == .old ? file.composition.old : file.composition.new, !decorator.isScoped(key) else {
+            return
+        }
+        let diff = file.diff
+        let text = side == .old ? diff.oldText : diff.newText
+        let lines = side == .old ? diff.model.oldLines : diff.model.newLines
+        let lineRanges = DiffRenderer.lineRanges(of: text, lines: lines)
+        let revision = Self.revision(of: key, path: diff.title, language: diff.language)
+        let store = decorator.refinesSwiftColor ? decorator.store : nil
+        let stamp = DiffDecorator.Stamp(generation: generation, fileID: file.rendered.id)
+        decorator.trackScopes(
+            taskProvider.task(priority: .utility) {
+                let scopes = await DiffDecorations.scopes(
+                    of: text, lineRanges: lineRanges, language: diff.language, revision: revision, store: store)
+                if let scopes { self.land(scopes, key: key, stamp: stamp) }
+                self.decorator.endScopes(key, cancelled: Task.isCancelled)
+            }, for: key)
+    }
+
+    /// Takes a side's scopes, unless their job was cancelled, or their render was superseded and no published file
+    /// shows their content any more; then decorates every published text that shows it.
+    private func land(_ scopes: ScopeLines, key: DiffDecorator.ContentKey, stamp: DiffDecorator.Stamp) {
+        let files = publishedFiles()
+        let shows = { (file: PublishedFile) in file.composition.old == key || file.composition.new == key }
+        guard !Task.isCancelled, stamp.generation == generation || files.contains(where: shows) else { return }
+        decorator.land(scopes, for: key)
+        decorator.publish(files.map { ($0.rendered, $0.composition) })
+        sendDecorated(.scopes, where: shows)
     }
 
     /// The revision a side's job reads: its file's path, its language and its content's key.

@@ -50,6 +50,8 @@ package final class DiffDecorator {
     /// The tiers each displayed side may run, and the clock the stages' deadlines are measured on.
     @ObservationIgnored let tiers: [any AtelierHighlighting.HighlightTier]
     @ObservationIgnored let clock: any Clock<Duration>
+    /// Where a Swift side's scopes are read from the parse its colour made; nil finds every side's from its braces.
+    @ObservationIgnored let store: SyntaxFactsStore?
     /// Where panes report the rows they show, which the stages decorate first.
     @ObservationIgnored package let viewport = DecorationViewport()
     @ObservationIgnored private var colors: [ContentKey: (tokens: LayeredLineTokens, version: Int)] = [:]
@@ -61,6 +63,11 @@ package final class DiffDecorator {
     @ObservationIgnored private var marksOrder: [UUID] = []
     @ObservationIgnored private var marksJobs: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var endedMarks: Set<UUID> = []
+    /// Each side's scopes, by its colour key, as they land, with the version they landed at (DIFF-03).
+    @ObservationIgnored private var scopes: [ContentKey: (lines: ScopeLines, version: Int)] = [:]
+    @ObservationIgnored private var scopeOrder: [ContentKey] = []
+    @ObservationIgnored private var scopeJobs: [ContentKey: Task<Void, Never>] = [:]
+    @ObservationIgnored private var endedScopes: Set<ContentKey> = []
     /// The rendered files a pane reported on screen, kept while they stay published, so a change of setting decorates
     /// what shows.
     @ObservationIgnored private var displayed: Set<RenderedDiff.ID> = []
@@ -81,18 +88,23 @@ package final class DiffDecorator {
         let old: Int?
         let new: Int?
         let marks: Int?
+        let oldScopes: Int?
+        let newScopes: Int?
     }
 
     /// - Parameters:
     ///   - tiers: The tiers each displayed side may run: those of a language that supports it, those after the lexer
     ///     only while ``refinesSwiftColor`` holds.
     ///   - clock: The clock the stages' deadlines are measured on.
+    ///   - store: Where a Swift side's scopes are read from the parse its colour tier made; nil finds every side's
+    ///     scopes from its braces.
     package init(
         tiers: [any AtelierHighlighting.HighlightTier] = DiffDecorations.tiers(),
-        clock: any Clock<Duration> = ContinuousClock()
+        clock: any Clock<Duration> = ContinuousClock(), store: SyntaxFactsStore? = nil
     ) {
         self.tiers = tiers
         self.clock = clock
+        self.store = store
     }
 
     /// The tiers a side of `language` runs now.
@@ -120,6 +132,10 @@ package final class DiffDecorator {
             task.cancel()
             colorJobs[key] = nil
         }
+        for (key, task) in scopeJobs where !keys.contains(key) {
+            task.cancel()
+            scopeJobs[key] = nil
+        }
         for (id, task) in marksJobs where !preparations.contains(id) {
             task.cancel()
             marksJobs[id] = nil
@@ -141,6 +157,34 @@ package final class DiffDecorator {
     /// Whether the marks of `preparation` are being found, or were: either way they need no new job.
     func isMarked(_ preparation: UUID) -> Bool {
         marksJobs[preparation] != nil || endedMarks.contains(preparation)
+    }
+
+    /// Whether `key`'s scopes are being found, or were: either way they need no new job.
+    func isScoped(_ key: ContentKey) -> Bool {
+        scopeJobs[key] != nil || endedScopes.contains(key)
+    }
+
+    func trackScopes(_ task: Task<Void, Never>, for key: ContentKey) {
+        scopeJobs[key] = task
+    }
+
+    /// Keeps a side's scopes, the oldest side past ``cacheCapacity`` going.
+    func land(_ lines: ScopeLines, for key: ContentKey) {
+        if scopes[key] == nil { scopeOrder.append(key) }
+        scopes[key] = (lines, nextVersion())
+        if scopeOrder.count > Self.cacheCapacity {
+            for evicted in scopeOrder.prefix(scopeOrder.count - Self.cacheCapacity) {
+                scopes[evicted] = nil
+                endedScopes.remove(evicted)
+            }
+            scopeOrder.removeFirst(scopeOrder.count - Self.cacheCapacity)
+        }
+    }
+
+    /// A side's scopes job ended; as ``endColors(_:cancelled:)``. A side whose scopes were not found has no ribbon.
+    func endScopes(_ key: ContentKey, cancelled: Bool) {
+        scopeJobs[key] = nil
+        if !cancelled { endedScopes.insert(key) }
     }
 
     func trackColors(_ task: Task<Void, Never>, for key: ContentKey) {
@@ -210,18 +254,29 @@ package final class DiffDecorator {
             let old = parts.old.flatMap { colors[$0] }
             let new = parts.new.flatMap { colors[$0] }
             let found = marks[parts.preparation]
-            guard old != nil || new != nil || found != nil else { continue }
-            let inputs = Inputs(old: old?.version, new: new?.version, marks: found?.version)
+            let oldScopes = parts.old.flatMap { scopes[$0] }
+            let newScopes = parts.new.flatMap { scopes[$0] }
+            guard old != nil || new != nil || found != nil || oldScopes != nil || newScopes != nil else { continue }
+            let inputs = Inputs(
+                old: old?.version, new: new?.version, marks: found?.version, oldScopes: oldScopes?.version,
+                newScopes: newScopes?.version)
             let decorations: DiffDecorations
             if let known = composed[parts] ?? kept[parts], known.inputs == inputs {
                 decorations = known.decorations
             } else {
                 let known = composed[parts] ?? kept[parts]
                 let sameColors = known.map { $0.inputs.old == inputs.old && $0.inputs.new == inputs.new } ?? false
-                let sameMarks = known?.inputs.marks == inputs.marks && known != nil
+                let sameMarks =
+                    known.map {
+                        $0.inputs.marks == inputs.marks && $0.inputs.oldScopes == inputs.oldScopes
+                            && $0.inputs.newScopes == inputs.newScopes
+                    } ?? false
                 decorations = DiffDecorations(
-                    old: DiffDecorations.Side(colors: old?.tokens, emphasis: found?.old ?? [:]),
-                    new: DiffDecorations.Side(colors: new?.tokens, emphasis: found?.new ?? [:]), moved: found?.moved,
+                    old: DiffDecorations.Side(
+                        colors: old?.tokens, emphasis: found?.old ?? [:], scopes: oldScopes?.lines),
+                    new: DiffDecorations.Side(
+                        colors: new?.tokens, emphasis: found?.new ?? [:], scopes: newScopes?.lines),
+                    moved: found?.moved,
                     colorVersion: sameColors ? known?.decorations.colorVersion ?? 0 : nextVersion(),
                     markVersion: sameMarks ? known?.decorations.markVersion ?? 0 : nextVersion())
             }
