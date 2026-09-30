@@ -80,7 +80,7 @@ struct LexAutomatonTests {
         let a = try #require(compiled.parseTable.terminals.firstIndex(of: "\"a\""))
         let afterA = try #require(
             { () -> Int? in
-                if case .shift(let state) = compiled.parseTable.actions[0][a] { return state }
+                if case .shift(let state) = compiled.parseTable.actions[0, a] { return state }
                 return nil
             }())
         let mode = compiled.lexTable.stateModes[afterA]

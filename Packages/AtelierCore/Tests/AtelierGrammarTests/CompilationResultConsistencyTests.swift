@@ -15,7 +15,7 @@ struct CompilationResultConsistencyTests {
     @Test
     func `A shift out of the table is inconsistent`() throws {
         var tables = try Self.compiled()
-        tables.parseTable.actions[0][0] = .shift(tables.parseTable.stateCount)
+        tables.parseTable.actions[0, 0] = .shift(tables.parseTable.stateCount)
 
         #expect(!tables.isConsistent)
     }
@@ -23,8 +23,10 @@ struct CompilationResultConsistencyTests {
     @Test
     func `A lexer move on an inverted range is inconsistent`() throws {
         var tables = try Self.compiled()
-        tables.lexTable.automaton[0].transitions[0].lower = 0x80
-        tables.lexTable.automaton[0].transitions[0].upper = 0x7F
+        var states = Array(tables.lexTable.automaton)
+        states[0].transitions[0].lower = 0x80
+        states[0].transitions[0].upper = 0x7F
+        tables.lexTable.automaton = LexAutomaton(states)
 
         #expect(!tables.isConsistent)
     }
