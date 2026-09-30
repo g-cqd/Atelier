@@ -116,7 +116,7 @@ package struct DiffTextView: NSViewRepresentable {
         textView.isEditable = false
         textView.isSelectable = true
         textView.isRichText = false
-        textView.usesFontPanel = false
+        Self.configurePanels(of: textView)
         textView.textContainerInset = NSSize(width: 0, height: DiffPaneMetrics.containerInset)
         textView.isVerticallyResizable = true
         textView.autoresizingMask = [.width]
@@ -275,6 +275,14 @@ package struct DiffTextView: NSViewRepresentable {
     /// The safe area a pane beneath bars `underBars` tall that AppKit does not know of takes on top of its own.
     static func insets(underBars: CGFloat) -> NSEdgeInsets {
         NSEdgeInsets(top: underBars, left: 0, bottom: 0, right: 0)
+    }
+
+    /// No font panel for a text that is not edited; ⌘F opens the find bar above the pane's text, and the matches light
+    /// up as the query is typed.
+    static func configurePanels(of textView: NSTextView) {
+        textView.usesFontPanel = false
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
     }
 
     /// Lets `scrollView` rubber-band past its edges as AppKit does by default, or stops it at them, on both axes.
