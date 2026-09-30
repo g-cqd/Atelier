@@ -44,6 +44,7 @@ let package = Package(
         .library(name: "AtelierLSP", targets: ["AtelierLSP"]),
         .library(name: "AtelierDocIndex", targets: ["AtelierDocIndex"]),
         .library(name: "AtelierTextRendering", targets: ["AtelierTextRendering"]),
+        .library(name: "AtelierTextView", targets: ["AtelierTextView"]),
         .library(name: "AtelierDocComment", targets: ["AtelierDocComment"])
     ],
     dependencies: [
@@ -306,6 +307,13 @@ let package = Package(
         .target(
             name: "AtelierTextRendering", dependencies: [], swiftSettings: strict),
         .testTarget(
-            name: "AtelierTextRenderingTests", dependencies: ["AtelierTextRendering"], swiftSettings: strict)
+            name: "AtelierTextRenderingTests", dependencies: ["AtelierTextRendering"], swiftSettings: strict),
+        // The renderer's @MainActor host view (text-renderer.md §3.4-3.6): tiles as layers, the height index kept
+        // live, hit-testing. AppKit and QuartzCore only; no diff knowledge.
+        .target(
+            name: "AtelierTextView", dependencies: ["AtelierTextRendering"], swiftSettings: strict),
+        .testTarget(
+            name: "AtelierTextViewTests", dependencies: ["AtelierTextView", "AtelierTextRendering"],
+            swiftSettings: strict)
     ]
 )
