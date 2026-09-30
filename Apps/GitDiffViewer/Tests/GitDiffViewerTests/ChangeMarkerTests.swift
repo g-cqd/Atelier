@@ -8,20 +8,20 @@ import Testing
 /// Where the compact inline view's markers sit (book DIFF-04; `compact-inline-design.md`).
 struct ChangeMarkerLayoutTests {
     @Test
-    func `a bar lies in the gutter's leading padding, a point wider under the pointer`() {
-        let bar = ChangeMarkerLayout.bar(top: 30, bottom: 60, isHovered: false)
-        let hovered = ChangeMarkerLayout.bar(top: 30, bottom: 60, isHovered: true)
+    func `a bar lies in the gutter's change layer, a point wider under the pointer`() {
+        let bar = ChangeMarkerLayout.bar(top: 30, bottom: 60, isHovered: false, layerX: 40)
+        let hovered = ChangeMarkerLayout.bar(top: 30, bottom: 60, isHovered: true, layerX: 40)
 
-        #expect(bar == CGRect(x: 2, y: 30, width: 3, height: 30))
+        #expect(bar == CGRect(x: 41, y: 30, width: 3, height: 30))
         #expect(hovered.width == bar.width + 1)
-        #expect(hovered.maxX <= ChangeMarkerLayout.hitWidth)
+        #expect(hovered.maxX <= 40 + ChangeMarkerLayout.hitWidth)
     }
 
     @Test
     func `a wedge sits across its boundary, or inside the row beside it`() {
-        #expect(ChangeMarkerLayout.wedge(at: 40, placement: .centred).midY == 40)
-        #expect(ChangeMarkerLayout.wedge(at: 40, placement: .below).minY == 40)
-        #expect(ChangeMarkerLayout.wedge(at: 40, placement: .above).maxY == 40)
+        #expect(ChangeMarkerLayout.wedge(at: 40, placement: .centred, layerX: 0).midY == 40)
+        #expect(ChangeMarkerLayout.wedge(at: 40, placement: .below, layerX: 0).minY == 40)
+        #expect(ChangeMarkerLayout.wedge(at: 40, placement: .above, layerX: 0).maxY == 40)
     }
 }
 
@@ -136,11 +136,25 @@ struct DiffGutterChangeMarkerTests {
     }
 
     @Test
+    func `markers lie on the gutter's trailing side, after the numbers and before the scope ribbon`() throws {
+        let fixture = Fixture(try #require(Self.layout()))
+        let gutter = fixture.gutter
+        let markers = fixture.markers()
+
+        #expect(!markers.isEmpty)
+        #expect(
+            markers.allSatisfy { $0.shape.rect.minX >= gutter.changeLayerX && $0.shape.rect.maxX <= gutter.ribbonX })
+        #expect(gutter.changeLayerX > gutter.bounds.width / 2)
+    }
+
+    @Test
     func `a press on a marker reports its change`() throws {
         let fixture = Fixture(try #require(Self.layout()))
         let markers = fixture.markers()
 
-        for (_, shape) in markers { fixture.mouse(.leftMouseDown, at: NSPoint(x: 3, y: shape.rect.midY)) }
+        for (_, shape) in markers {
+            fixture.mouse(.leftMouseDown, at: NSPoint(x: fixture.gutter.changeLayerX + 2, y: shape.rect.midY))
+        }
 
         #expect(fixture.toggled == markers.map { $0.change.key })
     }
@@ -150,7 +164,7 @@ struct DiffGutterChangeMarkerTests {
         let fixture = Fixture(try #require(Self.layout()))
         let bar = try #require(fixture.markers().first).shape.rect
 
-        fixture.mouse(.leftMouseDown, at: NSPoint(x: fixture.gutter.bounds.width - 4, y: bar.midY))
+        fixture.mouse(.leftMouseDown, at: NSPoint(x: fixture.gutter.changeLayerX - 4, y: bar.midY))
 
         #expect(fixture.toggled.isEmpty)
     }
@@ -187,10 +201,12 @@ struct DiffGutterChangeMarkerTests {
     func `hovering a marker draws it stronger and tells its change in the tooltip`() throws {
         let fixture = Fixture(try #require(Self.layout()))
         let (change, shape) = try #require(fixture.markers().first)
-        let area = NSRect(x: 0, y: shape.rect.minY, width: ChangeMarkerLayout.hitWidth, height: shape.rect.height)
+        let area = NSRect(
+            x: fixture.gutter.changeLayerX, y: shape.rect.minY, width: ChangeMarkerLayout.hitWidth,
+            height: shape.rect.height)
         let before = fixture.pixels(in: area)
 
-        fixture.mouse(.mouseMoved, at: NSPoint(x: 3, y: shape.rect.midY))
+        fixture.mouse(.mouseMoved, at: NSPoint(x: fixture.gutter.changeLayerX + 2, y: shape.rect.midY))
 
         #expect(fixture.pixels(in: area) != before)
         #expect(fixture.gutter.toolTip == change.help)

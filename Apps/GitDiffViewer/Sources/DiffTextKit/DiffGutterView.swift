@@ -83,7 +83,8 @@ package final class DiffGutterView: NSView {
     /// The text system whose rows are numbered; set together with `rendered`.
     package weak var source: (any GutterTextSource)?
     private weak var clipView: NSClipView?
-    private let padding: CGFloat = 8
+    /// The padding before the numbers: the change layer moved to their trailing side, next to the text.
+    private let padding: CGFloat = 3
     private let columnGap: CGFloat = 10
     private var handleDrag: HandleDrag?
     /// The handle under the pointer, drawn highlighted. The view's tooltip tells its gap's hidden lines meanwhile.
@@ -239,13 +240,13 @@ package final class DiffGutterView: NSView {
             onGapDrag?(.began(hit.marker, hit.handle, lineHeight: max(lineHeight, 1)))
             return
         }
-        if let request = foldRequest(at: point) {
-            onScopeFold?(request)
-            return
-        }
-        // A marker lies in the padding before the numbers, which a line number's click does not reach for.
+        // A marker lies in the change layer after the numbers, which a line number's click does not reach for.
         if let change = changeMarker(at: point) {
             onChangeToggle?(change.key)
+            return
+        }
+        if let request = foldRequest(at: point) {
+            onScopeFold?(request)
             return
         }
         if let (rowIndex, diagnostics, rect) = diagnosticHit(at: point) {
