@@ -56,8 +56,17 @@ extension ParseTableCompiler.CompilationResult {
 
 extension LexTable {
     /// Whether the automaton's moves, accepted tokens and modes land inside the table, a mode for each of the parse
-    /// table's `stateCount` states, and whether the keyword trie's moves do.
+    /// table's `stateCount` states, and whether the keyword trie's moves do; and whether the lexer reading the table
+    /// always moves on: every comment delimiter has text, and no mode starts by accepting an extra.
     func isConsistent(stateCount: Int) -> Bool {
+        // A comment that starts with nothing matches nothing at every place, and the lexer reading it never moves on.
+        let commentsStartWithText = commentPatterns.allSatisfy { pattern in
+            switch pattern {
+                case .line(let prefix): !prefix.isEmpty
+                case .block(let open, _): !open.isEmpty
+            }
+        }
+        guard commentsStartWithText else { return false }
         let keywordTrieIsConsistent = states.allSatisfy { state in
             state.transitions.allSatisfy { states.indices.contains($0.1) }
         }
@@ -65,6 +74,10 @@ extension LexTable {
         return keywordTrieIsConsistent
             && stateModes.count == stateCount
             && modeStarts.allSatisfy(automaton.indices.contains)
+            // A mode whose start accepts an extra reads it, zero-width, at the same place without end.
+            && modeStarts.allSatisfy { start in
+                automaton.accept(of: start).map { tokens.indices.contains($0) && !tokens[$0].isExtra } ?? true
+            }
             && stateModes.allSatisfy(modeStarts.indices.contains)
             && modeValidTokens.count == modeStarts.count
             && modeEmptyTokens.count == modeStarts.count
