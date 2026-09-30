@@ -55,6 +55,9 @@ package enum DiffRenderer {
     ) -> RenderedDiff {
         var unifiedRows: [RenderRow] = []
         var splitRows: [RenderRow] = []
+        // The rows before scopes fold, which the change starts are counted on.
+        var unifiedOpen: [RenderRow] = []
+        var splitOpen: [RenderRow] = []
         var changeCount = 0
         var addedLines = 0
         var removedLines = 0
@@ -67,10 +70,11 @@ package enum DiffRenderer {
                 ? compactRows(
                     of: file, fileIndex: index, layout: layout, header: header, disclosed: options.disclosedChanges)
                 : rows(of: file, fileIndex: index, layout: layout, header: header, split: false)
+            let split = rows(of: file, fileIndex: index, layout: layout, header: header, split: true)
+            unifiedOpen += unified
+            splitOpen += split
             unifiedRows += folding(unified, of: file, fileIndex: index, folds: options.foldedScopes)
-            splitRows += folding(
-                rows(of: file, fileIndex: index, layout: layout, header: header, split: true), of: file,
-                fileIndex: index, folds: options.foldedScopes)
+            splitRows += folding(split, of: file, fileIndex: index, folds: options.foldedScopes)
             changeCount += file.model.unifiedChangeStarts.count
             for row in file.model.unifiedRows {
                 if row.kind == .added { addedLines += 1 }
@@ -82,8 +86,8 @@ package enum DiffRenderer {
                 ? render(rows: unifiedRows, side: .unified, options: options) : nil,
             old: options.sides.contains(.old) ? render(rows: splitRows, side: .old, options: options) : nil,
             new: options.sides.contains(.new) ? render(rows: splitRows, side: .new, options: options) : nil,
-            unifiedChangeStarts: changeStarts(in: unifiedRows),
-            splitChangeStarts: changeStarts(in: splitRows),
+            unifiedChangeStarts: foldedStarts(changeStarts(in: unifiedOpen), through: unifiedRows),
+            splitChangeStarts: foldedStarts(changeStarts(in: splitOpen), through: splitRows),
             changeCount: changeCount,
             addedLines: addedLines,
             removedLines: removedLines,
