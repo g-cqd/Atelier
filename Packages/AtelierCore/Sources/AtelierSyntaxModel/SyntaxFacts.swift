@@ -32,6 +32,31 @@ public struct SyntaxDeclaration: Sendable, Equatable {
     }
 }
 
+/// A brace pair that opens a scope (DIFF-03): where it lies and what it holds.
+public struct SyntaxScope: Sendable, Equatable {
+    /// What a scope's braces hold.
+    public enum Kind: Sendable, Equatable {
+        /// A type's or an extension's members.
+        case type
+        /// A function's, an initializer's or an accessor's body.
+        case function
+        case closure
+        /// The body of an `if`, a loop, a `switch` and the like.
+        case controlFlow
+        /// Braces whose owner is unknown, as the lexer's are.
+        case block
+    }
+
+    /// From the opening brace to past the closing one, in UTF-8 bytes of the text.
+    public let range: Range<Int>
+    public let kind: Kind
+
+    public init(range: Range<Int>, kind: Kind) {
+        self.range = range
+        self.kind = kind
+    }
+}
+
 /// What one parse of a text learned, kept per revision in a ``SyntaxFactsStore`` so that colour, intraline boundaries
 /// and hover share one parse (PERF-11 step 3, design note section 3.4).
 public struct SyntaxFacts: Sendable {
@@ -44,15 +69,18 @@ public struct SyntaxFacts: Sendable {
     public let highlights: [HighlightToken]?
     /// The share of the text's bytes in unexpected nodes.
     public let unexpectedShare: Double
+    /// Every brace pair that opens a scope, by its opening brace, an enclosing scope before those it holds.
+    public let scopes: [SyntaxScope]
 
     public init(
         tokenBoundaries: [[Range<Int>]], declarations: [SyntaxDeclaration], highlights: [HighlightToken]?,
-        unexpectedShare: Double
+        unexpectedShare: Double, scopes: [SyntaxScope] = []
     ) {
         self.tokenBoundaries = tokenBoundaries
         self.declarations = declarations
         self.highlights = highlights
         self.unexpectedShare = unexpectedShare
+        self.scopes = scopes
     }
 
     /// An estimate of the memory the facts hold, their arrays' storage at its capacity and their strings' bytes, which
@@ -66,9 +94,10 @@ public struct SyntaxFacts: Sendable {
             total + declaration.name.utf8.count + (declaration.documentation?.utf8.count ?? 0)
                 + (declaration.signature?.utf8.count ?? 0)
         }
-        return Self.arrayHeader * 3 + tokenBoundaries.capacity * MemoryLayout<[Range<Int>]>.stride + lines
+        return Self.arrayHeader * 4 + tokenBoundaries.capacity * MemoryLayout<[Range<Int>]>.stride + lines
             + declarations.capacity * MemoryLayout<SyntaxDeclaration>.stride + strings
             + (highlights?.capacity ?? 0) * MemoryLayout<HighlightToken>.stride
+            + scopes.capacity * MemoryLayout<SyntaxScope>.stride
     }
 
     /// What an array's storage costs besides its elements.
