@@ -83,43 +83,10 @@ package final class DiffGutterView: NSView {
     private weak var clipView: NSClipView?
     private let padding: CGFloat = 8
     private let columnGap: CGFloat = 10
-    /// One handle of one gap, as the pointer finds it.
-    private struct HandleID: Equatable {
-        let key: GapKey
-        let handle: GapHandle
-    }
-
-    /// A gap handle drag in progress: the handle, where the pointer went down in window coordinates, which scrolling
-    /// never moves, and whether the pointer was last in an edge zone.
-    private struct HandleDrag {
-        let id: HandleID
-        let startY: CGFloat
-        var isHeldAtEdge = false
-    }
-
     private var handleDrag: HandleDrag?
     /// The handle under the pointer, drawn highlighted. The view's tooltip tells its gap's hidden lines meanwhile.
     private var hoveredHandle: HandleID?
     private var hoverTracking: NSTrackingArea?
-
-    /// The font, column width and number attributes of the current text, which every drawn row reuses.
-    private struct Metrics {
-        let font: NSFont
-        let columnWidth: CGFloat
-        let contextAttributes: [NSAttributedString.Key: Any]
-        let changedAttributes: [NSAttributedString.Key: Any]
-
-        /// - Complexity: O(rows), for the widest line number.
-        init(rendered: RenderedText?) {
-            let palette = rendered?.palette ?? .system
-            font = palette.gutterFont
-            let digitWidth = ("8" as NSString).size(withAttributes: [.font: font]).width
-            let digits = max(String(rendered?.maximumLineNumber ?? 0).count, 2)
-            columnWidth = CGFloat(digits) * digitWidth
-            contextAttributes = [.font: font, .foregroundColor: palette.gutterText]
-            changedAttributes = [.font: font, .foregroundColor: palette.gutterChangedText]
-        }
-    }
 
     private var metrics = Metrics(rendered: nil)
 
@@ -427,6 +394,43 @@ package final class DiffGutterView: NSView {
             case .error: .systemRed
             case .warning: .systemYellow
             case .note: .systemGray
+        }
+    }
+}
+
+// MARK: Nested types
+
+extension DiffGutterView {
+    /// One handle of one gap, as the pointer finds it.
+    fileprivate struct HandleID: Equatable {
+        let key: GapKey
+        let handle: GapHandle
+    }
+
+    /// A gap handle drag in progress: the handle, where the pointer went down in window coordinates, which scrolling
+    /// never moves, and whether the pointer was last in an edge zone.
+    fileprivate struct HandleDrag {
+        let id: HandleID
+        let startY: CGFloat
+        var isHeldAtEdge = false
+    }
+
+    /// The font, column width and number attributes of the current text, which every drawn row reuses.
+    fileprivate struct Metrics {
+        let font: NSFont
+        let columnWidth: CGFloat
+        let contextAttributes: [NSAttributedString.Key: Any]
+        let changedAttributes: [NSAttributedString.Key: Any]
+
+        /// - Complexity: O(rows), for the widest line number.
+        init(rendered: RenderedText?) {
+            let palette = rendered?.palette ?? .system
+            font = palette.gutterFont
+            let digitWidth = ("8" as NSString).size(withAttributes: [.font: font]).width
+            let digits = max(String(rendered?.maximumLineNumber ?? 0).count, 2)
+            columnWidth = CGFloat(digits) * digitWidth
+            contextAttributes = [.font: font, .foregroundColor: palette.gutterText]
+            changedAttributes = [.font: font, .foregroundColor: palette.gutterChangedText]
         }
     }
 }
