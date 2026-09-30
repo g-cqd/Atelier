@@ -83,4 +83,24 @@ struct SwiftSyntaxFactsTests {
             try await SwiftSyntaxHighlights.tokens(in: Self.text), lines: 0 ..< ranges.count)
         #expect(updates.flatMap { Array($0.tokens) }.map { Array($0) } == expected.map { Array($0) })
     }
+
+    @Test
+    func `the walk that finds the declarations finds each brace pair's scope and its kind`() throws {
+        let text = """
+            struct S {
+                var v: Int { 1 }
+                func f() {
+                    if true { [1].map { $0 } }
+                    switch v { default: break }
+                }
+            }
+            """
+        let facts = try #require(SwiftSyntaxFacts.extract(text))
+        let bytes = Array(text.utf8)
+
+        #expect(facts.scopes.map(\.kind) == [.type, .function, .function, .controlFlow, .closure, .controlFlow])
+        #expect(facts.scopes.map { bytes[$0.range.lowerBound] } == Array(repeating: UInt8(ascii: "{"), count: 6))
+        #expect(facts.scopes.map { bytes[$0.range.upperBound - 1] } == Array(repeating: UInt8(ascii: "}"), count: 6))
+        #expect(facts.scopes.first?.range == 9 ..< bytes.count)
+    }
 }
