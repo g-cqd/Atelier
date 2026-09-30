@@ -15,12 +15,15 @@ package enum DiffRenderer {
         package var compactsInline = false
         /// The changes a compact inline side shows whole.
         package var disclosedChanges: Set<ChangeKey> = []
+        /// The folded scopes, each with its last line on its side (DIFF-03): folded after the compact view and the gaps.
+        package var foldedScopes: [ScopeFoldKey: Int] = [:]
 
         package init(
             granularity: IntralineGranularity = .word, palette: DiffPalette = .system, lineHeightMultiple: Double = 0,
             sides: Set<RenderedSide> = [.unified, .old, .new], compactsInline: Bool = false,
-            disclosedChanges: Set<ChangeKey> = []
+            disclosedChanges: Set<ChangeKey> = [], foldedScopes: [ScopeFoldKey: Int] = [:]
         ) {
+            self.foldedScopes = foldedScopes
             self.granularity = granularity
             self.palette = palette
             self.lineHeightMultiple = lineHeightMultiple
@@ -58,13 +61,16 @@ package enum DiffRenderer {
         for (offset, file) in prepared.enumerated() {
             let index = firstFileIndex + offset
             let header = withHeaders ? file.title : nil
-            if options.compactsInline {
-                unifiedRows += compactRows(
+            // The compact view folds its changes, the layout cuts hunks and gaps, and folded scopes hide what they cover.
+            let unified =
+                options.compactsInline
+                ? compactRows(
                     of: file, fileIndex: index, layout: layout, header: header, disclosed: options.disclosedChanges)
-            } else {
-                unifiedRows += rows(of: file, fileIndex: index, layout: layout, header: header, split: false)
-            }
-            splitRows += rows(of: file, fileIndex: index, layout: layout, header: header, split: true)
+                : rows(of: file, fileIndex: index, layout: layout, header: header, split: false)
+            unifiedRows += folding(unified, of: file, fileIndex: index, folds: options.foldedScopes)
+            splitRows += folding(
+                rows(of: file, fileIndex: index, layout: layout, header: header, split: true), of: file,
+                fileIndex: index, folds: options.foldedScopes)
             changeCount += file.model.unifiedChangeStarts.count
             for row in file.model.unifiedRows {
                 if row.kind == .added { addedLines += 1 }
@@ -105,6 +111,8 @@ package enum DiffRenderer {
         case change(PendingChange)
         case gap(GapMarker)
         case header(String, fileIndex: Int)
+        /// A folded scope's band, in place of the rows it hides (DIFF-03).
+        case scopeFold(ScopeFoldBand, fileIndex: Int)
     }
 
     /// The rows of a file for a layout: everything, or hunks separated by gaps. Gap `i` precedes hunk `i`.
@@ -163,6 +171,7 @@ package enum DiffRenderer {
         var metas: [RowMeta] = []
         var gaps: [RenderedGap] = []
         var changes: [RenderedChange] = []
+        var folds: [RenderedFold] = []
         var lineStarts: [Int] = []
         var placeholders = BidiControls.Placeholders()
         metas.reserveCapacity(rows.count)
@@ -210,6 +219,17 @@ package enum DiffRenderer {
                     length = title.utf16.count
                     for unit in title.utf16 where unit == 9 { tabs += 1 }
                     metas.append(RowMeta(kind: .header, oldNumber: nil, newNumber: nil, fileIndex: fileIndex))
+                case .scopeFold(let band, let fileIndex):
+                    let shown = band.text(on: side)
+                    text.append(contentsOf: placeholders.reveal(Substring(shown.text), at: offset))
+                    length = shown.text.utf16.count
+                    for unit in shown.text.utf16 where unit == 9 { tabs += 1 }
+                    folds.append(
+                        RenderedFold(
+                            key: band.key, lastLine: band.lastLine, firstRow: metas.count - 1, bandRow: metas.count,
+                            holdsChange: band.holdsChange,
+                            marker: (offset + shown.marker.lowerBound) ..< (offset + shown.marker.upperBound)))
+                    metas.append(RowMeta(kind: .context, oldNumber: nil, newNumber: nil, fileIndex: fileIndex))
             }
             text.append("\n")
             lineStarts.append(offset)
@@ -224,11 +244,12 @@ package enum DiffRenderer {
 
         let styled = attributed(
             text, placeholders: placeholders, metas: metas, lineStarts: lineStarts, options: options)
+        styleFoldMarkers(folds, palette: options.palette, in: styled.attributed)
         addBands(of: gaps, lineStarts: lineStarts, lineHeight: styled.lineHeight, to: styled.attributed)
         return RenderedText(
             side: side, palette: options.palette, attributed: styled.attributed, rows: metas, gaps: gaps,
             lineStarts: lineStarts, longestLine: longestLine, baselineOffset: styled.baselineOffset,
-            lineHeight: styled.lineHeight, changes: changes
+            lineHeight: styled.lineHeight, changes: changes, folds: folds
         )
     }
 
@@ -326,7 +347,7 @@ extension DiffRenderer {
             let isChange: Bool
             switch row {
                 case .diff(let diff, _, _): isChange = diff.kind != .context
-                case .header, .folded, .change: isChange = false
+                case .header, .folded, .change, .scopeFold: isChange = false
                 case .gap:
                     // A gap takes no row, but the changes on either side of it are still two.
                     inChange = false

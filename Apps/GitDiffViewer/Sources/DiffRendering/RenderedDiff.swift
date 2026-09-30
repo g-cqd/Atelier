@@ -208,15 +208,18 @@ package final class RenderedText: @unchecked Sendable {
     package let lineHeight: CGFloat
     /// The changes the compact inline view marks, in row order; none in any other view (book DIFF-04).
     package let changes: [RenderedChange]
+    /// The folded scopes, in row order (DIFF-03).
+    package let folds: [RenderedFold]
     /// The bands between two rows, which the text holds as paragraph spacing.
     private let bandsBetweenRows: Int
 
     package init(
         side: RenderedSide, palette: DiffPalette, attributed: NSAttributedString, rows: [RowMeta],
         gaps: [RenderedGap], lineStarts: [Int], longestLine: Int, baselineOffset: CGFloat = 0,
-        lineHeight: CGFloat? = nil, changes: [RenderedChange] = []
+        lineHeight: CGFloat? = nil, changes: [RenderedChange] = [], folds: [RenderedFold] = []
     ) {
         self.changes = changes
+        self.folds = folds
         self.side = side
         self.palette = palette
         self.attributed = attributed
