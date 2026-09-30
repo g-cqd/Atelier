@@ -153,6 +153,12 @@ package struct DiffTextView: NSViewRepresentable {
             name: NSView.frameDidChangeNotification,
             object: scrollView.contentView
         )
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.clipViewDidScroll(_:)),
+            name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView
+        )
         textView.postsFrameChangedNotifications = true
         NotificationCenter.default.addObserver(
             context.coordinator,
