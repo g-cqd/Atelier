@@ -11,7 +11,9 @@ import Synchronization
 /// The tokens are complete over the text: a byte without a token is plain text on purpose. An identifier that names
 /// nothing swift-syntax can tell, a variable in use for one, gets no token, so a word the lexer takes for a keyword,
 /// `set` in `let set = [1]`, reads as plain text once this tier lands. A declaration's name is marked
-/// ``HighlightModifierSet/declaration``, with the role of what it declares.
+/// ``HighlightModifierSet/declaration``, with the role of what it declares. A type named where a type goes, or a
+/// capitalized name used as one in an expression, `NSRect(…)` or `NSColor.red`, is a type, as the lexer and Xcode
+/// colour it: classification alone left them plain, wiping the colour the lexer had given them.
 public enum SwiftSyntaxHighlights {
     /// The largest share of a text's bytes that may lie in unexpected nodes: past it the parse reads the text as
     /// something other than Swift, and the tier fails rather than colour it.
@@ -68,6 +70,8 @@ public enum SwiftSyntaxHighlights {
         let tree: SourceFileSyntax
         /// The role of each declaration's name, by the UTF-8 offset of its first byte.
         let declarationNames: [Int: HighlightRole]
+        /// The UTF-8 offset of the first byte of each name that refers to a type.
+        let typeReferences: Set<Int>
 
         /// Parses `source` and walks its tree once, on the caller's stack, which must be deep enough.
         /// - Throws: ``Failure/cancelled`` when asked to stop after the parse; ``Failure/tooManyUnexpectedBytes(share:)``
@@ -82,13 +86,14 @@ public enum SwiftSyntaxHighlights {
                 let share = Double(walk.unexpectedBytes) / Double(byteCount)
                 if share > SwiftSyntaxHighlights.maximumUnexpectedShare { throw .tooManyUnexpectedBytes(share: share) }
             }
-            self.init(tree: tree, declarationNames: walk.declarationNames)
+            self.init(tree: tree, declarationNames: walk.declarationNames, typeReferences: walk.typeReferences)
         }
 
         /// A tree parsed and walked already, as the facts' extraction has it.
-        init(tree: SourceFileSyntax, declarationNames: [Int: HighlightRole]) {
+        init(tree: SourceFileSyntax, declarationNames: [Int: HighlightRole], typeReferences: Set<Int>) {
             self.tree = tree
             self.declarationNames = declarationNames
+            self.typeReferences = typeReferences
         }
 
         /// The syntactic tokens that meet `bytes`, a UTF-8 range of the text, or every token for nil; a token that
@@ -112,6 +117,8 @@ public enum SwiftSyntaxHighlights {
                 if classified.kind == .identifier, let role = declarationNames[range.lowerBound] {
                     tokens.append(
                         HighlightToken(byteRange: range, role: role, modifiers: .declaration, layer: .syntactic))
+                } else if classified.kind == .identifier, typeReferences.contains(range.lowerBound) {
+                    tokens.append(HighlightToken(byteRange: range, role: .type, layer: .syntactic))
                 } else if let role = SwiftSyntaxHighlights.role(of: classified.kind) {
                     tokens.append(HighlightToken(byteRange: range, role: role, layer: .syntactic))
                 }
