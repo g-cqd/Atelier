@@ -30,6 +30,19 @@ struct ScalarRanges: Sendable, Hashable, Codable {
         self.init(normalized: merged)
     }
 
+    /// The set of `ranges` when they are already sorted, disjoint, non-adjacent and within Unicode, as a set's own
+    /// ranges are; nil otherwise, for a table file's reader to reject.
+    init?(validating ranges: [(lower: UInt32, upper: UInt32)]) {
+        var next: UInt32 = 0
+        for (index, range) in ranges.enumerated() {
+            guard range.lower <= range.upper, range.upper <= Self.maxScalar, index == 0 || range.lower > next else {
+                return nil
+            }
+            next = range.upper &+ 1
+        }
+        self.init(normalized: ranges.map { $0.lower ... $0.upper })
+    }
+
     init(scalar: UInt32) {
         self.init(normalized: [scalar ... scalar])
     }
