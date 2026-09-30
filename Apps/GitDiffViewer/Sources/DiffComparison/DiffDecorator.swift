@@ -36,7 +36,9 @@ package final class DiffDecorator {
         var version = 0
     }
 
-    /// How many sides' colours, and files' marks, are kept, the oldest going first.
+    /// How many sides' colours, and files' marks, are kept past those a published file shows, the oldest going first.
+    /// What a published file shows is never dropped: nothing would colour it again until a pane showed the file anew,
+    /// and a card that stays on screen does not; in a long card list, colouring one card dropped its neighbours'.
     package static let cacheCapacity = 64
 
     /// The decorations of every published text that has any, by ``RenderedText/id``: what a pane draws.
@@ -71,6 +73,8 @@ package final class DiffDecorator {
     /// The rendered files a pane reported on screen, kept while they stay published, so a change of setting decorates
     /// what shows.
     @ObservationIgnored private var displayed: Set<RenderedDiff.ID> = []
+    /// The colour keys and preparations of the files last published, whose colours, scopes and marks are kept.
+    @ObservationIgnored private var published: (keys: Set<ContentKey>, preparations: Set<UUID>) = ([], [])
     /// Each published file's decorations with what they were composed from, so a file's value, and so its panes,
     /// change only when something it draws lands.
     @ObservationIgnored private var composed: [Composition: (inputs: Inputs, decorations: DiffDecorations)] = [:]
@@ -172,12 +176,14 @@ package final class DiffDecorator {
     func land(_ lines: ScopeLines, for key: ContentKey) {
         if scopes[key] == nil { scopeOrder.append(key) }
         scopes[key] = (lines, nextVersion())
-        if scopeOrder.count > Self.cacheCapacity {
-            for evicted in scopeOrder.prefix(scopeOrder.count - Self.cacheCapacity) {
-                scopes[evicted] = nil
-                endedScopes.remove(evicted)
-            }
-            scopeOrder.removeFirst(scopeOrder.count - Self.cacheCapacity)
+        trimScopes()
+    }
+
+    private func trimScopes() {
+        let evicted = Self.oldest(in: &scopeOrder) { published.keys.contains($0) || scopeJobs[$0] != nil }
+        for key in evicted {
+            scopes[key] = nil
+            endedScopes.remove(key)
         }
     }
 
@@ -204,12 +210,14 @@ package final class DiffDecorator {
         entry.tokens.apply(update)
         entry.version = nextVersion()
         colors[key] = entry
-        if colorOrder.count > Self.cacheCapacity {
-            for evicted in colorOrder.prefix(colorOrder.count - Self.cacheCapacity) {
-                colors[evicted] = nil
-                endedColors.remove(evicted)
-            }
-            colorOrder.removeFirst(colorOrder.count - Self.cacheCapacity)
+        trimColors()
+    }
+
+    private func trimColors() {
+        let evicted = Self.oldest(in: &colorOrder) { published.keys.contains($0) || colorJobs[$0] != nil }
+        for key in evicted {
+            colors[key] = nil
+            endedColors.remove(key)
         }
     }
 
@@ -222,13 +230,31 @@ package final class DiffDecorator {
         if let moved = found.moved { entry.moved = moved }
         entry.version = nextVersion()
         marks[preparation] = entry
-        if marksOrder.count > Self.cacheCapacity {
-            for evicted in marksOrder.prefix(marksOrder.count - Self.cacheCapacity) {
-                marks[evicted] = nil
-                endedMarks.remove(evicted)
-            }
-            marksOrder.removeFirst(marksOrder.count - Self.cacheCapacity)
+        trimMarks()
+    }
+
+    private func trimMarks() {
+        let evicted = Self.oldest(in: &marksOrder) { published.preparations.contains($0) || marksJobs[$0] != nil }
+        for preparation in evicted {
+            marks[preparation] = nil
+            endedMarks.remove(preparation)
         }
+    }
+
+    /// Takes out of `order` its oldest entries past ``cacheCapacity``, but those `isKept` holds, which a published
+    /// file shows or a job still lands in, and returns them.
+    /// - Complexity: O(entries)
+    private static func oldest<Key: Hashable>(in order: inout [Key], sparing isKept: (Key) -> Bool) -> [Key] {
+        guard order.count > cacheCapacity else { return [] }
+        var excess = order.count - cacheCapacity
+        var evicted: [Key] = []
+        order.removeAll { key in
+            guard excess > 0, !isKept(key) else { return false }
+            excess -= 1
+            evicted.append(key)
+            return true
+        }
+        return evicted
     }
 
     /// A side's colour job ended: when it ran to its end, the side is not coloured again, whatever its tiers found; when
@@ -247,6 +273,14 @@ package final class DiffDecorator {
     /// Sets ``byText`` to the decorations of `files`, each a published file with its parts; an unchanged file keeps its
     /// value, so its panes see nothing new.
     func publish(_ files: [(rendered: RenderedDiff, composition: Composition)]) {
+        let compositions = files.map(\.composition)
+        published = (
+            Set(compositions.flatMap { [$0.old, $0.new] }.compactMap(\.self)), Set(compositions.map(\.preparation))
+        )
+        // What the files published before showed, and these do not, may go now.
+        trimColors()
+        trimScopes()
+        trimMarks()
         var next: [UUID: DiffDecorations] = [:]
         var kept: [Composition: (inputs: Inputs, decorations: DiffDecorations)] = [:]
         for file in files {
