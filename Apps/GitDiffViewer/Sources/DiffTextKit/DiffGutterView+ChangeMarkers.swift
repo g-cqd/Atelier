@@ -18,8 +18,8 @@ extension DiffGutterView {
         guard let rendered, !rendered.changes.isEmpty else { return }
         var edges: [Int: (top: CGFloat, bottom: CGFloat)] = [:]
         // A wedge reaches half its height past its boundary: look a row further.
-        forEachFragment(in: rect.insetBy(dx: 0, dy: -rendered.lineHeight)) { fragment, _, rowIndex, y in
-            let height = fragment.layoutFragmentFrame.height - rendered.bandSpacing(afterRow: rowIndex)
+        forEachRow(in: rect.insetBy(dx: 0, dy: -rendered.lineHeight)) { frame, _, rowIndex, y, _ in
+            let height = frame.height - rendered.bandSpacing(afterRow: rowIndex)
             edges[rowIndex] = (y, y + height)
         }
         guard let first = edges.keys.min(), let last = edges.keys.max() else { return }
@@ -183,9 +183,9 @@ extension DiffGutterView {
     func drawChangeBars(in rect: NSRect) {
         guard let rendered, rendered.changes.isEmpty, let color = rendered.palette.changeBar else { return }
         color.setFill()
-        forEachFragment(in: rect) { fragment, row, rowIndex, y in
+        forEachRow(in: rect) { frame, row, rowIndex, y, _ in
             guard [.added, .removed, .modified].contains(row.kind) else { return }
-            let height = fragment.layoutFragmentFrame.height - rendered.bandSpacing(afterRow: rowIndex)
+            let height = frame.height - rendered.bandSpacing(afterRow: rowIndex)
             NSRect(x: changeLayerX + ChangeMarkerLayout.barX, y: y, width: ChangeMarkerLayout.barWidth, height: height)
                 .fill()
         }

@@ -14,4 +14,9 @@ package protocol DiffRowGeometry {
 
     /// The rows intersecting the pane's visible rect.
     func visibleRows() -> Range<Int>
+
+    /// `row`'s own frame and first-line baseline, laying it out first if it is not yet, direct rather than found by
+    /// walking from a rect: for a jump to one row by index, such as a diagnostic's line number (`DiffGutterView`), not
+    /// for a scan of what shows. Nil for a row that does not exist.
+    func frame(ofRow row: Int) -> (frame: CGRect, firstBaseline: CGFloat)?
 }

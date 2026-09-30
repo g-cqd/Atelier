@@ -117,8 +117,8 @@ extension DiffGutterView {
     func drawFolds(in rect: NSRect) {
         guard let rendered, !rendered.folds.isEmpty else { return }
         var edges: [Int: (top: CGFloat, bottom: CGFloat)] = [:]
-        forEachFragment(in: rect) { fragment, _, rowIndex, y in
-            edges[rowIndex] = (y, y + fragment.layoutFragmentFrame.height - rendered.bandSpacing(afterRow: rowIndex))
+        forEachRow(in: rect) { frame, _, rowIndex, y, _ in
+            edges[rowIndex] = (y, y + frame.height - rendered.bandSpacing(afterRow: rowIndex))
         }
         for fold in rendered.folds {
             if let first = edges[fold.firstRow] { drawTab(in: first) }
@@ -158,8 +158,8 @@ extension DiffGutterView {
     func addFoldCursorRects() {
         guard let rendered else { return }
         let hovered = hoveredRows()
-        forEachFragment(in: unobscuredRect(of: visibleRect)) { fragment, _, rowIndex, y in
-            let height = fragment.layoutFragmentFrame.height - rendered.bandSpacing(afterRow: rowIndex)
+        forEachRow(in: unobscuredRect(of: visibleRect)) { frame, _, rowIndex, y, _ in
+            let height = frame.height - rendered.bandSpacing(afterRow: rowIndex)
             let ribbon = NSRect(
                 x: ribbonX - Self.ribbonReach, y: y, width: bounds.width - ribbonX + Self.ribbonReach, height: height)
             if let fold = rendered.fold(atRow: rowIndex) {

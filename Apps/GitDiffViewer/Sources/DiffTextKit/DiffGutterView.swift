@@ -11,23 +11,6 @@ package enum GutterStyle {
     case new
 }
 
-/// What a gutter reads: a text system and the vertical inset its container sits at.
-@MainActor
-package protocol GutterTextSource: AnyObject {
-    var gutterLayoutManager: NSTextLayoutManager? { get }
-    var gutterInset: CGFloat { get }
-}
-
-extension NSTextView: GutterTextSource {
-    package var gutterLayoutManager: NSTextLayoutManager? { textLayoutManager }
-    package var gutterInset: CGFloat { textContainerInset.height }
-}
-
-extension StaticTextLayout: GutterTextSource {
-    package var gutterLayoutManager: NSTextLayoutManager? { layoutManager }
-    package var gutterInset: CGFloat { inset }
-}
-
 /// Line numbers drawn from the laid-out fragments of the visible viewport only, so cost is proportional to what is
 /// on screen. Sits next to the scroll view and redraws when the clip view scrolls.
 package final class DiffGutterView: NSView {
@@ -106,8 +89,10 @@ package final class DiffGutterView: NSView {
     package var onDiagnosticClick:
         ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)?
 
-    /// The text system whose rows are numbered; set together with `rendered`.
-    package weak var source: (any GutterTextSource)?
+    /// The text system whose rows are numbered; set together with `rendered`. Not `weak`: `DiffRowGeometry` is not a
+    /// class protocol (`TextKit2RowGeometry` is a value type holding its coordinator strongly), but the coordinator
+    /// keeps this gutter only weakly (``DiffTextViewCoordinator/gutterView``), so nothing cycles.
+    package var source: (any DiffRowGeometry)?
     weak var clipView: NSClipView?
     let columnGap: CGFloat = 10
     private var handleDrag: HandleDrag?
@@ -230,10 +215,10 @@ package final class DiffGutterView: NSView {
             return
         }
         let changed = Set(rows)
-        forEachFragment(in: visibleRect) { fragment, _, rowIndex, y in
+        forEachRow(in: visibleRect) { frame, _, rowIndex, y, _ in
             guard changed.contains(rowIndex) else { return }
             // A number's underlay reaches past its row by a point or two.
-            let row = NSRect(x: 0, y: y, width: bounds.width, height: fragment.layoutFragmentFrame.height)
+            let row = NSRect(x: 0, y: y, width: bounds.width, height: frame.height)
             setNeedsDisplay(row.insetBy(dx: 0, dy: -Self.underlayOverhang))
         }
     }
@@ -299,35 +284,22 @@ package final class DiffGutterView: NSView {
         NSRect(x: 0, y: point.y, width: 1, height: 1)
     }
 
-    /// Visits the laid-out fragments intersecting `rect` of this view, with each row's metadata, its row index, and
-    /// its y in this view.
-    ///
-    /// Starts at the fragment under `rect`'s top rather than at the document's start, so drawing one tile of a tall
-    /// embedded gutter costs the rows in that tile, not the whole document. A top not laid out yet starts at the
-    /// text's laid-out viewport when `rect` lies below that viewport's top, and at the document's start otherwise.
-    /// - Complexity: O(rows in `rect`), plus a lookup of the first fragment.
-    func forEachFragment(in rect: NSRect, _ body: (NSTextLayoutFragment, RowMeta, Int, CGFloat) -> Void) {
-        guard let source, let rendered, !rendered.rows.isEmpty, let layoutManager = source.gutterLayoutManager,
-            let contentManager = layoutManager.textContentManager
-        else { return }
+    /// Visits the rows intersecting `rect` of this view, with each row's metadata, its row index, its frame in this
+    /// view, and its first line's baseline in this view. Never lays out rows outside `rect`
+    /// (``DiffRowGeometry/forEachRow(in:_:)``), so drawing one tile of a tall embedded gutter costs the rows in that
+    /// tile, not the whole document.
+    /// - Complexity: O(rows in `rect`), plus a lookup of the first row.
+    func forEachRow(
+        in rect: NSRect,
+        _ body: (_ frame: NSRect, _ row: RowMeta, _ rowIndex: Int, _ y: CGFloat, _ baseline: CGFloat) -> Void
+    ) {
+        guard let source, let rendered, !rendered.rows.isEmpty else { return }
         let scrollOffset = clipView?.bounds.origin.y ?? 0
-        let inset = source.gutterInset
-        let top = CGPoint(x: 0, y: max(rect.minY - inset + scrollOffset, 0))
-        let viewport = layoutManager.textViewportLayoutController
-        let start =
-            layoutManager.textLayoutFragment(for: top)?.rangeInElement.location
-            ?? viewport.viewportRange.flatMap { top.y >= viewport.viewportBounds.minY ? $0.location : nil }
-            ?? layoutManager.documentRange.location
-        layoutManager.enumerateTextLayoutFragments(from: start, options: [.ensuresLayout]) { fragment in
-            let frame = fragment.layoutFragmentFrame
-            let y = frame.minY + inset - scrollOffset
-            if y > rect.maxY { return false }
-            if y + frame.height < rect.minY { return true }
-            let offset = contentManager.offset(
-                from: layoutManager.documentRange.location, to: fragment.rangeInElement.location)
-            let rowIndex = rendered.rowIndex(containing: offset)
-            body(fragment, rendered.rows[rowIndex], rowIndex, y)
-            return true
+        let documentRect = rect.offsetBy(dx: 0, dy: scrollOffset)
+        source.forEachRow(in: documentRect) { rowIndex, frame, baseline in
+            guard rendered.rows.indices.contains(rowIndex) else { return }
+            let gutterFrame = frame.offsetBy(dx: 0, dy: -scrollOffset)
+            body(gutterFrame, rendered.rows[rowIndex], rowIndex, gutterFrame.minY, baseline - scrollOffset)
         }
     }
 
@@ -341,8 +313,8 @@ package final class DiffGutterView: NSView {
         let height = rendered.gapBandHeight
         var edges: [Int: (top: CGFloat, bottom: CGFloat)] = [:]
         // A band lies outside the rows it runs between, above the first or below the last: look a band further.
-        forEachFragment(in: rect.insetBy(dx: 0, dy: -height)) { fragment, _, rowIndex, y in
-            edges[rowIndex] = (y, y + fragment.layoutFragmentFrame.height)
+        forEachRow(in: rect.insetBy(dx: 0, dy: -height)) { frame, _, rowIndex, y, _ in
+            edges[rowIndex] = (y, y + frame.height)
         }
         guard let first = edges.keys.min(), let last = edges.keys.max() else { return }
         let width = max(bounds.width - 1, 0)
@@ -372,7 +344,7 @@ package final class DiffGutterView: NSView {
 
         if showsScopeRibbon { drawRibbon(in: dirtyRect) }
         let metrics = metrics
-        forEachFragment(in: dirtyRect) { fragment, row, rowIndex, y in
+        forEachRow(in: dirtyRect) { _, row, rowIndex, _, baseline in
             let diagnostics = overlay?.row(rowIndex)
             let attributes: [NSAttributedString.Key: Any] =
                 if let diagnostics {
@@ -387,7 +359,7 @@ package final class DiffGutterView: NSView {
                     case .old: [row.oldNumber]
                     case .new: [row.newNumber]
                 }
-            let top = numberTop(of: fragment, at: y)
+            let top = numberTop(baseline: baseline)
             for (column, number) in numbers.enumerated() {
                 guard let number else { continue }
                 let label = String(number) as NSString

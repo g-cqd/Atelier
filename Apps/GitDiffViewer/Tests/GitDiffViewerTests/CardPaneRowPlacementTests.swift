@@ -301,7 +301,7 @@ private final class CardInList {
     func gutterRows() -> [Int: CGFloat] {
         guard let gutter, let textView else { return [:] }
         var rows: [Int: CGFloat] = [:]
-        gutter.forEachFragment(in: gutter.convert(textView.visibleRect, from: textView)) { _, _, row, y in
+        gutter.forEachRow(in: gutter.convert(textView.visibleRect, from: textView)) { _, _, row, y, _ in
             rows[row] = y
         }
         return rows

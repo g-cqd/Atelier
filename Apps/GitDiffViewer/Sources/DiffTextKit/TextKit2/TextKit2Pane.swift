@@ -67,7 +67,7 @@ package final class TextKit2Pane: DiffTextPane {
             scrollView: scrollView)
 
         let gutterView = DiffGutterView(clipView: scrollView.contentView)
-        gutterView.source = textView
+        gutterView.source = TextKit2RowGeometry(textView: textView, coordinator: coordinator)
         gutterView.style = options.gutter
         gutterView.overlay = coordinator.diagnostics
         gutterView.decorations = coordinator.decorationStore.snapshot
@@ -180,7 +180,7 @@ package final class TextKit2Pane: DiffTextPane {
     }
 
     package var geometry: any DiffRowGeometry {
-        TextKit2RowGeometry(textView: textView, rendered: coordinator.rendered, coordinator: coordinator)
+        TextKit2RowGeometry(textView: textView, coordinator: coordinator)
     }
 
     package func scroll(toRow row: Int, centered: Bool) {

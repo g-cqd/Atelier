@@ -567,7 +567,7 @@ struct DiffGutterGapEdgeTests {
         var firstRowTop: CGFloat?
 
         gutter.forEachGap(in: gutter.bounds) { gap, band in bands[gap.boundary] = band }
-        gutter.forEachFragment(in: gutter.bounds) { _, _, row, y in if row == 0 { firstRowTop = y } }
+        gutter.forEachRow(in: gutter.bounds) { _, _, row, y, _ in if row == 0 { firstRowTop = y } }
 
         let height = rendered.gapBandHeight
         let width = gutter.bounds.width - 1

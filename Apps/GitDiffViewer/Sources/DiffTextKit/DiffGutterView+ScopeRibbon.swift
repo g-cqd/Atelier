@@ -60,8 +60,8 @@ extension DiffGutterView {
         // A line's margin either side tells a run that starts or ends at the sample's own edge from one that merely
         // continues past it, so only a confirmed boundary draws a rounded cap.
         var rows: [RibbonRow] = []
-        forEachFragment(in: rect.insetBy(dx: 0, dy: -rendered.lineHeight)) { fragment, row, rowIndex, y in
-            let height = fragment.layoutFragmentFrame.height - rendered.bandSpacing(afterRow: rowIndex)
+        forEachRow(in: rect.insetBy(dx: 0, dy: -rendered.lineHeight)) { frame, row, rowIndex, y, _ in
+            let height = frame.height - rendered.bandSpacing(afterRow: rowIndex)
             let depth: Int
             if let found = decorations.scopeLine(of: row, on: rendered.side) {
                 depth = min(found.scopes.depth(ofLine: found.line), Self.ribbonLevels)
@@ -105,8 +105,8 @@ extension DiffGutterView {
     func rowIndex(at point: NSPoint) -> Int? {
         guard point.x >= 0, point.x < bounds.width else { return nil }
         var found: Int?
-        forEachFragment(in: NSRect(x: 0, y: point.y, width: 1, height: 1)) { fragment, _, rowIndex, y in
-            let height = fragment.layoutFragmentFrame.height - (rendered?.bandSpacing(afterRow: rowIndex) ?? 0)
+        forEachRow(in: NSRect(x: 0, y: point.y, width: 1, height: 1)) { frame, _, rowIndex, y, _ in
+            let height = frame.height - (rendered?.bandSpacing(afterRow: rowIndex) ?? 0)
             if point.y >= y, point.y < y + height { found = rowIndex }
         }
         return found
@@ -164,9 +164,9 @@ extension DiffGutterView {
     func drawHoveredScope(in rect: NSRect) {
         guard let rendered, let rows = hoveredRows() else { return }
         var edges: [Int: (top: CGFloat, bottom: CGFloat)] = [:]
-        forEachFragment(in: rect) { fragment, _, rowIndex, y in
+        forEachRow(in: rect) { frame, _, rowIndex, y, _ in
             guard rowIndex >= rows.first, rowIndex <= rows.last else { return }
-            edges[rowIndex] = (y, y + fragment.layoutFragmentFrame.height - rendered.bandSpacing(afterRow: rowIndex))
+            edges[rowIndex] = (y, y + frame.height - rendered.bandSpacing(afterRow: rowIndex))
         }
         guard !edges.isEmpty else { return }
         // An end out of `rect` runs on past its edge, so its round end is not drawn there.

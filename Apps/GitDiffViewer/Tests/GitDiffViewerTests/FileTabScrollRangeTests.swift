@@ -139,7 +139,9 @@ struct FileTabScrollRangeTests {
         let textViews = subviews(of: DiffPaneTextView.self, in: content).filter { $0.enclosingScrollView != nil }
         try #require(!textViews.isEmpty)
         return try textViews.map { textView in
-            let gutter = try #require(subviews(of: DiffGutterView.self, in: content).first { $0.source === textView })
+            let gutter = try #require(
+                subviews(of: DiffGutterView.self, in: content)
+                    .first { ($0.source as? TextKit2RowGeometry)?.textView === textView })
             return ShownPane(
                 textView: textView, clip: try #require(textView.enclosingScrollView?.contentView),
                 rendered: try #require(gutter.rendered))

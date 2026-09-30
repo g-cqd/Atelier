@@ -82,7 +82,7 @@ struct DiffGutterChangeMarkerTests {
         /// The top of each row in the gutter.
         func rowTops() -> [Int: CGFloat] {
             var tops: [Int: CGFloat] = [:]
-            gutter.forEachFragment(in: gutter.bounds) { _, _, row, y in tops[row] = y }
+            gutter.forEachRow(in: gutter.bounds) { _, _, row, y, _ in tops[row] = y }
             return tops
         }
 
