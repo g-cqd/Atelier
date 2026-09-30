@@ -241,7 +241,7 @@ final class HostedPanes {
     init(
         showing text: PaneText, layout: PaneLayout, wrapsLines: Bool, scrollsPastEnd: Bool = false,
         size: NSSize = NSSize(width: 600, height: HostedPanes.paneHeight), underBars: CGFloat = 0,
-        ratio: Binding<Double>? = nil
+        ratio: Binding<Double>? = nil, scrollSync: SplitPaneController.ScrollSync = .byRow
     ) {
         self.underBars = underBars
         let ratio = ratio ?? PaneRatioStore().binding
@@ -249,6 +249,7 @@ final class HostedPanes {
         let controller = SplitPaneController(clock: clock, taskProvider: taskProvider)
         // As the split view sets it when it appears.
         controller.wrapsLines = wrapsLines
+        controller.scrollSync = scrollSync
         self.layout = layout
         self.wrapsLines = wrapsLines
         self.scrollsPastEnd = scrollsPastEnd
@@ -451,6 +452,28 @@ struct ShownPane {
     /// The bottom of `row`'s last line in the text view, as TextKit laid it out to draw it.
     func bottom(ofRow row: Int) throws -> CGFloat {
         try fragment(ofRow: row).layoutFragmentFrame.maxY + textView.textContainerOrigin.y
+    }
+
+    /// Whether TextKit has laid out `row`, rather than placed it after its estimates.
+    func isLaidOut(row: Int) throws -> Bool {
+        let layoutManager = try #require(textView.textLayoutManager)
+        let content = try #require(layoutManager.textContentManager)
+        let location = try #require(
+            content.location(layoutManager.documentRange.location, offsetBy: rendered.lineStarts[row]))
+        return layoutManager.textLayoutFragment(for: location)?.state == .layoutAvailable
+    }
+
+    /// The row at the pane's top below its bars, and how far below the row's top that lies.
+    func rowAtTop() throws -> (row: Int, offset: CGFloat) {
+        let layoutManager = try #require(textView.textLayoutManager)
+        let content = try #require(layoutManager.textContentManager)
+        let origin = textView.textContainerOrigin.y
+        let fragment = try #require(layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: shownTop - origin)))
+        try #require(fragment.state == .layoutAvailable, "the pane's top is not laid out")
+        let row = rendered.rowIndex(
+            containing: content.offset(
+                from: layoutManager.documentRange.location, to: fragment.rangeInElement.location))
+        return (row, shownTop - (fragment.layoutFragmentFrame.minY + origin))
     }
 
     private func fragment(ofRow row: Int) throws -> NSTextLayoutFragment {
