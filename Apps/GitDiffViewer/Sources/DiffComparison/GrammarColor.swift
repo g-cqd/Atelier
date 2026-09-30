@@ -12,13 +12,12 @@ import os
 /// Every window's grammar tier runs through them.
 package final class GrammarColorServices: Sendable {
     /// The largest table grammar colour loads, and the tables it keeps loaded, in bytes of their disk cache files,
-    /// which hold 4.3 to 6.5 times less than the tables once loaded (design note PERF-11, section 4.2).
+    /// which hold about what the tables keep once loaded (design note PERF-11, section 4.2).
     ///
-    /// The limit keeps every table of at most 20 MB: JSON's, TOML's, CSS's, Lua's, HTML's, YAML's, Ruby's (8 MB),
-    /// JavaScript's (9.6 MB), Go's (11.4 MB) and Python's (16.7 MB, 78 to 94 MB loaded). Java's (30 MB), C's and
-    /// Bash's (45 MB), TypeScript's (49 MB, 322 MB loaded), Rust's and Kotlin's (60 MB) and C++'s (107 MB, 495 MB
-    /// loaded) stay on disk until their tables are smaller. The budget holds any two of the tables kept, the two
-    /// largest among them, 150 to 210 MB once loaded; a table a parse is using stays however far past it.
+    /// Every bundled grammar's table file is under 9 MiB, so the limit keeps them all: TypeScript's is the largest
+    /// (8.8 MiB, 10.5 MiB loaded), then Bash's, C++'s (7.1 MiB) and Rust's. It stays for a grammar whose tables are
+    /// larger. The budget holds any four of the tables, about as much once loaded; a table a parse is using stays
+    /// however far past it.
     package static let limits = SyntaxArtifactsCache.Limits(maxTableBytes: 20 << 20, budgetBytes: 32 << 20)
 
     /// How many parses run at once: a quarter of the cores, at least one (design note, section 4.6).
