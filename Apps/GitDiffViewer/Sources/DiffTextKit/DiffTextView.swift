@@ -489,13 +489,23 @@ package final class DiffTextViewCoordinator: NSObject {
     /// is being sized is left to that sizing, which reads the layout they leave. Sizing the pane for each of them in
     /// turn nested one call per fragment dropped, and a text laid out over some 1,800 rows, replaced, overflowed the
     /// stack.
+    ///
+    /// During an edit of the text, TextKit tells of a change of its usage bounds from within its invalidation of the
+    /// edited range, as it drops that range's fragments one by one. Reading the layout there invalidates the range
+    /// again, under the invalidation still going through its fragments, and that one then never ends: the row spacing
+    /// that lines up side-by-side rows wrapped onto different numbers of lines froze the window so. A change that
+    /// comes during an edit leaves the pane to be sized at the end of the next layout pass, once the edit is over.
     package func followLayout() {
         usageObservation = textView?.textLayoutManager?
             .observe(\.usageBoundsForTextContainer) { [weak self] _, _ in
                 MainActor.assumeIsolated {
-                    guard let self, !self.isFollowingUsage,
-                        let clipView = self.textView?.enclosingScrollView?.contentView
+                    guard let self, !self.isFollowingUsage, let textView = self.textView,
+                        let clipView = textView.enclosingScrollView?.contentView
                     else { return }
+                    if textView.textLayoutManager?.textContentManager?.hasEditingTransaction == true {
+                        textView.needsLayout = true
+                        return
+                    }
                     self.isFollowingUsage = true
                     defer { self.isFollowingUsage = false }
                     self.updateOverscroll(in: clipView)
