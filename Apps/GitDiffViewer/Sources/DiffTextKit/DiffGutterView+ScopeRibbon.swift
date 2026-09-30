@@ -12,9 +12,10 @@ struct HoveredScope: Equatable {
 /// it nests, a hairline where a scope ends, and the scope under the pointer outlined, its braces lit in the text. It is
 /// drawn from the pane's decorations as the gutter draws, so scopes that land lay nothing out.
 extension DiffGutterView {
-    /// The padding after the numbers, which holds the ribbon: 2 pt wider than the leading padding, the ribbon's whole
-    /// cost, taken whether or not the text has scopes, so the gutter never changes width when they land.
-    static let trailingPadding: CGFloat = 10
+    /// The padding after the numbers, which holds, from them to the text, 2 pt of air, the change layer and the ribbon.
+    /// With the 3 pt before the numbers, the gutter is 2 pt wider than before the ribbon, its whole cost, taken whether
+    /// or not the text has scopes or changes, so the gutter never changes width when they land.
+    static let trailingPadding: CGFloat = 2 + ChangeMarkerLayout.hitWidth + ribbonWidth + 2
     static let ribbonWidth: CGFloat = 5
     /// How many levels of nesting the shading tells apart, and how much of the text colour each adds.
     static let ribbonLevels = 4
@@ -22,6 +23,9 @@ extension DiffGutterView {
 
     /// The ribbon's leading edge: 1 pt before the gutter's trailing hairline.
     var ribbonX: CGFloat { bounds.width - 2 - Self.ribbonWidth }
+    /// The change layer's leading edge, right after the numbers and before the ribbon: the compact view's markers and
+    /// the Xcode colours' change bar.
+    var changeLayerX: CGFloat { ribbonX - ChangeMarkerLayout.hitWidth }
 
     /// The decorations of the text on show; nil while none has landed.
     private var currentDecorations: DiffDecorations? {

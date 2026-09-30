@@ -66,9 +66,9 @@ struct DiffColorsSettingTests {
         #expect(sut.settings.diffColors == .standard)
     }
 
-    /// A gutter over ten lines with line 5 changed, or a line added after it, in `palette`, drawn whole; the pixel at
-    /// the leading padding of row `row`'s middle.
-    private func leadingPixel(
+    /// A gutter over ten lines with line 5 changed, or a line added after it, in `palette`, drawn whole; the pixel in
+    /// the change layer, after the numbers, at row `row`'s middle.
+    private func changeLayerPixel(
         ofRow row: Int, palette: DiffPalette, adds: Bool = false, compact: Bool = false
     ) throws -> NSColor? {
         let old = (1 ... 10).map { "let value\($0) = \($0)" }
@@ -91,26 +91,27 @@ struct DiffColorsSettingTests {
         gutter.cacheDisplay(in: gutter.bounds, to: bitmap)
         let scale = CGFloat(bitmap.pixelsWide) / gutter.bounds.width
         let y = layout.inset + (CGFloat(row) + 0.5) * rendered.lineHeight
-        return bitmap.colorAt(x: Int(3.5 * scale), y: Int(y * scale))
+        let x = gutter.changeLayerX + ChangeMarkerLayout.barX + ChangeMarkerLayout.barWidth / 2
+        return bitmap.colorAt(x: Int(x * scale), y: Int(y * scale))
     }
 
     @Test
     func `Xcode's colours draw a change bar beside a changed row, and none beside the others`() throws {
         let xcode = DiffPalette.system.with(diffColors: .xcode)
         // Inline, line 5 changed takes rows 4 (removed) and 5 (added).
-        let changed = try leadingPixel(ofRow: 4, palette: xcode)
-        let context = try leadingPixel(ofRow: 1, palette: xcode)
+        let changed = try changeLayerPixel(ofRow: 4, palette: xcode)
+        let context = try changeLayerPixel(ofRow: 1, palette: xcode)
 
         #expect(changed != context)
-        #expect(try leadingPixel(ofRow: 4, palette: .system) == context)
+        #expect(try changeLayerPixel(ofRow: 4, palette: .system) == context)
     }
 
     @Test
     func `the compact inline view keeps its markers in place of the change bar`() throws {
         let xcode = DiffPalette.system.with(diffColors: .xcode)
-        let barred = try leadingPixel(ofRow: 5, palette: xcode, adds: true)
+        let barred = try changeLayerPixel(ofRow: 5, palette: xcode, adds: true)
 
         // The added line is row 5 either way; compact, its marker is the addition's green, not the bar's blue.
-        #expect(try leadingPixel(ofRow: 5, palette: xcode, adds: true, compact: true) != barred)
+        #expect(try changeLayerPixel(ofRow: 5, palette: xcode, adds: true, compact: true) != barred)
     }
 }

@@ -3,7 +3,7 @@
 The book's DIFF-04 and the roadmap's "Diff interaction refinements", item 4: an inline view that reads as the new file,
 with a gutter marker at each place that changed. Clicking a marker discloses that change in place. No Xcode capture
 covers it (`xcode-reference.md`), so it borrows the gutter's own language: the gap handles' thin outlines and their
-hover, and the change bar Xcode draws at the gutter's leading edge.
+hover, and the change bar Xcode draws right of the line numbers.
 
 ## The setting
 
@@ -30,10 +30,11 @@ Only the inline side is compacted. The split and stacked layouts are unchanged.
 
 ## Markers
 
-Every marker lies in the gutter's leading padding, the 8 points left of the line numbers, so the gutter keeps its
-width and the numbers keep their place.
+Every marker lies in the gutter's change layer, 6 points on its trailing side between the line numbers and the scope
+ribbon, next to the text, as Xcode draws its change bar (moved there 09-30 at the user's ask; it lay in the leading
+padding before). The gutter keeps its width: the leading padding gave the points the change layer took.
 
-- **A change with added lines**: a bar 3 points wide, 2 points from the gutter's leading edge, with round ends,
+- **A change with added lines**: a bar 3 points wide, 1 point into the change layer, with round ends,
   running down the change's rows: the added rows while folded, the removed and the added rows while disclosed. It
   stops at the last row's own height, never across a gap's band.
   - Green for an addition, blue for a modification, which removes lines and adds others (Xcode's change bar).
@@ -48,7 +49,7 @@ width and the numbers keep their place.
 - **Hover**: the marker under the pointer draws one point wider and at full strength, as a gap handle's half does,
   the pointer turns into a pointing hand, and the tooltip tells the change and what a click does: "Modified: 2 lines
   removed, 3 added. Click to show the change (⌥⌘↩)" or "… Click to hide the change".
-- **Hit area**: the leading padding across the marker's rows, or half a row either side of a wedge. The line numbers
+- **Hit area**: the change layer across the marker's rows, or half a row either side of a wedge. The line numbers
   keep their own clicks, and a gap's band keeps its handles: a marker never lies in a band.
 
 ## Interaction with isolated changes and the gap handles
