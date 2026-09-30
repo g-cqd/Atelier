@@ -3,7 +3,7 @@ import AtelierGrammar
 /// Reads one token at a time with a lex table's automaton, in the lex mode the parser asks for.
 ///
 /// Built once per parser from the table: it lays the automaton out for reading, a direct table for the moves on
-/// ASCII scalars and sorted ranges for the others.
+/// ASCII scalars, and the automaton's own groups of ranges for the others.
 struct TokenScanner: Sendable {
     /// A place in the source: a byte offset and its point, columns counted in bytes.
     struct Cursor: Sendable, Equatable {
@@ -31,7 +31,8 @@ struct TokenScanner: Sendable {
 
     /// For each state and ASCII scalar, `target << 1 | skips`, or -1 where the state has no move.
     private let asciiMoves: [Int32]
-    private let moves: [[LexTransition]]
+    /// The automaton, for the moves on the other scalars.
+    private let automaton: LexAutomaton
     /// Each state's accepted token, or -1.
     private let accepts: [Int32]
     private let modeStarts: [Int]
@@ -51,18 +52,19 @@ struct TokenScanner: Sendable {
     /// Nil for a table without lex modes.
     init?(_ table: LexTable) {
         guard !table.modeStarts.isEmpty else { return nil }
-        var asciiMoves = [Int32](repeating: -1, count: table.automaton.count * 128)
-        for (state, automatonState) in table.automaton.enumerated() {
-            for transition in automatonState.transitions where transition.lower < 128 {
-                let move = Int32(transition.target) << 1 | (transition.skips ? 1 : 0)
-                for scalar in Int(transition.lower) ... Int(min(transition.upper, 127)) {
+        let automaton = table.automaton
+        var asciiMoves = [Int32](repeating: -1, count: automaton.count * 128)
+        for state in automaton.indices {
+            automaton.forEachMove(from: state, below: 128) { lower, upper, target, skips in
+                let move = Int32(target) << 1 | (skips ? 1 : 0)
+                for scalar in Int(lower) ... Int(upper) {
                     asciiMoves[state << 7 | scalar] = move
                 }
             }
         }
         self.asciiMoves = asciiMoves
-        self.moves = table.automaton.map(\.transitions)
-        self.accepts = table.automaton.map { Int32($0.accept ?? -1) }
+        self.automaton = automaton
+        self.accepts = automaton.indices.map { Int32(automaton.accept(of: $0) ?? -1) }
         self.modeStarts = table.modeStarts
         self.stateModes = table.stateModes
         self.errorMode = table.errorMode
@@ -215,19 +217,8 @@ struct TokenScanner: Sendable {
         if scalar < 128 {
             return asciiMoves[state << 7 | Int(scalar)]
         }
-        let transitions = moves[state]
-        var low = 0
-        var high = transitions.count
-        while low < high {
-            let middle = (low + high) / 2
-            if transitions[middle].upper < scalar {
-                low = middle + 1
-            } else {
-                high = middle
-            }
-        }
-        guard low < transitions.count, transitions[low].lower <= scalar else { return -1 }
-        return Int32(transitions[low].target) << 1 | (transitions[low].skips ? 1 : 0)
+        guard let move = automaton.move(from: state, on: scalar) else { return -1 }
+        return Int32(move.target) << 1 | (move.skips ? 1 : 0)
     }
 
     /// The scalar at `offset` and its length in bytes; U+FFFD for one byte of a sequence with no valid lead byte or

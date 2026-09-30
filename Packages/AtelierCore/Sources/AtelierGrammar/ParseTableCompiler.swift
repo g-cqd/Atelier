@@ -185,14 +185,17 @@ public enum ParseTableCompiler: Sendable {
             })
         table.externalIsExtra = table.externalSymbols.map { extraNames.contains($0) }
         let terminalIndex = Dictionary(uniqueKeysWithValues: table.terminals.enumerated().map { ($1, $0) })
-        table.validExternals = table.actions.map { row in
-            table.externalSymbols.enumerated()
-                .map { external, name in
-                    if table.externalIsExtra[external] { return true }
-                    guard let terminal = terminalIndex[name] else { return false }
-                    return row[terminal] != .error
-                }
-        }
+        let actions = table.actions
+        table.validExternals = ExternalValidity(
+            rows: (0 ..< actions.stateCount)
+                .map { state in
+                    table.externalSymbols.enumerated()
+                        .map { external, name in
+                            if table.externalIsExtra[external] { return true }
+                            guard let terminal = terminalIndex[name] else { return false }
+                            return !actions.isError(state: state, terminal: terminal)
+                        }
+                })
     }
 
     private static func literalText(of rule: Rule) -> String? {
@@ -214,9 +217,11 @@ public enum ParseTableCompiler: Sendable {
             guard !tokens[token].isExtra, let terminal = terminalIndex[tokens[token].name] else { return nil }
             return (token, terminal)
         }
-        return table.actions.map { row in
-            (extras + shifted.filter { row[$0.terminal] != .error }.map(\.token)).sorted()
-        }
+        return (0 ..< table.actions.stateCount)
+            .map { state in
+                (extras + shifted.filter { !table.actions.isError(state: state, terminal: $0.terminal) }.map(\.token))
+                    .sorted()
+            }
     }
 
     private static func collectTerminals(

@@ -1,19 +1,21 @@
 // MARK: - Parse Table
 
-/// An LR parse table: 2D array of actions indexed by (state, symbol).
+/// An LR parse table: actions by state and terminal, and GOTO targets by state and non-terminal.
 public struct ParseTable: Sendable, Equatable, Codable {
     public var stateCount: Int
     public var symbols: [String]
     public var terminals: [String]
     public var nonTerminals: [String]
-    public var actions: [[Action]]  // [state][symbolIndex] → Action
-    public var gotos: [[Int?]]  // [state][nonTerminalIndex] → state or nil
+    /// The action of each state on each terminal.
+    public var actions: ParseActionTable
+    /// The state each state goes to after a reduction to each non-terminal, if any.
+    public var gotos: ParseGotoTable
     /// External symbol names in the grammar's declared order.
     public var externalNames: [String]
     /// The parse-table terminal for each external, including quoted literal terminal names.
     public var externalSymbols: [String]
     /// The external scanner's validity array for each parse state, in ``externalNames`` order.
-    public var validExternals: [[Bool]]
+    public var validExternals: ExternalValidity
     /// External symbols that the grammar treats as extras in every state.
     public var externalIsExtra: [Bool]
     /// The shifts precedence resolved against in favour of a reduction, by state then terminal: their target states.
@@ -25,6 +27,7 @@ public struct ParseTable: Sendable, Equatable, Codable {
     /// takes the shift instead.
     public var lostShifts: [Int: [Int: Int]]
 
+    /// A table of `actions` and `gotos` by state, as rows, for a table built by hand.
     public init(
         stateCount: Int,
         symbols: [String],
@@ -35,6 +38,27 @@ public struct ParseTable: Sendable, Equatable, Codable {
         externalNames: [String] = [],
         externalSymbols: [String] = [],
         validExternals: [[Bool]] = [],
+        externalIsExtra: [Bool] = [],
+        lostShifts: [Int: [Int: Int]] = [:]
+    ) {
+        self.init(
+            stateCount: stateCount, symbols: symbols, terminals: terminals, nonTerminals: nonTerminals,
+            actions: ParseActionTable(rows: actions), gotos: ParseGotoTable(rows: gotos), externalNames: externalNames,
+            externalSymbols: externalSymbols, validExternals: ExternalValidity(rows: validExternals),
+            externalIsExtra: externalIsExtra, lostShifts: lostShifts)
+    }
+
+    /// A table of compact `actions`, `gotos` and `validExternals`, as the compiler and the cache build them.
+    public init(
+        stateCount: Int,
+        symbols: [String],
+        terminals: [String],
+        nonTerminals: [String],
+        actions: ParseActionTable,
+        gotos: ParseGotoTable,
+        externalNames: [String] = [],
+        externalSymbols: [String] = [],
+        validExternals: ExternalValidity = ExternalValidity(),
         externalIsExtra: [Bool] = [],
         lostShifts: [Int: [Int: Int]] = [:]
     ) {
@@ -62,11 +86,12 @@ public struct ParseTable: Sendable, Equatable, Codable {
         symbols = try values.decode([String].self, forKey: .symbols)
         terminals = try values.decode([String].self, forKey: .terminals)
         nonTerminals = try values.decode([String].self, forKey: .nonTerminals)
-        actions = try values.decode([[Action]].self, forKey: .actions)
-        gotos = try values.decode([[Int?]].self, forKey: .gotos)
+        actions = try values.decode(ParseActionTable.self, forKey: .actions)
+        gotos = try values.decode(ParseGotoTable.self, forKey: .gotos)
         externalNames = try values.decodeIfPresent([String].self, forKey: .externalNames) ?? []
         externalSymbols = try values.decodeIfPresent([String].self, forKey: .externalSymbols) ?? externalNames
-        validExternals = try values.decodeIfPresent([[Bool]].self, forKey: .validExternals) ?? []
+        validExternals =
+            try values.decodeIfPresent(ExternalValidity.self, forKey: .validExternals) ?? ExternalValidity()
         externalIsExtra = try values.decodeIfPresent([Bool].self, forKey: .externalIsExtra) ?? []
         lostShifts = try values.decodeIfPresent([Int: [Int: Int]].self, forKey: .lostShifts) ?? [:]
     }
@@ -74,7 +99,7 @@ public struct ParseTable: Sendable, Equatable, Codable {
 
 // MARK: - Action
 
-public enum Action: Sendable, Equatable, Codable {
+public enum Action: Sendable, Hashable, Codable {
     case shift(Int)  // Shift and go to state
     case reduce(ruleIndex: Int, count: Int, nonTerminal: String)  // Reduce
     case accept
@@ -197,7 +222,7 @@ public struct LexTable: Sendable, Equatable, Codable {
     /// The tokens ``automaton`` accepts, by index.
     public var tokens: [LexToken]
     /// The lexer's automaton over Unicode scalars, which every lex mode shares.
-    public var automaton: [LexAutomatonState]
+    public var automaton: LexAutomaton
     /// Each lex mode's start state in ``automaton``: a mode reads only the tokens valid in the parse states that use
     /// it, so a token is read as the parser expects it.
     public var modeStarts: [Int]
@@ -235,8 +260,9 @@ public struct LexTable: Sendable, Equatable, Codable {
         modeEmptyAfterSeparator: [Int?] = []
     ) {
         self.init(
-            states: states, keywords: keywords, commentPatterns: commentPatterns, tokens: tokens, automaton: automaton,
-            modeStarts: modeStarts, stateModes: stateModes, errorMode: errorMode, wordToken: wordToken,
+            states: states, keywords: keywords, commentPatterns: commentPatterns, tokens: tokens,
+            automaton: LexAutomaton(automaton), modeStarts: modeStarts, stateModes: stateModes, errorMode: errorMode,
+            wordToken: wordToken,
             keywordTokens: keywordTokens, modeValidTokens: modeValidTokens, modeEmptyTokens: modeEmptyTokens,
             modeEmptyAfterSeparator: modeEmptyAfterSeparator, modeSource: nil)
     }
@@ -245,7 +271,7 @@ public struct LexTable: Sendable, Equatable, Codable {
         states: [LexState] = [], keywords: [String: Int] = [:],
         commentPatterns: [CommentPattern] = [],
         tokens: [LexToken] = [],
-        automaton: [LexAutomatonState] = [],
+        automaton: LexAutomaton = LexAutomaton(),
         modeStarts: [Int] = [],
         stateModes: [Int] = [],
         errorMode: Int? = nil,

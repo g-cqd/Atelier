@@ -99,7 +99,7 @@ struct ExternalScannerIntegrationTests {
         let compiled = try ParseTableCompiler.compile(grammar)
         var table = compiled.parseTable
         switch damage {
-            case 0: table.validExternals = []
+            case 0: table.validExternals = ExternalValidity()
             case 1: table.externalSymbols = []
             default: table.externalIsExtra = []
         }

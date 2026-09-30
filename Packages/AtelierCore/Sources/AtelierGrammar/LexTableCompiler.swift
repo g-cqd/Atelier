@@ -253,7 +253,7 @@ extension LexTableCompiler {
             for: tokens.indices.filter { !tokens[$0].isImmediate && !startingLikeSeparators.contains($0) })
         return LexTable(
             tokens: tokens.map { LexToken(name: $0.name, isNamed: $0.isNamed, isExtra: $0.isExtra) },
-            automaton: builder.states,
+            automaton: LexAutomaton(builder.states),
             modeStarts: modeStarts,
             stateModes: stateModes,
             errorMode: errorMode,
