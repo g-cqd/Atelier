@@ -9,13 +9,13 @@ public struct ParseGotoTable: Sendable {
     /// The number of distinct rows.
     private(set) var rowCount: Int
     /// The row of each state, by state.
-    private(set) var rowOfState: [UInt32]
+    @usableFromInline private(set) var rowOfState: [UInt32]
     /// The rows' cells, row after row, ``columnCount`` each.
-    private(set) var cells: [UInt32]
+    @usableFromInline private(set) var cells: [UInt32]
     /// The targets cells refer to, for those too large or negative to hold.
-    private(set) var indirectTargets: [Int]
+    @usableFromInline private(set) var indirectTargets: [Int]
 
-    static let indirectFlag: UInt32 = 1 << 31
+    @usableFromInline static let indirectFlag: UInt32 = 1 << 31
 
     /// The table of `rows`, one per state. A row shorter than the longest has no target past its end.
     public init(rows: [[Int?]]) {
@@ -70,20 +70,25 @@ public struct ParseGotoTable: Sendable {
     /// The state `state` goes to after reducing to `nonTerminal`; nil for none.
     ///
     /// Setting a cell copies the state's row first, so it costs O(``columnCount``): for building tables by hand.
+    @inlinable
     public subscript(state: Int, nonTerminal: Int) -> Int? {
-        get {
+        @inline(__always) get {
             precondition(0 <= nonTerminal && nonTerminal < columnCount, "non-terminal \(nonTerminal) outside the table")
             return target(ofCell: cells[Int(rowOfState[state]) &* columnCount &+ nonTerminal])
         }
-        set {
-            precondition(0 <= nonTerminal && nonTerminal < columnCount, "non-terminal \(nonTerminal) outside the table")
-            let start = Int(rowOfState[state]) * columnCount
-            var row = Array(cells[start ..< start + columnCount])
-            row[nonTerminal] = cell(for: newValue)
-            rowOfState[state] = UInt32(rowCount)
-            rowCount += 1
-            cells.append(contentsOf: row)
-        }
+        set { setTarget(newValue, state: state, nonTerminal: nonTerminal) }
+    }
+
+    /// Gives `state` its own copy of its row, with `target` for `nonTerminal`.
+    @usableFromInline
+    mutating func setTarget(_ target: Int?, state: Int, nonTerminal: Int) {
+        precondition(0 <= nonTerminal && nonTerminal < columnCount, "non-terminal \(nonTerminal) outside the table")
+        let start = Int(rowOfState[state]) * columnCount
+        var row = Array(cells[start ..< start + columnCount])
+        row[nonTerminal] = cell(for: target)
+        rowOfState[state] = UInt32(rowCount)
+        rowCount += 1
+        cells.append(contentsOf: row)
     }
 
     /// The targets of `state`, by non-terminal.
@@ -99,6 +104,7 @@ public struct ParseGotoTable: Sendable {
         rowOfState.indices.map(row)
     }
 
+    @inlinable @inline(__always)
     func target(ofCell cell: UInt32) -> Int? {
         if cell == 0 { return nil }
         return cell & Self.indirectFlag == 0 ? Int(cell) - 1 : indirectTargets[Int(cell & ~Self.indirectFlag)]
