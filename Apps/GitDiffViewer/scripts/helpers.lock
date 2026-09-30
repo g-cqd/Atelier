@@ -3,6 +3,6 @@
 # that commit, with the dependencies its committed Package.resolved pins, and fails on anything else.
 # The commits are fixed revisions on the atelier-review-fixes and atelier-followups branches of each
 # g-cqd mirror (decision D15). Bump a pin in a commit of its own.
-arcleak   https://github.com/g-cqd/arcleak.git   67a67ae1057785fd7d3ffbbb6fc67aba8a3e47fd
-dolly     https://github.com/g-cqd/dolly.git     c21d5d1d424e2a0203ce0190f4f597a871dc37be
-deadwood  https://github.com/g-cqd/deadwood.git  ec7addf85542ef75f6907f853256d2c9b263c54a
+arcleak   https://github.com/g-cqd/arcleak.git   a730808368398e487e0990965c1d5bc33b0f1a4d
+dolly     https://github.com/g-cqd/dolly.git     0b963bcdc455a5f01b1496b6ec252bdb6005856d
+deadwood  https://github.com/g-cqd/deadwood.git  33a7758275a13a1a0ce7f61672c0bea1ba114307
