@@ -31,6 +31,21 @@ struct SwiftSyntaxHighlightsTests {
     }
 
     @Test
+    func `a type named where a type goes, or capitalized in an expression, keeps the lexer's type colour`() throws {
+        let source = "let r: NSRect = NSRect(x: 0)\nlet c = NSColor.red\nvar s: Set<Swift.String> = []\nlet v = value\n"
+        let syntactic = try SwiftSyntaxHighlights.tokens(in: source)
+
+        for type in ["NSRect", "NSColor", "Set", "Swift", "String"] {
+            #expect(
+                Self.tokens(syntactic, spelling: type, in: source).allSatisfy { $0.role == .type }
+                    && !Self.tokens(syntactic, spelling: type, in: source).isEmpty, "\(type)")
+        }
+        #expect(Self.tokens(syntactic, spelling: "NSRect", in: source).count == 2)
+        #expect(Self.tokens(syntactic, spelling: "red", in: source).isEmpty)
+        #expect(Self.tokens(syntactic, spelling: "value", in: source).isEmpty)
+    }
+
+    @Test
     func `every token is syntactic, ascending and disjoint`() throws {
         let source = """
             /// A doc comment.

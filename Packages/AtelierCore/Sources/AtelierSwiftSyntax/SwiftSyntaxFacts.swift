@@ -53,7 +53,8 @@ public enum SwiftSyntaxFacts {
         let share = byteCount > 0 ? Double(walk.unexpectedBytes) / Double(byteCount) : 0
         var highlights: [HighlightToken]?
         if share <= SwiftSyntaxHighlights.maximumUnexpectedShare {
-            let parsed = SwiftSyntaxHighlights.Parsed(tree: tree, declarationNames: walk.declarationNames)
+            let parsed = SwiftSyntaxHighlights.Parsed(
+                tree: tree, declarationNames: walk.declarationNames, typeReferences: walk.typeReferences)
             do {
                 highlights = try parsed.tokens(in: nil, isCancelled: isCancelled)
             } catch {
@@ -73,6 +74,8 @@ public enum SwiftSyntaxFacts {
 final class TreeWalk: SyntaxVisitor {
     /// The colour role of each declaration's name, by the UTF-8 offset of its first byte.
     private(set) var declarationNames: [Int: HighlightRole] = [:]
+    /// The UTF-8 offset of each name that refers to a type: where a type goes, or capitalized in an expression.
+    private(set) var typeReferences: Set<Int> = []
     private(set) var unexpectedBytes = 0
     private(set) var declarations: [SyntaxDeclaration] = []
     /// The scopes, by their opening brace: the walk visits an enclosing node before the nodes it holds.
@@ -117,6 +120,25 @@ final class TreeWalk: SyntaxVisitor {
         let start = left.positionAfterSkippingLeadingTrivia.utf8Offset
         let end = right.endPositionBeforeTrailingTrivia.utf8Offset
         if end > start { scopes.append(SyntaxScope(range: start ..< end, kind: kind)) }
+        return .visitChildren
+    }
+
+    override func visit(_ node: IdentifierTypeSyntax) -> SyntaxVisitorContinueKind {
+        typeReferences.insert(node.name.positionAfterSkippingLeadingTrivia.utf8Offset)
+        return .visitChildren
+    }
+
+    override func visit(_ node: MemberTypeSyntax) -> SyntaxVisitorContinueKind {
+        typeReferences.insert(node.name.positionAfterSkippingLeadingTrivia.utf8Offset)
+        return .visitChildren
+    }
+
+    /// A capitalized name in an expression, `NSRect(…)` or `NSColor.red`, is taken for a type, as the lexer and Xcode
+    /// take it: without the compiler's semantics nothing tells a type from a capitalized value, which Swift rarely has.
+    override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
+        if case .identifier = node.baseName.tokenKind, node.baseName.text.first?.isUppercase == true {
+            typeReferences.insert(node.baseName.positionAfterSkippingLeadingTrivia.utf8Offset)
+        }
         return .visitChildren
     }
 
