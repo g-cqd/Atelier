@@ -12,14 +12,16 @@ import Testing
 ///
 /// Run in release, alone on the machine: `GDV_BENCH=1 swift test -c release -Xswiftc -enable-testing --filter
 /// FirstChangePlacementBenchmark`. GDV_BENCH_ROWS sets the file's length and GDV_BENCH_RUNS the openings timed per
-/// side.
+/// side; GDV_BENCH_SYNC=offset has the two sides follow each other's offset rather than their rows, as they did
+/// before (``SplitPaneController/ScrollSync``). Times are the main thread's CPU time, which layout takes, not the wall
+/// clock's, which other jobs on the machine stretch.
 @MainActor
 @Suite(.mainActorLane)
 struct FirstChangePlacementBenchmark {
     // Serialized: the layouts would otherwise share the main thread and time each other.
     @Test(
         .serialized, .enabled(if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil),
-        arguments: [(PaneLayout.inline, true), (.inline, false), (.sideBySide, true)])
+        arguments: [(PaneLayout.inline, true), (.inline, false), (.sideBySide, true), (.sideBySide, false)])
     func `opening a long file at a change near its top and near its end`(layout: PaneLayout, wrapsLines: Bool)
         throws
     {
@@ -29,7 +31,8 @@ struct FirstChangePlacementBenchmark {
         let near = PaneText.longLines(rows, changedAt: 30)
         let deep = PaneText.longLines(rows, changedAt: rows - 50)
         let short = PaneText.lines(40)
-        let sut = HostedPanes(showing: short, layout: layout, wrapsLines: wrapsLines)
+        let sync: SplitPaneController.ScrollSync = environment["GDV_BENCH_SYNC"] == "offset" ? .byOffset : .byRow
+        let sut = HostedPanes(showing: short, layout: layout, wrapsLines: wrapsLines, scrollSync: sync)
 
         var samples = Samples()
         // One opening each first, which the samples leave out.
@@ -44,7 +47,7 @@ struct FirstChangePlacementBenchmark {
             }
         }
         print(
-            "BENCH first change \(layout.rawValue) wraps \(wrapsLines), \(rows) rows: "
+            "BENCH first change \(layout.rawValue) wraps \(wrapsLines), sync \(sync), \(rows) rows, CPU: "
                 + "opening near the top \(Self.summary(samples.nearOpening)), "
                 + "near the end \(Self.summary(samples.deepOpening)); "
                 + "leaving near the top \(Self.summary(samples.nearLeaving)), "
@@ -69,11 +72,11 @@ struct FirstChangePlacementBenchmark {
         }
     }
 
+    /// The calling thread's CPU time `work` takes, in milliseconds.
     private static func time(_ work: () throws -> Void) rethrows -> Double {
-        let start = ContinuousClock.now
+        let start = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
         try work()
-        let elapsed = start.duration(to: .now)
-        return Double(elapsed.components.seconds) * 1e3 + Double(elapsed.components.attoseconds) / 1e15
+        return Double(clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) - start) / 1e6
     }
 
     /// Each pane shows the change three lines below its top, as `FilePaneScrollToRowTests` checks.
