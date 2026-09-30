@@ -257,13 +257,17 @@ final class HostedPanes {
     private let ratio: Binding<Double>
     /// The row the model asked the panes to show, if any.
     private(set) var requestedRow: Int?
+    /// What both panes draw over their text.
+    private let decorations: DiffDecorations?
 
     /// `ratio` is where the window keeps its pane ratio; nil keeps one of the panes' own, starting even.
     init(
         showing text: PaneText, layout: PaneLayout, wrapsLines: Bool, scrollsPastEnd: Bool = false,
         size: NSSize = NSSize(width: 600, height: HostedPanes.paneHeight), underBars: CGFloat = 0,
-        ratio: Binding<Double>? = nil, scrollSync: SplitPaneController.ScrollSync = .byRow
+        ratio: Binding<Double>? = nil, scrollSync: SplitPaneController.ScrollSync = .byRow,
+        decorations: DiffDecorations? = nil
     ) {
+        self.decorations = decorations
         self.underBars = underBars
         let ratio = ratio ?? PaneRatioStore().binding
         self.ratio = ratio
@@ -280,7 +284,7 @@ final class HostedPanes {
             rootView: Panes(
                 text: text, request: requestedRow.map(ScrollRequest.init(row:)), layout: layout,
                 wrapsLines: wrapsLines, scrollsPastEnd: scrollsPastEnd, controller: controller, underBars: underBars,
-                ratio: ratio))
+                ratio: ratio, decorations: decorations))
         window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
             backing: .buffered, defer: false)
@@ -300,7 +304,7 @@ final class HostedPanes {
         host.rootView = Panes(
             text: text, request: requestedRow.map(ScrollRequest.init(row:)), layout: layout,
             wrapsLines: wrapsLines, scrollsPastEnd: scrollsPastEnd, controller: controller, underBars: underBars,
-            ratio: ratio)
+            ratio: ratio, decorations: decorations)
         settle()
     }
 
@@ -352,6 +356,12 @@ final class HostedPanes {
             NSEvent.mouseEvent(
                 with: type, location: point, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
                 context: nil, eventNumber: 0, clickCount: clickCount, pressure: 1))
+    }
+
+    /// Gives the window, and so the panes, a new size, as a user resizing it does.
+    func resize(to size: NSSize) {
+        window.setContentSize(size)
+        settle()
     }
 
     /// Lays out and displays what needs it, as the run loop does between two events.
@@ -521,6 +531,8 @@ struct Panes: View {
     var underBars: CGFloat = 0
     /// The old pane's share of the length.
     var ratio: Binding<Double> = .constant(PaneSplit.evenRatio)
+    /// What the stages after the text found, drawn over both panes; nil leaves them plain.
+    var decorations: DiffDecorations?
 
     var body: some View {
         switch layout {
@@ -547,7 +559,9 @@ struct Panes: View {
     ) -> DiffTextView {
         DiffTextView(
             rendered: rendered, gutter: gutter, wrapsLines: wrapsLines, scrollRequest: request,
-            splitController: controller, scrollsPastEnd: scrollsPastEnd, underBars: underBars)
+            splitController: controller, scrollsPastEnd: scrollsPastEnd, underBars: underBars
+        )
+        .decorated(with: decorations)
     }
 }
 

@@ -250,6 +250,7 @@ package struct DiffTextView: NSViewRepresentable {
         coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
         coordinator.scrollMemory = scrollMemory
         if coordinator.rendered?.id != rendered.id {
+            coordinator.decorationStore.willShow(rendered, decorations: decorations)
             coordinator.show(rendered, keepingScroll: keepsScrollPosition, key: memoryKey)
             onDisplayed?()
         }
