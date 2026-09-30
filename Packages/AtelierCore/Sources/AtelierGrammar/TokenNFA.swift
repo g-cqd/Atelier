@@ -62,6 +62,14 @@ struct TokenNFA: Sendable, Equatable, Codable {
         case states, owners, starts, nullableTokens
     }
 
+    /// The automaton made of its parts, as a table file's reader read them.
+    init(states: [State], owners: [Int], starts: [Int], nullableTokens: Set<Int>) {
+        self.states = states
+        self.owners = owners
+        self.starts = starts
+        self.nullableTokens = nullableTokens
+    }
+
     static func == (lhs: TokenNFA, rhs: TokenNFA) -> Bool {
         lhs.states == rhs.states && lhs.owners == rhs.owners && lhs.starts == rhs.starts
             && lhs.nullableTokens == rhs.nullableTokens
