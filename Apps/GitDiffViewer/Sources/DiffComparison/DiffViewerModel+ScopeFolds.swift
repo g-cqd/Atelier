@@ -12,4 +12,18 @@ extension DiffViewerModel {
         timer.abandon()
         pipeline.changeFolds(request)
     }
+
+    /// Unfolds every scope, as turning the ribbon off does: with it off, nothing can fold one back.
+    func unfoldAllScopes() {
+        guard !foldedScopes.isEmpty else { return }
+        changeFolds(.unfold(Set(foldedScopes.keys)))
+    }
+
+    /// Follows every appearance setting that is not its own SwiftUI binding.
+    func followAppearanceSettingsChange() {
+        refreshCommitGroups(force: false)
+        followSemanticColorSetting()
+        followColorSettings()
+        if !settings.showsScopeRibbon { unfoldAllScopes() }
+    }
 }

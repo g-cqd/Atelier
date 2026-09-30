@@ -54,6 +54,8 @@ package struct DiffTextView: NSViewRepresentable {
     package var decorations: DiffDecorations?
     /// Called when the ribbon or a folding command folds or unfolds scopes (DIFF-03); nil folds nothing.
     package var onScopeFold: ((ScopeFoldRequest) -> Void)?
+    /// Whether the gutter's scope ribbon draws and takes the pointer's hover, and the folding keys work (DIFF-03).
+    package var showsScopeRibbon = true
     /// Where the pane reports the rows it shows, so they are decorated first.
     package var viewport: DecorationViewport?
     /// The text engine the window's panes use (text-renderer.md §4.3).
@@ -137,6 +139,7 @@ package struct DiffTextView: NSViewRepresentable {
         options.bouncesAtEdges = bouncesAtEdges
         options.underBars = underBars
         options.showsMinimap = showsMinimap
+        options.showsScopeRibbon = showsScopeRibbon
         options.splitController = splitController
         return options
     }
@@ -167,6 +170,14 @@ package struct DiffTextView: NSViewRepresentable {
         coordinator.gutterView?.onChangeToggle = onChangeToggle
         coordinator.gutterView?.onDiagnosticClick = onDiagnosticClick
         coordinator.gutterView?.onScopeFold = onScopeFold
+        if let gutterView = coordinator.gutterView, gutterView.showsScopeRibbon != showsScopeRibbon {
+            gutterView.showsScopeRibbon = showsScopeRibbon
+            if showsScopeRibbon, let textView = coordinator.textView {
+                coordinator.scopeHover.attach(to: textView, gutter: gutterView)
+            } else {
+                coordinator.scopeHover.detach()
+            }
+        }
         splitController?.syncsScrolling = syncsScrolling
         coordinator.hoverController.isEnabled = hoverEnabled
         coordinator.hoverController.resolve = hoverResolver

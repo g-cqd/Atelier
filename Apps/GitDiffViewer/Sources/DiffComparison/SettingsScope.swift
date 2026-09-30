@@ -135,6 +135,7 @@ extension SettingOverride {
             case Key.mode: SettingLabel.diffLayout
             case Key.wrapsLines: SettingLabel.wrapsLines
             case Key.wrapColumn: SettingLabel.wrapColumn
+            case Key.showsScopeRibbon: SettingLabel.showsScopeRibbon
             case Key.showsMinimap: SettingLabel.showsMinimap
             case Key.isolatesChanges: SettingLabel.isolatesChanges
             case Key.contextLines: SettingLabel.contextLines
@@ -165,6 +166,7 @@ extension SettingOverride {
             case Key.mode: settings.mode.displayName
             case Key.wrapsLines: onOff(settings.wrapsLines)
             case Key.wrapColumn: settings.wrapColumn > 0 ? "\(settings.wrapColumn) characters" : "Pane width"
+            case Key.showsScopeRibbon: onOff(settings.showsScopeRibbon)
             case Key.showsMinimap: onOff(settings.showsMinimap)
             case Key.isolatesChanges: onOff(settings.isolatesChanges)
             case Key.contextLines: "\(settings.contextLines)"

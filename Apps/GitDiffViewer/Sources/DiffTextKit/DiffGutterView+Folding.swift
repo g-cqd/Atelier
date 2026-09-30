@@ -173,19 +173,27 @@ extension DiffGutterView {
 }
 
 extension DiffTextView {
-    /// This pane with its scopes folded and unfolded through `onScopeFold` (DIFF-03).
-    package func folding(_ onScopeFold: @escaping (ScopeFoldRequest) -> Void) -> DiffTextView {
+    /// This pane with its scopes folded and unfolded through `onScopeFold`, and its ribbon shown or hidden
+    /// (DIFF-03).
+    package func folding(
+        showsRibbon: Bool = true, _ onScopeFold: @escaping (ScopeFoldRequest) -> Void
+    ) -> DiffTextView {
         var pane = self
         pane.onScopeFold = onScopeFold
+        pane.showsScopeRibbon = showsRibbon
         return pane
     }
 }
 
 extension EmbeddedDiffTextView {
-    /// This card pane with its scopes folded and unfolded through `onScopeFold` (DIFF-03).
-    package func folding(_ onScopeFold: @escaping (ScopeFoldRequest) -> Void) -> EmbeddedDiffTextView {
+    /// This card pane with its scopes folded and unfolded through `onScopeFold`, and its ribbon shown or hidden
+    /// (DIFF-03).
+    package func folding(
+        showsRibbon: Bool = true, _ onScopeFold: @escaping (ScopeFoldRequest) -> Void
+    ) -> EmbeddedDiffTextView {
         var pane = self
         pane.onScopeFold = onScopeFold
+        pane.showsScopeRibbon = showsRibbon
         return pane
     }
 }

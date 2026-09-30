@@ -15,6 +15,7 @@ struct SettingLabelTests {
             SettingLabel.granularity, SettingLabel.whitespace, SettingLabel.advancedMatching,
             SettingLabel.anchorsRareLines, SettingLabel.slidesToIndentation, SettingLabel.pairsSimilarLines,
             SettingLabel.cleansUpEmphasis, SettingLabel.detectsMovedBlocks, SettingLabel.wrapsLines,
+            SettingLabel.showsScopeRibbon,
             SettingLabel.diagnosticsEnabled, SettingLabel.showsHoverDocumentation, SettingLabel.analyzedSides,
             SettingLabel.refreshToolStatus, SettingLabel.appearanceScheme
         ]
