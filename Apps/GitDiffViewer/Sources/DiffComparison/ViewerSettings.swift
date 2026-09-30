@@ -94,6 +94,9 @@ package enum SettingsPane: String, CaseIterable, Identifiable, Codable {
     case tools
     /// Every known project, with what it overrides.
     case projects
+    /// Work-in-progress features, off by default (book D44): not project-scoped, so it takes no part in
+    /// ``SettingsCategory``'s per-tab "Restore Defaults".
+    case beta
 
     package var id: String { rawValue }
 }

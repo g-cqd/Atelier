@@ -63,4 +63,8 @@ package enum SettingLabel {
     package static let settingsScope = "Settings for"
     /// The whitespace mode and the advanced matching heuristics together, as one project override.
     package static let matching = "Whitespace and matching"
+
+    // MARK: Beta
+
+    package static let textEngine = "Text Engine"
 }
