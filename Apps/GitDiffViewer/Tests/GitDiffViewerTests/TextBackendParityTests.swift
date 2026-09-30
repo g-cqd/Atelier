@@ -62,14 +62,11 @@ struct TextBackendCoreTextGeometryTests {
     func `CoreText's row frames and document height match TextKit's, within half a point`(
         fixture: TextBackendParity.Fixture, width: CGFloat?
     ) throws {
-        // Disclosed M1 gaps, not this test's to hide: CoreText does not draw a gap's band yet (a core-engine
-        // extension, not an adapter fix); at 400 pt its line breaks land one line off TextKit's for two fixtures, a
-        // wrap-boundary calibration a follow-up measures and closes; and LayoutConfiguration.bidi is not wired into
-        // TextTypesetter yet, so bidiControls' forced-embedding placeholders do not typeset the same row count.
-        let isKnownGap =
-            fixture == .gapsAndFillers || (width == 400 && [.longLines, .rightToLeft, .bidiControls].contains(fixture))
-        if isKnownGap {
-            withKnownIssue("CoreTextBackend M1: gap bands, one wrap boundary and BidiPolicy are not yet at parity") {
+        // Disclosed M1 gap, not this test's to hide: CoreText does not draw a gap's band yet (a core-engine
+        // extension, not an adapter fix). The wrap-boundary and bidi gaps once measured at 400 pt for longLines,
+        // rightToLeft and bidiControls no longer reproduce as of D43's rebase, so only gapsAndFillers is left here.
+        if fixture == .gapsAndFillers {
+            withKnownIssue("CoreTextBackend M1: gap bands are not yet at parity") {
                 try TextBackendParity.checkCoreTextGeometry(fixture, width: width)
             }
         } else {
