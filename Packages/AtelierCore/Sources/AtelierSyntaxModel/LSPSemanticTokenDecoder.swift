@@ -79,8 +79,10 @@ public enum LSPSemanticTokenDecoder: Sendable {
                 tokenType = "variable"
             }
 
-            let role = CaptureRoleMapper.mapLSPTokenType(tokenType)
             let modifiers = decodeLSPModifiers(tokenModifierBits, legend: legend)
+            let role = CaptureRoleMapper.mapLSPTokenType(
+                tokenType, isDefaultLibrary: modifiers.contains(.defaultLibrary),
+                isDeclaration: modifiers.contains(.declaration) || modifiers.contains(.definition))
 
             tokens.append(
                 HighlightToken(
@@ -204,6 +206,7 @@ public enum LSPSemanticTokenDecoder: Sendable {
                 case "deprecated": modifiers.insert(.deprecated)
                 case "async": modifiers.insert(.async)
                 case "documentation": modifiers.insert(.documentation)
+                case "defaultLibrary": modifiers.insert(.defaultLibrary)
                 default: break
             }
         }

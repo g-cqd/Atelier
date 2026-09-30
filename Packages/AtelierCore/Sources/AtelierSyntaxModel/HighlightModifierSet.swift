@@ -13,4 +13,7 @@ public struct HighlightModifierSet: OptionSet, Sendable, Hashable {
     public static let deprecated = HighlightModifierSet(rawValue: 1 << 4)
     public static let async = HighlightModifierSet(rawValue: 1 << 5)
     public static let documentation = HighlightModifierSet(rawValue: 1 << 6)
+    /// The symbol belongs to a default or standard library: LSP's `defaultLibrary`, sourcekit-lsp's signal that a
+    /// name comes from outside the edited target, the only tier that can tell a project symbol from another one's.
+    public static let defaultLibrary = HighlightModifierSet(rawValue: 1 << 7)
 }

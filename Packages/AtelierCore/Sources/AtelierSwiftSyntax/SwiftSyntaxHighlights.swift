@@ -72,6 +72,9 @@ public enum SwiftSyntaxHighlights {
         let declarationNames: [Int: HighlightRole]
         /// The UTF-8 offset of the first byte of each name that refers to a type.
         let typeReferences: Set<Int>
+        /// The ranges of the attributes the compiler treats as a reserved word, `@` and all (D43-ish: a handful of
+        /// concurrency attributes Xcode colours as keywords, not as ``HighlightRole/attribute``).
+        let keywordAttributeRanges: [Range<Int>]
 
         /// Parses `source` and walks its tree once, on the caller's stack, which must be deep enough.
         /// - Throws: ``Failure/cancelled`` when asked to stop after the parse; ``Failure/tooManyUnexpectedBytes(share:)``
@@ -86,14 +89,20 @@ public enum SwiftSyntaxHighlights {
                 let share = Double(walk.unexpectedBytes) / Double(byteCount)
                 if share > SwiftSyntaxHighlights.maximumUnexpectedShare { throw .tooManyUnexpectedBytes(share: share) }
             }
-            self.init(tree: tree, declarationNames: walk.declarationNames, typeReferences: walk.typeReferences)
+            self.init(
+                tree: tree, declarationNames: walk.declarationNames, typeReferences: walk.typeReferences,
+                keywordAttributeRanges: walk.keywordAttributeRanges)
         }
 
         /// A tree parsed and walked already, as the facts' extraction has it.
-        init(tree: SourceFileSyntax, declarationNames: [Int: HighlightRole], typeReferences: Set<Int>) {
+        init(
+            tree: SourceFileSyntax, declarationNames: [Int: HighlightRole], typeReferences: Set<Int>,
+            keywordAttributeRanges: [Range<Int>] = []
+        ) {
             self.tree = tree
             self.declarationNames = declarationNames
             self.typeReferences = typeReferences
+            self.keywordAttributeRanges = keywordAttributeRanges
         }
 
         /// The syntactic tokens that meet `bytes`, a UTF-8 range of the text, or every token for nil; a token that
@@ -114,11 +123,20 @@ public enum SwiftSyntaxHighlights {
                 if seen & 0x3FF == 0, isCancelled() { throw .cancelled }
                 let range = classified.range.lowerBound.utf8Offset ..< classified.range.upperBound.utf8Offset
                 guard !range.isEmpty else { continue }
-                if classified.kind == .identifier, let role = declarationNames[range.lowerBound] {
+                // A parameter's external label classifies as `.argumentLabel`, like one at a call; its internal name,
+                // like every other declared name, classifies as `.identifier`. `declarationNames` already holds only
+                // the offsets ``TreeWalk`` chose to colour as a declaration, so it needs no further gate here.
+                if classified.kind == .identifier || classified.kind == .argumentLabel,
+                    let role = declarationNames[range.lowerBound]
+                {
                     tokens.append(
                         HighlightToken(byteRange: range, role: role, modifiers: .declaration, layer: .syntactic))
                 } else if classified.kind == .identifier, typeReferences.contains(range.lowerBound) {
                     tokens.append(HighlightToken(byteRange: range, role: .type, layer: .syntactic))
+                } else if classified.kind == .attribute,
+                    keywordAttributeRanges.contains(where: { $0.overlaps(range) })
+                {
+                    tokens.append(HighlightToken(byteRange: range, role: .keyword, layer: .syntactic))
                 } else if let role = SwiftSyntaxHighlights.role(of: classified.kind) {
                     tokens.append(HighlightToken(byteRange: range, role: role, layer: .syntactic))
                 }
@@ -135,12 +153,15 @@ public enum SwiftSyntaxHighlights {
             case .lineComment, .blockComment: .comment
             case .docLineComment, .docBlockComment: .commentDocumentation
             case .stringLiteral: .string
-            case .regexLiteral: .stringSpecial
+            case .regexLiteral: .regex
             case .integerLiteral: .number
             case .floatLiteral: .numberFloat
             case .type: .type
             case .operator: .operator
-            case .identifier, .dollarIdentifier, .argumentLabel, .editorPlaceholder, .none: nil
+            // An argument label or a parameter name colours as a variable's parameter, Xcode's own treatment at a
+            // declaration (SwiftSyntaxFacts) and at a call alike.
+            case .argumentLabel: .variableParameter
+            case .identifier, .dollarIdentifier, .editorPlaceholder, .none: nil
         }
     }
 }

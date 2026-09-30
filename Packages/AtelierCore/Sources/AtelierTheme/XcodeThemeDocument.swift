@@ -74,13 +74,17 @@ public struct XcodeThemeDocument: Sendable, Hashable {
         "xcode.syntax.identifier.function": [.function, .functionCall, .functionMethod],
         "xcode.syntax.identifier.function.system": [.functionBuiltin],
         "xcode.syntax.identifier.variable": [.variable, .property],
-        "xcode.syntax.identifier.variable.system": [.variableBuiltin],
+        "xcode.syntax.identifier.variable.system": [.variableBuiltin, .propertyBuiltin],
         "xcode.syntax.identifier.constant": [.constant, .boolean],
         "xcode.syntax.identifier.constant.system": [.constantBuiltin],
         "xcode.syntax.identifier.macro": [.functionMacro],
         "xcode.syntax.identifier.macro.system": [.functionMacro],
-        "xcode.syntax.declaration.type": [.type],
-        "xcode.syntax.declaration.other": [.function]
+        "xcode.syntax.regex": [.regex],
+        // A type's or a function's own name at its declaration: distinct from every reference to it
+        // (`identifier.type`/`identifier.function` above), which is why these two keys are listed last and name
+        // roles none of the earlier keys also name.
+        "xcode.syntax.declaration.type": [.typeDeclaration],
+        "xcode.syntax.declaration.other": [.declarationOther]
     ]
 
     private struct File: Decodable {
