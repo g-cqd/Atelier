@@ -54,7 +54,8 @@ public enum SwiftSyntaxFacts {
         var highlights: [HighlightToken]?
         if share <= SwiftSyntaxHighlights.maximumUnexpectedShare {
             let parsed = SwiftSyntaxHighlights.Parsed(
-                tree: tree, declarationNames: walk.declarationNames, typeReferences: walk.typeReferences)
+                tree: tree, declarationNames: walk.declarationNames, typeReferences: walk.typeReferences,
+                keywordAttributeRanges: walk.keywordAttributeRanges)
             do {
                 highlights = try parsed.tokens(in: nil, isCancelled: isCancelled)
             } catch {
@@ -76,6 +77,8 @@ final class TreeWalk: SyntaxVisitor {
     private(set) var declarationNames: [Int: HighlightRole] = [:]
     /// The UTF-8 offset of each name that refers to a type: where a type goes, or capitalized in an expression.
     private(set) var typeReferences: Set<Int> = []
+    /// The ranges of the attributes the compiler treats as a reserved word (``keywordAttributeNames``), `@` and all.
+    private(set) var keywordAttributeRanges: [Range<Int>] = []
     private(set) var unexpectedBytes = 0
     private(set) var declarations: [SyntaxDeclaration] = []
     /// The scopes, by their opening brace: the walk visits an enclosing node before the nodes it holds.
@@ -148,40 +151,40 @@ final class TreeWalk: SyntaxVisitor {
     }
 
     override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-        declare(node, name: node.name, role: .type, kind: .type)
+        declare(node, name: node.name, role: .typeDeclaration, kind: .type)
     }
 
     override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
-        declare(node, name: node.name, role: .type, kind: .type)
+        declare(node, name: node.name, role: .typeDeclaration, kind: .type)
     }
 
     override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
-        declare(node, name: node.name, role: .type, kind: .type)
+        declare(node, name: node.name, role: .typeDeclaration, kind: .type)
     }
 
     override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
-        declare(node, name: node.name, role: .type, kind: .type)
+        declare(node, name: node.name, role: .typeDeclaration, kind: .type)
     }
 
     override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
-        declare(node, name: node.name, role: .type, kind: .type)
+        declare(node, name: node.name, role: .typeDeclaration, kind: .type)
     }
 
     override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
-        declare(node, name: node.name, role: .type, kind: .typeAlias)
+        declare(node, name: node.name, role: .typeDeclaration, kind: .typeAlias)
     }
 
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-        declare(node, name: node.name, role: .function, kind: .function)
+        declare(node, name: node.name, role: .declarationOther, kind: .function)
     }
 
     override func visit(_ node: MacroDeclSyntax) -> SyntaxVisitorContinueKind {
-        declare(node, name: node.name, role: .function, kind: .macro)
+        declare(node, name: node.name, role: .declarationOther, kind: .macro)
     }
 
     /// Coloured as a type's name; hover has never listed an associated type, and still does not.
     override func visit(_ node: AssociatedTypeDeclSyntax) -> SyntaxVisitorContinueKind {
-        declarationNames[node.name.positionAfterSkippingLeadingTrivia.utf8Offset] = .type
+        declarationNames[node.name.positionAfterSkippingLeadingTrivia.utf8Offset] = .typeDeclaration
         return .visitChildren
     }
 
@@ -192,6 +195,30 @@ final class TreeWalk: SyntaxVisitor {
 
     override func visit(_ node: SubscriptDeclSyntax) -> SyntaxVisitorContinueKind {
         if collectsDeclarations { record(DeclSyntax(node), name: "subscript", kind: .subscript) }
+        return .visitChildren
+    }
+
+    /// A parameter's own name at its declaration, the label and the internal name alike, coloured as Xcode's
+    /// `declaration.other`, distinct from a use of the same name; `_`, the wildcard that hides a label, colours
+    /// nothing.
+    override func visit(_ node: FunctionParameterSyntax) -> SyntaxVisitorContinueKind {
+        for name in [node.firstName, node.secondName] {
+            guard let name, name.tokenKind != .wildcard else { continue }
+            declarationNames[name.positionAfterSkippingLeadingTrivia.utf8Offset] = .declarationOther
+        }
+        return .visitChildren
+    }
+
+    /// `@concurrent`, and any other attribute the compiler treats as a reserved word rather than an arbitrary
+    /// annotation: Xcode colours it as a keyword, not as ``HighlightRole/attribute``.
+    override func visit(_ node: AttributeSyntax) -> SyntaxVisitorContinueKind {
+        if let name = node.attributeName.as(IdentifierTypeSyntax.self)?.name.text,
+            Self.keywordAttributeNames.contains(name)
+        {
+            let start = node.positionAfterSkippingLeadingTrivia.utf8Offset
+            let end = node.endPositionBeforeTrailingTrivia.utf8Offset
+            if end > start { keywordAttributeRanges.append(start ..< end) }
+        }
         return .visitChildren
     }
 
@@ -225,6 +252,10 @@ final class TreeWalk: SyntaxVisitor {
         }
         return .visitChildren
     }
+
+    /// Attributes the compiler recognises as a reserved word (image 1): the Swift 6.2 concurrency attribute that
+    /// chooses which actor a function's callers run it on, coloured as a keyword by Xcode's own indexer.
+    private static let keywordAttributeNames: Set<String> = ["concurrent"]
 
     private func declare(
         _ node: some DeclSyntaxProtocol, name: TokenSyntax, role: HighlightRole, kind: SyntaxDeclaration.Kind
