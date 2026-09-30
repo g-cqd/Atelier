@@ -13,11 +13,11 @@ import Testing
 @MainActor
 @Suite(.mainActorLane)
 struct ColourPaneCoverageTests {
-    private static let count = 240
-    private static let old = (1 ... count).map { "let value\($0) = \($0)" }.joined(separator: "\n") + "\n"
-    private static let new = old.replacingOccurrences(of: "let value30 = 30\n", with: "let value30 = 31\n")
+    static let count = 240
+    static let old = (1 ... count).map { "let value\($0) = \($0)" }.joined(separator: "\n") + "\n"
+    static let new = old.replacingOccurrences(of: "let value30 = 30\n", with: "let value30 = 31\n")
 
-    private static func text(layout: RenderLayout = .full) -> PaneText {
+    static func text(layout: RenderLayout = .full) -> PaneText {
         let prepared = PreparedDiff(
             FileDiffInput(title: "a.swift", oldText: old, newText: new, language: .swift), granularity: .word)
         let rendered = DiffRenderer.render(
@@ -26,7 +26,7 @@ struct ColourPaneCoverageTests {
     }
 
     /// The lexer's colour of both sides, as the pipeline lands it.
-    private static func decorations() async -> DiffDecorations {
+    static func decorations() async -> DiffDecorations {
         DecorationFixtures.colors(
             old: await DecorationFixtures.lexed(old, language: .swift),
             new: await DecorationFixtures.lexed(new, language: .swift))
@@ -34,7 +34,7 @@ struct ColourPaneCoverageTests {
 
     /// Expects every numbered row laid out in each pane's viewport to start in the keyword's colour, and a changed
     /// row's fragment to keep its diff background.
-    private static func expectColoured(_ sut: HostedPanes, _ moment: String) throws {
+    static func expectColoured(_ sut: HostedPanes, _ moment: String) throws {
         for pane in try sut.panes() {
             let layoutManager = try #require(pane.textView.textLayoutManager)
             let content = try #require(layoutManager.textContentManager)
@@ -74,10 +74,15 @@ struct ColourPaneCoverageTests {
         }
     }
 
-    @Test(arguments: PaneLayout.allCases)
+    @Test(arguments: [PaneLayout.inline, .stacked])
     func `every row shown keeps its syntax colour through scrolls, resizes and renders`(layout: PaneLayout)
         async throws
     {
+        try await Self.checkEveryMoment(layout)
+    }
+
+    /// Checks the rows shown in `layout` after first paint, a scroll to the end, a resize and a new render.
+    static func checkEveryMoment(_ layout: PaneLayout) async throws {
         let decorations = await Self.decorations()
         let sut = HostedPanes(showing: Self.text(), layout: layout, wrapsLines: true, decorations: decorations)
         try await sut.alignSides()
@@ -95,7 +100,7 @@ struct ColourPaneCoverageTests {
     }
 
     /// The rows laid out in `textView`'s viewport that show a line and do not start in the keyword's colour.
-    private static func uncolouredRows(in textView: NSTextView, showing rendered: RenderedText) throws -> [Int] {
+    static func uncolouredRows(in textView: NSTextView, showing rendered: RenderedText) throws -> [Int] {
         let layoutManager = try #require(textView.textLayoutManager)
         let content = try #require(layoutManager.textContentManager)
         let start = layoutManager.documentRange.location
@@ -125,18 +130,34 @@ struct ColourPaneCoverageTests {
         }
         return missing
     }
+}
 
+/// Side by side, where the split view's alignment scrolls the rows a new render placed: split from
+/// ``ColourPaneCoverageTests`` to keep each suite within the main thread's budget.
+@MainActor
+@Suite(.mainActorLane)
+struct ColourSideBySideCoverageTests {
+    @Test
+    func `every row shown side by side keeps its syntax colour through scrolls, resizes and renders`() async throws {
+        try await ColourPaneCoverageTests.checkEveryMoment(.sideBySide)
+    }
+}
+
+/// A text edit that lays rows out again, as the split view's row spacing does, keeps their colour.
+@MainActor
+@Suite(.mainActorLane)
+struct ColourEditCoverageTests {
     @Test
     func `rows keep their colour when an edit of the text's attributes lays them out again`() async throws {
-        let rendered = try #require(Self.text().rendered.new)
-        let pane = try HostedDecoratedPane(rendered: rendered, decorations: await Self.decorations())
+        let rendered = try #require(ColourPaneCoverageTests.text().rendered.new)
+        let pane = try HostedDecoratedPane(rendered: rendered, decorations: await ColourPaneCoverageTests.decorations())
         let textView = try pane.textView
-        #expect(try Self.uncolouredRows(in: textView, showing: rendered).isEmpty)
+        #expect(try ColourPaneCoverageTests.uncolouredRows(in: textView, showing: rendered).isEmpty)
 
         let storage = try #require(textView.textContentStorage)
         _ = RowSpacing.apply(Array(repeating: 6, count: rendered.rows.count), to: storage, rendered: rendered)
         pane.settle()
 
-        #expect(try Self.uncolouredRows(in: textView, showing: rendered) == [])
+        #expect(try ColourPaneCoverageTests.uncolouredRows(in: textView, showing: rendered) == [])
     }
 }
