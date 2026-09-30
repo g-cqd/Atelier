@@ -61,12 +61,62 @@ struct SwiftSyntaxHighlightsTests {
         #expect(zip(tokens, tokens.dropFirst()).allSatisfy { $0.byteRange.upperBound <= $1.byteRange.lowerBound })
         #expect(Self.tokens(tokens, spelling: "/// A doc comment.", in: source).map(\.role) == [.commentDocumentation])
         #expect(Self.tokens(tokens, spelling: "// a comment", in: source).map(\.role) == [.comment])
-        #expect(Self.tokens(tokens, spelling: "Point", in: source).map(\.role) == [.type, .type])
+        // "Point" declares the struct the first time, at `struct Point`, and refers to it the second, as the
+        // function's return type: Xcode colours the two differently (`declaration.type` vs `identifier.type`).
+        #expect(Self.tokens(tokens, spelling: "Point", in: source).map(\.role) == [.typeDeclaration, .type])
         #expect(Self.tokens(tokens, spelling: "Equatable", in: source).map(\.role) == [.type])
         #expect(Self.tokens(tokens, spelling: "1.5", in: source).map(\.role) == [.numberFloat])
-        #expect(Self.tokens(tokens, spelling: "moved", in: source).map(\.role) == [.function])
-        #expect(Self.tokens(tokens, spelling: "delta", in: source).isEmpty)
+        // "moved" declares the function; Xcode's `declaration.other`, distinct from a call to it.
+        #expect(Self.tokens(tokens, spelling: "moved", in: source).map(\.role) == [.declarationOther])
+        // "delta" is a parameter's own name at its declaration, coloured the same as the function's own name.
+        #expect(Self.tokens(tokens, spelling: "delta", in: source).map(\.role) == [.declarationOther])
         #expect(Self.tokens(tokens, spelling: "self", in: source).map(\.role) == [.keyword])
+    }
+
+    @Test
+    func `a type's declaration, a function's declaration and their parameters colour distinctly from a use`() throws {
+        let source = """
+            struct Widget {
+                func resize(to scale: Double) -> Widget { self }
+            }
+            func make(with scale: Double) -> Widget { Widget().resize(to: scale) }
+            """
+        let tokens = try SwiftSyntaxHighlights.tokens(in: source)
+
+        // "Widget" declares the struct once, then names a type three more times: two return types and a call taken
+        // for a type, as the lexer and Xcode take a capitalized name with no semantic tokens to say otherwise.
+        // Xcode colours the declaration differently from every one of those references.
+        #expect(
+            Self.tokens(tokens, spelling: "Widget", in: source).map(\.role) == [.typeDeclaration, .type, .type, .type])
+        // "resize" declares the method once; nothing tells a lowercase name used after `.` from a plain member
+        // access without semantic tokens, so the call stays untokenized here, as it already did before this change.
+        #expect(Self.tokens(tokens, spelling: "resize", in: source).map(\.role) == [.declarationOther])
+        // "make" only declares a free function; nothing in this source calls it.
+        #expect(Self.tokens(tokens, spelling: "make", in: source).map(\.role) == [.declarationOther])
+        // "scale" is a parameter's own name at its declaration, twice; used as a plain argument at the call, it
+        // colours no differently than any other unresolved name would.
+        #expect(
+            Self.tokens(tokens, spelling: "scale", in: source).map(\.role) == [.declarationOther, .declarationOther])
+        // "with" is an argument label at its declaration; "to" is the same label, first at its declaration and then
+        // at the call, each Xcode's own place for `variable.parameter`.
+        #expect(Self.tokens(tokens, spelling: "with", in: source).map(\.role) == [.declarationOther])
+        #expect(Self.tokens(tokens, spelling: "to", in: source).map(\.role) == [.declarationOther, .variableParameter])
+    }
+
+    @Test
+    func `a regex literal colours distinctly from a string, and @concurrent as a keyword`() throws {
+        let source = #"""
+            @concurrent
+            func matches(_ text: String) -> Bool {
+                let pattern = /[a-z]+/
+                return text.contains(pattern) && text == "z"
+            }
+            """#
+        let tokens = try SwiftSyntaxHighlights.tokens(in: source)
+
+        #expect(Self.tokens(tokens, spelling: "@concurrent", in: source).map(\.role) == [.keyword])
+        #expect(Self.tokens(tokens, spelling: "/[a-z]+/", in: source).map(\.role) == [.regex])
+        #expect(Self.tokens(tokens, spelling: "\"z\"", in: source).map(\.role) == [.string])
     }
 
     @Test

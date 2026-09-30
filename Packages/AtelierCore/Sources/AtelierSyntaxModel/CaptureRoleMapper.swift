@@ -31,9 +31,37 @@ public enum CaptureRoleMapper: Sendable {
     }
 
     /// Map an LSP semantic token type name to a role.
-    public static func mapLSPTokenType(_ tokenType: String) -> HighlightRole {
-        lspTokenTypeLookup[tokenType] ?? .variable
+    /// - Parameters:
+    ///   - tokenType: The LSP semantic token type name, such as `"type"` or `"property"`.
+    ///   - isDefaultLibrary: LSP's `defaultLibrary` modifier, sourcekit-lsp's signal that the symbol is declared
+    ///     outside the edited target: the role for a type, a function, a method, a variable, a property or a
+    ///     constant becomes its "other module" variant, the only tier able to draw that distinction from Xcode's own
+    ///     `identifier.*.system` colours.
+    ///   - isDeclaration: LSP's `declaration` or `definition` modifier, on the token that names what it declares: a
+    ///     type or a function's own name takes Xcode's `declaration.type`/`declaration.other`, distinct from every
+    ///     later reference to the same name.
+    /// - Returns: The role `tokenType` maps to, refined by `isDefaultLibrary` and `isDeclaration`.
+    public static func mapLSPTokenType(
+        _ tokenType: String, isDefaultLibrary: Bool = false, isDeclaration: Bool = false
+    ) -> HighlightRole {
+        let role = lspTokenTypeLookup[tokenType] ?? .variable
+        if isDeclaration, let declared = declarationVariant[role] { return declared }
+        guard isDefaultLibrary else { return role }
+        return otherModuleVariant[role] ?? role
     }
+
+    /// The role a project-module role becomes once `defaultLibrary` marks it as declared elsewhere.
+    private static let otherModuleVariant: [HighlightRole: HighlightRole] = [
+        .type: .typeBuiltin, .function: .functionBuiltin, .functionMethod: .functionBuiltin,
+        .functionCall: .functionBuiltin, .variable: .variableBuiltin, .property: .propertyBuiltin,
+        .constant: .constantBuiltin
+    ]
+
+    /// The role a type's or a function's own name takes at its declaration, distinct from a use of the same name; a
+    /// variable, a property or a constant has no such distinction in Xcode's own categories.
+    private static let declarationVariant: [HighlightRole: HighlightRole] = [
+        .type: .typeDeclaration, .function: .declarationOther, .functionMethod: .declarationOther
+    ]
 
     // MARK: - Lookup tables
 
@@ -48,6 +76,7 @@ public enum CaptureRoleMapper: Sendable {
         "type": (.type, []),
         "type.builtin": (.typeBuiltin, []),
         "type.parameter": (.typeParameter, []),
+        "type.declaration": (.typeDeclaration, []),
 
         // Functions
         "function": (.function, []),
@@ -68,6 +97,7 @@ public enum CaptureRoleMapper: Sendable {
         "string.special": (.stringSpecial, []),
         "string.special.key": (.stringSpecial, []),
         "string.escape": (.stringEscape, []),
+        "string.regex": (.regex, []),
 
         // Numbers
         "number": (.number, []),
@@ -139,7 +169,7 @@ public enum CaptureRoleMapper: Sendable {
         "comment": .comment,
         "string": .string,
         "number": .number,
-        "regexp": .stringSpecial,
+        "regexp": .regex,
         "operator": .operator,
         "decorator": .attribute
     ]

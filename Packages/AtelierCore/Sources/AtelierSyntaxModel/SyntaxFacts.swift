@@ -160,7 +160,7 @@ public struct SymbolKinds: Sendable, Equatable {
     public static func kind(of role: HighlightRole) -> Kind? {
         switch role {
             case .keyword, .keywordFunction, .keywordReturn, .keywordOperator: .keyword
-            case .string, .stringSpecial, .stringEscape, .number, .numberFloat, .boolean, .escape: .literal
+            case .string, .stringSpecial, .stringEscape, .number, .numberFloat, .regex, .boolean, .escape: .literal
             case .comment, .commentDocumentation: .comment
             case .operator, .punctuationBracket, .punctuationDelimiter, .punctuationSpecial: nil
             default: .symbol
