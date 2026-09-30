@@ -47,7 +47,7 @@ public enum SwiftSyntaxFacts {
     static func extractInPlace(_ text: String, isCancelled: () -> Bool) -> SyntaxFacts? {
         let tree = Parser.parse(source: text)
         if isCancelled() { return nil }
-        let walk = TreeWalk(collectsDeclarations: true)
+        let walk = TreeWalk(collectsDeclarations: true, collectsScopes: true)
         walk.walk(tree)
         let byteCount = text.utf8.count
         let share = byteCount > 0 ? Double(walk.unexpectedBytes) / Double(byteCount) : 0
@@ -63,22 +63,61 @@ public enum SwiftSyntaxFacts {
         if isCancelled() { return nil }
         return SyntaxFacts(
             tokenBoundaries: SwiftSyntaxTokenRanges.tokenBoundaries(of: tree, text: text),
-            declarations: walk.declarations, highlights: highlights, unexpectedShare: share)
+            declarations: walk.declarations, highlights: highlights, unexpectedShare: share, scopes: walk.scopes)
     }
 }
 
 /// One walk over a tree for what the classification alone does not tell: where each declaration's name starts and
-/// what it declares, how many bytes lie in unexpected nodes, and, when asked, every declaration with its doc comment.
+/// what it declares, how many bytes lie in unexpected nodes, and, when asked, every declaration with its doc comment
+/// and every brace pair that opens a scope (DIFF-03).
 final class TreeWalk: SyntaxVisitor {
     /// The colour role of each declaration's name, by the UTF-8 offset of its first byte.
     private(set) var declarationNames: [Int: HighlightRole] = [:]
     private(set) var unexpectedBytes = 0
     private(set) var declarations: [SyntaxDeclaration] = []
+    /// The scopes, by their opening brace: the walk visits an enclosing node before the nodes it holds.
+    private(set) var scopes: [SyntaxScope] = []
     private let collectsDeclarations: Bool
+    private let collectsScopes: Bool
 
-    init(collectsDeclarations: Bool) {
+    init(collectsDeclarations: Bool, collectsScopes: Bool = false) {
         self.collectsDeclarations = collectsDeclarations
+        self.collectsScopes = collectsScopes
         super.init(viewMode: .sourceAccurate)
+    }
+
+    override func visit(_ node: MemberBlockSyntax) -> SyntaxVisitorContinueKind {
+        scope(node.leftBrace, node.rightBrace, kind: .type)
+    }
+
+    override func visit(_ node: CodeBlockSyntax) -> SyntaxVisitorContinueKind {
+        let isBody =
+            node.parent.map {
+                $0.is(FunctionDeclSyntax.self) || $0.is(InitializerDeclSyntax.self)
+                    || $0.is(DeinitializerDeclSyntax.self) || $0.is(AccessorDeclSyntax.self)
+            } ?? false
+        return scope(node.leftBrace, node.rightBrace, kind: isBody ? .function : .controlFlow)
+    }
+
+    override func visit(_ node: AccessorBlockSyntax) -> SyntaxVisitorContinueKind {
+        scope(node.leftBrace, node.rightBrace, kind: .function)
+    }
+
+    override func visit(_ node: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+        scope(node.leftBrace, node.rightBrace, kind: .closure)
+    }
+
+    override func visit(_ node: SwitchExprSyntax) -> SyntaxVisitorContinueKind {
+        scope(node.leftBrace, node.rightBrace, kind: .controlFlow)
+    }
+
+    /// Records the scope `left` and `right` enclose, when both braces are written.
+    private func scope(_ left: TokenSyntax, _ right: TokenSyntax, kind: SyntaxScope.Kind) -> SyntaxVisitorContinueKind {
+        guard collectsScopes, left.presence == .present, right.presence == .present else { return .visitChildren }
+        let start = left.positionAfterSkippingLeadingTrivia.utf8Offset
+        let end = right.endPositionBeforeTrailingTrivia.utf8Offset
+        if end > start { scopes.append(SyntaxScope(range: start ..< end, kind: kind)) }
+        return .visitChildren
     }
 
     override func visit(_ node: UnexpectedNodesSyntax) -> SyntaxVisitorContinueKind {
