@@ -30,6 +30,8 @@ struct DiagnosticDiffTextView: View {
 
     /// This pane's findings, since its rows are its own.
     @State private var diagnostics = PaneDiagnostics()
+    /// The window's text engine: a switch builds the pane again with the new one (text-renderer.md §4.3).
+    @Environment(\.diffTextBackend) private var textBackend
 
     var body: some View {
         DiffTextView(
@@ -50,6 +52,7 @@ struct DiagnosticDiffTextView: View {
         .decorated(with: model.decorations(for: rendered), viewport: model.decorationViewport)
         .folding { model.changeFolds($0) }
         .followingDiagnostics(of: rendered, in: model, into: diagnostics)
+        .id(textBackend)
     }
 }
 

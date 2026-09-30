@@ -47,6 +47,7 @@ struct GitDiffViewerApp: App {
                 WelcomeCommand()
             }
             SidebarCommands()
+            DevelopCommands()
         }
 
         WindowGroup(id: WindowID.comparison, for: LaunchConfiguration.self) { $configuration in
