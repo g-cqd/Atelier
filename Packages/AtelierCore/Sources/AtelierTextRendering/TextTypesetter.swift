@@ -17,6 +17,15 @@ public enum TextTypesetter {
     public static func layout(
         _ rows: Range<RowIndex>, of text: StyledText, configuration: LayoutConfiguration
     ) async throws(CancellationError) -> [RowGeometry] {
+        try layoutSynchronously(rows, of: text, configuration: configuration)
+    }
+
+    /// ``layout(_:of:configuration:)``'s synchronous core: nothing in it ever suspends, so a caller that already
+    /// needs an immediate answer off an `async` boundary — a gutter, a minimap or hover hit-testing reading geometry
+    /// from the main actor — can call it directly instead of awaiting a child task for cheap, bounded ranges.
+    public static func layoutSynchronously(
+        _ rows: Range<RowIndex>, of text: StyledText, configuration: LayoutConfiguration
+    ) throws(CancellationError) -> [RowGeometry] {
         let baseFont = Self.font(for: text.styles.font, weight: nil, isItalic: false)
         var fontCache: [FontKey: CTFont] = [FontKey(font: text.styles.font, weight: nil, isItalic: false): baseFont]
         let wrapWidth = Self.wrapWidth(configuration: configuration, cellAdvance: Self.cellAdvance(of: baseFont))
@@ -51,6 +60,18 @@ public enum TextTypesetter {
         _ rows: Range<RowIndex>, of text: StyledText, decorations: [DecorationLayer],
         configuration: LayoutConfiguration, appearance: Appearance, colorSpace: CGColorSpace, scale: Double
     ) async throws(CancellationError) -> RenderedTile {
+        try renderSynchronously(
+            rows, of: text, decorations: decorations, configuration: configuration, appearance: appearance,
+            colorSpace: colorSpace, scale: scale)
+    }
+
+    /// ``render(_:of:decorations:configuration:appearance:colorSpace:scale:)``'s synchronous core; see
+    /// ``layoutSynchronously(_:of:configuration:)``.
+    // swiftlint:disable:next function_parameter_count
+    public static func renderSynchronously(
+        _ rows: Range<RowIndex>, of text: StyledText, decorations: [DecorationLayer],
+        configuration: LayoutConfiguration, appearance: Appearance, colorSpace: CGColorSpace, scale: Double
+    ) throws(CancellationError) -> RenderedTile {
         let baseFont = Self.font(for: text.styles.font, weight: nil, isItalic: false)
         var fontCache: [FontKey: CTFont] = [FontKey(font: text.styles.font, weight: nil, isItalic: false): baseFont]
         let wrapWidth = Self.wrapWidth(configuration: configuration, cellAdvance: Self.cellAdvance(of: baseFont))
@@ -127,7 +148,11 @@ public enum TextTypesetter {
         guard let image = context.makeImage() else { throw CancellationError() }
         return RenderedTile(rows: rows, image: image, geometry: geometry)
     }
+}
 
+// The typesetting and drawing helpers, split from ``TextTypesetter``'s own body only to stay under the file's
+// type-body-length limit; there is no visibility change, since `private` is file-scoped.
+extension TextTypesetter {
     // MARK: Fonts
 
     private struct FontKey: Hashable {
