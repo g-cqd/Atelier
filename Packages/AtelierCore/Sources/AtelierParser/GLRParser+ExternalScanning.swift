@@ -14,7 +14,7 @@ extension GLRParser {
     /// Rejects malformed scanner metadata before a parse branch indexes its validity row.
     func validateExternalTable() throws(ParseError) {
         guard parseTable.validExternals.count == parseTable.stateCount,
-            parseTable.validExternals.allSatisfy({ $0.count == parseTable.externalNames.count }),
+            parseTable.validExternals.rowsAll(haveCount: parseTable.externalNames.count),
             parseTable.externalSymbols.count == parseTable.externalNames.count,
             parseTable.externalIsExtra.count == parseTable.externalNames.count
         else { throw .parsingFailed("External scanner table is inconsistent") }

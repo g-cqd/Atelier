@@ -62,7 +62,8 @@ extension ExternalValidity {
     }
 
     /// Whether every state's row has `count` externals.
-    func rowsAll(haveCount count: Int) -> Bool {
+    /// - Complexity: O(r) in the distinct rows, a few dozen at most, not in the states.
+    public func rowsAll(haveCount count: Int) -> Bool {
         distinctRows.allSatisfy { $0.count == count }
     }
 }
