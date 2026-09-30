@@ -147,9 +147,9 @@ extension DiffGutterView {
 @MainActor
 final class ChangeMarkerElement: NSAccessibilityElement {
     let key: ChangeKey
-    private let action: () -> Void
+    private nonisolated let action: @MainActor @Sendable () -> Void
 
-    init(change: RenderedChange, frame: NSRect, parent: NSView, action: @escaping () -> Void) {
+    init(change: RenderedChange, frame: NSRect, parent: NSView, action: @escaping @MainActor @Sendable () -> Void) {
         key = change.key
         self.action = action
         super.init()
@@ -160,8 +160,10 @@ final class ChangeMarkerElement: NSAccessibilityElement {
         setAccessibilityFrameInParentSpace(frame)
     }
 
+    /// AppKit declares the press nonisolated but sends it on the main thread, where the action runs.
     override func accessibilityPerformPress() -> Bool {
-        action()
+        let action = self.action
+        MainActor.assumeIsolated { action() }
         return true
     }
 
