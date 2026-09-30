@@ -38,6 +38,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         ((_ rowIndex: Int, _ findings: [Finding], _ anchorRect: NSRect, _ in: NSView) -> Void)?
     /// What the stages after the text found for its sides, drawn over it as they land (``decorated(with:viewport:)``).
     package var decorations: DiffDecorations?
+    /// Called when the ribbon or a folding command folds or unfolds scopes (DIFF-03); nil folds nothing.
+    package var onScopeFold: ((ScopeFoldRequest) -> Void)?
     /// Where the pane reports the rows it shows, so they are decorated first.
     package var viewport: DecorationViewport?
 
@@ -155,6 +157,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         pane.gutterView.onGapDrag = onGapDrag
         pane.gutterView.onChangeToggle = onChangeToggle
         pane.gutterView.onDiagnosticClick = onDiagnosticClick
+        pane.gutterView.onScopeFold = onScopeFold
         let elasticity: NSScrollView.Elasticity = bouncesAtEdges ? .automatic : .none
         if let scrollView = pane.contentView as? NSScrollView, scrollView.horizontalScrollElasticity != elasticity {
             scrollView.horizontalScrollElasticity = elasticity

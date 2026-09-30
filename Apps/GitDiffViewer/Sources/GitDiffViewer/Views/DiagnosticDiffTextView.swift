@@ -48,6 +48,7 @@ struct DiagnosticDiffTextView: View {
             underBars: underBars
         )
         .decorated(with: model.decorations(for: rendered), viewport: model.decorationViewport)
+        .folding { model.changeFolds($0) }
         .followingDiagnostics(of: rendered, in: model, into: diagnostics)
     }
 }

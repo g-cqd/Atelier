@@ -1,8 +1,8 @@
 package import DiffCore
 package import DiffRendering
 
-/// What the user reveals of what is published: the rows around a gap (book DIFF-02), and the changes the compact
-/// inline view discloses (book DIFF-04), kept alike.
+/// What the user reveals of what is published: the rows around a gap (book DIFF-02), the changes the compact inline
+/// view discloses (book DIFF-04), and the scopes folded (DIFF-03), kept alike.
 extension RenderPipeline {
     /// Reveals `expansion` around one gap and renders only the file it belongs to, at once on the main actor: one
     /// file's cost per drag step, and no `.finished`, since nothing else changed.
@@ -53,7 +53,35 @@ extension RenderPipeline {
     func renderOptions(for target: Target) -> DiffRenderer.Options {
         var options = options
         options.disclosedChanges = carriedDisclosures(into: target)
+        options.foldedScopes = carriedFolds(into: target)
         return options
+    }
+
+    /// The folded scopes `target` keeps, as ``carriedExpansions(into:)`` keeps revealed lines (DIFF-03).
+    func carriedFolds(into target: Target) -> [ScopeFoldKey: Int] {
+        foldedScopes.filter { carries($0.key.fileIndex, into: target) }
+    }
+
+    /// Folds or unfolds scopes as `request` asks, and renders again the files whose folds changed, keeping the scroll
+    /// position (DIFF-03): one file at once, as a gap drag does, more off the main actor. Colour, emphasis and the
+    /// ribbon come back at once, since every decoration is kept by source line.
+    package func changeFolds(_ request: ScopeFoldRequest) {
+        var updated = foldedScopes
+        switch request {
+            case .fold(let folds): updated.merge(folds) { $1 }
+            case .unfold(let keys): for key in keys { updated[key] = nil }
+        }
+        guard updated != foldedScopes else { return }
+        let changed = Set(
+            Set(updated.keys).symmetricDifference(foldedScopes.keys).map(\.fileIndex)
+                + updated.filter { foldedScopes[$0.key] != $0.value }.map(\.key.fileIndex))
+        foldedScopes = updated
+        guard let target else { return }
+        if changed.count == 1, let index = changed.first, prepared.indices.contains(index) {
+            rerender([index], of: target, keepingScroll: true)
+        } else {
+            refresh(keepingScroll: true)
+        }
     }
 
     /// The disclosed changes `target` keeps, as ``carriedExpansions(into:)`` keeps revealed lines: those of every file
