@@ -105,28 +105,46 @@ package struct DiffTextView: NSViewRepresentable {
         Coordinator()
     }
 
+    /// Builds this window's pane through the backend seam (text-renderer.md §4.2): a `TextKit2Pane` built with its
+    /// full options directly, since the seam's minimal `makePane(gutter:)` only covers what every backend shares; a
+    /// CoreText pane through the backend, which needs none of TextKit 2's own construction-time options. Both
+    /// backends' `view` is a `DiffPaneView`, so the gutter and minimap wiring below stays one path.
     package func makeNSView(context: Context) -> DiffPaneView {
         let coordinator = context.coordinator
-        let pane =
+        let pane: any DiffTextPane =
             switch textBackend {
                 case .textKit2: TextKit2Pane(options: paneOptions, coordinator: coordinator)
+                case .coreText: DiffTextBackends.backend(for: .coreText).makePane(gutter: gutter)
             }
-        pane.gutterView.onGapDrag = onGapDrag
-        pane.gutterView.onChangeToggle = onChangeToggle
-        pane.gutterView.onDiagnosticClick = onDiagnosticClick
-        pane.gutterView.onScopeFold = onScopeFold
-        coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
-        coordinator.scrollMemory = scrollMemory
-        coordinator.show(rendered, keepingScroll: false, key: memoryKey)
-        pane.installDecorations()
-        coordinator.decorationStore.update(rendered: rendered, decorations: decorations, view: pane.textView)
-        coordinator.report(to: viewport)
+        coordinator.pane = pane
+        guard let paneView = pane.view as? DiffPaneView else {
+            preconditionFailure("Every DiffTextBackend's pane view is a DiffPaneView")
+        }
+        paneView.gutterView.onGapDrag = onGapDrag
+        paneView.gutterView.onChangeToggle = onChangeToggle
+        paneView.gutterView.onDiagnosticClick = onDiagnosticClick
+        paneView.gutterView.onScopeFold = onScopeFold
+        if let tk2Pane = pane as? TextKit2Pane {
+            coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
+            coordinator.scrollMemory = scrollMemory
+            coordinator.show(rendered, keepingScroll: false, key: memoryKey)
+            tk2Pane.installDecorations()
+            coordinator.decorationStore.update(rendered: rendered, decorations: decorations, view: tk2Pane.textView)
+            coordinator.report(to: viewport)
+            coordinator.hoverController.attach(to: tk2Pane.textView) { [weak coordinator] in
+                coordinator?.rendered
+            }
+        } else {
+            // Drawing only (text-renderer.md §5 M1): no hover, diagnostics-in-text, scroll memory or split alignment
+            // yet for a backend other than TextKit 2.
+            pane.setWrapping(WrapMode(wrapsLines: wrapsLines, column: wrapColumn))
+            coordinator.recordShownWithoutApplying(rendered)
+            pane.show(rendered, keepingScroll: false)
+            pane.setDecorations(decorations)
+        }
         // A new pane shows its first render here, and `updateNSView` only reports the renders that replace it.
         onDisplayed?()
-        coordinator.hoverController.attach(to: pane.textView) { [weak coordinator] in
-            coordinator?.rendered
-        }
-        return pane.paneView
+        return paneView
     }
 
     /// What the pane is built with, from this view's settings.
@@ -144,9 +162,34 @@ package struct DiffTextView: NSViewRepresentable {
         return options
     }
 
-    package func updateNSView(_ pane: DiffPaneView, context: Context) {
+    package func updateNSView(_ paneView: DiffPaneView, context: Context) {
         let coordinator = context.coordinator
-        guard let scrollView = pane.scrollView else { return }
+        paneView.gutterView.onGapDrag = onGapDrag
+        paneView.gutterView.onChangeToggle = onChangeToggle
+        paneView.gutterView.onDiagnosticClick = onDiagnosticClick
+        paneView.gutterView.onScopeFold = onScopeFold
+        if let tk2Pane = coordinator.pane as? TextKit2Pane {
+            updateTextKit2(tk2Pane, paneView: paneView, coordinator: coordinator)
+        } else if let pane = coordinator.pane {
+            // Drawing only (text-renderer.md §5 M1): no split alignment, scroll requests aside.
+            pane.setWrapping(WrapMode(wrapsLines: wrapsLines, column: wrapColumn))
+            if coordinator.rendered?.id != rendered.id {
+                coordinator.recordShownWithoutApplying(rendered)
+                pane.show(rendered, keepingScroll: keepsScrollPosition)
+                onDisplayed?()
+            }
+            pane.setDecorations(decorations)
+            if let scrollRequest, coordinator.handledScrollRequest != scrollRequest.id {
+                coordinator.handledScrollRequest = scrollRequest.id
+                pane.scroll(toRow: scrollRequest.row, centered: false)
+            }
+        }
+    }
+
+    /// `updateNSView`, for a pane TextKit 2 built: every option `paneOptions` cannot carry after construction, and the
+    /// memory-aware `show`, both still exact as before the seam construction (text-renderer.md §4.2).
+    private func updateTextKit2(_ tk2Pane: TextKit2Pane, paneView: DiffPaneView, coordinator: Coordinator) {
+        guard let scrollView = paneView.scrollView else { return }
         coordinator.metrics.width = max(scrollView.contentView.bounds.width, coordinator.textView?.frame.width ?? 0)
         if coordinator.setWrapping(wrapsLines, column: wrapColumn, font: rendered.palette.font) {
             splitController?.wrapsLines = wrapsLines
@@ -156,24 +199,20 @@ package struct DiffTextView: NSViewRepresentable {
             scrollView.additionalSafeAreaInsets = Self.insets(underBars: underBars)
             coordinator.updateOverscroll(in: scrollView.contentView)
             // The minimap gives up what the bars cover.
-            pane.needsLayout = true
+            paneView.needsLayout = true
         }
         if coordinator.scrollsPastEnd != scrollsPastEnd {
             coordinator.scrollsPastEnd = scrollsPastEnd
             coordinator.updateOverscroll(in: scrollView.contentView)
         }
-        if pane.minimapView.isHidden == showsMinimap {
-            pane.minimapView.isHidden = !showsMinimap
-            pane.needsLayout = true
+        if paneView.minimapView.isHidden == showsMinimap {
+            paneView.minimapView.isHidden = !showsMinimap
+            paneView.needsLayout = true
         }
-        coordinator.gutterView?.onGapDrag = onGapDrag
-        coordinator.gutterView?.onChangeToggle = onChangeToggle
-        coordinator.gutterView?.onDiagnosticClick = onDiagnosticClick
-        coordinator.gutterView?.onScopeFold = onScopeFold
-        if let gutterView = coordinator.gutterView, gutterView.showsScopeRibbon != showsScopeRibbon {
-            gutterView.showsScopeRibbon = showsScopeRibbon
+        if paneView.gutterView.showsScopeRibbon != showsScopeRibbon {
+            paneView.gutterView.showsScopeRibbon = showsScopeRibbon
             if showsScopeRibbon, let textView = coordinator.textView {
-                coordinator.scopeHover.attach(to: textView, gutter: gutterView)
+                coordinator.scopeHover.attach(to: textView, gutter: paneView.gutterView)
             } else {
                 coordinator.scopeHover.detach()
             }
@@ -197,13 +236,15 @@ package struct DiffTextView: NSViewRepresentable {
         }
     }
 
-    package static func dismantleNSView(_ pane: DiffPaneView, coordinator: Coordinator) {
-        coordinator.rememberPosition()
-        if let textView = coordinator.textView { coordinator.splitController?.unregister(textView: textView) }
-        coordinator.hoverController.detach()
-        coordinator.scopeHover.detach()
-        coordinator.report(to: nil)
-        coordinator.usageObservation = nil
+    package static func dismantleNSView(_ paneView: DiffPaneView, coordinator: Coordinator) {
+        if coordinator.pane is TextKit2Pane {
+            coordinator.rememberPosition()
+            if let textView = coordinator.textView { coordinator.splitController?.unregister(textView: textView) }
+            coordinator.hoverController.detach()
+            coordinator.scopeHover.detach()
+            coordinator.report(to: nil)
+            coordinator.usageObservation = nil
+        }
         NotificationCenter.default.removeObserver(coordinator)
     }
 
@@ -256,6 +297,9 @@ package final class DiffTextViewCoordinator: NSObject {
     package weak var textView: NSTextView?
     package weak var gutterView: DiffGutterView?
     package weak var minimapView: MinimapView?
+    /// The pane this window's view shows, whichever backend built it (text-renderer.md §4.2); TextKit 2's own fields
+    /// below stay in step only while `pane` is a `TextKit2Pane`.
+    package var pane: (any DiffTextPane)?
     package var splitController: SplitPaneController?
     package var wrapsLines = true
     package var wrapColumn = 0
@@ -313,6 +357,12 @@ package final class DiffTextViewCoordinator: NSObject {
         gutterView?.redrawDiagnostics(ofRows: changed)
         guard let rendered else { return }
         textView?.redrawDiagnostics(ofRows: changed, in: rendered)
+    }
+
+    /// Records `rendered` as shown for a backend that draws through the seam instead of ``apply(_:keepingScroll:)``,
+    /// so the next update still knows whether its text changed.
+    package func recordShownWithoutApplying(_ rendered: RenderedText) {
+        self.rendered = rendered
     }
 
     package func apply(_ rendered: RenderedText, keepingScroll: Bool = false) {

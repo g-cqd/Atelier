@@ -1,10 +1,11 @@
 import Foundation
 package import SwiftUI
 
-/// The text engine a window's panes use (text-renderer.md §4.3). TextKit 2 is the only one until the CoreText
-/// renderer lands (M1); the Develop menu offers the one choice meanwhile.
+/// The text engine a window's panes use (text-renderer.md §4.3). CoreText draws rows and decorations only (M1): no
+/// selection, hover, split alignment or cards yet, so the Develop menu says so.
 package enum TextBackendKind: String, CaseIterable, Identifiable, Sendable {
     case textKit2
+    case coreText
 
     package var id: String { rawValue }
 
@@ -12,6 +13,7 @@ package enum TextBackendKind: String, CaseIterable, Identifiable, Sendable {
     package var title: String {
         switch self {
             case .textKit2: "TextKit 2"
+            case .coreText: "CoreText (drawing only)"
         }
     }
 

@@ -40,6 +40,16 @@ public final class TextCanvasView: NSView {
             configuration.wrap = .width(bounds.width)
         }
     }
+    /// Space above the first row, matching a host's own container inset so a gutter beside this view lines up with
+    /// one beside a different backend's text system.
+    public var topInset: Double = 0 {
+        didSet {
+            guard topInset != oldValue else { return }
+            invalidateIntrinsicContentSize()
+            setFrameSize(NSSize(width: max(bounds.width, 1), height: max(documentHeight, 1)))
+            updateTiles()
+        }
+    }
 
     private var heightIndex: HeightIndex
     private var decorations: [DecorationLayer] = []
@@ -74,7 +84,7 @@ public final class TextCanvasView: NSView {
         invalidateAllTiles()
         rebuildHeightIndex()
         invalidateIntrinsicContentSize()
-        setFrameSize(NSSize(width: max(bounds.width, 1), height: max(heightIndex.documentHeight, 1)))
+        setFrameSize(NSSize(width: max(bounds.width, 1), height: max(documentHeight, 1)))
         needsLayout = true
         updateTiles()
     }
@@ -95,20 +105,20 @@ public final class TextCanvasView: NSView {
         updateTiles()
     }
 
-    public var documentHeight: Double { heightIndex.documentHeight }
+    public var documentHeight: Double { heightIndex.documentHeight + topInset }
 
     public override var intrinsicContentSize: NSSize {
-        NSSize(width: NSView.noIntrinsicMetric, height: heightIndex.documentHeight)
+        NSSize(width: NSView.noIntrinsicMetric, height: documentHeight)
     }
 
-    /// Rows intersecting `rect`, top to bottom, with each row's frame and its first line's baseline, in document
-    /// coordinates. Never lays out rows outside `rect`, beyond the one it may type set to answer a row still
-    /// estimated.
+    /// Rows intersecting `rect`, top to bottom, with each row's frame and its first line's baseline, in this view's
+    /// own coordinates (``topInset`` above the first row). Never lays out rows outside `rect`, beyond the one it may
+    /// type set to answer a row still estimated.
     public func forEachRow(in rect: CGRect, _ body: (_ row: RowIndex, _ frame: CGRect, _ baseline: Double) -> Void) {
         guard text.rowCount > 0 else { return }
-        var row = heightIndex.row(atY: rect.minY)
+        var row = heightIndex.row(atY: rect.minY - topInset)
         while row.index < text.rowCount {
-            let top = heightIndex.y(of: row)
+            let top = heightIndex.y(of: row) + topInset
             if top > rect.maxY { break }
             let geometry = rowGeometry(of: row)
             let frame = CGRect(x: 0, y: top, width: bounds.width, height: Double(geometry.height))
@@ -123,7 +133,7 @@ public final class TextCanvasView: NSView {
     /// it has none, as an embedded pane does).
     public func visibleRowRange() -> Range<RowIndex> {
         guard text.rowCount > 0 else { return RowIndex(0) ..< RowIndex(0) }
-        let rect = visibleDocumentRect()
+        let rect = visibleDocumentRect().offsetBy(dx: 0, dy: -topInset)
         let first = heightIndex.row(atY: rect.minY)
         let last = heightIndex.row(atY: max(rect.maxY - 1, rect.minY))
         return first ..< RowIndex(last.index + 1)
@@ -132,7 +142,7 @@ public final class TextCanvasView: NSView {
     /// `row`'s own frame and first-line baseline, type setting it first if its height is still estimated.
     public func frame(ofRow row: RowIndex) -> (frame: CGRect, baseline: Double)? {
         guard row.index >= 0, row.index < text.rowCount else { return nil }
-        let top = heightIndex.y(of: row)
+        let top = heightIndex.y(of: row) + topInset
         let geometry = rowGeometry(of: row)
         let frame = CGRect(x: 0, y: top, width: bounds.width, height: Double(geometry.height))
         return (frame, top + Double(geometry.lines.first?.baseline ?? 0))
@@ -155,7 +165,7 @@ public final class TextCanvasView: NSView {
     /// Brings `row` into view: near the top, or centred.
     public func scroll(toRow row: RowIndex, centered: Bool) {
         guard let clipView = enclosingScrollView?.contentView else { return }
-        let top = heightIndex.y(of: row)
+        let top = heightIndex.y(of: row) + topInset
         let target: Double =
             if centered {
                 max(top - (clipView.bounds.height - Double(rowGeometry(of: row).height)) / 2, 0)
@@ -170,7 +180,18 @@ public final class TextCanvasView: NSView {
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         observeScrolling()
+        updateAppearance()
         updateTiles()
+    }
+
+    public override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateAppearance()
+    }
+
+    private func updateAppearance() {
+        let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        renderAppearance = isDark ? .dark : .light
     }
 
     public override func setFrameSize(_ newSize: NSSize) {
@@ -257,15 +278,16 @@ public final class TextCanvasView: NSView {
     private func positionTile(_ tileLayer: CALayer, index: Int) {
         let rows = tileRange(forTile: index)
         guard !rows.isEmpty else { return }
-        let top = heightIndex.y(of: RowIndex(rows.lowerBound))
-        let bottom = rows.upperBound < text.rowCount ? heightIndex.y(of: RowIndex(rows.upperBound)) : documentHeight
+        let top = heightIndex.y(of: RowIndex(rows.lowerBound)) + topInset
+        let bottom =
+            rows.upperBound < text.rowCount ? heightIndex.y(of: RowIndex(rows.upperBound)) + topInset : documentHeight
         tileLayer.frame = CGRect(x: 0, y: top, width: bounds.width, height: max(bottom - top, 1))
     }
 
     /// Materializes the tiles near the viewport and discards the rest.
     private func updateTiles() {
         guard text.rowCount > 0, bounds.width > 0 else { return }
-        let visible = visibleDocumentRect()
+        let visible = visibleDocumentRect().offsetBy(dx: 0, dy: -topInset)
         let firstRow = heightIndex.row(atY: visible.minY)
         let lastRow = heightIndex.row(atY: max(visible.maxY - 1, visible.minY))
         let lastTileIndex = max(text.rowCount - 1, 0) / Self.rowsPerTile
@@ -326,7 +348,7 @@ public final class TextCanvasView: NSView {
         tileLayer.contentsScale = window?.backingScaleFactor ?? 2
         if corrected {
             invalidateIntrinsicContentSize()
-            setFrameSize(NSSize(width: bounds.width, height: max(heightIndex.documentHeight, 1)))
+            setFrameSize(NSSize(width: bounds.width, height: max(documentHeight, 1)))
             for (index, layer) in tileLayers { positionTile(layer, index: index) }
         } else {
             positionTile(tileLayer, index: tileIndex)

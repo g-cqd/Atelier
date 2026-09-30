@@ -66,6 +66,9 @@ let package = Package(
             name: "DiffTextKit",
             dependencies: [
                 "DiffCore", "DiffRendering", .product(name: "AtelierDiagnostics", package: "AtelierCore"),
+                .product(name: "AtelierSyntaxModel", package: "AtelierCore"),
+                .product(name: "AtelierTextRendering", package: "AtelierCore"),
+                .product(name: "AtelierTextView", package: "AtelierCore"),
                 .product(name: "AemiCore", package: "aemi")
             ],
             swiftSettings: strict

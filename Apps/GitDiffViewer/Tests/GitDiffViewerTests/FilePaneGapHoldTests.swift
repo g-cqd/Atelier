@@ -150,7 +150,7 @@ private final class HeldFilePane {
 
     /// How far the pane's text is scrolled down.
     var scrollOffset: CGFloat {
-        (gutter.source as? NSTextView)?.enclosingScrollView?.contentView.bounds.minY ?? 0
+        (gutter.source as? TextKit2RowGeometry)?.textView.enclosingScrollView?.contentView.bounds.minY ?? 0
     }
 
     /// The gap between the two changes, with its band in the gutter.
@@ -164,7 +164,9 @@ private final class HeldFilePane {
 
     /// Scrolls the pane's text `delta` points further down.
     func scroll(by delta: CGFloat) {
-        guard let clip = (gutter.source as? NSTextView)?.enclosingScrollView?.contentView else { return }
+        guard let clip = (gutter.source as? TextKit2RowGeometry)?.textView.enclosingScrollView?.contentView else {
+            return
+        }
         clip.scroll(to: NSPoint(x: clip.bounds.minX, y: clip.bounds.minY + delta))
         clip.enclosingScrollView?.reflectScrolledClipView(clip)
         settle()
