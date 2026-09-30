@@ -270,13 +270,14 @@ public final class GrammarRegistry: Sendable {
 
     // MARK: - Cache file contents
 
-    /// The compiled tables a cache file holds, whether AemiJSON or Foundation's `JSONEncoder` wrote it.
+    /// The compiled tables a JSON cache file holds, whether AemiJSON or Foundation's `JSONEncoder` wrote it: the format
+    /// the cache keeps when `ATELIER_TABLE_CACHE_FORMAT` is `json`, to measure against its table files.
     /// - Throws: `JSONError` or `DecodingError` when `data` is not a cache file.
     static func decodeCompiledTables(from data: Data) throws -> ParseTableCompiler.CompilationResult {
         try SyntaxJSON.decode(ParseTableCompiler.CompilationResult.self, from: data)
     }
 
-    /// The contents of a cache file for `result`.
+    /// The contents of a JSON cache file for `result`.
     static func encodeCompiledTables(_ result: ParseTableCompiler.CompilationResult) throws -> Data {
         try SyntaxJSON.encode(result)
     }
