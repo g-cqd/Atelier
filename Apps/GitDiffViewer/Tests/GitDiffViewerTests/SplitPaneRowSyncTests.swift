@@ -36,6 +36,35 @@ struct SplitPaneRowSyncTests {
         #expect(try !panes[1].isLaidOut(row: 100))
     }
 
+    /// A folded function takes the same rows out of both sides, so the row below the fold one side shows at its top
+    /// is the row the other shows (DIFF-03).
+    @Test
+    func `side by side, scrolled deep below a function folded in both panes, the other pane shows the same row`()
+        throws
+    {
+        let sut = HostedPanes(
+            showing: .longLines(600, foldedFrom: 20, through: 200), layout: .sideBySide, wrapsLines: false)
+        let first = try #require(try sut.panes().first)
+        let band = try #require(first.rendered.folds.first?.bandRow)
+        for pane in try sut.panes() { #expect(pane.rendered.folds.map(\.bandRow) == [band]) }
+        let layoutManager = try #require(first.textView.textLayoutManager)
+        let content = try #require(layoutManager.textContentManager)
+        let middle = try #require(
+            content.location(layoutManager.documentRange.location, offsetBy: first.rendered.lineStarts[band + 150]))
+        let above = try #require(NSTextRange(location: layoutManager.documentRange.location, end: middle))
+        layoutManager.ensureLayout(for: above)
+
+        first.clip.scroll(to: NSPoint(x: 0, y: first.textView.frame.height * 0.8))
+        first.clip.enclosingScrollView?.reflectScrolledClipView(first.clip)
+        sut.settleNow()
+
+        let panes = try sut.panes()
+        let tops = try panes.map { try $0.rowAtTop() }
+        #expect(tops[0].row > band + 150)
+        #expect(tops[1].row == tops[0].row)
+        #expect(abs(tops[1].offset - tops[0].offset) < 0.5, "the offsets are \(tops.map(\.offset))")
+    }
+
     /// Side by side, as inline, a deep first change is placed after the estimates of the rows above it, which are
     /// not laid out: laying them out took most of opening a long file (`FirstChangePlacementBenchmark`).
     @Test(arguments: [false, true])

@@ -205,6 +205,27 @@ struct PaneText {
             changedAt: changed)
     }
 
+    /// ``longLines(_:changedAt:)``'s lines, `count` of them, changed in the middle, with the scope from line `first`
+    /// through line `last`, from zero, folded on both sides (DIFF-03).
+    static func longLines(_ count: Int, foldedFrom first: Int, through last: Int) -> PaneText {
+        let tail = String(repeating: "long ", count: 32)
+        let lines = (1 ... count).map { $0.isMultiple(of: 7) ? "let value\($0) = \(tail)" : "let value\($0) = \($0)" }
+        var new = lines
+        new[count / 2] = "let changed = true"
+        let prepared = PreparedDiff(
+            FileDiffInput(
+                title: "", oldText: lines.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
+                language: .plain),
+            granularity: .word)
+        let folds = [
+            ScopeFoldKey(fileIndex: 0, isOld: true, firstLine: first): last,
+            ScopeFoldKey(fileIndex: 0, isOld: false, firstLine: first): last
+        ]
+        let rendered = DiffRenderer.render(
+            prepared: [prepared], options: DiffRenderer.Options(foldedScopes: folds), layout: .full, withHeaders: false)
+        return PaneText(rendered: rendered, asksForChange: false)
+    }
+
     private static func render(_ lines: [String], changedAt changed: Int?) -> PaneText {
         var new = lines
         new[changed ?? lines.count / 2] = "let changed = true"
