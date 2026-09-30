@@ -5,15 +5,16 @@ import Testing
 @testable import DiffRendering
 @testable import DiffTextKit
 
-/// Where the compact inline view's markers sit (book DIFF-04; `compact-inline-design.md`).
+/// Where the compact inline view's markers sit (book DIFF-04, D43; `compact-inline-design.md`).
 struct ChangeMarkerLayoutTests {
     @Test
-    func `a bar lies in the gutter's change layer, a point wider under the pointer`() {
+    func `a bar is centred in the gutter's change layer, filling it under the pointer, like Xcode's`() {
         let bar = ChangeMarkerLayout.bar(top: 30, bottom: 60, isHovered: false, layerX: 40)
         let hovered = ChangeMarkerLayout.bar(top: 30, bottom: 60, isHovered: true, layerX: 40)
 
-        #expect(bar == CGRect(x: 41, y: 30, width: 3, height: 30))
-        #expect(hovered.width == bar.width + 1)
+        #expect(bar == CGRect(x: 41, y: 30, width: 6, height: 30))
+        #expect(hovered == CGRect(x: 40, y: 30, width: 8, height: 30))
+        #expect(hovered.minX >= 40)
         #expect(hovered.maxX <= 40 + ChangeMarkerLayout.hitWidth)
     }
 
@@ -136,15 +137,20 @@ struct DiffGutterChangeMarkerTests {
     }
 
     @Test
-    func `markers lie on the gutter's trailing side, after the numbers and before the scope ribbon`() throws {
+    func `markers lie back on the gutter's leading edge, before the numbers and the scope ribbon`() throws {
         let fixture = Fixture(try #require(Self.layout()))
         let gutter = fixture.gutter
         let markers = fixture.markers()
 
         #expect(!markers.isEmpty)
         #expect(
-            markers.allSatisfy { $0.shape.rect.minX >= gutter.changeLayerX && $0.shape.rect.maxX <= gutter.ribbonX })
-        #expect(gutter.changeLayerX > gutter.bounds.width / 2)
+            markers.allSatisfy {
+                $0.shape.rect.minX >= gutter.changeLayerX
+                    && $0.shape.rect.maxX <= gutter.changeLayerX + ChangeMarkerLayout.hitWidth
+            })
+        #expect(gutter.changeLayerX + ChangeMarkerLayout.hitWidth < gutter.ribbonX)
+        // A little negative space sits before the layer, so the gutter's own edge is not the marker's hit area.
+        #expect(gutter.changeLayerX > 0)
     }
 
     @Test
@@ -164,7 +170,9 @@ struct DiffGutterChangeMarkerTests {
         let fixture = Fixture(try #require(Self.layout()))
         let bar = try #require(fixture.markers().first).shape.rect
 
-        fixture.mouse(.leftMouseDown, at: NSPoint(x: fixture.gutter.changeLayerX - 4, y: bar.midY))
+        fixture.mouse(
+            .leftMouseDown,
+            at: NSPoint(x: fixture.gutter.changeLayerX + ChangeMarkerLayout.hitWidth + 2, y: bar.midY))
 
         #expect(fixture.toggled.isEmpty)
     }
@@ -210,5 +218,59 @@ struct DiffGutterChangeMarkerTests {
 
         #expect(fixture.pixels(in: area) != before)
         #expect(fixture.gutter.toolTip == change.help)
+    }
+
+    /// Thirty lines with ten new ones inserted after line 15: an added change spanning far more rows than the small
+    /// window ``DiffGutterView/changeMarker(at:)`` once gathered edges from, isolated with no context so gap bands
+    /// sit close by, as a card with gaps does.
+    private static func tallAdditionLayout() -> StaticTextLayout? {
+        let old = (1 ... 30).map { "let value\($0) = \($0)" }
+        var new = old
+        new.insert(contentsOf: (1 ... 10).map { "let added\($0) = \($0)" }, at: 15)
+        let prepared = PreparedDiff(
+            FileDiffInput(
+                title: "", oldText: old.joined(separator: "\n") + "\n", newText: new.joined(separator: "\n") + "\n",
+                language: .plain), granularity: .word)
+        let diff = DiffRenderer.render(
+            prepared: [prepared], options: DiffRenderer.Options(sides: [.unified], compactsInline: true),
+            layout: .changes(context: 0, expansions: [:]), withHeaders: false)
+        guard let unified = diff.unified else { return nil }
+        let layout = StaticTextLayout(rendered: unified)
+        layout.layOut(mode: .none, viewportWidth: 800)
+        return layout
+    }
+
+    @Test
+    func `hovering anywhere along a tall marker in a card finds its own change, not a guess from nearby`() throws {
+        let fixture = Fixture(try #require(Self.tallAdditionLayout()))
+        let gutter = fixture.gutter
+        let (change, shape) = try #require(fixture.markers().first { $0.change.kind == .added })
+
+        // Top, middle and bottom of a ten-row bar, each once well past the old fallback's own reach.
+        for fraction: CGFloat in [0.05, 0.5, 0.95] {
+            let point = NSPoint(x: gutter.changeLayerX + 2, y: shape.rect.minY + fraction * shape.rect.height)
+            #expect(gutter.changeMarker(at: point)?.key == change.key)
+        }
+    }
+
+    @Test
+    func `hovering anywhere along a tall marker finds its own change while its pane is scrolled`() throws {
+        let layout = try #require(Self.tallAdditionLayout())
+        let clipView = NSClipView()
+        clipView.bounds = NSRect(x: 0, y: 120, width: 200, height: 400)
+        let gutter = DiffGutterView(clipView: clipView)
+        gutter.style = .dual
+        gutter.source = layout
+        gutter.rendered = layout.rendered
+        gutter.frame = NSRect(x: 0, y: 0, width: gutter.thickness, height: 400)
+
+        var markers: [(change: RenderedChange, shape: ChangeMarkerLayout.Shape)] = []
+        gutter.forEachChangeMarker(in: gutter.bounds) { markers.append((change: $0, shape: $1)) }
+        let (change, shape) = try #require(markers.first { $0.change.kind == .added })
+
+        for fraction: CGFloat in [0.05, 0.5, 0.95] {
+            let point = NSPoint(x: gutter.changeLayerX + 2, y: shape.rect.minY + fraction * shape.rect.height)
+            #expect(gutter.changeMarker(at: point)?.key == change.key)
+        }
     }
 }

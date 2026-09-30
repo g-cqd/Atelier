@@ -44,6 +44,9 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
     package var showsScopeRibbon = true
     /// Where the pane reports the rows it shows, so they are decorated first.
     package var viewport: DecorationViewport?
+    /// Shares this card's gutter width with the rest of its list, so every card's trailing edge lines up (book D43);
+    /// nil keeps this card's own width.
+    package var widthCoordinator: GutterWidthCoordinator?
 
     package init(
         layouts: CardLayouts, side: RenderedSide, gutter: GutterStyle, width: CGFloat, wrapMode: WrapMode = .viewport,
@@ -162,6 +165,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         pane.gutterView.onChangeToggle = onChangeToggle
         pane.gutterView.onDiagnosticClick = onDiagnosticClick
         pane.gutterView.onScopeFold = onScopeFold
+        if pane.gutterView.widthCoordinator !== widthCoordinator { pane.gutterView.widthCoordinator = widthCoordinator }
         if pane.gutterView.showsScopeRibbon != showsScopeRibbon {
             pane.gutterView.showsScopeRibbon = showsScopeRibbon
             if showsScopeRibbon, let textView = context.coordinator.textView {

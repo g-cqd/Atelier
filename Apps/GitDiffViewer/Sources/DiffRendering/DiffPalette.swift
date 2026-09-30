@@ -45,7 +45,8 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
         textColor: .labelColor,
         background: .textBackgroundColor,
         selection: .selectedTextBackgroundColor,
-        gutterBackground: .windowBackgroundColor,
+        // The gutter's own background: the code's (book D43, 09-30).
+        gutterBackground: .textBackgroundColor,
         gutterText: .tertiaryLabelColor,
         gutterChangedText: .labelColor,
         lineHeightMultiple: 1,
@@ -97,7 +98,8 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
             textColor: text,
             background: background,
             selection: theme.selection.map(NSColor.init) ?? text.withAlphaComponent(0.2),
-            gutterBackground: background.blended(withFraction: 0.04, of: text) ?? background,
+            // The gutter's own background: the code's (book D43, 09-30).
+            gutterBackground: background,
             gutterText: text.withAlphaComponent(0.4),
             gutterChangedText: text,
             lineHeightMultiple: theme.lineHeightMultiple ?? 1,

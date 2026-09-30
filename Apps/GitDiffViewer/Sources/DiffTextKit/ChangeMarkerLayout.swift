@@ -1,10 +1,10 @@
 package import CoreGraphics
 
-/// Where the compact inline view's change markers sit in the gutter (book DIFF-04; `compact-inline-design.md`). Every
-/// marker lies in the gutter's change layer, on its trailing side, between the line numbers and the scope ribbon, next
-/// to the text (`scope-ribbon-design.md`): a bar with round ends down a change's rows, or, for a folded removal, a
-/// wedge pointing into the text on the boundary where the lines were. Pure geometry, in the gutter's flipped
-/// coordinates, from the change layer's leading edge `layerX`.
+/// Where the compact inline view's change markers sit in the gutter (book DIFF-04, D43; `compact-inline-design.md`).
+/// Every marker lies in the gutter's change layer, back on its leading edge (09-30, reversing D42), before the line
+/// numbers, with a little negative space before it so it is easy to click (`scope-ribbon-design.md`): a bar with round
+/// ends down a change's rows, or, for a folded removal, a wedge pointing into the text on the boundary where the lines
+/// were. Pure geometry, in the gutter's flipped coordinates, from the change layer's leading edge `layerX`.
 package enum ChangeMarkerLayout {
     /// A marker's shape: a bar over a change's rows, or a wedge for a folded removal.
     package enum Shape: Equatable {
@@ -29,23 +29,26 @@ package enum ChangeMarkerLayout {
         case above
     }
 
-    /// The change layer's width: what takes the pointer for a marker.
-    package static let hitWidth: CGFloat = 6
-    /// The bar's distance from the change layer's leading edge.
-    package static let barX: CGFloat = 1
-    package static let barWidth: CGFloat = 3
-    /// The bar under the pointer, a point wider.
-    package static let hoveredBarWidth: CGFloat = 4
+    /// The change layer's width: what takes the pointer for a marker, and the most a bar grows to on hover, like
+    /// Xcode's (book D43).
+    package static let hitWidth: CGFloat = 8
+    /// A bar's width at rest, about Xcode's own.
+    package static let barWidth: CGFloat = 6
+    /// The bar's distance from the change layer's leading edge at rest, centred in the layer.
+    package static let barX: CGFloat = (hitWidth - barWidth) / 2
+    /// The bar under the pointer, filling the change layer, so it never grows into the numbers or past the gutter's
+    /// own edge.
+    package static let hoveredBarWidth: CGFloat = hitWidth
     package static let wedgeWidth: CGFloat = 5
     package static let wedgeHeight: CGFloat = 7
-    /// The wedge's distance from the change layer's leading edge.
-    package static let wedgeX: CGFloat = 0.5
+    /// The wedge's distance from the change layer's leading edge, centred in the layer.
+    package static let wedgeX: CGFloat = (hitWidth - wedgeWidth) / 2
 
-    /// A bar from `top` to `bottom`, the change's first row's top and its last row's own bottom.
+    /// A bar from `top` to `bottom`, the change's first row's top and its last row's own bottom: at rest, `barWidth`
+    /// wide and centred in the change layer; under the pointer, it grows from its centre to fill the layer.
     package static func bar(top: CGFloat, bottom: CGFloat, isHovered: Bool, layerX: CGFloat) -> CGRect {
-        CGRect(
-            x: layerX + barX, y: top, width: isHovered ? hoveredBarWidth : barWidth, height: max(bottom - top, barWidth)
-        )
+        let width = isHovered ? hoveredBarWidth : barWidth
+        return CGRect(x: layerX + (hitWidth - width) / 2, y: top, width: width, height: max(bottom - top, width))
     }
 
     /// A wedge on the boundary at `y`.

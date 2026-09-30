@@ -30,27 +30,37 @@ Only the inline side is compacted. The split and stacked layouts are unchanged.
 
 ## Markers
 
-Every marker lies in the gutter's change layer, 6 points on its trailing side between the line numbers and the scope
-ribbon, next to the text, as Xcode draws its change bar (moved there 09-30 at the user's ask; it lay in the leading
-padding before). The gutter keeps its width: the leading padding gave the points the change layer took.
+Every marker lies in the gutter's change layer, back on its leading edge (09-30, D43, reversing the trailing move of
+09-30 earlier the same day): a little negative space, then the layer, then the numbers. The layer is 8 points wide, at
+rest and under the pointer alike; only present while it has something to draw, the compact view's markers or, lacking
+those, the Xcode change bar, which share it and never draw together (`scope-ribbon-design.md`). Off, the gutter
+reclaims the layer's own width.
 
-- **A change with added lines**: a bar 3 points wide, 1 point into the change layer, with round ends,
-  running down the change's rows: the added rows while folded, the removed and the added rows while disclosed. It
-  stops at the last row's own height, never across a gap's band.
+- **A change with added lines**: a bar 6 points wide at rest, centred in the layer, with round ends, running down the
+  change's rows: the added rows while folded, the removed and the added rows while disclosed. It stops at the last
+  row's own height, never across a gap's band.
   - Green for an addition, blue for a modification, which removes lines and adds others (Xcode's change bar).
   - **Folded**: a solid bar. The text itself looks unchanged, so the bar is what says something changed here.
   - **Disclosed**: the same bar hollow, a 1-point outline over a faint fill, since the rows it spans already carry the
-    change's colours.
+    change's colours, and subtle separator lines cut through it in the gutter's own background: on its own outer top
+    and bottom edges, and, with both removed and added rows, on the seam where the one gives way to the other, at the
+    row height its removed lines take down from its top (book D43).
 - **A change that only removes lines**, folded: a red wedge 5 points wide and 7 tall, pointing into the text, centred
   on the boundary between the two rows around the removal: Xcode's mark for deleted lines. At the top of a file it
-  sits on the first row's top edge, at the end on the last row's bottom edge. Where a gap's band lies on that boundary,
-  which only happens with no context lines, it moves just inside the row below, clear of the band's handle. Disclosed,
-  the removal takes rows and is marked like the others, with a hollow red bar.
-- **Hover**: the marker under the pointer draws one point wider and at full strength, as a gap handle's half does,
-  the pointer turns into a pointing hand, and the tooltip tells the change and what a click does: "Modified: 2 lines
-  removed, 3 added. Click to show the change (⌥⌘↩)" or "… Click to hide the change".
-- **Hit area**: the change layer across the marker's rows, or half a row either side of a wedge. The line numbers
-  keep their own clicks, and a gap's band keeps its handles: a marker never lies in a band.
+  sits on the first row's top edge, at the end on the last row's bottom edge. Where a gap's band lies on that
+  boundary, or a neighbouring change touches it with no row between, it keeps to the side away from that neighbour, so
+  the two markers never overlap (book D43, R134): below the boundary if the neighbour is above, or if a gap's band
+  is there, above it if the neighbour is below, and only otherwise centred, since a row of context then separates it
+  from its neighbours either way. Disclosed, the removal takes rows and is marked like the others, with a hollow red
+  bar and its own outer-edge separators.
+- **Hover**: the marker under the pointer grows to fill the layer, 8 points, and draws at full strength, the pointer
+  turns into a pointing hand, and the tooltip tells the change and what a click does: "Modified: 2 lines removed, 3
+  added. Click to show the change (⌥⌘↩)" or "… Click to hide the change". Its outer-edge separators show while
+  hovered too, disclosed or not.
+- **Hit area**: the change layer across the marker's rows, or half a row either side of a wedge, its own rows looked
+  up directly wherever they lie, not guessed from how close they are to the pointer (book D43, "hover hits the wrong
+  row"; ``DiffGutterView/changeMarker(at:)``). The line numbers keep their own clicks, and a gap's band keeps its
+  handles: a marker never lies in a band.
 
 ## Interaction with isolated changes and the gap handles
 

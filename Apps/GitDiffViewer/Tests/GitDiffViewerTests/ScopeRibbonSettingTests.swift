@@ -79,11 +79,16 @@ struct ScopeRibbonSettingTests {
     }
 
     @Test
-    func `the gutter keeps the same width whether the ribbon shows or not`() throws {
+    func `turning the ribbon off reclaims its width, and back on grows it again (book D43)`() throws {
         let sut = try gutter()
         let withRibbon = sut.thickness
 
         sut.showsScopeRibbon = false
+        let withoutRibbon = sut.thickness
+
+        #expect(withoutRibbon < withRibbon)
+
+        sut.showsScopeRibbon = true
 
         #expect(sut.thickness == withRibbon)
     }
