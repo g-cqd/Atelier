@@ -12,13 +12,16 @@ spot. From the leading edge:
 
 | Place | Width | What lies there |
 | --- | --- | --- |
-| Leading padding | 8 pt | The change layer: the compact inline view's markers (DIFF-04), or, with the Xcode colours, the change bar. Never both: the compact view's markers already say where the changes are. |
+| Leading padding | 3 pt | Air before the numbers. |
 | Number columns | as now | The line numbers, over their diagnostics underlay (DIAG-03). |
-| Trailing padding | 10 pt, 2 pt more than today's 8 | The scope ribbon, 5 pt wide, 1 pt from the gutter's trailing hairline, with 2 pt of air before the numbers. |
+| Trailing padding | 15 pt | From the numbers to the text: 2 pt of air; the change layer, 6 pt, with the compact inline view's markers (DIFF-04) or, with the Xcode colours, the change bar, never both, since the compact view's markers already say where the changes are; the scope ribbon, 5 pt; 1 pt; the gutter's trailing hairline. |
 | Across the gutter | the band | A gap's band and its handles (DIFF-02) and a folded scope's band, over every layer, since no row lies there. |
 
 The only growth is the ribbon's 2 points, the whole of criterion 3's "a few points". A text without scopes keeps them,
-so the gutter never changes width when scopes land after first paint.
+so the gutter never changes width when scopes land after first paint. The change layer moved from the leading padding
+to the trailing side, next to the text, where Xcode draws its change bar (09-30, the user's ask): the order from the
+numbers to the text is line numbers, change marker, scope ribbon, and the gutter kept its width, 5 points leaving the
+leading padding for the trailing one.
 
 Z order, bottom to top: the gutter's background; the ribbon's depth shading; the diagnostics underlay; the line
 numbers; the change layer; the ribbon's hover capsule and fold tabs; a band and its handles.
@@ -38,8 +41,8 @@ numbers; the change layer; the ribbon's hover capsule and fold tabs; a band and 
 - **Hovering the capsule's ends** strengthens them, with a pointing hand and a tooltip: "Fold the function (⌥⌘←)".
 - **Folded**: the scope's first row stays, its inner rows and its last row give way to a band one row tall, like a
   gap's, holding a gray `•••` capsule after the first row's text and the closing brace; the line numbers jump across
-  it. The ribbon shows a dark tab with a `›` on the first row. If the folded rows hold a change, the band's leading
-  padding shows a dotted change bar (image 13): a fold never hides that something changed.
+  it. The ribbon shows a dark tab with a `›` on the first row. If the folded rows hold a change, the band's change
+  layer shows a dotted change bar (image 13): a fold never hides that something changed.
 - **Clicking** the `⌄` or the `›` tab folds or unfolds; clicking a `•••` capsule unfolds.
 
 ## Folding, gaps and the compact view
@@ -77,7 +80,7 @@ the default, or **Xcode**. Xcode's, from image 12, in light and dark alike throu
 | An added line, and the new side of a modified one | green, 16 % | blue, 12 % |
 | A changed token on the old side | red, 40 % | orange, 28 %: tan |
 | A changed token on the new side | green, 40 % | blue, 30 % |
-| The change bar | none | solid blue, 3 pt, in the gutter's leading padding, down every changed row |
+| The change bar | none | solid blue, 3 pt, in the gutter's change layer right of the numbers, down every changed row |
 | The minimap of a split pane | green and red | blue and gray |
 
 Moved lines keep their own blue in both. The compact inline view keeps its markers; its disclosed changes take the

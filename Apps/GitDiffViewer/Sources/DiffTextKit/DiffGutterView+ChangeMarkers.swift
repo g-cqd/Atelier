@@ -3,7 +3,7 @@ import DiffCore
 import DiffRendering
 
 /// The compact inline view's change markers in the gutter (book DIFF-04; `compact-inline-design.md`): drawn over the
-/// rows, in the leading padding, clicked to disclose or fold their change.
+/// rows, in the change layer between the numbers and the ribbon, clicked to disclose or fold their change.
 extension DiffGutterView {
     /// Visits the markers of the changes near the rows intersecting `rect` of this view, each with its shape.
     ///
@@ -29,7 +29,8 @@ extension DiffGutterView {
                 let top = edges[change.rows.lowerBound]?.top ?? overrun.minY
                 let bottom = edges[change.rows.upperBound - 1]?.bottom ?? overrun.maxY
                 let isHovered = change.key == hoveredChange
-                body(change, .bar(ChangeMarkerLayout.bar(top: top, bottom: bottom, isHovered: isHovered)))
+                let bar = ChangeMarkerLayout.bar(top: top, bottom: bottom, isHovered: isHovered, layerX: changeLayerX)
+                body(change, .bar(bar))
             }
         }
     }
@@ -39,24 +40,31 @@ extension DiffGutterView {
         -> CGRect?
     {
         if boundary == 0 {
-            return edges[0].map { ChangeMarkerLayout.wedge(at: $0.top, placement: .below) }
+            return edges[0].map { ChangeMarkerLayout.wedge(at: $0.top, placement: .below, layerX: changeLayerX) }
         }
         if boundary >= rendered.rows.count {
-            return edges[boundary - 1].map { ChangeMarkerLayout.wedge(at: $0.bottom, placement: .above) }
+            return edges[boundary - 1]
+                .map {
+                    ChangeMarkerLayout.wedge(at: $0.bottom, placement: .above, layerX: changeLayerX)
+                }
         }
         guard let below = edges[boundary] else { return nil }
         // Where a gap's band lies on the boundary, with no context lines, the wedge keeps clear of its handle.
         let underBand = rendered.bandedGap(afterRow: boundary - 1) != nil
-        return ChangeMarkerLayout.wedge(at: below.top, placement: underBand ? .below : .centred)
+        return ChangeMarkerLayout.wedge(
+            at: below.top, placement: underBand ? .below : .centred, layerX: changeLayerX)
     }
 
     /// The change whose marker takes the pointer at `point`.
     func changeMarker(at point: NSPoint) -> RenderedChange? {
-        guard point.x >= 0, point.x < ChangeMarkerLayout.hitWidth, let rendered else { return nil }
+        guard point.x >= changeLayerX, point.x < changeLayerX + ChangeMarkerLayout.hitWidth, let rendered else {
+            return nil
+        }
         var found: RenderedChange?
         forEachChangeMarker(in: NSRect(x: 0, y: point.y, width: 1, height: 1)) { change, shape in
             guard found == nil,
-                ChangeMarkerLayout.hitArea(of: shape, lineHeight: rendered.lineHeight).contains(point)
+                ChangeMarkerLayout.hitArea(of: shape, lineHeight: rendered.lineHeight, layerX: changeLayerX)
+                    .contains(point)
             else { return }
             found = change
         }
@@ -69,7 +77,7 @@ extension DiffGutterView {
         guard let rendered else { return [] }
         var elements: [ChangeMarkerElement] = []
         forEachChangeMarker(in: unobscuredRect(of: visibleRect)) { change, shape in
-            let frame = ChangeMarkerLayout.hitArea(of: shape, lineHeight: rendered.lineHeight)
+            let frame = ChangeMarkerLayout.hitArea(of: shape, lineHeight: rendered.lineHeight, layerX: changeLayerX)
             elements.append(
                 ChangeMarkerElement(change: change, frame: frame, parent: self) { [weak self] in
                     self?.onChangeToggle?(change.key)
@@ -89,12 +97,14 @@ extension DiffGutterView {
     func addChangeMarkerCursorRects() {
         guard let rendered else { return }
         forEachChangeMarker(in: unobscuredRect(of: visibleRect)) { _, shape in
-            addCursorRect(ChangeMarkerLayout.hitArea(of: shape, lineHeight: rendered.lineHeight), cursor: .pointingHand)
+            let area = ChangeMarkerLayout.hitArea(of: shape, lineHeight: rendered.lineHeight, layerX: changeLayerX)
+            addCursorRect(area, cursor: .pointingHand)
         }
     }
 
     /// Xcode's change bar beside every changed row near `rect`, with the Xcode diff colours (book D18): one solid bar
-    /// in the leading padding, where the compact inline view draws its markers instead, down each row's own height, so
+    /// in the change layer, right of the numbers as Xcode draws it, where the compact inline view draws its markers
+    /// instead, down each row's own height, so
     /// that the rows of one change join into one bar and a gap's band breaks it.
     func drawChangeBars(in rect: NSRect) {
         guard let rendered, rendered.changes.isEmpty, let color = rendered.palette.changeBar else { return }
@@ -102,7 +112,8 @@ extension DiffGutterView {
         forEachFragment(in: rect) { fragment, row, rowIndex, y in
             guard [.added, .removed, .modified].contains(row.kind) else { return }
             let height = fragment.layoutFragmentFrame.height - rendered.bandSpacing(afterRow: rowIndex)
-            NSRect(x: ChangeMarkerLayout.barX, y: y, width: ChangeMarkerLayout.barWidth, height: height).fill()
+            NSRect(x: changeLayerX + ChangeMarkerLayout.barX, y: y, width: ChangeMarkerLayout.barWidth, height: height)
+                .fill()
         }
     }
 

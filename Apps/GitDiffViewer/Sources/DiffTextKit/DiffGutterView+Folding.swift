@@ -27,7 +27,7 @@ package enum ScopeFoldCommand: Sendable, Equatable {
 /// folded scope's `›` tab or its band unfolds it, and the pane's folding commands act on the insertion point's row.
 extension DiffGutterView {
     /// How far left of the ribbon a click still takes it: the ribbon is narrow.
-    private static let ribbonReach: CGFloat = 2
+    private static let ribbonReach: CGFloat = 1
 
     /// What a click at `point` asks: to unfold the fold whose band it is on, or whose tab it is on in the ribbon, or
     /// to fold the hovered scope when it is on one of the capsule's ends; nil otherwise.
@@ -113,7 +113,7 @@ extension DiffGutterView {
     }
 
     /// Each fold near `rect`: a dark tab with a `›` on its first row in the ribbon, and on its band, when the rows it
-    /// hides hold a change, a dotted change bar in the leading padding: a fold never hides that something changed.
+    /// hides hold a change, a dotted change bar in the change layer: a fold never hides that something changed.
     func drawFolds(in rect: NSRect) {
         guard let rendered, !rendered.folds.isEmpty else { return }
         var edges: [Int: (top: CGFloat, bottom: CGFloat)] = [:]
@@ -148,7 +148,8 @@ extension DiffGutterView {
         var y = edge.top + 1
         while y + ChangeMarkerLayout.barWidth <= edge.bottom {
             let size = ChangeMarkerLayout.barWidth
-            NSBezierPath(ovalIn: NSRect(x: ChangeMarkerLayout.barX, y: y, width: size, height: size)).fill()
+            NSBezierPath(ovalIn: NSRect(x: changeLayerX + ChangeMarkerLayout.barX, y: y, width: size, height: size))
+                .fill()
             y += 2 * ChangeMarkerLayout.barWidth
         }
     }
