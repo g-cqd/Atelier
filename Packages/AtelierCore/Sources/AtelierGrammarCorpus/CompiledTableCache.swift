@@ -44,7 +44,7 @@ struct CompiledTableCache: Sendable {
     /// point outside themselves, which a damaged file can do and which would trap the parser on every launch. A table
     /// file that is damaged, cut short, of another version or not a table file at all reads as nil too.
     func outcome(for key: Key) -> Result<ParseTableCompiler.CompilationResult, GrammarError>? {
-        if let data = Self.contents(of: fileURL(for: key, kind: .tables)),
+        if let data = storedTables(for: key),
             let tables = try? decode(data),
             tables.isConsistent
         {
@@ -81,6 +81,15 @@ struct CompiledTableCache: Sendable {
         }
     }
 
+    /// The bytes of the tables file stored for `key`: a table file read by ``contents(of:)``, JSON read whole.
+    private func storedTables(for key: Key) -> Data? {
+        let url = fileURL(for: key, kind: .tables)
+        return switch format {
+            case .binary: Self.contents(of: url)
+            case .json: try? Data(contentsOf: url)
+        }
+    }
+
     private func encode(_ tables: ParseTableCompiler.CompilationResult) throws -> Data {
         switch format {
             case .binary: tables.tableFile()
@@ -112,7 +121,12 @@ struct CompiledTableCache: Sendable {
 }
 
 extension CompiledTableCache {
-    /// The whole file at `url`; nil when it can't be read whole, is empty, or changes size as it is read.
+    /// The largest table file ``contents(of:)`` reads: 64 MiB, seven times the largest bundled grammar's, so a foreign
+    /// file in the cache directory costs no more than a miss.
+    static let maximumFileSize = 64 << 20
+
+    /// The whole file at `url`; nil when it can't be read whole, is empty, is past ``maximumFileSize``, or changes size
+    /// as it is read.
     ///
     /// The bytes go in memory mapped for this read alone, and unmapped when the data is released. A block of the heap
     /// would stay in the allocator's cache once freed, and counted in the process's footprint as long as the process
@@ -122,7 +136,8 @@ extension CompiledTableCache {
         guard descriptor >= 0 else { return nil }
         defer { close(descriptor) }
         var status = stat()
-        guard fstat(descriptor, &status) == 0, status.st_size > 0, let size = Int(exactly: status.st_size),
+        guard fstat(descriptor, &status) == 0, status.st_size > 0, status.st_size <= maximumFileSize,
+            let size = Int(exactly: status.st_size),
             let memory = mmap(nil, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0), memory != MAP_FAILED
         else { return nil }
         // Owner: this function, until the data below takes the mapping and unmaps it when released. Bounds: each read
