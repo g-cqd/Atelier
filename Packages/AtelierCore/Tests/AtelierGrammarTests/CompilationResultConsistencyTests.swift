@@ -20,6 +20,14 @@ struct CompilationResultConsistencyTests {
         #expect(!tables.isConsistent)
     }
 
+    @Test(arguments: [0, -1])
+    func `A table without states is inconsistent, a negative count of them included`(stateCount: Int) throws {
+        var tables = try Self.compiled()
+        tables.parseTable.stateCount = stateCount
+
+        #expect(!tables.isConsistent)
+    }
+
     @Test
     func `A lexer move on an inverted range is inconsistent`() throws {
         var tables = try Self.compiled()
