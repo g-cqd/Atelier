@@ -147,6 +147,36 @@ struct GrammarRegistryCacheTests {
         #expect(compiles.withLock { $0 } == 1)
     }
 
+    /// A table file cut short, of another version, whose header miscounts its payload, or that is not a table file.
+    static let damagedTableFiles: [String] = ["cut short", "another version", "a miscounted payload", "JSON"]
+
+    @Test(arguments: damagedTableFiles)
+    func `a damaged table file is compiled again and replaced`(damage: String) async throws {
+        let fixture = try GrammarFixture()
+        defer { fixture.remove() }
+        let first = fixture.registry { grammar throws(GrammarError) in try ParseTableCompiler.compile(grammar) }
+        let compiled = try await first.compiledResult(for: "tiny", grammarsPath: fixture.grammarsPath)
+        var file = try Data(contentsOf: fixture.cachedTableFileURL())
+        switch damage {
+            case "cut short": file = file.prefix(file.count / 2)
+            case "another version": file[TableFile.versionOffset] &+= 1
+            case "a miscounted payload": file[TableFile.lengthOffset] &+= 1
+            default: file = try GrammarRegistry.encodeCompiledTables(compiled)
+        }
+        try fixture.overwriteCachedTableFile(with: file)
+        let compiles = Mutex(0)
+        let relaunched = fixture.registry { grammar throws(GrammarError) in
+            compiles.withLock { $0 += 1 }
+            return try ParseTableCompiler.compile(grammar)
+        }
+
+        let reloaded = try await relaunched.compiledResult(for: "tiny", grammarsPath: fixture.grammarsPath)
+
+        #expect(reloaded.parseTable == compiled.parseTable)
+        #expect(compiles.withLock { $0 } == 1)
+        #expect(try Data(contentsOf: fixture.cachedTableFileURL()) == compiled.tableFile())
+    }
+
     @Test
     func `compiled tables are read back by the next registry on the same cache`() async throws {
         let fixture = try GrammarFixture()
@@ -186,10 +216,20 @@ private struct GrammarFixture {
 
     /// Replaces the cached tables of the current `tiny` grammar with `tables`.
     func overwriteCachedTables(with tables: ParseTableCompiler.CompilationResult) throws {
+        try overwriteCachedTableFile(with: tables.tableFile())
+    }
+
+    /// Replaces the cached table file of the current `tiny` grammar with `contents`.
+    func overwriteCachedTableFile(with contents: Data) throws {
+        try contents.write(to: cachedTableFileURL())
+    }
+
+    /// The cached table file of the current `tiny` grammar.
+    func cachedTableFileURL() throws -> URL {
         let grammar = try Data(contentsOf: root.appending(path: "Grammars/tiny/grammar.json"))
         let key = CompiledTableCache.Key(language: "tiny", grammar: grammar)
-        try GrammarRegistry.encodeCompiledTables(tables)
-            .write(to: root.appending(path: "cache/\(key.fileStem).ptable"))
+        return CompiledTableCache(directory: root.appending(path: "cache"), format: .binary)
+            .fileURL(for: key, kind: .tables)
     }
 
     /// A registry that knows `tiny`, caches under the fixture and compiles with `compile`.

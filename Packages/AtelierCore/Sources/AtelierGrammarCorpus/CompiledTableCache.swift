@@ -23,13 +23,28 @@ struct CompiledTableCache: Sendable {
         }
     }
 
+    /// How a cache file holds tables.
+    enum Format: Sendable {
+        /// A table file (``ParseTableCompiler/CompilationResult/tableFile()``): compact, and read in a few copies.
+        case binary
+        /// The tables' JSON, which an older cache held: kept to measure the two against each other.
+        case json
+
+        /// The format `ATELIER_TABLE_CACHE_FORMAT` names: `json` for JSON, anything else or nothing for binary.
+        static let current: Format =
+            ProcessInfo.processInfo.environment["ATELIER_TABLE_CACHE_FORMAT"] == "json"
+            ? .json : .binary
+    }
+
     let directory: URL
+    var format = Format.current
 
     /// The tables or the compile error stored for `key`; nil when neither is there or readable, or when the tables
-    /// point outside themselves, which a damaged file can do and which would trap the parser on every launch.
+    /// point outside themselves, which a damaged file can do and which would trap the parser on every launch. A table
+    /// file that is damaged, cut short, of another version or not a table file at all reads as nil too.
     func outcome(for key: Key) -> Result<ParseTableCompiler.CompilationResult, GrammarError>? {
         if let data = try? Data(contentsOf: fileURL(for: key, kind: .tables)),
-            let tables = try? GrammarRegistry.decodeCompiledTables(from: data),
+            let tables = try? decode(data),
             tables.isConsistent
         {
             return .success(tables)
@@ -58,21 +73,40 @@ struct CompiledTableCache: Sendable {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         switch outcome {
             case .success(let tables):
-                try GrammarRegistry.encodeCompiledTables(tables)
-                    .write(to: fileURL(for: key, kind: .tables), options: .atomic)
+                try encode(tables).write(to: fileURL(for: key, kind: .tables), options: .atomic)
             case .failure(let error):
                 try SyntaxJSON.encode(RecordedFailure(error))
                     .write(to: fileURL(for: key, kind: .failure), options: .atomic)
         }
     }
 
-    private enum FileKind: String {
-        case tables = "ptable"
-        case failure = "failed"
+    private func encode(_ tables: ParseTableCompiler.CompilationResult) throws -> Data {
+        switch format {
+            case .binary: tables.tableFile()
+            case .json: try GrammarRegistry.encodeCompiledTables(tables)
+        }
     }
 
-    private func fileURL(for key: Key, kind: FileKind) -> URL {
-        directory.appendingPathComponent("\(key.fileStem).\(kind.rawValue)")
+    private func decode(_ data: Data) throws -> ParseTableCompiler.CompilationResult {
+        switch format {
+            case .binary: try ParseTableCompiler.CompilationResult(tableFile: data)
+            case .json: try GrammarRegistry.decodeCompiledTables(from: data)
+        }
+    }
+
+    enum FileKind {
+        case tables
+        case failure
+    }
+
+    /// Where `key`'s file of `kind` is: a table file ends in `.tables`, the JSON of tables in `.ptable`.
+    func fileURL(for key: Key, kind: FileKind) -> URL {
+        let suffix =
+            switch kind {
+                case .tables: format == .binary ? "tables" : "ptable"
+                case .failure: "failed"
+            }
+        return directory.appendingPathComponent("\(key.fileStem).\(suffix)")
     }
 }
 
