@@ -133,6 +133,10 @@ package struct DiffTextView: NSViewRepresentable {
         gutterView.onChangeToggle = onChangeToggle
         gutterView.overlay = context.coordinator.diagnostics
         gutterView.onDiagnosticClick = onDiagnosticClick
+        gutterView.decorations = context.coordinator.decorationStore.snapshot
+        gutterView.decorationStore = context.coordinator.decorationStore
+        context.coordinator.decorationStore.gutter = gutterView
+        context.coordinator.scopeHover.attach(to: textView, gutter: gutterView)
         context.coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
         let minimapView = makeMinimap(following: scrollView, coordinator: context.coordinator)
 
@@ -257,6 +261,7 @@ package struct DiffTextView: NSViewRepresentable {
         coordinator.rememberPosition()
         if let textView = coordinator.textView { coordinator.splitController?.unregister(textView: textView) }
         coordinator.hoverController.detach()
+        coordinator.scopeHover.detach()
         coordinator.report(to: nil)
         coordinator.usageObservation = nil
         NotificationCenter.default.removeObserver(coordinator)
@@ -295,6 +300,8 @@ package final class DiffTextViewCoordinator: NSObject {
     package let hoverController = DocHoverController()
     /// The decorations drawn over the plain text as the stages after it land (PERF-09).
     package let decorationStore = DecorationStore()
+    /// Outlines the scope of the row under the pointer in the text (DIFF-03).
+    package let scopeHover = ScopeHoverTracker()
     /// Where the pane reports its visible rows, and the text it reported them for.
     private var reported: (viewport: DecorationViewport, textID: UUID)?
     package var metrics: ViewportMetrics { fragmentProvider.metrics }

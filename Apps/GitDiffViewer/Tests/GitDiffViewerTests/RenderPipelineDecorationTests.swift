@@ -181,7 +181,7 @@ struct RenderPipelineDecorationTests {
                 guard case .decorated(let id, let layer) = event, id == file.id else { return nil }
                 return (index, layer)
             }
-        #expect(Set(decorated.map(\.1)) == [.color(.lexical), .color(.syntactic), .marks])
+        #expect(Set(decorated.map(\.1)) == [.color(.lexical), .color(.syntactic), .marks, .scopes])
         #expect(decorated.allSatisfy { $0.0 > (published ?? .max) })
     }
 
