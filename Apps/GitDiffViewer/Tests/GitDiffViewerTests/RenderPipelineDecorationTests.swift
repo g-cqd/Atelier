@@ -185,6 +185,35 @@ struct RenderPipelineDecorationTests {
         #expect(decorated.allSatisfy { $0.0 > (published ?? .max) })
     }
 
+    /// A card list shows more sides than the colour cache keeps: a card that stays on screen is never shown anew, so
+    /// nothing would colour it again, and showing one card, as the list scrolls to it, dropped its neighbours' colour.
+    @Test
+    func `every card of a list longer than the colour cache keeps its colour once shown`() async throws {
+        let count = DiffDecorator.cacheCapacity / 2 + 8
+        let pairs = (0 ..< count)
+            .map { index in
+                reader.blobContents["o\(index)"] = "let a\(index) = \(index)\n"
+                reader.blobContents["n\(index)"] = "let a\(index) = -\(index)\n"
+                return pair("f\(index).swift", old: "o\(index)", new: "n\(index)")
+            }
+        sut.render(
+            .cards(pairs), left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
+            granularity: .word, heuristics: DiffHeuristics(), keepingPublished: false)
+        try await taskProvider.waitForAllTasks()
+        let cards = sut.cards.map(\.rendered)
+        try #require(cards.count == count)
+
+        // As the list shows its cards scrolled through from its top.
+        for card in cards {
+            sut.decorateDisplayed(card.id)
+            try await taskProvider.waitForAllTasks()
+        }
+
+        let plain = cards.indices.filter { decorations(of: cards[$0].new)?.new.colors == nil }
+        #expect(plain.isEmpty, "cards without colour: \(plain)")
+        #expect(sut.decorator.started == 2 * count)
+    }
+
     @Test
     func `both sides of one blob are coloured once`() async throws {
         _ = try await decorate(pair("a.swift", old: "old", new: "old"))
