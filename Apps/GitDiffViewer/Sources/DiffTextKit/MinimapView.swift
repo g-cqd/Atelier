@@ -5,7 +5,8 @@ package import Foundation
 import SwiftUI
 
 /// Overview strip of one pane: every row is a bar whose length follows the line and whose color follows the change
-/// kind, with the rows currently on screen framed. The bars are rasterized once per document and size.
+/// kind, with the rows currently on screen framed. The bars are rasterized once per document, size, appearance and
+/// backing scale.
 package final class MinimapView: NSView {
     package static let width: CGFloat = 64
 
@@ -24,7 +25,17 @@ package final class MinimapView: NSView {
     /// The pane this strip belongs to; wheel events over the strip scroll it.
     package weak var scrollView: NSScrollView?
 
-    private var bars: (size: CGSize, image: CGImage)?
+    /// What the bars were rasterized for: their colours are dynamic, resolved in the appearance of the time, and
+    /// their bitmap has the backing scale of the time.
+    struct BarsKey: Equatable {
+        let size: CGSize
+        let scale: CGFloat
+        let appearance: NSAppearance.Name
+    }
+
+    private var bars: (key: BarsKey, image: CGImage)?
+    /// How many times the bars were rasterized, for tests.
+    private(set) var rasterizations = 0
     private let horizontalPadding: CGFloat = 4
     private let longestBar = 100
 
@@ -37,8 +48,11 @@ package final class MinimapView: NSView {
         NSRect(x: 0, y: 0, width: 1, height: bounds.height).fill()
 
         guard let rendered, !rendered.rows.isEmpty, let context = NSGraphicsContext.current?.cgContext else { return }
-        if bars?.size != bounds.size {
-            bars = rasterizeBars(rendered: rendered).map { (bounds.size, $0) }
+        let key = BarsKey(
+            size: bounds.size, scale: window?.backingScaleFactor ?? 2,
+            appearance: effectiveAppearance.name)
+        if bars?.key != key {
+            bars = rasterizeBars(rendered: rendered, scale: key.scale).map { (key, $0) }
         }
         if let image = bars?.image {
             context.saveGState()
@@ -58,6 +72,16 @@ package final class MinimapView: NSView {
         viewport.fill()
         rendered.palette.textColor.withAlphaComponent(0.3).setStroke()
         NSBezierPath(rect: viewport.insetBy(dx: 0.5, dy: 0.5)).stroke()
+    }
+
+    package override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
+    package override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        needsDisplay = true
     }
 
     @objc package func setNeedsDisplayOnScroll(_ notification: Notification) {
@@ -86,8 +110,8 @@ package final class MinimapView: NSView {
     ///
     /// Detail follows the density: one bar per row, then one bar per point summarizing its rows by strongest change
     /// kind and longest line, then a schematic map where context is a faint constant bar and only changes stand out.
-    private func rasterizeBars(rendered: RenderedText) -> CGImage? {
-        let scale = window?.backingScaleFactor ?? 2
+    private func rasterizeBars(rendered: RenderedText, scale: CGFloat) -> CGImage? {
+        rasterizations += 1
         let width = Int(bounds.width * scale)
         let height = Int(bounds.height * scale)
         guard width > 0, height > 0,
