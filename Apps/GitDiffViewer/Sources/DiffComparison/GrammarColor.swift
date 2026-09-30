@@ -134,10 +134,14 @@ package final class ColorTierGate: Sendable {
     }
 
     /// Whether grammar colour runs for `language`.
+    /// Whether the grammar tier runs on sides of `language`: grammar colour is on for it, and its table can load
+    /// under the services' limits, so a language whose table is too large starts no job and keeps the lexer's colour.
     package func grammarColors(_ language: Language) -> Bool {
-        state.withLock { state in
-            state.services != nil && Self.languages.contains(language) && !state.grammarOff.contains(language)
+        let services = state.withLock { state in
+            Self.languages.contains(language) && !state.grammarOff.contains(language) ? state.services : nil
         }
+        guard let services, let name = GrammarEngine.grammarName(of: language) else { return false }
+        return services.artifacts.admits(name)
     }
 
     /// Whether grammar colour runs for any language.
