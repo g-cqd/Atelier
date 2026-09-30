@@ -1,4 +1,5 @@
 import AppKit
+import AtelierSwiftSyntax
 import DiffCore
 import Metal
 import Testing
@@ -36,14 +37,35 @@ struct ScopeRibbonTests {
     }
 
     @Test
-    func `the gutter is exactly 2 pt wider than its numbers and padding were`() throws {
-        let rendered = try Self.rendered()
-        let sut = DiffGutterView(clipView: nil)
-        sut.style = .new
-        sut.rendered = rendered
+    func `the gutter's width follows what it shows: the ribbon's own setting, and whether the change layer draws`()
+        throws
+    {
+        // No compact changes and the standard colours: nothing for the change layer to draw, so it takes no width.
+        let bare = DiffGutterView(clipView: nil)
+        bare.style = .new
+        bare.rendered = try Self.rendered()
+        let bareWidth = bare.thickness
 
-        let digit = ("8" as NSString).size(withAttributes: [.font: rendered.palette.gutterFont]).width
-        #expect(sut.thickness == (8 + 8 + 2 * digit).rounded(.up) + 2)
+        bare.showsScopeRibbon = false
+        // Turning the ribbon off reclaims its own width and the air before it.
+        #expect(bare.thickness == bareWidth - (DiffGutterView.ribbonWidth + 2))
+
+        let prepared = PreparedDiff(
+            FileDiffInput(title: "", oldText: "let a = 1\n", newText: "let a = 2\n", language: .plain),
+            granularity: .word)
+        let compact = DiffRenderer.render(
+            prepared: [prepared], options: DiffRenderer.Options(sides: [.unified], compactsInline: true),
+            layout: .full, withHeaders: false)
+        guard let compactRendered = compact.unified else {
+            Issue.record("expected a unified render")
+            return
+        }
+        let marked = DiffGutterView(clipView: nil)
+        marked.style = .new
+        marked.rendered = compactRendered
+
+        // With a change to mark, the layer and its own negative space take their width back.
+        #expect(marked.thickness == bareWidth + (ChangeMarkerLayout.hitWidth + 2))
     }
 
     @Test
@@ -105,5 +127,24 @@ struct ScopeRibbonTests {
         pane.settle()
         #expect(try pane.renderingColor(at: rendered.lineStarts[0] + 9) == nil)
         #expect(try pane.pixels().differing(from: resting, in: pane.bounds) == 0)
+    }
+
+    /// Hovering deep inside a tall scope, far from either brace, still finds it, in a file pane (book D43, "hover
+    /// hits the wrong row"): the ribbon's own row lookup is a direct TextKit fragment lookup, not guessed from a
+    /// window around some other row, so it is not the class of bug the change markers had.
+    @Test
+    func `hovering a row deep inside a tall scope finds it, far from either of its braces`() throws {
+        let text = "struct S {\n" + (1 ... 20).map { "    let v\($0) = \($0)\n" }.joined() + "}\n"
+        let rendered = try #require(DiffRenderer.render(oldText: text, newText: text, language: .swift).new)
+        let facts = try #require(SwiftSyntaxFacts.extract(text))
+        let scopes = ScopeLines(
+            facts.scopes, text: text, lineRanges: DiffRenderer.lineRanges(of: text, lines: DiffModel.lines(of: text)))
+        let pane = try HostedDecoratedPane(
+            rendered: rendered, decorations: DiffDecorations(new: .init(scopes: scopes), markVersion: 1))
+        let gutter = try Self.gutter(of: pane)
+
+        gutter.hoverScope(atRow: 10)
+
+        #expect(gutter.hoveredScope == HoveredScope(isOld: false, index: 0))
     }
 }

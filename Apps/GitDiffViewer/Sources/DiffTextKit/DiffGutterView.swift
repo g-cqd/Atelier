@@ -36,6 +36,7 @@ package final class DiffGutterView: NSView {
             metrics = Metrics(rendered: rendered)
             setHoveredScope(nil)
             invalidateIntrinsicContentSize()
+            registerWidth()
             needsDisplay = true
             // Revealed rows move the boundaries after them, and the handles on them.
             window?.invalidateCursorRects(for: self)
@@ -53,12 +54,34 @@ package final class DiffGutterView: NSView {
     var hoveredScope: HoveredScope?
     /// Called when the ribbon, or a folding command in the pane, folds or unfolds scopes (DIFF-03).
     package var onScopeFold: ((ScopeFoldRequest) -> Void)?
-    /// Whether the ribbon draws and takes the pointer's hover; the gutter keeps the width it takes either way, so
-    /// turning it back on never shifts the text.
-    package var showsScopeRibbon = true { didSet { needsDisplay = true } }
+    /// Whether the ribbon draws and takes the pointer's hover: off, the gutter reclaims its width, since there is
+    /// nothing left to show there (book D43, "the gutter's width follows what it shows").
+    package var showsScopeRibbon = true {
+        didSet {
+            guard showsScopeRibbon != oldValue else { return }
+            invalidateIntrinsicContentSize()
+            registerWidth()
+            needsDisplay = true
+        }
+    }
 
     package var style: GutterStyle = .dual {
-        didSet { invalidateIntrinsicContentSize() }
+        didSet {
+            invalidateIntrinsicContentSize()
+            registerWidth()
+        }
+    }
+
+    /// Shares this gutter's width with the other gutters of a card list, so every card's trailing edge lines up
+    /// (book D43, "one gutter width across the card list"); nil keeps this gutter's own width, as a single file
+    /// pane's does.
+    package weak var widthCoordinator: GutterWidthCoordinator? {
+        didSet {
+            guard widthCoordinator !== oldValue else { return }
+            oldValue?.unregister(ObjectIdentifier(self))
+            registerWidth()
+            invalidateIntrinsicContentSize()
+        }
     }
 
     /// Diagnostics for the pane's rows: a row with one tints its line number over a faint underlay, without changing
@@ -85,16 +108,14 @@ package final class DiffGutterView: NSView {
 
     /// The text system whose rows are numbered; set together with `rendered`.
     package weak var source: (any GutterTextSource)?
-    private weak var clipView: NSClipView?
-    /// The padding before the numbers: the change layer moved to their trailing side, next to the text.
-    private let padding: CGFloat = 3
-    private let columnGap: CGFloat = 10
+    weak var clipView: NSClipView?
+    let columnGap: CGFloat = 10
     private var handleDrag: HandleDrag?
     /// The handle under the pointer, drawn highlighted. The view's tooltip tells its gap's hidden lines meanwhile.
     private var hoveredHandle: HandleID?
     private var hoverTracking: NSTrackingArea?
 
-    private var metrics = Metrics(rendered: nil)
+    var metrics = Metrics(rendered: nil)
 
     /// Without a clip view the gutter belongs to an embedded pane that shows its whole document.
     package init(clipView: NSClipView?) {
@@ -118,15 +139,8 @@ package final class DiffGutterView: NSView {
 
     package override var isFlipped: Bool { true }
 
-    /// The gutter's width, on a whole point: the text beside it starts on one, so its clip view is not scrolled
-    /// sideways by the fraction AppKit aligns it by.
-    package var thickness: CGFloat {
-        let columns: CGFloat = style == .dual ? 2 : 1
-        return (padding + Self.trailingPadding + columns * metrics.columnWidth + (columns - 1) * columnGap).rounded(.up)
-    }
-
-    package override var intrinsicContentSize: NSSize {
-        NSSize(width: thickness, height: NSView.noIntrinsicMetric)
+    isolated deinit {
+        widthCoordinator?.unregister(ObjectIdentifier(self))
     }
 
     var palette: DiffPalette { rendered?.palette ?? .system }
@@ -281,7 +295,7 @@ package final class DiffGutterView: NSView {
     }
 
     /// A one-point-tall band across the gutter at `point`, for hit tests.
-    private static func row(at point: NSPoint) -> NSRect {
+    static func row(at point: NSPoint) -> NSRect {
         NSRect(x: 0, y: point.y, width: 1, height: 1)
     }
 
@@ -428,7 +442,7 @@ extension DiffGutterView {
     }
 
     /// The font, column width and number attributes of the current text, which every drawn row reuses.
-    fileprivate struct Metrics {
+    struct Metrics {
         let font: NSFont
         let columnWidth: CGFloat
         let contextAttributes: [NSAttributedString.Key: Any]
@@ -486,79 +500,6 @@ extension DiffGutterView {
         list.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(
             self, selector: #selector(listDidScroll(_:)), name: NSView.boundsDidChangeNotification, object: list)
-    }
-}
-
-// MARK: Diagnostics
-
-extension DiffGutterView {
-    /// The row whose decorated line number sits under `point`, with its diagnostics and the number's frame.
-    private func diagnosticHit(at point: NSPoint) -> (
-        rowIndex: Int, diagnostics: DiagnosticOverlay.RowDiagnostics, rect: NSRect
-    )? {
-        guard overlay?.isEmpty == false, point.x >= 0, point.x < bounds.width else { return nil }
-        var found: (Int, DiagnosticOverlay.RowDiagnostics, NSRect)?
-        forEachFragment(in: Self.row(at: point)) { fragment, _, rowIndex, y in
-            // The row's own height: the band of a gap after it holds no line number.
-            let height = fragment.layoutFragmentFrame.height - (rendered?.bandSpacing(afterRow: rowIndex) ?? 0)
-            guard point.y >= y, point.y < y + height, let diagnostics = overlay?.row(rowIndex) else { return }
-            found = (rowIndex, diagnostics, NSRect(x: 0, y: y, width: bounds.width, height: height))
-        }
-        return found
-    }
-
-    /// Opens `findings` of `rowIndex` as a click on the row's decorated line number opens the row's own, anchored on
-    /// that line number.
-    /// - Returns: False when nothing takes the click or the row is not laid out, true otherwise.
-    @discardableResult
-    package func showFindings(_ findings: [Finding], ofRow rowIndex: Int) -> Bool {
-        guard let onDiagnosticClick, let rect = lineNumberRect(ofRow: rowIndex) else { return false }
-        onDiagnosticClick(rowIndex, findings, rect, self)
-        return true
-    }
-
-    /// `rowIndex`'s line number in this view, as ``diagnosticHit(at:)`` measures it: the row's fragment, less the band
-    /// of a gap after it.
-    private func lineNumberRect(ofRow rowIndex: Int) -> NSRect? {
-        guard let source, let rendered, rendered.lineStarts.indices.contains(rowIndex),
-            let layoutManager = source.gutterLayoutManager, let contentManager = layoutManager.textContentManager,
-            let location = contentManager.location(
-                layoutManager.documentRange.location, offsetBy: rendered.lineStarts[rowIndex])
-        else { return nil }
-        layoutManager.ensureLayout(for: NSTextRange(location: location))
-        guard let fragment = layoutManager.textLayoutFragment(for: location) else { return nil }
-        let y = fragment.layoutFragmentFrame.minY + source.gutterInset - (clipView?.bounds.origin.y ?? 0)
-        let height = fragment.layoutFragmentFrame.height - rendered.bandSpacing(afterRow: rowIndex)
-        return NSRect(x: 0, y: y, width: bounds.width, height: height)
-    }
-}
-
-// MARK: Line numbers
-
-extension DiffGutterView {
-    /// The top of the line number of the row `fragment` lays out, whose top is `y` in this view.
-    ///
-    /// Numbers sit on the same baseline as the row's first line of text, whatever the line height is, so they follow
-    /// the text up when a taller line centres it: TextKit reports the baseline it laid out, which is not where a
-    /// baseline offset then drew the glyphs.
-    fileprivate func numberTop(of fragment: NSTextLayoutFragment, at y: CGFloat) -> CGFloat {
-        let firstBaseline =
-            fragment.textLineFragments.first.map { $0.typographicBounds.minY + $0.glyphOrigin.y }
-            ?? fragment.layoutFragmentFrame.height * 0.75
-        return y + firstBaseline - (rendered?.baselineOffset ?? 0) - metrics.font.ascender
-    }
-
-    /// Where the gutter draws the line number of each row intersecting `rect` of this view: across the gutter, from
-    /// the number's ascender down to its descender, on its row's baseline (book DIFF-06).
-    /// - Complexity: O(rows in `rect`), plus a lookup of the first fragment.
-    func lineNumberFrames(in rect: NSRect) -> [Int: NSRect] {
-        let font = metrics.font
-        var frames: [Int: NSRect] = [:]
-        forEachFragment(in: rect) { fragment, _, rowIndex, y in
-            frames[rowIndex] = NSRect(
-                x: 0, y: numberTop(of: fragment, at: y), width: bounds.width, height: font.ascender - font.descender)
-        }
-        return frames
     }
 }
 

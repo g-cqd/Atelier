@@ -8,48 +8,97 @@ struct HoveredScope: Equatable {
     let index: Int
 }
 
-/// The scope ribbon in the gutter's trailing padding (DIFF-03, `scope-ribbon-design.md`): each row shaded by how deeply
-/// it nests, a hairline where a scope ends, and the scope under the pointer outlined, its braces lit in the text. It is
-/// drawn from the pane's decorations as the gutter draws, so scopes that land lay nothing out.
+/// One row the ribbon samples to draw its capsules (book D43): its index, its own top and bottom in the gutter, and
+/// how deeply it nests.
+private struct RibbonRow {
+    let rowIndex: Int
+    let top: CGFloat
+    let bottom: CGFloat
+    let depth: Int
+}
+
+/// The scope ribbon in the gutter's trailing padding (DIFF-03, D43, `scope-ribbon-design.md`): capsule segments with
+/// rounded ends, no stroke, each nested scope shaded darker than the one holding it, and the scope under the pointer
+/// outlined with a light stroke, its braces lit in the text. It is drawn from the pane's decorations as the gutter
+/// draws, so scopes that land lay nothing out.
 extension DiffGutterView {
-    /// The padding after the numbers, which holds, from them to the text, 2 pt of air, the change layer and the ribbon.
-    /// With the 3 pt before the numbers, the gutter is 2 pt wider than before the ribbon, its whole cost, taken whether
-    /// or not the text has scopes or changes, so the gutter never changes width when they land.
-    static let trailingPadding: CGFloat = 2 + ChangeMarkerLayout.hitWidth + ribbonWidth + 2
-    static let ribbonWidth: CGFloat = 5
+    /// The numbers to the gutter's trailing hairline: nothing beyond the hairline's own gap when the ribbon is off,
+    /// so the gutter reclaims the ribbon's width (book D43, "the gutter's width follows what it shows"); otherwise 2
+    /// pt of air, the ribbon, and 2 pt more to the hairline.
+    var trailingPadding: CGFloat { Self.ribbonTrailingGap + (showsScopeRibbon ? Self.ribbonGap + Self.ribbonWidth : 0) }
+    static let ribbonWidth: CGFloat = 8
+    /// Air between the numbers and the ribbon.
+    private static let ribbonGap: CGFloat = 2
+    /// Past the ribbon, to the gutter's trailing hairline.
+    private static let ribbonTrailingGap: CGFloat = 2
     /// How many levels of nesting the shading tells apart, and how much of the text colour each adds.
     static let ribbonLevels = 4
     static let ribbonLevelAlpha: CGFloat = 0.05
+    /// The hovered scope's stroke: mostly white, with enough of the text colour blended in that it still shows
+    /// against a light, barely shaded gutter background, so it sets the scope apart from its neighbours whichever
+    /// appearance is active, not only a dark one (book D43).
+    var hoverStrokeColor: NSColor {
+        (NSColor.white.blended(withFraction: 0.25, of: palette.textColor) ?? .white).withAlphaComponent(0.7)
+    }
 
-    /// The ribbon's leading edge: 1 pt before the gutter's trailing hairline.
-    var ribbonX: CGFloat { bounds.width - 2 - Self.ribbonWidth }
-    /// The change layer's leading edge, right after the numbers and before the ribbon: the compact view's markers and
-    /// the Xcode colours' change bar.
-    var changeLayerX: CGFloat { ribbonX - ChangeMarkerLayout.hitWidth }
+    /// The ribbon's leading edge, before the gutter's trailing hairline; the hairline's own edge when the ribbon is
+    /// off, since nothing draws left of it then.
+    var ribbonX: CGFloat { bounds.width - Self.ribbonTrailingGap - (showsScopeRibbon ? Self.ribbonWidth : 0) }
 
     /// The decorations of the text on show; nil while none has landed.
     private var currentDecorations: DiffDecorations? {
         rendered.flatMap { decorations?.decorations(for: $0) }
     }
 
-    /// Each row near `rect` shaded by its depth, with a hairline under a row where a scope ends. A row outside every
-    /// scope, or whose side has no scopes yet, has none.
-    /// - Complexity: O(rows in `rect`)
+    /// Each scope near `rect` as a capsule spanning its rows, shaded by how deeply it nests: a scope inside another
+    /// draws over it, darker, so the two read as nested pills, the outer one's rounded ends showing past the inner's
+    /// (book D43). A row outside every scope, or whose side has no scopes yet, draws at no level. No stroke at rest;
+    /// only the hovered scope gets one, in ``drawHoveredScope(in:)``.
+    /// - Complexity: O(rows in `rect` × ``ribbonLevels``)
     func drawRibbon(in rect: NSRect) {
         guard let rendered, let decorations = currentDecorations else { return }
-        let color = palette.textColor
-        let x = ribbonX
-        forEachFragment(in: rect) { fragment, row, rowIndex, y in
-            guard let found = decorations.scopeLine(of: row, on: rendered.side) else { return }
-            let depth = min(found.scopes.depth(ofLine: found.line), Self.ribbonLevels)
-            guard depth > 0 else { return }
+        // A line's margin either side tells a run that starts or ends at the sample's own edge from one that merely
+        // continues past it, so only a confirmed boundary draws a rounded cap.
+        var rows: [RibbonRow] = []
+        forEachFragment(in: rect.insetBy(dx: 0, dy: -rendered.lineHeight)) { fragment, row, rowIndex, y in
             let height = fragment.layoutFragmentFrame.height - rendered.bandSpacing(afterRow: rowIndex)
-            color.withAlphaComponent(Self.ribbonLevelAlpha * CGFloat(depth)).setFill()
-            NSRect(x: x, y: y, width: Self.ribbonWidth, height: height).fill()
-            guard found.scopes.endsScope(atLine: found.line) else { return }
-            color.withAlphaComponent(Self.ribbonLevelAlpha * CGFloat(Self.ribbonLevels)).setFill()
-            NSRect(x: x, y: y + height - 1, width: Self.ribbonWidth, height: 1).fill()
+            let depth: Int
+            if let found = decorations.scopeLine(of: row, on: rendered.side) {
+                depth = min(found.scopes.depth(ofLine: found.line), Self.ribbonLevels)
+            } else {
+                depth = 0
+            }
+            rows.append(RibbonRow(rowIndex: rowIndex, top: y, bottom: y + height, depth: depth))
         }
+        guard !rows.isEmpty else { return }
+        for level in 1 ... Self.ribbonLevels {
+            var start: Int?
+            for index in rows.indices {
+                let inRun = rows[index].depth >= level
+                if inRun, start == nil { start = index }
+                if !inRun, let begin = start {
+                    drawCapsule(rows[begin ..< index], of: rows.count, level: level)
+                    start = nil
+                }
+            }
+            if let begin = start { drawCapsule(rows[begin...], of: rows.count, level: level) }
+        }
+    }
+
+    /// One depth level's capsule over `run`, of the `total` rows sampled with a line's margin either side of what
+    /// shows: rounded on an edge the sample confirms is the scope's own — the row beyond it falls short of `level`, or
+    /// the run reaches the text's first or last row — left open on an edge the sample only runs into, so its curve
+    /// never shows within the drawn rect.
+    private func drawCapsule(_ run: ArraySlice<RibbonRow>, of total: Int, level: Int) {
+        guard let first = run.first, let last = run.last else { return }
+        let overrun = Self.ribbonWidth * 2
+        let topConfirmed = run.startIndex > 0 || first.rowIndex == 0
+        let bottomConfirmed = run.endIndex < total || last.rowIndex == (rendered?.rows.count ?? 0) - 1
+        let top = topConfirmed ? first.top : first.top - overrun
+        let bottom = bottomConfirmed ? last.bottom : last.bottom + overrun
+        let capsule = NSRect(x: ribbonX, y: top, width: Self.ribbonWidth, height: bottom - top)
+        palette.textColor.withAlphaComponent(Self.ribbonLevelAlpha * CGFloat(level)).setFill()
+        NSBezierPath(roundedRect: capsule, xRadius: Self.ribbonWidth / 2, yRadius: Self.ribbonWidth / 2).fill()
     }
 
     /// The row whose own height, less a band after it, holds `point`; nil over a band or past the text.
@@ -109,8 +158,9 @@ extension DiffGutterView {
         ]
     }
 
-    /// The hovered scope as a rounded capsule over the ribbon, from its first row to its last, with a `⌄` on the
-    /// first and a `⌃` on the last.
+    /// The hovered scope outlined over the ribbon, from its first row to its last, with a `⌄` on the first and a `⌃`
+    /// on the last: a light stroke only, so its own depth shading stays and the stroke alone sets it apart from its
+    /// neighbours (book D43; no stroke otherwise).
     func drawHoveredScope(in rect: NSRect) {
         guard let rendered, let rows = hoveredRows() else { return }
         var edges: [Int: (top: CGFloat, bottom: CGFloat)] = [:]
@@ -126,21 +176,16 @@ extension DiffGutterView {
         let capsule = NSRect(x: ribbonX, y: top, width: Self.ribbonWidth, height: bottom - top)
             .insetBy(dx: 0.5, dy: 0.5)
         let radius = capsule.width / 2
-        let color = palette.textColor.withAlphaComponent(Self.capsuleAlpha)
-        palette.gutterBackground.setFill()
-        NSBezierPath(roundedRect: capsule, xRadius: radius, yRadius: radius).fill()
         let outline = NSBezierPath(roundedRect: capsule, xRadius: radius, yRadius: radius)
         outline.lineWidth = 1
-        color.setStroke()
+        hoverStrokeColor.setStroke()
         outline.stroke()
         if let first = edges[rows.first] { drawChevron(pointingDown: true, in: first) }
         if let last = edges[rows.last] { drawChevron(pointingDown: false, in: last) }
     }
 
-    /// A gap handle's outline under the pointer: the capsule's.
-    static let capsuleAlpha: CGFloat = 0.4
-
-    /// A small chevron centred on the ribbon in a row running from `edge.top` to `edge.bottom`.
+    /// A small chevron centred on the ribbon in a row running from `edge.top` to `edge.bottom`, in the hovered
+    /// scope's own stroke.
     private func drawChevron(pointingDown: Bool, in edge: (top: CGFloat, bottom: CGFloat)) {
         let midX = ribbonX + Self.ribbonWidth / 2
         let midY = min((edge.top + edge.bottom) / 2, edge.top + (rendered?.lineHeight ?? 0) / 2)
@@ -152,7 +197,7 @@ extension DiffGutterView {
         path.line(to: NSPoint(x: midX + half, y: midY + rise))
         path.lineWidth = 1
         path.lineCapStyle = .round
-        palette.textColor.withAlphaComponent(Self.capsuleAlpha).setStroke()
+        hoverStrokeColor.setStroke()
         path.stroke()
     }
 }
