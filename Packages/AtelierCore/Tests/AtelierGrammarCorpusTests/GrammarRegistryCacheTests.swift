@@ -148,17 +148,24 @@ struct GrammarRegistryCacheTests {
     }
 
     @Test
-    func `a cache file is read whole, and a missing or empty one is not read`() throws {
+    func `a cache file is read whole, and a missing, empty or oversized one is not read`() throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "table-read-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let bytes = Data((0 ..< 100_000).map { UInt8(truncatingIfNeeded: $0 &* 31) })
         try bytes.write(to: directory.appending(path: "whole"))
         try Data().write(to: directory.appending(path: "empty"))
+        // Past the limit, sparse: its size is set, and nothing is written.
+        let large = directory.appending(path: "large")
+        try Data().write(to: large)
+        let handle = try FileHandle(forWritingTo: large)
+        try handle.truncate(atOffset: UInt64(CompiledTableCache.maximumFileSize + 1))
+        try handle.close()
 
         #expect(CompiledTableCache.contents(of: directory.appending(path: "whole")) == bytes)
         #expect(CompiledTableCache.contents(of: directory.appending(path: "empty")) == nil)
         #expect(CompiledTableCache.contents(of: directory.appending(path: "missing")) == nil)
+        #expect(CompiledTableCache.contents(of: large) == nil)
     }
 
     /// A table file cut short, of another version, whose header miscounts its payload, or that is not a table file.
