@@ -40,6 +40,9 @@ struct SettingsView: View {
             Tab("Projects", systemImage: "folder.badge.gearshape", value: SettingsPane.projects) {
                 ProjectsSettings(scope: scope)
             }
+            Tab("Beta", systemImage: "flask", value: SettingsPane.beta) {
+                BetaSettings()
+            }
         }
         .frame(width: 560, height: 560)
     }

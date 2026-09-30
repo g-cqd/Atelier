@@ -7,30 +7,19 @@ extension FocusedValues {
     @Entry var textBackend: Binding<TextBackendKind>?
 }
 
-/// The Develop menu: the text engine of the focused comparison window. It shows in debug builds, or when the defaults
-/// key ``TextBackendKind/showsDevelopMenuKey`` is set.
+/// The Beta menu: the text engine of the focused comparison window. Shown in every build (book D44: no `#if DEBUG`
+/// feature gate); its one choice, CoreText, is off by default and labelled as drawing only.
 struct DevelopCommands: Commands {
     @FocusedBinding(\.textBackend) private var textBackend
 
-    /// Whether the menu shows: always in a debug build, and in a release build when a developer asked for it.
-    static var isShown: Bool {
-        #if DEBUG
-            true
-        #else
-            UserDefaults.standard.bool(forKey: TextBackendKind.showsDevelopMenuKey)
-        #endif
-    }
-
     var body: some Commands {
-        if Self.isShown {
-            CommandMenu("Develop") {
-                Picker("Text Engine", selection: $textBackend) {
-                    ForEach(TextBackendKind.allCases) { kind in
-                        Text(kind.title).tag(Optional(kind))
-                    }
+        CommandMenu("Beta") {
+            Picker("Text Engine", selection: $textBackend) {
+                ForEach(TextBackendKind.allCases) { kind in
+                    Text(kind.title).tag(Optional(kind))
                 }
-                .disabled(textBackend == nil)
             }
+            .disabled(textBackend == nil)
         }
     }
 }

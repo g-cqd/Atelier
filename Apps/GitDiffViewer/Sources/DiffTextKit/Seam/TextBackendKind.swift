@@ -21,8 +21,6 @@ package enum TextBackendKind: String, CaseIterable, Identifiable, Sendable {
     package static let environmentKey = "GDV_TEXT_BACKEND"
     /// The hidden defaults key that picks a new window's backend, when the environment does not.
     package static let defaultsKey = "developer.textBackend"
-    /// The hidden defaults key that shows the Develop menu in a release build.
-    package static let showsDevelopMenuKey = "developer.showsDevelopMenu"
 
     /// The backend a new window starts with: the one `environment` names under ``environmentKey``, else the one
     /// `stored` names, by default the standard defaults' value under ``defaultsKey``, else TextKit 2. A name no
