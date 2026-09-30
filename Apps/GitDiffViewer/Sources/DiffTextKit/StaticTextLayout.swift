@@ -19,13 +19,18 @@ package enum WrapMode: Hashable {
     }
 }
 
-/// A TextKit 2 text system whose layout manager is not attached to any view, so measuring and re-laying it out
-/// never touches AppKit layout. A card pane displays it by adding its own text view's layout manager to
-/// `contentStorage`, so the text and the row spacing computed here are shown without being copied.
+/// A TextKit 2 text system that measures a card's text apart from any view, so measuring and re-laying it out never
+/// touches AppKit layout. A card pane shows it in its text view: the view takes ``container``, and with it
+/// ``layoutManager``, so the rows measured here are the rows shown, laid out once (``sharesLayout``); or, before that,
+/// the view's own layout manager joined `contentStorage` and laid the text out again (CardScrollBenchmark compares the
+/// two).
 @MainActor
 package final class StaticTextLayout {
     /// The space above a card's first row and below its last: none, so a card's body is its rows.
     package static let verticalInset: CGFloat = 0
+    /// Whether the layouts made from now on are shown with their own layout manager (``sharesLayout``). Only
+    /// CardScrollBenchmark turns it off, to time the layout the view did of its own.
+    package static var sharesLayoutWithView = true
 
     package let rendered: RenderedText
     /// The space above the first row, which the gutter and the height read from each layout: ``verticalInset``, and
@@ -34,10 +39,16 @@ package final class StaticTextLayout {
     /// The space below the last row: ``verticalInset``, and the band of a gap at the end of the file.
     package let bottomInset: CGFloat
     package let contentStorage = NSTextContentStorage()
-    package let layoutManager = NSTextLayoutManager()
+    /// Whether a card's text view shows this layout through ``container`` and ``layoutManager`` rather than lay the
+    /// text out with a layout manager of its own.
+    package let sharesLayout: Bool
+    /// Lays out from the top, and keeps what it laid out, when shared: see ``ContiguousTextContainer`` and
+    /// ``RetainingTextLayoutManager``, which a card's text view needs.
+    package let layoutManager: NSTextLayoutManager
     /// Delegate for every layout manager on `contentStorage`, so a displaying view colours rows the same way.
     package let fragmentProvider: DiffFragmentProvider
-    private let container = NSTextContainer(size: NSSize(width: 0, height: DiffPaneMetrics.unboundedExtent))
+    /// The container a card's text view takes to show the layout, when shared.
+    package let container: NSTextContainer
     package private(set) var width: CGFloat = 0
     /// The width a displaying view needs: the longest line or the pane, whichever is wider, when lines do not wrap;
     /// the container width otherwise.
@@ -54,6 +65,10 @@ package final class StaticTextLayout {
         inset = Self.verticalInset + rendered.bandAbove
         bottomInset = Self.verticalInset + rendered.bandBelow
         fragmentProvider = DiffFragmentProvider(rendered: rendered)
+        sharesLayout = Self.sharesLayoutWithView
+        let size = NSSize(width: 0, height: DiffPaneMetrics.unboundedExtent)
+        container = sharesLayout ? ContiguousTextContainer(size: size) : NSTextContainer(size: size)
+        layoutManager = sharesLayout ? RetainingTextLayoutManager() : NSTextLayoutManager()
         container.lineFragmentPadding = DiffPaneMetrics.lineFragmentPadding
         container.widthTracksTextView = false
         layoutManager.textContainer = container
@@ -87,7 +102,9 @@ package final class StaticTextLayout {
             } else {
                 viewportWidth
             }
-        if width != self.width {
+        // A view that showed the layout unwrapped had its container follow the view's width.
+        if container.widthTracksTextView { container.widthTracksTextView = false }
+        if width != self.width || container.size.width != max(width, 1) {
             self.width = width
             container.size = NSSize(width: max(width, 1), height: DiffPaneMetrics.unboundedExtent)
             layoutManager.invalidateLayout(for: layoutManager.documentRange)

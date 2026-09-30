@@ -110,16 +110,33 @@ struct CardPaneRowPlacementTests {
         #expect((sut.textView as? DiffPaneTextView)?.placesContainerAtInset == true)
     }
 
-    /// AppKit works out a text view's container origin from its whole laid-out text when the container keeps its own
-    /// width, as a wrapped card's does, and reads it on every pass.
+    /// A wrapped card measures its height by laying its whole text out; its text view shows those rows as they were
+    /// laid out, rather than lay the text out again from its top, before and after a reveal renders it anew.
     @Test
-    func `a wrapped card showing its top lays out only the rows near its top`() {
-        let sut = CardInList(showing: Self.file(lines: 300), wrapMode: .viewport)
+    func `a wrapped card shows the rows it measured, laid out once, and a reveal's too`() throws {
+        let sut = CardInList(showing: Self.changes(), wrapMode: .viewport)
+        try Self.expectShowsMeasuredRows(of: sut)
 
+        let text = try #require(sut.layouts.unified?.rendered)
+        let gap = try #require(text.gaps.first)
+        sut.show(Self.changes(revealing: [gap.marker.key: GapExpansion(below: 3, above: 2)]))
+
+        try Self.expectShowsMeasuredRows(of: sut)
+    }
+
+    /// Every row of `sut`'s card is laid out, in its measuring layout's layout manager, which its text view shows; and
+    /// scrolling deep and back lays none out again.
+    private static func expectShowsMeasuredRows(of sut: CardInList) throws {
+        let layout = try #require(sut.layouts.unified)
+        #expect(sut.textView?.textLayoutManager === layout.layoutManager)
         let laidOut = sut.fragments()
+        #expect(laidOut.count == layout.rendered.rows.count)
 
-        #expect(!laidOut.isEmpty)
-        #expect(laidOut.count < 100, "\(laidOut.count) rows of 300 laid out")
+        sut.scroll(toCardY: 3_000)
+        sut.scroll(toCardY: 0)
+
+        let after = sut.fragments()
+        #expect(laidOut.allSatisfy { after[$0.key] === $0.value }, "rows laid out again")
     }
 
     @Test
@@ -189,6 +206,8 @@ private final class CardInList {
     private let document = FlippedDocument()
     private let body: NSHostingController<EmbeddedDiffTextView>
     private let wrapMode: WrapMode
+    /// The card's measuring layouts, which its text view shows.
+    var layouts: CardLayouts { body.rootView.layouts }
 
     init(showing rendered: RenderedDiff, wrapMode: WrapMode = .none) {
         self.wrapMode = wrapMode

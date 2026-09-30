@@ -100,6 +100,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         layoutManager.textContainer = container
         context.coordinator.emptyStorage.addTextLayoutManager(layoutManager)
         let textView = DiffPaneTextView(frame: .zero, textContainer: container)
+        context.coordinator.ownContainer = container
         textView.placesContainerAtInset = RetainingTextLayoutManager.retainsFragments
         // The card sizes the text view: see `size`.
         textView.sizesToFitText = false
@@ -164,11 +165,13 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         }
         guard let layout, let textView = context.coordinator.textView, width > 0 else { return }
         let coordinator = context.coordinator
-        let isNewLayout = coordinator.layout !== layout
+        let isNewLayout = coordinator.layout !== layout || !coordinator.shows(layout)
         // The gutter's width follows the widest line number, which the text width depends on.
         if isNewLayout { pane.gutterView.rendered = layout.rendered }
         let textWidth = max(width - pane.gutterView.thickness, 1)
         prepare(layout, textWidth: textWidth)
+        // Taken before sizing, so the size applies to the container that shows the layout.
+        if isNewLayout { coordinator.takeContainer(of: layout) }
         size(textView, in: pane, for: layout, textWidth: textWidth, coordinator: coordinator)
         if isNewLayout {
             coordinator.attach(layout)
@@ -203,6 +206,9 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         textView.textContainer?.widthTracksTextView = tracksView
         if !tracksView {
             textView.textContainer?.size = NSSize(width: layout.width, height: DiffPaneMetrics.unboundedExtent)
+        } else if layout.sharesLayout {
+            // The layout's container follows the view from the next change of its frame, which may not come.
+            textView.textContainer?.size = NSSize(width: frameSize.width, height: DiffPaneMetrics.unboundedExtent)
         }
         textView.autoresizingMask = fits ? [.width] : []
         textView.setFrameSize(frameSize)
@@ -234,6 +240,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         package let hoverController = DocHoverController()
         /// The storage the text view shows until it shows a layout's.
         let emptyStorage = NSTextContentStorage()
+        /// The container the text view was made with, which it shows while it shows no shared layout.
+        var ownContainer: NSTextContainer?
         /// The decorations drawn over the plain text as the stages after it land (PERF-09).
         package let decorationStore = DecorationStore()
         /// Outlines the scope of the row under the pointer in the text (DIFF-03).
@@ -243,16 +251,48 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         /// The diagnostics this pane draws, which its gutter and every fragment its text view lays out hold.
         package let diagnostics = PaneDiagnosticsDisplay()
 
-        /// Moves the text view's layout manager onto the layout's content storage, leaving whichever storage it
-        /// was on, so the view shows the measured text and its row spacing rather than a copy.
+        /// Whether the text view shows `layout` through the layout's own container, when it shares it: another pane
+        /// that took the container since leaves this one without it.
+        func shows(_ layout: StaticTextLayout) -> Bool {
+            !layout.sharesLayout || textView?.textContainer === layout.container
+        }
+
+        /// Has the text view show `layout`'s container, and with it its layout manager and the rows it laid out, when
+        /// the layout is shared; ``attach(_:)`` then finishes showing it.
+        func takeContainer(of layout: StaticTextLayout) {
+            guard layout.sharesLayout, let textView else { return }
+            leaveContainer()
+            layout.container.textView = textView
+            appliedSize = nil
+            appliedMode = nil
+        }
+
+        /// Gives back the container of the shared layout on show, unless another pane took it since. A container
+        /// keeps its text view until told otherwise, and handing it to another view later takes the container of
+        /// whichever view it still names, so it is cleared first.
+        private func leaveContainer() {
+            guard let layout, layout.sharesLayout, let textView, layout.container.textView === textView else { return }
+            layout.layoutManager.renderingAttributesValidator = nil
+            layout.container.textView = nil
+        }
+
+        /// Shows `layout` in the text view: its text and row spacing as measured, not a copy. A shared layout's layout
+        /// manager is the view's already (``takeContainer(of:)``); otherwise the text view's own layout manager moves
+        /// onto the layout's content storage, leaving whichever storage it was on.
         package func attach(_ layout: StaticTextLayout) {
+            if !shows(layout) { takeContainer(of: layout) }
             guard let textView, let layoutManager = textView.textLayoutManager else { return }
-            layoutManager.textContentManager?.removeTextLayoutManager(layoutManager)
             // Before the view lays anything out, so each fragment it makes draws this pane's diagnostics and decorations.
             layout.fragmentProvider.overlay = diagnostics.overlay
             layout.fragmentProvider.decorations = decorationStore.snapshot
-            layout.contentStorage.addTextLayoutManager(layoutManager)
-            layoutManager.delegate = layout.fragmentProvider
+            if layout.sharesLayout {
+                adoptLaidOutFragments(of: layout)
+                decorationStore.install(on: layoutManager, retainsLayout: true)
+            } else {
+                layoutManager.textContentManager?.removeTextLayoutManager(layoutManager)
+                layout.contentStorage.addTextLayoutManager(layoutManager)
+                layoutManager.delegate = layout.fragmentProvider
+            }
             // The layout's space above its first row, the band of a gap at the top of the file among it.
             textView.textContainerInset = NSSize(width: 0, height: layout.inset)
             textView.backgroundColor = layout.rendered.palette.background
@@ -302,11 +342,30 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
             return first ..< last + 1
         }
 
-        /// Leaves the shared storage, which would otherwise keep a dismantled pane's layout manager alive and
-        /// invalidate it on every spacing change.
+        /// The rows a shared layout laid out before the pane showed it, as measuring a wrapped card lays out all of
+        /// them, came without the pane's diagnostics and decorations, which the view's own rows are made with.
+        /// - Complexity: O(rows laid out), which TextKit lays out from the top.
+        private func adoptLaidOutFragments(of layout: StaticTextLayout) {
+            let layoutManager = layout.layoutManager
+            layoutManager.enumerateTextLayoutFragments(from: layoutManager.documentRange.location) { fragment in
+                guard fragment.state == .layoutAvailable else { return false }
+                if let fragment = fragment as? DiffLayoutFragment {
+                    fragment.overlay = diagnostics.overlay
+                    fragment.decorations = decorationStore.snapshot
+                }
+                return true
+            }
+        }
+
+        /// Leaves the shared storage or the shared layout, which would otherwise keep a dismantled pane's layout
+        /// manager alive and invalidate it on every spacing change, or keep the layout's container naming the pane.
         package func detach() {
-            guard let layoutManager = textView?.textLayoutManager else { return }
-            layoutManager.textContentManager?.removeTextLayoutManager(layoutManager)
+            if let layout, layout.sharesLayout {
+                leaveContainer()
+                ownContainer?.textView = textView
+            } else if let layoutManager = textView?.textLayoutManager {
+                layoutManager.textContentManager?.removeTextLayoutManager(layoutManager)
+            }
             layout = nil
         }
     }
@@ -321,7 +380,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
 /// sat away from where the card measured them, its gutter drew their numbers and separators elsewhere, and its last
 /// rows fell past its end. A container that is not a simple rectangle turns that estimated layout off
 /// (`NSTextLayoutManager.textContainer`). A card that wraps is laid out whole either way.
-private final class ContiguousTextContainer: NSTextContainer {
+final class ContiguousTextContainer: NSTextContainer {
     override var isSimpleRectangularTextContainer: Bool { false }
 }
 
