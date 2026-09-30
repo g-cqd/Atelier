@@ -45,7 +45,11 @@ package final class DecorationStore {
     package private(set) var rendered: RenderedText?
     /// What the pane decorates ``rendered``'s rows with; nil leaves them plain.
     package private(set) var decorations: DiffDecorations?
-    private weak var layoutManager: NSTextLayoutManager?
+    weak var layoutManager: NSTextLayoutManager?
+    /// The gutter beside the pane, which draws the scope ribbon from ``snapshot`` and is redrawn when scopes land.
+    package weak var gutter: NSView?
+    /// The braces of the scope under the pointer, in UTF-16 offsets of the text, lit in the accent colour (DIFF-03).
+    var litBraces: [Int] = []
     /// Whether the layout manager keeps the rows it laid out when they leave the viewport, as a card's does.
     private var retainsLayout = false
 
@@ -79,10 +83,13 @@ package final class DecorationStore {
         let marksChanged = isNewText || decorations?.markVersion != self.decorations?.markVersion
         guard colorsChanged || marksChanged else { return }
         let hadColors = self.rendered != nil && self.decorations != nil
+        // Braces lit in another text point at nothing in this one; recolouring below clears what they drew.
+        if isNewText { litBraces = [] }
         self.rendered = rendered
         self.decorations = decorations
         snapshot.set(rendered: rendered, decorations: decorations)
         if colorsChanged { recolor(clearing: hadColors) }
+        if marksChanged { gutter?.needsDisplay = true }
         // TextKit draws each fragment in a view of its own, below the text view, and keeps what it drew.
         var views = view.map { [$0] } ?? []
         while let next = views.popLast() {
@@ -137,6 +144,7 @@ package final class DecorationStore {
             }
             row += 1
         }
+        paintLitBraces(in: anchor.offset ..< end, anchor: anchor, layoutManager: layoutManager)
     }
 
     /// Colours one row, `lineStart ..< lineEnd` in the text, with its source line's tokens: the plain text colour where

@@ -118,6 +118,10 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         gutterView.source = textView
         gutterView.style = gutter
         gutterView.overlay = context.coordinator.diagnostics.overlay
+        gutterView.decorations = context.coordinator.decorationStore.snapshot
+        gutterView.decorationStore = context.coordinator.decorationStore
+        context.coordinator.decorationStore.gutter = gutterView
+        context.coordinator.scopeHover.attach(to: textView, gutter: gutterView)
         let minimapView = MinimapView()
         minimapView.isHidden = true
         let pane = DiffPaneView(
@@ -140,6 +144,7 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
 
     package static func dismantleNSView(_ pane: DiffPaneView, coordinator: Coordinator) {
         coordinator.hoverController.detach()
+        coordinator.scopeHover.detach()
         coordinator.report(to: nil)
         coordinator.detach()
     }
@@ -228,6 +233,8 @@ package struct EmbeddedDiffTextView: NSViewRepresentable {
         let emptyStorage = NSTextContentStorage()
         /// The decorations drawn over the plain text as the stages after it land (PERF-09).
         package let decorationStore = DecorationStore()
+        /// Outlines the scope of the row under the pointer in the text (DIFF-03).
+        package let scopeHover = ScopeHoverTracker()
         /// Where the pane reports its visible rows, and the text it reported them for.
         private var reported: (viewport: DecorationViewport, textID: UUID)?
         /// The diagnostics this pane draws, which its gutter and every fragment its text view lays out hold.

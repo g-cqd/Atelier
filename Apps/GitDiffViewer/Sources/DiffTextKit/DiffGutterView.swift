@@ -34,6 +34,7 @@ package final class DiffGutterView: NSView {
     package var rendered: RenderedText? {
         didSet {
             metrics = Metrics(rendered: rendered)
+            setHoveredScope(nil)
             invalidateIntrinsicContentSize()
             needsDisplay = true
             // Revealed rows move the boundaries after them, and the handles on them.
@@ -42,6 +43,14 @@ package final class DiffGutterView: NSView {
             if handleDrag?.isHeldAtEdge == true { needsLayout = true }
         }
     }
+
+    /// What the pane's stages after the text found, which the scope ribbon reads as it draws (DIFF-03); nil draws no
+    /// ribbon.
+    package var decorations: DecorationSnapshot? { didSet { needsDisplay = true } }
+    /// The pane's decoration store, which lights the braces of the scope under the pointer.
+    package weak var decorationStore: DecorationStore?
+    /// The scope under the pointer, in the gutter or the text, outlined in the ribbon.
+    var hoveredScope: HoveredScope?
 
     package var style: GutterStyle = .dual {
         didSet { invalidateIntrinsicContentSize() }
@@ -140,14 +149,14 @@ package final class DiffGutterView: NSView {
     /// sideways by the fraction AppKit aligns it by.
     package var thickness: CGFloat {
         let columns: CGFloat = style == .dual ? 2 : 1
-        return (padding * 2 + columns * metrics.columnWidth + (columns - 1) * columnGap).rounded(.up)
+        return (padding + Self.trailingPadding + columns * metrics.columnWidth + (columns - 1) * columnGap).rounded(.up)
     }
 
     package override var intrinsicContentSize: NSSize {
         NSSize(width: thickness, height: NSView.noIntrinsicMetric)
     }
 
-    private var palette: DiffPalette { rendered?.palette ?? .system }
+    var palette: DiffPalette { rendered?.palette ?? .system }
 
     @objc private func clipViewDidScroll(_ notification: Notification) {
         // The row under a still pointer changed; the next move finds its handle or its marker again.
@@ -195,6 +204,7 @@ package final class DiffGutterView: NSView {
         if toolTip != help { toolTip = help }
         setHoveredHandle(handle)
         setHoveredChange(change?.key)
+        setHoveredScope(handle == nil ? point.flatMap(rowIndex(at:)).flatMap(scope(atRow:)) : nil)
     }
 
     package override func layout() {
@@ -368,6 +378,7 @@ package final class DiffGutterView: NSView {
         defer { NSGraphicsContext.restoreGraphicsState() }
         unobscuredRect(of: bounds).clip()
 
+        drawRibbon(in: dirtyRect)
         let metrics = metrics
         forEachFragment(in: dirtyRect) { fragment, row, rowIndex, y in
             let diagnostics = overlay?.row(rowIndex)
@@ -400,6 +411,7 @@ package final class DiffGutterView: NSView {
         drawGaps(in: dirtyRect)
         drawChangeBars(in: dirtyRect)
         drawChangeMarkers(in: dirtyRect)
+        drawHoveredScope(in: dirtyRect)
     }
 
     /// A faint rounded-rect wash in the severity's colour behind a diagnostic-carrying line number.
