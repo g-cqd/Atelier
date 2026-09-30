@@ -181,6 +181,7 @@ D1 to D3. D9 to D20 answer the open questions of 09-23.
 | D39 | 09-25 | GIT-06: what does a file under a commit show? | Typed: "when using grouping the diff happens against the previous commit state so we should always have the net difference between 2 commits not a weird sum": that commit's change, from its first parent to the commit; replaces D31 | GIT-06 |
 | D40 | 09-25 | How do agents build, hand back and use worktrees? | Typed (R124 to R126): build once per completed step in one configuration, with no combination matrix; the agent's final run after rebasing onto main is the verification and the coordinator does not rebuild it; few long-lived worktrees. Written into the skills (`3ac96f9`, `515e4e0`) and `AGENTS.md` (`eeba05e`) | PROC |
 | D41 | 09-25 | HOVER-16: how do TypeScript, JavaScript and Go hover without a language server? | "Lexer now, grammar later (Recommended)": a lexer-based doc-comment tier now; a language moves to its grammar once the grammar passes the gate and a background budget (TypeScript, C++ and Ruby today; Go and Java parse at about 34 s of CPU per 50 KB) | HOVER-16 |
+| D42 | 09-30 | DIFF-04: where do the compact view's change markers sit? | Typed: "the compact indicator are pleaced on the leading edge of gutter, i'd prefer them on the other side": on the gutter's trailing side, next to the text, with D18's Xcode change bar, so the change layer stays one thing | DIFF-04, DIFF-03 |
 
 ## Answered questions (09-23 09:37)
 
@@ -1899,3 +1900,4 @@ Times are CEST. "Mid-turn" marks a message the user sent while the assistant was
 | R127 | 09-25 | "i'd prefer that you cancel the one you just started please, and that you gives me the whole list of things we have yet to do" | The grammar table work (queue item 8) stopped before any change |
 | R128 | 09-25 | "the gitdiffviewer ui and ux topics related to the gutter, and the rendering and hover work are right now what i would prioritize, i was not expecting you to do the commit grouping stuff now and now it's not working very well, i'd like that when using grouping the diff happens against the previous commit state so we should always have the net difference between 2 commits not a weird sum" | D38, D39, GIT-06 criterion 5 |
 | R129 | 09-25 (decision D41) | "Lexer now, grammar later (Recommended)" | D41, HOVER-16 |
+| R130 | 09-30 | "the coloring is not working properly anymore, the compact indicator are pleaced on the leading edge of gutter, i'd prefer them on the other side, we need to fix that" | A colouring regression to find and fix; D42 |
