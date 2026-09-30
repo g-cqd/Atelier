@@ -172,11 +172,10 @@ package final class DiffDecorator {
         scopeJobs[key] = task
     }
 
-    /// Keeps a side's scopes, the oldest side past ``cacheCapacity`` going.
+    /// Keeps a side's scopes; ``publish(_:)``, which every caller runs right after, trims what none shows any more.
     func land(_ lines: ScopeLines, for key: ContentKey) {
         if scopes[key] == nil { scopeOrder.append(key) }
         scopes[key] = (lines, nextVersion())
-        trimScopes()
     }
 
     private func trimScopes() {
@@ -203,14 +202,14 @@ package final class DiffDecorator {
         marksJobs[preparation] = task
     }
 
-    /// Merges a tier's update into its side's layers, the oldest side past ``cacheCapacity`` going.
+    /// Merges a tier's update into its side's layers; ``publish(_:)``, which every caller runs right after, trims
+    /// what none shows any more.
     func land(_ update: TierUpdate, lineCount: Int, for key: ContentKey) {
         var entry = colors[key] ?? (LayeredLineTokens(lineCount: lineCount), 0)
         if colors[key] == nil { colorOrder.append(key) }
         entry.tokens.apply(update)
         entry.version = nextVersion()
         colors[key] = entry
-        trimColors()
     }
 
     private func trimColors() {
@@ -221,7 +220,8 @@ package final class DiffDecorator {
         }
     }
 
-    /// Adds what a marks job found for `preparation`, the oldest file past ``cacheCapacity`` going.
+    /// Adds what a marks job found for `preparation`; ``publish(_:)``, which every caller runs right after, trims
+    /// what none shows any more.
     func land(_ found: MarksFound, for preparation: UUID) {
         var entry = marks[preparation] ?? Marks()
         if marks[preparation] == nil { marksOrder.append(preparation) }
@@ -230,7 +230,6 @@ package final class DiffDecorator {
         if let moved = found.moved { entry.moved = moved }
         entry.version = nextVersion()
         marks[preparation] = entry
-        trimMarks()
     }
 
     private func trimMarks() {
