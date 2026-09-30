@@ -31,7 +31,7 @@ struct GLRParserPrecedenceTests {
     func `Precedence and associativity leave the parser no conflict to fork on`() throws {
         let table = try ParseTableCompiler.compile(ArithmeticGrammar.definition()).parseTable
 
-        let conflicts = table.actions.joined()
+        let conflicts = table.actions.rows.joined()
             .filter { action in
                 if case .conflict = action { true } else { false }
             }

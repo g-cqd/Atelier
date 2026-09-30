@@ -17,19 +17,19 @@ extension ParseTableCompiler.CompilationResult {
     private var parseTableIsConsistent: Bool {
         let table = parseTable
         let states = 0 ..< table.stateCount
-        guard table.stateCount > 0, table.actions.count == table.stateCount, table.gotos.count == table.stateCount
+        guard table.stateCount > 0, table.actions.isWellFormed, table.gotos.isWellFormed,
+            table.validExternals.isWellFormed, table.actions.stateCount == table.stateCount,
+            table.gotos.stateCount == table.stateCount, table.actions.columnCount == table.terminals.count,
+            table.gotos.columnCount == table.nonTerminals.count
         else { return false }
         guard table.externalSymbols.count == table.externalNames.count,
             table.externalIsExtra.count == table.externalNames.count,
             table.validExternals.count == table.stateCount,
-            table.validExternals.allSatisfy({ $0.count == table.externalNames.count })
+            table.validExternals.rowsAll(haveCount: table.externalNames.count)
         else { return false }
-        return table.actions.allSatisfy { row in
-            row.count == table.terminals.count && row.allSatisfy { isValid($0, states: states, nested: false) }
-        }
-            && table.gotos.allSatisfy { row in
-                row.count == table.nonTerminals.count && row.allSatisfy { $0.map(states.contains) ?? true }
-            }
+        return table.actions.shiftsAll(into: states)
+            && table.actions.indirectActions.allSatisfy { isValid($0, states: states, nested: false) }
+            && table.gotos.targetsAll(in: states)
             && table.lostShifts.allSatisfy { state, shifts in
                 states.contains(state)
                     && shifts.allSatisfy { table.terminals.indices.contains($0.key) && states.contains($0.value) }
@@ -74,21 +74,8 @@ extension LexTable {
             && keywordTokens.values.allSatisfy(tokens.indices.contains)
             && (errorMode.map(modeStarts.indices.contains) ?? true)
             && (modeSource.map { $0.isConsistent(tokenCount: tokens.count) } ?? true)
-            && automaton.allSatisfy { state in
-                (state.accept.map(tokens.indices.contains) ?? true) && movesAreConsistent(state.transitions)
-            }
-    }
-
-    /// Whether `moves` read scalars in order, on non-empty ranges that do not overlap, into states of the automaton.
-    private func movesAreConsistent(_ moves: [LexTransition]) -> Bool {
-        var next: UInt32 = 0
-        for move in moves {
-            guard next <= move.lower, move.lower <= move.upper, move.upper <= ScalarRanges.maxScalar,
-                automaton.indices.contains(move.target)
-            else { return false }
-            next = move.upper + 1
-        }
-        return true
+            && automaton.isWellFormed
+            && automaton.movesAreConsistent(tokens: tokens.indices)
     }
 }
 

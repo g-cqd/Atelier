@@ -133,7 +133,7 @@ struct GrammarRegistryCacheTests {
         let first = fixture.registry { grammar throws(GrammarError) in try ParseTableCompiler.compile(grammar) }
         let compiled = try await first.compiledResult(for: "tiny", grammarsPath: fixture.grammarsPath)
         var damaged = compiled
-        damaged.parseTable.actions[0][0] = .shift(compiled.parseTable.stateCount)
+        damaged.parseTable.actions[0, 0] = .shift(compiled.parseTable.stateCount)
         try fixture.overwriteCachedTables(with: damaged)
         let compiles = Mutex(0)
         let relaunched = fixture.registry { grammar throws(GrammarError) in

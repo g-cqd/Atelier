@@ -26,21 +26,24 @@ struct ParseActionResolver {
         let nonTerminalIndex = Dictionary(uniqueKeysWithValues: nonTerminals.enumerated().map { ($1, $0) })
         let lookaheadTerminals = propagated.terminals.map { terminalIndex[$0] }
 
-        var actions = [[Action]](
-            repeating: [Action](repeating: .error, count: terminals.count), count: itemSets.count)
+        // Each state's row is built and stored before the next, so the table is never held a cell per state and
+        // terminal, which for the largest grammars comes to tens of megabytes.
+        var actions = ParseActionTable.Builder(columnCount: terminals.count)
         var lostShifts: [Int: [Int: Int]] = [:]
-        var gotos = [[Int?]](
-            repeating: [Int?](repeating: nil, count: nonTerminals.count), count: itemSets.count)
+        var gotos = ParseGotoTable.Builder(columnCount: nonTerminals.count)
 
         for (state, itemSet) in itemSets.enumerated() {
             var shifts: [Int: Int] = [:]
+            var gotoRow = [Int?](repeating: nil, count: nonTerminals.count)
             for (symbol, target) in transitions[state] ?? [] {
                 if let terminal = terminalIndex[symbol] {
                     shifts[terminal] = target
                 } else if let nonTerminal = nonTerminalIndex[symbol] {
-                    gotos[state][nonTerminal] = target
+                    gotoRow[nonTerminal] = target
                 }
             }
+            gotos.append(gotoRow)
+            var row = [Action](repeating: .error, count: terminals.count)
             var completed: [Int: [Int]] = [:]
             for (index, item) in itemSet.items.enumerated() where item.dot == productions[item.rule].steps.count {
                 itemSet.forEachLookahead(ofItemAt: index) { lookahead in
@@ -56,11 +59,12 @@ struct ParseActionResolver {
                     completedRules: completed[terminal] ?? [],
                     in: itemSet
                 )
-                actions[state][terminal] = resolved
+                row[terminal] = resolved
                 if let shift = shifts[terminal], !resolved.shifts {
                     lostShifts[state, default: [:]][terminal] = shift
                 }
             }
+            actions.append(row)
         }
 
         return ParseTable(
@@ -68,8 +72,8 @@ struct ParseActionResolver {
             symbols: terminals + nonTerminals,
             terminals: terminals,
             nonTerminals: nonTerminals,
-            actions: actions,
-            gotos: gotos,
+            actions: actions.table,
+            gotos: gotos.table,
             lostShifts: lostShifts
         )
     }

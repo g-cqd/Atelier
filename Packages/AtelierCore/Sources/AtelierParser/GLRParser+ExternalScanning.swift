@@ -193,7 +193,8 @@ extension GLRParser {
         }
         let name = parseTable.externalSymbols[lexer.resultSymbol]
         let changesParseState =
-            !inErrorMode && (terminalIndex[name].map { parseTable.actions[stack.state][$0] != .error } ?? false)
+            !inErrorMode
+            && (terminalIndex[name].map { !parseTable.actions.isError(state: stack.state, terminal: $0) } ?? false)
         guard lexer.tokenEnd.offset > stack.cursor.offset || state != stack.scannerState || changesParseState else {
             return nil
         }

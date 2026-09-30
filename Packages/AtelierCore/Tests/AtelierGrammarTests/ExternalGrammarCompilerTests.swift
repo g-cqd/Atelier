@@ -95,13 +95,15 @@ struct ExternalGrammarCompilerTests {
             extras: [], conflicts: conflicts)
 
         let compiled = try ParseTableCompiler.compile(grammar)
-        let reductions = compiled.parseTable.actions.flatMap { $0 }
+        let reductions = compiled.parseTable.actions.rows.flatMap { $0 }
             .compactMap { action -> String? in
                 if case .reduce(_, _, let nonTerminal) = action { return nonTerminal }
                 return nil
             }
 
-        #expect(!compiled.parseTable.actions.flatMap { $0 }.contains { if case .conflict = $0 { true } else { false } })
+        #expect(
+            !compiled.parseTable.actions.rows.flatMap { $0 }.contains { if case .conflict = $0 { true } else { false } }
+        )
         #expect(reductions.contains("B"))
         #expect(!reductions.contains("A"))
     }
@@ -118,7 +120,7 @@ struct ExternalGrammarCompilerTests {
             extras: [], conflicts: [["A", "B"]])
 
         let compiled = try ParseTableCompiler.compile(grammar)
-        let hasConflict = compiled.parseTable.actions.flatMap { $0 }
+        let hasConflict = compiled.parseTable.actions.rows.flatMap { $0 }
             .contains { if case .conflict = $0 { true } else { false } }
 
         #expect(!hasConflict)

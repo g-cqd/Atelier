@@ -25,7 +25,7 @@ extension GLRParser {
     /// for, on any branch of a conflict. The reductions run on a copy of the stack's states and no node is built.
     /// A reduction without a GOTO state fails its branch, and so does running out of the budget `applyReduces` has.
     func canShift(_ terminal: Int, on stack: ParseStack) -> Bool {
-        switch parseTable.actions[stack.state][terminal] {
+        switch parseTable.actions[stack.state, terminal] {
             case .shift, .accept: return true
             case .error: return false
             case .reduce, .conflict: break
@@ -65,7 +65,7 @@ extension GLRParser {
                     budget -= 1
                     // Whether the reduction there shifts the token or leads nowhere, the parser shifts it.
                     if lostShift(of: terminal, in: states.top) != nil { return true }
-                    switch parseTable.actions[states.top][terminal] {
+                    switch parseTable.actions[states.top, terminal] {
                         case .shift, .accept:
                             return true
                         case .error:
@@ -93,7 +93,7 @@ extension GLRParser {
 
     /// The target of the GOTO on `nonTerminal`, to which `rule` reduces, from `state`, if the table has one.
     fileprivate func gotoState(from state: Int, rule: Int, nonTerminal: String) -> Int? {
-        nonTerminalColumn(rule: rule, nonTerminal: nonTerminal).flatMap { parseTable.gotos[state][$0] }
+        nonTerminalColumn(rule: rule, nonTerminal: nonTerminal).flatMap { parseTable.gotos[state, $0] }
     }
 }
 
