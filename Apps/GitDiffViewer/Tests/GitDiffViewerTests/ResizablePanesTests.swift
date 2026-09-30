@@ -126,19 +126,22 @@ struct ResizablePanesTests {
         #expect(abs(panes[1].shownTop - panes[0].shownTop) < 0.5)
     }
 
-    @Test
-    func `after a resize wrapped rows line up again side by side`() async throws {
+    /// To 180 points of the 600 either way: the narrower pane wraps the long rows onto more lines than the other.
+    @Test(arguments: [-120, 120] as [CGFloat])
+    func `after a resize wrapped rows line up again side by side`(distance: CGFloat) async throws {
         let sut = makeSUT(.sideBySide, text: .longLines(60), wrapsLines: true)
         try await sut.alignSides()
 
-        try sut.dragDivider(by: -40)
-        try await sut.alignSides()
+        try sut.dragDivider(by: distance)
+        try await withMainThreadBound("Aligning the rows after the drag") { try await sut.alignSides() }
 
         let panes = try sut.panes()
-        // Row 7 wraps, and the narrower old pane wraps it onto more lines than the new one.
-        for row in [6, 7, 8, 14] {
+        // Row 7 wraps, onto more lines in the narrower pane than in the other, down past the pane's bottom: the row after
+        // it starts where it ends.
+        for row in [6, 7] {
             #expect(abs(try panes[0].top(ofRow: row) - panes[1].top(ofRow: row)) < 0.5, "row \(row)")
         }
+        #expect(abs(try panes[0].bottom(ofRow: 7) - panes[1].bottom(ofRow: 7)) < 0.5)
     }
 }
 

@@ -1,4 +1,5 @@
 import AemiTesting
+import Foundation
 import Synchronization
 import Testing
 
@@ -138,4 +139,37 @@ extension AsyncProbe {
             try await next()
         }
     }
+}
+
+/// Runs `work` on the main actor, and ends the test process with a message naming `activity` if `work` still holds
+/// the main thread once `bound` has passed.
+///
+/// A hang on the main thread holds the thread that every bounded wait of a main-actor test resumes on, so no wait
+/// can fail the test: the run would otherwise hang until whatever runs it gives up. A thread of its own watches the
+/// time instead, and ends the process, which stops the run with the failure named rather than hanging it.
+@MainActor
+func withMainThreadBound<Value>(
+    _ activity: String, bound seconds: Double = 60, sourceLocation: SourceLocation = #_sourceLocation,
+    _ work: () async throws -> Value
+) async rethrows -> Value {
+    let watch = MainThreadWatch()
+    let place = "\(sourceLocation.fileID):\(sourceLocation.line)"
+    let message = "error: \(place): \(activity) held the main thread for more than \(seconds) s; ending the run\n"
+    DispatchQueue.global()
+        .asyncAfter(deadline: .now() + seconds) {
+            guard !watch.isOver else { return }
+            FileHandle.standardError.write(Data(message.utf8))
+            _exit(EXIT_FAILURE)
+        }
+    defer { watch.end() }
+    return try await work()
+}
+
+/// Whether the work ``withMainThreadBound(_:bound:sourceLocation:_:)`` watches has ended.
+private final class MainThreadWatch: Sendable {
+    private let over = Atomic(false)
+
+    var isOver: Bool { over.load(ordering: .acquiring) }
+
+    func end() { over.store(true, ordering: .releasing) }
 }
