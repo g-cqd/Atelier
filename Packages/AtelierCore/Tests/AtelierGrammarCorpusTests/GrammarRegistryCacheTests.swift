@@ -147,6 +147,20 @@ struct GrammarRegistryCacheTests {
         #expect(compiles.withLock { $0 } == 1)
     }
 
+    @Test
+    func `a cache file is read whole, and a missing or empty one is not read`() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "table-read-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let bytes = Data((0 ..< 100_000).map { UInt8(truncatingIfNeeded: $0 &* 31) })
+        try bytes.write(to: directory.appending(path: "whole"))
+        try Data().write(to: directory.appending(path: "empty"))
+
+        #expect(CompiledTableCache.contents(of: directory.appending(path: "whole")) == bytes)
+        #expect(CompiledTableCache.contents(of: directory.appending(path: "empty")) == nil)
+        #expect(CompiledTableCache.contents(of: directory.appending(path: "missing")) == nil)
+    }
+
     /// A table file cut short, of another version, whose header miscounts its payload, or that is not a table file.
     static let damagedTableFiles: [String] = ["cut short", "another version", "a miscounted payload", "JSON"]
 
