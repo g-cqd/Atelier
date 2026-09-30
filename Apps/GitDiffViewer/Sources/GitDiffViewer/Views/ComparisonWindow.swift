@@ -22,6 +22,9 @@ struct ComparisonWindow: View {
     @State private var model: DiffViewerModel
     /// Guards the one-time startup work, so a repeated `onAppear` never restarts the comparison.
     @State private var hasStarted = false
+    /// The text engine this window's panes use, from the developer default; the Develop menu switches it for this
+    /// window only (text-renderer.md §4.3).
+    @State private var textBackend = TextBackendKind.developerDefault()
     @Environment(\.dismissWindow) private var dismissWindow
 
     init(
@@ -41,6 +44,8 @@ struct ComparisonWindow: View {
 
     var body: some View {
         ContentView(settings: settings, model: model)
+            .environment(\.diffTextBackend, textBackend)
+            .focusedSceneValue(\.textBackend, $textBackend)
             .navigationTitle(model.windowTitle)
             .background(
                 WindowTabbingConfigurator { window in
