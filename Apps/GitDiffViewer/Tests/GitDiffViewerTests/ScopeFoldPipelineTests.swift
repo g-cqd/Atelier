@@ -36,9 +36,9 @@ struct ScopeFoldPipelineTests {
         reader.blobContents["new"] = ScopeFoldRenderingTests.new
     }
 
-    private func render() async throws -> RenderedDiff {
+    private func render(_ pair: FilePair = Self.pair) async throws -> RenderedDiff {
         sut.render(
-            .file(Self.pair), left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
+            .file(pair), left: .directory(ModelTestHarness.leftURL), right: .directory(ModelTestHarness.rightURL),
             granularity: .word, heuristics: DiffHeuristics(), keepingPublished: false)
         try await taskProvider.waitForAllTasks()
         return try #require(sut.file)
@@ -84,5 +84,36 @@ struct ScopeFoldPipelineTests {
 
         #expect(sut.foldedScopes == [Self.s: 10])
         #expect(reloaded.unified?.folds.map(\.key) == [Self.s])
+    }
+
+    @Test
+    func `a reload with new content keeps a fold whose first line still opens as long a scope, and drops the rest`()
+        async throws
+    {
+        let f = ScopeFoldKey(fileIndex: 0, isOld: false, firstLine: 1)
+        let g = ScopeFoldKey(fileIndex: 0, isOld: false, firstLine: 4)
+        _ = try await render()
+        // `S` opens on line 0, which the leading gap hides until revealed: then it is the fold drawn, `f` within it.
+        sut.setExpansion(GapExpansion(above: 1), for: Self.revealed)
+        sut.changeFolds(.fold([Self.s: 10, f: 3, g: 6]))
+        // A comment above `g`: `S` reaches a line further, `f` stays, and line 4 no longer opens a scope.
+        reader.blobContents["new2"] = ScopeFoldRenderingTests.new.replacingOccurrences(
+            of: "    func g", with: "    // g\n    func g")
+        let changed = FilePair(
+            path: "a.swift", old: SourceEntry(relativePath: "a.swift", blobID: "old", size: 1),
+            new: SourceEntry(relativePath: "a.swift", blobID: "new2", size: 1))
+
+        let reloaded = try await render(changed)
+
+        // Nothing folds until the new scopes say what still does.
+        #expect(reloaded.unified?.folds.isEmpty == true)
+        #expect(sut.pendingFolds == [Self.s: 10, f: 3, g: 6])
+
+        sut.decorateDisplayed(reloaded.id)
+        try await taskProvider.waitForAllTasks()
+
+        #expect(sut.pendingFolds.isEmpty)
+        #expect(sut.foldedScopes == [Self.s: 11, f: 3])
+        #expect(sut.file?.unified?.folds.map(\.key) == [Self.s])
     }
 }
