@@ -10,20 +10,20 @@ public struct ParseActionTable: Sendable {
     /// The number of distinct rows.
     private(set) var rowCount: Int
     /// The row of each state, by state.
-    private(set) var rowOfState: [UInt32]
+    @usableFromInline private(set) var rowOfState: [UInt32]
     /// The rows' cells, row after row, ``columnCount`` each.
-    private(set) var cells: [UInt32]
+    @usableFromInline private(set) var cells: [UInt32]
     /// The actions cells refer to, each once.
     public private(set) var indirectActions: [Action]
 
     /// A cell's kind is in its top two bits, and its payload, a shift's state or an index into ``indirectActions``,
     /// below them.
-    static let payloadBits: UInt32 = 30
-    static let payloadMask: UInt32 = (1 << payloadBits) - 1
-    static let errorCell: UInt32 = 0
-    static let shiftTag: UInt32 = 1
-    static let acceptCell: UInt32 = 2 << payloadBits
-    static let indirectTag: UInt32 = 3
+    @usableFromInline static let payloadBits: UInt32 = 30
+    @usableFromInline static let payloadMask: UInt32 = (1 << payloadBits) - 1
+    @usableFromInline static let errorCell: UInt32 = 0
+    @usableFromInline static let shiftTag: UInt32 = 1
+    @usableFromInline static let acceptCell: UInt32 = 2 << payloadBits
+    @usableFromInline static let indirectTag: UInt32 = 3
 
     /// The table of `rows`, one per state. A row shorter than the longest reads as errors past its end.
     public init(rows: [[Action]]) {
@@ -48,25 +48,32 @@ public struct ParseActionTable: Sendable {
 
     /// The action of `state` on `terminal`.
     ///
-    /// Setting a cell copies the state's row first, so it costs O(``columnCount``): for building tables by hand.
+    /// Reading one is the parser's innermost step, inlined into it. Setting a cell copies the state's row first, so it
+    /// costs O(``columnCount``): for building tables by hand.
+    @inlinable
     public subscript(state: Int, terminal: Int) -> Action {
-        get { action(ofCell: cell(state: state, terminal: terminal)) }
-        set {
-            precondition(0 <= terminal && terminal < columnCount, "terminal \(terminal) outside the table")
-            var row = Array(rowCells(Int(rowOfState[state])))
-            if let cell = Self.inlineCell(for: newValue) {
-                row[terminal] = cell
-            } else {
-                row[terminal] = Self.indirectCell(indirectActions.count)
-                indirectActions.append(newValue)
-            }
-            rowOfState[state] = UInt32(rowCount)
-            rowCount += 1
-            cells.append(contentsOf: row)
+        @inline(__always) get { action(ofCell: cell(state: state, terminal: terminal)) }
+        set { setAction(newValue, state: state, terminal: terminal) }
+    }
+
+    /// Gives `state` its own copy of its row, with `action` on `terminal`.
+    @usableFromInline
+    mutating func setAction(_ action: Action, state: Int, terminal: Int) {
+        precondition(0 <= terminal && terminal < columnCount, "terminal \(terminal) outside the table")
+        var row = Array(rowCells(Int(rowOfState[state])))
+        if let cell = Self.inlineCell(for: action) {
+            row[terminal] = cell
+        } else {
+            row[terminal] = Self.indirectCell(indirectActions.count)
+            indirectActions.append(action)
         }
+        rowOfState[state] = UInt32(rowCount)
+        rowCount += 1
+        cells.append(contentsOf: row)
     }
 
     /// Whether `state` has no action on `terminal`.
+    @inlinable @inline(__always)
     public func isError(state: Int, terminal: Int) -> Bool {
         cell(state: state, terminal: terminal) == Self.errorCell
     }
@@ -83,7 +90,8 @@ public struct ParseActionTable: Sendable {
         rowOfState.indices.map(row)
     }
 
-    private func cell(state: Int, terminal: Int) -> UInt32 {
+    @inlinable @inline(__always)
+    func cell(state: Int, terminal: Int) -> UInt32 {
         precondition(0 <= terminal && terminal < columnCount, "terminal \(terminal) outside the table")
         return cells[Int(rowOfState[state]) &* columnCount &+ terminal]
     }
@@ -92,6 +100,7 @@ public struct ParseActionTable: Sendable {
         cells[row * columnCount ..< (row + 1) * columnCount]
     }
 
+    @inlinable @inline(__always)
     func action(ofCell cell: UInt32) -> Action {
         switch cell >> Self.payloadBits {
             case Self.shiftTag: .shift(Int(cell & Self.payloadMask))

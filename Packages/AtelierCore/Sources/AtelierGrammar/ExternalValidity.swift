@@ -3,9 +3,9 @@
 /// dozen of them at most.
 public struct ExternalValidity: Sendable, RandomAccessCollection {
     /// The distinct rows.
-    private(set) var distinctRows: [[Bool]]
+    @usableFromInline private(set) var distinctRows: [[Bool]]
     /// The row of each state, by state.
-    private(set) var rowOfState: [UInt32]
+    @usableFromInline private(set) var rowOfState: [UInt32]
 
     /// The validity of `rows`, one per state.
     public init(rows: [[Bool]] = []) {
@@ -27,10 +27,11 @@ public struct ExternalValidity: Sendable, RandomAccessCollection {
         self.rowOfState = rowOfState
     }
 
-    public var startIndex: Int { 0 }
-    public var endIndex: Int { rowOfState.count }
+    @inlinable public var startIndex: Int { 0 }
+    @inlinable public var endIndex: Int { rowOfState.count }
 
-    /// The externals valid in `state`.
+    /// The externals valid in `state`, read once per token by a parse with an external scanner.
+    @inlinable
     public subscript(state: Int) -> [Bool] {
         distinctRows[Int(rowOfState[state])]
     }
