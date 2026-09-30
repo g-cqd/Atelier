@@ -51,6 +51,8 @@ package final class DiffGutterView: NSView {
     package weak var decorationStore: DecorationStore?
     /// The scope under the pointer, in the gutter or the text, outlined in the ribbon.
     var hoveredScope: HoveredScope?
+    /// Called when the ribbon, or a folding command in the pane, folds or unfolds scopes (DIFF-03).
+    package var onScopeFold: ((ScopeFoldRequest) -> Void)?
 
     package var style: GutterStyle = .dual {
         didSet { invalidateIntrinsicContentSize() }
@@ -167,7 +169,7 @@ package final class DiffGutterView: NSView {
         let handle = point.flatMap(gapHalf(at:))
         let change = handle == nil ? point.flatMap(changeMarker(at:)) : nil
         // A drag changes the count under a pointer that stays on the same half: the next move tells the new one.
-        let help = handle?.marker.handleHelp ?? change?.help
+        let help = handle?.marker.handleHelp ?? change?.help ?? (handle == nil ? point.flatMap(foldHelp(at:)) : nil)
         if toolTip != help { toolTip = help }
         setHoveredHandle(handle)
         setHoveredChange(change?.key)
@@ -197,6 +199,7 @@ package final class DiffGutterView: NSView {
             }
         }
         addChangeMarkerCursorRects()
+        addFoldCursorRects()
     }
 
     /// Marks for display the line numbers of `rows`, whose diagnostics changed. A gutter beside a clip view draws what
@@ -234,6 +237,10 @@ package final class DiffGutterView: NSView {
             needsDisplay = true
             let lineHeight = rendered?.lineHeight ?? palette.defaultLineHeight
             onGapDrag?(.began(hit.marker, hit.handle, lineHeight: max(lineHeight, 1)))
+            return
+        }
+        if let request = foldRequest(at: point) {
+            onScopeFold?(request)
             return
         }
         // A marker lies in the padding before the numbers, which a line number's click does not reach for.
@@ -379,6 +386,7 @@ package final class DiffGutterView: NSView {
         drawChangeBars(in: dirtyRect)
         drawChangeMarkers(in: dirtyRect)
         drawHoveredScope(in: dirtyRect)
+        drawFolds(in: dirtyRect)
     }
 
     /// A faint rounded-rect wash in the severity's colour behind a diagnostic-carrying line number.

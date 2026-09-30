@@ -154,7 +154,7 @@ extension DiffRenderer {
             switch row {
                 case .change: starts.append(index)
                 case .gap: continue
-                case .diff, .folded, .header: index += 1
+                case .diff, .folded, .header, .scopeFold: index += 1
             }
         }
         return starts.map { min($0, max(index - 1, 0)) }

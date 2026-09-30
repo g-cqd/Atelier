@@ -52,6 +52,8 @@ package struct DiffTextView: NSViewRepresentable {
     package var underBars: CGFloat = 0
     /// What the stages after the text found for its sides, drawn over it as they land (``decorated(with:viewport:)``).
     package var decorations: DiffDecorations?
+    /// Called when the ribbon or a folding command folds or unfolds scopes (DIFF-03); nil folds nothing.
+    package var onScopeFold: ((ScopeFoldRequest) -> Void)?
     /// Where the pane reports the rows it shows, so they are decorated first.
     package var viewport: DecorationViewport?
 
@@ -135,6 +137,7 @@ package struct DiffTextView: NSViewRepresentable {
         gutterView.onDiagnosticClick = onDiagnosticClick
         gutterView.decorations = context.coordinator.decorationStore.snapshot
         gutterView.decorationStore = context.coordinator.decorationStore
+        gutterView.onScopeFold = onScopeFold
         context.coordinator.decorationStore.gutter = gutterView
         context.coordinator.scopeHover.attach(to: textView, gutter: gutterView)
         context.coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
@@ -239,6 +242,7 @@ package struct DiffTextView: NSViewRepresentable {
         coordinator.gutterView?.onGapDrag = onGapDrag
         coordinator.gutterView?.onChangeToggle = onChangeToggle
         coordinator.gutterView?.onDiagnosticClick = onDiagnosticClick
+        coordinator.gutterView?.onScopeFold = onScopeFold
         splitController?.syncsScrolling = syncsScrolling
         coordinator.hoverController.isEnabled = hoverEnabled
         coordinator.hoverController.resolve = hoverResolver

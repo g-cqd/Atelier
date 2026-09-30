@@ -78,11 +78,13 @@ extension DiffGutterView {
         guard scope != hoveredScope else { return }
         hoveredScope = scope
         needsDisplay = true
+        // The capsule's ends take a pointing hand.
+        window?.invalidateCursorRects(for: self)
         decorationStore?.highlightBraces(at: scope.flatMap(braceOffsets(of:)) ?? [])
     }
 
     /// The hovered scope, the rows of its first and last lines, and the scope itself.
-    private func hoveredRows() -> (first: Int, last: Int, scope: ScopeLines.Scope)? {
+    func hoveredRows() -> (first: Int, last: Int, scope: ScopeLines.Scope)? {
         guard let hoveredScope, let rendered, let decorations = currentDecorations,
             let scopes = (hoveredScope.isOld ? decorations.old : decorations.new).scopes,
             scopes.scopes.indices.contains(hoveredScope.index)

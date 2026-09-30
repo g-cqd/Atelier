@@ -46,6 +46,8 @@ package final class RenderPipeline {
         let expansions: [Int: GapExpansion]
         /// The changes the compact inline view shows disclosed, by change index (book DIFF-04).
         let disclosed: Set<Int>
+        /// The file's folded scopes, each with its last line (DIFF-03).
+        let folds: [ScopeFoldKey: Int]
     }
 
     /// A rendered file with the stamp it was rendered under.
@@ -64,6 +66,8 @@ package final class RenderPipeline {
     package internal(set) var gapExpansions: [GapKey: GapExpansion] = [:]
     /// The changes of what is published that the compact inline view shows disclosed (book DIFF-04).
     package internal(set) var disclosedChanges: Set<ChangeKey> = []
+    /// The folded scopes of what is published, each with its last line on its side (DIFF-03).
+    package internal(set) var foldedScopes: [ScopeFoldKey: Int] = [:]
     package internal(set) var error: String?
     /// Diffs of what is published, kept so layout changes and gap drags re-render without reloading or re-diffing.
     @ObservationIgnored package internal(set) var prepared: [PreparedDiff] = []
@@ -172,6 +176,7 @@ package final class RenderPipeline {
         if !keeps {
             gapExpansions = carriedExpansions(into: target)
             disclosedChanges = carriedDisclosures(into: target)
+            foldedScopes = carriedFolds(into: target)
             unpublish()
             self.target = target
             targetVersion &+= 1
@@ -194,6 +199,7 @@ package final class RenderPipeline {
         if !keepingScroll {
             gapExpansions = [:]
             disclosedChanges = []
+            foldedScopes = [:]
         }
         refresh(keepingScroll: keepingScroll)
     }

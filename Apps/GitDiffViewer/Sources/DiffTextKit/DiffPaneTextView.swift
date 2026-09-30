@@ -42,6 +42,16 @@ package final class DiffPaneTextView: NSTextView {
         onLayout?()
     }
 
+    /// Carries out a folding command (DIFF-03), answering whether it did anything; ``ScopeHoverTracker`` sets it.
+    package var onFoldCommand: ((ScopeFoldCommand) -> Bool)?
+
+    /// ⌥⌘←, ⌥⌘→, ⌥⌘⇧← and ⌥⌘⇧→ fold and unfold scopes, as in Xcode; where they find nothing to do, the key goes on as
+    /// usual.
+    package override func keyDown(with event: NSEvent) {
+        if let command = ScopeFoldCommand(event), onFoldCommand?(command) == true { return }
+        super.keyDown(with: event)
+    }
+
     /// The items a context menu over a point, in this view's coordinates, starts with, set apart from the text view's
     /// own; none while nil or empty. ``DocHoverController`` sets it while attached (book HOVER-14).
     package var contextMenuItems: (@MainActor (NSPoint) -> [NSMenuItem])?
