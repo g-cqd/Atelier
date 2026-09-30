@@ -84,9 +84,9 @@ private final class ClickableCardPane {
     func clickLineNumber(ofRow row: Int) throws {
         let gutter = try #require(Self.first(DiffGutterView.self, in: host))
         var center: NSPoint?
-        gutter.forEachFragment(in: gutter.bounds) { fragment, _, index, y in
+        gutter.forEachRow(in: gutter.bounds) { frame, _, index, y, _ in
             guard index == row else { return }
-            center = NSPoint(x: gutter.bounds.midX, y: y + fragment.layoutFragmentFrame.height / 2)
+            center = NSPoint(x: gutter.bounds.midX, y: y + frame.height / 2)
         }
         let point = gutter.convert(try #require(center), to: nil)
         let event = try #require(

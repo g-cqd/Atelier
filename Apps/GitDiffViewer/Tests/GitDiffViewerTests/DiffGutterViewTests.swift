@@ -33,8 +33,8 @@ struct DiffGutterViewTests {
         defer { withExtendedLifetime(layout) {} }
         let band = NSRect(x: 0, y: sut.bounds.midY, width: sut.bounds.width, height: 100)
         var visited: [(row: Int, y: CGFloat, height: CGFloat)] = []
-        sut.forEachFragment(in: band) { fragment, _, row, y in
-            visited.append((row, y, fragment.layoutFragmentFrame.height))
+        sut.forEachRow(in: band) { frame, _, row, y, _ in
+            visited.append((row, y, frame.height))
         }
         let rows = visited.map(\.row)
         #expect(!visited.isEmpty)
@@ -48,7 +48,7 @@ struct DiffGutterViewTests {
         let (sut, layout) = try makeSUT(lines: 40)
         defer { withExtendedLifetime(layout) {} }
         var visited = 0
-        sut.forEachFragment(in: NSRect(x: 0, y: sut.bounds.maxY + 50, width: 10, height: 100)) { _, _, _, _ in
+        sut.forEachRow(in: NSRect(x: 0, y: sut.bounds.maxY + 50, width: 10, height: 100)) { _, _, _, _, _ in
             visited += 1
         }
         #expect(visited == 0)
