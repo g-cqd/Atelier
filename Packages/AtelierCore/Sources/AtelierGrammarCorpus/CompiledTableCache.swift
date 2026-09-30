@@ -1,5 +1,6 @@
 import AtelierGrammar
 import CryptoKit
+import Darwin
 import Foundation
 
 /// Compiled grammar tables, and the errors of compiles that failed, on disk: one file per grammar file and compiler
@@ -43,7 +44,7 @@ struct CompiledTableCache: Sendable {
     /// point outside themselves, which a damaged file can do and which would trap the parser on every launch. A table
     /// file that is damaged, cut short, of another version or not a table file at all reads as nil too.
     func outcome(for key: Key) -> Result<ParseTableCompiler.CompilationResult, GrammarError>? {
-        if let data = try? Data(contentsOf: fileURL(for: key, kind: .tables)),
+        if let data = Self.contents(of: fileURL(for: key, kind: .tables)),
             let tables = try? decode(data),
             tables.isConsistent
         {
@@ -107,6 +108,38 @@ struct CompiledTableCache: Sendable {
                 case .failure: "failed"
             }
         return directory.appendingPathComponent("\(key.fileStem).\(suffix)")
+    }
+}
+
+extension CompiledTableCache {
+    /// The whole file at `url`; nil when it can't be read whole, is empty, or changes size as it is read.
+    ///
+    /// The bytes go in memory mapped for this read alone, and unmapped when the data is released. A block of the heap
+    /// would stay in the allocator's cache once freed, and counted in the process's footprint as long as the process
+    /// runs: 9 MB for TypeScript's table file, as much as its tables once read.
+    static func contents(of url: URL) -> Data? {
+        let descriptor = open(url.path, O_RDONLY | O_CLOEXEC)
+        guard descriptor >= 0 else { return nil }
+        defer { close(descriptor) }
+        var status = stat()
+        guard fstat(descriptor, &status) == 0, status.st_size > 0, let size = Int(exactly: status.st_size),
+            let memory = mmap(nil, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0), memory != MAP_FAILED
+        else { return nil }
+        // Owner: this function, until the data below takes the mapping and unmaps it when released. Bounds: each read
+        // writes at most the `size - filled` bytes left of the `size` mapped, from `memory + filled` on.
+        var filled = 0
+        while filled < size {
+            let count = read(descriptor, memory + filled, size - filled)
+            if count < 0, errno == EINTR { continue }
+            guard count > 0 else { break }
+            filled += count
+        }
+        guard filled == size else {
+            munmap(memory, size)
+            return nil
+        }
+        return Data(
+            bytesNoCopy: memory, count: size, deallocator: .custom { pointer, count in _ = munmap(pointer, count) })
     }
 }
 
