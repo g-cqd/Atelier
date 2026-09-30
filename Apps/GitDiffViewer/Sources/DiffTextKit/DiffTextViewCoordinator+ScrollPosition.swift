@@ -128,7 +128,9 @@ extension DiffTextViewCoordinator {
             guard abs(clipView.bounds.minY - target.y) >= 0.5 || abs(clipView.bounds.minX - target.x) >= 0.5 else {
                 break
             }
+            RowPlacement.isScrolling = true
             scroll(clipView, to: target)
+            RowPlacement.isScrolling = false
             textView.textLayoutManager?.textViewportLayoutController.layoutViewport()
         }
         placedRow = (placement, clipView.bounds.minY)
@@ -156,6 +158,19 @@ extension DiffTextViewCoordinator {
         layoutManager.ensureLayout(for: NSTextRange(location: location))
         guard let fragment = layoutManager.textLayoutFragment(for: location) else { return nil }
         return fragment.layoutFragmentFrame.minY + textView.textContainerInset.height
+    }
+
+    /// Follows a scroll of the pane's clip view: one that comes while another pane places a row, as the split view
+    /// scrolls this pane along with that one, leaves the row this pane placed where that placement puts it, so this
+    /// pane places it again once the rows move, as it does when nothing scrolled it. Side by side, the two panes place
+    /// the same row, each at the top its own layout gives the row before the split view lines their rows up; the pane
+    /// placed first follows the other's offset, and taking that offset for a scroll of its own left its row where
+    /// the lined-up rows put it, lines away from the top.
+    @objc package func clipViewDidScroll(_ notification: Notification) {
+        guard RowPlacement.isScrolling, pendingScroll == nil, let placement = placedRow?.placement,
+            let clipView = notification.object as? NSClipView
+        else { return }
+        placedRow = (placement, clipView.bounds.minY)
     }
 
     /// Scrolls `clipView` to `point`, its height kept within the text view.
@@ -192,4 +207,7 @@ struct RowPlacement {
 
     let row: Int
     let anchor: Anchor
+
+    /// Whether a pane is scrolling to place a row: the split view scrolls the other pane along meanwhile.
+    @MainActor static var isScrolling = false
 }
