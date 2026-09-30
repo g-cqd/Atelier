@@ -266,7 +266,7 @@ function that runs one child task per supported tier in a task group and returns
   runs only if the file is still shown.
 
 The disk cache itself needs a look: Swift loads slower than it compiles. That is queue item 8's work, and section 8
-lists it as a risk.
+lists it as a risk. (Done: see *Table files* below.)
 
 **As built in step 5 (09-25).** Measuring every bundled grammar changed the plan above: warming a changeset's
 grammars when a comparison opens costs too much memory while the table format stays as it is. Each figure below is
@@ -288,18 +288,18 @@ compile, and the footprint the loaded tables keep.
 | Rust, Kotlin | 59.2–61.2 MB | 0.78–0.80 s | 1.7 s | 268–329 MB |
 | Swift, C++ | 106.6–107.2 MB | 1.5–1.9 s | 2.6–4.0 s | 457–495 MB |
 
-A table holds 4.3 to 6.5 times its file once loaded, so the file's size, which one `stat(2)` reads before anything is
-decoded, is the measure of a table:
+Those are the JSON cache's figures. Since the table files of 09-30 (below), a table keeps 1.0 to 1.25 times its file
+once loaded, more for the smallest, so the file's size, which one `stat(2)` reads before anything is decoded, is the
+measure of a table:
 - **Lazily, one at a time.** A grammar tier loads its language's tables only when a side of that language shows,
   through `SyntaxArtifactsCache`, which loads one grammar at a time.
-- **At most 20 MB of table.** GitDiffViewer loads no table past 20 MB (`GrammarColorServices.limits`): JSON, TOML,
-  HTML, Lua, CSS, YAML, Ruby, JavaScript, Go and Python qualify; Java, Bash, C, TypeScript, Rust, Kotlin and C++ keep
-  the lexer's colour until the format work makes their tables smaller, when they qualify with no code change. A
-  grammar that was never compiled is compiled once to be measured, and dropped if too large; its cached file keeps it
-  undecoded from then on.
-- **A 32 MB budget.** The loaded tables are held to 32 MB of table, 150 to 210 MB once loaded, which fits any two of
-  those that qualify; past it, the least recently used table unloads, from the registry's memory too, unless a parse
-  is using it.
+- **At most 20 MB of table.** GitDiffViewer loads no table past 20 MB (`GrammarColorServices.limits`). Every bundled
+  grammar qualifies since the table files, with no code change: the largest, TypeScript's, is 8.8 MiB. With the JSON
+  cache only JSON, TOML, HTML, Lua, CSS, YAML, Ruby, JavaScript, Go and Python did. A grammar that was never compiled
+  is compiled once to be measured, and dropped if too large; its cached file keeps it undecoded from then on.
+- **A 32 MB budget.** The loaded tables are held to 32 MB of table, about as much once loaded, which fits any four
+  grammars' tables and up to sixteen of the smaller ones; past it, the least recently used table unloads, from the registry's memory too, unless a
+  parse is using it.
 - **The deadline counts CPU time.** The grammar tier's 250 ms deadline counts the parsing thread's CPU time, which the
   parser checks every 256 tokens, so a machine under load does not fail a grammar that would have met it, and the
   predictor's throughput is CPU time too.
@@ -308,8 +308,27 @@ decoded, is the measure of a table:
 - **Go is decided per side** by the deadline and the predictor. Go's own `net/http/request.go` took 35 s of CPU in
   the grammar assessment, so a side like it stops at 250 ms of CPU, which sets Go's throughput past the budget for
   any larger side, and three such failures in a row stop the grammar for the session; 50 KB of plain Go, small
-  functions one after another, parses in time (in a debug build) and takes its grammar's colour. Java stays on the
-  lexer through the table limit.
+  functions one after another, parses in time (in a debug build) and takes its grammar's colour. Java, past the table
+  limit with the JSON cache, passes it with the table files, and its sides are decided the same way.
+
+**Table files (09-30).** Queue item 8's work. The compiled tables are compact in memory: a 32-bit cell per terminal
+or non-terminal of each distinct row, reductions and conflicts stored once, and the lexer's moves grouped by target
+over range sets stored once. The disk cache holds them as a binary table file (`TableFile`: a checked header, then
+the tables' arrays read in one copy each), read into memory unmapped once decoded. `ATELIER_TABLE_CACHE_FORMAT=json`
+keeps the JSON for measuring. Release, one process per load, medians of 3 loads under a load average near 20:
+
+| Grammar | Table file | Warm load | Loaded |
+|---|---|---|---|
+| JSON, HTML, TOML, Lua, CSS | 0.02–0.28 MiB | 0.2–0.7 ms | 0.1–0.4 MiB |
+| YAML, Go, Ruby, Python, JavaScript | 0.59–1.56 MiB | 1.0–2.2 ms | 0.5–1.8 MiB |
+| Markdown, Java, C, Kotlin | 2.12–3.91 MiB | 2.6–4.8 ms | 2.4–4.5 MiB |
+| Swift, Rust, C++, Bash | 5.41–7.33 MiB | 5.4–10.9 ms | 5.8–9.1 MiB |
+| TypeScript | 8.80 MiB | 13.7 ms | 10.5 MiB |
+
+Of the six grammars also measured compiling, each loads faster than it compiles: JSON 5 times, and Ruby, Python,
+TypeScript, C++ and Swift 130 to 210 times. A cold compile's peak footprint fell too, as the compiler stores each
+state's row before building the next: TypeScript 278 to 208 MiB, C++ 208 to 128, Swift 124 to 91 (medians of 3
+processes). A compile costs 3 to 6% more instructions, building the compact form.
 
 ### 4.3 Visible lines first
 
@@ -622,7 +641,7 @@ keystroke re-lex).
 
 - **The disk cache can make Swift slower.** Loading Swift's 112 MB table costs more than compiling it. With
   swift-syntax enabled (Q1), Swift never loads it. If the GLR Swift grammar is kept, queue item 8 must fix the cache
-  first.
+  first. (Fixed 09-30: Swift's table file is 5.4 MiB and loads in 5 ms of CPU.)
 - **The quality gate throws work away late.** Two of the five Swift files failed only after 1.1–1.4 s of parsing.
   The predictor and the breaker bound the loss for any language; only a faster parser removes it (queue item
   `glr-hot-paths`).
