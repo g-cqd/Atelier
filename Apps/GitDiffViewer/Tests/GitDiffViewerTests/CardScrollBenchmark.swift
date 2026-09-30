@@ -25,7 +25,10 @@ import Testing
 /// .build-release --filter CardScrollBenchmark`. GDV_BENCH_ROWS picks one card length (5,000 and 20,000 rows
 /// otherwise), GDV_BENCH_RUNS the rounds timed (each 20 steps and one reveal), GDV_BENCH_WRAP `1` or `0` one wrap mode.
 /// GDV_BENCH_PROFILE `step` or `reveal` repeats that phase alone for GDV_BENCH_PROFILE_SECONDS, for a sampling
-/// profiler, after writing the process's id to the file GDV_BENCH_PROFILE_MARK names.
+/// profiler, after writing the process's id to the file GDV_BENCH_PROFILE_MARK names. GDV_BENCH_SHARE=0 has the card's
+/// text view lay its text out with a layout manager of its own, as it did before it showed the measuring layout's
+/// (``StaticTextLayout/sharesLayout``). Times are the main thread's CPU time, which other jobs on the machine do not
+/// stretch as they do the wall clock's.
 @MainActor
 @Suite(.mainActorLane)
 struct CardScrollBenchmark {
@@ -46,6 +49,9 @@ struct CardScrollBenchmark {
     func `a scroll step deep in a long card, and a reveal there`(rows: Int, wrapsLines: Bool) async throws {
         let runs = Self.environment["GDV_BENCH_RUNS"].flatMap(Int.init) ?? 12
         let stepsPerRun = 10
+        let shares = Self.environment["GDV_BENCH_SHARE"] != "0"
+        StaticTextLayout.sharesLayoutWithView = shares
+        defer { StaticTextLayout.sharesLayoutWithView = true }
         let sut = harness.makeSUT()
         sut.settings.mode = .inline
         sut.settings.isolatesChanges = true
@@ -112,7 +118,7 @@ struct CardScrollBenchmark {
             stepsAfterReveal.append(afterReveal)
         }
         print(
-            "BENCH card scroll \(rows) rows (\(shownRows) shown), wraps \(wrapsLines): "
+            "BENCH card scroll \(rows) rows (\(shownRows) shown), wraps \(wrapsLines), shares \(shares), CPU: "
                 + "scroll step down \(Self.summary(steps)), up \(Self.summary(stepsUp)), "
                 + "first step of a round \(Self.summary(firstSteps)); "
                 + "reveal \(Self.summary(reveals)), step after a reveal \(Self.summary(stepsAfterReveal)); "
@@ -186,11 +192,11 @@ struct CardScrollBenchmark {
         return result == 0 ? Double(usage.ri_phys_footprint) / 1_048_576 : .nan
     }
 
+    /// The calling thread's CPU time `work` takes, in milliseconds.
     private static func time(_ work: () throws -> Void) rethrows -> Double {
-        let start = ContinuousClock.now
+        let start = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
         try work()
-        let elapsed = start.duration(to: .now)
-        return Double(elapsed.components.seconds) * 1e3 + Double(elapsed.components.attoseconds) / 1e15
+        return Double(clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) - start) / 1e6
     }
 
     /// The median and the 10th to 90th percentiles, in milliseconds.
