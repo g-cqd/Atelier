@@ -56,6 +56,8 @@ package struct DiffTextView: NSViewRepresentable {
     package var onScopeFold: ((ScopeFoldRequest) -> Void)?
     /// Where the pane reports the rows it shows, so they are decorated first.
     package var viewport: DecorationViewport?
+    /// The text engine the window's panes use (text-renderer.md §4.3).
+    @Environment(\.diffTextBackend) private var textBackend
 
     package init(
         rendered: RenderedText, gutter: GutterStyle, keepsScrollPosition: Bool = false, wrapsLines: Bool = true,
@@ -102,126 +104,48 @@ package struct DiffTextView: NSViewRepresentable {
     }
 
     package func makeNSView(context: Context) -> DiffPaneView {
-        let scrollView = DiffPaneTextView.scrollableTextView()
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = true
-        scrollView.autohidesScrollers = true
-        scrollView.borderType = .noBorder
-        // The safe area, the toolbar's and the bars' above the pane, insets the text, and sizes the edge effect.
-        scrollView.automaticallyAdjustsContentInsets = true
-        scrollView.additionalSafeAreaInsets = Self.insets(underBars: underBars)
-        Self.setElasticity(of: scrollView, bouncing: bouncesAtEdges)
-
-        let textView = scrollView.documentView as? NSTextView ?? DiffPaneTextView(usingTextLayoutManager: true)
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.isRichText = false
-        Self.configurePanels(of: textView)
-        textView.textContainerInset = NSSize(width: 0, height: DiffPaneMetrics.containerInset)
-        textView.isVerticallyResizable = true
-        textView.autoresizingMask = [.width]
-        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        textView.textContainer?.lineFragmentPadding = DiffPaneMetrics.lineFragmentPadding
-        textView.textLayoutManager?.delegate = context.coordinator.fragmentProvider
-        context.coordinator.wrapColumn = wrapColumn
-        context.coordinator.scrollsPastEnd = scrollsPastEnd
-        Coordinator.configureWrapping(
-            wrapsLines, column: wrapColumn, font: rendered.palette.font, textView: textView, scrollView: scrollView)
-
-        let gutterView = DiffGutterView(clipView: scrollView.contentView)
-        gutterView.source = textView
-        gutterView.style = gutter
-        gutterView.onGapDrag = onGapDrag
-        gutterView.onChangeToggle = onChangeToggle
-        gutterView.overlay = context.coordinator.diagnostics
-        gutterView.onDiagnosticClick = onDiagnosticClick
-        gutterView.decorations = context.coordinator.decorationStore.snapshot
-        gutterView.decorationStore = context.coordinator.decorationStore
-        gutterView.onScopeFold = onScopeFold
-        context.coordinator.decorationStore.gutter = gutterView
-        context.coordinator.scopeHover.attach(to: textView, gutter: gutterView)
-        context.coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
-        let minimapView = makeMinimap(following: scrollView, coordinator: context.coordinator)
-
-        context.coordinator.textView = textView
-        context.coordinator.followLayout()
-        context.coordinator.gutterView = gutterView
-        context.coordinator.minimapView = minimapView
-        context.coordinator.splitController = splitController
-        context.coordinator.wrapsLines = wrapsLines
-        splitController?
-            .register(scrollView, textView: textView) { [weak coordinator = context.coordinator] in
-                coordinator?.rowsDidAlign()
+        let coordinator = context.coordinator
+        let pane =
+            switch textBackend {
+                case .textKit2: TextKit2Pane(options: paneOptions, coordinator: coordinator)
             }
-        scrollView.contentView.postsFrameChangedNotifications = true
-        NotificationCenter.default.addObserver(
-            context.coordinator,
-            selector: #selector(Coordinator.viewportDidResize(_:)),
-            name: NSView.frameDidChangeNotification,
-            object: scrollView.contentView
-        )
-        NotificationCenter.default.addObserver(
-            context.coordinator,
-            selector: #selector(Coordinator.clipViewDidScroll(_:)),
-            name: NSView.boundsDidChangeNotification,
-            object: scrollView.contentView
-        )
-        textView.postsFrameChangedNotifications = true
-        NotificationCenter.default.addObserver(
-            context.coordinator,
-            selector: #selector(Coordinator.textViewFrameDidChange(_:)),
-            name: NSView.frameDidChangeNotification,
-            object: textView
-        )
-        context.coordinator.scrollMemory = scrollMemory
-        context.coordinator.show(rendered, keepingScroll: false, key: memoryKey)
-        if let layoutManager = textView.textLayoutManager {
-            context.coordinator.decorationStore.install(on: layoutManager)
-        }
-        context.coordinator.decorationStore.update(rendered: rendered, decorations: decorations, view: textView)
-        context.coordinator.report(to: viewport)
+        pane.gutterView.onGapDrag = onGapDrag
+        pane.gutterView.onChangeToggle = onChangeToggle
+        pane.gutterView.onDiagnosticClick = onDiagnosticClick
+        pane.gutterView.onScopeFold = onScopeFold
+        coordinator.updateDiagnostics(diagnosticOverlay, version: diagnosticsVersion)
+        coordinator.scrollMemory = scrollMemory
+        coordinator.show(rendered, keepingScroll: false, key: memoryKey)
+        pane.installDecorations()
+        coordinator.decorationStore.update(rendered: rendered, decorations: decorations, view: pane.textView)
+        coordinator.report(to: viewport)
         // A new pane shows its first render here, and `updateNSView` only reports the renders that replace it.
         onDisplayed?()
-        context.coordinator.hoverController.attach(to: textView) { [weak coordinator = context.coordinator] in
+        coordinator.hoverController.attach(to: pane.textView) { [weak coordinator] in
             coordinator?.rendered
         }
-        return DiffPaneView(
-            gutterView: gutterView, scrollView: scrollView, contentView: scrollView, minimapView: minimapView)
+        return pane.paneView
     }
 
-    /// The pane's minimap: it shows the rows `scrollView` shows, redraws as it scrolls, and scrolls it to a row
-    /// clicked, centred.
-    private func makeMinimap(following scrollView: NSScrollView, coordinator: Coordinator) -> MinimapView {
-        let minimapView = MinimapView()
-        minimapView.scrollView = scrollView
-        minimapView.isHidden = !showsMinimap
-        minimapView.visibleRows = { [weak coordinator] in coordinator?.visibleRows() ?? 0 ..< 0 }
-        minimapView.onSelectRow = { [weak coordinator, weak scrollView] row in
-            guard let scrollView else { return }
-            coordinator?.scroll(toRow: row, in: scrollView, centered: true)
-        }
-        scrollView.contentView.postsBoundsChangedNotifications = true
-        NotificationCenter.default.addObserver(
-            minimapView,
-            selector: #selector(MinimapView.setNeedsDisplayOnScroll(_:)),
-            name: NSView.boundsDidChangeNotification,
-            object: scrollView.contentView
-        )
-        return minimapView
+    /// What the pane is built with, from this view's settings.
+    private var paneOptions: TextKit2Pane.Options {
+        var options = TextKit2Pane.Options(gutter: gutter)
+        options.font = rendered.palette.font
+        options.wrapsLines = wrapsLines
+        options.wrapColumn = wrapColumn
+        options.scrollsPastEnd = scrollsPastEnd
+        options.bouncesAtEdges = bouncesAtEdges
+        options.underBars = underBars
+        options.showsMinimap = showsMinimap
+        options.splitController = splitController
+        return options
     }
 
     package func updateNSView(_ pane: DiffPaneView, context: Context) {
         let coordinator = context.coordinator
         guard let scrollView = pane.scrollView else { return }
         coordinator.metrics.width = max(scrollView.contentView.bounds.width, coordinator.textView?.frame.width ?? 0)
-        if coordinator.wrapsLines != wrapsLines || coordinator.wrapColumn != wrapColumn,
-            let textView = coordinator.textView
-        {
-            coordinator.wrapsLines = wrapsLines
-            coordinator.wrapColumn = wrapColumn
-            Coordinator.configureWrapping(
-                wrapsLines, column: wrapColumn, font: rendered.palette.font, textView: textView, scrollView: scrollView)
-            coordinator.updateOverscroll(in: scrollView.contentView)
+        if coordinator.setWrapping(wrapsLines, column: wrapColumn, font: rendered.palette.font) {
             splitController?.wrapsLines = wrapsLines
         }
         Self.setElasticity(of: scrollView, bouncing: bouncesAtEdges)
@@ -426,6 +350,20 @@ package final class DiffTextViewCoordinator: NSObject {
         textView.needsDisplay = true
         gutterView?.needsDisplay = true
         minimapView?.needsDisplay = true
+    }
+
+    /// Breaks lines as `wrapsLines` and `column` say, unless they already do, and sizes the pane again. Returns
+    /// whether anything changed, for the split view to align the rows again.
+    @discardableResult
+    package func setWrapping(_ wrapsLines: Bool, column: Int, font: NSFont) -> Bool {
+        guard self.wrapsLines != wrapsLines || wrapColumn != column, let textView,
+            let scrollView = textView.enclosingScrollView
+        else { return false }
+        self.wrapsLines = wrapsLines
+        wrapColumn = column
+        Self.configureWrapping(wrapsLines, column: column, font: font, textView: textView, scrollView: scrollView)
+        updateOverscroll(in: scrollView.contentView)
+        return true
     }
 
     /// Wrapped panes track the viewport width, or wrap at a fixed column and scroll sideways when the viewport is
