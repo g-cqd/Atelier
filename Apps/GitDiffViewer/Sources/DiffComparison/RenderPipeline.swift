@@ -68,6 +68,9 @@ package final class RenderPipeline {
     package internal(set) var disclosedChanges: Set<ChangeKey> = []
     /// The folded scopes of what is published, each with its last line on its side (DIFF-03).
     package internal(set) var foldedScopes: [ScopeFoldKey: Int] = [:]
+    /// Folds carried through a reload whose side's content may have changed: not drawn until that side's new scopes
+    /// land and show which of them still fold a scope (DIFF-03).
+    package internal(set) var pendingFolds: [ScopeFoldKey: Int] = [:]
     package internal(set) var error: String?
     /// Diffs of what is published, kept so layout changes and gap drags re-render without reloading or re-diffing.
     @ObservationIgnored package internal(set) var prepared: [PreparedDiff] = []
@@ -162,6 +165,7 @@ package final class RenderPipeline {
         error = nil
         let inputs = RenderInputs(
             sources: Sources(left: left, right: right), granularity: granularity, heuristics: heuristics)
+        holdFolds(forContentOf: target)
         let loan = self.loan(for: target, inputs: inputs)
         let keeps = keepingPublished && (file != nil || !cards.isEmpty)
         if target.isCards { shelvedLists.removeAll { $0.target.showsSameFiles(as: target) } }
@@ -176,7 +180,6 @@ package final class RenderPipeline {
         if !keeps {
             gapExpansions = carriedExpansions(into: target)
             disclosedChanges = carriedDisclosures(into: target)
-            foldedScopes = carriedFolds(into: target)
             unpublish()
             self.target = target
             targetVersion &+= 1
@@ -200,6 +203,7 @@ package final class RenderPipeline {
             gapExpansions = [:]
             disclosedChanges = []
             foldedScopes = [:]
+            pendingFolds = [:]
         }
         refresh(keepingScroll: keepingScroll)
     }

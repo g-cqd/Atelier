@@ -65,6 +65,7 @@ extension RenderPipeline {
             startMarks(of: file)
         }
         decorator.publish(files.map { ($0.rendered, $0.composition) })
+        settlePendingFolds()
     }
 
     /// Gives every published text the decorations found for its content, and drops those of texts no longer published:
@@ -190,6 +191,7 @@ extension RenderPipeline {
         decorator.land(scopes, for: key)
         decorator.publish(files.map { ($0.rendered, $0.composition) })
         sendDecorated(.scopes, where: shows)
+        settlePendingFolds()
     }
 
     /// The revision a side's job reads: its file's path, its language and its content's key.

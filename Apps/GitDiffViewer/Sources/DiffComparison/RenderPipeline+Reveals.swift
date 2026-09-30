@@ -1,4 +1,5 @@
 package import DiffCore
+import DiffGit
 package import DiffRendering
 
 /// What the user reveals of what is published: the rows around a gap (book DIFF-02), the changes the compact inline
@@ -60,6 +61,48 @@ extension RenderPipeline {
     /// The folded scopes `target` keeps, as ``carriedExpansions(into:)`` keeps revealed lines (DIFF-03).
     func carriedFolds(into target: Target) -> [ScopeFoldKey: Int] {
         foldedScopes.filter { carries($0.key.fileIndex, into: target) }
+    }
+
+    /// Keeps folded the folds of the files `target` carries whose side is the same blob as the one published, and
+    /// holds back every other fold it carries until that side's scopes land (``settlePendingFolds()``): a fold never
+    /// hides rows that no longer make up its scope. A side without a blob id, as a working tree's, is held back too.
+    func holdFolds(forContentOf target: Target) {
+        var kept: [ScopeFoldKey: Int] = [:]
+        var held: [ScopeFoldKey: Int] = [:]
+        for (key, last) in foldedScopes.merging(pendingFolds, uniquingKeysWith: { folded, _ in folded })
+        where carries(key.fileIndex, into: target) {
+            if foldedScopes[key] != nil, sameContent(on: key, in: target) { kept[key] = last } else { held[key] = last }
+        }
+        foldedScopes = kept
+        pendingFolds = held
+    }
+
+    /// Whether the side of `key`'s file in `target` is the blob published there.
+    private func sameContent(on key: ScopeFoldKey, in target: Target) -> Bool {
+        guard let published = self.target else { return false }
+        let entry = { (pair: FilePair) in key.isOld ? pair.old?.blobID : pair.new?.blobID }
+        guard let blob = entry(published.pairs[key.fileIndex]) else { return false }
+        return entry(target.pairs[key.fileIndex]) == blob
+    }
+
+    /// Folds again each held-back fold whose side's scopes have landed, when its first line still opens a scope that
+    /// reaches at least as far, down to that scope's end, and drops the others.
+    func settlePendingFolds() {
+        guard !pendingFolds.isEmpty else { return }
+        var settled: [ScopeFoldKey: Int] = [:]
+        var resolved: [ScopeFoldKey] = []
+        for (index, file) in publishedFiles().enumerated() {
+            let text = [file.rendered.unified, file.rendered.new, file.rendered.old].compactMap(\.self).first
+            guard let text, let decorations = decorator.byText[text.id] else { continue }
+            for (key, last) in pendingFolds where key.fileIndex == index {
+                guard let scopes = (key.isOld ? decorations.old : decorations.new).scopes else { continue }
+                resolved.append(key)
+                let scope = scopes.scopes.first { $0.lines.lowerBound == key.firstLine && $0.lines.upperBound >= last }
+                if let scope { settled[key] = scope.lines.upperBound }
+            }
+        }
+        for key in resolved { pendingFolds[key] = nil }
+        if !settled.isEmpty { changeFolds(.fold(settled)) }
     }
 
     /// Folds or unfolds scopes as `request` asks, and renders again the files whose folds changed, keeping the scroll
