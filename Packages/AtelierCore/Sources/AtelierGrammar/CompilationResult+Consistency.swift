@@ -16,8 +16,10 @@ extension ParseTableCompiler.CompilationResult {
 
     private var parseTableIsConsistent: Bool {
         let table = parseTable
+        // The count comes first: a range of states is only formed from a positive one, which would otherwise trap.
+        guard table.stateCount > 0 else { return false }
         let states = 0 ..< table.stateCount
-        guard table.stateCount > 0, table.actions.isWellFormed, table.gotos.isWellFormed,
+        guard table.actions.isWellFormed, table.gotos.isWellFormed,
             table.validExternals.isWellFormed, table.actions.stateCount == table.stateCount,
             table.gotos.stateCount == table.stateCount, table.actions.columnCount == table.terminals.count,
             table.gotos.columnCount == table.nonTerminals.count
