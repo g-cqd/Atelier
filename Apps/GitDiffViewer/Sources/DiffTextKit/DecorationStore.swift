@@ -32,7 +32,9 @@ package final class DecorationSnapshot: Sendable {
 /// - Colour goes through TextKit 2's rendering attributes: ``validate(_:in:)`` colours each row laid out in the viewport
 ///   from the tokens of the source line the row shows, where they differ from the storage's plain colour. TextKit drops
 ///   rendering attributes when it lays a fragment out again, and calls the validator for it, so they are rebuilt from
-///   here every time and never lost.
+///   here every time and never lost. It calls the validator for nothing else: a fragment it keeps laid out, as it
+///   keeps those around the viewport and the last rows, is not asked about again when colours land, however they are
+///   invalidated, and ``viewportDidLayout()`` colours it when it next shows.
 /// - Emphasis and the moved rows' background are read by each row's fragment as it draws, from ``snapshot``: when they
 ///   land, the fragments are only redrawn.
 ///
@@ -52,6 +54,11 @@ package final class DecorationStore {
     var litBraces: [Int] = []
     /// Whether the layout manager keeps the rows it laid out when they leave the viewport, as a card's does.
     private var retainsLayout = false
+    /// The fragments coloured from ``decorations`` since their colours last changed. Landing colours clears the colour
+    /// of every other fragment TextKit keeps laid out; each is coloured again when it next shows.
+    private let colored = NSHashTable<NSTextLayoutFragment>.weakObjects()
+    /// The text view that shows the pane, whose fragment views are redrawn when a fragment is coloured again.
+    private weak var view: NSView?
 
     package init() {}
 
@@ -87,10 +94,38 @@ package final class DecorationStore {
         if isNewText { litBraces = [] }
         self.rendered = rendered
         self.decorations = decorations
+        self.view = view
         snapshot.set(rendered: rendered, decorations: decorations)
         if colorsChanged { recolor(clearing: hadColors) }
         if marksChanged { gutter?.needsDisplay = true }
-        // TextKit draws each fragment in a view of its own, below the text view, and keeps what it drew.
+        redraw(view)
+    }
+
+    /// Colours the fragments in the viewport that were not coloured since the colours last changed: those TextKit kept
+    /// laid out from before, which it does not validate again. The pane calls it at the end of each layout pass, once
+    /// TextKit has laid out what shows, and outside its invalidation; nothing is laid out again.
+    /// - Complexity: O(fragments in the viewport), plus the rows coloured and their tokens.
+    package func viewportDidLayout() {
+        guard let layoutManager, rendered != nil, decorations != nil,
+            let viewport = layoutManager.textViewportLayoutController.viewportRange
+        else { return }
+        var recolored = false
+        layoutManager.enumerateTextLayoutFragments(from: viewport.location) { fragment in
+            guard fragment.rangeInElement.location.compare(viewport.endLocation) == .orderedAscending else {
+                return false
+            }
+            if !colored.contains(fragment) {
+                validate(fragment, in: layoutManager)
+                recolored = true
+            }
+            return true
+        }
+        if recolored { redraw(view) }
+    }
+
+    /// Redraws `view` and every view below it: TextKit draws each fragment in a view of its own, below the text view,
+    /// and keeps what it drew.
+    private func redraw(_ view: NSView?) {
         var views = view.map { [$0] } ?? []
         while let next = views.popLast() {
             next.needsDisplay = true
@@ -108,6 +143,7 @@ package final class DecorationStore {
         if self.rendered != nil, let layoutManager {
             layoutManager.removeRenderingAttribute(.foregroundColor, for: layoutManager.documentRange)
         }
+        colored.removeAllObjects()
         litBraces = []
         self.rendered = rendered
         self.decorations = decorations
@@ -115,8 +151,10 @@ package final class DecorationStore {
     }
 
     /// Colours again the fragments laid out in the viewport, or every one laid out when the layout manager keeps them,
-    /// having cleared the colours drawn before when `clearing`.
+    /// having cleared the colours drawn before when `clearing`. Every other fragment TextKit keeps is left without
+    /// colour, invalidated, until ``viewportDidLayout()`` finds it on show.
     private func recolor(clearing: Bool) {
+        colored.removeAllObjects()
         guard let layoutManager, clearing || decorations != nil else { return }
         let range = layoutManager.documentRange
         if clearing { layoutManager.removeRenderingAttribute(.foregroundColor, for: range) }
@@ -141,6 +179,7 @@ package final class DecorationStore {
     /// for a row whose side has no colour yet.
     /// - Complexity: O(rows in the fragment + their tokens)
     package func validate(_ fragment: NSTextLayoutFragment, in layoutManager: NSTextLayoutManager) {
+        colored.add(fragment)
         guard let rendered, let decorations, !rendered.rows.isEmpty,
             let contentManager = layoutManager.textContentManager
         else { return }
