@@ -39,6 +39,27 @@ struct CompilationResultConsistencyTests {
         #expect(!tables.isConsistent)
     }
 
+    @Test(arguments: [CommentPattern.line(prefix: ""), .block(open: "", close: "*/")])
+    func `A comment that starts with no text is inconsistent`(pattern: CommentPattern) throws {
+        var tables = try Self.compiled()
+        tables.lexTable.commentPatterns = [pattern]
+
+        #expect(!tables.isConsistent)
+    }
+
+    @Test
+    func `A lex mode whose start accepts an extra is inconsistent`() throws {
+        var tables = try Self.compiled()
+        var states = Array(tables.lexTable.automaton)
+        states[tables.lexTable.modeStarts[0]].accept = 0
+        tables.lexTable.automaton = LexAutomaton(states)
+        #expect(tables.isConsistent)
+
+        tables.lexTable.tokens[0].isExtra = true
+
+        #expect(!tables.isConsistent)
+    }
+
     @Test
     func `A field on a step before the first is inconsistent`() throws {
         var tables = try Self.compiled()
