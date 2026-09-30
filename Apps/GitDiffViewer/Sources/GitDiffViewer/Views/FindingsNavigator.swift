@@ -3,7 +3,7 @@ import DiffComparison
 import SwiftUI
 
 /// Toolbar item: a button showing the warning and error totals that opens every finding of the comparison,
-/// grouped by file.
+/// grouped by file. With nothing found it stays in place, disabled: see ``NoFindingsLabel``.
 struct FindingsNavigatorButton: View {
     let model: DiffViewerModel
     @State private var isPresented = false
@@ -34,6 +34,14 @@ struct FindingsNavigatorButton: View {
             .popover(isPresented: $isPresented) {
                 FindingsNavigatorPopover(model: model, isPresented: $isPresented)
             }
+        } else {
+            Button(action: {}) {
+                NoFindingsLabel(diagnosticsEnabled: model.settings.diagnosticsEnabled)
+            }
+            .buttonStyle(.plain)
+            .disabled(true)
+            .toolbarItemMetrics()
+            .accessibilityLabel("Findings")
         }
     }
 }

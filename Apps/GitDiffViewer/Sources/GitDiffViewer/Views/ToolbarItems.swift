@@ -33,8 +33,8 @@ struct DiffTotalsLabel: View {
     }
 }
 
-/// Static-analysis totals for the working tree, warnings and errors from every enabled tool; hidden while
-/// diagnostics are off or nothing was found.
+/// Static-analysis totals for the working tree, warnings and errors from every enabled tool; ``NoFindingsLabel``
+/// while diagnostics are off or nothing was found.
 struct DiagnosticsLabel: View {
     let model: DiffViewerModel
 
@@ -58,7 +58,26 @@ struct DiagnosticsLabel: View {
             .accessibilityLabel("Diagnostics")
             .help(
                 DiagnosticsBreakdown.lines(summary: summary, runStates: diagnostics.runStates).joined(separator: "\n"))
+        } else {
+            NoFindingsLabel(diagnosticsEnabled: model.settings.diagnosticsEnabled)
+                .toolbarItemMetrics()
+                .accessibilityLabel("Diagnostics")
         }
+    }
+}
+
+/// What a findings item shows with nothing to count. Such an item keeps content of its own rather than none: SwiftUI
+/// takes an item with empty content out of the toolbar, and every comparison window shares one toolbar identifier,
+/// so AppKit mirrors an item one window inserts into all the others, and throws when another window's toolbar lacks
+/// the item or the items before it (book WIN-02). A toolbar's items must not depend on what its window shows.
+struct NoFindingsLabel: View {
+    let diagnosticsEnabled: Bool
+
+    var body: some View {
+        Label("No findings", systemImage: "checkmark.circle")
+            .labelStyle(.iconOnly)
+            .foregroundStyle(.tertiary)
+            .help(diagnosticsEnabled ? "No warnings or errors found" : "Diagnostics are off")
     }
 }
 
