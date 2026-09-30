@@ -112,8 +112,9 @@ struct HoverBlockSlot {
     /// Places the view's top in the body's document; nil until the view is in the body.
     var top: NSLayoutConstraint?
 
-    /// The view's height as shown: its text's, or what its content lays out to.
-    var shownHeight: CGFloat { height?.constant ?? view.fittingSize.height }
+    /// The view's height as shown: its text's, or what its content lays out to. Main-actor: `fittingSize` lays the
+    /// view out, and the slot itself, a plain value, carries no isolation of its own.
+    @MainActor var shownHeight: CGFloat { height?.constant ?? view.fittingSize.height }
 }
 
 /// The body's top-level block views, top to bottom: the first ``shown`` show the discussion, and the rest, out of the
