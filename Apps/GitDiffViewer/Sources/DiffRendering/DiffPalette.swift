@@ -33,7 +33,7 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
     package let gutterChangedText: NSColor
     /// Line height as a multiple of the font's, from the theme; 1 for the system palette.
     package let lineHeightMultiple: Double
-    /// The height TextKit gives a line of `font` at its natural spacing, measured once here: it is what a line
+    /// The height TextKit gives a line of `font` at its natural spacing, from ``FontLineHeight``: it is what a line
     /// height multiple multiplies, and rendering runs on several threads at once.
     package let defaultLineHeight: CGFloat
     /// The colours changes take (book D18).
@@ -69,7 +69,7 @@ package struct DiffPalette: @unchecked Sendable, Equatable {
         self.gutterText = gutterText
         self.gutterChangedText = gutterChangedText
         self.lineHeightMultiple = lineHeightMultiple
-        defaultLineHeight = NSLayoutManager().defaultLineHeight(for: font)
+        defaultLineHeight = FontLineHeight.of(font)
         self.roleColors = roleColors
         self.diffColors = diffColors
     }
