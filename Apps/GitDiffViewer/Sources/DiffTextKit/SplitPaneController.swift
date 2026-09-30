@@ -25,6 +25,10 @@ package final class SplitPaneController: NSObject {
     package private(set) var pendingAlignment: Task<Void, Never>?
     /// Long enough for a resize and both panes applying text to land in one alignment pass.
     package static let alignmentDebounce: Duration = .milliseconds(40)
+    /// Whether the panes' window is in a live resize, when alignment waits for its end; nil asks the panes' views.
+    package var liveResize: (@MainActor () -> Bool)?
+    /// Whether a live resize held an alignment pass back, which its end runs.
+    private var alignsAfterLiveResize = false
 
     /// Takes the clock the debounce sleeps on and the provider its task is spawned through, so tests can drive
     /// the one with a virtual clock and await the other.
@@ -63,6 +67,7 @@ package final class SplitPaneController: NSObject {
     ) {
         guard !members.contains(where: { $0.textView === textView }) else { return }
         members.append(Member(scrollView: scrollView, textView: textView, rendered: nil, didAlign: didAlign))
+        (textView as? DiffPaneTextView)?.onLiveResizeEnd = { [weak self] in self?.liveResizeDidEnd() }
         guard let scrollView else { return }
         scrollView.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(
@@ -87,13 +92,31 @@ package final class SplitPaneController: NSObject {
         scheduleAlignment()
     }
 
-    /// Coalesces bursts of layout changes (a resize, two panes applying text) into one alignment pass.
+    /// Coalesces bursts of layout changes (a resize, two panes applying text) into one alignment pass. During a live
+    /// resize the pass waits for the resize to end: each pass lays out both panes whole and rewrites their rows'
+    /// spacing (text-renderer.md §5, M0 item 7), and a drag would run one every few frames.
     package func scheduleAlignment() {
         pendingAlignment?.cancel()
+        guard !isInLiveResize else {
+            pendingAlignment = nil
+            alignsAfterLiveResize = true
+            return
+        }
         pendingAlignment = taskProvider.task { [weak self, clock] in
             guard (try? await clock.sleep(for: Self.alignmentDebounce)) != nil else { return }
             self?.alignRows()
         }
+    }
+
+    /// Runs the alignment pass a live resize held back, now that it ended.
+    package func liveResizeDidEnd() {
+        guard alignsAfterLiveResize else { return }
+        alignsAfterLiveResize = false
+        scheduleAlignment()
+    }
+
+    private var isInLiveResize: Bool {
+        liveResize?() ?? members.contains { $0.textView?.inLiveResize == true }
     }
 
     @objc private func boundsDidChange(_ notification: Notification) {

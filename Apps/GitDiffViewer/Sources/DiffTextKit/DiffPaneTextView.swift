@@ -11,6 +11,8 @@ package final class DiffPaneTextView: NSTextView {
 
     /// Called at the end of each layout pass, once TextKit has laid out what shows.
     package var onLayout: (() -> Void)?
+    /// Called when a live resize of the window ends.
+    package var onLiveResizeEnd: (() -> Void)?
 
     /// Whether the text container sits at the container inset exactly, as a card's does, instead of where AppKit
     /// puts it.
@@ -40,6 +42,11 @@ package final class DiffPaneTextView: NSTextView {
     package override func layout() {
         super.layout()
         onLayout?()
+    }
+
+    package override func viewDidEndLiveResize() {
+        super.viewDidEndLiveResize()
+        onLiveResizeEnd?()
     }
 
     /// Carries out a folding command (DIFF-03), answering whether it did anything; ``ScopeHoverTracker`` sets it.
