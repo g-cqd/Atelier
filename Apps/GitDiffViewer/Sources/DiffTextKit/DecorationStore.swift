@@ -98,6 +98,22 @@ package final class DecorationStore {
         }
     }
 
+    /// Takes `rendered` and `decorations` before the pane puts `rendered`'s text in its storage, and clears the colour
+    /// drawn over the text it replaces: TextKit validates the new text's fragments as it lays them out, and validates
+    /// each only once, so they must be coloured from `rendered`'s rows then. Validated from the text before, they kept
+    /// its rows' colours, or none, wherever the pass that colours them again did not reach, as outside the viewport it
+    /// saw, which the placement of the first change or the split view's alignment then scrolled to.
+    package func willShow(_ rendered: RenderedText, decorations: DiffDecorations?) {
+        guard rendered !== self.rendered else { return }
+        if self.rendered != nil, let layoutManager {
+            layoutManager.removeRenderingAttribute(.foregroundColor, for: layoutManager.documentRange)
+        }
+        litBraces = []
+        self.rendered = rendered
+        self.decorations = decorations
+        snapshot.set(rendered: rendered, decorations: decorations)
+    }
+
     /// Colours again the fragments laid out in the viewport, or every one laid out when the layout manager keeps them,
     /// having cleared the colours drawn before when `clearing`.
     private func recolor(clearing: Bool) {
