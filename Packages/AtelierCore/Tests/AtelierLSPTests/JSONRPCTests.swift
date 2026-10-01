@@ -1,5 +1,8 @@
+import AemiTestKit
 import Foundation
 import Testing
+
+import enum AemiJSON.JSONError
 
 @testable import AtelierLSP
 
@@ -97,7 +100,11 @@ struct JSONRPCTests {
     @Test
     func `a malformed response's id is still read, leniently`() {
         let payload = Data(#"{"jsonrpc":"2.0","id":7,"result":{"text":"\ud800"}}"#.utf8)
-        #expect(throws: (any Error).self) { _ = try IncomingMessage.decode(payload) }
+        expectThrows(
+            { try IncomingMessage.decode(payload) },
+            where: { (error: JSONError) in
+                if case .invalidString = error { true } else { false }
+            })
         #expect(IncomingMessage.responseID(ofUndecodable: payload) == .number(7))
     }
 

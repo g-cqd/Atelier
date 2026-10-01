@@ -254,7 +254,8 @@ public actor ProcessSession {
     /// `nil` inherits the parent's environment untouched; otherwise the child sees exactly these variables.
     private static func subprocessEnvironment(_ variables: [String: String]?) -> Environment {
         guard let variables else { return .inherit }
-        let entries = variables.map { (Environment.Key(rawValue: $0.key)!, $0.value) }
+        // A name the platform cannot hold (empty, or containing `=` or NUL) is dropped: the child could not see it anyway.
+        let entries = variables.compactMap { name, value in Environment.Key(rawValue: name).map { ($0, value) } }
         return .custom(Dictionary(uniqueKeysWithValues: entries))
     }
 }

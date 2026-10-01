@@ -319,7 +319,7 @@ public final class TextCanvasView: NSView {
         let snapshotConfiguration = configuration
         let snapshotAppearance = renderAppearance
         // A follow-up: the window's own colour space (text-renderer.md §3.5); sRGB is correct, if costlier to commit.
-        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
         let scale = Double(window?.backingScaleFactor ?? 2)
         pendingTasks[index] = Task { [weak self] in
             guard
