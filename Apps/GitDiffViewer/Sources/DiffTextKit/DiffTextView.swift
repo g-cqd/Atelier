@@ -575,7 +575,7 @@ package final class DiffTextViewCoordinator: NSObject {
                 // One line per row: the width needs no layout.
                 max(clipView.bounds.width, unwrappedWidth(of: rendered))
             } else if textView.textContainer?.widthTracksTextView == true {
-                textView.frame.width
+                clipView.bounds.width
             } else if wrapColumn > 0 {
                 max(clipView.bounds.width, textView.textContainer?.size.width ?? 0)
             } else {
