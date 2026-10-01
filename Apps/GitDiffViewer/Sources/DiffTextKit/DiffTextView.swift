@@ -314,6 +314,8 @@ package final class DiffTextViewCoordinator: NSObject {
     package var diagnostics: DiagnosticOverlay { diagnosticsDisplay.overlay }
     /// ``RenderedText/measuredUnwrappedWidth()`` of the text on show, measured once per render.
     private var unwrappedWidth: (id: UUID, width: CGFloat)?
+    /// Where the text on show last ended once TextKit had laid out its last row; see ``contentHeight()``.
+    private var laidOutTextHeight: (id: UUID, height: CGFloat)?
     /// Sizes the pane again whenever TextKit's usage bounds change; see ``followLayout()``.
     fileprivate var usageObservation: NSKeyValueObservation?
     /// Whether the pane is being sized for a change of TextKit's usage bounds; see ``followLayout()``.
@@ -599,12 +601,20 @@ package final class DiffTextViewCoordinator: NSObject {
     package func contentHeight() -> CGFloat {
         guard let textView, let layoutManager = textView.textLayoutManager else { return 0 }
         let below = (rendered?.bandBelow ?? 0) + DiffPaneMetrics.containerInset
-        let text =
-            if let last = lastFragment(in: layoutManager), last.state == .layoutAvailable {
-                last.layoutFragmentFrame.maxY
-            } else {
-                max(layoutManager.usageBoundsForTextContainer.maxY, rendered?.unwrappedTextHeight ?? 0)
-            }
+        let usage = layoutManager.usageBoundsForTextContainer
+        let text: CGFloat
+        if let last = lastFragment(in: layoutManager), last.state == .layoutAvailable {
+            text = last.layoutFragmentFrame.maxY
+            if let rendered { laidOutTextHeight = (rendered.id, text) }
+        } else if usage.isEmpty, let rendered, let known = laidOutTextHeight, known.id == rendered.id {
+            // TextKit dropped all of its layout, as a change of the container's width does, and the rows at one line
+            // each are far short of a wrapped text. A pane sized to them would fit its viewport and drop its vertical
+            // scroller; a legacy scroller's width then goes back to the text, which wraps taller and brings the
+            // scroller back, and so on without end. The pane keeps its height until the viewport is laid out again.
+            text = max(known.height, rendered.unwrappedTextHeight)
+        } else {
+            text = max(usage.maxY, rendered?.unwrappedTextHeight ?? 0)
+        }
         return textView.textContainerInset.height + text + below
     }
 
