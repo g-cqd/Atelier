@@ -110,7 +110,8 @@ let package = Package(
                 .product(name: "AtelierSwiftSyntax", package: "AtelierCore"),
                 .product(name: "AtelierTestSupport", package: "AtelierCore"),
                 .product(name: "AtelierTheme", package: "AtelierCore"),
-                .product(name: "AemiCore", package: "aemi"), .product(name: "AemiTesting", package: "aemi")
+                .product(name: "AemiCore", package: "aemi"), .product(name: "AemiTesting", package: "aemi"),
+                .product(name: "AemiTestKit", package: "aemi")
             ],
             swiftSettings: strict
         )
