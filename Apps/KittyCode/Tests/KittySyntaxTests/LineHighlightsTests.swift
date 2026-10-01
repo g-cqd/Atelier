@@ -1,3 +1,4 @@
+import AemiTestKit
 import KittyStyle
 import Testing
 
@@ -48,7 +49,7 @@ struct LineHighlightsTests {
     /// Random edits, anywhere and of any size, applied to both a `LineHighlights` and the plain array it stands for.
     @Test(arguments: 0 ..< 8)
     func `random edits read back as the same edits on a plain array`(seed: UInt64) {
-        var generator = SplitMix64(seed: seed)
+        var generator = SeededRNG(seed: seed)
         var model = [[StyledSpan]](repeating: [], count: 200)
         var lines = LineHighlights(unhighlightedLineCount: 200)
         for step in 0 ..< 400 {
@@ -70,22 +71,5 @@ struct LineHighlightsTests {
         }
         #expect(Array(lines) == model)
         #expect(lines == LineHighlights(model))
-    }
-}
-
-/// A seeded generator, so a failing seed replays.
-private struct SplitMix64: RandomNumberGenerator {
-    private var state: UInt64
-
-    init(seed: UInt64) {
-        state = seed
-    }
-
-    mutating func next() -> UInt64 {
-        state &+= 0x9E37_79B9_7F4A_7C15
-        var value = state
-        value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
-        value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
-        return value ^ (value >> 31)
     }
 }
