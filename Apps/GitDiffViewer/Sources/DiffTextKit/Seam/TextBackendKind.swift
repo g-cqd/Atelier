@@ -1,7 +1,7 @@
 import Foundation
 package import SwiftUI
 
-/// The text engine a window's panes use (text-renderer.md §4.3). CoreText draws rows and decorations only (M1): no
+/// The text engine a window's panes use. CoreText draws rows and decorations only: no
 /// selection, hover, split alignment or cards yet, so the Develop menu says so.
 package enum TextBackendKind: String, CaseIterable, Identifiable, Sendable {
     case textKit2
