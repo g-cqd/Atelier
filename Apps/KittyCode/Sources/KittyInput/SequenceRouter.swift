@@ -364,8 +364,12 @@ public struct SequenceRouter: Sendable {
         guard start < limit else { return start }
         return bytes.withUnsafeBufferPointer { pointer in
             let run = UnsafeBufferPointer(rebasing: pointer[start ..< limit])
-            let escape = memchr(run.baseAddress, Int32(Self.pasteEndMarker[0]), run.count)
-            let end = escape.map { start + (UnsafeRawPointer($0) - UnsafeRawPointer(run.baseAddress!)) } ?? limit
+            let end: Int
+            if let base = run.baseAddress, let escape = memchr(base, Int32(Self.pasteEndMarker[0]), run.count) {
+                end = start + (UnsafeRawPointer(escape) - UnsafeRawPointer(base))
+            } else {
+                end = limit
+            }
             if keeps { buffer.append(contentsOf: UnsafeBufferPointer(rebasing: pointer[start ..< end])) }
             return end
         }
