@@ -1,3 +1,4 @@
+import AemiTestKit
 import Testing
 
 @testable import AtelierSyntaxModel
@@ -6,7 +7,7 @@ struct UTF16OffsetsTests {
     @Test
     func `a walk in steps counts the utf16 length of the text before each stop`() {
         let characters = ["a", " ", "é", "✓", "変", "🙂", "𝔘", "\r\n"]
-        var random = SplitMix64(seed: 0x10)
+        var random = SeededRNG(seed: 0x10)
         for _ in 0 ..< 500 {
             let text = (0 ..< Int(random.next() % 48)).map { _ in characters[Int(random.next() % 8)] }.joined()
             let bytes = Array(text.utf8)
@@ -26,7 +27,7 @@ struct UTF16OffsetsTests {
 
     @Test
     func `eight bytes at a time count what one byte at a time does, on any bytes`() {
-        var random = SplitMix64(seed: 0xFF)
+        var random = SeededRNG(seed: 0xFF)
         for _ in 0 ..< 500 {
             let bytes = (0 ..< Int(random.next() % 40)).map { _ in UInt8(truncatingIfNeeded: random.next()) }
             let start = bytes.isEmpty ? 0 : Int(random.next() % UInt64(bytes.count))

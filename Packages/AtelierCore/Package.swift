@@ -203,7 +203,10 @@ let package = Package(
             name: "AtelierDiffTests",
             dependencies: ["AtelierDiff", "AtelierText", .product(name: "AemiTestKit", package: "aemi")],
             swiftSettings: strict),
-        .testTarget(name: "AtelierSyntaxModelTests", dependencies: ["AtelierSyntaxModel"], swiftSettings: strict),
+        .testTarget(
+            name: "AtelierSyntaxModelTests",
+            dependencies: ["AtelierSyntaxModel", .product(name: "AemiTestKit", package: "aemi")],
+            swiftSettings: strict),
         .testTarget(
             name: "AtelierHighlightingTests",
             dependencies: [
@@ -233,7 +236,9 @@ let package = Package(
         .testTarget(name: "AtelierGrammarTests", dependencies: ["AtelierGrammar"], swiftSettings: strict),
         .testTarget(
             name: "AtelierParserTests", dependencies: ["AtelierParser", "AtelierScanners"], swiftSettings: strict),
-        .testTarget(name: "AtelierQueryTests", dependencies: ["AtelierQuery"], swiftSettings: strict),
+        .testTarget(
+            name: "AtelierQueryTests", dependencies: ["AtelierQuery", .product(name: "AemiTestKit", package: "aemi")],
+            swiftSettings: strict),
         .testTarget(
             name: "AtelierScannersTests", dependencies: ["AtelierScanners", "AtelierParser"], swiftSettings: strict),
         .testTarget(
@@ -288,6 +293,7 @@ let package = Package(
             name: "AtelierLSPTests",
             dependencies: [
                 "AtelierHighlighting", "AtelierLSP", "AtelierProcess", "AtelierSwiftSyntax",
+                .product(name: "AemiJSON", package: "AemiJSON"),
                 .product(name: "AemiRuntime", package: "aemi"), .product(name: "AemiTestKit", package: "aemi")
             ],
             swiftSettings: strict

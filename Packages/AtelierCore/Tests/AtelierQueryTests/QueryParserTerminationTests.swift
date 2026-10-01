@@ -1,3 +1,4 @@
+import AemiTestKit
 import Foundation
 import Synchronization
 import Testing
@@ -49,7 +50,7 @@ struct QueryParserTerminationTests {
     func `Every single-character mutation of a bundled query ends its parse`() async throws {
         let queries = try BundledHighlightQueries.all()
         #expect(queries.count > 10)
-        var generator = SplitMix64(seed: 0x51E5_A7E1)
+        var generator = SeededRNG(seed: 0x51E5_A7E1)
         var parses = 0
         for (language, source) in queries {
             for mutation in QueryMutation.sample(of: source, count: 48, using: &generator) {
@@ -151,7 +152,7 @@ private struct QueryMutation: CustomStringConvertible {
 
     /// `count` mutations of `source`: half near its predicates, where an argument the parser cannot read used to stop
     /// it advancing, and half anywhere.
-    static func sample(of source: String, count: Int, using generator: inout SplitMix64) -> [QueryMutation] {
+    static func sample(of source: String, count: Int, using generator: inout SeededRNG) -> [QueryMutation] {
         let characters = Array(source)
         guard !characters.isEmpty else { return [] }
         let predicateStarts = characters.indices.filter { characters[$0] == "#" }
@@ -171,22 +172,5 @@ private struct QueryMutation: CustomStringConvertible {
                     }
                 return QueryMutation(offset: offset, kind: kind)
             }
-    }
-}
-
-/// A seeded generator, so the sweep tries the same mutations on every run.
-private struct SplitMix64: RandomNumberGenerator {
-    private var state: UInt64
-
-    init(seed: UInt64) {
-        state = seed
-    }
-
-    mutating func next() -> UInt64 {
-        state &+= 0x9E37_79B9_7F4A_7C15
-        var value = state
-        value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
-        value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
-        return value ^ (value >> 31)
     }
 }

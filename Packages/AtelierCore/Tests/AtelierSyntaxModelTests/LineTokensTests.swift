@@ -1,3 +1,4 @@
+import AemiTestKit
 import Testing
 
 @testable import AtelierSyntaxModel
@@ -21,7 +22,7 @@ struct LineTokensTests {
 
     @Test
     func `flat per-line tokens equal byLine on generated texts`() {
-        var random = SplitMix64(seed: 0x3A6)
+        var random = SeededRNG(seed: 0x3A6)
         for _ in 0 ..< 500 {
             let (tokens, lineStarts, textLength) = Self.generated(&random)
             let expected = Self.lineTokens(
@@ -82,7 +83,7 @@ struct LineTokensTests {
     @Test
     func `utf16 offsets equal the utf16 length of the line before each bound on generated texts`() {
         let characters = ["a", " ", "é", "✓", "変", "🙂", "𝔘", "\n", "\r\n"]
-        var random = SplitMix64(seed: 0x16)
+        var random = SeededRNG(seed: 0x16)
         for _ in 0 ..< 500 {
             let text = (0 ..< Int(random.next() % 40)).map { _ in characters[Int(random.next() % 9)] }.joined()
             let bytes = Array(text.utf8)
@@ -159,7 +160,7 @@ struct LineTokensTests {
     }
 
     /// Random ascending, disjoint tokens over a random text of short lines, some empty.
-    private static func generated(_ random: inout SplitMix64) -> ([HighlightToken], [Int], Int) {
+    private static func generated(_ random: inout SeededRNG) -> ([HighlightToken], [Int], Int) {
         let lineCount = Int(random.next() % 12)
         var lineStarts: [Int] = []
         var position = 0
@@ -182,20 +183,5 @@ struct LineTokensTests {
             cursor += length
         }
         return (tokens, lineStarts, textLength)
-    }
-}
-
-/// A seeded generator, so a failing case reproduces.
-struct SplitMix64 {
-    private var state: UInt64
-
-    init(seed: UInt64) { state = seed }
-
-    mutating func next() -> UInt64 {
-        state &+= 0x9E37_79B9_7F4A_7C15
-        var value = state
-        value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
-        value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
-        return value ^ (value >> 31)
     }
 }

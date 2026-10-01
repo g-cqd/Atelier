@@ -228,7 +228,9 @@ extension TextTypesetter {
         rowText: RowText, runs: ArraySlice<LineRuns.Run>, sheet: StyleSheet, fontCache: inout [FontKey: CTFont],
         includeColor: Bool, appearance: Appearance
     ) -> CFAttributedString {
-        let mutable = CFAttributedStringCreateMutable(kCFAllocatorDefault, 0)!
+        guard let mutable = CFAttributedStringCreateMutable(kCFAllocatorDefault, 0) else {
+            preconditionFailure("the default allocator could not create an attributed string")
+        }
         CFAttributedStringReplaceString(mutable, CFRange(location: 0, length: 0), rowText.string as CFString)
         let fullRange = CFRange(location: 0, length: rowText.utf16Count)
         let plainStyle = sheet[StyleID(0)] ?? TextStyle(foreground: .fixed(RGBA(red: 0, green: 0, blue: 0)))
