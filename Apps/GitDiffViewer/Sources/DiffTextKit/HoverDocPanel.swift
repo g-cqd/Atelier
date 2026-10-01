@@ -335,6 +335,9 @@ package final class HoverDocPanel {
         }
         bodyScrollView.drawsBackground = false
         bodyScrollView.hasVerticalScroller = false
+        // The blocks are laid out at the panel's inner width, so the scroller floats over them: a legacy one, as with a
+        // mouse attached, would take 15 pt of the width the blocks were made for and hide the end of each line.
+        bodyScrollView.scrollerStyle = .overlay
         bodyScrollView.borderType = .noBorder
         bodyScrollView.translatesAutoresizingMaskIntoConstraints = false
     }
