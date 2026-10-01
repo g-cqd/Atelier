@@ -130,6 +130,7 @@ enum TextBackendParity {
         let pane = TextKit2Backend().makePane(gutter: .dual)
         let window = Self.window(size: size, content: pane.view)
         defer { window.contentView = nil }
+        Self.pinOverlayScrollers(in: pane.view)
         pane.setWrapping(width == nil ? .none : .viewport)
         pane.show(rendered, keepingScroll: false)
         window.contentView?.layoutSubtreeIfNeeded()
@@ -200,6 +201,7 @@ enum TextBackendParity {
         let pane = DiffTextBackends.backend(for: .coreText).makePane(gutter: .dual)
         let window = Self.window(size: size, content: pane.view)
         defer { window.contentView = nil }
+        Self.pinOverlayScrollers(in: pane.view)
         pane.setWrapping(width == nil ? .none : .viewport)
         pane.show(rendered, keepingScroll: false)
         window.contentView?.layoutSubtreeIfNeeded()
@@ -273,6 +275,17 @@ enum TextBackendParity {
         return window
     }
 
+    /// Shows every scroll view under `view` with overlay scrollers, whatever the system prefers.
+    ///
+    /// The preference follows the pointing devices attached, and can flip while a run is going. A legacy scroller takes
+    /// 15 pt of the pane's width and so moves where lines wrap, which the checks compare row by row: at 400 pt it
+    /// leaves 260 pt for text, where a line of 35 characters of the fixtures' font fits TextKit and CoreText by less
+    /// than a point, and each breaks it on its own side.
+    static func pinOverlayScrollers(in view: NSView) {
+        if let scrollView = view as? NSScrollView { scrollView.scrollerStyle = .overlay }
+        for subview in view.subviews { pinOverlayScrollers(in: subview) }
+    }
+
     static func first<View: NSView>(_ type: View.Type, in view: NSView) -> View? {
         if let match = view as? View { return match }
         return view.subviews.lazy.compactMap { first(type, in: $0) }.first
@@ -290,6 +303,7 @@ private struct ReferencePane {
     init(rendered: RenderedText, wrapsLines: Bool, size: NSSize) throws {
         let host = NSHostingView(rootView: DiffTextView(rendered: rendered, gutter: .dual, wrapsLines: wrapsLines))
         window = TextBackendParity.window(size: size, content: host)
+        TextBackendParity.pinOverlayScrollers(in: host)
         textView = try #require(TextBackendParity.first(NSTextView.self, in: host))
         clip = try #require(textView.enclosingScrollView?.contentView)
         minimap = try #require(TextBackendParity.first(MinimapView.self, in: host))
