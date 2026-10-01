@@ -165,9 +165,10 @@ struct HardenedProcessRunnerLimitsTests {
     func `standard input comes from a file with no path left for anyone to open`() async throws {
         let pool = BlockingOffloadPool(width: 2)
         defer { pool.shutdown() }
-        // The link count of the file the child reads its input from, then the input itself.
+        // The link count of the file the child reads its input from, then the input itself. `stat` is the system one by
+        // its path: the child inherits `PATH`, where GNU `stat` can come first and reads `-f` as a filesystem report.
         let output = try await HardenedProcessRunner(pool: pool)
-            .run(Self.shell("stat -f %l /dev/fd/0; cat", input: Data("payload\n".utf8)))
+            .run(Self.shell("/usr/bin/stat -f %l /dev/fd/0; cat", input: Data("payload\n".utf8)))
         #expect(String(decoding: output.standardOutput, as: UTF8.self) == "0\npayload\n")
     }
 }
