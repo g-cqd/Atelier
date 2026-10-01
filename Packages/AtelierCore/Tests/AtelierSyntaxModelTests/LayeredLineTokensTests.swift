@@ -1,3 +1,4 @@
+import AemiTestKit
 import AtelierSyntaxModel
 import Testing
 
@@ -59,7 +60,7 @@ struct LayeredLineTokensTests {
 
     @Test
     func `the merge equals HighlightMerger's over the layers the coverage rule shows, on generated lines`() {
-        var random = SplitMix64(seed: 0x9E)
+        var random = SeededRNG(seed: 0x9E)
         let allLayers: [HighlightLayer] = [.lexical, .structural, .syntactic, .semantic]
         for _ in 0 ..< 500 {
             var layered = LayeredLineTokens(lineCount: 1)
@@ -103,7 +104,7 @@ struct LayeredLineTokensTests {
     }
 
     /// Ascending, disjoint tokens of `layer` somewhere in the first 60 bytes of a line.
-    private static func generatedTokens(layer: HighlightLayer, _ random: inout SplitMix64) -> [HighlightToken] {
+    private static func generatedTokens(layer: HighlightLayer, _ random: inout SeededRNG) -> [HighlightToken] {
         var tokens: [HighlightToken] = []
         var cursor = Int(random.next() % 4)
         while cursor < 60 {
