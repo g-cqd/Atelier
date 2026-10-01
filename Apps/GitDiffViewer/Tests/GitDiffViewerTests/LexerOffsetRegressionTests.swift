@@ -1,3 +1,4 @@
+import AemiTestKit
 import AppKit
 import DiffCore
 import Testing
@@ -107,7 +108,7 @@ struct LexerOffsetRegressionTests {
             "let ", "x", " = ", "é", "✓", "変", "🙂", "𝔘", "\t", " // c🙂", "/* a", " 𝔘 */", "\"s🙂\"", "\"\"\"",
             "\"open 🙂", "0x1F", "\r\n", "\n"
         ]
-        var random = SplitMix64(seed: 0x15)
+        var random = SeededRNG(seed: 0x15)
         for _ in 0 ..< 300 {
             let text = (0 ..< 40).map { _ in pieces[Int(random.next() % UInt64(pieces.count))] }.joined()
             let lines = DiffModel.lines(of: text)
@@ -160,20 +161,5 @@ struct LexerOffsetRegressionTests {
             runs.append("\(range.location)+\(range.length):\(name)")
         }
         return runs
-    }
-}
-
-/// A seeded generator, so a failing case reproduces.
-private struct SplitMix64 {
-    private var state: UInt64
-
-    init(seed: UInt64) { state = seed }
-
-    mutating func next() -> UInt64 {
-        state &+= 0x9E37_79B9_7F4A_7C15
-        var value = state
-        value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
-        value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
-        return value ^ (value >> 31)
     }
 }
