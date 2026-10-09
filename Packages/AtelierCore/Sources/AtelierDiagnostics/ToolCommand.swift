@@ -52,6 +52,7 @@ public enum ToolCommand {
             guard let first = path.first, let last = path.last else { return false }
             let isTrimmed: (Character) -> Bool = { $0 == " " || $0 == "\t" }
             let isQuoted = path.count >= 2 && first == "\"" && last == "\""
+            // `\r` is not in the trim set because `isNewline` already rejects any path that contains it.
             return !path.contains(where: \.isNewline) && !isTrimmed(first) && !isTrimmed(last) && !isQuoted
         }
     }

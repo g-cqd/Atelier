@@ -130,6 +130,10 @@ public actor DiagnosticsEngine {
         guard let located = await discovery.locate(tool, location: request.tools[tool]) else {
             return ToolResult(tool: tool, findings: [], status: .toolMissing, duration: .zero, fromCache: false)
         }
+        // Nothing to analyze, but only once the tool is known to be installed, so a missing tool still shows.
+        if tool.scopesItsOwnReport, request.files.isEmpty {
+            return ToolResult(tool: tool, findings: [], status: .succeeded, duration: .zero, fromCache: false)
+        }
 
         let scopedPaths: [String]
         // A tool that scopes its own report is given the same files a per-file tool is.
@@ -207,7 +211,10 @@ public actor DiagnosticsEngine {
     /// What ``run(_:request:)`` would answer for `tool` without running anything and without reading
     /// `request.root`: a skip, a clean run, or a missing tool it can tell from the request alone, or a result from the
     /// cache. Nil when the tool would have to run, so a caller that must first put the files on disk only does it then.
+    /// A tool that scopes its own report with no file is always nil, since ``run(_:request:)`` decides it once the tool
+    /// is located.
     public func cachedResult(_ tool: DiagnosticTool, request: Request) async -> ToolResult? {
+        if tool.scopesItsOwnReport, request.files.isEmpty { return nil }
         if let settled = Self.resultWithoutRunning(tool, request: request) { return settled }
         if request.contentIdentity == nil, !hasRequiredConfiguration(tool, at: request.root) {
             return Self.skippedForConfiguration(tool)
@@ -219,10 +226,10 @@ public actor DiagnosticsEngine {
         return cachedOutcome(for: key).map { result(from: $0, tool: tool, request: request) }
     }
 
-    /// The result of a request that needs no run at all: a corpus tool with no corpus to fingerprint, or a request with
-    /// no file for a tool that needs one. A per-file tool with no file is skipped. A tool that scopes its own report
-    /// with no file is not launched over the whole root either; it reports the clean run that a file-scoped run with
-    /// nothing in it would, which is not cached.
+    /// The result of a request that needs no run at all: a corpus tool with no corpus to fingerprint, or a per-file tool
+    /// with no file, which is skipped. A tool that scopes its own report with no file is not settled here: it is not
+    /// skipped, and it is not launched over the whole root either. ``run(_:request:)`` reports its clean run once it has
+    /// located the tool, so a missing tool still shows as missing.
     private static func resultWithoutRunning(_ tool: DiagnosticTool, request: Request) -> ToolResult? {
         if tool.scope == .corpus, request.corpusFingerprint == nil {
             return ToolResult(
@@ -230,10 +237,7 @@ public actor DiagnosticsEngine {
                 fromCache: false)
         }
         guard request.files.isEmpty else { return nil }
-        if tool.scopesItsOwnReport {
-            return ToolResult(tool: tool, findings: [], status: .succeeded, duration: .zero, fromCache: false)
-        }
-        if tool.scope == .perFile {
+        if tool.scope == .perFile, !tool.scopesItsOwnReport {
             return ToolResult(tool: tool, findings: [], status: .skipped("no files"), duration: .zero, fromCache: false)
         }
         return nil

@@ -170,4 +170,70 @@ struct DiagnosticsEngineScopeTests {
         #expect(result.status == .skipped("sources not on disk"))
         #expect(runner.specs.isEmpty)
     }
+
+    @Test(arguments: [DiagnosticTool.arcleak, .dolly, .deadwood])
+    func `cachedResult answers nothing for a self-scoping tool with no files, since run decides it`(
+        tool: DiagnosticTool
+    ) async throws {
+        let temp = TemporaryDirectory(prefix: "diageng")
+        defer { temp.cleanup() }
+        let root = URL(filePath: temp.file("root"))
+        let executable = URL(filePath: temp.file("tool/\(tool.executableName)"))
+        try DiagnosticsEngineTests.makeExecutable(at: executable)
+        let runner = FakeProcessRunner(always: .success(""))
+        let discovery = DiagnosticsEngineTests.discovery(
+            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+        let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
+
+        let request = DiagnosticsEngineTests.request(
+            root: root, files: [], corpusFingerprint: "fp-1", tool: tool, customPath: executable.path)
+        #expect(await engine.cachedResult(tool, request: request) == nil)
+        #expect(runner.specs.isEmpty)
+    }
+
+    @Test(arguments: [DiagnosticTool.arcleak, .dolly, .deadwood])
+    func `a self-scoping tool with no files reports toolMissing when it cannot be located`(
+        tool: DiagnosticTool
+    ) async throws {
+        let temp = TemporaryDirectory(prefix: "diageng")
+        defer { temp.cleanup() }
+        let root = URL(filePath: temp.file("root"))
+        let runner = FakeProcessRunner(always: .success(""))
+        let discovery = ToolDiscovery(
+            runner: runner, bundledDirectory: nil, homeDirectory: URL(filePath: temp.file("home")),
+            environment: [:])
+        let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
+
+        // Nothing is installed at any rung of discovery, so the missing tool shows even though no file changed.
+        let request = DiagnosticsEngine.Request(root: root, files: [], corpusFingerprint: "fp-1", tools: [:])
+        let result = try await engine.run(tool, request: request)
+        #expect(result.status == .toolMissing)
+        #expect(result.findings.isEmpty)
+    }
+
+    @Test
+    func `a corpus tool with no files still launches once over the root, with its findings filtered to none`()
+        async throws
+    {
+        let temp = TemporaryDirectory(prefix: "diageng")
+        defer { temp.cleanup() }
+        let root = URL(filePath: temp.file("root"))
+        let executable = URL(filePath: temp.file("tool/swiftlint"))
+        try DiagnosticsEngineTests.makeExecutable(at: executable)
+        // The report names A.swift, which the request does not name, so the post-filter removes it.
+        let runner = FakeProcessRunner(always: DiagnosticsEngineTests.sarifOutput(root: root))
+        let discovery = DiagnosticsEngineTests.discovery(
+            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+        let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
+
+        let request = DiagnosticsEngineTests.request(
+            root: root, files: [], corpusFingerprint: "fp-1", tool: .swiftlint, customPath: executable.path)
+        let result = try await engine.run(.swiftlint, request: request)
+
+        #expect(result.status == .succeeded)
+        #expect(result.findings.isEmpty)
+        #expect(runner.specs.count == 1)
+        let launch = try #require(runner.specs.first)
+        #expect(launch.arguments == ["lint", "--reporter", "sarif", "--quiet"])
+    }
 }
