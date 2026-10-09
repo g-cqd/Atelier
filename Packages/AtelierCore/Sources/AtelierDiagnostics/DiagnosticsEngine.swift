@@ -122,7 +122,7 @@ public actor DiagnosticsEngine {
     public func run(_ tool: DiagnosticTool, request: Request) async throws -> ToolResult {
         let scope = tool.scope
 
-        if let skipped = Self.skippedWithoutRunning(tool, request: request) { return skipped }
+        if let settled = Self.resultWithoutRunning(tool, request: request) { return settled }
         if request.contentIdentity == nil, !hasRequiredConfiguration(tool, at: request.root) {
             return Self.skippedForConfiguration(tool)
         }
@@ -204,10 +204,10 @@ public actor DiagnosticsEngine {
     }
 
     /// What ``run(_:request:)`` would answer for `tool` without running anything and without reading
-    /// `request.root`: a skip or a missing tool it can tell from the request alone, or a result from the cache. Nil
-    /// when the tool would have to run, so a caller that must first put the files on disk only does it then.
+    /// `request.root`: a skip, a clean run, or a missing tool it can tell from the request alone, or a result from the
+    /// cache. Nil when the tool would have to run, so a caller that must first put the files on disk only does it then.
     public func cachedResult(_ tool: DiagnosticTool, request: Request) async -> ToolResult? {
-        if let skipped = Self.skippedWithoutRunning(tool, request: request) { return skipped }
+        if let settled = Self.resultWithoutRunning(tool, request: request) { return settled }
         if request.contentIdentity == nil, !hasRequiredConfiguration(tool, at: request.root) {
             return Self.skippedForConfiguration(tool)
         }
@@ -218,15 +218,21 @@ public actor DiagnosticsEngine {
         return cachedOutcome(for: key).map { result(from: $0, tool: tool, request: request) }
     }
 
-    /// The result of a request that needs no run at all: a per-file tool, or one that scopes its own report, with no
-    /// file, or a corpus tool with no corpus to fingerprint.
-    private static func skippedWithoutRunning(_ tool: DiagnosticTool, request: Request) -> ToolResult? {
+    /// The result of a request that needs no run at all: a corpus tool with no corpus to fingerprint, or a request with
+    /// no file for a tool that needs one. A per-file tool with no file is skipped. A tool that scopes its own report
+    /// with no file is not launched over the whole root either; it reports the clean run that a file-scoped run with
+    /// nothing in it would, which is not cached.
+    private static func resultWithoutRunning(_ tool: DiagnosticTool, request: Request) -> ToolResult? {
         if tool.scope == .corpus, request.corpusFingerprint == nil {
             return ToolResult(
                 tool: tool, findings: [], status: .skipped("requires a working tree"), duration: .zero,
                 fromCache: false)
         }
-        if tool.scope == .perFile || tool.scopesItsOwnReport, request.files.isEmpty {
+        guard request.files.isEmpty else { return nil }
+        if tool.scopesItsOwnReport {
+            return ToolResult(tool: tool, findings: [], status: .succeeded, duration: .zero, fromCache: false)
+        }
+        if tool.scope == .perFile {
             return ToolResult(tool: tool, findings: [], status: .skipped("no files"), duration: .zero, fromCache: false)
         }
         return nil
