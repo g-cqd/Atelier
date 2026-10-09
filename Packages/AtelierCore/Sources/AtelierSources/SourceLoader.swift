@@ -97,9 +97,9 @@ public struct SourceLoader: SourceReading {
     /// byte-order mark is dropped, as Foundation's UTF-8 decoding drops it. A file with a NUL anywhere in it is
     /// binary and becomes one line naming its size, so the diff still shows that it changed. The whole file is
     /// searched, not its first 8 KiB: a NUL anywhere means the bytes are not text a diff can show, whatever the first
-    /// lines look like. The scan costs about 0.3 ms per 8 MiB, small beside the read that precedes it. Search keeps
-    /// its narrower probe on purpose (`binaryProbeLength` in AtelierSearch looks at the first 8 KiB only), since a
-    /// search skips only files that are clearly binary.
+    /// lines look like. The scan costs about 0.3 ms per 8 MiB, small beside the read that precedes it. AtelierSearch
+    /// keeps its narrower probe (`binaryProbeLength`, the first 8 KiB) on purpose, as git and the file enumerator
+    /// judge a file binary.
     public static func text(from data: Data) -> String {
         if containsNUL(data) {
             return "(binary file, \(data.count.formatted(.byteCount(style: .file))))\n"
