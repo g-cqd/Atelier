@@ -78,4 +78,35 @@ struct LanguageDetectionByFileNameTests {
     func `a name with no language of its own is plain`(path: String) {
         #expect(Language(path: path) == .plain)
     }
+
+    @Test(
+        arguments: [
+            ("dir.d/deploy", "#!/bin/sh", Language.shell), ("dir.d/deploy", nil, .plain), (".", nil, .plain),
+            ("foo.", nil, .plain), ("script.unknown", "#!/bin/sh", .plain)
+        ] as [(String, String?, Language)])
+    func `only the last path component decides whether a name has an extension`(
+        path: String, firstLine: String?, language: Language
+    ) {
+        #expect(Language(path: path, firstLine: firstLine.map { Substring($0) }) == language)
+    }
+
+    @Test(arguments: ["#!/bin/sh\r", "#!/bin/sh\r\n", "#!  /bin/sh  ", "#!\t/bin/sh"])
+    func `a shebang line survives a carriage return and odd spacing`(firstLine: String) {
+        #expect(Language(path: "deploy", firstLine: Substring(firstLine)) == .shell)
+    }
+
+    @Test(arguments: [" #!/bin/sh", "#!", "#!/usr/bin/env", "#!/usr/bin/env -S", "# !/bin/sh", ""])
+    func `a line that is not a complete shebang names no interpreter`(firstLine: String) {
+        #expect(Language(path: "deploy", firstLine: Substring(firstLine)) == .plain)
+    }
+
+    @Test
+    func `text after the first line is never read`() {
+        #expect(Language(path: "deploy", firstLine: "#!/usr/bin/env\npython3") == .plain)
+    }
+
+    @Test
+    func `env assignments are skipped`() {
+        #expect(Language(path: "deploy", firstLine: "#!/usr/bin/env FOO=bar python3") == .python)
+    }
 }

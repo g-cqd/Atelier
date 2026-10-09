@@ -26,15 +26,12 @@ public enum Language: Sendable, Equatable, CaseIterable {
         self = Self.byExtension[fileExtension.lowercased()] ?? .plain
     }
 
-    /// The language of the file at `path`: its exact file name (``byFileName``), else its extension through
-    /// ``init(fileExtension:)``, else, for a name with no extension, the interpreter that the `#!` line names.
-    /// A name with no language of its own, such as `Makefile` or `.env`, is ``plain``.
-    ///
-    /// The order is fixed. (1) The last path component, matched case-sensitively in ``byFileName``. (2) The text after
-    /// the last `.` of that component, as `URL.pathExtension` gives it, through ``init(fileExtension:)``; an unmapped
-    /// extension is plain. A leading-dot name (`.zshrc`) and a name ending in a dot (`foo.`) have no extension.
-    /// (3) Only when the name has no extension and no exact-name match: the interpreter that `firstLine` names, when
-    /// it is a `#!` line; otherwise plain.
+    /// The language of the file at `path`, decided in a fixed order: (1) the last path component, matched
+    /// case-sensitively in `byFileName`; (2) the text after the last `.` of that component, as `URL.pathExtension`
+    /// gives it, through ``init(fileExtension:)``, where an unmapped extension is plain; (3) for a name with no
+    /// extension, the interpreter that `firstLine` names when it is a `#!` line. A leading-dot name (`.zshrc`) and a
+    /// name ending in a dot (`foo.`) have no extension. A name with no language of its own, such as `Makefile` or
+    /// `.env`, is plain, unless it has no extension and a shebang names one.
     ///
     /// - Parameters:
     ///   - path: The file's path; only its last component is read.
@@ -46,7 +43,7 @@ public enum Language: Sendable, Equatable, CaseIterable {
 
     /// File names whose language is not their extension: the shell startup files and Ruby's tooling files. Matched
     /// exactly and case-sensitively against the last path component.
-    public static let byFileName: [String: Language] = [
+    static let byFileName: [String: Language] = [
         ".zshrc": .shell, ".zprofile": .shell, ".zshenv": .shell, ".zlogin": .shell, ".zlogout": .shell,
         ".bashrc": .shell, ".bash_profile": .shell, ".bash_login": .shell, ".bash_logout": .shell,
         ".bash_aliases": .shell, ".profile": .shell,
@@ -75,6 +72,7 @@ public enum Language: Sendable, Equatable, CaseIterable {
     /// The language of the interpreter a `#!` line names: `#!/usr/bin/python3.12` and `#!/usr/bin/env -S python3 -u`
     /// both name Python. `env` is skipped with its options and assignments, and a trailing version is dropped.
     private static func interpreter(of line: Substring) -> Language? {
+        let line = line.prefix { !$0.isNewline }
         guard line.hasPrefix("#!") else { return nil }
         let words = line.dropFirst(2).split { $0 == " " || $0 == "\t" || $0.isNewline }
         guard let first = words.first else { return nil }
