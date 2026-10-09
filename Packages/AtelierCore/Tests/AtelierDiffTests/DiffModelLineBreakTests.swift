@@ -4,9 +4,10 @@ import Testing
 
 /// The line-break contract of `DiffModel.lines(of:)`: only a line feed ends a line, so a lone carriage return is
 /// content, and a carriage return directly before the line feed belongs to the break, not to the line. This is the
-/// same rule as git, `TextLines`, `DiffRenderer.lineRanges(of:lines:)` and `LineSourceTests`, so the diff, the gutter
-/// and the hunk numbers count the same lines. Splitting at a lone carriage return here alone would break that
-/// agreement, so it has to change in all of them together.
+/// same rule as git, `TextLines` and `LineSourceTests`; `DiffRenderer.lineRanges(of:lines:)` relies on this cut, as
+/// it walks the lines it is given, rather than splitting on its own. So the diff, the gutter and the hunk numbers
+/// count the same lines. Splitting at a lone carriage return here alone would break that agreement, so it has to
+/// change in all of them together.
 @Suite
 struct DiffModelLineBreakTests {
     private static func lines(of text: String) -> [String] {
@@ -14,8 +15,18 @@ struct DiffModelLineBreakTests {
     }
 
     @Test
-    func `a text of lone carriage returns is one line, its last carriage return dropped`() {
-        #expect(Self.lines(of: "a\rb\rc\r") == ["a\rb\rc"])
+    func `a lone carriage return inside an unterminated line stays in it`() {
+        #expect(Self.lines(of: "a\rb") == ["a\rb"])
+    }
+
+    @Test
+    func `a trailing carriage return at the end of the text is dropped`() {
+        #expect(Self.lines(of: "a\r") == ["a"])
+    }
+
+    @Test
+    func `only the carriage return directly before the line feed is dropped`() {
+        #expect(Self.lines(of: "a\r\r\n") == ["a\r"])
     }
 
     @Test
