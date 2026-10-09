@@ -59,6 +59,15 @@ public enum DiagnosticTool: String, CaseIterable, Sendable, Codable, Identifiabl
         }
     }
 
+    /// True when the tool reads all of its root and scopes its own report to the files it is given, one `--only` each.
+    /// ``DiagnosticsEngine`` passes such a tool those files, neither runs it without any nor post-filters its findings.
+    public var scopesItsOwnReport: Bool {
+        switch self {
+            case .arcleak, .dolly, .deadwood: true
+            case .swiftlint, .swiftFormat, .swiftformat: false
+        }
+    }
+
     /// The shape the tool's output is parsed as.
     public enum ToolOutputFormat: Sendable, Equatable {
         case sarif
