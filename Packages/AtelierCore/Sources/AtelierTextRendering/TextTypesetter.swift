@@ -138,6 +138,8 @@ public enum TextTypesetter {
             }
         }
 
+        // The context is flipped, so the text matrix must flip too for glyphs to stand upright.
+        context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
         for lines in drawLines {
             for (line, lineY) in lines {
                 context.textPosition = CGPoint(x: CGFloat(configuration.padding), y: CGFloat(lineY + Double(baseline)))
