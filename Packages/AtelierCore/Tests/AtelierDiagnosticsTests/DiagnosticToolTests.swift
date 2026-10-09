@@ -17,4 +17,16 @@ struct DiagnosticToolTests {
     ) {
         #expect(tool.scopesItsOwnReport == expected)
     }
+
+    @Test(arguments: [
+        (DiagnosticTool.swiftlint, [".swiftlint.yml"]),
+        (.swiftFormat, [".swift-format"]),
+        (.swiftformat, [".swiftformat"]),
+        (.arcleak, [".arcleak.json", ".arcleak-baseline.json"]),
+        (.dolly, [".dolly.json"]),
+        (.deadwood, [".deadwood.json"])
+    ])
+    func `each tool names the configuration files it reads from the root`(tool: DiagnosticTool, expected: [String]) {
+        #expect(tool.configFileNames == expected)
+    }
 }

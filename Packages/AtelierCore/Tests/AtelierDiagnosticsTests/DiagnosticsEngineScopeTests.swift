@@ -9,6 +9,40 @@ import Testing
 /// ``DiagnosticsEngine`` over a tool that scopes its own report to the request's files: it is given those files, keeps
 /// the findings it reports as written, is cached per set of files, and is skipped when it has none.
 struct DiagnosticsEngineScopeTests {
+    @Test(arguments: [
+        (DiagnosticTool.arcleak, ".arcleak.json"), (.dolly, ".dolly.json"), (.deadwood, ".deadwood.json")
+    ])
+    func `a changed JSON configuration file of an analyzer busts the cache`(tool: DiagnosticTool, configName: String)
+        async throws
+    {
+        let temp = TemporaryDirectory(prefix: "diageng")
+        defer { temp.cleanup() }
+        let root = URL(filePath: temp.file("root"))
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let executable = URL(filePath: temp.file("tool/\(tool.executableName)"))
+        try DiagnosticsEngineTests.makeExecutable(at: executable)
+        let runner = FakeProcessRunner(always: DiagnosticsEngineTests.sarifOutput(root: root))
+        let discovery = DiagnosticsEngineTests.discovery(
+            runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
+        let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
+
+        let file = DiagnosticsEngine.FileTarget(
+            path: "A.swift", contentHash: "hash-1", url: root.appending(path: "A.swift"))
+        let request = DiagnosticsEngineTests.request(
+            root: root, files: [file], corpusFingerprint: "fp-1", tool: tool, customPath: executable.path)
+
+        let configURL = root.appending(path: configName)
+        try "{}".write(to: configURL, atomically: true, encoding: .utf8)
+        let first = try await engine.run(tool, request: request)
+
+        try "{\"longer\": true}".write(to: configURL, atomically: true, encoding: .utf8)
+        let second = try await engine.run(tool, request: request)
+
+        #expect(!first.fromCache)
+        #expect(!second.fromCache)
+        #expect(runner.specs.count == 2)
+    }
+
     @Test
     func `a self-scoping tool caches its report per set of files, so a narrower request runs it again`() async throws {
         let temp = TemporaryDirectory(prefix: "diageng")

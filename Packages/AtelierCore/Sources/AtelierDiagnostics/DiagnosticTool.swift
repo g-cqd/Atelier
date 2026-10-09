@@ -87,9 +87,9 @@ public enum DiagnosticTool: String, CaseIterable, Sendable, Codable, Identifiabl
             case .swiftlint: [".swiftlint.yml"]
             case .swiftFormat: [".swift-format"]
             case .swiftformat: [".swiftformat"]
-            case .arcleak: [".arcleak.yml", ".arcleak-baseline.json"]
-            case .dolly: [".dolly.yml"]
-            case .deadwood: [".deadwood.yml"]
+            case .arcleak: [".arcleak.json", ".arcleak-baseline.json"]
+            case .dolly: [".dolly.json"]
+            case .deadwood: [".deadwood.json"]
         }
     }
 
