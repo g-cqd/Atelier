@@ -30,7 +30,10 @@ struct ToolCommandTests {
         #expect(ToolCommand.standardInput(tool, files: ["/repo/A.swift"]) == nil)
     }
 
-    @Test(arguments: ["/repo/A\nB.swift", "/repo/A\rB.swift", "/repo/A.swift ", "\"A.swift\""])
+    @Test(arguments: [
+        "/repo/A\nB.swift", "/repo/A\rB.swift", "/repo/A\u{2028}B.swift", "/repo/A.swift ", " /repo/A.swift",
+        "/repo/A.swift\t", "\"A.swift\""
+    ])
     func `a path that standard input would alter is passed as --only, with no standard input`(path: String) {
         let files = ["/repo/B.swift", path]
         let expected = [
@@ -40,6 +43,17 @@ struct ToolCommandTests {
             #expect(ToolCommand.standardInput(tool, files: files) == nil)
             #expect(ToolCommand.analyze(tool, files: files, root: Self.root) == expected)
         }
+    }
+
+    @Test(arguments: [DiagnosticTool.arcleak, .dolly, .deadwood])
+    func `a lone quote and a quote inside a path stay on standard input, since neither wraps the path`(
+        tool: DiagnosticTool
+    ) {
+        let files = ["\"", "/repo/\"A.swift"]
+        #expect(
+            ToolCommand.analyze(tool, files: files, root: Self.root)
+                == ["analyze", "/repo", "--only-from", "-", "--format", "sarif", "--relative-to", "/repo"])
+        #expect(ToolCommand.standardInput(tool, files: files) == Data("\"\n/repo/\"A.swift\n".utf8))
     }
 
     @Test(arguments: [DiagnosticTool.arcleak, .dolly, .deadwood])
