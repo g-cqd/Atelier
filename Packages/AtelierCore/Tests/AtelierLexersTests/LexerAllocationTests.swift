@@ -4,11 +4,22 @@ import Testing
 
 @testable import AtelierLexers
 
+/// The allocation bound describes the optimized lexer. An unoptimized build allocates once per token.
+private let isDebugBuild: Bool = {
+    #if DEBUG
+        true
+    #else
+        false
+    #endif
+}()
+
 extension LexerCorpusTests {
     /// A scan allocates its token array and little else, whatever the size of the source: no string, set or array per
     /// token or per keyword candidate.
     struct Allocations {
-        @Test(.enabled(if: allocationCountingAvailable), arguments: [Language.swift, .json, .yaml, .toml, .html, .css])
+        @Test(
+            .enabled(if: allocationCountingAvailable && !isDebugBuild),
+            arguments: [Language.swift, .json, .yaml, .toml, .html, .css])
         func `a scan makes a handful of allocations`(language: Language) throws {
             let bytes = Array(LexerCorpus.text(language, fragments: 400).utf8)
             let engine = LexicalHighlightEngine()
