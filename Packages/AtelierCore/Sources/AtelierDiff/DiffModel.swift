@@ -228,8 +228,9 @@ public struct DiffModel: Sendable {
     /// D3), as ``TextLines`` finds them.
     ///
     /// A lone carriage return does not end a line, matching git and the other line splitter (``TextLines``); the
-    /// renderer's line ranges rely on this cut rather than make their own, so line numbers agree everywhere. A file that uses only carriage returns therefore
-    /// shows as one long line; normalising such files belongs at load time, not here.
+    /// renderer's line ranges rely on this cut rather than make their own, so line numbers agree everywhere. A file
+    /// that uses only carriage returns therefore shows as one long line; normalising such files belongs at load time,
+    /// not here.
     public static func lines(of text: String) -> [Substring] {
         substrings(of: TextLines(text))
     }
