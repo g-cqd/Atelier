@@ -16,8 +16,9 @@ public final class GLRParser: Sendable {
     let tokenTerminals: [Int?]
     /// The grammar's symbols in tree-sitter's order, which breaks a tie between two parses.
     let symbolRanks: SymbolRanks
-    /// The terminal index of each external token, in the grammar's order; nil for one the table does not take.
-    let externalTerminals: [Int?]
+    /// The terminal indices each external token can be read as, in the grammar's order
+    /// (``ParseTable/terminalVariants(ofExternalSymbol:)``); empty for one the table does not take.
+    let externalTerminals: [[Int]]
     /// The GOTO column of each rule's reductions, by rule index, read without hashing the non-terminal's name; nil for
     /// a rule the table's reductions name inconsistently or never, which ``nonTerminalColumn(rule:nonTerminal:)`` looks
     /// up by name.
@@ -44,7 +45,7 @@ public final class GLRParser: Sendable {
         self.scanner = TokenScanner(lexTable)
         self.tokenTerminals = lexTable.tokens.map { tIdx[$0.name] }
         self.symbolRanks = SymbolRanks(lexTable: lexTable, parseTable: parseTable, productions: productions)
-        self.externalTerminals = parseTable.externalSymbols.map { tIdx[$0] }
+        self.externalTerminals = parseTable.externalSymbols.map { parseTable.terminalVariants(ofExternalSymbol: $0) }
         self.reductionColumns = Self.reductionColumns(of: parseTable, nonTerminalIndex: ntIdx)
         self.hasLostShifts = (0 ..< parseTable.stateCount).map { parseTable.lostShifts[$0] != nil }
     }

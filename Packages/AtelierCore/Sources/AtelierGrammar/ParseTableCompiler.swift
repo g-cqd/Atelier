@@ -56,8 +56,9 @@ public enum ParseTableCompiler: Sendable {
     /// The version of what ``compile(_:limits:)`` produces, for caches of compiled tables and of failed compiles to
     /// key on: bumped whenever the outcome of compiling the same grammar changes, tables or error, which a change to
     /// the default limits can do too, so no cache hands out what an older compiler made; and whenever the layout of a
-    /// table file changes, which a table file's header also names.
-    public static let formatVersion = 19
+    /// table file changes, which a table file's header also names. Version 20 makes a string external valid wherever
+    /// any of its token variants is, so the validity rows of a table with string externals changed.
+    public static let formatVersion = 20
 
     /// Compile a grammar definition into parse tables.
     public static func compile(
@@ -185,16 +186,16 @@ public enum ParseTableCompiler: Sendable {
                 }
             })
         table.externalIsExtra = table.externalSymbols.map { extraNames.contains($0) }
-        let terminalIndex = Dictionary(uniqueKeysWithValues: table.terminals.enumerated().map { ($1, $0) })
         let actions = table.actions
+        // An external is valid in a state when any of its terminal variants has an action there.
+        let variants = table.externalSymbols.map { table.terminalVariants(ofExternalSymbol: $0) }
         table.validExternals = ExternalValidity(
             rows: (0 ..< actions.stateCount)
                 .map { state in
-                    table.externalSymbols.enumerated()
-                        .map { external, name in
+                    variants.enumerated()
+                        .map { external, candidates in
                             if table.externalIsExtra[external] { return true }
-                            guard let terminal = terminalIndex[name] else { return false }
-                            return !actions.isError(state: state, terminal: terminal)
+                            return candidates.contains { !actions.isError(state: state, terminal: $0) }
                         }
                 })
     }
