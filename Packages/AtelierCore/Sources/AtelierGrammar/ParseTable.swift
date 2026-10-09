@@ -95,6 +95,22 @@ public struct ParseTable: Sendable, Equatable, Codable {
         externalIsExtra = try values.decodeIfPresent([Bool].self, forKey: .externalIsExtra) ?? []
         lostShifts = try values.decodeIfPresent([Int: [Int: Int]].self, forKey: .lostShifts) ?? [:]
     }
+
+    /// The indices into ``terminals`` of the terminals an external symbol `name` can be read as. For a quoted string's
+    /// name `S`, these are `S` and every `S_N` with a decimal `N`: a string used in `token()` or `immediate_token()`
+    /// wrappers becomes several terminals, the first named `S` and the others numbered after it. Any other name has
+    /// only the terminal of that exact name, if the table has one.
+    /// - Complexity: O(t) in the number of ``terminals``.
+    public func terminalVariants(ofExternalSymbol name: String) -> [Int] {
+        let isQuotedString = name.count >= 2 && name.hasPrefix("\"") && name.hasSuffix("\"")
+        return terminals.indices.filter { index in
+            let terminal = terminals[index]
+            if terminal == name { return true }
+            guard isQuotedString, terminal.hasPrefix(name + "_") else { return false }
+            let suffix = terminal.dropFirst(name.count + 1)
+            return !suffix.isEmpty && suffix.allSatisfy { ("0" ... "9").contains($0) }
+        }
+    }
 }
 
 // MARK: - Action
