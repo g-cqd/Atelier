@@ -192,9 +192,13 @@ extension GLRParser {
             throw .parsingFailed("External scanner state exceeded its size limit")
         }
         let name = parseTable.externalSymbols[lexer.resultSymbol]
+        // The variant the state accepts, so the parse shifts the token it scanned; the first one if none is accepted.
+        let variants = externalTerminals[lexer.resultSymbol]
+        let terminal =
+            variants.first(where: { !parseTable.actions.isError(state: stack.state, terminal: $0) }) ?? variants.first
         let changesParseState =
             !inErrorMode
-            && (terminalIndex[name].map { !parseTable.actions.isError(state: stack.state, terminal: $0) } ?? false)
+            && (terminal.map { !parseTable.actions.isError(state: stack.state, terminal: $0) } ?? false)
         guard lexer.tokenEnd.offset > stack.cursor.offset || state != stack.scannerState || changesParseState else {
             return nil
         }
@@ -202,7 +206,7 @@ extension GLRParser {
         stack.cursor = lexer.tokenEnd
         let start = lexer.tokenStart.offset > lexer.tokenEnd.offset ? lexer.tokenEnd : lexer.tokenStart
         return ParseToken(
-            terminal: terminalIndex[name], type: name,
+            terminal: terminal, type: name,
             byteRange: start.offset ..< lexer.tokenEnd.offset,
             pointRange: start.point ..< lexer.tokenEnd.point,
             isNamed: !name.hasPrefix("_") && !name.hasPrefix("\""),
