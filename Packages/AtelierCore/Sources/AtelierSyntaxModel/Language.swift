@@ -74,7 +74,7 @@ public enum Language: Sendable, Equatable, CaseIterable {
     private static func interpreter(of line: Substring) -> Language? {
         let line = line.prefix { !$0.isNewline }
         guard line.hasPrefix("#!") else { return nil }
-        let words = line.dropFirst(2).split { $0 == " " || $0 == "\t" || $0.isNewline }
+        let words = line.dropFirst(2).split { $0 == " " || $0 == "\t" }
         guard let first = words.first else { return nil }
         var command = lastComponent(of: first)
         if command == "env" {
