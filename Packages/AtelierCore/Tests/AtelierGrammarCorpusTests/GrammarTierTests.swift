@@ -194,6 +194,25 @@ struct GrammarTierTests {
         #expect(try await Self.run(edited, Self.request("howdy")).count == 1)
         #expect(record.parsesStarted == 4)
     }
+
+    @Test
+    func `a source past the size gate is refused before its grammar's tables are compiled`() async throws {
+        let fixture = try TierFixture()
+        defer { fixture.remove() }
+        let compiles = Counter()
+        let artifacts = SyntaxArtifactsCache(
+            registry: fixture.registry(counting: compiles), grammarsDirectory: fixture.grammarsDirectory)
+        let tier = GrammarTier(artifacts: artifacts)
+        let text = String(repeating: "a", count: GrammarEngine.maxSourceBytes + 1)
+
+        let failure = await Self.failure { _ = try await Self.run(tier, Self.request(text)) }
+
+        #expect(
+            failure
+                == .failed(
+                    "\(GrammarEngine.maxSourceBytes + 1) bytes are past the grammar's \(GrammarEngine.maxSourceBytes)"))
+        #expect(compiles.value == 0)
+    }
 }
 
 /// An empty directory under the temporary directory.
