@@ -40,6 +40,24 @@ struct BinaryDetectionTests {
         #expect(text == String(repeating: "a", count: 99))
     }
 
+    /// A slice's bytes after its end belong to the parent, not to the slice, so they must not make it binary.
+    @Test
+    func `a NUL after a slice's end does not count`() {
+        let whole = Self.bytes(count: 100, nulAt: 99)
+        let slice = whole.prefix(50)
+        let text = SourceLoader.text(from: slice)
+        #expect(text == String(repeating: "a", count: 50))
+    }
+
+    /// A NUL inside a slice is in the slice's bytes, so it makes the slice binary.
+    @Test
+    func `a NUL inside a slice makes it binary`() {
+        let whole = Self.bytes(count: 100, nulAt: 60)
+        let slice = whole.dropFirst(10)
+        let text = SourceLoader.text(from: slice)
+        #expect(text.hasPrefix("(binary file, "))
+    }
+
     /// Empty data is an empty file, not a binary one.
     @Test
     func `empty data loads as empty text`() {
