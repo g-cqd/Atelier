@@ -77,10 +77,31 @@ struct HardenedProcessRunnerLimitsTests {
         #expect(output.succeeded)
     }
 
-    /// Blocks on the pool until the child writes `ready` into the FIFO at `path`.
-    private static func awaitReady(_ path: String, on pool: BlockingOffloadPool) async throws {
-        let signal = try await pool.run { try FileHandle(forReadingFrom: URL(filePath: path)).readToEnd() }
-        #expect(signal == Data("ready\n".utf8))
+    /// Waits until the child writes `ready` into the FIFO at `path`, polling a non-blocking descriptor so the wait
+    /// neither occupies one of the runner's pool threads nor outlives the test: a child that never signals fails
+    /// the test after `deadline` instead of hanging the suite (a blocking FIFO open cannot be cancelled).
+    private static func awaitReady(_ path: String, deadline: Duration = .seconds(30)) async throws {
+        let descriptor = open(path, O_RDONLY | O_NONBLOCK)
+        try #require(descriptor >= 0, "cannot open the FIFO at \(path): errno \(errno)")
+        defer { close(descriptor) }
+        var received = Data()
+        let clock = ContinuousClock()
+        let end = clock.now.advanced(by: deadline)
+        let capacity = 64
+        var buffer = [UInt8](repeating: 0, count: capacity)
+        while !received.contains(UInt8(ascii: "\n")) {
+            let count = read(descriptor, &buffer, capacity)
+            if count > 0 {
+                received.append(contentsOf: buffer[0 ..< count])
+                continue
+            }
+            guard clock.now < end else {
+                Issue.record("the child did not signal ready within \(deadline)")
+                throw CancellationError()
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(received == Data("ready\n".utf8))
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -98,7 +119,7 @@ struct HardenedProcessRunnerLimitsTests {
         // Both ignore `SIGTERM`, and the background one holds the pipe; only `SIGKILL` ends them.
         let script = "trap '' TERM; sleep 120 & echo ready > '\(ready)'; sleep 120"
         let run = Task { try await runner.run(Self.shell(script, timeout: .seconds(5))) }
-        try await Self.awaitReady(ready, on: pool)
+        try await Self.awaitReady(ready)
         try await clock.waitForSleepers(atLeast: 1)
         clock.advance(by: .seconds(5))
         try await clock.waitForSleepers(atLeast: 1)
@@ -122,7 +143,7 @@ struct HardenedProcessRunnerLimitsTests {
         // catch the signal with the trap and then sleep on, which a loaded machine makes likely.
         let script = "trap ':' TERM; sh -c \"echo ready > '\(ready)'; exec sleep 120\" & c=$!; wait $c; wait $c"
         let run = Task { try await runner.run(Self.shell(script, timeout: .seconds(5))) }
-        try await Self.awaitReady(ready, on: pool)
+        try await Self.awaitReady(ready)
         try await clock.waitForSleepers(atLeast: 1)
         clock.advance(by: .seconds(5))
         await #expect(throws: ProcessError.timedOut(.seconds(5))) { try await run.value }
@@ -147,7 +168,7 @@ struct HardenedProcessRunnerLimitsTests {
         // Everything ignores `SIGTERM`, and the grandchild writes to `held` and to nothing of the runner's.
         let script = "trap '' TERM; (echo ready > '\(ready)'; exec sleep 120) > '\(held)' & wait"
         let run = Task { try await runner.run(Self.shell(script, timeout: .seconds(5))) }
-        try await Self.awaitReady(ready, on: pool)
+        try await Self.awaitReady(ready)
         _ = fcntl(reading, F_SETFL, 0)
         async let grandchildGone: Int = pool.run {
             var byte: UInt8 = 0
