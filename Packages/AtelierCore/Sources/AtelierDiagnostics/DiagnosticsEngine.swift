@@ -131,8 +131,8 @@ public actor DiagnosticsEngine {
             return ToolResult(tool: tool, findings: [], status: .toolMissing, duration: .zero, fromCache: false)
         }
 
-        let argvFiles: [String]
-        // A tool that scopes its own report takes the same `--only` files a per-file tool does.
+        let scopedPaths: [String]
+        // A tool that scopes its own report is given the same files a per-file tool is.
         if scope == .perFile || tool.scopesItsOwnReport {
             let onDisk = request.files.compactMap(\.url).map(\.path)
             if onDisk.isEmpty {
@@ -140,9 +140,9 @@ public actor DiagnosticsEngine {
                     tool: tool, findings: [], status: .skipped("sources not on disk"), duration: .zero,
                     fromCache: false)
             }
-            argvFiles = onDisk
+            scopedPaths = onDisk
         } else {
-            argvFiles = []
+            scopedPaths = []
         }
 
         let cacheKey = cacheKey(for: tool, request: request, locatedPath: located.url.path)
@@ -156,8 +156,9 @@ public actor DiagnosticsEngine {
         }
 
         let spec = ProcessSpec(
-            executable: located.url, arguments: ToolCommand.analyze(tool, files: argvFiles, root: request.root),
-            currentDirectory: request.root, timeout: ToolCommand.timeout(tool)
+            executable: located.url, arguments: ToolCommand.analyze(tool, files: scopedPaths, root: request.root),
+            currentDirectory: request.root, standardInput: ToolCommand.standardInput(tool, files: scopedPaths),
+            timeout: ToolCommand.timeout(tool)
         )
 
         var output: ProcessOutput?

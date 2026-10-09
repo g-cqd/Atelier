@@ -3,7 +3,7 @@ import Testing
 
 @testable import AtelierDiagnostics
 
-/// The argv, exit-code and time-budget contracts ``ToolCommand`` builds for each tool.
+/// The argv, standard input, exit-code and time-budget contracts ``ToolCommand`` builds for each tool.
 struct ToolCommandTests {
     private static let root = URL(filePath: "/repo")
 
@@ -11,30 +11,35 @@ struct ToolCommandTests {
         (DiagnosticTool.swiftlint, ["lint", "--reporter", "sarif", "--quiet"]),
         (.swiftFormat, ["lint", "--configuration", "/repo/.swift-format", "/repo/A.swift", "/repo/B.swift"]),
         (.swiftformat, ["--lint", "."]),
-        (
-            .arcleak,
-            [
-                "analyze", "/repo", "--only", "/repo/A.swift", "--only", "/repo/B.swift", "--format", "sarif",
-                "--relative-to", "/repo"
-            ]
-        ),
-        (
-            .dolly,
-            [
-                "analyze", "/repo", "--only", "/repo/A.swift", "--only", "/repo/B.swift", "--format", "sarif",
-                "--relative-to", "/repo"
-            ]
-        ),
-        (
-            .deadwood,
-            [
-                "analyze", "/repo", "--only", "/repo/A.swift", "--only", "/repo/B.swift", "--format", "sarif",
-                "--relative-to", "/repo"
-            ]
-        )
+        (.arcleak, ["analyze", "/repo", "--only-from", "-", "--format", "sarif", "--relative-to", "/repo"]),
+        (.dolly, ["analyze", "/repo", "--only-from", "-", "--format", "sarif", "--relative-to", "/repo"]),
+        (.deadwood, ["analyze", "/repo", "--only-from", "-", "--format", "sarif", "--relative-to", "/repo"])
     ])
     func `analyze builds the expected argv for each tool`(tool: DiagnosticTool, expected: [String]) {
         #expect(ToolCommand.analyze(tool, files: ["/repo/A.swift", "/repo/B.swift"], root: Self.root) == expected)
+    }
+
+    @Test(arguments: [DiagnosticTool.arcleak, .dolly, .deadwood])
+    func `an analyzer is given its files on standard input, one path per line`(tool: DiagnosticTool) {
+        let files = ["/repo/A.swift", "/repo/Sub Dir/B.swift"]
+        #expect(ToolCommand.standardInput(tool, files: files) == Data("/repo/A.swift\n/repo/Sub Dir/B.swift\n".utf8))
+    }
+
+    @Test(arguments: [DiagnosticTool.swiftlint, .swiftFormat, .swiftformat])
+    func `a tool that is not an analyzer gets no standard input`(tool: DiagnosticTool) {
+        #expect(ToolCommand.standardInput(tool, files: ["/repo/A.swift"]) == nil)
+    }
+
+    @Test(arguments: ["/repo/A\nB.swift", "/repo/A\rB.swift", "/repo/A.swift ", "\"A.swift\""])
+    func `a path that standard input would alter is passed as --only, with no standard input`(path: String) {
+        let files = ["/repo/B.swift", path]
+        let expected = [
+            "analyze", "/repo", "--only", "/repo/B.swift", "--only", path, "--format", "sarif", "--relative-to", "/repo"
+        ]
+        for tool in [DiagnosticTool.arcleak, .dolly, .deadwood] {
+            #expect(ToolCommand.standardInput(tool, files: files) == nil)
+            #expect(ToolCommand.analyze(tool, files: files, root: Self.root) == expected)
+        }
     }
 
     @Test(arguments: [DiagnosticTool.arcleak, .dolly, .deadwood])

@@ -88,9 +88,9 @@ struct DiagnosticsEngineScopeTests {
         let narrower = try #require(runner.specs.last)
         #expect(
             narrower.arguments == [
-                "analyze", root.path, "--only", root.appending(path: "A.swift").path, "--format", "sarif",
-                "--relative-to", root.path
+                "analyze", root.path, "--only-from", "-", "--format", "sarif", "--relative-to", root.path
             ])
+        #expect(narrower.standardInput == Data("\(root.appending(path: "A.swift").path)\n".utf8))
     }
 
     @Test

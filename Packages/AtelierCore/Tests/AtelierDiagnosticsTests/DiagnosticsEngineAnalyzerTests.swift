@@ -124,9 +124,11 @@ struct DiagnosticsEngineAnalyzerTests {
         let spec = try #require(runner.specs.first)
         #expect(
             spec.arguments == [
-                "analyze", root.path, "--only", root.appending(path: "A.swift").path, "--only",
-                root.appending(path: "B.swift").path, "--format", "sarif", "--relative-to", root.path
+                "analyze", root.path, "--only-from", "-", "--format", "sarif", "--relative-to", root.path
             ])
+        #expect(
+            spec.standardInput
+                == Data("\(root.appending(path: "A.swift").path)\n\(root.appending(path: "B.swift").path)\n".utf8))
         #expect(spec.timeout == .seconds(300))
     }
 

@@ -59,7 +59,7 @@ public enum DiagnosticTool: String, CaseIterable, Sendable, Codable, Identifiabl
         }
     }
 
-    /// True when the tool reads all of its root and scopes its own report to the files it is given, one `--only` each.
+    /// True when the tool reads all of its root and scopes its own report to the files it is given.
     /// ``DiagnosticsEngine`` passes such a tool those files, neither runs it without any nor post-filters its findings.
     public var scopesItsOwnReport: Bool {
         switch self {
