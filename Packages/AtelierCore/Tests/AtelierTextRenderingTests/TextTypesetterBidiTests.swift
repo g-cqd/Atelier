@@ -124,7 +124,7 @@ struct TextTypesetterBidiTests {
     }
 
     @Test
-    func `a wrapped right-to-left row keeps a left-to-right base on every line`() throws {
+    func `a wrapped right-to-left row is cut into lines that tile it in order`() throws {
         let row = "שלום עולם = x + y"
         let text = StyledText.plain(
             rows: [row], font: FontSpec(postScriptName: Self.fontName, pointSize: 20), plainStyle: Self.plainStyle)
