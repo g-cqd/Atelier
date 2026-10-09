@@ -226,6 +226,10 @@ public struct DiffModel: Sendable {
     /// Splits on "\n" bytes, since Swift folds "\r\n" into one Character, drops a trailing "\r" per line so CRLF files
     /// align, and ignores the empty tail after a final newline. The line breaks are found with `memchr` (perf-core
     /// D3), as ``TextLines`` finds them.
+    ///
+    /// A lone carriage return does not end a line, matching git and the other line splitters (``TextLines``, the
+    /// renderer's line ranges), so line numbers agree everywhere. A file that uses only carriage returns therefore
+    /// shows as one long line; normalising such files belongs at load time, not here.
     public static func lines(of text: String) -> [Substring] {
         substrings(of: TextLines(text))
     }
