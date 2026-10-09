@@ -237,6 +237,7 @@ extension TextTypesetter {
         // Under forceLeftToRight the controls are drawn as their placeholders, unit for unit, so the offsets that
         // `rowText` maps (the runs, the carets) still hold for the text drawn.
         let drawn = bidi == .forceLeftToRight ? BidiPlaceholders.replacingControls(in: rowText.string) : rowText.string
+        assert(drawn.utf16.count == rowText.utf16Count, "bidi substitution changed the row's UTF-16 length")
         CFAttributedStringReplaceString(mutable, CFRange(location: 0, length: 0), drawn as CFString)
         let fullRange = CFRange(location: 0, length: rowText.utf16Count)
         if bidi == .forceLeftToRight {
