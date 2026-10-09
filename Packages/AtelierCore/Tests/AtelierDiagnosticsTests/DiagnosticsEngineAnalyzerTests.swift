@@ -40,7 +40,7 @@ struct DiagnosticsEngineAnalyzerTests {
     }
 
     @Test(arguments: [(DiagnosticTool.dolly, 2), (.deadwood, 14)])
-    func `every dolly or deadwood finding on a symlinked root with a space under TMPDIR survives the corpus filter`(
+    func `every dolly or deadwood finding on a symlinked root with a space under TMPDIR is reported as written`(
         tool: DiagnosticTool, expected: Int
     ) async throws {
         let files = ["Sources/Cache.swift", "Sources/Cache Copy.swift", "Sources/Unused.swift"]

@@ -7,7 +7,8 @@ import Testing
 @testable import AtelierDiagnostics
 
 /// ``DiagnosticsEngine`` over a tool that scopes its own report to the request's files: it is given those files, keeps
-/// the findings it reports as written, is cached per set of files, and is skipped when it has none.
+/// the findings it reports as written, is cached per set of files, and, with none, reports a clean run without
+/// launching it.
 struct DiagnosticsEngineScopeTests {
     @Test(arguments: [
         (DiagnosticTool.arcleak, ".arcleak.json"), (.dolly, ".dolly.json"), (.deadwood, ".deadwood.json")
@@ -139,7 +140,7 @@ struct DiagnosticsEngineScopeTests {
             runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
         let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
 
-        // A corpus is present, so only the empty file list can skip the run.
+        // A corpus is present, so only the empty file list keeps the tool from launching.
         let request = DiagnosticsEngineTests.request(
             root: root, files: [], corpusFingerprint: "fp-1", tool: tool, customPath: executable.path)
         let result = try await engine.run(tool, request: request)
