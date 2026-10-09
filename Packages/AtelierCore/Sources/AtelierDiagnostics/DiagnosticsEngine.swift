@@ -132,7 +132,8 @@ public actor DiagnosticsEngine {
         }
 
         let argvFiles: [String]
-        if scope == .perFile {
+        // A tool that scopes its own report takes the same `--only` files a per-file tool does.
+        if scope == .perFile || tool.scopesItsOwnReport {
             let onDisk = request.files.compactMap(\.url).map(\.path)
             if onDisk.isEmpty {
                 return ToolResult(
@@ -217,16 +218,16 @@ public actor DiagnosticsEngine {
         return cachedOutcome(for: key).map { result(from: $0, tool: tool, request: request) }
     }
 
-    /// The result of a request that needs no run at all: a per-file tool with no file, or a corpus tool with no
-    /// corpus to fingerprint.
+    /// The result of a request that needs no run at all: a per-file tool, or one that scopes its own report, with no
+    /// file, or a corpus tool with no corpus to fingerprint.
     private static func skippedWithoutRunning(_ tool: DiagnosticTool, request: Request) -> ToolResult? {
-        if tool.scope == .perFile, request.files.isEmpty {
-            return ToolResult(tool: tool, findings: [], status: .skipped("no files"), duration: .zero, fromCache: false)
-        }
         if tool.scope == .corpus, request.corpusFingerprint == nil {
             return ToolResult(
                 tool: tool, findings: [], status: .skipped("requires a working tree"), duration: .zero,
                 fromCache: false)
+        }
+        if tool.scope == .perFile || tool.scopesItsOwnReport, request.files.isEmpty {
+            return ToolResult(tool: tool, findings: [], status: .skipped("no files"), duration: .zero, fromCache: false)
         }
         return nil
     }
@@ -291,12 +292,17 @@ public actor DiagnosticsEngine {
     }
 
     /// What is being analyzed: for a per-file tool the sorted `path=hash` pairs, so moving content between paths
-    /// still changes it; for a corpus tool the corpus fingerprint.
+    /// still changes it; for a corpus tool the corpus fingerprint, with the sorted paths added for a tool that scopes
+    /// its own report, since its report depends on which files it was given.
     private func payloadFingerprint(for tool: DiagnosticTool, request: Request) -> String {
         switch tool.scope {
             case .perFile:
-                request.files.map { "\($0.path)=\($0.contentHash)" }.sorted().joined(separator: ",")
-            case .corpus: request.corpusFingerprint ?? ""
+                return request.files.map { "\($0.path)=\($0.contentHash)" }.sorted().joined(separator: ",")
+            case .corpus:
+                let corpus = request.corpusFingerprint ?? ""
+                guard tool.scopesItsOwnReport else { return corpus }
+                let scopedFiles = request.files.map(\.path).sorted().joined(separator: ",")
+                return "\(corpus)|\(scopedFiles)"
         }
     }
 
@@ -331,9 +337,10 @@ public actor DiagnosticsEngine {
         }
     }
 
-    /// Narrows a corpus tool's findings to the requested files; a per-file tool only ran on those.
+    /// Narrows a corpus tool's findings to the requested files. A per-file tool only ran on those, and a tool that
+    /// ``DiagnosticTool/scopesItsOwnReport`` already scoped its report to them, so its findings are kept as written.
     private func filterFindings(_ findings: [Finding], tool: DiagnosticTool, request: Request) -> [Finding] {
-        guard tool.scope == .corpus else { return findings }
+        guard tool.scope == .corpus, !tool.scopesItsOwnReport else { return findings }
         let paths = Set(request.files.map(\.path))
         return findings.filter { paths.contains($0.file) }
     }

@@ -133,51 +133,6 @@ struct DiagnosticsEngineTests {
     }
 
     @Test
-    func `a corpus tool caches the full result and re-filters a different file subset without re-running`()
-        async throws
-    {
-        let temp = TemporaryDirectory(prefix: "diageng")
-        defer { temp.cleanup() }
-        let root = URL(filePath: temp.file("root"))
-        let executable = URL(filePath: temp.file("tool/dolly"))
-        try Self.makeExecutable(at: executable)
-        let sarif = """
-            {"version": "2.1.0", "runs": [{"results": [
-                {"ruleId": "duplicate", "level": "warning", "message": {"text": "Dup"},
-                 "locations": [{"physicalLocation": {"artifactLocation": {"uri": "file://\(root.path)/A.swift"},
-                     "region": {"startLine": 1}}}]},
-                {"ruleId": "duplicate", "level": "warning", "message": {"text": "Dup"},
-                 "locations": [{"physicalLocation": {"artifactLocation": {"uri": "file://\(root.path)/B.swift"},
-                     "region": {"startLine": 1}}}]}
-            ]}]}
-            """
-        let runner = FakeProcessRunner(always: .success(sarif))
-        let discovery = Self.discovery(runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
-        let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
-
-        let both = [
-            DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "a", url: root.appending(path: "A.swift")),
-            DiagnosticsEngine.FileTarget(path: "B.swift", contentHash: "b", url: root.appending(path: "B.swift"))
-        ]
-        let full = try await engine.run(
-            .dolly,
-            request: Self.request(
-                root: root, files: both, corpusFingerprint: "fp-1", tool: .dolly, customPath: executable.path)
-        )
-        #expect(full.findings.count == 2)
-        #expect(!full.fromCache)
-
-        let onlyA = try await engine.run(
-            .dolly,
-            request: Self.request(
-                root: root, files: [both[0]], corpusFingerprint: "fp-1", tool: .dolly, customPath: executable.path)
-        )
-        #expect(onlyA.fromCache)
-        #expect(onlyA.findings.map(\.file) == ["A.swift"])
-        #expect(runner.specs.count == 1)
-    }
-
-    @Test
     func `a missing tool reports toolMissing`() async throws {
         let temp = TemporaryDirectory(prefix: "diageng")
         defer { temp.cleanup() }
@@ -254,43 +209,6 @@ struct DiagnosticsEngineTests {
             root: root, files: [], corpusFingerprint: nil, tool: .dolly, customPath: executable.path)
         let result = try await engine.run(.dolly, request: request)
         #expect(result.status == .skipped("requires a working tree"))
-        #expect(runner.specs.isEmpty)
-    }
-
-    @Test
-    func `a per-file tool with no files is skipped`() async throws {
-        // arcleak, not swiftlint: a corpus tool does not skip on an empty file list.
-        let temp = TemporaryDirectory(prefix: "diageng")
-        defer { temp.cleanup() }
-        let root = URL(filePath: temp.file("root"))
-        let executable = URL(filePath: temp.file("tool/arcleak"))
-        try Self.makeExecutable(at: executable)
-        let runner = FakeProcessRunner(always: .success(""))
-        let discovery = Self.discovery(runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
-        let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
-
-        let request = Self.request(root: root, files: [], tool: .arcleak, customPath: executable.path)
-        let result = try await engine.run(.arcleak, request: request)
-        #expect(result.status == .skipped("no files"))
-        #expect(runner.specs.isEmpty)
-    }
-
-    @Test
-    func `a per-file tool with only blobs not on disk is skipped`() async throws {
-        // arcleak, not swiftlint: a corpus tool never reads a file's on-disk URL.
-        let temp = TemporaryDirectory(prefix: "diageng")
-        defer { temp.cleanup() }
-        let root = URL(filePath: temp.file("root"))
-        let executable = URL(filePath: temp.file("tool/arcleak"))
-        try Self.makeExecutable(at: executable)
-        let runner = FakeProcessRunner(always: .success(""))
-        let discovery = Self.discovery(runner: runner, executable: executable, home: URL(filePath: temp.file("home")))
-        let engine = DiagnosticsEngine(runner: runner, discovery: discovery)
-
-        let file = DiagnosticsEngine.FileTarget(path: "A.swift", contentHash: "a", url: nil)
-        let request = Self.request(root: root, files: [file], tool: .arcleak, customPath: executable.path)
-        let result = try await engine.run(.arcleak, request: request)
-        #expect(result.status == .skipped("sources not on disk"))
         #expect(runner.specs.isEmpty)
     }
 

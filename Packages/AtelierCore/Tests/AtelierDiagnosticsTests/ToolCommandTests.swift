@@ -18,8 +18,20 @@ struct ToolCommandTests {
                 "--relative-to", "/repo"
             ]
         ),
-        (.dolly, ["analyze", "/repo", "--format", "sarif", "--relative-to", "/repo"]),
-        (.deadwood, ["analyze", "/repo", "--format", "sarif", "--relative-to", "/repo"])
+        (
+            .dolly,
+            [
+                "analyze", "/repo", "--only", "/repo/A.swift", "--only", "/repo/B.swift", "--format", "sarif",
+                "--relative-to", "/repo"
+            ]
+        ),
+        (
+            .deadwood,
+            [
+                "analyze", "/repo", "--only", "/repo/A.swift", "--only", "/repo/B.swift", "--format", "sarif",
+                "--relative-to", "/repo"
+            ]
+        )
     ])
     func `analyze builds the expected argv for each tool`(tool: DiagnosticTool, expected: [String]) {
         #expect(ToolCommand.analyze(tool, files: ["/repo/A.swift", "/repo/B.swift"], root: Self.root) == expected)
