@@ -3,14 +3,15 @@ public import Foundation
 /// Builds the argv each diagnostic tool is launched with, what its exit codes mean, and how long it may run.
 public enum ToolCommand {
     /// The arguments to analyze `files` under `root`. Tools with ``DiagnosticTool/AnalysisScope-swift.enum/corpus``
-    /// scope analyze `root` as a whole and ignore `files`.
+    /// scope analyze `root` as a whole and ignore `files`, unless they ``DiagnosticTool/scopesItsOwnReport``.
     ///
     /// swiftlint and Lockwood's swiftformat get no file arguments: given explicit paths they skip the project's own
     /// `included:`/`excluded:` lists and `--exclude` globs, so they run over the root the way the project runs them.
-    /// arcleak also reads all of `root` and reports only on `files`, one `--only` each: its `mutual-strong-properties`
-    /// rule needs every type in the module, and a run over the files alone would prune its shared facts cache to them.
-    /// arcleak, dolly and deadwood write their SARIF paths relative to `root`, which `--relative-to` resolves the way
-    /// they resolve the paths they report.
+    /// arcleak, dolly and deadwood all read all of `root` and scope their report to `files`, one `--only` each, because
+    /// their rules are cross-file: arcleak's `mutual-strong-properties` needs every type in the module, and dolly
+    /// reports a clone group when any of its members is in scope. A run over the files alone would prune arcleak's
+    /// shared facts cache to them and miss the members outside them. All three write their SARIF paths relative to
+    /// `root`, which `--relative-to` resolves the way they resolve the paths they report.
     public static func analyze(_ tool: DiagnosticTool, files: [String], root: URL) -> [String] {
         switch tool {
             case .swiftlint:
@@ -19,10 +20,8 @@ public enum ToolCommand {
                 ["lint", "--configuration", root.appending(path: ".swift-format").path] + files
             case .swiftformat:
                 ["--lint", "."]
-            case .arcleak:
+            case .arcleak, .dolly, .deadwood:
                 ["analyze", root.path] + files.flatMap { ["--only", $0] } + rootRelativeSARIF(root)
-            case .dolly, .deadwood:
-                ["analyze", root.path] + rootRelativeSARIF(root)
         }
     }
 
