@@ -90,8 +90,9 @@ struct HardenedProcessRunnerLimitsTests {
     /// FIFO open cannot be cancelled). The suite's `.timeLimit` remains the backstop.
     private static func awaitReady(_ path: String, deadline: Duration = .seconds(30)) async throws {
         // Read-write, so this descriptor holds a writer of its own: `read` reports EAGAIN, not end-of-file, while the
-        // child has yet to open the FIFO, and the read source does not fire repeatedly on end-of-file.
-        let descriptor = open(path, O_RDWR | O_NONBLOCK)
+        // child has yet to open the FIFO. Opening a FIFO read-write is unspecified by POSIX but well defined on Darwin,
+        // which this suite targets. Close-on-exec keeps a child spawned meanwhile from inheriting the descriptor.
+        let descriptor = open(path, O_RDWR | O_NONBLOCK | O_CLOEXEC)
         try #require(descriptor >= 0, "cannot open the FIFO at \(path): errno \(errno)")
         let (events, continuation) = AsyncStream.makeStream(of: ReadyEvent.self)
         // Ending the wait, by a line, by the deadline or by leaving the loop, cancels both sources, and the read
@@ -103,22 +104,19 @@ struct HardenedProcessRunnerLimitsTests {
         let reader = DispatchSource.makeReadSource(fileDescriptor: descriptor, queue: queue)
         let timer = DispatchSource.makeTimerSource(queue: queue)
         reader.setEventHandler {
+            // One read per event: the source is level-triggered, so it fires again while bytes remain.
             let capacity = 64
             var buffer = [UInt8](repeating: 0, count: capacity)
-            while true {
-                let count = read(descriptor, &buffer, capacity)
-                if count > 0 {
-                    continuation.yield(.bytes(Array(buffer[0 ..< count])))
-                } else if count < 0, errno == EINTR {
-                    continue
-                } else if count < 0, errno == EAGAIN {
-                    // Drained; the next event resumes the wait.
-                    return
-                } else {
-                    // End-of-file or an error: the line cannot arrive, so end the wait now rather than spin.
-                    continuation.finish()
-                    return
-                }
+            let count = read(descriptor, &buffer, capacity)
+            if count > 0 {
+                continuation.yield(.bytes(Array(buffer[0 ..< count])))
+            } else if count < 0, errno == EINTR || errno == EAGAIN {
+                // Interrupted or drained: the source fires again when there is more.
+                return
+            } else {
+                // An error (end-of-file cannot happen while this descriptor holds the write end): the line cannot
+                // arrive, so end the wait now rather than spin.
+                continuation.finish()
             }
         }
         reader.setCancelHandler { close(descriptor) }
@@ -150,7 +148,9 @@ struct HardenedProcessRunnerLimitsTests {
                     throw CancellationError()
             }
         }
-        Issue.record("the FIFO at \(path) closed before the child signalled ready")
+        // A cancelled wait (the test's time limit) throws here instead, so it records no second issue.
+        try Task.checkCancellation()
+        Issue.record("the FIFO at \(path) became unreadable before the child signalled ready")
         throw CancellationError()
     }
 
