@@ -227,8 +227,8 @@ public struct DiffModel: Sendable {
     /// align, and ignores the empty tail after a final newline. The line breaks are found with `memchr` (perf-core
     /// D3), as ``TextLines`` finds them.
     ///
-    /// A lone carriage return does not end a line, matching git and the other line splitters (``TextLines``, the
-    /// renderer's line ranges), so line numbers agree everywhere. A file that uses only carriage returns therefore
+    /// A lone carriage return does not end a line, matching git and the other line splitter (``TextLines``); the
+    /// renderer's line ranges rely on this cut rather than make their own, so line numbers agree everywhere. A file that uses only carriage returns therefore
     /// shows as one long line; normalising such files belongs at load time, not here.
     public static func lines(of text: String) -> [Substring] {
         substrings(of: TextLines(text))
