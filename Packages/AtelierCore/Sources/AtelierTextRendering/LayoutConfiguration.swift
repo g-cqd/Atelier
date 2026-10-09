@@ -1,10 +1,11 @@
 /// How bidirectional text is handled (text-renderer.md §3.7): a row's base direction is set by the policy rather than
 /// by its first strong character, and the direction controls that could reorder a row are drawn as placeholders.
 public enum BidiPolicy: Hashable, Sendable {
-    /// Every row's base direction is left to right, so a row that starts with right-to-left letters still starts at
-    /// the left, while right-to-left words keep reading right to left inside it. The bidi controls (U+202A to U+202E,
+    /// Every row's base direction is left to right, so a row that starts with right-to-left letters begins at the
+    /// left. Right-to-left words still read right to left inside the row. The bidi controls (U+202A to U+202E,
     /// U+2066 to U+2069, U+200E, U+200F and U+061C) are drawn as placeholders of the same length (`▸`, `◂`, `↔`, `□`),
-    /// so they reorder nothing: the Trojan Source class (CVE-2021-42574).
+    /// which reorder nothing; the controls themselves no longer reorder the text around them (the Trojan Source class,
+    /// CVE-2021-42574).
     case forceLeftToRight
     /// The Unicode Bidirectional Algorithm runs unmodified: each row takes its base direction from its first strong
     /// character, and the controls reorder the text around them.
