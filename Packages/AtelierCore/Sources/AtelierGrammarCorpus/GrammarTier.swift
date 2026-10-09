@@ -193,8 +193,7 @@ public struct GrammarTier: AtelierHighlighting.HighlightTier {
                 throw failure
             case .parsed(let tree, let elapsed):
                 guard GrammarEngine.passesQualityGate(tree) else {
-                    let failure = TierFailure.gate(
-                        "\(GrammarEngine.errorBytePercent(of: tree)) % of the bytes lie under ERROR nodes")
+                    let failure = TierFailure.gate(GrammarEngine.gateFailureReason(of: tree))
                     record.fail(grammar: grammar, content: content, failure, bytes: bytes, took: .exactly(elapsed))
                     throw failure
                 }

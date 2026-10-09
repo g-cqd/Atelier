@@ -213,6 +213,37 @@ struct GrammarTierTests {
                     "\(GrammarEngine.maxSourceBytes + 1) bytes are past the grammar's \(GrammarEngine.maxSourceBytes)"))
         #expect(compiles.value == 0)
     }
+
+    @Test
+    func `a parse that does not reach the start rule fails the gate by saying so`() async throws {
+        let fixture = try TierFixture()
+        defer { fixture.remove() }
+        let tier = GrammarTier(artifacts: fixture.artifacts())
+        // An empty text reduces to no rule: its root stays the synthetic start, with no bytes under ERROR nodes.
+        let failure = await Self.failure { _ = try await Self.run(tier, Self.request("")) }
+
+        #expect(failure == .gate("the parse did not reach the grammar's start rule"))
+    }
+
+    @Test
+    func `a parse over five percent under ERROR nodes fails the gate by that share`() async throws {
+        let fixture = try TierFixture()
+        defer { fixture.remove() }
+        // A tree of 100 bytes that reduces to the start rule, 10 of them under an ERROR node: past the gate's 5 %.
+        let parse: GrammarTier.Parse = { _, text, _ in
+            let error = SyntaxNode(type: "ERROR", byteRange: 10 ..< 20, isError: true)
+            return SyntaxTree(root: SyntaxNode(type: "source", children: [error], byteRange: 0 ..< 100), source: text)
+        }
+        let tier = GrammarTier(
+            artifacts: fixture.artifacts(), record: GrammarTierRecord(), deadline: .seconds(10), pool: nil,
+            cpuTime: GrammarTier.threadCPUTime, parse: parse)
+
+        let text = String(repeating: "x", count: 100)
+
+        let failure = await Self.failure { _ = try await Self.run(tier, Self.request(text)) }
+
+        #expect(failure == .gate("10 % of the bytes lie under ERROR nodes"))
+    }
 }
 
 /// An empty directory under the temporary directory.

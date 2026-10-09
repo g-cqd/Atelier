@@ -18,6 +18,9 @@ public struct GrammarEngine: Sendable {
     /// Between the two, 5% keeps the grammar through a few misread constructs and drops it for a text it fails on.
     public static let maxErrorBytePercent = 5
 
+    /// The root of a parse that never reduced to the grammar's start rule: the synthetic `_start` the grammar adds.
+    private static let startRule = "_start"
+
     public let parser: GrammarParser
     public let query: Query
     /// The role of each of `query`'s capture names.
@@ -65,7 +68,7 @@ public struct GrammarEngine: Sendable {
     /// ``maxErrorBytePercent`` percent of its bytes lie under ERROR nodes.
     /// - Complexity: O(1): the parse counted its ERROR bytes as it built the tree.
     public static func passesQualityGate(_ tree: SyntaxTree) -> Bool {
-        tree.root.type != "_start"
+        tree.root.type != startRule
             && (tree.errorByteCount == 0 || tree.errorByteCount * 100 < tree.source.utf8.count * maxErrorBytePercent)
     }
 
@@ -73,6 +76,16 @@ public struct GrammarEngine: Sendable {
     public static func errorBytePercent(of tree: SyntaxTree) -> Int {
         let bytes = tree.source.utf8.count
         return bytes == 0 ? 0 : tree.errorByteCount * 100 / bytes
+    }
+
+    /// Why `tree` fails ``passesQualityGate(_:)``, as a tier reports it: that its parse did not reach the grammar's
+    /// start rule, or else the share of its bytes under ERROR nodes.
+    /// - Precondition: `tree` fails the gate.
+    /// - Complexity: O(1)
+    static func gateFailureReason(of tree: SyntaxTree) -> String {
+        tree.root.type == startRule
+            ? "the parse did not reach the grammar's start rule"
+            : "\(errorBytePercent(of: tree)) % of the bytes lie under ERROR nodes"
     }
 
     /// The query's tokens over `tree`, overlapping as the captures do, or only those of nodes that overlap
