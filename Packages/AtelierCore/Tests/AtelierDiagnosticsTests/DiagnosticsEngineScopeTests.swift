@@ -126,9 +126,9 @@ struct DiagnosticsEngineScopeTests {
     }
 
     @Test(arguments: [DiagnosticTool.arcleak, .dolly, .deadwood])
-    func `a tool that scopes its own report with no files is skipped without being launched`(tool: DiagnosticTool)
-        async throws
-    {
+    func `a tool that scopes its own report with no files reports a clean run without being launched`(
+        tool: DiagnosticTool
+    ) async throws {
         let temp = TemporaryDirectory(prefix: "diageng")
         defer { temp.cleanup() }
         let root = URL(filePath: temp.file("root"))
@@ -143,8 +143,9 @@ struct DiagnosticsEngineScopeTests {
         let request = DiagnosticsEngineTests.request(
             root: root, files: [], corpusFingerprint: "fp-1", tool: tool, customPath: executable.path)
         let result = try await engine.run(tool, request: request)
-        #expect(result.status == .skipped("no files"))
+        #expect(result.status == .succeeded)
         #expect(result.findings.isEmpty)
+        #expect(result.fromCache == false)
         #expect(runner.specs.isEmpty)
     }
 
