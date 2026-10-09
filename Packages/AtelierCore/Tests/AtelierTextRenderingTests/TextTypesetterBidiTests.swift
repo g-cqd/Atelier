@@ -61,7 +61,8 @@ struct TextTypesetterBidiTests {
             carets == placeholder, "the control is not its placeholder: carets \(carets), placeholder \(placeholder)")
     }
 
-    /// Characterization: the default policy leaves the algorithm alone (guards against .unicodeDefault being treated as .forceLeftToRight).
+    /// Characterization: the default policy leaves the algorithm alone
+    /// (guards against .unicodeDefault being treated as .forceLeftToRight).
     @Test(arguments: samples)
     func `a row that starts right to left lays out right to left under unicodeDefault`(
         sample: RightToLeftSample
@@ -74,7 +75,8 @@ struct TextTypesetterBidiTests {
             tail < runStart, "the tail at x = \(tail) is not left of the \(sample.name) run at \(runStart): \(carets)")
     }
 
-    /// Characterization: the default policy still lets an override reorder its text (guards against the controls being replaced under .unicodeDefault).
+    /// Characterization: the default policy still lets an override reorder its text
+    /// (guards against the controls being replaced under .unicodeDefault).
     @Test
     func `a right-to-left override reorders its text under unicodeDefault`() throws {
         let carets = try Self.carets(of: "a\u{202E}bc", bidi: .unicodeDefault)
