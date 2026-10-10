@@ -22,6 +22,7 @@ package import Foundation
 /// `NSAttributedString.Key.diffBidiControl`, which copying writes back.
 package enum BidiControls {
     /// The placeholder a pane shows for `scalar`, or nil when `scalar` is not a bidi control.
+    /// Mirrored in AtelierTextRendering's Internal/BidiPlaceholders.swift; change both.
     package static func placeholder(for scalar: Unicode.Scalar) -> Unicode.Scalar? {
         switch scalar.value {
             case 0x202A, 0x202D, 0x2066, 0x200E: "\u{25B8}"

@@ -111,17 +111,24 @@ package final class DiffPreparer {
         async let newTexts = reader.contents(of: pairs.compactMap(\.new), in: right)
         let (olds, news) = try await (oldTexts, newTexts)
         let inputs = pairs.map { pair in
-            let language = Language(fileExtension: URL(filePath: pair.path).pathExtension)
+            let oldText = pair.old.flatMap { olds[$0.relativePath] } ?? ""
+            let newText = pair.new.flatMap { news[$0.relativePath] } ?? ""
+            let head = newText.isEmpty ? oldText : newText
+            let language = Language(path: pair.path, firstLine: Self.firstLine(of: head))
             func revision(_ entry: SourceEntry?) -> SourceRevision? {
                 entry?.blobID.map { SourceRevision(documentID: pair.path, language: language, key: .content($0)) }
             }
             return FileDiffInput(
-                title: pair.path,
-                oldText: pair.old.flatMap { olds[$0.relativePath] } ?? "",
-                newText: pair.new.flatMap { news[$0.relativePath] } ?? "",
+                title: pair.path, oldText: oldText, newText: newText,
                 language: language, oldRevision: revision(pair.old), newRevision: revision(pair.new)
             )
         }
         return try await mapConcurrently(inputs, limit: ProcessInfo.processInfo.activeProcessorCount, prepare)
+    }
+
+    /// The first line of `text`, read from at most its first 256 characters: all a `#!` line needs, and no copy of
+    /// the whole file.
+    private nonisolated static func firstLine(of text: String) -> Substring {
+        text.prefix(256).prefix { !$0.isNewline }
     }
 }

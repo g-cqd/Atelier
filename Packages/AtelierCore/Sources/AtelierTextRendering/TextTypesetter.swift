@@ -38,7 +38,7 @@ public enum TextTypesetter {
             let rowText = RowText(bytes: text.bytes(ofRow: row))
             let attributed = Self.attributedString(
                 rowText: rowText, runs: text.runs[row], sheet: text.styles, fontCache: &fontCache, includeColor: false,
-                appearance: .light)
+                appearance: .light, bidi: configuration.bidi)
             let typesetter = CTTypesetterCreateWithAttributedString(attributed)
             let breaks = Self.breakLines(typesetter: typesetter, length: rowText.utf16Count, wrapWidth: wrapWidth)
             var lines: [VisualLine] = []
@@ -91,7 +91,7 @@ public enum TextTypesetter {
             let rowText = RowText(bytes: text.bytes(ofRow: row))
             let attributed = Self.attributedString(
                 rowText: rowText, runs: text.runs[row], sheet: text.styles, fontCache: &fontCache, includeColor: true,
-                appearance: appearance)
+                appearance: appearance, bidi: configuration.bidi)
             let typesetter = CTTypesetterCreateWithAttributedString(attributed)
             let breaks = Self.breakLines(typesetter: typesetter, length: rowText.utf16Count, wrapWidth: wrapWidth)
             rowTops.append(y)
@@ -138,6 +138,8 @@ public enum TextTypesetter {
             }
         }
 
+        // The context is flipped, so the text matrix must flip too for glyphs to stand upright.
+        context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
         for lines in drawLines {
             for (line, lineY) in lines {
                 context.textPosition = CGPoint(x: CGFloat(configuration.padding), y: CGFloat(lineY + Double(baseline)))
@@ -224,15 +226,24 @@ extension TextTypesetter {
 
     // MARK: Attributed strings
 
+    // swiftlint:disable:next function_parameter_count
     private static func attributedString(
         rowText: RowText, runs: ArraySlice<LineRuns.Run>, sheet: StyleSheet, fontCache: inout [FontKey: CTFont],
-        includeColor: Bool, appearance: Appearance
+        includeColor: Bool, appearance: Appearance, bidi: BidiPolicy
     ) -> CFAttributedString {
         guard let mutable = CFAttributedStringCreateMutable(kCFAllocatorDefault, 0) else {
             preconditionFailure("the default allocator could not create an attributed string")
         }
-        CFAttributedStringReplaceString(mutable, CFRange(location: 0, length: 0), rowText.string as CFString)
+        // Under forceLeftToRight the controls are drawn as their placeholders, unit for unit, so the offsets that
+        // `rowText` maps (the runs, the carets) still hold for the text drawn.
+        let drawn = bidi == .forceLeftToRight ? BidiPlaceholders.replacingControls(in: rowText.string) : rowText.string
+        assert(drawn.utf16.count == rowText.utf16Count, "bidi substitution changed the row's UTF-16 length")
+        CFAttributedStringReplaceString(mutable, CFRange(location: 0, length: 0), drawn as CFString)
         let fullRange = CFRange(location: 0, length: rowText.utf16Count)
+        if bidi == .forceLeftToRight {
+            CFAttributedStringSetAttribute(
+                mutable, fullRange, kCTParagraphStyleAttributeName, Self.leftToRightParagraphStyle())
+        }
         let plainStyle = sheet[StyleID(0)] ?? TextStyle(foreground: .fixed(RGBA(red: 0, green: 0, blue: 0)))
 
         func resolvedFont(_ style: TextStyle) -> CTFont {
@@ -265,6 +276,15 @@ extension TextTypesetter {
             }
         }
         return mutable
+    }
+
+    /// A paragraph style whose base writing direction is left to right, whatever the row's first strong character.
+    private static func leftToRightParagraphStyle() -> CTParagraphStyle {
+        withUnsafePointer(to: CTWritingDirection.leftToRight) { direction in
+            let setting = CTParagraphStyleSetting(
+                spec: .baseWritingDirection, valueSize: MemoryLayout<CTWritingDirection>.size, value: direction)
+            return CTParagraphStyleCreate([setting], 1)
+        }
     }
 
     private static func cgColor(_ rgba: RGBA) -> CGColor {
