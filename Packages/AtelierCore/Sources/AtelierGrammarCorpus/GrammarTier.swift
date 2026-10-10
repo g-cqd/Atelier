@@ -86,6 +86,10 @@ public struct GrammarTier: AtelierHighlighting.HighlightTier {
         guard let name = GrammarEngine.grammarName(of: request.revision.language) else {
             throw TierFailure.failed("no grammar for \(request.revision.language.name)")
         }
+        let bytes = request.text.utf8.count
+        guard bytes <= GrammarEngine.maxSourceBytes else {
+            throw TierFailure.failed("\(bytes) bytes are past the grammar's \(GrammarEngine.maxSourceBytes)")
+        }
         guard let loaded = await artifacts.pin(name) else {
             throw TierFailure.failed(
                 artifacts.isOversized(name)
@@ -95,10 +99,6 @@ public struct GrammarTier: AtelierHighlighting.HighlightTier {
         try Task.checkCancellation()
         guard let engine = GrammarEngine(loaded) else {
             throw TierFailure.failed("the \(name) grammar needs an external scanner that is not bundled")
-        }
-        let bytes = request.text.utf8.count
-        guard bytes <= GrammarEngine.maxSourceBytes else {
-            throw TierFailure.failed("\(bytes) bytes are past the grammar's \(GrammarEngine.maxSourceBytes)")
         }
         let content = GrammarTierRecord.ContentKey(request)
         let declined = record.admit(grammar: engine.grammarKey, content: content, bytes: bytes, budget: parseDeadline)
@@ -193,8 +193,7 @@ public struct GrammarTier: AtelierHighlighting.HighlightTier {
                 throw failure
             case .parsed(let tree, let elapsed):
                 guard GrammarEngine.passesQualityGate(tree) else {
-                    let failure = TierFailure.gate(
-                        "\(GrammarEngine.errorBytePercent(of: tree)) % of the bytes lie under ERROR nodes")
+                    let failure = TierFailure.gate(GrammarEngine.gateFailureReason(of: tree))
                     record.fail(grammar: grammar, content: content, failure, bytes: bytes, took: .exactly(elapsed))
                     throw failure
                 }

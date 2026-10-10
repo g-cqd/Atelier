@@ -1,6 +1,7 @@
 import AemiRuntime
 import AemiTestKit
 import Darwin
+import Dispatch
 import Foundation
 import Testing
 
@@ -77,31 +78,80 @@ struct HardenedProcessRunnerLimitsTests {
         #expect(output.succeeded)
     }
 
-    /// Waits until the child writes `ready` into the FIFO at `path`, polling a non-blocking descriptor so the wait
-    /// neither occupies one of the runner's pool threads nor outlives the test: a child that never signals fails
-    /// the test after `deadline` instead of hanging the suite (a blocking FIFO open cannot be cancelled).
+    /// What the readiness wait sees: bytes the child wrote, or the deadline passing first.
+    private enum ReadyEvent: Sendable {
+        case bytes([UInt8])
+        case timedOut
+    }
+
+    /// Waits until the child writes `ready` into the FIFO at `path`. It occupies no pool thread and does not poll: a
+    /// dispatch read source delivers the child's bytes as they arrive, and a timer source gives up after `deadline`
+    /// with a named failure, so a child that never signals fails the test instead of hanging the suite (a blocking
+    /// FIFO open cannot be cancelled). The suite's `.timeLimit` remains the backstop.
     private static func awaitReady(_ path: String, deadline: Duration = .seconds(30)) async throws {
-        let descriptor = open(path, O_RDONLY | O_NONBLOCK)
+        // Read-write, so this descriptor holds a writer of its own: `read` reports EAGAIN, not end-of-file, while the
+        // child has yet to open the FIFO. Opening a FIFO read-write is unspecified by POSIX but well defined on Darwin,
+        // which this suite targets. Close-on-exec keeps a child spawned meanwhile from inheriting the descriptor.
+        let descriptor = open(path, O_RDWR | O_NONBLOCK | O_CLOEXEC)
         try #require(descriptor >= 0, "cannot open the FIFO at \(path): errno \(errno)")
-        defer { close(descriptor) }
-        var received = Data()
-        let clock = ContinuousClock()
-        let end = clock.now.advanced(by: deadline)
-        let capacity = 64
-        var buffer = [UInt8](repeating: 0, count: capacity)
-        while !received.contains(UInt8(ascii: "\n")) {
+        let (events, continuation) = AsyncStream.makeStream(of: ReadyEvent.self)
+        // Ending the wait, by a line, by the deadline or by leaving the loop, cancels both sources, and the read
+        // source's cancel handler closes the descriptor.
+        defer { continuation.finish() }
+        // A dispatch source needs a target queue to run its handlers on, so a private serial queue does that here;
+        // the wait itself is still an `AsyncStream` that the caller iterates with structured concurrency.
+        let queue = DispatchQueue(label: "AtelierProcessTests.awaitReady")
+        let reader = DispatchSource.makeReadSource(fileDescriptor: descriptor, queue: queue)
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        reader.setEventHandler {
+            // One read per event: the source is level-triggered, so it fires again while bytes remain.
+            let capacity = 64
+            var buffer = [UInt8](repeating: 0, count: capacity)
             let count = read(descriptor, &buffer, capacity)
             if count > 0 {
-                received.append(contentsOf: buffer[0 ..< count])
-                continue
+                continuation.yield(.bytes(Array(buffer[0 ..< count])))
+            } else if count < 0, errno == EINTR || errno == EAGAIN {
+                // Interrupted or drained: the source fires again when there is more.
+                return
+            } else {
+                // An error (end-of-file cannot happen while this descriptor holds the write end): the line cannot
+                // arrive, so end the wait now rather than spin.
+                continuation.finish()
             }
-            guard clock.now < end else {
-                Issue.record("the child did not signal ready within \(deadline)")
-                throw CancellationError()
-            }
-            try await Task.sleep(for: .milliseconds(10))
         }
-        #expect(received == Data("ready\n".utf8))
+        reader.setCancelHandler { close(descriptor) }
+        timer.setEventHandler {
+            continuation.yield(.timedOut)
+            continuation.finish()
+        }
+        let (seconds, attoseconds) = deadline.components
+        let nanoseconds = Int(seconds) * 1_000_000_000 + Int(attoseconds / 1_000_000_000)
+        timer.schedule(deadline: .now() + .nanoseconds(nanoseconds))
+        continuation.onTermination = { _ in
+            reader.cancel()
+            timer.cancel()
+        }
+        reader.resume()
+        timer.resume()
+
+        var received = Data()
+        for await event in events {
+            switch event {
+                case .bytes(let bytes):
+                    received.append(contentsOf: bytes)
+                    if received.contains(UInt8(ascii: "\n")) {
+                        #expect(received == Data("ready\n".utf8))
+                        return
+                    }
+                case .timedOut:
+                    Issue.record("the child did not signal ready within \(deadline)")
+                    throw CancellationError()
+            }
+        }
+        // A cancelled wait (the test's time limit) throws here instead, so it records no second issue.
+        try Task.checkCancellation()
+        Issue.record("the FIFO at \(path) became unreadable before the child signalled ready")
+        throw CancellationError()
     }
 
     @Test(.timeLimit(.minutes(1)))

@@ -15,8 +15,9 @@ extension GLRParser {
     func viableExternals(for stack: ParseStack) -> [Bool] {
         var valid = parseTable.validExternals[stack.state]
         for index in valid.indices where valid[index] && !parseTable.externalIsExtra[index] {
-            guard let terminal = externalTerminals[index] else { continue }
-            valid[index] = canShift(terminal, on: stack)
+            let variants = externalTerminals[index]
+            guard !variants.isEmpty else { continue }
+            valid[index] = variants.contains { canShift($0, on: stack) }
         }
         return valid
     }
