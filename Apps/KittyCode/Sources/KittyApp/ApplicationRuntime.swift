@@ -2,12 +2,12 @@
 // swiftlint:disable function_body_length
 public import AemiCore
 import Foundation
-import KittyCodecs
-public import KittyInput
-public import KittyRenderer
-public import KittyTerminal
 import KittyWidgets
 import Observation
+import TerminalKitCodecs
+public import TerminalKitIO
+public import TerminalKitInput
+public import TerminalKitRender
 
 /// Orchestrates the application lifecycle.
 @MainActor

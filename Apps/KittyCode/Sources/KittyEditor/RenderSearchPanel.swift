@@ -1,10 +1,10 @@
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable function_body_length
 import Foundation
-import KittyCodecs
-public import KittyRenderer
 import KittySearch
 public import KittyWidgets
+import TerminalKitCodecs
+public import TerminalKitRender
 
 @MainActor
 public func renderSearchPanel(

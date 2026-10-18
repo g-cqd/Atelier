@@ -18,11 +18,6 @@ let package = Package(
     ],
     products: [
         // The public surface; `KittySearch`, an editor implementation detail, stays an internal target.
-        .library(name: "KittyTerminal", targets: ["KittyTerminal"]),
-        .library(name: "KittyStyle", targets: ["KittyStyle"]),
-        .library(name: "KittyCodecs", targets: ["KittyCodecs"]),
-        .library(name: "KittyInput", targets: ["KittyInput"]),
-        .library(name: "KittyRenderer", targets: ["KittyRenderer"]),
         .library(name: "KittySyntax", targets: ["KittySyntax"]),
         .library(name: "KittyWidgets", targets: ["KittyWidgets"]),
         .library(name: "KittyApp", targets: ["KittyApp"]),
@@ -44,28 +39,6 @@ let package = Package(
         .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "4bd0b134dd9c0ef7c02a0dd358c943b9004b20a9")
     ],
     targets: [
-        // Compatibility modules: implementations and owning tests live in TerminalKit.
-        .target(
-            name: "KittyTerminal",
-            dependencies: [.product(name: "TerminalKitIO", package: "TerminalKit")],
-            swiftSettings: strict),
-        .target(
-            name: "KittyStyle",
-            dependencies: [.product(name: "TerminalKitStyle", package: "TerminalKit")],
-            swiftSettings: strict),
-        .target(
-            name: "KittyCodecs",
-            dependencies: [.product(name: "TerminalKitCodecs", package: "TerminalKit")],
-            swiftSettings: strict),
-        .target(
-            name: "KittyInput",
-            dependencies: [.product(name: "TerminalKitInput", package: "TerminalKit")],
-            swiftSettings: strict),
-        .target(
-            name: "KittyRenderer",
-            dependencies: [.product(name: "TerminalKitRender", package: "TerminalKit")],
-            swiftSettings: strict),
-
         // Layer 2d — File system browsing
         .target(
             name: "KittyFileTree",
@@ -87,7 +60,7 @@ let package = Package(
                 "KittyFileTree", .product(name: "AtelierProcess", package: "AtelierCore"),
                 .product(name: "AtelierGit", package: "AtelierCore"),
                 .product(name: "AtelierDiff", package: "AtelierCore"),
-                .product(name: "AtelierText", package: "AtelierCore")
+                .product(name: "TerminalKitText", package: "TerminalKit")
             ],
             swiftSettings: strict),
 
@@ -97,7 +70,7 @@ let package = Package(
             dependencies: [.product(name: "AtelierSearch", package: "AtelierCore")],
             swiftSettings: strict),
 
-        // Layers 3a–3c (grammar tables, GLR parser, queries) and 2c (text storage) live in AtelierCore.
+        // Layers 3a–3c (grammar tables, GLR parser, queries) live in AtelierCore; text storage in TerminalKit.
 
         // Layer 3d — Themes + styled text producer
         .target(
@@ -106,7 +79,8 @@ let package = Package(
                 .product(name: "AtelierGrammar", package: "AtelierCore"),
                 .product(name: "AtelierParser", package: "AtelierCore"),
                 .product(name: "AtelierScanners", package: "AtelierCore"),
-                .product(name: "AtelierQuery", package: "AtelierCore"), "KittyStyle",
+                .product(name: "AtelierQuery", package: "AtelierCore"),
+                .product(name: "TerminalKitStyle", package: "TerminalKit"),
                 .product(name: "AtelierSyntaxModel", package: "AtelierCore"),
                 .product(name: "AtelierLexers", package: "AtelierCore"),
                 .product(name: "AtelierTheme", package: "AtelierCore"),
@@ -118,14 +92,18 @@ let package = Package(
 
         // Layer 4 — View protocol, layout, tree/text widgets
         .target(
-            name: "KittyWidgets", dependencies: ["KittySyntax", "KittyInput", "KittyRenderer"],
+            name: "KittyWidgets",
+            dependencies: [
+                "KittySyntax", .product(name: "TerminalKitInput", package: "TerminalKit"),
+                .product(name: "TerminalKitRender", package: "TerminalKit")
+            ],
             swiftSettings: strict),
 
         // Layer 4b — Workspace domain: document, tab, file lifecycle, git coordination
         .target(
             name: "KittyWorkspace",
             dependencies: [
-                .product(name: "AtelierText", package: "AtelierCore"), "KittySyntax", "KittyFileTree", "KittyGit",
+                .product(name: "TerminalKitText", package: "TerminalKit"), "KittySyntax", "KittyFileTree", "KittyGit",
                 .product(name: "AemiCore", package: "aemi"), .product(name: "AemiIO", package: "aemi")
             ],
             swiftSettings: strict),
@@ -133,18 +111,24 @@ let package = Package(
         // Layer 5 — App lifecycle, event loop, signals
         .target(
             name: "KittyApp",
-            dependencies: ["KittyWidgets", "KittyInput", .product(name: "AemiCore", package: "aemi")],
+            dependencies: [
+                "KittyWidgets", .product(name: "TerminalKitInput", package: "TerminalKit"),
+                .product(name: "AemiCore", package: "aemi")
+            ],
             swiftSettings: strict),
 
         // Layer 6 — Editor logic library: all but `AppMain`, so the tests depend on a library, not an executable
         .target(
             name: "KittyEditor",
             dependencies: [
-                "KittyApp", "KittyWorkspace", "KittyInput", .product(name: "AtelierText", package: "AtelierCore"),
+                "KittyApp", "KittyWorkspace", .product(name: "TerminalKitInput", package: "TerminalKit"),
+                .product(name: "TerminalKitText", package: "TerminalKit"),
                 .product(name: "AtelierTheme", package: "AtelierCore"),
                 "KittyFileTree",
-                "KittyRenderer", "KittySyntax", "KittySymbols", "KittyGit", "KittySearch",
-                "KittyStyle", "KittyTerminal",
+                .product(name: "TerminalKitRender", package: "TerminalKit"), "KittySyntax", "KittySymbols", "KittyGit",
+                "KittySearch",
+                .product(name: "TerminalKitStyle", package: "TerminalKit"),
+                .product(name: "TerminalKitIO", package: "TerminalKit"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "AemiCore", package: "aemi"),
                 .product(name: "AemiKernel", package: "aemi"),
@@ -157,8 +141,10 @@ let package = Package(
         .executableTarget(
             name: "KittyCode",
             dependencies: [
-                "KittyEditor", "KittyApp", "KittyTerminal", "KittyCodecs",
-                "KittyFileTree", "KittyGit", "KittyRenderer", "KittyWorkspace",
+                "KittyEditor", "KittyApp", .product(name: "TerminalKitIO", package: "TerminalKit"),
+                .product(name: "TerminalKitCodecs", package: "TerminalKit"),
+                "KittyFileTree", "KittyGit", .product(name: "TerminalKitRender", package: "TerminalKit"),
+                "KittyWorkspace",
                 .product(name: "AemiCore", package: "aemi"),
                 .product(name: "AemiRuntime", package: "aemi"),
                 .product(name: "AtelierProcess", package: "AtelierCore")
@@ -171,25 +157,12 @@ let package = Package(
 
         // Owning terminal suites are in TerminalKit; app integration tests remain here.
         .testTarget(
-            name: "TerminalCompatibilityTests",
-            dependencies: [
-                "KittyCodecs", "KittyInput", "KittyRenderer", "KittyStyle", "KittyTerminal",
-                .product(name: "AtelierText", package: "AtelierCore"),
-                .product(name: "TerminalKitCodecs", package: "TerminalKit"),
-                .product(name: "TerminalKitIO", package: "TerminalKit"),
-                .product(name: "TerminalKitInput", package: "TerminalKit"),
-                .product(name: "TerminalKitRender", package: "TerminalKit"),
-                .product(name: "TerminalKitStyle", package: "TerminalKit"),
-                .product(name: "TerminalKitText", package: "TerminalKit")
-            ],
-            swiftSettings: strict),
-        .testTarget(
             name: "KittySyntaxTests",
             dependencies: [
-                "KittySyntax", "KittyCodecs", .product(name: "AtelierSyntaxModel", package: "AtelierCore"),
+                "KittySyntax", .product(name: "TerminalKitCodecs", package: "TerminalKit"),
+                .product(name: "AtelierSyntaxModel", package: "AtelierCore"),
                 .product(name: "AtelierGrammarCorpus", package: "AtelierCore"),
-                .product(name: "AemiTestKit", package: "aemi"),
-                .product(name: "TerminalKitCodecs", package: "TerminalKit")
+                .product(name: "AemiTestKit", package: "aemi")
             ],
             swiftSettings: strict),
         .testTarget(
@@ -215,10 +188,9 @@ let package = Package(
             name: "KittyCodeTests",
             dependencies: [
                 "KittyEditor", "KittyFileTree", "KittyWorkspace",
-                .product(name: "AtelierText", package: "AtelierCore"),
+                .product(name: "TerminalKitText", package: "TerminalKit"),
                 .product(name: "AemiTesting", package: "aemi"),
-                .product(name: "AemiTestKit", package: "aemi"),
-                .product(name: "TerminalKitText", package: "TerminalKit")
+                .product(name: "AemiTestKit", package: "aemi")
             ],
             swiftSettings: strict),
         .testTarget(
@@ -227,11 +199,11 @@ let package = Package(
         .testTarget(
             name: "KittyWorkspaceTests",
             dependencies: [
-                "KittyWorkspace", "KittySyntax", "KittyStyle", .product(name: "AtelierText", package: "AtelierCore"),
+                "KittyWorkspace", "KittySyntax", .product(name: "TerminalKitStyle", package: "TerminalKit"),
+                .product(name: "TerminalKitText", package: "TerminalKit"),
                 .product(name: "AtelierFileTree", package: "AtelierCore"),
                 .product(name: "AemiIO", package: "aemi"),
-                .product(name: "AemiTesting", package: "aemi"),
-                .product(name: "TerminalKitText", package: "TerminalKit")
+                .product(name: "AemiTesting", package: "aemi")
             ],
             swiftSettings: strict),
         .testTarget(
@@ -240,9 +212,8 @@ let package = Package(
                 "KittyGit", .product(name: "AtelierProcess", package: "AtelierCore"),
                 .product(name: "AtelierTestSupport", package: "AtelierCore"),
                 .product(name: "AtelierFileTree", package: "AtelierCore"),
-                .product(name: "AtelierText", package: "AtelierCore"),
-                .product(name: "AemiRuntime", package: "aemi"),
-                .product(name: "TerminalKitText", package: "TerminalKit")
+                .product(name: "TerminalKitText", package: "TerminalKit"),
+                .product(name: "AemiRuntime", package: "aemi")
             ],
             swiftSettings: strict)
     ]

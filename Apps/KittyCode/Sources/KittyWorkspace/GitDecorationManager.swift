@@ -1,6 +1,6 @@
 public import AemiCore
-import AtelierText
 public import KittyGit
+import TerminalKitText
 
 public struct GitDecorationConfig: Sendable {
     public var showGitStatus: Bool

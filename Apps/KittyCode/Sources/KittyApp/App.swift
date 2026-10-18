@@ -1,8 +1,8 @@
-import KittyCodecs
-import KittyInput
-import KittyRenderer
-import KittyTerminal
 public import KittyWidgets
+import TerminalKitCodecs
+import TerminalKitIO
+import TerminalKitInput
+import TerminalKitRender
 
 // MARK: - App Protocol
 

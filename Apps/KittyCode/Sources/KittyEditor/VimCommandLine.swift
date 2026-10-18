@@ -1,5 +1,5 @@
-public import KittyCodecs
-import KittyInput
+public import TerminalKitCodecs
+import TerminalKitInput
 
 public struct VimCommandLine: Sendable, Equatable {
     public var buffer: String = ""

@@ -1,7 +1,7 @@
 import AtelierLexers
 import AtelierSyntaxModel
-import AtelierText
 import Foundation
+import TerminalKitText
 import Testing
 
 /// Opt-in timing of the lexical tier's two paths over one Swift side of about a megabyte, interleaved in one binary,

@@ -1,4 +1,4 @@
-public import KittyCodecs
+public import TerminalKitCodecs
 
 public struct Separator: View, Sendable {
     public let character: Character
