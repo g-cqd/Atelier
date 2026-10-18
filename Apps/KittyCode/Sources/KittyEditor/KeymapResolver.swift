@@ -1,7 +1,7 @@
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable function_body_length type_body_length
-import KittyCodecs
-import KittyInput
+import TerminalKitCodecs
+import TerminalKitInput
 
 public struct KeymapResolver: Sendable {
     public enum ResolveResult: Sendable, Equatable {

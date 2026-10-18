@@ -1,5 +1,5 @@
 import AtelierSyntaxModel
-import KittyStyle
+import TerminalKitStyle
 import Testing
 
 @testable import KittySyntax

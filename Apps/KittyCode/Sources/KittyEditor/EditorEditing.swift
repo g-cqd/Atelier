@@ -1,4 +1,4 @@
-import AtelierText
+import TerminalKitText
 
 @MainActor
 public func insertText(_ text: String, into state: EditorState) {

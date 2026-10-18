@@ -1,15 +1,15 @@
 import AemiCore
-import AtelierText
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable cyclomatic_complexity file_length function_body_length
 import Foundation
 import KittyApp
-public import KittyCodecs
 import KittyFileTree
-public import KittyRenderer
 import KittySearch
 public import KittyWidgets
 import KittyWorkspace
+public import TerminalKitCodecs
+public import TerminalKitRender
+import TerminalKitText
 
 @MainActor
 public func handleMouse(_ mouse: MouseEvent, state: EditorState, pipeline: RenderPipeline) {

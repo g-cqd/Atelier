@@ -1,8 +1,8 @@
-import AtelierText
-import KittyCodecs
-import KittyRenderer
-import KittyTerminal
 import KittyWorkspace
+import TerminalKitCodecs
+import TerminalKitIO
+import TerminalKitRender
+import TerminalKitText
 import Testing
 
 @testable import KittyEditor

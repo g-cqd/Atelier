@@ -1,6 +1,6 @@
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable type_body_length
-public import AtelierText
+public import TerminalKitText
 
 /// Shared layout calculations for `TextEditor` rendering and cursor placement.
 public enum TextEditorLayout {

@@ -1,4 +1,4 @@
-public import KittyCodecs
+public import TerminalKitCodecs
 
 /// Accumulated style context passed down the view tree during rendering.
 /// Modifiers push style overrides onto this context.

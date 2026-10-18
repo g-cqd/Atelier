@@ -1,13 +1,11 @@
 public import AemiCore
 import AtelierGit
 public import AtelierProcess
-public import AtelierText
 public import AtelierTheme
 // Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
 // swiftlint:disable file_length type_body_length
 import Foundation
 public import KittyApp
-public import KittyCodecs
 public import KittyFileTree
 public import KittyGit
 public import KittySearch
@@ -17,6 +15,8 @@ public import KittyWidgets
 public import KittyWorkspace
 public import Observation
 import System
+public import TerminalKitCodecs
+public import TerminalKitText
 import os
 
 public import class AemiRuntime.BlockingOffloadPool

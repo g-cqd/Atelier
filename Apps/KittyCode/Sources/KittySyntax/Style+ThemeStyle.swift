@@ -1,5 +1,5 @@
 public import AtelierTheme
-public import KittyStyle
+public import TerminalKitStyle
 
 extension Style {
     /// The terminal cell style of a theme style: true colour for the foreground and background, the four

@@ -1,5 +1,5 @@
 public import AtelierSyntaxModel
-public import KittyStyle
+public import TerminalKitStyle
 
 /// Resolves `(HighlightRole, HighlightModifierSet)` to a visual `Style`
 /// using the existing `Theme` with role-hierarchy fallback and modifier overrides.

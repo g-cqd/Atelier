@@ -1,6 +1,6 @@
-import KittyCodecs
-public import KittyRenderer
 import KittyWidgets
+import TerminalKitCodecs
+public import TerminalKitRender
 
 @MainActor
 public func renderEmptyEditor(

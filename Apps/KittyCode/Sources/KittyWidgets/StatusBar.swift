@@ -1,5 +1,5 @@
-import AtelierText
-public import KittyCodecs
+public import TerminalKitCodecs
+import TerminalKitText
 
 /// Status bar with left/center/right aligned segments.
 public struct StatusBar: View, Sendable {

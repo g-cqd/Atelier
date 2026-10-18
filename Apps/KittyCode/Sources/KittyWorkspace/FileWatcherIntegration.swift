@@ -1,7 +1,7 @@
 public import AemiCore
-import AtelierText
 import Foundation
 public import KittyFileTree
+import TerminalKitText
 import os
 
 /// The watcher calls the workspace makes, as a protocol so a test can inject a synthetic source.

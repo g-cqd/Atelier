@@ -1,5 +1,5 @@
-public import AtelierText
 import KittyFileTree
+public import TerminalKitText
 
 public struct BufferEditSnapshot: Sendable {
     public var textBuffer: TextBuffer

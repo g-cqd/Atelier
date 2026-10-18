@@ -1,4 +1,4 @@
-public import KittyCodecs
+public import TerminalKitCodecs
 
 public struct KeyStroke: Hashable, Sendable {
     public var keyCode: UInt32

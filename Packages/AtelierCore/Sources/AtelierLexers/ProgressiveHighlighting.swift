@@ -1,5 +1,5 @@
 public import AtelierSyntaxModel
-public import AtelierText
+public import TerminalKitText
 
 /// Lexing a text visible lines first (review §7.4, P1a), as tier 0 of the tier job (PERF-11).
 ///

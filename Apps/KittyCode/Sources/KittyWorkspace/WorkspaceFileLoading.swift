@@ -1,7 +1,7 @@
 import AemiIO
-public import AtelierText
 import Darwin
 public import Foundation
+public import TerminalKitText
 
 public struct LoadedFile: Sendable {
     public let content: String

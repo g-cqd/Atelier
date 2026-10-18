@@ -1,9 +1,9 @@
 import AemiCore
-import AtelierText
 import Foundation
-public import KittyCodecs
 import KittySearch
 import KittyWorkspace
+public import TerminalKitCodecs
+import TerminalKitText
 
 public struct EditorPrompt: Sendable, Equatable {
     public enum Kind: Sendable, Equatable {
@@ -390,7 +390,7 @@ extension EditorState {
                     to: lines, matches: fileResult.matches,
                     pattern: pattern, replacement: replacement)
                 if count > 0 {
-                    buffer.textBuffer = AtelierText.TextBuffer(lines: newLines)
+                    buffer.textBuffer = TerminalKitText.TextBuffer(lines: newLines)
                     buffer.isDirty = true
                     buffer.cachedFileLines = nil
                     buffer.cachedDocumentText = nil
