@@ -5,8 +5,8 @@ import KittyGit
 import Synchronization
 import Testing
 
-@testable import AtelierText
 @testable import KittyWorkspace
+@testable import TerminalKitText
 
 private final class RopeDecorationSpy: RopeGitLineDecorationProvider, Sendable {
     let calls = Mutex((rope: 0, lines: 0))

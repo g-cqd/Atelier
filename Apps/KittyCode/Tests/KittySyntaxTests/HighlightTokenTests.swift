@@ -4,8 +4,8 @@ import Testing
 @testable import AtelierParser
 @testable import AtelierQuery
 @testable import AtelierSyntaxModel
-@testable import KittyCodecs
 @testable import KittySyntax
+@testable import TerminalKitCodecs
 
 @Suite
 struct HighlightTokenTests {
