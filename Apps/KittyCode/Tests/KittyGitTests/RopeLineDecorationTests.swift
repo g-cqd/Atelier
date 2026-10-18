@@ -5,8 +5,8 @@ import AtelierTestSupport
 import Foundation
 import Testing
 
-@testable import AtelierText
 @testable import KittyGit
+@testable import TerminalKitText
 
 @Suite struct RopeLineDecorationTests {
     @Test(.enabled(if: ProcessInfo.processInfo.environment["GDV_BENCH"] != nil))

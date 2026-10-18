@@ -31,7 +31,7 @@ struct KittyCodeEntry {
                     try await runEditor(launchConfig: launchConfig)
                 } catch {
                     writeCrashLog(error: error)
-                    KittyLogger.stderr("CRASH: \(error)")
+                    TerminalLogger.stderr("CRASH: \(error)")
                 }
         }
     }
@@ -48,7 +48,7 @@ struct KittyCodeEntry {
         // POSIX, because Foundation can't combine an exclusive create with a permission mask.
         let fd = path.withCString { Darwin.open($0, O_CREAT | O_EXCL | O_WRONLY, 0o600) }
         guard fd >= 0 else {
-            KittyLogger.fault(public: "kittycode crash log open failed at \(path)")
+            TerminalLogger.fault(public: "kittycode crash log open failed at \(path)")
             return
         }
         defer { Darwin.close(fd) }
@@ -61,7 +61,7 @@ struct KittyCodeEntry {
                 written += n
             }
         }
-        KittyLogger.fault(public: "kittycode crash log at \(path)")
+        TerminalLogger.fault(public: "kittycode crash log at \(path)")
     }
 
     @MainActor static func runEditor(launchConfig: CLIArguments.LaunchConfig) async throws {

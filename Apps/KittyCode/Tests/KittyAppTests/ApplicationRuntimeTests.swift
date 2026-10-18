@@ -1,10 +1,10 @@
 import Testing
 
 @testable import KittyApp
-@testable import KittyCodecs
-@testable import KittyInput
-@testable import KittyTerminal
 @testable import KittyWidgets
+@testable import TerminalKitCodecs
+@testable import TerminalKitIO
+@testable import TerminalKitInput
 
 @Suite
 struct ApplicationRuntimeTests {
@@ -21,7 +21,7 @@ struct ApplicationRuntimeTests {
 
         let output = mock.writtenOutput
         // Should contain alternate screen entry bytes
-        let altScreen = KittySequences.enterAlternateScreen
+        let altScreen = EscapeSequences.enterAlternateScreen
         let found = output.indices.contains(where: { i in
             output[i...].starts(with: altScreen)
         })
@@ -41,12 +41,12 @@ struct ApplicationRuntimeTests {
         #expect(mock.enterRawModeCallCount == 1)
         #expect(mock.restoreModeCallCount == 1)
         #expect(!mock.isRawMode)
-        #expect(containsSubsequence(KittySequences.popKeyboardMode, in: mock.writtenOutput))
-        #expect(containsSubsequence(KittySequences.disableMouseSGR, in: mock.writtenOutput))
-        #expect(containsSubsequence(KittySequences.disableFocusEvents, in: mock.writtenOutput))
-        #expect(containsSubsequence(KittySequences.disableBracketedPaste, in: mock.writtenOutput))
-        #expect(containsSubsequence(KittySequences.showCursor, in: mock.writtenOutput))
-        #expect(containsSubsequence(KittySequences.leaveAlternateScreen, in: mock.writtenOutput))
+        #expect(containsSubsequence(EscapeSequences.popKeyboardMode, in: mock.writtenOutput))
+        #expect(containsSubsequence(EscapeSequences.disableMouseSGR, in: mock.writtenOutput))
+        #expect(containsSubsequence(EscapeSequences.disableFocusEvents, in: mock.writtenOutput))
+        #expect(containsSubsequence(EscapeSequences.disableBracketedPaste, in: mock.writtenOutput))
+        #expect(containsSubsequence(EscapeSequences.showCursor, in: mock.writtenOutput))
+        #expect(containsSubsequence(EscapeSequences.leaveAlternateScreen, in: mock.writtenOutput))
     }
 
     @Test

@@ -2,8 +2,8 @@ import AtelierSyntaxModel
 import KittyStyle
 import Testing
 
-@testable import KittyCodecs
 @testable import KittySyntax
+@testable import TerminalKitCodecs
 
 @Suite
 struct RoleBasedThemeResolverTests {
