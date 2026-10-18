@@ -1,7 +1,7 @@
-import AtelierText
-public import KittyCodecs
-public import KittyRenderer
 import KittyWidgets
+public import TerminalKitCodecs
+public import TerminalKitRender
+import TerminalKitText
 
 @MainActor
 public func handleEditorKey(

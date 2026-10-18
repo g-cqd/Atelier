@@ -1,4 +1,4 @@
-public import KittyCodecs
+public import TerminalKitCodecs
 
 public struct ColorOverlay: Sendable, Equatable {
     public var color: Color

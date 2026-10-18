@@ -1,6 +1,6 @@
-import AtelierText
-import KittyRenderer
 import KittyWorkspace
+import TerminalKitRender
+import TerminalKitText
 import Testing
 
 @testable import KittyEditor

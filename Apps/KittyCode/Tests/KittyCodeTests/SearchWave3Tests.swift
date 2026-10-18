@@ -1,9 +1,9 @@
 import Foundation
-import KittyCodecs
-import KittyRenderer
 import KittySearch
 import KittyWidgets
 import KittyWorkspace
+import TerminalKitCodecs
+import TerminalKitRender
 import Testing
 
 @testable import KittyEditor

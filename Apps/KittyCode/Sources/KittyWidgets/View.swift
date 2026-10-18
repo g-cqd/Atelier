@@ -1,6 +1,6 @@
-public import KittyCodecs
-public import KittyInput
-public import KittyRenderer
+public import TerminalKitCodecs
+public import TerminalKitInput
+public import TerminalKitRender
 
 // MARK: - Size
 

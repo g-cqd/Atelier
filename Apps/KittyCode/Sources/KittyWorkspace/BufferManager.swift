@@ -1,4 +1,4 @@
-public import AtelierText
+public import TerminalKitText
 
 @MainActor
 public final class BufferManager {

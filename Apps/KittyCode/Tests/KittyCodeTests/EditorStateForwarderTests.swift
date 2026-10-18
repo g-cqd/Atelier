@@ -1,5 +1,5 @@
-import KittyStyle
 import KittyWorkspace
+import TerminalKitStyle
 import Testing
 
 @testable import KittyEditor

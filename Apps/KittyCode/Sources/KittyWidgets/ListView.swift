@@ -1,4 +1,4 @@
-public import KittyCodecs
+public import TerminalKitCodecs
 
 public struct ListView: View, Sendable {
     public struct Item: Sendable {

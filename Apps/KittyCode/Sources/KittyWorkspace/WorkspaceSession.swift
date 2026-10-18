@@ -1,8 +1,8 @@
-public import AtelierText
 import Foundation
 import KittyGit
-import KittyStyle
 public import KittySyntax
+import TerminalKitStyle
+public import TerminalKitText
 
 @MainActor
 public final class WorkspaceSession: ActiveDocumentView, WorkspaceCommands {

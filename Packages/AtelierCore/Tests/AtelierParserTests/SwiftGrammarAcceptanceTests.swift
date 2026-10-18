@@ -41,7 +41,7 @@ struct SwiftGrammarAcceptanceTests {
             "Packages/AtelierCore/Sources/AtelierGrammar/LexAutomaton.swift",
             "Packages/AtelierCore/Sources/AtelierParser/ScannerLexer.swift",
             "Packages/AtelierCore/Sources/AtelierGrammar/GrammarDefinition.swift",
-            "Apps/KittyCode/Sources/KittyStyle/Style.swift",
+            "Apps/KittyCode/Sources/KittySyntax/Style+ThemeStyle.swift",
             "Packages/AtelierCore/Sources/AtelierSyntaxModel/HighlightToken.swift",
             "Packages/AtelierCore/Sources/AtelierSyntaxModel/HighlightRole.swift",
             "Packages/AtelierCore/Sources/AtelierSyntaxModel/SemanticTokenProvider.swift"

@@ -1,5 +1,5 @@
-public import KittyInput
 import Synchronization
+public import TerminalKitInput
 
 public final class RenderRefreshSource: Sendable {
     private let lock = Mutex<(@Sendable () -> Void)?>(nil)

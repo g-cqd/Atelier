@@ -1,5 +1,5 @@
-public import KittyCodecs
-public import KittyRenderer
+public import TerminalKitCodecs
+public import TerminalKitRender
 
 public struct ActivityBar: View, Sendable {
     public struct Item: Sendable {

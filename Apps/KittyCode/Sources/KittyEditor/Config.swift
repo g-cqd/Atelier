@@ -2,8 +2,8 @@
 // swiftlint:disable file_length function_body_length type_body_length
 import AemiJSON
 public import Foundation
-public import KittyCodecs
-import KittyTerminal
+public import TerminalKitCodecs
+import TerminalKitIO
 
 /// Why `~/.kittycode.json` could not be loaded. `load(from:)` throws neither: it logs the failure and falls back to
 /// the default config.

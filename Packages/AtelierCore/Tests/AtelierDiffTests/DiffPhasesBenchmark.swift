@@ -1,6 +1,6 @@
 import AtelierDiff
-import AtelierText
 import Foundation
+import TerminalKitText
 import Testing
 
 /// Opt-in timing of the diff's phases on the inputs perf-core measured, through APIs that stay across P1b, so a build

@@ -1,5 +1,5 @@
-public import KittyCodecs
-import KittyRenderer
+public import TerminalKitCodecs
+import TerminalKitRender
 
 public struct HorizontalScrollIndicatorStyle: Sendable, Equatable {
     public var trackStyle: Style

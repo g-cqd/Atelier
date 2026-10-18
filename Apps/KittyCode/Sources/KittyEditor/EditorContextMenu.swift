@@ -1,7 +1,7 @@
 import Foundation
-public import KittyCodecs
 import KittyFileTree
 import KittyWorkspace
+public import TerminalKitCodecs
 
 extension EditorState {
     public var activeFileDisplayName: String {

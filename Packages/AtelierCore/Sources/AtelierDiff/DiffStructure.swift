@@ -1,4 +1,4 @@
-public import AtelierText
+public import TerminalKitText
 
 /// One change of a diff: the old lines it removes and the new lines it adds, next to each other in the edit script;
 /// either range may be empty.

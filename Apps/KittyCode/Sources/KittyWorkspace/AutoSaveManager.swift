@@ -1,6 +1,6 @@
 public import AemiCore
-import AtelierText
 public import Foundation
+import TerminalKitText
 import os
 
 /// Runs one blocking disk write off the cooperative pool, the way the app's `BlockingOffloadPool.run` does, and

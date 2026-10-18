@@ -1,6 +1,6 @@
 import AemiKernel
-public import AtelierText
 import Foundation
+public import TerminalKitText
 
 /// Lines a diff runs over: a text kit's substrings, bytes, a rope or a string's ``TextLines``. A source lends its lines
 /// by index, so nothing is diffed through a string of its own: identity comes from hashing the normalised bytes and

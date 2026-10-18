@@ -31,7 +31,6 @@ let package = Package(
         .library(name: "AtelierGit", targets: ["AtelierGit"]),
         .library(name: "AtelierTestSupport", targets: ["AtelierTestSupport"]),
         .library(name: "AtelierSources", targets: ["AtelierSources"]),
-        .library(name: "AtelierText", targets: ["AtelierText"]),
         .library(name: "AtelierGrammar", targets: ["AtelierGrammar"]),
         .library(name: "AtelierParser", targets: ["AtelierParser"]),
         .library(name: "AtelierQuery", targets: ["AtelierQuery"]),
@@ -66,13 +65,19 @@ let package = Package(
         // Line and intraline diffing, moved blocks, hunk layout and unified patches. Pure value code.
         .target(
             name: "AtelierDiff",
-            dependencies: ["AtelierSyntaxModel", "AtelierText", .product(name: "AemiKernel", package: "aemi")],
+            dependencies: [
+                "AtelierSyntaxModel", .product(name: "TerminalKitText", package: "TerminalKit"),
+                .product(name: "AemiKernel", package: "aemi")
+            ],
             swiftSettings: strict
         ),
         // Hand-written scanners over borrowed UTF-8 bytes for the lexical tier; a scan allocates only its token array.
-        // They also scan a line at a time from its entry state, over AtelierText's line sources (P1a).
+        // They also scan a line at a time from its entry state, over TerminalKitText's line sources (P1a).
         .target(
-            name: "AtelierLexers", dependencies: ["AtelierHighlighting", "AtelierSyntaxModel", "AtelierText"],
+            name: "AtelierLexers",
+            dependencies: [
+                "AtelierHighlighting", "AtelierSyntaxModel", .product(name: "TerminalKitText", package: "TerminalKit")
+            ],
             swiftSettings: strict),
         // swift-syntax support: the syntax tier's token provider, the syntactic colour tier over SwiftIDEUtils'
         // classification, and the deep stack every swift-syntax parse and tree walk runs on.
@@ -149,11 +154,6 @@ let package = Package(
             ],
             swiftSettings: strict
         ),
-        // Text storage: a UTF-8 rope with a line index, cursors, selections, mutations and display metrics.
-        .target(
-            name: "AtelierText",
-            dependencies: [.product(name: "TerminalKitText", package: "TerminalKit")],
-            swiftSettings: strict),
         // File trees: a lazily scanned directory tree with secure paths, visibility rules and git statuses, and a
         // tree built from relative paths with chain compaction, as a comparison's explorer shows it.
         .target(
@@ -205,7 +205,10 @@ let package = Package(
         ),
         .testTarget(
             name: "AtelierDiffTests",
-            dependencies: ["AtelierDiff", "AtelierText", .product(name: "AemiTestKit", package: "aemi")],
+            dependencies: [
+                "AtelierDiff", .product(name: "TerminalKitText", package: "TerminalKit"),
+                .product(name: "AemiTestKit", package: "aemi")
+            ],
             swiftSettings: strict),
         .testTarget(
             name: "AtelierSyntaxModelTests",
@@ -274,7 +277,8 @@ let package = Package(
         .testTarget(
             name: "AtelierLexersTests",
             dependencies: [
-                "AtelierLexers", "AtelierSyntaxModel", "AtelierText", .product(name: "AemiTestKit", package: "aemi")
+                "AtelierLexers", "AtelierSyntaxModel", .product(name: "TerminalKitText", package: "TerminalKit"),
+                .product(name: "AemiTestKit", package: "aemi")
             ],
             swiftSettings: strict),
         .testTarget(

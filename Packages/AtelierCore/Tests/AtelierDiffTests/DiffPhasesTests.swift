@@ -1,6 +1,6 @@
 import AemiTestKit
-import AtelierText
 import Synchronization
+import TerminalKitText
 import Testing
 
 @testable import AtelierDiff

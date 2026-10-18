@@ -1,9 +1,9 @@
-// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
-// swiftlint:disable function_body_length
-import KittyCodecs
-public import KittyRenderer
 public import KittyWidgets
 import KittyWorkspace
+// Predates the size and complexity gates; reviewed opt-out tracked in g-cqd/Atelier#1.
+// swiftlint:disable function_body_length
+import TerminalKitCodecs
+public import TerminalKitRender
 
 public struct ShellLayoutRects {
     public var tabRibbon: Rect?

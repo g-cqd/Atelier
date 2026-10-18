@@ -1,4 +1,4 @@
-import AtelierText
+import TerminalKitText
 
 /// A document that reads the text of a run of lines in one pass, as the lines joined by `\n`, rather than as one
 /// string per line that a highlighter joins again.

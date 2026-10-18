@@ -1,5 +1,5 @@
 public import AtelierSyntaxModel
-import AtelierText
+import TerminalKitText
 
 /// A syntax token provider that can return ranges for only the lines paired by a diff.
 public protocol SelectedSyntaxTokenRanging: SyntaxTokenRanging {

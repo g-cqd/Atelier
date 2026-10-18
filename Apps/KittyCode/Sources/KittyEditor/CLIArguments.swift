@@ -1,7 +1,7 @@
 import ArgumentParser
 import Foundation
-import KittyTerminal
 import System
+import TerminalKitIO
 
 /// Parses `CommandLine.arguments` into a structured launch action, through swift-argument-parser.
 public struct CLIArguments: Sendable {

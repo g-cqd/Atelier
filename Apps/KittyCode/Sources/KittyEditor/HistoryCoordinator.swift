@@ -1,7 +1,7 @@
 import AemiCore
 import Foundation
-import KittyCodecs
 import KittyWorkspace
+import TerminalKitCodecs
 
 extension EditorState {
     public enum HistoryDomain {
